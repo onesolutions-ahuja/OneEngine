@@ -1,7 +1,9 @@
-import { useEffect, useMemo } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
 
 const uid = (prefix='wc') => globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const resourceLabel = (resource) => resource?.label || resource?.apiName || ''
 
 export const WAIT_CONDITIONS_DEFAULTS = Object.freeze({ configurations: [] })
 
@@ -88,8 +90,25 @@ const OPERATORS = [
   ['is_null','Is Null'],['is_not_null','Is Not Null'],
 ]
 
-export default function GPTBuilderWaitConditions({ draft, updateConfig, eventTypes = [], onConfiguredChange }) {
+function loadOpenState() {
+  try {
+    const value = JSON.parse(localStorage.getItem('gptbuilder.waitConditions.openState') || 'null')
+    if (value && typeof value === 'object') return value
+  } catch {}
+  return { root: true, configurations: {} }
+}
+
+export default function GPTBuilderWaitConditions({ draft, updateConfig, resources = [], eventTypes = [], onConfiguredChange }) {
   const config = normalizeWaitConditionsConfig(draft.config)
+  const [openState, setOpenState] = useState(loadOpenState)
+  const persistOpenState = (next) => {
+    setOpenState(next)
+    try { localStorage.setItem('gptbuilder.waitConditions.openState', JSON.stringify(next)) } catch {}
+  }
+  const toggleRoot = () => persistOpenState({ ...openState, root: openState.root === false })
+  const toggleConfiguration = (id) => persistOpenState({ ...openState, configurations: { ...(openState.configurations || {}), [id]: openState.configurations?.[id] === false } })
+  const scalarResources = resources.filter((resource) => resource?.isCollection !== true)
+  const dateTimeResources = scalarResources.filter((resource) => ['datetime','date'].includes(String(resource?.dataType || '').toLowerCase()))
   const errors = useMemo(()=>waitConditionsConfigErrors(config),[JSON.stringify(config)])
   useEffect(()=>{ onConfiguredChange?.(errors.length===0,errors) },[JSON.stringify(errors)])
   const patch=(changes)=>updateConfig({...config,...changes})
@@ -101,20 +120,22 @@ export default function GPTBuilderWaitConditions({ draft, updateConfig, eventTyp
   }
 
   return <div className="gptb-gr gptb-wait-conditions">
-    <section><h3>Wait Configurations</h3><p className="gptb-help-text">The flow waits for the first eligible resume event. Each configuration creates a separate path from this element.</p>
+    <section className="gptb-collapsible-section"><button type="button" className="gptb-section-toggle" aria-expanded={openState.root !== false} onClick={toggleRoot}>{openState.root !== false ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}<span>Wait Configurations</span></button>
+      {openState.root !== false ? <><p className="gptb-help-text">The flow waits for the first eligible resume event. Each configuration creates a separate path from this element.</p>
       {config.configurations.map((row,index)=><div className="gptb-wait-config" key={row.id}>
-        <div className="gptb-gr-sort-option-head"><strong>Wait Configuration {index+1}</strong><button type="button" aria-label={`Remove wait configuration ${index+1}`} onClick={()=>patch({configurations:config.configurations.filter((item)=>item.id!==row.id)})}><Trash2 size={13}/></button></div>
+        <div className="gptb-gr-sort-option-head"><button type="button" className="gptb-wait-config-toggle" aria-expanded={openState.configurations?.[row.id] !== false} onClick={()=>toggleConfiguration(row.id)}>{openState.configurations?.[row.id] !== false ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}<strong>{row.label || `Wait Configuration ${index+1}`}</strong></button><button type="button" aria-label={`Remove wait configuration ${index+1}`} onClick={()=>patch({configurations:config.configurations.filter((item)=>item.id!==row.id)})}><Trash2 size={13}/></button></div>
+        {openState.configurations?.[row.id] !== false ? <>
         <label><span>Label <b>*</b></span><input value={row.label||''} onChange={(event)=>patchConfiguration(row.id,{label:event.target.value})}/></label>
         <label><span>Condition Requirements</span><select value={row.conditionMode||'always'} onChange={(event)=>patchConfiguration(row.id,{conditionMode:event.target.value,customConditionLogic:event.target.value==='custom'?row.customConditionLogic||'':''})}><option value="always">Always Wait—No Conditions</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option></select></label>
         {(row.conditionMode||'always')!=='always'?<>
-          <div className="gptb-gr-field-assignments">{(row.conditions||[]).map((condition,conditionIndex)=><div key={condition.id}><span>{conditionIndex+1}</span><input value={condition.resource||''} onChange={(event)=>patchCondition(row.id,condition.id,{resource:event.target.value})} placeholder="Resource"/><select value={condition.operator||'equals'} onChange={(event)=>patchCondition(row.id,condition.id,{operator:event.target.value,value:['is_null','is_not_null'].includes(event.target.value)?'':condition.value})}>{OPERATORS.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>{!['is_null','is_not_null'].includes(condition.operator)?<input value={condition.value??''} onChange={(event)=>patchCondition(row.id,condition.id,{value:event.target.value})} placeholder="Value"/>:<span/>}<button type="button" aria-label={`Remove condition ${conditionIndex+1}`} onClick={()=>patchConfiguration(row.id,{conditions:(row.conditions||[]).filter((item)=>item.id!==condition.id)})}><Trash2 size={13}/></button></div>)}</div>
+          <div className="gptb-gr-field-assignments">{(row.conditions||[]).map((condition,conditionIndex)=><div key={condition.id}><span>{conditionIndex+1}</span><select value={condition.resource||''} onChange={(event)=>patchCondition(row.id,condition.id,{resource:event.target.value})}><option value="">Select a resource</option>{scalarResources.map((resource)=><option key={resource.id || resource.apiName} value={resourcePath(resource)}>{resourceLabel(resource)}</option>)}</select><select value={condition.operator||'equals'} onChange={(event)=>patchCondition(row.id,condition.id,{operator:event.target.value,value:['is_null','is_not_null'].includes(event.target.value)?'':condition.value})}>{OPERATORS.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>{!['is_null','is_not_null'].includes(condition.operator)?<input value={condition.value??''} onChange={(event)=>patchCondition(row.id,condition.id,{value:event.target.value})} placeholder="Value"/>:<span/>}<button type="button" aria-label={`Remove condition ${conditionIndex+1}`} onClick={()=>patchConfiguration(row.id,{conditions:(row.conditions||[]).filter((item)=>item.id!==condition.id)})}><Trash2 size={13}/></button></div>)}</div>
           <button type="button" className="gptb-inline-action" onClick={()=>patchConfiguration(row.id,{conditions:[...(row.conditions||[]),{id:uid('cond'),resource:'',operator:'equals',value:''}]})}><Plus size={13}/> Add Condition</button>
           {row.conditionMode==='custom'?<label><span>Condition Logic <b>*</b></span><input maxLength={1000} value={row.customConditionLogic||''} onChange={(event)=>patchConfiguration(row.id,{customConditionLogic:event.target.value})} placeholder="Example: 1 AND NOT(2 OR 3)"/></label>:null}
         </>:null}
         <div className="gptb-wait-resume"><h4>Resume Event</h4>
           <label><span>Resume When</span><select value={row.resumeEvent?.type||'specific_time'} onChange={(event)=>patchConfiguration(row.id,{resumeEvent:event.target.value==='platform_event'?{type:'platform_event',eventType:'',conditions:[]}:{type:'specific_time',baseTime:'$Flow.CurrentDateTime',offsetNumber:0,offsetUnit:'hours'}})}><option value="specific_time">A Specified Time Occurs</option><option value="platform_event">A Platform Event Message Is Received</option></select></label>
           {(row.resumeEvent?.type||'specific_time')==='specific_time'?<>
-            <label><span>Base Time <b>*</b></span><input value={row.resumeEvent?.baseTime||''} onChange={(event)=>patchResume(row.id,{baseTime:event.target.value})} placeholder="$Flow.CurrentDateTime or Date/Time resource"/></label>
+            <label><span>Base Time <b>*</b></span><select value={row.resumeEvent?.baseTime||''} onChange={(event)=>patchResume(row.id,{baseTime:event.target.value})}><option value="$Flow.CurrentDateTime">$Flow.CurrentDateTime</option>{dateTimeResources.map((resource)=><option key={resource.id || resource.apiName} value={resourcePath(resource)}>{resourceLabel(resource)}</option>)}</select></label>
             <label><span>Offset Number</span><input type="number" step="1" value={row.resumeEvent?.offsetNumber??''} onChange={(event)=>patchResume(row.id,{offsetNumber:event.target.value})}/></label>
             <label><span>Offset Unit</span><select value={row.resumeEvent?.offsetUnit||'hours'} onChange={(event)=>patchResume(row.id,{offsetUnit:event.target.value})}><option value="hours">Hours</option><option value="days">Days</option></select></label>
           </>:<>
@@ -122,8 +143,9 @@ export default function GPTBuilderWaitConditions({ draft, updateConfig, eventTyp
             <small>Event-field filtering is stored with this wait configuration and evaluated when matching messages arrive.</small>
           </>}
         </div>
+        </> : null}
       </div>)}
-      <button type="button" className="gptb-inline-action" onClick={()=>patch({configurations:[...config.configurations,{id:uid(),label:'',conditionMode:'always',customConditionLogic:'',conditions:[],resumeEvent:{type:'specific_time',baseTime:'$Flow.CurrentDateTime',offsetNumber:0,offsetUnit:'hours'}}]})}><Plus size={13}/> Add Wait Configuration</button>
+      <button type="button" className="gptb-inline-action" onClick={()=>patch({configurations:[...config.configurations,{id:uid(),label:'',conditionMode:'always',customConditionLogic:'',conditions:[],resumeEvent:{type:'specific_time',baseTime:'$Flow.CurrentDateTime',offsetNumber:0,offsetUnit:'hours'}}]})}><Plus size={13}/> Add Wait Configuration</button></> : null}
     </section>
     <section><h3>Default Path</h3><p>If none of the wait configurations meet their wait conditions, the flow does not pause and continues on the default path.</p></section>
     {errors.length?<div className="gptb-gr-errors"><b>Complete this Wait for Conditions element</b>{errors.map((error)=><span key={error}>{error}</span>)}</div>:null}
