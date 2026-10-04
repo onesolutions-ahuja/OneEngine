@@ -226,3 +226,11 @@ test('GPT Builder auto-generated labels apply in auto-layout and free-form and p
   assert.match(props, /labelSource: 'auto'/)
   assert.match(props, /if \(instance\.labelSource === 'manual'\)/)
 })
+
+
+test('GPT Builder recheck matches Salesforce draft-save rules by layout mode', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /const hasUnsavableIncomplete = layout === 'free'/)
+  assert.match(page, /Resolve flow errors before saving in Free-Form/)
+  assert.match(page, /elements\.some\(\(item\) => !item\.configured && \['screen', 'action'\]\.includes\(item\.key\)\)/)
+})
