@@ -289,9 +289,14 @@ test('GPT Builder phase 1 recheck uses the current Salesforce New Automation bro
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
   assert.match(page, /<GPTBuilderNewAutomation flowTypes=\{FLOW_TYPES\}/)
-  for (const text of ['Start From Scratch','Use a Template','Frequently Used','Triggered','Screens','Autolaunched Automations','View All','Search automation types','Search templates']) {
+  for (const text of ['New Automation','Search automations...','Categories','Triggered','Scheduled','Screen','Autolaunched','Frequently Used','View All','View All Automations','Templates']) {
     assert.ok(automation.includes(text), text)
   }
+  assert.doesNotMatch(automation, /Start From Scratch/)
+  assert.doesNotMatch(automation, /Use a Template/)
+  assert.doesNotMatch(automation, />Create<\/button>/)
+  assert.match(automation, /FREQUENT_ORDER = \['screen', 'record', 'schedule', 'autolaunched'\]/)
+  assert.match(automation, /onClick=\{\(\) => onCreate\(flow\)\}/)
   assert.match(automation, /apiRequest\('\/api\/platform\/rules'\)/)
   assert.match(automation, /item\?\.action\?\.isTemplate === true/)
   assert.match(automation, /onCreate\(\{ \.\.\.definition, templateRule: template \}\)/)
