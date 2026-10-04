@@ -111,7 +111,8 @@ test("booking router graph reaches service, availability, confirmation and only 
   assert.ok(validateDate.defaultBranch.includes("service_found"));
   assert.ok(byId.get("service_found").outcomes[0].branch.includes("resource_service_found"));
   assert.ok(byId.get("resource_service_found").outcomes[0].branch.includes("resource_found"));
-  assert.ok(byId.get("resource_found").outcomes[0].branch.includes("availability_found"));
+  assert.ok(byId.get("resource_found").outcomes[0].branch.includes("availability_rules_found"));
+  assert.ok(byId.get("availability_rules_found").outcomes[0].branch.includes("availability_found"));
   assert.ok(byId.get("validate_slot").outcomes.every((outcome) => outcome.branch.includes("confirm_case") && outcome.branch.includes("send_confirmation")));
   const getCase = byId.get("get_case");
   for (const status of ["CONFIRMED","CANCELLED","EXPIRED"]) {
