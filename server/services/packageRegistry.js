@@ -2138,7 +2138,7 @@ export function packageDefinition(entry) {
             authType: "oauth2_client_credentials",
             baseUrl: "https://api.uber.com",
             credentialsSchema: [{ key: "token", type: "secret", required: false, label: "OAuth access token" }, { key: "clientId", type: "string", required: false, label: "Client ID" }, { key: "clientSecret", type: "secret", required: false, label: "Client Secret" }],
-            operations: [{ key: "oauth_client_credentials", tokenUrl: "https://auth.uber.com/oauth/v2/token", scope: "eats.store eats.order" }, { key: "test_connection", name: "Test Connection", method: "GET", path: "/v1/eats/stores" }],
+            operations: [{ key: "oauth_client_credentials", tokenUrls: { sandbox: "https://sandbox-login.uber.com/oauth/v2/token", production: "https://auth.uber.com/oauth/v2/token" }, scope: "eats.store eats.order" }, { key: "test_connection", name: "Test Connection", method: "GET", path: "/v1/eats/stores" }],
           },
         };
         const definition = definitions[entry.key];
