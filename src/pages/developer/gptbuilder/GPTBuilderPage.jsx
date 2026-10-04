@@ -1574,6 +1574,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                                           draft={draft}
                                           updateConfig={updateConfig}
                                           resources={resources}
+                                          object={objects.find((item) => objectKey(item) === startConfig.objectKey) || null}
+                                          onResourcesChange={(next) => { setResources(next); setDirty(true) }}
                                           onConfiguredChange={setConfigured}
                                         />
                                       : activeElement.key === 'run_agent'
