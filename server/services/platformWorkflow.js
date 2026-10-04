@@ -3187,25 +3187,54 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           if (field.source_column) fieldByKey.set(String(field.source_column), field);
         }
         const params = [];
-        const clauses = [];
+        const clauseRows = [];
         for (const condition of action.conditions) {
-          const metadata = fieldByKey.get(String(condition?.field || ""));
+          const fieldName = String(condition?.field || "");
+          const metadata = fieldByKey.get(fieldName);
           if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) throw new Error("Delete Record condition field is unavailable");
           const column = '"' + (metadata.source_column || metadata.api_name) + '"';
           const operator = String(condition.operator || "equals").toLowerCase();
           const value = resolveConfiguredResource(condition.value, context, { preserveMissing: false });
-          params.push(value);
-          const placeholder = "$" + params.length;
-          if (operator === "equals") clauses.push(column + "=" + placeholder);
-          else if (operator === "not_equals") clauses.push(column + "<>" + placeholder);
-          else if (operator === "greater_than") clauses.push(column + ">" + placeholder);
-          else if (operator === "greater_than_or_equal") clauses.push(column + ">=" + placeholder);
-          else if (operator === "less_than") clauses.push(column + "<" + placeholder);
-          else if (operator === "less_than_or_equal") clauses.push(column + "<=" + placeholder);
-          else if (operator === "contains") clauses.push(column + "::text ILIKE '%' || " + placeholder + "::text || '%'");
-          else if (operator === "starts_with") clauses.push(column + "::text ILIKE " + placeholder + "::text || '%'");
-          else if (operator === "ends_with") clauses.push(column + "::text ILIKE '%' || " + placeholder + "::text");
-          else throw new Error("Delete Record uses unsupported condition operator");
+          let sql = "";
+          if (operator === "is_null") {
+            sql = Boolean(value) ? "(" + column + " IS NULL OR " + column + "::text='')" : "(" + column + " IS NOT NULL AND " + column + "::text<>'')";
+          } else {
+            params.push(value);
+            const placeholder = "$" + params.length;
+            if (operator === "equals") sql = column + "=" + placeholder;
+            else if (operator === "not_equals") sql = column + "<>" + placeholder;
+            else if (operator === "greater_than") sql = column + ">" + placeholder;
+            else if (operator === "greater_than_or_equal") sql = column + ">=" + placeholder;
+            else if (operator === "less_than") sql = column + "<" + placeholder;
+            else if (operator === "less_than_or_equal") sql = column + "<=" + placeholder;
+            else if (operator === "contains") sql = column + "::text ILIKE '%' || " + placeholder + "::text || '%'";
+            else if (operator === "starts_with") sql = column + "::text ILIKE " + placeholder + "::text || '%'";
+            else if (operator === "ends_with") sql = column + "::text ILIKE '%' || " + placeholder + "::text";
+            else throw new Error("Delete Record uses unsupported condition operator");
+          }
+          clauseRows.push({ field: fieldName, operator, sql });
+        }
+        let conditionSql = "";
+        if (String(action.match || "all").toLowerCase() === "any") {
+          conditionSql = clauseRows.map((row) => row.sql).join(" OR ");
+        } else {
+          const consumed = new Set();
+          const groups = [];
+          clauseRows.forEach((row, index) => {
+            if (consumed.has(index)) return;
+            if (row.operator === "equals") {
+              const same = clauseRows.map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+                .filter(({ candidate, candidateIndex }) => candidateIndex >= index && candidate.operator === "equals" && candidate.field === row.field);
+              if (same.length > 1) {
+                same.forEach(({ candidateIndex }) => consumed.add(candidateIndex));
+                groups.push("(" + same.map(({ candidate }) => candidate.sql).join(" OR ") + ")");
+                return;
+              }
+            }
+            consumed.add(index);
+            groups.push(row.sql);
+          });
+          conditionSql = groups.join(" AND ");
         }
         const scoped = [];
         if (targetObject.company_scoped) { params.push(runtimeCompanyId); scoped.push('"company_id"=$' + params.length); }
@@ -3214,8 +3243,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           params.push(runtimeStoreId);
           scoped.push('"store_id"=$' + params.length);
         }
-        const joiner = String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ";
-        const where = ["(" + clauses.join(joiner) + ")", ...scoped].join(" AND ");
+        const where = ["(" + conditionSql + ")", ...scoped].join(" AND ");
         const existing = await db('SELECT id FROM "' + targetObject.source_table + '" WHERE ' + where, params);
         const deletedRecords = [];
         for (const row of existing.rows || []) {
