@@ -2,7 +2,7 @@ import { resolveBindingTree } from "./platformRecordPaths.js";
 import { decryptCredentials, redactHeadersForLog, redactValue } from "./integrationCredentials.js";
 
 const ALLOWED_METHODS = new Set(["GET","POST","PUT","PATCH","DELETE"]);
-const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
+const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;\nconst OAUTH_CLIENT_CREDENTIALS_CACHE = new Map();
 
 function interpolate(value, variables = {}) {
   if (typeof value !== "string") return value;
@@ -19,10 +19,10 @@ function safeBaseUrl(value) {
   return url;
 }
 
-function applyAuth(headers, authType, credentials) {
+async function applyAuth(headers, authType, credentials, { connectionId = null, operations = [] } = {}) {
   const type = String(authType || "none").toLowerCase();
   if (type === "none") return;
-  if (type === "bearer" || type === "oauth2") {
+  if (type === "oauth2_client_credentials") {\n    const auth = (Array.isArray(operations) ? operations : []).find((entry) => entry?.key === "oauth_client_credentials") || {};\n    const clientId = credentials?.clientId || credentials?.client_id;\n    const clientSecret = credentials?.clientSecret || credentials?.client_secret;\n    if (!clientId || !clientSecret || !auth.tokenUrl) throw new Error("Provider connection is missing OAuth client credentials metadata");\n    const cacheKey = `${connectionId || "connection"}:${auth.scope || ""}`;\n    let cached = OAUTH_CLIENT_CREDENTIALS_CACHE.get(cacheKey);\n    if (!cached || cached.expiresAt <= Date.now() + 60000) {\n      const tokenResponse = await fetch(String(auth.tokenUrl), { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "client_credentials", client_id: String(clientId), client_secret: String(clientSecret), ...(auth.scope ? { scope: String(auth.scope) } : {}) }) });\n      const tokenBody = await tokenResponse.json().catch(() => ({}));\n      if (!tokenResponse.ok || !tokenBody?.access_token) throw new Error(`Provider OAuth token request failed (${tokenResponse.status})`);\n      cached = { token: String(tokenBody.access_token), expiresAt: Date.now() + Math.max(60, Number(tokenBody.expires_in || 3600) - 60) * 1000 };\n      OAUTH_CLIENT_CREDENTIALS_CACHE.set(cacheKey, cached);\n    }\n    headers.Authorization = `Bearer ${cached.token}`;\n    return;\n  }\n  if (type === "bearer" || type === "oauth2") {
     const token = credentials?.accessToken || credentials?.access_token || credentials?.token;
     if (!token) throw new Error("Provider connection is missing its access token");
     headers.Authorization = `Bearer ${token}`;
@@ -43,7 +43,7 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
   if (!providerKey) throw new Error("ONE_HTTP_REQUEST requires providerKey");
 
   const definitionResult = await db(
-    `SELECT id,connector_key,base_url,auth_type,timeout_ms,status
+    `SELECT id,connector_key,base_url,auth_type,timeout_ms,status,operations
        FROM platform_connector_definitions
       WHERE LOWER(connector_key)=LOWER($1) AND status='ACTIVE'
       LIMIT 1`,
@@ -79,7 +79,7 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
   const requestMethod = String(method || "GET").toUpperCase();
   if (!ALLOWED_METHODS.has(requestMethod)) throw new Error(`Unsupported HTTP method: ${requestMethod}`);
   const requestHeaders = { Accept: "application/json", ...headers };
-  applyAuth(requestHeaders, connection?.auth_type || definition.auth_type, credentials);
+  await applyAuth(requestHeaders, connection?.auth_type || definition.auth_type, credentials, { connectionId: connection?.id || definition.id, operations: definition.operations || [] });
   const effectiveTimeout = Math.max(100, Math.min(120000, Number(timeoutMs || definition.timeout_ms || 15000)));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), effectiveTimeout);
