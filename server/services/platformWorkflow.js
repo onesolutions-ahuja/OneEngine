@@ -2238,7 +2238,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       type: "object",
       properties: {
         collection: { type: "string" },
-        transformMappings: { type: "object" },\n        outputValue: {},
+        transformMappings: { type: "object" },
+        outputValue: {},
       },
       required: ["collection","transformMappings"],
     },
@@ -2251,7 +2252,20 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
       const context = { record, previousRecord, req, object, workflowVariables };
       const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
-      const mappings = action.transformMappings || {};\n      const resolveTransformValue = (sourceValue, item) => {\n        let value;\n        if (typeof sourceValue === "string" && sourceValue.startsWith("item.")) value = String(sourceValue).slice(5).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);\n        else if (sourceValue === "item") value = item;\n        else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Array.isArray(sourceValue.coalesce)) {\n          value = sourceValue.coalesce.map((entry) => resolveTransformValue(entry, item)).find((entry) => entry !== undefined && entry !== null && entry !== "");\n        } else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Object.prototype.hasOwnProperty.call(sourceValue, "source")) {\n          value = resolveTransformValue(sourceValue.source, item);\n          if (sourceValue.multiply !== undefined) value = Number(value) * Number(sourceValue.multiply);\n          if (sourceValue.round === true) value = Math.round(Number(value));\n        } else value = resolveConfiguredResource(sourceValue, { ...context, record: item }, { preserveMissing: false });\n        return value;\n      };
+      const mappings = action.transformMappings || {};
+      const resolveTransformValue = (sourceValue, item) => {
+        let value;
+        if (typeof sourceValue === "string" && sourceValue.startsWith("item.")) value = String(sourceValue).slice(5).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);
+        else if (sourceValue === "item") value = item;
+        else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Array.isArray(sourceValue.coalesce)) {
+          value = sourceValue.coalesce.map((entry) => resolveTransformValue(entry, item)).find((entry) => entry !== undefined && entry !== null && entry !== "");
+        } else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Object.prototype.hasOwnProperty.call(sourceValue, "source")) {
+          value = resolveTransformValue(sourceValue.source, item);
+          if (sourceValue.multiply !== undefined) value = Number(value) * Number(sourceValue.multiply);
+          if (sourceValue.round === true) value = Math.round(Number(value));
+        } else value = resolveConfiguredResource(sourceValue, { ...context, record: item }, { preserveMissing: false });
+        return value;
+      };
       const assignPath = (target, path, value) => {
         const parts = String(path || "").split(".").filter(Boolean);
         if (!parts.length) return;
@@ -2264,7 +2278,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const transformOne = (item) => {
         const output = {};
         for (const [targetPath, sourceValue] of Object.entries(mappings)) {
-          const value = resolveTransformValue(sourceValue, item);\n          assignPath(output, targetPath, value);
+          const value = resolveTransformValue(sourceValue, item);
+          assignPath(output, targetPath, value);
         }
         return output;
       };
