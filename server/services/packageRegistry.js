@@ -854,7 +854,7 @@ export function packageDefinition(entry) {
         {
           "name": "storeId",
           "type": "text",
-          "required": true
+          "required": false
         }
       ],
       "outputContract": [
