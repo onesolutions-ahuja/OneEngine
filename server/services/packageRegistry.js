@@ -1721,7 +1721,7 @@ function oneAssistantAppointmentRouterWorkflow() {
     },
     {
       id: id + "_whatsapp_api", label: label + " - WhatsApp API", apiName: id + "_whatsapp_api",
-      key: "ONE_HTTP_REQUEST", providerKey: "whatsapp", method: "POST",
+      key: "ONE_HTTP_REQUEST", providerKey: "whatsapp", method: "POST", requireSuccess: true,
       endpoint: "/{{phoneNumberId}}/messages",
       body: {
         messaging_product: "whatsapp",
@@ -1765,7 +1765,11 @@ function oneAssistantAppointmentRouterWorkflow() {
       outcomes:[{id:"existing",label:"Existing Session",condition:{match:"all",conditions:[{field:"steps.get_case.count",operator:"greater_than",value:0}]},branch:["route_state"]}],
       defaultLabel:"New Session",defaultBranch:["is_booking_request"] },
     { id:"is_booking_request", label:"Start Appointment Booking?", apiName:"is_booking_request", key:"CONDITION",
-      outcomes:[{id:"appointment",label:"Appointment",condition:condition("body","APPOINTMENT"),branch:["create_case","send_initial_prompt"]}],
+      outcomes:[
+        {id:"appointment_upper",label:"APPOINTMENT",condition:condition("body","APPOINTMENT"),branch:["create_case","send_initial_prompt"]},
+        {id:"appointment_title",label:"Appointment",condition:condition("body","Appointment"),branch:["create_case","send_initial_prompt"]},
+        {id:"appointment_lower",label:"appointment",condition:condition("body","appointment"),branch:["create_case","send_initial_prompt"]}
+      ],
       defaultLabel:"Ignore Non-Booking Message",defaultBranch:[] },
     { id:"create_case", label:"Create Booking Case", apiName:"create_case", key:"CREATE_RECORD", objectKey:"appointment_booking_case",
       fieldValues:{channel:{path:"channel"},sender:{path:"sender"},recipient:{path:"recipient"},status:"NEW",customer_id:{path:"metadata.customerId",fallback:null},state:{step:"AWAITING_DATE"}} },
