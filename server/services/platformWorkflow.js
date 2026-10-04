@@ -506,6 +506,37 @@ export async function executeConnectorWorkflowAction({
     const instance = instanceResult.rows[0];
     if (!instance) return { success: false, code: "CONNECTOR_NOT_FOUND", message: "Installed connector instance not found" };
     const driver = connectorDrivers?.get(instance.connector_package_key);
+    if (!driver && requestedKey === "CONNECTOR_TEST_CONNECTION" && instance.connector_definition_id) {
+      try {
+        const executeConnectorAction = createConnectorActionExecutor({ db });
+        const test = await executeConnectorAction({
+          companyId: tenantCompanyId,
+          connectionId: instance.id,
+          operation: "test_connection",
+          actorUserId: actorUserId || req?.user?.id || null,
+        });
+        const testResult = { ...test, testMode: false };
+        await db(
+          `UPDATE integration_connections
+              SET connection_status='CONNECTED',last_error=NULL,last_test_at=NOW(),
+                  last_test_result=$1::jsonb,last_connected_at=NOW(),updated_at=NOW()
+            WHERE id=$2 AND company_id=$3`,
+          [JSON.stringify(testResult), instance.id, tenantCompanyId]
+        );
+        await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, "connector.instance.tested", "integration_connection", instance.id, { packageKey: instance.connector_package_key, success: true, metadataDriven: true });
+        return { success: true, status: "CONNECTED", connectorInstanceId: instance.id, connectorPackageKey: instance.connector_package_key, capability, requestedKey, result: testResult };
+      } catch (error) {
+        const message = String(error?.message || "Connector test failed").slice(0, 500);
+        await db(
+          `UPDATE integration_connections
+              SET connection_status='ERROR',last_error=$1,last_test_at=NOW(),
+                  last_test_result=$2::jsonb,updated_at=NOW()
+            WHERE id=$3 AND company_id=$4`,
+          [message, JSON.stringify({ success: false, message, metadataDriven: true }), instance.id, tenantCompanyId]
+        );
+        return { success: false, status: "ERROR", code: error?.code || "TEST_FAILED", message, connectorInstanceId: instance.id, connectorPackageKey: instance.connector_package_key, capability, requestedKey };
+      }
+    }
     if (!driver) return { success: false, code: "PROVIDER_NOT_SUPPORTED", message: "Connector app has no runtime driver", connectorInstanceId: instance.id };
 
     const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
