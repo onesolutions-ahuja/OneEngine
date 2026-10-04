@@ -1164,7 +1164,7 @@ export default function createOnlineRouter({
         db,
         req,
         companyId: req.user.companyId,
-        action: { type: "UBER_TEST_CONNECTION" },
+        action: { type: "CONNECTOR_TEST_CONNECTION" },
       });
 
       if (connectionResult.code === "PLATFORM_DISABLED") {

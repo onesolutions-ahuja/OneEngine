@@ -1881,6 +1881,7 @@ app.use("/api", createGlobalProductLookupRouter({
   db,
   writeAudit,
   lookupService: globalProductLookupService,
+  connectorDrivers,
 }));
 
 app.use("/api", createDashboardRouter({ authenticate, authorize, db }));

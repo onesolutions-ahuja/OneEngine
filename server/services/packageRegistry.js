@@ -533,6 +533,54 @@ export function packageDefinition(entry) {
       capabilities: Array.isArray(entry.capabilities) ? entry.capabilities : [entry.key],
       providerConnector: entry.providerConnector || null,
       connectorApp: entry.connectorApp || null,
+      connectors: (() => {
+        const provider = entry.providerConnector || {};
+        const lookup = provider.globalProductLookup || {};
+        const definitions = {
+          open_food_facts: {
+            authType: "none",
+            baseUrl: lookup.baseUrl || "https://world.openfoodfacts.org",
+            credentialsSchema: [],
+            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: lookup.testEndpoint || "/api/v2/product/737628064502.json" }],
+          },
+          go_upc: {
+            authType: "bearer",
+            baseUrl: lookup.baseUrl || "https://go-upc.com",
+            credentialsSchema: [{ key: "token", type: "secret", required: true, label: "API key" }],
+            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: lookup.testEndpoint || "/api/v1/code/737628064502" }],
+          },
+          quickbooks: {
+            authType: "bearer",
+            baseUrl: "https://quickbooks.api.intuit.com",
+            credentialsSchema: [{ key: "token", type: "secret", required: true, label: "OAuth access token" }],
+            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/v3/company/{{input.realmId}}/companyinfo/{{input.realmId}}", request: { query: { minorversion: "75" } } }],
+          },
+          shopify: {
+            authType: "api_key",
+            baseUrl: "https://example.myshopify.com",
+            credentialsSchema: [{ key: "apiKey", type: "secret", required: true, label: "Admin API access token" }, { key: "headerName", type: "string", required: false, label: "Authentication header" }],
+            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/admin/api/2025-01/shop.json" }],
+          },
+          uber_eats: {
+            authType: "bearer",
+            baseUrl: "https://api.uber.com",
+            credentialsSchema: [{ key: "token", type: "secret", required: true, label: "OAuth access token" }],
+            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/v1/eats/stores" }],
+          },
+        };
+        const definition = definitions[entry.key];
+        if (!definition) return [];
+        return [{
+          connectorKey: entry.packageKey || entry.key,
+          name: `${entry.name} Connection`,
+          description: `Metadata-driven connection for ${entry.name}.`,
+          publisher: entry.publisher || "OneSolutions",
+          ...definition,
+          timeoutMs: Number(lookup.timeoutMs) || 15000,
+          retryPolicy: { maxAttempts: 1, backoffMs: 0 },
+          required: true,
+        }];
+      })(),
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
       ...(entry.key === "one_kiosk" ? {
         workflows: [
@@ -2501,7 +2549,7 @@ export function packageDefinition(entry) {
             objectKey: "uber_eats_connection",
             label: "Test Uber Eats Connection",
             description: "Test connector credentials and discover accessible stores.",
-            handlerKey: "UBER_TEST_CONNECTION",
+            handlerKey: "CONNECTOR_TEST_CONNECTION",
             requiredPermission: "online_orders.configure",
           },
           {

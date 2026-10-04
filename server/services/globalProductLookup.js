@@ -239,31 +239,5 @@ export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch,
   return { lookup, search };
 }
 
-export async function testGlobalProductProvider({ db, companyId, providerKey, fetchImpl = globalThis.fetch }) {
-  if (!PROVIDER_ADAPTERS[providerKey]) {
-    return { success: false, code: "UNKNOWN_PROVIDER", message: "Unknown product lookup provider" };
-  }
-  const providers = await discoverGlobalProductProviders({ db, companyId });
-  const provider = providers.find((candidate) => candidate.providerKey === providerKey);
-  if (!provider) {
-    return { success: false, code: "NOT_AVAILABLE", message: "Provider app must be installed, enabled and licensed before it can be tested" };
-  }
-  const credentials = await providerCredentials(db, companyId, provider);
-  try {
-    const adapter = PROVIDER_ADAPTERS[providerKey]({ fetchImpl });
-    const result = await adapter.testConnection({
-      config: { ...provider.metadata, ...provider.settings, baseUrl: provider.settings.baseUrl || provider.metadata.baseUrl },
-      apiKey: credentials?.apiKey,
-    });
-    return { success: true, ...result };
-  } catch (error) {
-    return {
-      success: false,
-      code: error?.code || "PROVIDER_ERROR",
-      message: error?.message || "Unable to verify the product lookup provider. Review its settings and retry.",
-    };
-  }
-}
-
 export const globalProductProviderConfigKeys = CONFIG_KEYS;
 export const globalProductProviderDefaults = DEFAULT_CONFIG;

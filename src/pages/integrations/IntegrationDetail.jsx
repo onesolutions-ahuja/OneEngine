@@ -67,7 +67,7 @@ export default function IntegrationDetail({ integration, onBack }) {
       if (String(integration.providerName || "").toLowerCase() === "shopify") {
         const response = await apiRequest(`/api/integrations/${integration.id}/shopify/action`, {
           method: "POST",
-          body: JSON.stringify({ type: "SHOPIFY_TEST_CONNECTION" }),
+          body: JSON.stringify({ type: "CONNECTOR_TEST_CONNECTION" }),
         });
         const result = response?.data || {};
         setConnTest({ ok: result.success === true, error: result.success ? null : result.message || "Shopify connection failed", shopName: result.shopName, shopDomain: result.shopDomain });

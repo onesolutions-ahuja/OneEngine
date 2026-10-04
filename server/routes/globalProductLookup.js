@@ -2,7 +2,8 @@ import express from "express";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing.js";
-import { globalProductProviderConfigKeys, globalProductProviderDefaults, testGlobalProductProvider } from "../services/globalProductLookup.js";
+import { globalProductProviderConfigKeys, globalProductProviderDefaults } from "../services/globalProductLookup.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const PROVIDER_KEYS = Object.freeze(Object.keys(globalProductProviderConfigKeys));
 const PROVIDER_HOSTS = Object.freeze({
@@ -73,7 +74,7 @@ function sanitizeSettings(body, providerKey, current) {
   return next;
 }
 
-export default function createGlobalProductLookupRouter({ authenticate, authorize, db, writeAudit, lookupService }) {
+export default function createGlobalProductLookupRouter({ authenticate, authorize, db, writeAudit, lookupService, connectorDrivers = null }) {
   const router = express.Router();
 
   async function providerRows(companyId) {
@@ -277,6 +278,42 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
         credentialsChanged = true;
       }
 
+      // Every product provider gets a normal connector instance, including
+      // credential-free providers such as Open Food Facts. This keeps Test
+      // Connection on the same editable CONNECTOR_TEST_CONNECTION workflow.
+      const definitionResult = await db(
+        "SELECT id FROM platform_connector_definitions WHERE connector_key=$1 AND status='ACTIVE' LIMIT 1",
+        [providerKey]
+      );
+      const connectorDefinitionId = definitionResult.rows?.[0]?.id || null;
+      if (!connectorDefinitionId) throw new Error("Provider connector metadata is not installed");
+      const connectorInstance = await db(
+        "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND store_id IS NULL ORDER BY updated_at DESC LIMIT 1",
+        [req.user.companyId, providerKey]
+      );
+      if (!connectorInstance.rows?.[0]) {
+        await db(
+          `INSERT INTO integration_connections
+             (company_id,store_id,name,provider_name,integration_type,connector_package_key,connector_definition_id,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by)
+           VALUES ($1,NULL,$2,$3,'product_lookup',$4,$5,$6::jsonb,$7,NULL,true,'CONFIGURED',$8)`,
+          [
+            req.user.companyId,
+            `${connector.globalProductLookup.displayName} Product Lookup`,
+            providerKey,
+            providerKey,
+            connectorDefinitionId,
+            JSON.stringify(next),
+            connector.globalProductLookup.authType === "none" ? "none" : connector.globalProductLookup.authType,
+            req.user.id,
+          ]
+        );
+      } else {
+        await db(
+          "UPDATE integration_connections SET connector_package_key=COALESCE(connector_package_key,$1),connector_definition_id=$2,connector_configuration=$3::jsonb,updated_at=NOW() WHERE id=$4 AND company_id=$5",
+          [providerKey, connectorDefinitionId, JSON.stringify(next), connectorInstance.rows[0].id, req.user.companyId]
+        );
+      }
+
       await writeAudit?.(req.user.companyId, req.user.id, "global_product_provider_config_updated", "global_product_provider", providerKey, {
         fields: publicFields, credentialsChanged,
       });
@@ -290,16 +327,25 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
   router.post("/global-products/providers/:providerKey/test", authenticate, authorize("integration.manage"), async (req, res) => {
     const providerKey = String(req.params.providerKey || "");
     if (!PROVIDER_KEYS.includes(providerKey)) return res.status(404).json({ success: false, message: "Unknown product lookup provider" });
-    const result = await testGlobalProductProvider({ db, companyId: req.user.companyId, providerKey });
-    if (["go_upc","upcitemdb","barcode_nest"].includes(providerKey)) {
-      const error = result.success ? null : result.message || result.code || "Provider test failed";
-      await db(
-        `UPDATE integration_connections SET last_connected_at=CASE WHEN $1 THEN NOW() ELSE last_connected_at END,
-                last_error=$2,connection_status=$3,updated_at=NOW()
-          WHERE company_id=$4 AND LOWER(provider_name)=LOWER($5) AND store_id IS NULL`,
-        [result.success, error, result.success ? "CONNECTED" : "ERROR", req.user.companyId, providerKey]
-      );
+    const instanceResult = await db(
+      "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND store_id IS NULL ORDER BY updated_at DESC LIMIT 1",
+      [req.user.companyId, providerKey]
+    );
+    const connectorInstanceId = instanceResult.rows?.[0]?.id || null;
+    if (!connectorInstanceId) {
+      return res.status(400).json({ success: false, code: "NOT_CONFIGURED", message: "Configure this provider before testing the connection" });
     }
+    const execution = await executeSystemWorkflow({
+      db,
+      companyId: req.user.companyId,
+      userId: req.user.id || null,
+      systemKey: "action:CONNECTOR_TEST_CONNECTION",
+      req,
+      input: { connectorInstanceId },
+      connectorDrivers,
+      source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "CONNECTOR_TEST_CONNECTION" },
+    });
+    const result = execution.result || { success: false, code: "TEST_FAILED", message: "Provider test did not return a result" };
     await writeAudit?.(req.user.companyId, req.user.id, "global_product_provider_tested", "global_product_provider", providerKey, {
       success: result.success, code: result.code || null,
     });
