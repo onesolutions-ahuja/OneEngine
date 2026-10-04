@@ -594,7 +594,7 @@ export function packageDefinition(entry) {
       "flowType": "AUTOLAUNCHED",
       "apiName": "GPT_UBER_EATS_GET_STORES",
       "capabilityKey": "GPT_UBER_EATS_GET_STORES",
-      "inputs": [],
+      "inputContract": [],
       "outputs": [
         "success",
         "response"
@@ -725,7 +725,7 @@ export function packageDefinition(entry) {
       "flowType": "AUTOLAUNCHED",
       "apiName": "GPT_UBER_EATS_TEST_CONNECTION",
       "capabilityKey": "GPT_UBER_EATS_TEST_CONNECTION",
-      "inputs": [],
+      "inputContract": [],
       "outputs": [
         "success",
         "response"
@@ -856,7 +856,7 @@ export function packageDefinition(entry) {
       "flowType": "AUTOLAUNCHED",
       "apiName": "GPT_UBER_EATS_UPLOAD_MENU",
       "capabilityKey": "GPT_UBER_EATS_UPLOAD_MENU",
-      "inputs": [
+      "inputContract": [
         {
           "name": "storeId",
           "type": "text",
@@ -1025,7 +1025,7 @@ export function packageDefinition(entry) {
       "flowType": "AUTOLAUNCHED",
       "apiName": "GPT_UBER_EATS_ACCEPT_ORDER",
       "capabilityKey": "GPT_UBER_EATS_ACCEPT_ORDER",
-      "inputs": [
+      "inputContract": [
         {
           "name": "orderId",
           "type": "text",
@@ -1196,7 +1196,7 @@ export function packageDefinition(entry) {
       "flowType": "AUTOLAUNCHED",
       "apiName": "GPT_UBER_EATS_DENY_ORDER",
       "capabilityKey": "GPT_UBER_EATS_DENY_ORDER",
-      "inputs": [
+      "inputContract": [
         {
           "name": "orderId",
           "type": "text",
@@ -1367,7 +1367,7 @@ export function packageDefinition(entry) {
       "flowType": "AUTOLAUNCHED",
       "apiName": "GPT_UBER_EATS_UPDATE_ITEM_PRICE",
       "capabilityKey": "GPT_UBER_EATS_UPDATE_ITEM_PRICE",
-      "inputs": [
+      "inputContract": [
         {
           "name": "storeId",
           "type": "text",
@@ -1555,7 +1555,7 @@ export function packageDefinition(entry) {
       "flowType": "AUTOLAUNCHED",
       "apiName": "GPT_UBER_EATS_SET_ITEM_UNAVAILABLE",
       "capabilityKey": "GPT_UBER_EATS_SET_ITEM_UNAVAILABLE",
-      "inputs": [
+      "inputContract": [
         {
           "name": "storeId",
           "type": "text",
@@ -1729,7 +1729,7 @@ export function packageDefinition(entry) {
       "flowType": "AUTOLAUNCHED",
       "apiName": "GPT_UBER_EATS_SET_ITEM_AVAILABLE",
       "capabilityKey": "GPT_UBER_EATS_SET_ITEM_AVAILABLE",
-      "inputs": [
+      "inputContract": [
         {
           "name": "storeId",
           "type": "text",
