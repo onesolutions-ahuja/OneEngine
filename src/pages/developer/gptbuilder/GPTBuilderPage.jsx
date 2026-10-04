@@ -388,7 +388,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
   </section></div>
 }
 
-function ManagerPanel({ elements, resources, onNewResource, onOpenElement }) {
+function ManagerPanel({ elements, resources, goToConnections, onNewResource, onOpenElement }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(null)
   const needle = query.trim().toLowerCase()
@@ -397,6 +397,27 @@ function ManagerPanel({ elements, resources, onNewResource, onOpenElement }) {
   const typeLabel = (resource) => {
     const key = resource.resourceType || resource.source || 'variable'
     return MANAGER_RESOURCE_TYPES.find(([,value]) => value === key)?.[0] || (resource.isCollection ? 'Collection' : 'Resource')
+  }
+  const usageForResource = (resource) => {
+    const api = String(resource.apiName || '')
+    if (!api) return []
+    const needles = [`variables.${api}`, `{!${api}}`, api]
+    return elements.filter((element) => {
+      const serialized = JSON.stringify(element.config || {})
+      return needles.some((needle) => serialized.includes(needle))
+    }).map((element) => element.label || element.apiName || element.key)
+  }
+  const incomingForElement = (element) => (goToConnections || [])
+    .filter((edge) => String(edge.targetId) === String(element.id))
+    .map((edge) => edge.sourceId === 'start' ? 'Start' : (elements.find((item) => item.id === edge.sourceId)?.label || edge.sourceId))
+  const outputsForElement = (element) => {
+    if (element.key === 'get_records') {
+      const first = element.config?.recordLimit === 'first'
+      return [first ? `${element.apiName}.record` : `${element.apiName}.records`]
+    }
+    return Array.isArray(element.config?.outputs)
+      ? element.config.outputs.map((output) => output?.name || output?.apiName || String(output)).filter(Boolean)
+      : []
   }
   return <div className="gptb-manager">
     <div className="gptb-manager-actions"><button className="gptb-button is-brand" onClick={onNewResource}><Plus size={13}/> New Resource</button></div>
@@ -407,9 +428,9 @@ function ManagerPanel({ elements, resources, onNewResource, onOpenElement }) {
       <dl>
         <div><dt>Type</dt><dd>{selected.kind === 'element' ? (elementByKey(selected.row.key)?.label || selected.row.key) : typeLabel(selected.row)}</dd></div>
         <div><dt>API Name</dt><dd>{selected.row.apiName || '—'}</dd></div>
-        {selected.kind === 'resource' ? <><div><dt>Data Type</dt><dd>{selected.row.dataType || '—'}{selected.row.isCollection ? ' Collection' : ''}</dd></div><div><dt>Available for Input</dt><dd>{selected.row.availableForInput ? 'Yes' : 'No'}</dd></div><div><dt>Available for Output</dt><dd>{selected.row.availableForOutput ? 'Yes' : 'No'}</dd></div></> : null}
+        {selected.kind === 'resource' ? <><div><dt>Data Type</dt><dd>{selected.row.dataType || '—'}{selected.row.isCollection ? ' Collection' : ''}</dd></div><div><dt>Available for Input</dt><dd>{selected.row.availableForInput ? 'Yes' : 'No'}</dd></div><div><dt>Available for Output</dt><dd>{selected.row.availableForOutput ? 'Yes' : 'No'}</dd></div><div><dt>Usage</dt><dd>{usageForResource(selected.row).length ? usageForResource(selected.row).join(', ') : 'Not used'}</dd></div></> : null}
         <div><dt>Description</dt><dd>{selected.row.description || '—'}</dd></div>
-        {selected.kind === 'element' ? <div><dt>Incoming Go To Connections</dt><dd>Shown from the canvas connection map.</dd></div> : null}
+        {selected.kind === 'element' ? <><div><dt>Outputs</dt><dd>{outputsForElement(selected.row).length ? outputsForElement(selected.row).join(', ') : 'None'}</dd></div><div><dt>Incoming Go To Connections</dt><dd>{incomingForElement(selected.row).length ? incomingForElement(selected.row).join(', ') : 'None'}</dd></div></> : null}
       </dl>
       {selected.kind === 'element' ? <button className="gptb-inline-action" onClick={() => onOpenElement(selected.row)}>Open Element</button> : null}
     </div> : <>
@@ -419,7 +440,7 @@ function ManagerPanel({ elements, resources, onNewResource, onOpenElement }) {
   </div>
 }
 
-function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, onResourcesChange, onOpenElement }) {
+function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, goToConnections, onResourcesChange, onOpenElement }) {
   const [tab, setTab] = useState(layout === 'free' ? 'elements' : 'manager')
   const [newResourceOpen, setNewResourceOpen] = useState(false)
   const effectiveTab = layout === 'auto' ? 'manager' : tab
@@ -427,7 +448,7 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
     <div className="gptb-toolbox-tabs">{layout === 'free' ? <button className={effectiveTab === 'elements' ? 'is-active' : ''} onClick={() => setTab('elements')}>Elements</button> : null}<button className={effectiveTab === 'manager' ? 'is-active' : ''} onClick={() => setTab('manager')}>Manager</button><button className="gptb-toolbox-close" aria-label="Close toolbox" onClick={onClose}><X size={15}/></button></div>
     {effectiveTab === 'elements'
       ? <FreeFormElements flowType={flowType} startConfig={startConfig}/>
-      : <ManagerPanel elements={elements} resources={resources} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement}/>}
+      : <ManagerPanel elements={elements} resources={resources} goToConnections={goToConnections} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement}/>}
     {newResourceOpen ? <ManagerNewResource resources={resources} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
   </aside>
 }
@@ -1131,7 +1152,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     {message ? <div className="gptb-toast is-success">{message}<button aria-label="Dismiss message" onClick={() => setMessage('')}><X size={13}/></button></div> : null}
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''} ${editHistoryOpen ? 'is-history-mode' : ''}`}>
-      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={resources} onResourcesChange={(next) => { setResources(next); setDirty(true) }} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
+      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={resources} goToConnections={goToConnections} onResourcesChange={(next) => { setResources(next); setDirty(true) }} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
       <main
         ref={canvasRef}
         className="gptb-canvas"
