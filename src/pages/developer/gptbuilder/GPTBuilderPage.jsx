@@ -578,6 +578,41 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
     try { sessionStorage.removeItem(executionStorageKey) } catch {}
   }
 
+  const selectSavedTest = (nextTestId) => {
+    setSelectedTestId(nextTestId)
+    setResult(null)
+    setError('')
+    const savedTest = savedTests.find((test) => String(test.id) === String(nextTestId))
+    if (!savedTest) {
+      setRecordId('')
+      setRecordSearch('')
+      setInputs({})
+      setRollback(mode === 'test')
+      setAutomationEnabled(false)
+      setAssertions([])
+      setSkipStartConditions(false)
+      setDebugWaitBehavior(false)
+      setDebugWaitPaths({})
+      return
+    }
+    const config = savedTest.config && typeof savedTest.config === 'object' ? savedTest.config : {}
+    setRecordId(config.recordMode === 'specific' ? String(config.recordId || '') : '')
+    setRecordSearch('')
+    setInputs(config.inputs && typeof config.inputs === 'object' ? config.inputs : {})
+    const savedAutomationEnabled = config.scenarioTestingAutomation === true
+    setAutomationEnabled(savedAutomationEnabled)
+    setRollback(flowType === 'record' || savedAutomationEnabled ? true : (config.rollback ?? true))
+    setAssertions(Array.isArray(config.assertions) ? config.assertions.map((assertion, index) => ({
+      id: assertion.id || `saved-assertion-${index + 1}`,
+      resource: assertion.resource || '',
+      operator: assertion.operator || 'equals',
+      value: assertion.expected ?? assertion.value ?? '',
+    })) : [])
+    setSkipStartConditions(config.skipStartConditionRequirements === true)
+    setDebugWaitBehavior(config.debugWaitElementBehavior === true)
+    setDebugWaitPaths(config.debugWaitPaths && typeof config.debugWaitPaths === 'object' ? config.debugWaitPaths : {})
+  }
+
   const filteredRecords = records.filter((record) => {
     const needle = recordSearch.trim().toLowerCase()
     if (!needle) return true
@@ -651,7 +686,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   return <aside className="gptb-config-panel gptb-execution-panel" aria-label={title}>
     <header><div><strong>{title}</strong><small>Uses the most recent saved version.</small></div><button className="gptb-icon-button" aria-label={`Close ${title}`} onClick={onClose}><X size={16}/></button></header>
     <div className="gptb-config-body">
-      {mode === 'test' ? <section><h3>Test Scenario</h3><p className="gptb-help-text">Configure test data and run options for this scenario.</p><label><span>Saved Test</span><select value={selectedTestId} onChange={(event) => setSelectedTestId(event.target.value)}><option value="">New Scenario</option>{savedTests.map((test) => <option key={test.id} value={test.id}>{test.name}{test.last_status ? ` — ${test.last_status}` : ''}</option>)}</select></label><label><span>Scenario Name</span><input value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="Enter test name"/></label><button className="gptb-inline-action" disabled={savingScenario || !scenarioName.trim()} onClick={() => void saveScenario()}><Save size={13}/> {savingScenario ? 'Saving…' : 'Save Scenario'}</button></section> : null}
+      {mode === 'test' ? <section><h3>Test Scenario</h3><p className="gptb-help-text">Configure test data and run options for this scenario.</p><label><span>Saved Test</span><select value={selectedTestId} onChange={(event) => selectSavedTest(event.target.value)}><option value="">New Scenario</option>{savedTests.map((test) => <option key={test.id} value={test.id}>{test.name}{test.last_status ? ` — ${test.last_status}` : ''}</option>)}</select></label><label><span>Scenario Name</span><input value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="Enter test name"/></label><button className="gptb-inline-action" disabled={savingScenario || !scenarioName.trim()} onClick={() => void saveScenario()}><Save size={13}/> {savingScenario ? 'Saving…' : 'Save Scenario'}</button></section> : null}
       {needsRecord ? <section><h3>{mode === 'test' ? 'Set Triggering Record' : 'Triggering Record'}</h3>
         <label><span>Search records</span><span className="gptb-execution-search"><Search size={13}/><input value={recordSearch} onChange={(event) => setRecordSearch(event.target.value)} placeholder="Search records…"/></span></label>
         <label><span>Record</span><select value={recordId} onChange={(event) => setRecordId(event.target.value)}><option value="">Select a record…</option>{filteredRecords.map((record) => {
