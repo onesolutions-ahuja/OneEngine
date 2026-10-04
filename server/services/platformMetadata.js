@@ -1163,6 +1163,8 @@ const operationalObjects = [
     ["closed_by","Closed By","lookup","closed_by",false],
   ] },
   { key: "cash_ledger", label: "Cash Ledger", plural: "Cash Ledger", table: "cash_movements", fields: [
+    ["company_id","Company","lookup","company_id",true],
+    ["store_id","Store","lookup","store_id",true],
     ["till_session_id","Till Session","lookup","till_session_id",true],
     ["user_id","User","lookup","user_id",true],
     ["type","Type","select","type",true],
@@ -1574,6 +1576,17 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
   }
 
   export async function initializeStandardObjectEcosystem(pool) {
+    await pool.query(`
+      ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+      ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
+      UPDATE cash_movements cm
+         SET company_id=ts.company_id,
+             store_id=ts.store_id
+        FROM till_sessions ts
+       WHERE ts.id=cm.till_session_id
+         AND (cm.company_id IS NULL OR cm.store_id IS NULL);
+    `);
+
     const moduleResult = await pool.query("SELECT id FROM platform_modules WHERE module_key='retail_pos' LIMIT 1");
     const moduleId = moduleResult.rows[0]?.id;
     if (!moduleId) return;
@@ -1677,6 +1690,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       if (!result.rows.length) continue;
       if (object.key === "onestore_app") {
         await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
+      }
+      if (object.key === "till_session" || object.key === "cash_ledger") {
+        await pool.query("UPDATE platform_objects SET company_scoped=true,store_scoped=true WHERE id=$1", [result.rows[0].id]);
       }
       for (let index = 0; index < object.fields.length; index += 1) {
         const [apiName, label, fieldType, sourceColumn, required] = object.fields[index];
