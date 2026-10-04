@@ -79,6 +79,22 @@ test('GPT Builder saved Flow Properties update the draft and require toolbar Sav
   assert.match(page, /runtime_active === true/)
 })
 
+test('GPT Builder toolbar uses current Salesforce Run Debug View Tests and Activate behavior', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /> Run<\/button>/)
+  assert.match(page, /> View Tests<\/button>/)
+  assert.match(page, /> Debug<\/button>/)
+  assert.match(page, />Activate<\/button>/)
+  assert.match(page, /disabled=\{!workflowId\}/)
+  assert.match(page, /Run the most recent saved version/)
+  assert.match(page, /Debug the most recent saved version/)
+  assert.match(page, /View and run tests for the most recent saved version/)
+  assert.match(page, /dirty \|\| issues\.some\(\(issue\) => issue\.level === 'error'\)/)
+  assert.match(page, /Errors and Warnings/)
+  assert.match(page, /Errors <span>\{errorCount\}<\/span>/)
+  assert.match(page, /Warnings <span>\{warningCount\}<\/span>/)
+})
+
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
