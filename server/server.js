@@ -3202,6 +3202,8 @@ async function startServer() {
                 return { status: "COMPLETED", resumed: false, ignored: true, reason: "wait_already_resumed" };
               }
 
+              let matchedPlatformEventPayload = null;
+              let matchedPlatformEventId = null;
               if (payload.platformEventType) {
                 const since = payload.waitingStartedAt ? new Date(payload.waitingStartedAt) : new Date(run.updated_at || run.created_at || Date.now());
                 const safeSince = Number.isNaN(since.getTime()) ? new Date(Date.now() - 86400000) : since;
@@ -3231,11 +3233,43 @@ async function startServer() {
                   return false;
                 };
                 const filters = Array.isArray(payload.platformEventConditions) ? payload.platformEventConditions : [];
-                const matchedEvent = (events.rows || []).find((event) => filters.every((filter) => compareEventValue(
-                  getEventPath(event.payload || {}, filter.field),
-                  filter.operator,
-                  filter.value
-                )));
+                const evaluateLogic = (logic, results) => {
+                  const tokens = String(logic || "").match(/\d+|AND|OR|NOT|\(|\)/gi) || [];
+                  let cursor = 0;
+                  const factor = () => {
+                    const token = String(tokens[cursor++] || "");
+                    if (token.toUpperCase() === "NOT") return !factor();
+                    if (token === "(") {
+                      const value = or();
+                      if (tokens[cursor++] !== ")") return false;
+                      return value;
+                    }
+                    return /^\d+$/.test(token) ? Boolean(results[Number(token) - 1]) : false;
+                  };
+                  const and = () => {
+                    let value = factor();
+                    while (String(tokens[cursor] || "").toUpperCase() === "AND") { cursor += 1; value = value && factor(); }
+                    return value;
+                  };
+                  const or = () => {
+                    let value = and();
+                    while (String(tokens[cursor] || "").toUpperCase() === "OR") { cursor += 1; value = value || and(); }
+                    return value;
+                  };
+                  return tokens.length ? or() && cursor === tokens.length : false;
+                };
+                const conditionMode = String(payload.platformEventConditionMode || (filters.length ? "all" : "none"));
+                const matchedEvent = (events.rows || []).find((event) => {
+                  if (conditionMode === "none" || !filters.length) return true;
+                  const results = filters.map((filter) => compareEventValue(
+                    getEventPath(event.payload || {}, filter.field),
+                    filter.operator,
+                    filter.value
+                  ));
+                  if (conditionMode === "any") return results.some(Boolean);
+                  if (conditionMode === "custom") return evaluateLogic(payload.platformEventCustomConditionLogic, results);
+                  return results.every(Boolean);
+                });
                 if (!matchedEvent) {
                   const pollSeconds = Math.max(30, Math.min(86400, Number(payload.pollSeconds || 60)));
                   await db(
@@ -3244,6 +3278,8 @@ async function startServer() {
                   );
                   return { status: "WAITING", deferred: true, platformEventMatched: false, nextCheckSeconds: pollSeconds };
                 }
+                matchedPlatformEventPayload = matchedEvent.payload || {};
+                matchedPlatformEventId = matchedEvent.id;
                 if (payload.stepRunId) {
                   await db(
                     "UPDATE platform_workflow_step_runs SET metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND run_id=$3",
@@ -3421,6 +3457,12 @@ async function startServer() {
                 : { variables: {}, steps: {} };
               if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
               if (!workflowVariables.steps || typeof workflowVariables.steps !== "object") workflowVariables.steps = {};
+              if (payload.platformEventOutputVariable && matchedPlatformEventPayload) {
+                workflowVariables.variables[String(payload.platformEventOutputVariable)] = matchedPlatformEventPayload;
+              }
+              if (matchedPlatformEventId) {
+                workflowVariables.variables.$LastPlatformEventId = matchedPlatformEventId;
+              }
               let results;
               try {
                 results = await executeWorkflowActions({
