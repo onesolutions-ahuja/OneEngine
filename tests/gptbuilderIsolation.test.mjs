@@ -257,3 +257,28 @@ test('GPT Builder phase 2 recheck matches current Salesforce flow version proper
   assert.match(page, /Number\.parseFloat\(draft\.apiVersion \|\| '68\.0'\) >= 68/)
   assert.match(page, /defaultRunContextForFlowType\(flow\.key\)/)
 })
+
+
+test('GPT Builder phase 1 recheck uses the current Salesforce New Automation browser', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
+  assert.match(page, /<GPTBuilderNewAutomation flowTypes=\{FLOW_TYPES\}/)
+  for (const text of ['Start From Scratch','Use a Template','Frequently Used','Triggered','Screens','Autolaunched Automations','View All','Search automation types','Search templates']) {
+    assert.ok(automation.includes(text), text)
+  }
+  assert.match(automation, /apiRequest\('\/api\/platform\/rules'\)/)
+  assert.match(automation, /item\?\.action\?\.isTemplate === true/)
+  assert.match(automation, /onCreate\(\{ \.\.\.definition, template \}\)/)
+})
+
+test('GPT Builder phase 2 recheck uses Salesforce Show Advanced and current screen progress settings', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /advancedOpen \? 'Hide Advanced' : 'Show Advanced'/)
+  assert.doesNotMatch(page, /<details><summary>Advanced<\/summary>/)
+  assert.match(page, /showProgress: flow\.key === 'screen'/)
+  assert.match(page, /Simple: Top of Screen/)
+  assert.match(page, /Path: Top of Screen/)
+  assert.match(page, /Simple: Footer of Screen/)
+  assert.match(page, /User Context—Enforces User Permissions/)
+  assert.match(page, /Number\.parseFloat\(draft\.apiVersion \|\| '68\.0'\) >= 68/)
+})
