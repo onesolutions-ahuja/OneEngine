@@ -34,8 +34,8 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0041_diagnostic_runtime_columns",
   "0042_exact_root_cause_diagnostics",
   "0043_platform_agents",
-  "0044_core_metadata_data_sources",
   "0045_rename_ledger_tables",
+  "0044_core_metadata_data_sources",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -230,19 +230,19 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     ),
   },
   {
-    key: "0044_core_metadata_data_sources",
-    version: "44",
-    name: "Core metadata data sources",
-    up: client => client.query(
-      readFileSync(new URL("./migrations/0044_core_metadata_data_sources.sql", import.meta.url), "utf8")
-    ),
-  },
-  {
     key: "0045_rename_ledger_tables",
     version: "45",
     name: "Rename business tables to canonical ledger names",
     up: client => client.query(
       readFileSync(new URL("./migrations/0045_rename_ledger_tables.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0044_core_metadata_data_sources",
+    version: "44",
+    name: "Core metadata data sources",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0044_core_metadata_data_sources.sql", import.meta.url), "utf8")
     ),
   },
 ]);
