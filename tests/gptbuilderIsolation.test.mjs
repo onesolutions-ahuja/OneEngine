@@ -116,6 +116,36 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Transform matches current Salesforce source target mapping join aggregate and generated-resource behavior', async () => {
+  const transform = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderTransform.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Source Data',
+    'Target Data',
+    'Allow multiple values (collection)',
+    'Join Source Collections',
+    'Map Source Data to Target Data',
+    'Source Field',
+    'Fixed Value',
+    'Formula',
+    'Aggregate',
+    'Value Mapping',
+    'Count',
+    'Sum',
+    '[$EachItem]',
+  ]) assert.ok(transform.includes(text), text)
+  assert.match(transform, /generatedByElementKey: 'transform'/)
+  assert.match(transform, /transformRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'transform'/)
+  assert.match(page, /transformRuntimeAction\(element\)/)
+  assert.match(runtime, /Transform requires join keys when multiple source collections are used/)
+  assert.match(runtime, /replace\(\/\\\[\\\$EachItem\\\]\/g, "CurrentItem"\)/)
+  assert.match(runtime, /mapping\.aggregate/)
+  assert.match(runtime, /mapping\.valueMap/)
+  assert.match(runtime, /workflowVariables\.variables\[outputVariable\] = value/)
+})
+
 test('GPT Builder Collection Filter matches current Salesforce criteria and generated resources', async () => {
   const filter = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderCollectionFilter.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
