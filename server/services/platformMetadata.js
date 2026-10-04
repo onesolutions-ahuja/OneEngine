@@ -1226,7 +1226,7 @@ const operationalObjects = [
   { key: "inventory", label: "Inventory", plural: "Inventory", table: "product_store_stock", fields: [
     ["company_id", "Company", "lookup", "company_id", true], ["product_id", "Product", "lookup", "product_id", true], ["store_id", "Store", "lookup", "store_id", true], ["quantity", "Current Quantity", "decimal", "quantity", false], ["updated_at", "Updated", "datetime", "updated_at", false],
   ] },
-  { key: "inventory_movement", label: "Inventory Movement", plural: "Inventory Movements", table: "inventory_movements", fields: [
+  { key: "inventory_movement", label: "Inventory Movement", plural: "Inventory Movements", table: "inventory_ledger", fields: [
     ["company_id", "Company", "lookup", "company_id", true], ["product_id", "Product", "lookup", "product_id", true], ["store_id", "Store", "lookup", "store_id", false], ["movement_type", "Movement Type", "picklist", "movement_type", true], ["quantity_change", "Quantity Change", "decimal", "quantity_change", true], ["balance_after", "Balance After", "decimal", "balance_after", false], ["batch_id", "Batch", "lookup", "batch_id", false], ["transaction_id", "Sale / Transaction", "lookup", "transaction_id", false], ["reference_type", "Reference Type", "text", "reference_type", false], ["reference_id", "Reference", "lookup", "reference_id", false], ["reason", "Reason", "text", "reason", false], ["notes", "Notes", "text", "notes", false], ["created_by", "Operator", "lookup", "created_by", false], ["created_at", "Created", "datetime", "created_at", false],
   ] },
   { key: "inventory_batch", label: "Inventory Batch", plural: "Inventory Batches", table: "inventory_batches", moduleKey: "batch_expiry", storeScoped: true, fields: [
@@ -1244,7 +1244,7 @@ const operationalObjects = [
   { key: "purchase", label: "Purchase", plural: "Purchases", table: "purchases", fields: [
     ["reference_number", "Reference", "text", "reference_number", false], ["supplier_id", "Supplier", "lookup", "supplier_id", false], ["store_id", "Store", "lookup", "store_id", false], ["purchase_date", "Purchase Date", "date", "purchase_date", false], ["notes", "Notes", "text", "notes", false], ["status", "Status", "text", "status", false], ["total", "Total", "currency", "total", false],
   ] },
-  { key: "purchase_receipt", label: "Purchase Receipt", plural: "Purchase Receipts", table: "purchase_receipts", fields: [
+  { key: "purchase_receipt", label: "Purchase Receipt", plural: "Purchase Receipts", table: "purchase_ledger", fields: [
     ["purchase_id", "Purchase", "lookup", "purchase_id", false], ["reference_number", "Reference", "text", "reference_number", false], ["received_at", "Received", "datetime", "received_at", false], ["notes", "Notes", "text", "notes", false],
   ] },
   { key: "supplier_invoice", label: "Supplier Invoice", plural: "Supplier Invoices", table: "supplier_invoices", fields: [
@@ -1282,7 +1282,7 @@ const operationalObjects = [
   { key: "loyalty_account", label: "Loyalty Account", plural: "Loyalty Accounts", table: "customer_loyalty_balances", fields: [
     ["company_id","Company","lookup","company_id",true],["customer_id","Customer","lookup","customer_id",true],["balance","Balance","decimal","balance",false],["updated_at","Updated","datetime","updated_at",false],
   ] },
-  { key: "loyalty_transaction", label: "Loyalty Transaction", plural: "Loyalty Transactions", table: "customer_loyalty_transactions", fields: [
+  { key: "loyalty_transaction", label: "Loyalty Transaction", plural: "Loyalty Transactions", table: "customer_loyalty_ledger", fields: [
     ["company_id","Company","lookup","company_id",true],["customer_id","Customer","lookup","customer_id",true],["transaction_type","Transaction Type","picklist","transaction_type",true],["amount","Amount","decimal","amount",true],["balance_after","Balance After","decimal","balance_after",false],["reference_type","Reference Type","text","reference_type",false],["reference_id","Reference","lookup","reference_id",false],["description","Description","text","description",false],["created_at","Created","datetime","created_at",false],
   ] },
   { key: "stock_transfer", label: "Stock Transfer", plural: "Stock Transfers", table: "stock_transfers", fields: [
@@ -1493,10 +1493,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     ["sale", "sale", "original_transactions", "one_to_many", "original_transaction_id"],
     ["product", "inventory", "stock_positions", "one_to_many", "product_id"],
     ["store", "inventory", "stock_positions", "one_to_many", "store_id"],
-    ["product", "inventory_movement", "inventory_movements", "one_to_many", "product_id"],
-    ["store", "inventory_movement", "inventory_movements", "one_to_many", "store_id"],
+    ["product", "inventory_movement", "inventory_ledger", "one_to_many", "product_id"],
+    ["store", "inventory_movement", "inventory_ledger", "one_to_many", "store_id"],
     ["inventory_batch", "inventory_movement", "movements", "one_to_many", "batch_id"],
-    ["sale", "inventory_movement", "inventory_movements", "one_to_many", "transaction_id"],
+    ["sale", "inventory_movement", "inventory_ledger", "one_to_many", "transaction_id"],
     ["purchase", "purchase_line", "lines", "one_to_many", "purchase_id"],
     ["purchase_line", "product", "product", "lookup", "product_id"],
     ["purchase", "purchase_receipt", "receipts", "one_to_many", "purchase_id"],
