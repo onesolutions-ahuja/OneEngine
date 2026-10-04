@@ -491,7 +491,7 @@ function FlowDebugPanel({workflowId,busy,setBusy,buildPayload,inputContract,setE
       :['record','object','collection'].includes(input.type)?<textarea aria-label={input.label||input.name} rows={6} value={inputs[input.name]??''} onChange={e=>setValue(input,e.target.value)}/>:<input aria-label={input.label||input.name} type={input.type==='number'?'number':'text'} value={inputs[input.name]??''} onChange={e=>setValue(input,e.target.value)}/>}</label>)}
     <label className="b2-check"><input type="checkbox" checked readOnly/> Roll back changes after debugging</label>
     <button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);setError('');try{
-      const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),mode:'debug',inputs:parseWorkflowInputs(inputContract,inputs),debugOptions:{rollbackMode:true}})})
+      const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),mode:'debug',rollback:true,inputs:parseWorkflowInputs(inputContract,inputs)})})
       const data=r?.data||r;setResult(data);setRuntimeMessage(data?.status?`Debug: ${data.status}`:'Debug completed.')
     }catch(e){setError(e?.message||'Debug failed')}finally{setBusy(false)}}}>Run Debug</button>
     {result?<><h4>Execution Result</h4><pre className="b2-test-result">{JSON.stringify(result,null,2)}</pre></>:null}
@@ -513,7 +513,7 @@ function FlowTestPanel({workflowId,busy,setBusy,buildPayload,inputContract,setEr
     <button className="is-primary" disabled={!workflowId||busy} onClick={async()=>{setBusy(true);setError('');try{
       const recordOverride=JSON.parse(recordJson)
       if(!recordOverride||Array.isArray(recordOverride)||typeof recordOverride!=='object')throw new Error('Trigger Record must be a JSON object')
-      const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),recordOverride,inputs:parseWorkflowInputs(inputContract,inputs),mode:'test',debugOptions:{rollbackMode:true}})})
+      const r=await apiRequest(`/api/platform/rules/${workflowId}/debug`,{method:'POST',body:JSON.stringify({definition:buildPayload('DRAFT'),recordOverride,inputs:parseWorkflowInputs(inputContract,inputs),mode:'test',rollback:true})})
       const data=r?.data||r;setResult(data);setRuntimeMessage(`Test: ${data?.status||'completed'}${data?.results?.some(row=>row.result?.simulated)?' (external actions simulated)':''}`)
     }catch(e){setError(e?.message||'Test failed')}finally{setBusy(false)}}}>Run Test</button>
     {result?<><h4>Execution Result</h4><pre className="b2-test-result">{JSON.stringify(result,null,2)}</pre></>:null}
