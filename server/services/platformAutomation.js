@@ -18,6 +18,7 @@ function ruleMatches(rule, fields, record, previousRecord) {
   if (!conditions.length) return true;
   return evaluateCondition({
     match: rule.action?.match || "all",
+    conditionLogic: rule.action?.conditionLogic || rule.action?.customConditionLogic || "",
     conditions,
   }, fields, record, previousRecord);
 }
