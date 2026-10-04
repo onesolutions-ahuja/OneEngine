@@ -1021,11 +1021,6 @@ export function packageDefinition(entry) {
           "name": "orderId",
           "type": "text",
           "required": true
-        },
-        {
-          "name": "readyForPickupTimeSecs",
-          "type": "number",
-          "required": false
         }
       ],
         "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
@@ -1037,18 +1032,6 @@ export function packageDefinition(entry) {
           "type": "Variable",
           "dataType": "Text",
           "defaultValue": "",
-          "isCollection": false,
-          "availableInput": true,
-          "availableOutput": false,
-          "objectKey": ""
-        },
-        {
-          "value": "variables.readyForPickupTimeSecs",
-          "apiName": "readyForPickupTimeSecs",
-          "label": "readyForPickupTimeSecs",
-          "type": "Variable",
-          "dataType": "Number",
-          "defaultValue": null,
           "isCollection": false,
           "availableInput": true,
           "availableOutput": false,
@@ -1088,11 +1071,7 @@ export function packageDefinition(entry) {
           "providerKey": "uber_eats",
           "method": "POST",
           "endpoint": "/v1/eats/orders/{{orderId}}/accept_pos_order",
-          "body": {
-            "ready_for_pickup_time_secs": {
-              "path": "variables.readyForPickupTimeSecs"
-            }
-          }
+          "body": { "reason": "Accepted by POS" }
         },
         {
           "id": "check_result",
@@ -1256,11 +1235,7 @@ export function packageDefinition(entry) {
           "providerKey": "uber_eats",
           "method": "POST",
           "endpoint": "/v1/eats/orders/{{orderId}}/deny_pos_order",
-          "body": {
-            "reason": {
-              "path": "variables.reason"
-            }
-          }
+          "body": { "reason": { "explanation": { "path": "variables.reason" }, "code": "OTHER" } }
         },
         {
           "id": "check_result",
@@ -1433,6 +1408,7 @@ export function packageDefinition(entry) {
         }
       ],
       "actions": [
+        { "id":"calculate_price_minor","label":"Calculate Minor Unit Price","apiName":"calculate_price_minor","key":"FORMULA","resourceName":"priceMinor","resultType":"number","expression":"price * 100","inputs":{"price":{"path":"variables.price"}} },
         {
           "id": "update_price",
           "label": "Update Uber Eats Item Price",
@@ -1441,11 +1417,7 @@ export function packageDefinition(entry) {
           "providerKey": "uber_eats",
           "method": "POST",
           "endpoint": "/v2/eats/stores/{{storeId}}/menus/items/{{itemId}}",
-          "body": {
-            "price": {
-              "path": "variables.price"
-            }
-          }
+          "body": { "price_info": { "price": { "path": "variables.priceMinor" }, "overrides": [] } }
         },
         {
           "id": "check_result",
@@ -1548,6 +1520,8 @@ export function packageDefinition(entry) {
           "type": "text",
           "required": true
         }
+      ,
+        { "name":"suspendUntil","type":"number","required":true }
       ],
         "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
       "resources": [
@@ -1574,6 +1548,9 @@ export function packageDefinition(entry) {
           "availableInput": true,
           "availableOutput": false,
           "objectKey": ""
+        },
+        {
+          "value":"variables.suspendUntil","apiName":"suspendUntil","label":"Suspend Until","type":"Variable","dataType":"Number","defaultValue":null,"isCollection":false,"availableInput":true,"availableOutput":false,"objectKey":""
         },
         {
           "value": "variables.success",
@@ -1612,8 +1589,8 @@ export function packageDefinition(entry) {
           "body": {
             "suspension_info": {
               "suspension": {
-                "suspend_until": -1,
-                "reason": "OUT_OF_STOCK"
+                "suspend_until": { "path": "variables.suspendUntil" },
+                "reason": "Out of stock"
               }
             }
           }
@@ -1781,7 +1758,7 @@ export function packageDefinition(entry) {
           "method": "POST",
           "endpoint": "/v2/eats/stores/{{storeId}}/menus/items/{{itemId}}",
           "body": {
-            "suspension_info": {}
+            "suspension_info": { "suspension": { "suspend_until": null } }
           }
         },
         {
