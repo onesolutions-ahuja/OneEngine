@@ -8,14 +8,17 @@ import {
 } from "../server/services/platformWorkflow.js";
 import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
 
+const REMOVED_PROVIDER_TEST_ADAPTERS = [
+  "OPEN_FOOD_FACTS_TEST_CONNECTION",
+  "GO_UPC_TEST_CONNECTION",
+];
+
 const INTERNAL = [
   "PAYMENT_START",
   "PAYMENT_CANCEL",
   "GLOBAL_PRODUCT_LOOKUP_BARCODE",
   "OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
-  "OPEN_FOOD_FACTS_TEST_CONNECTION",
   "GO_UPC_LOOKUP_PRODUCT",
-  "GO_UPC_TEST_CONNECTION",
   "ONLINE_ORDER_TRANSITION",
   "SEND_PASSWORD_RESET_EMAIL",
   "SEND_USER_INVITATION",
@@ -43,6 +46,15 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
     assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
     assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
   }
+});
+
+test("provider-specific test adapters stay removed in favor of the generic connector test flow", () => {
+  const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
+  for (const key of REMOVED_PROVIDER_TEST_ADAPTERS) {
+    assert.equal(all.has(key), false, key + " must remain removed");
+    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as a hidden function");
+  }
+  assert.ok(all.has("CONNECTOR_TEST_CONNECTION"), "generic connector test action must remain executable");
 });
 
 test("internal adapters do not get generated System workflows", () => {
