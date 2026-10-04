@@ -780,6 +780,22 @@ test('GPT Builder phase 4 shared properties implements Salesforce label and API-
   assert.match(props, /apiNameSource: 'manual'/)
 })
 
+test('GPT Builder integrated Auto-Layout exposes insertion points between every element', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /const \[autoInsertIndex, setAutoInsertIndex\] = useState\(null\)/)
+  assert.match(page, /const addSlot = \(index\) =>/)
+  assert.match(page, /Add element at position/)
+  assert.match(page, /chooseElement\(element, 'auto', null, index\)/)
+  assert.match(page, /const target = autoElements\[insertIndex\] \|\| null/)
+})
+
+test('GPT Builder integrated Loop preserves LAST_TO_FIRST ordering exactly once', async () => {
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  assert.match(runtime, /const orderedCollection = String\(action\.iterationOrder .*LAST_TO_FIRST[\s\S]*\? \[\.\.\.collection\]\.reverse\(\)/)
+  assert.match(runtime, /LOOP executor already returns the collection in the requested iteration order/)
+  assert.match(runtime, /const iterationCollection = collection;/)
+})
+
 test('GPT Builder phase 4 matches auto-layout continuous editing and free-form dialog behavior', async () => {
   const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
   assert.match(props, /const useDialog = layout === 'free' \|\| isScreen/)
