@@ -337,7 +337,7 @@ export async function createGenericOrder({
 
           await client.query(
             `
-            INSERT INTO inventory_movements (
+            INSERT INTO inventory_ledger (
               company_id, product_id, store_id, movement_type, quantity_change,
               balance_after, reference_type, reference_id, reason, created_by
             )
