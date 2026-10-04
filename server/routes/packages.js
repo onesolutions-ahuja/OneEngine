@@ -369,9 +369,20 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
 
       const result = await db(
-        `SELECT p.*, m.module_key
+        `SELECT p.*, m.module_key,
+                osa.id AS onestore_app_id,
+                ta.id AS tenant_app_record_id,
+                ta.status AS tenant_app_status,
+                ta.installed_version AS tenant_app_installed_version,
+                ta.available_version AS tenant_app_available_version,
+                ta.licence_status AS tenant_app_licence_status,
+                ta.trial_started_at AS tenant_app_trial_started_at,
+                ta.trial_expires_at AS tenant_app_trial_expires_at,
+                ta.update_status AS tenant_app_update_status
            FROM package_registry p
            LEFT JOIN platform_modules m ON m.id=p.module_id
+           LEFT JOIN onestore_apps osa ON osa.app_key=p.package_key
+           LEFT JOIN tenant_apps ta ON ta.onestore_app_id=osa.id AND ta.company_id=$1
           WHERE p.publication_state='PUBLISHED'
             AND p.visible=true AND p.system_only=false
             AND (cardinality(p.allowed_companies)=0 OR $1=ANY(p.allowed_companies))
@@ -400,15 +411,22 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
             licence_required: item.licence_mode !== "TECHNICAL" && item.manifest?.licenceRequired !== false,
           });
           const marketplaceEligible = marketplaceEligibleFromSnapshot(req.user.companyId, item, eligibilitySnapshot);
+          const tenantStatus = String(item.tenant_app_status || "AVAILABLE").toUpperCase();
+          const tenantLicence = String(item.tenant_app_licence_status || "NONE").toUpperCase();
+          const tenantLicensed = ["LICENSED","TRIAL"].includes(tenantLicence) || licensed;
           const storefrontState = item.active !== true
             ? "UNAVAILABLE"
             : item.installable !== true
               ? "NOT_INSTALLABLE"
-              : !licensed || !marketplaceEligible
+              : !tenantLicensed || !marketplaceEligible
                 ? "LICENCE_REQUIRED"
-                : item.company_installation?.status === "active"
+                : tenantStatus === "ACTIVE"
                   ? "INSTALLED"
-                  : "AVAILABLE";
+                  : tenantStatus === "INACTIVE"
+                    ? "INACTIVE"
+                    : tenantStatus === "INSTALLED"
+                      ? "INSTALLED"
+                      : "AVAILABLE";
           const priorTrial = trialByPackage.get(item.package_key) || null;
           const trialAvailable =
             item.licence_mode !== "TECHNICAL" &&
@@ -421,8 +439,7 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
             licensed,
             licence_request_status: pendingRequests.has(item.package_key) ? "PENDING" : null,
             storefront_state: storefrontState,
-            can_install: storefrontState === "AVAILABLE" ||
-              (storefrontState === "INSTALLED" && item.company_installation?.deactivated_by_user === true),
+            can_install: storefrontState === "AVAILABLE",
             trial_available: trialAvailable,
             trial_days: 7,
             trial_activated_at: priorTrial?.activated_at || null,
