@@ -244,26 +244,19 @@ app.use("/api", apiLimiter);
  * before the global JSON parser consumes the stream (express.raw sets
  * req.body to a Buffer; express.json then skips the already-parsed body).
  */
-app.use("/api/online/deliveroo/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 
 /*
  * Uber primary webhook is HMAC-signed (X-Uber-Signature) over the RAW body -
  * same raw-parsing mechanism as the Deliveroo webhook above.
  */
-app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/smsgate/webhook", express.raw({ type: "*/*", limit: "64kb" }));
-app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
 
 /* T10D: Self-Checkout mode gate — ahead of EVERY API router so a
  * self-checkout mode token is refused for privileged operations
  * server-side (never merely hidden in the UI). */
-app.use(createSelfCheckoutModeGate());
-app.use(createKioskModeGate());
 app.use(createTrustedRuntimeGate());
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
@@ -1833,7 +1826,6 @@ app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeA
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
-app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
 app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
 app.use("/api", createPlatformSchedulesRouter({ authenticate, authorize, db }));
@@ -1887,19 +1879,6 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createSettingsRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  writeAudit,
-  testPaymentTerminal,
-  requireLoyaltyEntitlement: (req, res, next) => {
-    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
-    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
-    return requireEntitlement(db, "loyalty")(req, res, next);
-  },
-}));
  /* routes/customerAuth.js exports a router instance (self-contained) */
 
 /*
@@ -1981,7 +1960,6 @@ app.use("/api", createSettingsRouter({
 
 
 
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
 /*
 |--------------------------------------------------------------------------
