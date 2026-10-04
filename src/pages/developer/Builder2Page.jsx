@@ -110,9 +110,11 @@ const normalizeNodeType=value=>{
   if(type==='DELETE_RECORD')return 'DELETE_RECORDS'
   if(['ASSIGN_RECORD','SET_VARIABLE'].includes(type))return 'ASSIGNMENT'
   if(type==='CONDITION')return 'DECISION'
+  if(type==='RUN_SUBFLOW')return 'SUBFLOW'
+  if(['WAIT_FOR_CONDITIONS','WAIT_UNTIL_DATE'].includes(type))return 'WAIT'
   return type
 }
-const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','CREATE_RELATED_RECORD','UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS','DELETE_RECORD','ASSIGN_RECORD','SET_VARIABLE','ASSIGNMENT','CONDITION','LOOP','WAIT','SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
+const BUILDER_NATIVE_RUNTIME_TYPES=new Set(['GET_RECORDS','CREATE_RECORD','CREATE_RELATED_RECORD','UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS','DELETE_RECORD','ASSIGN_RECORD','SET_VARIABLE','ASSIGNMENT','CONDITION','LOOP','WAIT','WAIT_FOR_CONDITIONS','WAIT_UNTIL_DATE','RUN_SUBFLOW','SUBFLOW','COLLECTION_FILTER','COLLECTION_SORT','TRANSFORM','CUSTOM_ERROR','SCREEN','END'])
 const OPERATOR_TO_BUILDER={equals:'Equals',not_equals:'Does Not Equal',is_empty:'Is Null',changed:'Is Changed',greater_than:'Greater Than',greater_than_or_equal:'Greater Than or Equal',less_than:'Less Than',less_than_or_equal:'Less Than or Equal'}
 const OPERATOR_TO_RUNTIME=Object.fromEntries(Object.entries(OPERATOR_TO_BUILDER).map(([key,value])=>[value,key]))
 const conditionToBuilder=row=>({id:row?.id||uid(),resource:row?.field||row?.resource||'',operator:OPERATOR_TO_BUILDER[row?.operator]||row?.operator||'Equals',value:row?.value??''})
@@ -139,6 +141,13 @@ const runtimeActionToBuilderNode=x=>{
       defaultBranch:Array.isArray(x?.defaultBranch)?x.defaultBranch:[],
     }}
   }
+  if(rawType==='RUN_SUBFLOW'){
+    const inputs=x?.inputs||x?.workflowInputs||x?.inputMap||{}
+    const outputs=x?.outputs||x?.outputMappings||x?.outputMap||{}
+    return {...base,type:'SUBFLOW',config:{flow:x?.workflowId||x?.subflowId||'',inputs,outputs,inputsText:Object.keys(inputs).length?JSON.stringify(inputs,null,2):'',outputsText:Object.keys(outputs).length?JSON.stringify(outputs,null,2):''}}
+  }
+  if(rawType==='WAIT_UNTIL_DATE')return {...base,type:'WAIT',config:{waitType:'date',dateResource:x?.resumeAt||''}}
+  if(rawType==='WAIT_FOR_CONDITIONS')return {...base,type:'WAIT',config:{waitType:'conditions',conditionLogic:x?.waitCondition?.match||x?.condition?.match||'all',conditions:(x?.waitCondition?.conditions||x?.condition?.conditions||[]).map(conditionToBuilder),pollSeconds:x?.pollSeconds||60}}
   const normalized=normalizeNodeType(rawType)
   if(rawType==='SEND_COMMUNICATION'){
     const inputs=actionInputs(x), channel=communicationBinding(inputs.channel), recipient=communicationBinding(inputs.recipient??inputs.to)
@@ -191,6 +200,17 @@ const builderNodeToRuntimeAction=(node,resources=[])=>{
       try{inputs=JSON.parse(p.inputsText)}catch{throw new Error(`${node.label||'Action'} has invalid Input Values JSON`)}
     }
     return {...base,key:p.actionKey,...inputs}
+  }
+  if(node.type==='SUBFLOW'){
+    let inputs=p.inputs&&typeof p.inputs==='object'?p.inputs:{}, outputs=p.outputs&&typeof p.outputs==='object'?p.outputs:{}
+    if(String(p.inputsText||'').trim()){try{inputs=JSON.parse(p.inputsText)}catch{throw new Error(`${node.label||'Subflow'} has invalid Input Values JSON`)}}
+    if(String(p.outputsText||'').trim()){try{outputs=JSON.parse(p.outputsText)}catch{throw new Error(`${node.label||'Subflow'} has invalid Output Values JSON`)}}
+    return {...base,key:'RUN_SUBFLOW',workflowId:p.flow,inputs,outputs}
+  }
+  if(node.type==='WAIT'){
+    if(p.waitType==='date')return {...base,key:'WAIT_UNTIL_DATE',resumeAt:p.dateResource}
+    if(p.waitType==='conditions')return {...base,key:'WAIT_FOR_CONDITIONS',waitCondition:{match:p.conditionLogic==='any'?'any':'all',conditions:(p.conditions||[]).map(runtimeCondition)},pollSeconds:Number(p.pollSeconds||60)}
+    return {...base,key:'WAIT',durationSeconds:Math.max(0,Number(p.amount||0))*(p.unit==='days'?86400:p.unit==='hours'?3600:60)}
   }
   return {...base,type:node.type,config:p}
 }
@@ -382,7 +402,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
     setFlowProps({label:'New Flow',apiName:'New_Flow',description:'',apiVersion:'66.0',runContext:'default'})
     setStartConfig({trigger:'created_or_updated',conditionLogic:'all',optimize:'actions',...(initialObjectKey?{objectKey:initialObjectKey}:{})})
     setStartOpen(requestedType==='record')
-    Promise.all([apiRequest('/api/platform/objects'),apiRequest('/api/platform/action-registry'),apiRequest('/api/platform/rules')]).then(([o,a,r])=>{
+    Promise.all([apiRequest('/api/platform/objects'),apiRequest('/api/platform/workflow-actions'),apiRequest('/api/platform/rules')]).then(([o,a,r])=>{
       if(!live)return
       setObjects(o?.data?.objects||o?.data||[])
       setActions(Array.isArray(a?.data)?a.data:[])
