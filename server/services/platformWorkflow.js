@@ -4569,63 +4569,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "QUICKBOOKS_SYNC_VENDORS",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Sync QuickBooks Vendors",
-    description: "Create or update mapped QuickBooks vendors from canonical onePOS suppliers.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage", "accounting.export"],
-    executor: async (context) => {
-      const companyId = context.companyId || context.req?.user?.companyId;
-      try {
-        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
-        const supplierIds = context.action?.supplierId
-          ? [context.action.supplierId]
-          : (await context.db("SELECT id FROM suppliers WHERE company_id=$1 AND active=true ORDER BY name", [companyId])).rows.map((row) => row.id);
-        const results = [];
-        for (const supplierId of supplierIds) results.push(await syncQuickBooksVendor({ db: context.db, companyId, ...loaded, supplierId }));
-        return { success: true, synced: results.length, results };
-      } catch (error) {
-        return { success: false, code: "VENDOR_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks vendor sync failed").slice(0, 500) };
-      }
-    },
-  },
-  {
-    key: "QUICKBOOKS_SYNC_PURCHASES",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Sync QuickBooks Purchases",
-    description: "Export canonical onePOS purchases and supplier invoices as QuickBooks Bills.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage", "accounting.export"],
-    executor: async (context) => {
-      const companyId = context.companyId || context.req?.user?.companyId;
-      try {
-        const unavailable = await quickBooksPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "quickbooks", context.action?.connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "QuickBooks connection is unavailable" };
-        const action = context.action || {};
-        const ids = action.purchaseId || action.invoiceId
-          ? [{ purchaseId: action.purchaseId || null, invoiceId: action.invoiceId || null }]
-          : (await context.db("SELECT id FROM purchases WHERE company_id=$1 AND status <> 'CANCELLED' ORDER BY purchase_date", [companyId])).rows.map((row) => ({ purchaseId: row.id, invoiceId: null }));
-        const results = [];
-        for (const entity of ids) results.push(await exportQuickBooksPurchase({ db: context.db, companyId, ...loaded, ...entity }));
-        return { success: true, synced: results.length, results };
-      } catch (error) {
-        return { success: false, code: "PURCHASE_SYNC_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks purchase sync failed").slice(0, 500) };
-      }
-    },
-  },
-  {
     key: "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",
     builderVisible: false,
     systemVisible: false,
