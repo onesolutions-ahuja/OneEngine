@@ -1,6 +1,12 @@
 import { GitBranch, Database, Plus, Zap } from 'lucide-react'
 
 export function decisionPaths(node) {
+  if (node.type === 'ACTION') {
+    try {
+      const inputs = node.config?.inputsText ? JSON.parse(node.config.inputsText) : node.config?.inputs || {}
+      return inputs.faultBranch?.length ? [{ id: 'fault', label: 'Fault Recovery', steps: inputs.faultBranch }] : []
+    } catch { return [] }
+  }
   if (node.type !== 'DECISION') return []
   const config = node.config || {}
   return [...(config.outcomes || []).map(outcome => ({ id: outcome.id, label: outcome.label, steps: outcome.branch || [] })),
@@ -28,7 +34,7 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
       {paths.length && !collapsed[id] ? <div className="b2-decision-paths">{paths.map(path => <section key={path.id} className="b2-decision-path">
         <strong>{path.label}</strong><div className="b2-line"/>
         {path.steps.map(step => renderNode(step, [...ancestors, id]))}
-        <button className="b2-add" aria-label={`Add element to ${node.label}: ${path.label}`} onClick={() => onAdd({ nodeId: id, outcomeId: path.id })}><Plus size={14}/></button>
+        {path.id !== 'fault' ? <button className="b2-add" aria-label={`Add element to ${node.label}: ${path.label}`} onClick={() => onAdd({ nodeId: id, outcomeId: path.id })}><Plus size={14}/></button> : null}
         <small>{path.steps.length ? 'Path complete' : 'End'}</small>
       </section>)}</div> : null}
     </div>
