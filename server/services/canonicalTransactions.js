@@ -107,7 +107,7 @@ export async function createCanonicalRelatedTransaction(client, {
   const referenceIds = [...new Set([...(relatedReferenceIds || []), paymentSourceSaleId].filter(Boolean))];
   if (referenceIds.length) {
     await client.query(
-      `UPDATE inventory_movements
+      `UPDATE inventory_ledger
           SET transaction_id=$1
         WHERE company_id=$2 AND reference_id = ANY($3::uuid[])`,
       [transactionId, companyId, referenceIds]
