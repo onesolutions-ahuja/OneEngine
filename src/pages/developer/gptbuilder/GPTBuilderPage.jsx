@@ -43,6 +43,42 @@ function apiNameFromLabel(label, fallback = 'New_Flow') {
   return value.replace(/_+$/g, '').slice(0, 80)
 }
 
+function interviewLabelFromFlowLabel(label) {
+  const value = String(label || '').trim()
+  return value ? `${value} {!$Flow.CurrentDateTime}` : ''
+}
+
+function defaultRunContextForFlowType(flowType) {
+  return ['record', 'schedule', 'platform_event'].includes(flowType) ? 'system_without_sharing' : 'default'
+}
+
+function FlowReferencePicker({ value, onChange, flows, kind }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const isTemplate = kind === 'template'
+  const matches = flows.filter((item) => {
+    const action = item?.action || {}
+    if (isTemplate ? action.isTemplate !== true : action.overridable !== true) return false
+    const needle = query.trim().toLowerCase()
+    return !needle || `${item.name || ''} ${action.apiName || ''}`.toLowerCase().includes(needle)
+  }).slice(0, 25)
+  const selected = flows.find((item) => String(item.id) === String(value))
+  return <div className="gptb-flow-ref-picker" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }}>
+    <Search size={14}/>
+    <input
+      value={open ? query : (selected?.name || '')}
+      placeholder={isTemplate ? 'Enter the template name...' : 'Search overridable packaged flows...'}
+      onFocus={() => { setQuery(selected?.name || ''); setOpen(true) }}
+      onChange={(event) => { setQuery(event.target.value); setOpen(true) }}
+      aria-label={isTemplate ? 'Source Template' : 'Original Flow'}
+    />
+    {value ? <button type="button" aria-label={isTemplate ? 'Clear Source Template' : 'Clear Original Flow'} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(''); setQuery(''); setOpen(false) }}><X size={13}/></button> : null}
+    {open ? <div className="gptb-flow-ref-menu">
+      {matches.length ? matches.map((item) => <button type="button" key={item.id} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(String(item.id)); setOpen(false) }}><b>{item.name}</b><small>{item.action?.apiName || 'Workflow'}</small></button>) : <span>No matching flows</span>}
+    </div> : null}
+  </div>
+}
+
 function initialStart(flowType) {
   if (flowType === 'record') return { objectKey: '', trigger: 'created_or_updated', conditionMode: 'none', conditions: [], formula: '', updateMode: 'every_time', optimize: 'actions', asyncPath: false, scheduledPaths: [] }
   if (flowType === 'schedule') return { startDate: '', startTime: '', frequency: 'Daily', batchSize: 200, objectKey: '', conditionMode: 'none', conditions: [], formula: '' }
@@ -281,29 +317,32 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
   </aside>
 }
 
-function FlowPropertiesModal({ value, saved, saving, flowType, onChange, onCancel, onSave }) {
+function FlowPropertiesModal({ value, saved, saving, flowType, availableFlows, onChange, onCancel, onSave }) {
   const [draft, setDraft] = useState(value)
   const [manualApi, setManualApi] = useState(saved)
+  const [manualInterview, setManualInterview] = useState(saved || Boolean(value.interviewLabel))
   const valid = draft.label.trim() && /^[A-Za-z][A-Za-z0-9_]*$/.test(draft.apiName) && !draft.apiName.endsWith('_') && !draft.apiName.includes('__')
   return <div className="gptb-modal-backdrop">
     <section className="gptb-properties-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-properties-title">
       <header className="gptb-new-head"><div><h2 id="gptb-properties-title">{saved ? 'Flow Properties' : 'Save the Flow'}</h2><p>{saved ? 'Flow Version Properties' : 'Enter the flow details before the first save.'}</p></div><button className="gptb-icon-button" aria-label="Close properties" onClick={onCancel}><X size={18}/></button></header>
       <div className="gptb-properties-body">
-        <label><span>Flow Label <b>*</b></span><input autoFocus value={draft.label} onChange={(event) => { const label = event.target.value; setDraft((current) => ({ ...current, label, apiName: !saved && !manualApi ? apiNameFromLabel(label) : current.apiName })) }}/></label>
+        <label><span>Flow Label <b>*</b></span><input autoFocus value={draft.label} onChange={(event) => { const label = event.target.value; setDraft((current) => ({ ...current, label, apiName: !saved && !manualApi ? apiNameFromLabel(label) : current.apiName, interviewLabel: !saved && !manualInterview ? interviewLabelFromFlowLabel(label) : current.interviewLabel })) }}/></label>
         <label><span>Flow API Name <b>*</b></span><input value={draft.apiName} disabled={saved} onChange={(event) => { setManualApi(true); setDraft((current) => ({ ...current, apiName: event.target.value })) }}/>{saved ? <small>The API name can’t be edited after the flow is saved.</small> : <small>Auto-filled from the Flow Label. You can edit it before the first save.</small>}</label>
         <label><span>Description</span><textarea rows={4} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}/></label>
-        <label><span>Interview Label</span><input value={draft.interviewLabel || ''} onChange={(event) => setDraft((current) => ({ ...current, interviewLabel: event.target.value }))}/><small>By default, interviews use the flow label and the current date/time.</small></label>
+        <label><span>Interview Label</span><input value={draft.interviewLabel || ''} placeholder="Insert a resource..." onChange={(event) => { setManualInterview(true); setDraft((current) => ({ ...current, interviewLabel: event.target.value })) }}/><small>Default: {interviewLabelFromFlowLabel(draft.label) || 'Flow Label {!$Flow.CurrentDateTime}'}</small></label>
         <details><summary>Advanced</summary>
-          <label><span>How to Run the Flow</span><select value={draft.runContext || 'default'} onChange={(event) => setDraft((current) => ({ ...current, runContext: event.target.value }))}><option value="default">Default Context</option><option value="system_with_sharing">System Context with Sharing</option><option value="system_without_sharing">System Context without Sharing</option></select></label>
+          {['screen','autolaunched'].includes(flowType) ? <label><span>How to Run the Flow</span><select value={draft.runContext || 'default'} onChange={(event) => setDraft((current) => ({ ...current, runContext: event.target.value }))}><option value="default">User or System Context—Depends on How Flow Is Launched</option>{Number.parseFloat(draft.apiVersion || '68.0') >= 68 ? <option value="user_enforced">User Context—Enforces User Permissions</option> : null}<option value="system_with_sharing">System Context with Sharing—Enforces Record-Level Access</option><option value="system_without_sharing">System Context Without Sharing—Access All Data</option></select></label> : null}
           <label><span>Type</span><input value={FLOW_TYPES.find((item) => item.key === flowType)?.label || flowType} disabled/></label>
-          <label><span>API Version for Running the Flow</span><select value={draft.apiVersion || '68.0'} onChange={(event) => setDraft((current) => ({ ...current, apiVersion: event.target.value }))}><option value="68.0">68.0</option><option value="67.0">67.0</option><option value="66.0">66.0</option><option value="65.0">65.0</option><option value="64.0">64.0</option></select><small>New flows use the latest supported runtime API version.</small></label>
-          {flowType === 'record' ? <label><span>Trigger Order</span><input type="number" min="1" max="2000" value={draft.triggerOrder || ''} onChange={(event) => setDraft((current) => ({ ...current, triggerOrder: event.target.value }))}/></label> : null}
-          {flowType === 'screen' ? <label className="gptb-properties-check"><input type="checkbox" checked={draft.showProgress === true} onChange={(event) => setDraft((current) => ({ ...current, showProgress: event.target.checked }))}/><span>Show a progress indicator on screen elements</span></label> : null}
+          <label><span>Source Template</span><FlowReferencePicker value={draft.sourceTemplateId || ''} onChange={(sourceTemplateId) => setDraft((current) => ({ ...current, sourceTemplateId }))} flows={availableFlows || []} kind="template"/></label>
           <label className="gptb-properties-check"><input type="checkbox" checked={draft.isTemplate === true} onChange={(event) => setDraft((current) => ({ ...current, isTemplate: event.target.checked }))}/><span>Template</span></label>
+          <label><span>Original Flow</span><FlowReferencePicker value={draft.originalFlowId || ''} onChange={(originalFlowId) => setDraft((current) => ({ ...current, originalFlowId }))} flows={availableFlows || []} kind="original"/></label>
           <label className="gptb-properties-check"><input type="checkbox" checked={draft.overridable === true} onChange={(event) => setDraft((current) => ({ ...current, overridable: event.target.checked }))}/><span>Overridable</span></label>
+          <label><span>API Version for Running the Flow</span><select value={draft.apiVersion || '68.0'} onChange={(event) => { const apiVersion = event.target.value; setDraft((current) => ({ ...current, apiVersion, runContext: Number.parseFloat(apiVersion) < 68 && current.runContext === 'user_enforced' ? 'default' : current.runContext })) }}><option value="68.0">68.0</option><option value="67.0">67.0</option><option value="66.0">66.0</option><option value="65.0">65.0</option><option value="64.0">64.0</option></select><small>New flows use the latest supported runtime API version.</small></label>
+          {flowType === 'record' ? <label><span>Trigger Order</span><input type="number" min="1" max="2000" value={draft.triggerOrder || ''} onChange={(event) => setDraft((current) => ({ ...current, triggerOrder: event.target.value }))}/></label> : null}
+          {flowType === 'screen' ? <><label className="gptb-properties-check"><input type="checkbox" checked={draft.showProgress === true} onChange={(event) => setDraft((current) => ({ ...current, showProgress: event.target.checked }))}/><span>Show a progress indicator on screen elements</span></label>{draft.showProgress ? <label><span>Progress Indicator Type</span><select value={draft.progressIndicatorType || 'simple_top'} onChange={(event) => setDraft((current) => ({ ...current, progressIndicatorType: event.target.value }))}><option value="simple_top">Simple: Top of Screen</option><option value="path_top">Path: Top of Screen</option><option value="simple_footer">Simple: Footer of Screen</option></select></label> : null}</> : null}
         </details>
       </div>
-      <footer className="gptb-new-footer"><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled={!valid || saving} onClick={() => { onChange(draft); onSave(draft) }}>{saving ? 'Saving…' : 'Save'}</button></footer>
+      <footer className="gptb-new-footer"><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled={!valid || saving} onClick={() => { onChange(draft); onSave(draft) }}>{saving ? 'Saving…' : saved ? 'Done' : 'Save'}</button></footer>
     </section>
   </div>
 }
@@ -346,10 +385,11 @@ function FlowShell({ flow, onNew }) {
   const [layoutOpen, setLayoutOpen] = useState(false)
   const [objects, setObjects] = useState([])
   const [eventTypes, setEventTypes] = useState([])
+  const [availableFlows, setAvailableFlows] = useState([])
   const [startConfig, setStartConfig] = useState(() => initialStart(flow.key))
   const [startDraft, setStartDraft] = useState(() => initialStart(flow.key))
   const [startOpen, setStartOpen] = useState(flow.startNeedsConfiguration)
-  const [flowProps, setFlowProps] = useState({ label: '', apiName: '', description: '', interviewLabel: '', runContext: 'default', apiVersion: '68.0', triggerOrder: '', showProgress: false, isTemplate: false, overridable: false })
+  const [flowProps, setFlowProps] = useState({ label: '', apiName: '', description: '', interviewLabel: '', runContext: defaultRunContextForFlowType(flow.key), apiVersion: '68.0', triggerOrder: '', showProgress: flow.key === 'screen', progressIndicatorType: 'simple_top', sourceTemplateId: '', originalFlowId: '', isTemplate: false, overridable: false })
   const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [workflowId, setWorkflowId] = useState('')
@@ -432,10 +472,12 @@ function FlowShell({ flow, onNew }) {
     Promise.all([
       apiRequest('/api/platform/objects').catch(() => ({ data: [] })),
       apiRequest('/api/platform/event-types').catch(() => ({ data: [] })),
-    ]).then(([objectResponse, eventResponse]) => {
+      apiRequest('/api/platform/rules').catch(() => ({ data: [] })),
+    ]).then(([objectResponse, eventResponse, rulesResponse]) => {
       if (!live) return
       setObjects(objectResponse?.data?.objects || objectResponse?.data || [])
       setEventTypes(Array.isArray(eventResponse?.data) ? eventResponse.data : [])
+      setAvailableFlows((Array.isArray(rulesResponse?.data) ? rulesResponse.data : []).filter((item) => item?.action?.type === 'workflow'))
     })
     return () => { live = false }
   }, [])
@@ -471,10 +513,13 @@ function FlowShell({ flow, onNew }) {
       description: props.description,
       apiVersion: props.apiVersion || '68.0',
       flowType: flow.key,
-      runContext: props.runContext || 'default',
-      interviewLabel: props.interviewLabel || (props.label ? `${props.label} - {!$Flow.CurrentDateTime}` : ''),
+      runContext: props.runContext || defaultRunContextForFlowType(flow.key),
+      interviewLabel: props.interviewLabel || interviewLabelFromFlowLabel(props.label),
       triggerOrder: props.triggerOrder ? Number(props.triggerOrder) : undefined,
       showProgress: props.showProgress === true,
+      progressIndicatorType: props.progressIndicatorType || 'simple_top',
+      sourceTemplateId: props.sourceTemplateId || undefined,
+      originalFlowId: props.originalFlowId || undefined,
       isTemplate: props.isTemplate === true,
       overridable: props.overridable === true,
       match: startConfig.conditionMode === 'custom' ? 'custom' : startConfig.conditionMode === 'any' ? 'any' : 'all',
@@ -805,7 +850,7 @@ function FlowShell({ flow, onNew }) {
         : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
-    {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
+    {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
   </section>
 }
 
