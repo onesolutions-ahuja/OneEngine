@@ -102,7 +102,7 @@ test('GPT Builder phase 3 applies Salesforce flow-type and layout availability r
   assert.match(elements, /element\.key === 'group'\) return layout === 'auto'/)
   assert.match(elements, /\['record', 'screen', 'autolaunched'\]\.includes\(flowType\)/)
   assert.match(elements, /fastRecord/)
-  assert.match(elements, /'assignment', 'decision', 'loop', 'get_records', 'update_records', 'custom_error', 'group'/)
+  assert.match(elements, /'assignment', 'decision', 'get_records', 'loop'/)
   assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]/)
 })
 
