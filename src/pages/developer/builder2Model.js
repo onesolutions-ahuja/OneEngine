@@ -87,6 +87,12 @@ export function normalizeGraph(nodes=[],edges=[]) {
   }
 }
 
+function isJsonObjectText(value) {
+  const text=String(value||'').trim()
+  if(!text)return true
+  try{const parsed=JSON.parse(text);return Boolean(parsed)&&typeof parsed==='object'&&!Array.isArray(parsed)}catch{return false}
+}
+
 export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],resources=[]}) {
   const issues=[]
   const add=(level,code,text,node='')=>issues.push({level,code,text,node})
@@ -109,7 +115,10 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='ACTION'&&!n.config?.actionKey) add('error','ACTION_REQUIRED',`${n.label}: Select an action.`,n.id)
     if (n.type==='SUBFLOW'&&!String(n.config?.flow||'').trim()) add('error','SUBFLOW_REQUIRED',`${n.label}: Select a subflow.`,n.id)
     if (n.type==='LOOP'&&!n.config?.collection) add('error','LOOP_COLLECTION_REQUIRED',`${n.label}: Select a collection variable.`,n.id)
+    if (n.type==='LOOP'&&!String(n.config?.itemVariable||'').trim()) add('error','LOOP_ITEM_REQUIRED',`${n.label}: Enter a Current Item API Name.`,n.id)
+    if (n.type==='LOOP'&&!(n.config?.bodyBranch||[]).length) add('error','LOOP_BODY_REQUIRED',`${n.label}: Connect at least one element to the For Each Item path.`,n.id)
     if (n.type==='COLLECTION_SORT'&&!n.config?.collection) add('error','SORT_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
+    if (n.type==='COLLECTION_SORT'&&!String(n.config?.sortField||'').trim()) add('error','SORT_FIELD_REQUIRED',`${n.label}: Enter the field API name used to sort the collection.`,n.id)
     if (n.type==='COLLECTION_FILTER'&&!n.config?.collection) add('error','FILTER_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
     if (n.type==='COLLECTION_FILTER'&&n.config?.filterMode==='formula'&&!String(n.config?.filterFormula||'').trim()) add('error','FILTER_FORMULA_REQUIRED',`${n.label}: Enter a filter formula.`,n.id)
     if (n.type==='TRANSFORM'&&(!n.config?.source||!n.config?.target)) add('error','TRANSFORM_MAPPING_REQUIRED',`${n.label}: Select source and target data.`,n.id)
@@ -133,7 +142,11 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='DECISION') (n.config?.outcomes||[]).forEach((o,i)=>{if(!String(o?.label||'').trim()) add('error','DECISION_OUTCOME_LABEL',`${n.label}: Outcome ${i+1} needs a label.`,n.id);if(!(o?.conditions||[]).some(x=>x?.resource)) add('error','DECISION_OUTCOME_CONDITION',`${n.label}: ${o?.label||`Outcome ${i+1}`} needs conditions.`,n.id)})
     if (n.type==='WAIT' && (n.config?.waitType||'duration')==='duration' && !(Number(n.config?.amount)>0)) add('error','WAIT_DURATION_REQUIRED',`${n.label}: Enter a wait duration.`,n.id)
     if (n.type==='WAIT' && n.config?.waitType==='date' && !n.config?.dateResource) add('error','WAIT_DATE_REQUIRED',`${n.label}: Select a date/time resource.`,n.id)
-    if (n.type==='WAIT' && n.config?.waitType==='event' && !String(n.config?.eventKey||'').trim()) add('error','WAIT_EVENT_REQUIRED',`${n.label}: Enter an event API name.`,n.id)
+    if (n.type==='WAIT' && n.config?.waitType==='conditions' && !(n.config?.conditions||[]).some(x=>x?.resource)) add('error','WAIT_CONDITION_REQUIRED',`${n.label}: Add at least one wait condition.`,n.id)
+    if (n.type==='WAIT' && n.config?.waitType==='event') add('error','WAIT_EVENT_UNSUPPORTED',`${n.label}: Event waits are not supported by the current runtime. Use Wait for Conditions, Wait Until Date, or a Platform Event-triggered flow.`,n.id)
+    if (n.type==='TRANSFORM'&&!isJsonObjectText(n.config?.mappingsText)) add('error','TRANSFORM_MAPPING_JSON',`${n.label}: Field Mappings must be a JSON object.`,n.id)
+    if (n.type==='SUBFLOW'&&!isJsonObjectText(n.config?.inputsText)) add('error','SUBFLOW_INPUT_JSON',`${n.label}: Input Values must be a JSON object.`,n.id)
+    if (n.type==='SUBFLOW'&&!isJsonObjectText(n.config?.outputsText)) add('error','SUBFLOW_OUTPUT_JSON',`${n.label}: Output Values must be a JSON object.`,n.id)
     if (n.type==='SCREEN'&&!(n.config?.components||[]).length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
   }
   const names=new Set()
