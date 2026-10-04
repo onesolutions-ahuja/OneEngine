@@ -40,8 +40,10 @@ export const SYSTEM_OBJECTS = Object.freeze(definitions.map(([key, table, permis
   Object.freeze({ key, table, permission, route, companyScoped: options.companyScoped !== false })));
 
 export function systemObject(object) {
-  const exact = SYSTEM_OBJECTS.find(entry => entry.table === object?.source_table || entry.key === object?.object_key);
-  if (exact) return exact;
+  const byKey = SYSTEM_OBJECTS.find(entry => entry.key === object?.object_key);
+  if (byKey) return byKey;
+  const byTable = SYSTEM_OBJECTS.find(entry => entry.table === object?.source_table);
+  if (byTable) return byTable;
   const family = /^(customer|supplier|inventory|purchase|sale|online_order|payment|refund|return|exchange)(?:_|s$)/.exec(object?.source_table || "")?.[1];
   if (!family) return null;
   const key = ({ payment: "sale", refund: "sale", return: "sale", exchange: "sale", inventory: "inventory_movement" })[family] || family;
