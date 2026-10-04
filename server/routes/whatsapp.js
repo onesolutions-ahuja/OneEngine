@@ -1101,6 +1101,30 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
           if (!storedMessage) continue;
           processed += 1;
 
+          console.info("WhatsApp inbound message recorded", {
+            companyId,
+            phoneNumberId,
+            messageType: storedMessage.message_type,
+          });
+
+          if (configuration.opt_out_enabled !== false && WHATSAPP_OPT_OUT_WORDS.has(body.toUpperCase())) {
+            const updated = await db(
+              `UPDATE whatsapp_conversations
+                  SET status='OPTED_OUT',updated_at=NOW()
+                WHERE id=$1 AND company_id=$2
+                RETURNING *`,
+              [conversation.id, companyId]
+            );
+            conversation = updated.rows[0] || conversation;
+            await writeAudit?.(companyId, null, "whatsapp_assistant_opt_out", "whatsapp_conversation", conversation.id, {
+              channel: "WHATSAPP",
+              messageId: storedMessage.id,
+            });
+            continue;
+          }
+
+          if (["HUMAN", "OPTED_OUT", "CLOSED"].includes(String(conversation.status || "").toUpperCase())) continue;
+
           await recordCommunicationEvent({
             db,
             companyId,
@@ -1122,16 +1146,6 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
             },
           });
 
-          console.info("WhatsApp inbound message recorded", {
-            companyId,
-            phoneNumberId,
-            messageType: storedMessage.message_type,
-          });
-
-          // Receiving/recording always publishes the communication event. Appointment
-          // booking itself is owned by the active OneAssistant workflow published from
-          // that event, so do not suppress the event-driven booking path when the
-          // optional legacy WhatsApp Assistant entitlement is absent.
           if (!assistantLicensed) {
             console.info("WhatsApp Assistant legacy handler skipped; event workflows remain eligible", {
               companyId,
@@ -1139,24 +1153,6 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
             });
             continue;
           }
-
-          if (configuration.opt_out_enabled !== false && WHATSAPP_OPT_OUT_WORDS.has(body.toUpperCase())) {
-            const updated = await db(
-              `UPDATE whatsapp_conversations
-                  SET status='OPTED_OUT',updated_at=NOW()
-                WHERE id=$1 AND company_id=$2
-                RETURNING *`,
-              [conversation.id, companyId]
-            );
-            conversation = updated.rows[0] || conversation;
-            await writeAudit?.(companyId, null, "whatsapp_assistant_opt_out", "whatsapp_conversation", conversation.id, {
-              channel: "WHATSAPP",
-              messageId: storedMessage.id,
-            });
-            continue;
-          }
-
-          if (["HUMAN", "OPTED_OUT", "CLOSED"].includes(String(conversation.status || "").toUpperCase())) continue;
 
           // Appointment conversations are owned by the shared
           // communication_message_received workflow. Keep the optional legacy
