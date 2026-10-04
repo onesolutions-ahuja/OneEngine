@@ -116,6 +116,39 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Wait for Conditions matches Salesforce multi-configuration wait and resume-event behavior', async () => {
+  const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitConditions.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  const server = await readFile(new URL('../server/server.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Wait Configurations',
+    'Always Wait—No Conditions',
+    'All Conditions Are Met (AND)',
+    'Any Condition Is Met (OR)',
+    'Custom Condition Logic Is Met',
+    'A Specified Time Occurs',
+    'A Platform Event Message Is Received',
+    'Base Time',
+    'Offset Number',
+    'Offset Unit',
+    'Default Path',
+  ]) assert.ok(wait.includes(text), text)
+  assert.match(wait, /Add Wait Configuration/)
+  assert.match(wait, /waitConditionsRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'wait_conditions'/)
+  assert.match(page, /waitConditionsRuntimeAction\(element\)/)
+  assert.match(elements, /\['wait_duration', 'wait_conditions'\]\.includes\(element\.key\).*\['autolaunched', 'schedule'\]/s)
+  assert.match(runtime, /waitConfigurations/)
+  assert.match(runtime, /eligibleConfigurations/)
+  assert.match(runtime, /defaultPath: true/)
+  assert.match(runtime, /platformEventType/)
+  assert.match(server, /platformEventMatched: false/)
+  assert.match(server, /wait_already_resumed/)
+  assert.match(server, /payload \? 'waitConfigurationId'/)
+})
+
 test('GPT Builder Wait for Amount of Time matches Salesforce duration units resume-time options and durable wait runtime', async () => {
   const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitDuration.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
