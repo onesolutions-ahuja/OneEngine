@@ -1,0 +1,38 @@
+name: Builder Functional Parity Check
+
+on:
+  push:
+    branches: [builder-functional-parity]
+    paths:
+      - ".github/workflows/builder-functional-parity.yml"
+      - "src/pages/developer/Builder2Page.jsx"
+      - "src/pages/developer/builder2Runtime.js"
+      - "src/pages/developer/builder2Model.js"
+      - "src/pages/flow/ScreenFlowRuntimePage.jsx"
+      - "server/services/platformWorkflow.js"
+      - "tests/builder2Runtime.test.mjs"
+      - "tests/builderRuntimeRecord.test.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Workflow audits
+        run: |
+          npm run audit:trusted
+          npm run audit:apps
+          npm run audit:workflow-coverage
+      - name: Builder runtime tests
+        run: node --test tests/builder2Runtime.test.mjs tests/builderRuntimeRecord.test.mjs
+      - name: Production build
+        run: npm run build
