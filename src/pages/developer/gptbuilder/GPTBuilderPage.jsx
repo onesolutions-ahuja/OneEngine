@@ -363,6 +363,9 @@ function FlowShell({ flow, onNew }) {
   const [resources, setResources] = useState([])
   const [editingElement, setEditingElement] = useState(null)
   const [selectedElementIds, setSelectedElementIds] = useState([])
+  const [freeSelectedIds, setFreeSelectedIds] = useState([])
+  const [freeConnectorDraft, setFreeConnectorDraft] = useState(null)
+  const canvasRef = useRef(null)
   const [copiedElements, setCopiedElements] = useState([])
   const [connectMode, setConnectMode] = useState(false)
   const [goToConnections, setGoToConnections] = useState([])
@@ -531,6 +534,23 @@ function FlowShell({ flow, onNew }) {
     setDirty(true)
   }
   const toggleElementSelection = (id) => setSelectedElementIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
+  const uniqueCopiedIdentity = (label, allElements) => {
+    const root = String(label || 'Element').replace(/\s+Copy(?:\s+\d+)?$/i, '')
+    const usedLabels = new Set(allElements.map((item) => String(item.label || '').toLowerCase()))
+    let number = 1
+    let nextLabel = `${root} Copy`
+    while (usedLabels.has(nextLabel.toLowerCase())) {
+      number += 1
+      nextLabel = `${root} Copy ${number}`
+    }
+    const usedApi = new Set(allElements.map((item) => String(item.apiName || '').toLowerCase()))
+    let baseApi = nextLabel.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'Element_Copy'
+    if (!/^[A-Za-z]/.test(baseApi)) baseApi = `Element_${baseApi}`
+    let nextApi = baseApi
+    let apiNumber = 2
+    while (usedApi.has(nextApi.toLowerCase())) nextApi = `${baseApi}_${apiNumber++}`
+    return { label: nextLabel, apiName: nextApi }
+  }
   const copySelectedElements = () => {
     const picked = elements.filter((element) => selectedElementIds.includes(element.id))
     setCopiedElements(JSON.parse(JSON.stringify(picked)))
@@ -540,21 +560,39 @@ function FlowShell({ flow, onNew }) {
   const pasteCopiedElements = () => {
     if (!copiedElements.length) return
     const existing = [...elements]
-    const clones = copiedElements.map((element, index) => {
-      const base = createElementInstance(element.key, [...existing], { source: 'auto', config: JSON.parse(JSON.stringify(element.config || {})) })
-      const clone = {
-        ...base,
-        label: `${element.label || base.label} ${index ? index + 2 : 'Copy'}`,
-        description: element.description || '',
-        configured: element.configured,
-      }
-      clone.apiName = clone.label.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || base.apiName
+    const clones = copiedElements.map((element) => {
+      const base = createElementInstance(element.key, existing, { source: 'auto', config: JSON.parse(JSON.stringify(element.config || {})) })
+      const identity = uniqueCopiedIdentity(element.label || base.label, existing)
+      const clone = { ...base, ...identity, description: element.description || '', configured: element.configured }
       existing.push(clone)
       return clone
     })
     setElements((current) => [...current, ...clones])
     setDirty(true)
     setElementPickerOpen(false)
+  }
+  const duplicateFreeElement = () => {
+    if (freeSelectedIds.length !== 1) return
+    const original = elements.find((element) => element.id === freeSelectedIds[0])
+    if (!original) return
+    const base = createElementInstance(original.key, elements, {
+      source: 'free',
+      position: { x: Number(original.position?.x || 220) + 28, y: Number(original.position?.y || 180) + 28 },
+      config: JSON.parse(JSON.stringify(original.config || {})),
+    })
+    const identity = uniqueCopiedIdentity(original.label || base.label, elements)
+    const clone = { ...base, ...identity, description: original.description || '', configured: original.configured }
+    setElements((current) => [...current, clone])
+    setFreeSelectedIds([clone.id])
+    setDirty(true)
+  }
+  const removeFreeSelection = () => {
+    if (!freeSelectedIds.length) return
+    const removed = new Set(freeSelectedIds)
+    setElements((current) => current.filter((element) => !removed.has(element.id)))
+    setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
+    setFreeSelectedIds([])
+    setDirty(true)
   }
   const beginConnectToElement = () => {
     if (!elements.length) return
@@ -587,17 +625,67 @@ function FlowShell({ flow, onNew }) {
     setDiagnosticsOpen(false)
     setEditingElement({ id: instance.id, isNew: false })
   }
+  const canvasPoint = (clientX, clientY) => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    const scale = zoom / 100
+    return {
+      x: Math.max(20, (clientX - rect.left + canvas.scrollLeft) / scale),
+      y: Math.max(20, (clientY - rect.top + canvas.scrollTop) / scale),
+    }
+  }
   const dropElement = (event) => {
     if (layout !== 'free') return
+    const existingId = event.dataTransfer.getData('application/x-gptbuilder-existing')
     const key = event.dataTransfer.getData('application/x-gptbuilder-element')
-    if (!elementByKey(key)) return
+    if (!existingId && !elementByKey(key)) return
     event.preventDefault()
-    const rect = event.currentTarget.getBoundingClientRect()
-    const scale = zoom / 100
-    const x = Math.max(20, (event.clientX - rect.left + event.currentTarget.scrollLeft) / scale)
-    const y = Math.max(20, (event.clientY - rect.top + event.currentTarget.scrollTop) / scale)
-    chooseElement(elementByKey(key), 'free', { x, y })
+    const point = canvasPoint(event.clientX, event.clientY)
+    if (existingId) {
+      setElements((current) => current.map((element) => element.id === existingId ? { ...element, position: point } : element))
+      setDirty(true)
+      return
+    }
+    chooseElement(elementByKey(key), 'free', point)
   }
+  const startFreeConnector = (sourceId, event) => {
+    const point = canvasPoint(event.clientX, event.clientY)
+    setFreeConnectorDraft({ sourceId, x: point.x, y: point.y })
+  }
+  const finishFreeConnector = (targetId) => {
+    if (!freeConnectorDraft || freeConnectorDraft.sourceId === targetId) { setFreeConnectorDraft(null); return }
+    setGoToConnections((current) => [...current.filter((edge) => !(edge.sourceId === freeConnectorDraft.sourceId && edge.targetId === targetId)), { sourceId: freeConnectorDraft.sourceId, targetId }])
+    setFreeConnectorDraft(null)
+    setDirty(true)
+  }
+  const zoomToFit = () => {
+    const canvas = canvasRef.current
+    const stage = canvas?.querySelector('.gptb-canvas-stage')
+    if (!canvas || !stage) return
+    const width = Math.max(stage.scrollWidth, stage.offsetWidth, 1)
+    const height = Math.max(stage.scrollHeight, stage.offsetHeight, 1)
+    const next = Math.max(25, Math.min(150, Math.floor(Math.min((canvas.clientWidth - 30) / width, (canvas.clientHeight - 30) / height) * 100)))
+    setZoom(next)
+    requestAnimationFrame(() => { canvas.scrollLeft = 0; canvas.scrollTop = 0 })
+  }
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const tag = event.target?.tagName
+      if (['INPUT','TEXTAREA','SELECT'].includes(tag) || event.target?.isContentEditable) return
+      const primary = event.ctrlKey || event.metaKey
+      if (layout === 'free' && (event.key === 'Delete' || event.key === 'Backspace') && freeSelectedIds.length) {
+        event.preventDefault(); removeFreeSelection(); return
+      }
+      if (primary && event.altKey && (event.key === '+' || event.key === '=')) { event.preventDefault(); setZoom((value) => Math.min(150, value + 10)); return }
+      if (primary && event.altKey && event.key === '-') { event.preventDefault(); setZoom((value) => Math.max(25, value - 10)); return }
+      if (primary && event.altKey && event.key === '0') { event.preventDefault(); setZoom(100); return }
+      if (primary && event.altKey && event.key === '1') { event.preventDefault(); zoomToFit(); return }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [layout, freeSelectedIds, zoom, elements])
+
   const flowName = workflowId ? flowProps.label : flow.label
   const activeElement = editingElement ? elements.find((item) => item.id === editingElement.id) || null : null
   const hasUnsavableIncomplete = elements.some((item) => !item.configured && ['screen', 'action'].includes(item.key))
@@ -610,6 +698,7 @@ function FlowShell({ flow, onNew }) {
         <button className={toolboxOpen ? 'is-on' : ''} aria-label={toolboxOpen ? 'Hide Toolbox' : 'Show Toolbox'} onClick={() => setToolboxOpen((value) => !value)}><LayoutPanelLeft size={16}/></button>
         {layout === 'auto' ? <button className={selecting ? 'is-on' : ''} aria-label="Select Elements" onClick={() => { setSelecting((value) => !value); setSelectedElementIds([]); setConnectMode(false) }}><Copy size={16}/></button> : null}
         {layout === 'auto' && selecting ? <button aria-label="Copy Elements" title="Copy Elements" disabled={!selectedElementIds.length} onClick={copySelectedElements}><Copy size={16}/><em>{selectedElementIds.length || ''}</em></button> : null}
+        {layout === 'free' ? <button aria-label="Duplicate Element" title="Duplicate Element" disabled={freeSelectedIds.length !== 1} onClick={duplicateFreeElement}><Copy size={16}/></button> : null}
         <span className="gptb-toolbar-separator"/>
         <button aria-label="Undo" title="Undo" disabled={!historyRef.current.length} onClick={undoFlowChange}><Undo2 size={16}/></button><button aria-label="Redo" title="Redo" disabled={!futureRef.current.length} onClick={redoFlowChange}><Redo2 size={16}/></button>
         {issues.length ? <button className={issues.some((issue) => issue.level === 'error') ? 'has-issues is-error' : 'has-issues is-warning'} aria-label={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} title={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} onClick={() => { setDiagnosticsOpen((value) => !value); setStartOpen(false); setEditingElement(null) }}><AlertTriangle size={16}/><em>{issues.filter((issue) => issue.level === (issues.some((row) => row.level === 'error') ? 'error' : 'warning')).length}</em></button> : null}
@@ -626,10 +715,13 @@ function FlowShell({ flow, onNew }) {
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''}`}>
       {toolboxOpen ? <Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} onClose={() => setToolboxOpen(false)}/> : null}
       <main
+        ref={canvasRef}
         className="gptb-canvas"
         aria-label="Flow canvas"
-        onDragOver={layout === 'free' ? (event) => { if (event.dataTransfer.types.includes('application/x-gptbuilder-element')) event.preventDefault() } : undefined}
+        onDragOver={layout === 'free' ? (event) => { if (event.dataTransfer.types.includes('application/x-gptbuilder-element') || event.dataTransfer.types.includes('application/x-gptbuilder-existing')) event.preventDefault() } : undefined}
         onDrop={dropElement}
+        onPointerMove={layout === 'free' && freeConnectorDraft ? (event) => { const point = canvasPoint(event.clientX, event.clientY); setFreeConnectorDraft((current) => current ? { ...current, x: point.x, y: point.y } : current) } : undefined}
+        onPointerUp={layout === 'free' && freeConnectorDraft ? () => setFreeConnectorDraft(null) : undefined}
       >
         <div className="gptb-canvas-stage" style={{ transform: `scale(${zoom / 100})` }}>{layout === 'auto' ? <>
           <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} aria-label="Start" onClick={openStart}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
@@ -641,11 +733,34 @@ function FlowShell({ flow, onNew }) {
           </div>
           <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
         </> : <>
-          <button className="gptb-free-start" onClick={openStart}><span className="gptb-start-dot"/><strong>Start</strong></button>
-          {elements.filter((element) => element.source === 'free').map((element) => <PendingElementCard key={element.id} instance={element} free onOpen={() => openElement(element)}/>)}
-          <div className="gptb-free-hint">Drag elements from the Elements tab and connect them on the canvas.</div>
+          <svg className="gptb-free-connections" aria-hidden="true">
+            {goToConnections.map((edge) => {
+              const source = edge.sourceId === 'start' ? { x: 170, y: 115 } : elements.find((element) => element.id === edge.sourceId)?.position
+              const target = elements.find((element) => element.id === edge.targetId)?.position
+              if (!source || !target) return null
+              const sx = Number(source.x) + (edge.sourceId === 'start' ? 60 : 110)
+              const sy = Number(source.y)
+              const tx = Number(target.x) - 110
+              const ty = Number(target.y)
+              const bend = Math.max(40, Math.abs(tx - sx) / 2)
+              return <path key={`${edge.sourceId}-${edge.targetId}`} d={`M ${sx} ${sy} C ${sx + bend} ${sy}, ${tx - bend} ${ty}, ${tx} ${ty}`}/>
+            })}
+            {freeConnectorDraft ? <path className="is-draft" d={`M ${freeConnectorDraft.sourceId === 'start' ? 230 : (elements.find((element) => element.id === freeConnectorDraft.sourceId)?.position?.x || 0) + 110} ${freeConnectorDraft.sourceId === 'start' ? 115 : (elements.find((element) => element.id === freeConnectorDraft.sourceId)?.position?.y || 0)} L ${freeConnectorDraft.x} ${freeConnectorDraft.y}`}/> : null}
+          </svg>
+          <button className="gptb-free-start" onClick={openStart}><span className="gptb-start-dot"/><strong>Start</strong><span className="gptb-free-connector is-output" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); startFreeConnector('start', event) }}/></button>
+          {elements.filter((element) => element.source === 'free').map((element) => <PendingElementCard
+            key={element.id}
+            instance={element}
+            free
+            selected={freeSelectedIds.includes(element.id)}
+            onFreeSelect={(event) => setFreeSelectedIds((current) => event.shiftKey ? (current.includes(element.id) ? current.filter((id) => id !== element.id) : [...current, element.id]) : [element.id])}
+            onOpen={() => openElement(element)}
+            onConnectorStart={(event) => startFreeConnector(element.id, event)}
+            onConnectorEnd={() => finishFreeConnector(element.id)}
+          />)}
+          <div className="gptb-free-hint">Drag elements from the Elements tab, move them anywhere, and drag connectors between elements.</div>
         </>}</div>
-        <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(50, value - 10))} disabled={zoom <= 50}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button></div>
+        <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(25, value - 10))} disabled={zoom <= 25}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button><button className="gptb-fit-view" aria-label="Zoom to fit" onClick={zoomToFit}>Fit</button></div>
         <div className="gptb-canvas-help"><CircleHelp size={14}/><span>{layout === 'auto' ? 'Auto-Layout keeps the flow arranged and connected automatically.' : 'Free-Form lets you position and connect elements manually.'}</span></div>
       </main>
       {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
