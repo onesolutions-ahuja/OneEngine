@@ -606,7 +606,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           CREATE TABLE IF NOT EXISTS platform_communication_events (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-            channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+            channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP','IN_APP')),
             event_type VARCHAR(100) NOT NULL,
             direction VARCHAR(20),
             provider VARCHAR(100),
@@ -1760,6 +1760,12 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         await client.query(
           "ALTER TABLE platform_communication_events ADD CONSTRAINT platform_communication_events_channel_check CHECK (channel IN ('EMAIL','SMS','WHATSAPP','IN_APP'))"
+        );
+        await client.query(
+          "ALTER TABLE platform_message_templates DROP CONSTRAINT IF EXISTS platform_message_templates_channel_check"
+        );
+        await client.query(
+          "ALTER TABLE platform_message_templates ADD CONSTRAINT platform_message_templates_channel_check CHECK (channel IN ('EMAIL','SMS','WHATSAPP','IN_APP'))"
         );
 
         await client.query(
