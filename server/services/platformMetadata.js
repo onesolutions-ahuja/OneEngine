@@ -1154,6 +1154,20 @@ const operationalObjects = [
     ],
   },
   {
+    key: "available_store", label: "Available Store", plural: "Available Stores", table: "available_stores",
+    fields: [
+      ["user_id","User","lookup","user_id",true,false],
+      ["store_id","Store","lookup","store_id",true,false],
+      ["name","Store Name","text","name",true,false],
+      ["code","Store Code","text","code",false,false],
+      ["city","City","text","city",false,false],
+      ["postcode","Postcode","text","postcode",false,false],
+      ["active","Active","boolean","active",false,false],
+      ["is_primary","Primary","boolean","is_primary",false,false],
+      ["updated_at","Updated","datetime","updated_at",false,false],
+    ],
+  },
+  {
     key: "device_health", label: "Device Health", plural: "Device Health", table: "device_health",
     fields: [
       ["store_id","Store","lookup","store_id",false,false],
