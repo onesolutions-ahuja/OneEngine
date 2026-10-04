@@ -2,7 +2,7 @@
  * Gift cards — shared domain helpers.
  *
  * A gift card is company-scoped and identified by its unique code. The
- * balance is ALWAYS derived from the immutable gift_card_transactions
+ * balance is ALWAYS derived from the immutable gift_card_ledger
  * ledger (issue/topup/refund positive; redeem negative; adjustment signed
  * as given) — the same derive-don't-store rule as customer credit.
  *
