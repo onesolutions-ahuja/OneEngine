@@ -66,14 +66,73 @@ WHERE us.active=TRUE AND s.active=TRUE;
 
 CREATE OR REPLACE VIEW device_health AS
 SELECT
-  id, company_id, store_id, user_id, device_key, device_name, device_type, app_version,
+  h.id,
+  h.company_id,
+  h.store_id,
+  h.user_id,
+  h.device_key,
+  h.device_name,
+  h.device_type,
+  h.app_version,
+  'WORKSTATION'::text AS health_source,
   CASE
-    WHEN last_seen_at >= NOW() - INTERVAL '2 minutes' THEN 'ONLINE'
-    WHEN last_seen_at >= NOW() - INTERVAL '10 minutes' THEN 'STALE'
+    WHEN h.last_seen_at >= NOW() - INTERVAL '2 minutes' THEN 'ONLINE'
+    WHEN h.last_seen_at >= NOW() - INTERVAL '10 minutes' THEN 'STALE'
     ELSE 'OFFLINE'
   END::text AS status,
-  last_seen_at, metadata, created_at, updated_at
-FROM device_heartbeats;
+  h.last_seen_at,
+  h.metadata,
+  h.created_at,
+  h.updated_at
+FROM device_heartbeats h
+
+UNION ALL
+
+SELECT
+  p.id,
+  p.company_id,
+  p.store_id,
+  NULL::uuid AS user_id,
+  COALESCE(NULLIF(p.device_key,''), p.id::text) AS device_key,
+  p.name AS device_name,
+  'PAYMENT_TERMINAL'::text AS device_type,
+  NULL::text AS app_version,
+  'PAYMENT_TERMINAL'::text AS health_source,
+  CASE
+    WHEN p.active IS NOT TRUE THEN 'INACTIVE'
+    WHEN p.last_tested_at IS NULL THEN 'UNKNOWN'
+    WHEN UPPER(COALESCE(p.last_test_result,'')) ~ '(SUCCESS|CONNECTED|READY|ONLINE|OK)' THEN 'ONLINE'
+    ELSE 'ISSUE'
+  END::text AS status,
+  p.last_tested_at AS last_seen_at,
+  jsonb_build_object('provider',p.provider,'terminalIdentifier',p.terminal_identifier) AS metadata,
+  p.created_at,
+  p.updated_at
+FROM payment_terminals p
+
+UNION ALL
+
+SELECT
+  hw.id,
+  hw.company_id,
+  hw.store_id,
+  NULL::uuid AS user_id,
+  COALESCE(NULLIF(hw.device_key,''), hw.id::text) AS device_key,
+  COALESCE(NULLIF(hw.device_name,''), INITCAP(REPLACE(hw.device_type,'_',' '))) AS device_name,
+  hw.device_type::text AS device_type,
+  NULL::text AS app_version,
+  'HARDWARE'::text AS health_source,
+  CASE
+    WHEN hw.active IS NOT TRUE THEN 'INACTIVE'
+    WHEN hw.last_tested_at IS NULL THEN 'UNKNOWN'
+    WHEN UPPER(COALESCE(hw.last_test_result,'')) ~ '(SUCCESS|CONNECTED|READY|ONLINE|OK)' THEN 'ONLINE'
+    ELSE 'ISSUE'
+  END::text AS status,
+  hw.last_tested_at AS last_seen_at,
+  jsonb_build_object('connectionType',hw.connection_type,'default',hw.is_default) AS metadata,
+  hw.created_at,
+  hw.updated_at
+FROM hardware_configurations hw;
 
 CREATE OR REPLACE VIEW one_store_apps AS
 SELECT
