@@ -2110,6 +2110,10 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           "SELECT company_id,COUNT(*)::int count FROM platform_rules WHERE active=TRUE AND COALESCE(lifecycle_status,'ACTIVE')='ACTIVE' AND trigger_key='communication_message_received' AND action->>'type'='workflow' AND (action->>'scope'='one_assistant' OR action->>'apiName'='OneAssistant_Booking_Channel_Router' OR name ILIKE 'OneAssistant%') GROUP BY company_id HAVING COUNT(*)<>1"
         );
         if (duplicates.rows.length) throw new Error("OneAssistant event workflow uniqueness check failed");
+        const staleDefinitions = await client.query(
+          "SELECT id,name FROM platform_rules WHERE active=TRUE AND trigger_key='communication_message_received' AND action->>'apiName'='OneAssistant_Booking_Channel_Router' AND (action::text NOT LIKE '%availability_rules_found%' OR action::text NOT LIKE '%requireSuccess%')"
+        );
+        if (staleDefinitions.rows.length) throw new Error("OneAssistant canonical router refresh verification failed");
         console.log("onePOS: OneAssistant deep runtime repair complete");
       },
     }  ]);
