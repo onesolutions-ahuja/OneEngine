@@ -16,7 +16,8 @@ export function groupConfigErrors(config = {}, elements = [], selfId = '') {
 
 export default function GPTBuilderGroup({ draft, updateConfig, elements = [], onConfiguredChange }) {
   const config = normalizeGroupConfig(draft.config)
-  const candidates = elements.filter((element)=>element.id!==draft.id && element.source==='auto' && element.key!=='group')
+  const groupedElsewhere = new Set(elements.filter((element)=>element.key==='group' && element.id!==draft.id).flatMap((element)=>Array.isArray(element.config?.memberIds)?element.config.memberIds:[]))
+  const candidates = elements.filter((element)=>element.id!==draft.id && element.source==='auto' && element.key!=='group' && (!groupedElsewhere.has(element.id) || config.memberIds.includes(element.id)))
   const errors = useMemo(()=>groupConfigErrors(config,elements,draft.id),[JSON.stringify(config),JSON.stringify(elements.map((element)=>[element.id,element.source,element.key]))])
   useEffect(()=>{onConfiguredChange?.(errors.length===0,errors)},[JSON.stringify(errors)])
   const patch=(changes)=>updateConfig({...config,...changes})
