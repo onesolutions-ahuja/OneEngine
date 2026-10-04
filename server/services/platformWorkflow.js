@@ -3265,7 +3265,71 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "completed", channel: "IN_APP", recipients: recipientUserIds };
       }
 
-      const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS", WHATSAPP: "SEND_WHATSAPP" }[channel] || null;
+      if (channel === "WHATSAPP") {
+        if (!tenantId) return { status: "failed", code: "COMPANY_CONTEXT_REQUIRED", retryable: false };
+        const recipient = String(forwarded.recipient || forwarded.to || "").replace(/[^0-9]/g, "");
+        const message = String(forwarded.message || forwarded.body || forwarded.text || "").trim();
+        if (!recipient || !message) {
+          return { status: "failed", code: "COMMUNICATION_RECIPIENT_OR_MESSAGE_REQUIRED", channel, retryable: false };
+        }
+
+        // WhatsApp is transport metadata, not a platform job/function. Execute
+        // through the generic ONE_HTTP_REQUEST core using the tenant's stored
+        // connector definition, encrypted credentials and phone-number metadata.
+        const http = oneHttpRequestDefinition();
+        const result = await http.executor({
+          ...context,
+          companyId: tenantId,
+          action: {
+            providerKey: "whatsapp_connector",
+            method: "POST",
+            endpoint: "/{{phoneNumberId}}/messages",
+            body: {
+              messaging_product: "whatsapp",
+              recipient_type: "individual",
+              to: recipient,
+              type: "text",
+              text: { preview_url: false, body: message },
+            },
+          },
+        });
+        if (result?.success !== true) {
+          return {
+            status: "failed",
+            code: "COMMUNICATION_PROVIDER_FAILED",
+            channel,
+            retryable: Number(result?.statusCode || 0) >= 500,
+            statusCode: result?.statusCode || 0,
+            data: result?.data || null,
+          };
+        }
+        await recordCommunicationEvent({
+          db,
+          companyId: tenantId,
+          channel: "WHATSAPP",
+          eventType: COMMUNICATION_EVENTS.SENT,
+          direction: "OUTBOUND",
+          provider: "whatsapp_connector",
+          recipient,
+          objectId: forwarded.objectId || null,
+          recordId: forwarded.recordId || null,
+          body: message,
+          metadata: {
+            actionType: "SEND_COMMUNICATION",
+            providerMessageId: result?.data?.messages?.[0]?.id || null,
+            conversationId: forwarded.conversationId || null,
+          },
+        }).catch(() => null);
+        return {
+          status: "completed",
+          channel: "WHATSAPP",
+          provider: "whatsapp_connector",
+          statusCode: result.statusCode,
+          reference: result?.data?.messages?.[0]?.id || null,
+        };
+      }
+
+      const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS" }[channel] || null;
       if (!legacyKey) {
         return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
       }
