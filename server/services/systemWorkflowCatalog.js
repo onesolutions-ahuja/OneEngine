@@ -2,6 +2,23 @@ import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 import { TRUSTED_JOB_KINDS } from "./trustedJobKinds.js";
 
+const outputVariable = (name, dataType = "Text", extra = {}) => ({
+  value: `variables.${name}`,
+  apiName: name,
+  label: name,
+  type: "Variable",
+  dataType,
+  defaultValue: "",
+  isCollection: false,
+  availableInput: false,
+  availableOutput: true,
+  objectKey: "",
+  ...extra,
+});
+const assignment = (id, label, variableName, variableType, value) => ({
+  id, label, apiName: id, key: "ASSIGNMENT", variableName, variableType, operator: "set", value,
+});
+
 const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
   {
     systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
@@ -13,21 +30,29 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
       apiName: "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT", flowType: "AUTOLAUNCHED",
       inputs: [{ name: "barcode", type: "text", required: true }],
       outputs: ["found","barcode","productName","brand","imageUrl","ingredients"],
+      resources: [
+        outputVariable("barcode", "Text", { availableInput: true }),
+        outputVariable("found", "Boolean"),
+        outputVariable("productName"),
+        outputVariable("brand"),
+        outputVariable("imageUrl"),
+        outputVariable("ingredients"),
+      ],
       actions: [
         { id: "lookup_http", label: "Lookup Product", apiName: "lookup_http", key: "ONE_HTTP_REQUEST", providerKey: "open_food_facts", method: "GET", endpoint: "/api/v2/product/{{barcode}}.json" },
-        { id: "product_found", label: "Product Found?", apiName: "product_found", key: "CONDITION", outcomes: [{ id: "found", label: "Found", condition: { match: "all", conditions: [{ field: "steps.lookup_http.success", operator: "equals", value: true }, { field: "steps.lookup_http.data.status", operator: "equals", value: 1 }] }, branch: ["assign_found"] }], defaultLabel: "Not Found", defaultBranch: ["assign_not_found"] },
-        { id: "assign_found", label: "Set Product Outputs", apiName: "assign_found", key: "ASSIGNMENT", assignments: [
-          { variable: "variables.found", variableType: "boolean", operator: "set", value: true },
-          { variable: "variables.barcode", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.code" } },
-          { variable: "variables.productName", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.product.product_name" } },
-          { variable: "variables.brand", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.product.brands" } },
-          { variable: "variables.imageUrl", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.product.image_front_url" } },
-          { variable: "variables.ingredients", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.product.ingredients_text" } }
-        ] },
-        { id: "assign_not_found", label: "Set Not Found Output", apiName: "assign_not_found", key: "ASSIGNMENT", assignments: [
-          { variable: "variables.found", variableType: "boolean", operator: "set", value: false },
-          { variable: "variables.barcode", variableType: "text", operator: "set", value: { path: "barcode" } }
-        ] }
+        { id: "product_found", label: "Product Found?", apiName: "product_found", key: "CONDITION",
+          outcomes: [{ id: "found", label: "Found", condition: { match: "all", conditions: [
+            { field: "steps.lookup_http.success", operator: "equals", value: true },
+            { field: "steps.lookup_http.data.status", operator: "equals", value: 1 }
+          ] }, branch: ["set_found","set_barcode","set_product_name","set_brand","set_image_url","set_ingredients"] }],
+          defaultLabel: "Not Found", defaultBranch: ["set_not_found"] },
+        assignment("set_found", "Set Found", "found", "boolean", true),
+        assignment("set_barcode", "Set Barcode", "barcode", "text", { path: "steps.lookup_http.data.code" }),
+        assignment("set_product_name", "Set Product Name", "productName", "text", { path: "steps.lookup_http.data.product.product_name" }),
+        assignment("set_brand", "Set Brand", "brand", "text", { path: "steps.lookup_http.data.product.brands" }),
+        assignment("set_image_url", "Set Image URL", "imageUrl", "text", { path: "steps.lookup_http.data.product.image_front_url" }),
+        assignment("set_ingredients", "Set Ingredients", "ingredients", "text", { path: "steps.lookup_http.data.product.ingredients_text" }),
+        assignment("set_not_found", "Set Not Found", "found", "boolean", false),
       ]
     }
   },
@@ -40,19 +65,23 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
       scope: "system", capabilityType: "workflow", capabilityKey: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
       apiName: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION", flowType: "AUTOLAUNCHED",
       outputs: ["connected","message","statusCode"],
+      resources: [
+        outputVariable("connected", "Boolean"),
+        outputVariable("message"),
+        outputVariable("statusCode", "Number"),
+      ],
       actions: [
         { id: "test_http", label: "Call Open Food Facts", apiName: "test_http", key: "ONE_HTTP_REQUEST", providerKey: "open_food_facts", method: "GET", endpoint: "/api/v2/product/737628064502.json" },
-        { id: "connection_ok", label: "Connection Successful?", apiName: "connection_ok", key: "CONDITION", outcomes: [{ id: "success", label: "Success", condition: { match: "all", conditions: [{ field: "steps.test_http.success", operator: "equals", value: true }] }, branch: ["assign_connected"] }], defaultLabel: "Failed", defaultBranch: ["assign_failed"] },
-        { id: "assign_connected", label: "Set Connected Output", apiName: "assign_connected", key: "ASSIGNMENT", assignments: [
-          { variable: "variables.connected", variableType: "boolean", operator: "set", value: true },
-          { variable: "variables.message", variableType: "text", operator: "set", value: "Connected" },
-          { variable: "variables.statusCode", variableType: "number", operator: "set", value: { path: "steps.test_http.statusCode" } }
-        ] },
-        { id: "assign_failed", label: "Set Failed Output", apiName: "assign_failed", key: "ASSIGNMENT", assignments: [
-          { variable: "variables.connected", variableType: "boolean", operator: "set", value: false },
-          { variable: "variables.message", variableType: "text", operator: "set", value: "Connection failed" },
-          { variable: "variables.statusCode", variableType: "number", operator: "set", value: { path: "steps.test_http.statusCode" } }
-        ] }
+        { id: "connection_ok", label: "Connection Successful?", apiName: "connection_ok", key: "CONDITION",
+          outcomes: [{ id: "success", label: "Success", condition: { match: "all", conditions: [{ field: "steps.test_http.success", operator: "equals", value: true }] },
+            branch: ["set_connected","set_connected_message","set_connected_status"] }],
+          defaultLabel: "Failed", defaultBranch: ["set_failed","set_failed_message","set_failed_status"] },
+        assignment("set_connected", "Set Connected", "connected", "boolean", true),
+        assignment("set_connected_message", "Set Connected Message", "message", "text", "Connected"),
+        assignment("set_connected_status", "Set Connected Status Code", "statusCode", "number", { path: "steps.test_http.statusCode" }),
+        assignment("set_failed", "Set Failed", "connected", "boolean", false),
+        assignment("set_failed_message", "Set Failed Message", "message", "text", "Connection failed"),
+        assignment("set_failed_status", "Set Failed Status Code", "statusCode", "number", { path: "steps.test_http.statusCode" }),
       ]
     }
   }
@@ -186,7 +215,18 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
 
   let created = 0;
   for (const definition of definitions) {
-    if (existing.has(definition.systemKey)) continue;
+    const current = existing.get(definition.systemKey);
+    if (current) {
+      if (current.user_modified !== true) {
+        await db(
+          `UPDATE platform_rules
+              SET name=$1,trigger_key=$2,action=$3::jsonb,active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW()
+            WHERE id=$4 AND company_id=$5 AND COALESCE(user_modified,FALSE)=FALSE`,
+          [definition.name, definition.triggerKey, JSON.stringify(definition.action), current.id, companyId]
+        );
+      }
+      continue;
+    }
     await db(
       `INSERT INTO platform_rules
          (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,company_id,created_by,managed,package_required,user_modified)
