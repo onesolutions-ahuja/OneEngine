@@ -1726,7 +1726,7 @@ function oneAssistantAppointmentRouterWorkflow() {
       body: {
         messaging_product: "whatsapp",
         recipient_type: "individual",
-        to: { path: "sender" },
+        to: { path: "metadata.senderDigits", fallback: { path: "sender" } },
         type: "text",
         text: { body: message },
       },
