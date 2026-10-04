@@ -30,9 +30,7 @@ export const CORE_FUNCTIONS = Object.freeze([
   "REMOVE_RELATIONSHIP",
 
   // Generic external transport
-  "HTTP_REQUEST",
-  "CALL_WEBHOOK",
-  "WEBHOOK",
+  "ONE_HTTP_REQUEST",
   "CALL_CONNECTOR",
 
   // Generic provider-neutral communication
