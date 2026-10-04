@@ -142,6 +142,9 @@ function SourceFieldPicker({ sources, resources, objects, value, onChange }) {
 export default function GPTBuilderTransform({ draft, updateConfig, resources, objects, onResourcesChange, onConfiguredChange }) {
   const config = normalizeTransformConfig(draft.config)
   const [sourceToAdd, setSourceToAdd] = useState('')
+  const [pendingMapSource, setPendingMapSource] = useState('')
+  const [visualFieldSets, setVisualFieldSets] = useState({})
+  const [visualTargetFields, setVisualTargetFields] = useState([])
   const errors = useMemo(() => transformConfigErrors(config, resources), [JSON.stringify(config), JSON.stringify(resources)])
   useEffect(() => { onConfiguredChange?.(errors.length === 0, errors) }, [JSON.stringify(errors)])
   const patch = (changes) => updateConfig({ ...config, ...changes })
@@ -150,6 +153,40 @@ export default function GPTBuilderTransform({ draft, updateConfig, resources, ob
   const availableResources = resources.filter((resource) => resource.generatedByElementId !== draft.id)
   const selectedResources = config.sources.map((path)=>resources.find((resource)=>resourcePath(resource)===path)).filter(Boolean)
   const hasCollectionSource = selectedResources.some((resource)=>resource.isCollection)
+  useEffect(() => {
+    let live = true
+    Promise.all(selectedResources.map(async (resource) => {
+      const object = objects.find((item)=>objectKey(item)===resource.objectKey || String(item?.id||'')===String(resource.objectKey||''))
+      if (!object?.id) return [resource.apiName, []]
+      try {
+        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`)
+        return [resource.apiName, (Array.isArray(response?.data) ? response.data : []).filter((field)=>field?.active!==false && field?.readable!==false)]
+      } catch { return [resource.apiName, []] }
+    })).then((sets)=>{ if(live)setVisualFieldSets(Object.fromEntries(sets)) })
+    const targetObject = objects.find((item)=>objectKey(item)===config.target.objectKey || String(item?.id||'')===String(config.target.objectKey||''))
+    if (config.target.dataType==='record' && targetObject?.id) {
+      apiRequest(`/api/platform/objects/${encodeURIComponent(targetObject.id)}/fields`)
+        .then((response)=>{ if(live)setVisualTargetFields((Array.isArray(response?.data)?response.data:[]).filter((field)=>field?.active!==false&&field?.writable!==false)) })
+        .catch(()=>{ if(live)setVisualTargetFields([]) })
+    } else setVisualTargetFields([])
+    return()=>{live=false}
+  },[JSON.stringify(selectedResources.map((resource)=>[resource.apiName,resource.objectKey])),config.target.dataType,config.target.objectKey,JSON.stringify(objects.map((object)=>[object.id,objectKey(object)]))])
+
+  const visualSources = selectedResources.flatMap((resource) => {
+    const fields=visualFieldSets[resource.apiName]||[]
+    if(fields.length)return fields.map((field)=>({key:`${resource.apiName}.${fieldKey(field)}`,label:fieldLabel(field),resourceLabel:resource.label||resource.apiName,collection:resource.isCollection===true}))
+    return [{key:resource.apiName,label:resource.label||resource.apiName,resourceLabel:resource.label||resource.apiName,collection:resource.isCollection===true}]
+  })
+  const visualTargets = config.target.dataType==='record'
+    ? visualTargetFields.map((field)=>({key:fieldKey(field),label:fieldLabel(field)}))
+    : [{key:'value',label:draft.apiName||'Value'}]
+  const mapVisualTarget=(targetKey)=>{
+    if(!pendingMapSource)return
+    const existing=config.mappings.find((row)=>row.targetField===targetKey)
+    if(existing)patchMapping(existing.id,{mode:'source',source:pendingMapSource})
+    else patch({mappings:[...config.mappings,{id:uid('map'),targetField:targetKey,mode:'source',source:pendingMapSource}]})
+    setPendingMapSource('')
+  }
 
   const addSource = () => {
     if (!sourceToAdd || config.sources.includes(sourceToAdd)) return
@@ -206,7 +243,13 @@ export default function GPTBuilderTransform({ draft, updateConfig, resources, ob
     </section> : null}
 
     <section><h3>Map Source Data to Target Data</h3>
-      <p className="gptb-help-text">Choose the target field first, then select the mapping input. Mapping errors are shown beside the affected mapping before save.</p>
+      <p className="gptb-help-text">Select the Map socket next to a source field, then select the Map socket next to the target field. Existing mappings are shown between the two data structures.</p>
+      <div className="gptb-transform-visual-map">
+        <div className="gptb-transform-tree is-source"><header><strong>Source Data</strong><small>{selectedResources.length} resource{selectedResources.length===1?'':'s'}</small></header><div>{visualSources.map((field)=><div className={pendingMapSource===field.key?'is-pending':''} key={field.key}><span><b>{field.label}</b><small>{field.resourceLabel}{field.collection?' · Collection':''}</small></span><button type="button" className="gptb-transform-socket" aria-label={`Map source ${field.label}`} title="Map" onClick={()=>setPendingMapSource(field.key)}>●</button></div>)}</div></div>
+        <div className="gptb-transform-connections">{config.mappings.filter((row)=>row.mode==='source'&&row.source&&row.targetField).map((row)=><div key={row.id}><span>{row.source}</span><i>→</i><span>{row.targetField}</span></div>)}{pendingMapSource?<p>Select a target field for <b>{pendingMapSource}</b>.</p>:null}</div>
+        <div className="gptb-transform-tree is-target"><header><strong>Target Data</strong><small>{config.target.isCollection?'Collection':config.target.dataType}</small></header><div>{visualTargets.map((field)=>{const mapped=config.mappings.find((row)=>row.targetField===field.key);return <div className={mapped?'is-mapped':''} key={field.key}><button type="button" className="gptb-transform-socket" aria-label={`Map target ${field.label}`} title={pendingMapSource?'Map selected source':'Select a source field first'} disabled={!pendingMapSource} onClick={()=>mapVisualTarget(field.key)}>●</button><span><b>{field.label}</b>{mapped?<small>Mapped from {mapped.source||mapped.mode}</small>:null}</span></div>})}</div></div>
+      </div>
+      <details className="gptb-transform-mapping-details" open><summary>Mapping Details</summary>
       <div className="gptb-transform-mappings">{config.mappings.map((row,index)=>{
         const rowErrors = transformConfigErrors({ ...config, mappings:[row] }, resources).filter((error)=>error.startsWith('Mapping 1:')).map((error)=>error.replace('Mapping 1:', `Mapping ${index+1}:`))
         const aggregateResource = selectedResources.find((resource)=>resource.isCollection && resource.objectKey)
@@ -225,6 +268,7 @@ export default function GPTBuilderTransform({ draft, updateConfig, resources, ob
         </div>
       })}</div>
       <button type="button" className="gptb-inline-action" onClick={()=>patch({mappings:[...config.mappings,{id:uid('map'),targetField:'',mode:'source',source:''}]})}><Plus size={13}/> Add Mapping</button>
+      </details>
     </section>
 
     {errors.length ? <div className="gptb-gr-errors"><b>Complete this Transform element</b>{errors.map((error)=><span key={error}>{error}</span>)}</div> : null}
