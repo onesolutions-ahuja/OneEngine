@@ -528,6 +528,34 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
       userId: req.user?.id || null,
       storeId: req.user?.storeId || null,
     });
+
+    const deviceKey = String(req.headers?.["x-one-device-key"] || "").trim();
+    if (deviceKey && req.user?.companyId) {
+      const userAgent = String(req.headers?.["user-agent"] || "").slice(0, 500);
+      const deviceType = /mobile|android|iphone|ipad/i.test(userAgent) ? "MOBILE" : "DESKTOP";
+      await db(
+        `INSERT INTO device_heartbeats
+           (company_id,store_id,user_id,device_key,device_name,device_type,last_seen_at,metadata,updated_at)
+         VALUES($1,$2,$3,$4,$5,$6,NOW(),$7::jsonb,NOW())
+         ON CONFLICT(company_id,device_key) DO UPDATE SET
+           store_id=EXCLUDED.store_id,
+           user_id=EXCLUDED.user_id,
+           device_name=EXCLUDED.device_name,
+           device_type=EXCLUDED.device_type,
+           last_seen_at=NOW(),
+           metadata=EXCLUDED.metadata,
+           updated_at=NOW()`,
+        [
+          req.user.companyId,
+          req.user.storeId || null,
+          req.user.id || null,
+          deviceKey,
+          String(req.headers?.["x-one-device-name"] || deviceKey).slice(0, 200),
+          deviceType,
+          JSON.stringify({ userAgent }),
+        ]
+      ).catch(() => {});
+    }
     return next();
   } catch (nextError) {
     return next(nextError);
