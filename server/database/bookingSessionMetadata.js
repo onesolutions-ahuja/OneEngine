@@ -9,7 +9,7 @@ export const bookingSessionMetadataSql = `
     (object_id,api_name,label,field_type,source_column,required,readable,writable,options,config,display_order,
      company_id,source_package_id,source_package_version,managed,package_required)
   SELECT object.id,definition.api_name,definition.label,definition.field_type,definition.api_name,
-    FALSE,TRUE,TRUE,'[]'::jsonb,definition.config,100,object.company_id,object.source_package_id,
+    FALSE,TRUE,TRUE,'[]'::jsonb,definition.config,100,object.company_id,object.package_id,
     object.source_package_version,TRUE,FALSE
     FROM platform_objects object
     CROSS JOIN (VALUES
