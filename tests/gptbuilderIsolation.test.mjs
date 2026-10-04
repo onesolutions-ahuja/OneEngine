@@ -116,6 +116,33 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Wait for Amount of Time matches Salesforce duration units resume-time options and durable wait runtime', async () => {
+  const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitDuration.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Amount of Time',
+    'Minutes',
+    'Hours',
+    'Days',
+    'Months',
+    'Resume at a specific time of day',
+    'Resume Time',
+    'Time Zone',
+  ]) assert.ok(wait.includes(text), text)
+  assert.match(wait, /waitDurationRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'wait_duration'/)
+  assert.match(page, /waitDurationRuntimeAction\(element\)/)
+  assert.match(elements, /element\.key === 'wait_duration'\) return \['autolaunched', 'schedule'\]\.includes\(flowType\)/)
+  assert.match(runtime, /key: "WAIT_DURATION"/)
+  assert.match(runtime, /unit must be Minutes, Hours, Days, or Months/)
+  assert.match(runtime, /resumeAtSpecificTime/)
+  assert.match(runtime, /Intl\.DateTimeFormat/)
+  assert.match(runtime, /enqueuePlatformJob/)
+  assert.match(runtime, /status='WAITING'/)
+})
+
 test('GPT Builder Transform matches current Salesforce source target mapping join aggregate and generated-resource behavior', async () => {
   const transform = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderTransform.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
