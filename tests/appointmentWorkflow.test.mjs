@@ -121,6 +121,65 @@ test("booking router graph reaches service, availability, confirmation and only 
   }
 });
 
+test("booking router restarts stale sessions and uses token-safe 15 minute waits", () => {
+  const { workflow } = oneAssistantRouter();
+  const byId = new Map(workflow.action.actions.map((action) => [action.id, action]));
+  const hasCase = byId.get("has_case");
+  for (const outcomeId of ["restart_upper","restart_title","restart_lower"]) {
+    const outcome = hasCase.outcomes.find((item) => item.id === outcomeId);
+    assert.ok(outcome);
+    assert.ok(outcome.branch.includes("expire_existing_case"));
+    assert.ok(outcome.branch.includes("create_case"));
+    assert.ok(outcome.branch.includes("wait_date_timeout"));
+  }
+  for (const waitId of ["wait_date_timeout","wait_slot_timeout"]) {
+    assert.equal(byId.get(waitId)?.key, "WAIT_DURATION");
+    assert.equal(byId.get(waitId)?.amount, 15);
+    assert.equal(byId.get(waitId)?.unit, "minutes");
+  }
+  assert.equal(byId.get("create_case")?.fieldValues?.state?.waitToken?.path, "variables.currentTime");
+  assert.equal(byId.get("save_date_state")?.fieldValues?.state?.waitToken?.path, "variables.currentTime");
+  assert.ok(byId.get("date_timeout_still_waiting")?.outcomes?.[0]?.condition?.conditions?.some((condition) =>
+    condition.field === "steps.refresh_case_after_date_wait.record.state.waitToken" &&
+    condition.operator === "equals" &&
+    condition.value?.path === "variables.currentTime"
+  ));
+  assert.ok(byId.get("slot_timeout_still_waiting")?.outcomes?.[0]?.condition?.conditions?.some((condition) =>
+    condition.field === "steps.refresh_case_after_slot_wait.record.state.waitToken" &&
+    condition.operator === "equals" &&
+    condition.value?.path === "variables.currentTime"
+  ));
+});
+
+test("Decision supports indexed collection paths used by appointment slot choices", async () => {
+  const decision = getWorkflowActionDefinition("CONDITION");
+  const result = await decision.executor({
+    action: {
+      outcomes: [{
+        id: "first",
+        label: "First slot",
+        condition: { match: "all", conditions: [{ field: "steps.case.record.state.slots.0.startsAt", operator: "is_not_empty" }] },
+        branch: [],
+      }],
+      defaultBranch: [],
+    },
+    fields: [],
+    record: {},
+    previousRecord: null,
+    req: { user: { companyId: "company-1" } },
+    object: null,
+    workflowVariables: { variables: {}, steps: { case: { record: { state: { slots: [{ startsAt: "2026-10-05T10:00:00Z" }] } } } } },
+  });
+  assert.equal(result.outcomeId, "first");
+  assert.equal(result.matched, true);
+});
+
+test("generic Flow HTTP preserves provider base URL paths", () => {
+  const coreSource = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  assert.match(coreSource, /renderedEndpoint\.replace\(\/\^\\\/\+\//);
+  assert.match(coreSource, /absoluteEndpoint/);
+});
+
 test("generic Flow HTTP runtime does not depend on connector definitions", () => {
   const coreSource = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
   const start = coreSource.indexOf("export async function oneHttpRequest");
@@ -144,12 +203,12 @@ test("booking router validates custom dates, no-slot retry state and slot bounds
   const byId = new Map(workflow.action.actions.map((action) => [action.id, action]));
   assert.equal(byId.get("parse_custom_date")?.key, "FORMULA");
   assert.equal(byId.get("parse_custom_date")?.expression, "PARSEDATE(inputDate)");
-  assert.deepEqual(byId.get("custom_date_valid")?.defaultBranch, ["send_invalid_date"]);
+  assert.deepEqual(byId.get("custom_date_valid")?.defaultBranch, ["refresh_date_wait_token","send_invalid_date","wait_date_timeout","refresh_case_after_date_wait","date_timeout_still_waiting"]);
   assert.deepEqual(byId.get("custom_date_valid")?.outcomes?.[0]?.branch?.slice(0,1), ["set_next_custom_date"]);
   assert.ok(byId.get("custom_date_valid")?.outcomes?.[0]?.condition?.conditions?.some((condition) => condition.field === "variables.selectedDate" && condition.operator === "greater_than" && condition.value?.path === "variables.currentDate"));
   assert.equal(byId.has("set_custom_date"), false);
-  assert.deepEqual(byId.get("availability_rules_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
-  assert.deepEqual(byId.get("availability_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
+  assert.deepEqual(byId.get("availability_rules_found")?.defaultBranch, ["reset_to_date","send_no_slots","wait_date_timeout","refresh_case_after_date_wait","date_timeout_still_waiting"]);
+  assert.deepEqual(byId.get("availability_found")?.defaultBranch, ["reset_to_date","send_no_slots","wait_date_timeout","refresh_case_after_date_wait","date_timeout_still_waiting"]);
   assert.ok(byId.get("get_busy_appointments")?.filters?.some((filter) => filter.field === "starts_at" && filter.operator === "greater_than_or_equal"));
   assert.ok(byId.get("get_busy_appointments")?.filters?.some((filter) => filter.field === "starts_at" && filter.operator === "less_than"));
   assert.equal(byId.get("reset_to_date")?.fieldValues?.state?.step, "AWAITING_DATE");
@@ -157,7 +216,7 @@ test("booking router validates custom dates, no-slot retry state and slot bounds
   for (let index = 0; index < 5; index += 1) {
     assert.ok(slotDecision.outcomes[index].condition.conditions.some((condition) =>
       condition.field === `steps.get_case.record.state.slots.${index}.startsAt` &&
-      condition.operator === "not_equals" && condition.value === null
+      condition.operator === "is_not_empty"
     ));
   }
 });
@@ -196,7 +255,7 @@ test("WhatsApp Flow transport has no connector-definition runtime dependency", (
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
-  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_SORT","COLLECTION_FORMAT_TEXT","SEND_COMMUNICATION","ONE_HTTP_REQUEST"]) {
+  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_SORT","COLLECTION_FORMAT_TEXT","WAIT_DURATION","SEND_COMMUNICATION","ONE_HTTP_REQUEST"]) {
     const definition = getWorkflowActionDefinition(key);
     assert.ok(definition, `${key} must be registered`);
     assert.equal(typeof definition.executor, "function");
