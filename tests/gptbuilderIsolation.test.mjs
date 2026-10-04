@@ -116,6 +116,40 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder phase 3 element discovery matches the supported Salesforce catalog and visibility rules', async () => {
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  for (const label of [
+    'Action',
+    'Run Agent',
+    'Screen',
+    'Subflow',
+    'Assignment',
+    'Decision',
+    'Loop',
+    'Collection Filter',
+    'Collection Sort',
+    'Transform',
+    'Wait for Amount of Time',
+    'Wait for Conditions',
+    'Wait Until Date',
+    'Custom Error',
+    'Group',
+    'Get Records',
+    'Create Records',
+    'Update Records',
+    'Delete Records',
+  ]) assert.ok(elements.includes(`label: '${label}'`), label)
+  assert.match(elements, /if \(element\.key === 'screen'\) return flowType === 'screen'/)
+  assert.match(elements, /if \(element\.key === 'custom_error'\) return flowType === 'record'/)
+  assert.match(elements, /if \(element\.key === 'group'\) return layout === 'auto'/)
+  assert.match(elements, /return \['record', 'autolaunched', 'schedule', 'platform_event'\]\.includes\(flowType\)/)
+  assert.match(elements, /return \['assignment', 'decision', 'get_records', 'loop'\]\.includes\(element\.key\)/)
+  assert.match(elements, /placeholder="Search elements\.\.\."/)
+  assert.match(elements, /No matching elements/)
+  assert.match(elements, /Connect to element/)
+  assert.match(elements, /> End<\/button>/)
+})
+
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
