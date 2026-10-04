@@ -1412,6 +1412,7 @@ export default function createOnlineRouter({
               req,
               companyId: req.user.companyId,
               recordId: order.id,
+              record: order,
               action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_ACCEPT_ORDER", inputMappings: { orderId: { path: "record.external_order_id" } } },
             })
           : await service.acceptOrder(order, runtime);
@@ -1881,6 +1882,7 @@ export default function createOnlineRouter({
             req,
             companyId: req.user.companyId,
             recordId: order.id,
+            record: order,
             action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_ACCEPT_ORDER", inputMappings: { orderId: { path: "record.external_order_id" } } },
           })
         : service.acceptOrder(order, runtime),
@@ -1921,6 +1923,7 @@ export default function createOnlineRouter({
             req,
             companyId: req.user.companyId,
             recordId: order.id,
+            record: order,
             action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_DENY_ORDER", inputMappings: { orderId: { path: "record.external_order_id" }, reason } },
           })
         : service.rejectOrder(order, reason, runtime),
