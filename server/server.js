@@ -3702,6 +3702,7 @@ async function startServer() {
                     [workflow.object_id || payload.objectId, job.company_id]
                   )
                 : { rows: [] };
+              const triggerFields = objectResult.rows[0] ? await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=TRUE AND (company_id IS NULL OR company_id=$2)", [objectResult.rows[0].id, job.company_id]) : { rows: [] };
               try {
                 const actor = await loadWorkflowAutomationActor(job.company_id, payload.actorUserId || workflow.created_by || null);
                 const results = await executeWorkflowActions({
@@ -3720,6 +3721,7 @@ async function startServer() {
                   storeId: actor.store_id || payload.storeId || null,
                   tillId: actor.till_id || null,
                   object: objectResult.rows[0] || null,
+                  fields: triggerFields.rows,
                   record: payload.record || null,
                   recordId: payload.recordId || null,
                   runId: run?.id || null,
