@@ -1976,40 +1976,95 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "COLLECTION_SORT",
     displayName: "Collection Sort",
-    description: "Sort a collection and optionally limit the resulting items.",
+    description: "Sort a collection in place and optionally limit the remaining items.",
     schema: {
       type: "object",
       properties: {
         collection: { type: "string" },
+        sortOptions: { type: "array" },
         sortField: { type: "string" },
         sortDirection: { type: "string", enum: ["asc","desc"] },
+        nullsFirst: { type: "boolean" },
         limit: {},
       },
-      required: ["collection","sortField"],
+      required: ["collection"],
     },
     validation: (action) => {
       if (!action?.collection) throw new Error("Collection Sort requires a collection");
-      if (!String(action.sortField || "").trim()) throw new Error("Collection Sort requires a sort field");
+      const options = Array.isArray(action.sortOptions) && action.sortOptions.length
+        ? action.sortOptions
+        : [{ field: action.sortField || "", direction: action.sortDirection || "asc", nullsFirst: action.nullsFirst === true }];
+      if (options.length > 3) throw new Error("Collection Sort supports up to 3 sort options");
+      for (const option of options) {
+        if (!["asc","desc"].includes(String(option?.direction || "asc").toLowerCase())) {
+          throw new Error("Collection Sort sort order must be ascending or descending");
+        }
+      }
+      if (action.limit != null && action.limit !== "") {
+        const limit = Number(action.limit);
+        if (!Number.isInteger(limit) || limit < 0) throw new Error("Collection Sort limit must be a non-negative integer");
+      }
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
       const context = { record, previousRecord, req, object, workflowVariables };
       const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
+      const collection = Array.isArray(source) ? source : [];
       const getPath = (value, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
-      const direction = String(action.sortDirection || "asc").toLowerCase() === "desc" ? -1 : 1;
-      let output = [...(Array.isArray(source) ? source : [])].sort((a, b) => {
-        const left = getPath(a, action.sortField);
-        const right = getPath(b, action.sortField);
-        if (left == null && right == null) return 0;
-        if (left == null) return 1 * direction;
-        if (right == null) return -1 * direction;
-        if (typeof left === "number" && typeof right === "number") return (left - right) * direction;
-        return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" }) * direction;
+      const options = (Array.isArray(action.sortOptions) && action.sortOptions.length
+        ? action.sortOptions
+        : [{ field: action.sortField || "", direction: action.sortDirection || "asc", nullsFirst: action.nullsFirst === true }]
+      ).slice(0, 3);
+      const empty = (value) => value == null || value === "";
+      const comparable = (value) => {
+        if (typeof value === "boolean") return value ? 1 : 0;
+        if (typeof value === "number") return value;
+        if (value instanceof Date) return value.getTime();
+        if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value)) {
+          const stamp = Date.parse(value);
+          if (Number.isFinite(stamp)) return stamp;
+        }
+        return value;
+      };
+      let output = [...collection].sort((leftItem, rightItem) => {
+        for (const option of options) {
+          const left = option?.field ? getPath(leftItem, option.field) : leftItem;
+          const right = option?.field ? getPath(rightItem, option.field) : rightItem;
+          const leftEmpty = empty(left);
+          const rightEmpty = empty(right);
+          if (leftEmpty || rightEmpty) {
+            if (leftEmpty && rightEmpty) continue;
+            const nullOrder = option?.nullsFirst === true ? -1 : 1;
+            return leftEmpty ? nullOrder : -nullOrder;
+          }
+          const direction = String(option?.direction || "asc").toLowerCase() === "desc" ? -1 : 1;
+          const a = comparable(left);
+          const b = comparable(right);
+          let compared = 0;
+          if (typeof a === "number" && typeof b === "number") compared = a === b ? 0 : (a < b ? -1 : 1);
+          else compared = String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+          if (compared !== 0) return compared * direction;
+        }
+        return 0;
       });
-      const limit = Math.max(0, Number(action.limit || 0));
-      if (limit) output = output.slice(0, limit);
-      return { status: "completed", collection: output, count: output.length };
+      const limit = Number(action.limit || 0);
+      if (Number.isInteger(limit) && limit > 0) output = output.slice(0, limit);
+
+      const collectionPath = typeof action.collection === "string" ? action.collection : "";
+      if (collectionPath.startsWith("variables.")) {
+        const variableName = collectionPath.slice("variables.".length);
+        if (variableName) workflowVariables.variables[variableName] = output;
+      }
+
+      return {
+        status: "completed",
+        collection: output,
+        count: output.length,
+        mutatedCollection: collectionPath || null,
+        sortOptions: options,
+      };
     },
   },
   {
