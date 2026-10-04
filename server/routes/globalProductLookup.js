@@ -294,7 +294,7 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
             req.user.companyId,
             `${connector.globalProductLookup.displayName} Product Lookup`,
             providerKey,
-            connector.providerKey || providerKey,
+            providerKey,
             JSON.stringify(next),
             connector.globalProductLookup.authType === "none" ? "none" : connector.globalProductLookup.authType,
             req.user.id,
