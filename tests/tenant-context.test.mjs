@@ -21,13 +21,26 @@ source = `const developerMetadataHeaders = globalThis.developerMetadataHeaders; 
 const api = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 const requests = []
 let stores = []
+let serverPermissions = []
 globalThis.fetch = async (url, options) => {
   requests.push({ url, options })
   const body = url.endsWith('/login') ? { success: true, token: 'token', user: { id: 'u', company_id: 'home' }, actingCompanyId: 'other' }
+    : url.includes('/me/permissions') ? { data: { permissions: serverPermissions } }
     : url.endsWith('/bootstrap') ? { user: { id: 'u', company_id: 'home' }, stores }
     : url.endsWith('/me') ? { user: { id: 'u', company_id: 'home' } } : { data: stores }
   return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
 }
+
+test('forced permission checks refresh both stale denials and revoked grants', async () => {
+  sessionStorage.setItem('onepos_token', 'token')
+  api.setStoredSessionPermissions({ permissions: [] })
+  serverPermissions = ['oneengine.manage']
+  assert.deepEqual((await api.loadSessionPermissions()).permissions, [])
+  assert.deepEqual((await api.loadSessionPermissions({ force: true })).permissions, ['oneengine.manage'])
+  serverPermissions = []
+  assert.deepEqual((await api.loadSessionPermissions({ force: true })).permissions, [])
+  assert.deepEqual(api.getStoredSessionPermissions().permissions, [])
+})
 
 test('normal requests ignore remembered and supplied acting-company context', async () => {
   api.setActingCompanyId('other')

@@ -1922,6 +1922,14 @@ function Desktop({ onLock, onSignOut }) {
     return Array.isArray(cached?.permissions) ? cached.permissions : []
   })
   const canManageOneEngine = desktopPermissions.includes('oneengine.manage')
+  const requiresEnginePermission = ['developer', 'licensing', 'app-releases'].includes(activeApp)
+  const [enginePermissionStatus, setEnginePermissionStatus] = useState('loading')
+  const [permissionRetry, setPermissionRetry] = useState(0)
+  const enginePermissionNotice = <div className="module-state" role="status">
+    {enginePermissionStatus === 'loading' ? 'Checking OneEngine permissions…'
+      : enginePermissionStatus === 'error' ? <>Unable to verify OneEngine permissions. <button type="button" onClick={() => setPermissionRetry((value) => value + 1)}>Retry</button></>
+        : 'OneEngine Manager permission required.'}
+  </div>
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
   const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 'till'
@@ -1997,13 +2005,20 @@ function Desktop({ onLock, onSignOut }) {
 
   useEffect(() => {
     let live = true
-    loadSessionPermissions({ includeEntitlements: false })
+    setEnginePermissionStatus('loading')
+    loadSessionPermissions({ force: requiresEnginePermission, includeEntitlements: false })
       .then((permissions) => {
-        if (live) setDesktopPermissions(Array.isArray(permissions?.permissions) ? permissions.permissions : [])
+        if (!live) return
+        setDesktopPermissions(Array.isArray(permissions?.permissions) ? permissions.permissions : [])
+        setEnginePermissionStatus('ready')
       })
-      .catch(() => { if (live && !getStoredSessionPermissions()) setDesktopPermissions([]) })
+      .catch(() => {
+        if (!live) return
+        if (requiresEnginePermission || !getStoredSessionPermissions()) setDesktopPermissions([])
+        setEnginePermissionStatus('error')
+      })
     return () => { live = false }
-  }, [])
+  }, [requiresEnginePermission, permissionRetry])
 
   useEffect(() => {
     let live = true
@@ -2387,7 +2402,7 @@ function Desktop({ onLock, onSignOut }) {
       <LazyLoadBoundary resetKey={`${activeApp || ""}:${routeState?.section || ""}`}>
       <Suspense key={activeStoreId || 'no-store'} fallback={<div className="route-loading" role="status">Loading…</div>}>
         {activeApp === 'developer' ? (
-          canManageOneEngine ? (
+          enginePermissionStatus === 'ready' && canManageOneEngine ? (
             <OneDeveloperPage
               initialSection={routeState?.section || 'objects'}
               initialWorkflowId={routeState?.workflowId || ''}
@@ -2397,7 +2412,7 @@ function Desktop({ onLock, onSignOut }) {
                 setRoute('developer', section, options)
               }}
             />
-          ) : <div className="module-state">OneEngine Manager permission required.</div>
+          ) : enginePermissionNotice
         ) : activeApp === 'settings' ? (
           <SettingsPage onOpenProfile={() => {
             const next = { app: 'profile', section: null }
@@ -2483,9 +2498,9 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
-          canManageOneEngine ? <div className="superadmin-theme"><LicensingAdmin /></div> : <div className="module-state">OneEngine Manager permission required.</div>
+          enginePermissionStatus === 'ready' && canManageOneEngine ? <div className="superadmin-theme"><LicensingAdmin /></div> : enginePermissionNotice
         ) : activeApp === 'app-releases' ? (
-          canManageOneEngine ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : <div className="module-state">OneEngine Manager permission required.</div>
+          enginePermissionStatus === 'ready' && canManageOneEngine ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : enginePermissionNotice
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'company' }
