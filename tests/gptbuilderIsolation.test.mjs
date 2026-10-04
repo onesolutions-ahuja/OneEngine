@@ -11,7 +11,8 @@ test('GPT Builder is isolated from the existing Workflow Builder implementation'
 test('OneDeveloper exposes GPT Builder as a separate developer section', async () => {
   const developer = await readFile(new URL('../src/pages/developer/OneDeveloperPage.jsx', import.meta.url), 'utf8')
   assert.match(developer, /key: 'gptbuilder'/)
-  assert.match(developer, /import GPTBuilderPage from '\.\/gptbuilder\/GPTBuilderPage'/)\n  assert.match(developer, /current\.key === 'gptbuilder' \? <GPTBuilderPage/)
+  assert.match(developer, /import GPTBuilderPage from '\.\/gptbuilder\/GPTBuilderPage'/)
+  assert.match(developer, /current\.key === 'gptbuilder' \? <GPTBuilderPage/)
 })
 
 
