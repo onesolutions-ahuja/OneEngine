@@ -116,6 +116,38 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Wait Until Date matches Salesforce Enter Date and Get from Attribute UX and runtime behavior', async () => {
+  const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitUntilDate.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Enter Date',
+    'Get from Attribute',
+    'Resume Date',
+    'Resume Time',
+    'Time Zone',
+    'Resume on a date and time relative to the field',
+    'Hours',
+    'Days',
+    'Before',
+    'After',
+    'Resume at a specific time of day',
+    'Use org time zone',
+  ]) assert.ok(wait.includes(text), text)
+  assert.match(wait, /gptbuilder\.waitUntilDate\.openSections/)
+  assert.match(wait, /Select a Date or Date\/Time resource/)
+  assert.match(page, /activeElement\.key === 'wait_until_date'/)
+  assert.match(page, /waitUntilDateRuntimeAction\(element, resources\)/)
+  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\).*\['autolaunched', 'schedule'\]/s)
+  assert.match(runtime, /key: "WAIT_UNTIL_DATE"/)
+  assert.match(runtime, /relative unit must be Hours or Days/)
+  assert.match(runtime, /specificTimeEnabled/)
+  assert.match(runtime, /localToUtc/)
+  assert.match(runtime, /runAt = new Date\(\)/)
+  assert.match(runtime, /waitUntilDate: true/)
+})
+
 test('GPT Builder Wait for Conditions platform-event UX uses event metadata filters resources and output variables', async () => {
   const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitConditions.jsx', import.meta.url), 'utf8')
   const events = await readFile(new URL('../server/services/platformEvents.js', import.meta.url), 'utf8')
