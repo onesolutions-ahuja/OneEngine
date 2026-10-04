@@ -1104,6 +1104,21 @@ const retailObjects = [
 ];
 
 const operationalObjects = [
+  { key: "integration_entity_mapping", label: "Integration Entity Mapping", plural: "Integration Entity Mappings", table: "integration_entity_mappings", fields: [
+    ["integration_id","Integration Connection","lookup","integration_id",true],
+    ["company_id","Company","lookup","company_id",true],
+    ["store_id","Store","lookup","store_id",false],
+    ["entity_type","Local Entity Type","text","entity_type",true],
+    ["local_entity_id","Local Record","lookup","local_entity_id",true],
+    ["external_id","External Record ID","text","external_id",true],
+    ["external_parent_id","External Parent ID","text","external_parent_id",false],
+    ["mapping_status","Mapping Status","picklist","mapping_status",true],
+    ["safe_error","Safe Error","text","safe_error",false],
+    ["metadata","External Metadata","json","metadata",false],
+    ["last_synced_at","Last Synced","datetime","last_synced_at",false],
+    ["created_at","Created","datetime","created_at",false],
+    ["updated_at","Updated","datetime","updated_at",false],
+  ] },
   { key: "payment_method", label: "Payment Method", plural: "Payment Methods", table: "payment_methods", fields: [
     ["code", "API Code", "text", "code", true], ["label", "Label", "text", "label", true],
     ["kind", "Kind", "picklist", "kind", true], ["active", "Active", "boolean", "active", false],
