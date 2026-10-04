@@ -116,6 +116,36 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Create Records matches current Salesforce creation modes and generic runtime', async () => {
+  const createRecords = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderCreateRecords.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'How to Set Record Field Values',
+    'Manually',
+    'From a Record Variable',
+    'How Many Records to Create',
+    'One',
+    'Multiple',
+    'Update Existing Records',
+    'Check for Matching Records',
+    'Skip the matching record',
+    'Update the matching record',
+  ]) assert.ok(createRecords.includes(text), text)
+  assert.match(createRecords, /recordCollectionResource/)
+  assert.match(createRecords, /matchField/)
+  assert.match(createRecords, /matchConditions/)
+  assert.match(createRecords, /createRecordsRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'create_records'/)
+  assert.match(page, /createRecordsRuntimeAction\(element\)/)
+  assert.match(runtime, /recordCollectionResource/)
+  assert.match(runtime, /updateExisting/)
+  assert.match(runtime, /checkMatchingRecords/)
+  assert.match(runtime, /matchAction/)
+  assert.match(runtime, /createdRecords/)
+  assert.match(runtime, /updatedRecords/)
+})
+
 test('GPT Builder Get Records matches current Salesforce limits and advanced null handling', async () => {
   const getRecords = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderGetRecords.jsx', import.meta.url), 'utf8')
   const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
