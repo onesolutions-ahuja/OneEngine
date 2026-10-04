@@ -1747,11 +1747,6 @@ function oneAssistantAppointmentRouterWorkflow() {
 
   // IMPORTANT: this definition intentionally uses Builder-visible primitives.
   // No PROCESS_APPOINTMENT_* or APPOINTMENT_SESSION_CONTEXT action may own the business process.
-  const channelSend = (id, label, channel, message, templateContext = {}) => ({
-    id, label, apiName: id, key: "SEND_COMMUNICATION", channel,
-    recipient: { path: "sender" }, message, templateContext,
-    conversationId: { path: "metadata.conversationId" },
-  });
   const actions = [
     { id:"channel_router", label:"Route Communication Channel", apiName:"channel_router", key:"CONDITION",
       outcomes:[
@@ -1764,11 +1759,14 @@ function oneAssistantAppointmentRouterWorkflow() {
     { id:"date_2_formula", label:"Calculate Date Choice 2", apiName:"date_2_formula", key:"FORMULA", resourceName:"date2", resultType:"date", expression:"ADDDAYS(TODAY(),2)", inputs:{} },
     { id:"now_formula", label:"Current Date Time", apiName:"now_formula", key:"FORMULA", resourceName:"currentTime", resultType:"datetime", expression:"NOW()", inputs:{} },
     { id:"get_case", label:"Get Open Booking Case", apiName:"get_case", key:"GET_RECORDS", objectKey:"appointment_booking_case",
-      filters:[{field:"sender",operator:"equals",value:{path:"sender"}},{field:"channel",operator:"equals",value:{path:"channel"}}],
+      filters:[{field:"sender",operator:"equals",value:{path:"sender"}},{field:"channel",operator:"equals",value:{path:"channel"}},{field:"status",operator:"not_equals",value:"CONFIRMED"},{field:"status",operator:"not_equals",value:"CANCELLED"},{field:"status",operator:"not_equals",value:"EXPIRED"}],
       sortField:"created_at",sortDirection:"desc",limit:1,store:"first" },
     { id:"has_case", label:"Existing Booking Session?", apiName:"has_case", key:"CONDITION",
       outcomes:[{id:"existing",label:"Existing Session",condition:{match:"all",conditions:[{field:"steps.get_case.count",operator:"greater_than",value:0}]},branch:["route_state"]}],
-      defaultLabel:"New Session",defaultBranch:["create_case","send_initial_prompt"] },
+      defaultLabel:"New Session",defaultBranch:["is_booking_request"] },
+    { id:"is_booking_request", label:"Start Appointment Booking?", apiName:"is_booking_request", key:"CONDITION",
+      outcomes:[{id:"appointment",label:"Appointment",condition:condition("body","APPOINTMENT"),branch:["create_case","send_initial_prompt"]}],
+      defaultLabel:"Ignore Non-Booking Message",defaultBranch:[] },
     { id:"create_case", label:"Create Booking Case", apiName:"create_case", key:"CREATE_RECORD", objectKey:"appointment_booking_case",
       fieldValues:{channel:{path:"channel"},sender:{path:"sender"},recipient:{path:"recipient"},status:"NEW",customer_id:{path:"metadata.customerId",fallback:null},state:{step:"AWAITING_DATE"}} },
     ...send("send_initial_prompt","Send Date Choices",{path:"variables.messageChannel"},dateMessage,{date1:{path:"variables.date1"},date2:{path:"variables.date2"}}),
@@ -1782,27 +1780,27 @@ function oneAssistantAppointmentRouterWorkflow() {
 
     { id:"validate_date", label:"Validate Date Reply", apiName:"validate_date", key:"CONDITION",
       outcomes:[
-        {id:"one",label:"Choice 1",condition:condition("body","1"),branch:["set_date_1","get_service"]},
-        {id:"two",label:"Choice 2",condition:condition("body","2"),branch:["set_date_2","get_service"]}
-      ],defaultLabel:"DD/MM/YYYY",defaultBranch:["set_custom_date","get_service"] },
+        {id:"one",label:"Choice 1",condition:condition("body","1"),branch:["set_date_1","get_service","service_found"]},
+        {id:"two",label:"Choice 2",condition:condition("body","2"),branch:["set_date_2","get_service","service_found"]}
+      ],defaultLabel:"DD/MM/YYYY",defaultBranch:["set_custom_date","get_service","service_found"] },
     { id:"set_date_1", label:"Use Date Choice 1", apiName:"set_date_1", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date1"} },
     { id:"set_date_2", label:"Use Date Choice 2", apiName:"set_date_2", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date2"} },
     { id:"set_custom_date", label:"Use Entered Date", apiName:"set_custom_date", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"body"} },
     { id:"get_service", label:"Get Active Appointment Service", apiName:"get_service", key:"GET_RECORDS", objectKey:"appointment_service",
       filters:[{field:"active",operator:"equals",value:true}],sortField:"name",sortDirection:"asc",limit:1,store:"first" },
     { id:"service_found", label:"Service Available?", apiName:"service_found", key:"CONDITION",
-      outcomes:[{id:"yes",label:"Service Found",condition:{match:"all",conditions:[{field:"steps.get_service.count",operator:"greater_than",value:0}]},branch:["get_resource_service"]}],
+      outcomes:[{id:"yes",label:"Service Found",condition:{match:"all",conditions:[{field:"steps.get_service.count",operator:"greater_than",value:0}]},branch:["get_resource_service","resource_service_found"]}],
       defaultLabel:"No Service",defaultBranch:["send_no_service"] },
     ...send("send_no_service","Send No Service Reply",{path:"variables.messageChannel"},"No appointment service is currently available."),
     { id:"get_resource_service", label:"Get Service Resource Assignment", apiName:"get_resource_service", key:"GET_RECORDS", objectKey:"appointment_resource_service",
       filters:[{field:"service_id",operator:"equals",value:{path:"steps.get_service.record.id"}},{field:"active",operator:"equals",value:true}],limit:1,store:"first" },
     { id:"resource_service_found", label:"Service Resource Available?", apiName:"resource_service_found", key:"CONDITION",
-      outcomes:[{id:"yes",label:"Assignment Found",condition:{match:"all",conditions:[{field:"steps.get_resource_service.count",operator:"greater_than",value:0}]},branch:["get_resource"]}],
+      outcomes:[{id:"yes",label:"Assignment Found",condition:{match:"all",conditions:[{field:"steps.get_resource_service.count",operator:"greater_than",value:0}]},branch:["get_resource","resource_found"]}],
       defaultLabel:"No Resource",defaultBranch:["send_no_resource"] },
     { id:"get_resource", label:"Get Assigned Appointment Resource", apiName:"get_resource", key:"GET_RECORDS", objectKey:"appointment_resource",
       filters:[{field:"id",operator:"equals",value:{path:"steps.get_resource_service.record.resource_id"}},{field:"active",operator:"equals",value:true}],limit:1,store:"first" },
     { id:"resource_found", label:"Resource Available?", apiName:"resource_found", key:"CONDITION",
-      outcomes:[{id:"yes",label:"Resource Found",condition:{match:"all",conditions:[{field:"steps.get_resource.count",operator:"greater_than",value:0}]},branch:["get_availability"]}],
+      outcomes:[{id:"yes",label:"Resource Found",condition:{match:"all",conditions:[{field:"steps.get_resource.count",operator:"greater_than",value:0}]},branch:["get_availability","expand_slots","get_busy_appointments","get_busy_holds","set_busy_appointments","append_busy_holds","exclude_busy_slots","sort_slots","format_slots","availability_found"]}],
       defaultLabel:"No Resource",defaultBranch:["send_no_resource"] },
     ...send("send_no_resource","Send No Resource Reply",{path:"variables.messageChannel"},"No appointment resource is currently available."),
     { id:"get_availability", label:"Get Availability Rules", apiName:"get_availability", key:"GET_RECORDS", objectKey:"appointment_availability_rule",
@@ -1837,11 +1835,11 @@ function oneAssistantAppointmentRouterWorkflow() {
 
     { id:"validate_slot", label:"Validate Slot Reply", apiName:"validate_slot", key:"CONDITION",
       outcomes:[
-        {id:"one",label:"Slot 1",condition:condition("body","1"),branch:["select_slot_1","create_appointment"]},
-        {id:"two",label:"Slot 2",condition:condition("body","2"),branch:["select_slot_2","create_appointment"]},
-        {id:"three",label:"Slot 3",condition:condition("body","3"),branch:["select_slot_3","create_appointment"]},
-        {id:"four",label:"Slot 4",condition:condition("body","4"),branch:["select_slot_4","create_appointment"]},
-        {id:"five",label:"Slot 5",condition:condition("body","5"),branch:["select_slot_5","create_appointment"]}
+        {id:"one",label:"Slot 1",condition:condition("body","1"),branch:["select_slot_1","create_appointment","confirm_case","send_confirmation"]},
+        {id:"two",label:"Slot 2",condition:condition("body","2"),branch:["select_slot_2","create_appointment","confirm_case","send_confirmation"]},
+        {id:"three",label:"Slot 3",condition:condition("body","3"),branch:["select_slot_3","create_appointment","confirm_case","send_confirmation"]},
+        {id:"four",label:"Slot 4",condition:condition("body","4"),branch:["select_slot_4","create_appointment","confirm_case","send_confirmation"]},
+        {id:"five",label:"Slot 5",condition:condition("body","5"),branch:["select_slot_5","create_appointment","confirm_case","send_confirmation"]}
       ],defaultLabel:"Invalid Slot",defaultBranch:["send_invalid_slot"] },
     ...[1,2,3,4,5].map((number)=>({id:`select_slot_${number}`,label:`Select Slot ${number}`,apiName:`select_slot_${number}`,key:"ASSIGNMENT",variableName:"selectedSlot",variableType:"record",operator:"set",value:{path:`steps.get_case.record.state.slots.${number-1}`}})),
     ...send("send_invalid_slot","Send Invalid Slot Reply",{path:"variables.messageChannel"},invalidSlotMessage),
