@@ -1,3 +1,13 @@
+// Runtime record actions use field/value maps; the native builder's record
+// controls use row arrays. Keep runtime maps in the registered action editor
+// so opening and saving an existing flow preserves its execution contract.
+export function requiresRuntimeRecordEditor(action) {
+  const type = String(action?.type || action?.key || '').toUpperCase()
+  if (!['GET_RECORDS', 'CREATE_RECORD', 'CREATE_RELATED_RECORD', 'UPDATE_RECORD', 'UPDATE_RELATED_RECORD', 'BULK_UPDATE_RECORDS', 'DELETE_RECORD', 'ASSIGN_RECORD'].includes(type)) return false
+  const config = action?.config || action || {}
+  return ['fieldValues', 'conditions'].some((key) => config[key] != null && !Array.isArray(config[key]))
+}
+
 export const FLOW_TYPES = {
   record: { label: 'Record-Triggered Flow', start: 'record', testMode: true },
   schedule: { label: 'Schedule-Triggered Flow', start: 'schedule', testMode: false },
