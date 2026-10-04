@@ -4938,6 +4938,122 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "WAIT_DURATION",
+    displayName: "Wait for Amount of Time",
+    description: "Pause a workflow for a specific amount of time and optionally resume at a specific local time of day.",
+    schema: {
+      type: "object",
+      properties: {
+        amount: { type: "number" },
+        unit: { type: "string", enum: ["minutes","hours","days","months"] },
+        resumeAtSpecificTime: { type: "boolean" },
+        resumeTime: { type: "string" },
+        timeZone: { type: "string" },
+      },
+      required: ["amount","unit"],
+    },
+    validation: (action) => {
+      const amount = Number(action?.amount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Wait for Amount of Time requires an amount greater than zero");
+      if (!["minutes","hours","days","months"].includes(String(action?.unit || "").toLowerCase())) throw new Error("Wait for Amount of Time unit must be Minutes, Hours, Days, or Months");
+      if (action?.resumeAtSpecificTime === true) {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(action?.resumeTime || ""))) throw new Error("Wait for Amount of Time resume time is invalid");
+        if (!String(action?.timeZone || "").trim()) throw new Error("Wait for Amount of Time time zone is required");
+        try { new Intl.DateTimeFormat("en-US", { timeZone: String(action.timeZone) }).format(new Date()); }
+        catch { throw new Error("Wait for Amount of Time time zone is invalid"); }
+      }
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ db, action, companyId, req, runId = null, stepRunId = null }) => {
+      const tenantId = companyId || req?.user?.companyId;
+      const amount = Number(action.amount);
+      const unit = String(action.unit || "minutes").toLowerCase();
+      const now = new Date();
+      let expiry = new Date(now);
+      if (unit === "minutes") expiry = new Date(now.getTime() + amount * 60000);
+      else if (unit === "hours") expiry = new Date(now.getTime() + amount * 3600000);
+      else if (unit === "days") expiry = new Date(now.getTime() + amount * 86400000);
+      else {
+        if (!Number.isInteger(amount)) throw new Error("Wait for Amount of Time months must be a whole number");
+        expiry.setUTCMonth(expiry.getUTCMonth() + amount);
+      }
+
+      const zonedParts = (date, timeZone) => {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone,
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit",
+          hourCycle: "h23",
+        }).formatToParts(date);
+        return Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+      };
+      const localToUtc = (year, month, day, hour, minute, timeZone) => {
+        let guess = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const parts = zonedParts(new Date(guess), timeZone);
+          const rendered = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second || 0));
+          const desired = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+          const delta = desired - rendered;
+          if (Math.abs(delta) < 1000) break;
+          guess += delta;
+        }
+        return new Date(guess);
+      };
+      const addLocalDay = (year, month, day) => {
+        const date = new Date(Date.UTC(year, month - 1, day));
+        date.setUTCDate(date.getUTCDate() + 1);
+        return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+      };
+
+      let runAt = expiry;
+      if (action.resumeAtSpecificTime === true) {
+        const timeZone = String(action.timeZone);
+        const [resumeHour, resumeMinute] = String(action.resumeTime).split(":").map(Number);
+        const local = zonedParts(expiry, timeZone);
+        let dateParts = { year: Number(local.year), month: Number(local.month), day: Number(local.day) };
+        const expiredMinutes = Number(local.hour) * 60 + Number(local.minute);
+        const desiredMinutes = resumeHour * 60 + resumeMinute;
+        if (expiredMinutes > desiredMinutes) dateParts = addLocalDay(dateParts.year, dateParts.month, dateParts.day);
+        runAt = localToUtc(dateParts.year, dateParts.month, dateParts.day, resumeHour, resumeMinute, timeZone);
+        if (runAt.getTime() < expiry.getTime()) {
+          dateParts = addLocalDay(dateParts.year, dateParts.month, dateParts.day);
+          runAt = localToUtc(dateParts.year, dateParts.month, dateParts.day, resumeHour, resumeMinute, timeZone);
+        }
+      }
+
+      const job = await enqueuePlatformJob({
+        db,
+        companyId: tenantId,
+        kind: "WAIT",
+        payload: {
+          runId,
+          stepRunId,
+          amount,
+          unit,
+          resumeAtSpecificTime: action.resumeAtSpecificTime === true,
+          resumeTime: action.resumeTime || null,
+          timeZone: action.timeZone || null,
+          resumeAt: runAt.toISOString(),
+        },
+        runAt,
+        idempotencyKey: `${tenantId || "workflow"}:wait-duration:${runId || "no-run"}:${stepRunId || action.id || runAt.toISOString()}`,
+      });
+      if (job?.id && stepRunId) await db("UPDATE platform_workflow_step_runs SET durable_job_id=$1,updated_at=NOW() WHERE id=$2", [job.id, stepRunId]);
+      if (job?.id && runId && tenantId) await db("UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [runId, tenantId]);
+      return {
+        status: job ? "waiting" : "skipped",
+        jobId: job?.id || null,
+        amount,
+        unit,
+        resumeAt: runAt.toISOString(),
+        resumeAtSpecificTime: action.resumeAtSpecificTime === true,
+        resumeTime: action.resumeTime || null,
+        timeZone: action.timeZone || null,
+      };
+    },
+  },
+  {
     key: "WAIT_FOR_CONDITIONS",
     displayName: "Wait for Conditions",
     description: "Pause a workflow until record conditions are met.",
