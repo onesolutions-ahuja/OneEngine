@@ -433,3 +433,25 @@ test("resource fallback resolves through null overrides", () => {
   );
   assert.equal(result, 30);
 });
+
+
+test("Workflow Builder exposes WhatsApp HTTP message templates and child navigation", () => {
+  const page = readFileSync(new URL("../src/pages/developer/Builder2Page.jsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/pages/developer/Builder2Page.css", import.meta.url), "utf8");
+  assert.match(page, /WhatsApp Message Template/);
+  assert.match(page, /fitFlowToCanvas/);
+  assert.match(page, /selectCanvasNode/);
+  assert.match(page, /b2-path-step-link/);
+  assert.match(page, /inputs=\{\.\.\.inputs,body:\{\.\.\.inputs\.body,text:\{\.\.\.inputs\.body\.text,body:p\.message\}\}\}/);
+  assert.match(css, /\.b2-message-editor/);
+  assert.match(css, /\.b2-fit-flow/);
+});
+
+test("provider HTTP and WhatsApp delivery status are observable without secrets", () => {
+  const core = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  const whatsapp = readFileSync(new URL("../server/routes/whatsapp.js", import.meta.url), "utf8");
+  assert.match(core, /Provider HTTP request completed/);
+  assert.match(core, /providerMessageId/);
+  assert.match(whatsapp, /WhatsApp delivery status/);
+  assert.match(whatsapp, /trackedMessage/);
+});
