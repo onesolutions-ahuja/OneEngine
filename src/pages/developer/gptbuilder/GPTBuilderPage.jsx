@@ -12,6 +12,7 @@ import GPTBuilderElementProperties, {
   createElementInstance, elementCommonErrors,
 } from './GPTBuilderElementProperties'
 import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRecords'
+import GPTBuilderCreateRecords, { createRecordsRuntimeAction } from './GPTBuilderCreateRecords'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
@@ -787,6 +788,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       goToConnections,
       actions: elements.filter((element) => element.configured).map((element) => {
         if (element.key === 'get_records') return getRecordsRuntimeAction(element)
+        if (element.key === 'create_records') return createRecordsRuntimeAction(element)
         return null
       }).filter(Boolean),
     },
@@ -1377,7 +1379,15 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
             onResourcesChange={(next) => { setResources(next); setDirty(true) }}
             onConfiguredChange={setConfigured}
           />
-        : null}</GPTBuilderElementProperties> : null}
+        : activeElement.key === 'create_records'
+          ? <GPTBuilderCreateRecords
+              draft={draft}
+              updateConfig={updateConfig}
+              objects={objects}
+              resources={resources}
+              onConfiguredChange={setConfigured}
+            />
+          : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => {
