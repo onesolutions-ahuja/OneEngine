@@ -68,13 +68,38 @@ export default function createSecurityGovernanceRouter({authenticate,authorize,d
   });
 
   router.get("/security/governance/connected-apps",...manage,async(req,res)=>{
-    const r=await db(`SELECT COALESCE(p.id,c.id) AS id,LOWER(COALESCE(p.app_key,c.provider_name)) AS app_key,
-      COALESCE(p.display_name,c.name,c.provider_name) AS display_name,c.id AS integration_connection_id,c.provider_name,c.connection_status,c.enabled AS connection_enabled,
-      p.active,p.permitted_user_mode,p.allowed_scopes,p.refresh_token_days,p.ip_policy,p.require_high_assurance,p.revoke_on_policy_change,p.updated_at,
-      (SELECT COUNT(*)::int FROM security_connected_app_user_assignments a WHERE a.connected_app_policy_id=p.id AND a.active=TRUE) AS approved_user_count
-      FROM integration_connections c
-      FULL OUTER JOIN security_connected_app_policies p ON p.company_id=c.company_id AND (p.integration_connection_id=c.id OR (p.integration_connection_id IS NULL AND LOWER(p.app_key)=LOWER(c.provider_name)))
-      WHERE COALESCE(p.company_id,c.company_id)=$1 ORDER BY display_name`,[req.user.companyId]);
+    const r=await db(`
+      SELECT * FROM (
+        SELECT COALESCE(p.id,c.id) AS id,LOWER(COALESCE(p.app_key,c.provider_name)) AS app_key,
+          COALESCE(p.display_name,c.name,c.provider_name) AS display_name,c.id AS integration_connection_id,c.provider_name,c.connection_status,c.enabled AS connection_enabled,
+          p.active,p.permitted_user_mode,p.allowed_scopes,p.refresh_token_days,p.ip_policy,p.require_high_assurance,p.revoke_on_policy_change,p.updated_at,
+          (SELECT COUNT(*)::int FROM security_connected_app_user_assignments a WHERE a.connected_app_policy_id=p.id AND a.active=TRUE) AS approved_user_count
+        FROM integration_connections c
+        LEFT JOIN LATERAL (
+          SELECT candidate.*
+          FROM security_connected_app_policies candidate
+          WHERE candidate.company_id=c.company_id
+            AND (candidate.integration_connection_id=c.id OR (candidate.integration_connection_id IS NULL AND LOWER(candidate.app_key)=LOWER(c.provider_name)))
+          ORDER BY CASE WHEN candidate.integration_connection_id=c.id THEN 0 ELSE 1 END
+          LIMIT 1
+        ) p ON TRUE
+        WHERE c.company_id=$1
+
+        UNION ALL
+
+        SELECT p.id,LOWER(p.app_key) AS app_key,p.display_name,NULL::uuid AS integration_connection_id,
+          NULL::text AS provider_name,NULL::text AS connection_status,NULL::boolean AS connection_enabled,
+          p.active,p.permitted_user_mode,p.allowed_scopes,p.refresh_token_days,p.ip_policy,p.require_high_assurance,p.revoke_on_policy_change,p.updated_at,
+          (SELECT COUNT(*)::int FROM security_connected_app_user_assignments a WHERE a.connected_app_policy_id=p.id AND a.active=TRUE) AS approved_user_count
+        FROM security_connected_app_policies p
+        WHERE p.company_id=$1
+          AND NOT EXISTS (
+            SELECT 1 FROM integration_connections c
+            WHERE c.company_id=p.company_id
+              AND (p.integration_connection_id=c.id OR (p.integration_connection_id IS NULL AND LOWER(p.app_key)=LOWER(c.provider_name)))
+          )
+      ) connected_apps
+      ORDER BY display_name`,[req.user.companyId]);
     res.json({success:true,data:r.rows});
   });
 
