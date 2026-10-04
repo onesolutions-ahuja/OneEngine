@@ -1483,6 +1483,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                               ? <GPTBuilderWaitConditions
                                   draft={draft}
                                   updateConfig={updateConfig}
+                                  resources={resources}
                                   eventTypes={eventTypes}
                                   onConfiguredChange={setConfigured}
                                 />
