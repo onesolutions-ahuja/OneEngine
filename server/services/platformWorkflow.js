@@ -29,6 +29,7 @@ import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
+import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 import {
   holdAppointmentSlot,
   releaseAppointmentHold,
@@ -3479,6 +3480,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["integrations.execute"],
     executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
   },
+  oneHttpRequestDefinition(),
   {
     key: "HTTP_REQUEST",
     displayName: "HTTP Request",
