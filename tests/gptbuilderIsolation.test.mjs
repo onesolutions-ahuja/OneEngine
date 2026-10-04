@@ -167,7 +167,7 @@ test('GPT Builder Wait for Amount of Time matches Salesforce duration units resu
   assert.match(wait, /waitDurationRuntimeAction/)
   assert.match(page, /activeElement\.key === 'wait_duration'/)
   assert.match(page, /waitDurationRuntimeAction\(element\)/)
-  assert.match(elements, /element\.key === 'wait_duration'\) return \['autolaunched', 'schedule'\]\.includes\(flowType\)/)
+  assert.match(elements, /\['wait_duration', 'wait_conditions'\]\.includes\(element\.key\)\) return \['autolaunched', 'schedule'\]\.includes\(flowType\)/)
   assert.match(runtime, /key: "WAIT_DURATION"/)
   assert.match(runtime, /unit must be Minutes, Hours, Days, or Months/)
   assert.match(runtime, /resumeAtSpecificTime/)
