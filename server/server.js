@@ -2460,7 +2460,9 @@ async function startServer() {
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
     if (process.env.TEMP_DB_EXPORT_LOG === "1") {
-      await logDatabaseWorkbook(pool);
+      setTimeout(() => {
+        logDatabaseWorkbook(pool).catch((error) => console.error("DBXLSX|UNHANDLED|" + String(error?.message || error)));
+      }, 1000).unref?.();
     }
 
     // Canonical development tenant seed: a clean database must become usable
