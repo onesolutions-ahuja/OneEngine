@@ -66,7 +66,7 @@ export function relatedRuntimeConfig(selection = {}) {
     customConditionLogic: selection.conditionLogic === 'custom' ? selection.customConditionLogic : undefined,
     sortField: selection.sortOrder === 'none' ? undefined : selection.sortBy,
     sortDirection: selection.sortOrder === 'none' ? undefined : selection.sortOrder,
-    limit: selection.recordLimit === 'limited' ? Number(selection.maxRecords) : 20000,
+    limit: selection.recordLimit === 'first' ? 1 : selection.recordLimit === 'limited' ? Number(selection.maxRecords) : 20000,
     fieldSelection: selection.storeMode,
     selectedFields: selection.storeMode === 'choose' ? selection.selectedFields : undefined,
   }
