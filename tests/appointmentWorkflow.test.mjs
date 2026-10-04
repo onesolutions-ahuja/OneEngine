@@ -143,7 +143,12 @@ test("booking router validates custom dates, no-slot retry state and slot bounds
   assert.equal(byId.get("parse_custom_date")?.key, "FORMULA");
   assert.equal(byId.get("parse_custom_date")?.expression, "PARSEDATE(inputDate)");
   assert.deepEqual(byId.get("custom_date_valid")?.defaultBranch, ["send_invalid_date"]);
+  assert.deepEqual(byId.get("custom_date_valid")?.outcomes?.[0]?.branch?.slice(0,1), ["set_next_custom_date"]);
+  assert.equal(byId.has("set_custom_date"), false);
+  assert.deepEqual(byId.get("availability_rules_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
   assert.deepEqual(byId.get("availability_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
+  assert.ok(byId.get("get_busy_appointments")?.filters?.some((filter) => filter.field === "starts_at" && filter.operator === "greater_than_or_equal"));
+  assert.ok(byId.get("get_busy_appointments")?.filters?.some((filter) => filter.field === "starts_at" && filter.operator === "less_than"));
   assert.equal(byId.get("reset_to_date")?.fieldValues?.state?.step, "AWAITING_DATE");
   const slotDecision = byId.get("validate_slot");
   for (let index = 0; index < 5; index += 1) {
