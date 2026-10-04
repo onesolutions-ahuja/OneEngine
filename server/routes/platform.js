@@ -6794,15 +6794,19 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const assertion = assertions[index] || {};
       const type = String(assertion.type || "RUN_STATUS").toUpperCase();
       if (!["RUN_STATUS", "STEP_STATUS", "DECISION_OUTCOME", "RESOURCE_EQUALS", "RESOURCE_CONDITION"].includes(type)) return `Assertion ${index + 1} has an unsupported type`;
+      if (type === "RUN_STATUS" && !["COMPLETED","FAILED","NOT_STARTED"].includes(String(assertion.expected || "COMPLETED").toUpperCase())) return `Assertion ${index + 1} has an unsupported run status`;
       if (type === "STEP_STATUS" && (!assertion.stepId || !byId.has(String(assertion.stepId)))) return `Assertion ${index + 1} must reference an existing element`;
+      if (type === "STEP_STATUS" && !["COMPLETED","FAILED","NOT_RUN"].includes(String(assertion.expected || "COMPLETED").toUpperCase())) return `Assertion ${index + 1} has an unsupported element status`;
       if (type === "DECISION_OUTCOME") {
         const decision = byId.get(String(assertion.stepId || ""));
         if (!decision || String(decision.type || decision.key || "").toUpperCase() !== "CONDITION") return `Assertion ${index + 1} must reference a Decision element`;
         const expected = String(assertion.expected || "");
+        if (!expected) return `Assertion ${index + 1} must select an expected Decision outcome`;
         const outcomes = Array.isArray(decision.outcomes) ? decision.outcomes : Array.isArray(decision.config?.outcomes) ? decision.config.outcomes : [];
         if (!["__DEFAULT__", "Default", "Default Outcome"].includes(expected) && !outcomes.some((outcome) => String(outcome?.id || "") === expected)) return `Assertion ${index + 1} must reference a valid Decision outcome`;
       }
       if (["RESOURCE_EQUALS","RESOURCE_CONDITION"].includes(type) && !String(assertion.resource || "").trim()) return `Assertion ${index + 1} must select a resource`;
+      if (["RESOURCE_EQUALS","RESOURCE_CONDITION"].includes(type) && !["is_empty","is_not_empty"].includes(String(assertion.operator || "equals")) && assertion.expected === undefined) return `Assertion ${index + 1} must provide an expected value`;
       if (type === "RESOURCE_CONDITION" && !["equals","not_equals","greater_than","greater_than_or_equal","less_than","less_than_or_equal","is_empty","is_not_empty"].includes(String(assertion.operator || "equals"))) {
         return `Assertion ${index + 1} has an unsupported operator`;
       }
