@@ -133,7 +133,7 @@ SELECT
   jsonb_build_object('connectionType',hw.connection_type,'default',hw.is_default) AS metadata,
   hw.created_at,
   hw.updated_at
-FROM hardware_configurations hw;
+FROM hardware_devices hw;
 
 CREATE OR REPLACE VIEW one_store_apps AS
 SELECT
