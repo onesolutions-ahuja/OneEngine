@@ -31,17 +31,18 @@ export default function createCustomersRouter({
 }) {
   const router = express.Router();
 
-  async function runCustomerFunction(req, key, input = {}) {
-    return executeSystemWorkflow({
+  async function runCustomerFlow(req, subflowApiName, inputMappings = {}) {
+    const execution = await executeSystemWorkflow({
       db,
       companyId: req.user.companyId,
       userId: req.user.id || req.user.userId || null,
-      systemKey: `function:${key}`,
+      systemKey: "action:RUN_SUBFLOW",
       req,
-      input,
+      input: { subflowApiName, inputMappings },
       storeId: req.user.storeId || null,
-      source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: key },
+      source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: subflowApiName },
     });
+    return execution.result?.outputs || execution.result;
   }
   const db = domainDb;
 
@@ -914,11 +915,10 @@ export default function createCustomersRouter({
 
       const outstanding = await outstandingCents(req.user.companyId, req.params.id);
       /* Service contract: checkPayment(currentBalanceCents, paymentAmountCents). */
-      const checkExecution = await runCustomerFunction(req, "customer.credit.payment.check", {
+      const check = await runCustomerFlow(req, "GPT_CUSTOMER_CREDIT_CHECK_PAYMENT", {
         currentBalanceCents: outstanding,
         paymentAmountCents: cents,
       });
-      const check = checkExecution.result;
       if (!check.allowed)
         return res.status(409).json({ success: false, message: "Payment exceeds the outstanding balance" });
 
@@ -940,12 +940,12 @@ export default function createCustomersRouter({
         }
       }
 
-      const txExecution = await runCustomerFunction(req, "customer.credit.transaction.build_payment", {
+      const txResult = await runCustomerFlow(req, "GPT_CUSTOMER_CREDIT_BUILD_PAYMENT_TRANSACTION", {
         amount: req.body.amount,
         paymentMethod: method,
         userId: req.user.id || req.user.userId || null,
       });
-      const tx = txExecution.result;
+      const tx = txResult.transaction;
 
       const inserted = await db(
         `
@@ -1012,12 +1012,11 @@ export default function createCustomersRouter({
        */
       if (type === "credit_note") {
         const limitCents = Math.round((Number(customer.credit_limit) || 0) * 100);
-        const limitExecution = await runCustomerFunction(req, "customer.credit.limit.check", {
+        const limitCheck = await runCustomerFlow(req, "GPT_CUSTOMER_CREDIT_CHECK_LIMIT", {
           currentBalanceCents: outstanding,
           saleAmountCents: cents,
           creditLimitCents: limitCents,
         });
-        const limitCheck = limitExecution.result;
         if (!limitCheck.allowed)
           return res.status(409).json({ success: false, message: "Credit note would exceed the customer's credit limit" });
       } else if (cents > outstanding) {
@@ -1041,7 +1040,7 @@ export default function createCustomersRouter({
         }
       }
 
-      const txExecution = await runCustomerFunction(req, "customer.credit.transaction.build_adjustment", {
+      const txResult = await runCustomerFlow(req, "GPT_CUSTOMER_CREDIT_BUILD_ADJUSTMENT_TRANSACTION", {
         adjustmentType: type,
         amount: req.body.amount,
         reason: notes,
