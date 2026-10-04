@@ -1772,19 +1772,20 @@ function DevicesMenu({ onOpenSettings }) {
 
   useEffect(() => {
     let live = true
-    apiRequest('/api/health/devices', { timeoutMs: 15000, retryGet: false })
+    apiRequest('/api/platform/objects/device_health/records?page=1&pageSize=100', { timeoutMs: 15000, retryGet: false })
       .then((response) => {
         if (!live) return
-        setDevices(Array.isArray(response?.data) ? response.data : [])
+        const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+        setDevices(rows)
       })
       .catch(() => { if (live) setDevices([]) })
       .finally(() => { if (live) setLoadingDevices(false) })
     return () => { live = false }
   }, [])
 
-  const iconFor = (device) => device.deviceType === 'RECEIPT_PRINTER'
+  const iconFor = (device) => String(device.device_type || device.deviceType || '').toUpperCase() === 'RECEIPT_PRINTER'
     ? Printer
-    : device.deviceType === 'PAYMENT_TERMINAL' ? CreditCard : MonitorSmartphone
+    : String(device.device_type || device.deviceType || '').toUpperCase() === 'PAYMENT_TERMINAL' ? CreditCard : MonitorSmartphone
   const isOnline = (status) => ['CONNECTED','READY','ONLINE','VERIFIED','OK','SUCCESS'].includes(String(status || '').toUpperCase())
 
   return (
@@ -1803,7 +1804,7 @@ function DevicesMenu({ onOpenSettings }) {
           return (
             <div className="git-macos-row device-status-row" key={device.id}>
               <span className="git-macos-icon git-macos-icon--gray"><Icon size={15} /></span>
-              <div className="git-macos-copy"><strong>{device.name}</strong><small>{String(device.deviceType || 'Device').replaceAll('_',' ')} · {device.message || device.status}{device.live === false ? ' · live probe unavailable' : ''}</small></div>
+              <div className="git-macos-copy"><strong>{device.device_name || device.name || device.device_key}</strong><small>{String(device.device_type || device.deviceType || 'Device').replaceAll('_',' ')} · {device.status || 'Unknown'}{device.last_seen_at ? ` · seen ${new Date(device.last_seen_at).toLocaleTimeString()}` : ''}</small></div>
               <span className={`git-macos-status-dot ${online ? 'is-online' : ''}`} aria-label={online ? 'Connected' : device.status || 'Configured'} />
             </div>
           )
