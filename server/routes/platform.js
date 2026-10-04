@@ -5532,6 +5532,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
       if (!actions.length) return res.status(422).json({ success: false, message: "Workflow contains no executable steps" });
+      const flowType = String(workflow.action?.flowType || "");
+      const rollbackMode = executionMode === "TEST"
+        ? (flowType === "record" || req.body?.rollback !== false)
+        : req.body?.rollback === true;
 
 
       let object = null;
@@ -5608,7 +5612,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         metadata: {
           debug: executionMode === "DEBUG",
           test: executionMode === "TEST",
-          dryRun: true,
+          dryRun: rollbackMode,
+          rollbackMode,
           unsavedDefinition: Boolean(definition),
           rolledBack: false,
           actorUserId: req.user.id || null,
@@ -5631,9 +5636,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           };
           await db(
             "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
-            [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
+            [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: rollbackMode, rollbackMode, rolledBack: rollbackMode, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
           );
-          const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: true, externalActionsSimulated: true, variables: { variables: {}, steps: {} } };
+          const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: rollbackMode, externalActionsSimulated: rollbackMode, variables: { variables: {}, steps: {} } };
           const assertions = Array.isArray(req.body?.assertions) ? req.body.assertions : [];
           const assertionResult = evaluateWorkflowAssertions(notStartedData, assertions, { record, user: req.user });
           const testPassed = executionMode === "TEST"
@@ -5643,9 +5648,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
-      client = await pool.connect();
-      await client.query("BEGIN");
-      const debugDb = (query, params = []) => client.query(query, params);
+      if (rollbackMode) {
+        client = await pool.connect();
+        await client.query("BEGIN");
+      }
+      const executionDb = rollbackMode ? ((query, params = []) => client.query(query, params)) : db;
       let results = [];
       let debugError = null;
       const declaredInputs = Array.isArray(workflow.action?.inputContract) ? workflow.action.inputContract : [];
@@ -5657,7 +5664,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const hasValue = Object.prototype.hasOwnProperty.call(suppliedInputs, name);
         const value = hasValue ? suppliedInputs[name] : input?.defaultValue;
         if (input?.required === true && (value === undefined || value === null || String(value).trim() === "")) {
-          throw Object.assign(new Error(`Debug input ${input.label || name} is required`), { status: 422 });
+          throw Object.assign(new Error(`${executionMode === "TEST" ? "Test" : "Debug"} input ${input.label || name} is required`), { status: 422 });
         }
         if (value !== undefined) inputVariables[name] = value;
       }
@@ -5665,7 +5672,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       try {
         results = await executeWorkflowActions({
           actions,
-          db: debugDb,
+          db: executionDb,
           traceDb: db,
           pool,
           req,
@@ -5675,17 +5682,19 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: record?.id || null,
           companyId: req.user.companyId,
           runId: run?.id || null,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: Number(workflow.draft_version || workflow.version || workflow.active_version || 1),
           trigger: executionMode,
-          debugMode: true,
+          debugMode: rollbackMode,
           workflowVariables,
         });
       } catch (error) {
         debugError = error;
       }
-      await client.query("ROLLBACK");
-      client.release();
-      client = null;
+      if (client) {
+        await client.query("ROLLBACK");
+        client.release();
+        client = null;
+      }
 
       const finalStatus = debugError ? "FAILED" : "COMPLETED";
       const friendly = debugError ? friendlyWorkflowError(debugError) : null;
@@ -5700,7 +5709,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         [
           finalStatus,
           debugError ? String(debugError?.message || debugError).slice(0, 2000) : null,
-          JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, startMatched: true, friendlyError: friendly }),
+          JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: rollbackMode, rollbackMode, rolledBack: rollbackMode, startMatched: true, friendlyError: friendly }),
           run.id,
           req.user.companyId,
         ]
@@ -5734,8 +5743,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         friendlyError: friendly,
         handledFaults: debugError ? [] : handledFaults,
         completedWithHandledError: !debugError && handledFaults.length > 0,
-        rolledBack: true,
-        externalActionsSimulated: true,
+        rolledBack: rollbackMode,
+        externalActionsSimulated: rollbackMode,
         variables: workflowVariables,
         resourceHistory,
       };
@@ -5762,7 +5771,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW() WHERE id=$3 AND company_id=$4",
           [
             String(error?.message || error).slice(0, 2000),
-            JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: true, rolledBack: true, friendlyError: friendlyWorkflowError(error) }),
+            JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: rollbackMode, rollbackMode, rolledBack: rollbackMode, friendlyError: friendlyWorkflowError(error) }),
             run.id,
             req.user.companyId,
           ]
