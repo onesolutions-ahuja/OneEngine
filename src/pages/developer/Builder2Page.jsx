@@ -210,6 +210,7 @@ const builderNodeToRuntimeAction=(node,resources=[])=>{
   if(node.type==='WAIT'){
     if(p.waitType==='date')return {...base,key:'WAIT_UNTIL_DATE',resumeAt:p.dateResource}
     if(p.waitType==='conditions')return {...base,key:'WAIT_FOR_CONDITIONS',waitCondition:{match:p.conditionLogic==='any'?'any':'all',conditions:(p.conditions||[]).map(runtimeCondition)},pollSeconds:Number(p.pollSeconds||60)}
+    if(p.waitType==='event')throw new Error(`${node.label||'Wait'}: Wait Until Event is not supported by the current workflow runtime`)
     return {...base,key:'WAIT',durationSeconds:Math.max(0,Number(p.amount||0))*(p.unit==='days'?86400:p.unit==='hours'?3600:60)}
   }
   return {...base,type:node.type,config:p}
