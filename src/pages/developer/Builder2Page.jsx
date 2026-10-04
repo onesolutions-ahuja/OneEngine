@@ -606,8 +606,23 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       setActions(Array.isArray(a?.data)?a.data:[])
       if(!selectedId)return
       const rows=Array.isArray(r?.data)?r.data:[]
-      const saved=rows.find(x=>String(x?.id||'')===selectedId)
+      let saved=rows.find(x=>String(x?.id||'')===selectedId)
       if(!saved){setError('Flow definition is no longer available. Return to the flow list and refresh.');return}
+      const selectedApiName=String(saved?.action?.apiName||'').trim()
+      const selectedIsLive=saved?.runtime_active===true||saved?.runtimeActive===true||saved?.active===true
+      if(selectedApiName&&!selectedIsLive){
+        const activeTwin=rows.find(x=>String(x?.id||'')!==String(saved.id||'')&&String(x?.action?.apiName||'').trim()===selectedApiName&&(x?.runtime_active===true||x?.runtimeActive===true||x?.active===true))
+        if(activeTwin){
+          saved=activeTwin
+          setWorkflowId(String(activeTwin.id||''))
+          setRuntimeMessage('Opened the active flow. This link pointed to a retired duplicate.')
+          try{
+            const url=new URL(window.location.href)
+            url.searchParams.set('workflowId',String(activeTwin.id||''))
+            window.history.replaceState(window.history.state,'',url.pathname+url.search+url.hash)
+          }catch{}
+        }
+      }
       const action=saved.action||{}
       const triggerKey=String(saved.trigger_key||saved.triggerKey||'')
       const inferredType=action.flowType||(triggerKey==='scheduled'?'schedule':triggerKey==='manual'?'autolaunched':triggerKey?'record':requestedType)
