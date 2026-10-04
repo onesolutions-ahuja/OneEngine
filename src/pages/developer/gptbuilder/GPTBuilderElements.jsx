@@ -102,15 +102,16 @@ function ElementSections({ elements, query, draggable, onSelect }) {
   </div>
 }
 
-export function ElementPicker({ flowType, startConfig, onSelect, onClose, hasExistingElements = false }) {
+export function ElementPicker({ flowType, startConfig, onSelect, onClose, hasExistingElements = false, copiedCount = 0, onPaste, onConnect }) {
   const [query, setQuery] = React.useState('')
   const elements = getAvailableElements({ flowType, startConfig, layout: 'auto' })
   return <section className="gptb-element-picker" role="dialog" aria-label="Add Element">
     <header><strong>Add Element</strong><button type="button" aria-label="Close Add Element" onClick={onClose}><X size={15}/></button></header>
     <label className="gptb-element-search"><Search size={14}/><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search elements..."/></label>
+    {copiedCount ? <button type="button" className="gptb-paste-elements" onClick={onPaste}><Copy size={13}/> Paste {copiedCount} Element{copiedCount === 1 ? '' : 's'}</button> : null}
     <div className="gptb-element-picker-body"><ElementSections elements={elements} query={query} draggable={false} onSelect={onSelect}/></div>
     <footer>
-      <button type="button" disabled={!hasExistingElements} title={hasExistingElements ? 'Connect this path to an existing element' : 'No existing elements are available to connect'}><GitBranch size={13}/> Connect to element</button>
+      <button type="button" disabled={!hasExistingElements} title={hasExistingElements ? 'Connect this path to an existing element' : 'No existing elements are available to connect'} onClick={onConnect}><GitBranch size={13}/> Connect to element</button>
       <button type="button" onClick={() => onSelect?.({ key: 'end', label: 'End', category: 'logic', icon: Workflow, description: 'End this flow path.' })}><span className="gptb-end-symbol">■</span> End</button>
     </footer>
   </section>
@@ -126,7 +127,7 @@ export function FreeFormElements({ flowType, startConfig }) {
   </div>
 }
 
-export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen }) {
+export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen, selecting = false, selected = false, onSelectToggle, connecting = false, onConnectTarget }) {
   const key = instance?.key || elementKey
   const element = elementByKey(key)
   if (!element) return null
@@ -135,12 +136,18 @@ export function PendingElementCard({ elementKey, instance = null, free = false, 
   const label = instance?.label || element.label
   return <button
     type="button"
-    className={`gptb-pending-element-card ${free ? 'is-free' : ''}`}
+    className={`gptb-pending-element-card ${free ? 'is-free' : ''} ${selected ? 'is-selected' : ''} ${connecting ? 'is-connect-target' : ''}`}
     style={style}
     aria-label={`${label} element`}
-    onClick={!free ? onOpen : undefined}
+    aria-pressed={selecting ? selected : undefined}
+    onClick={!free ? () => {
+      if (connecting) { onConnectTarget?.(); return }
+      if (selecting) { onSelectToggle?.(); return }
+      onOpen?.()
+    } : undefined}
     onDoubleClick={free ? onOpen : undefined}
   >
+    {selecting ? <span className="gptb-select-element-node" aria-hidden="true">{selected ? '✓' : '+'}</span> : null}
     <span className={`gptb-element-icon is-${element.category}`}><Icon size={16}/></span>
     <span><strong>{label}</strong><small>{instance?.configured ? element.label : `${element.label} · Not fully configured`}</small></span>
     {instance ? <span className="gptb-card-info" tabIndex={0} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
