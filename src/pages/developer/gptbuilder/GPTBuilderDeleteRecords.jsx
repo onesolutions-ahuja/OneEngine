@@ -6,6 +6,14 @@ const objectKey = (value) => String(value?.object_key || value?.api_name || valu
 const objectLabel = (value) => value?.label || value?.name || objectKey(value)
 const fieldKey = (value) => String(value?.api_name || value?.apiName || value?.field_key || value?.key || value?.id || '')
 const fieldLabel = (value) => value?.label || value?.name || fieldKey(value)
+const fieldType = (value) => String(value?.field_type || value?.data_type || value?.type || 'text').toLowerCase()
+const deleteOperatorsFor = (field) => {
+  const type = fieldType(field)
+  const base = [['equals','Equals'],['not_equals','Does Not Equal'],['is_null','Is Null']]
+  if (['number','decimal','currency','date','datetime','time'].includes(type)) return [...base,['greater_than','Greater Than'],['greater_than_or_equal','Greater Than or Equal'],['less_than','Less Than'],['less_than_or_equal','Less Than or Equal']]
+  if (['text','email','phone','select','multiselect'].includes(type)) return [...base,['contains','Contains'],['starts_with','Starts With'],['ends_with','Ends With']]
+  return base
+}
 const uid = () => globalThis.crypto?.randomUUID?.() || `dr-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export const DELETE_RECORDS_DEFAULTS = Object.freeze({
@@ -38,7 +46,7 @@ export function deleteRecordsConfigErrors(config = {}) {
     if (!c.conditions.length) errors.push('Add at least one filter condition.')
     c.conditions.forEach((row,index) => {
       if (!row.field) errors.push(`Condition ${index + 1}: select a field.`)
-      if (row.value === '' || row.value == null) errors.push(`Condition ${index + 1}: enter or select a value.`)
+      if (row.operator !== 'is_null' && (row.value === '' || row.value == null)) errors.push(`Condition ${index + 1}: enter or select a value.`)
     })
   }
   return errors
@@ -114,7 +122,7 @@ export default function GPTBuilderDeleteRecords({ draft, updateConfig, objects, 
     </section> : <>
       <section><h3>Delete Records of This Object Type</h3><label><span>Object <b>*</b></span><select value={config.objectKey} onChange={(event) => setObject(event.target.value)}><option value="">Select an object</option>{objects.map((object) => <option key={object.id || objectKey(object)} value={objectKey(object)}>{objectLabel(object)}</option>)}</select></label></section>
       <section><h3>Filter {config.objectLabel || 'Object'} Records</h3><label><span>Condition Requirements</span><select value={config.conditionLogic} onChange={(event) => patch({ conditionLogic: event.target.value })}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option></select></label>
-        <div className="gptb-gr-field-assignments">{config.conditions.map((row,index) => <div key={row.id}><span>{index + 1}</span><select value={row.field || ''} onChange={(event) => patchCondition(row.id,{field:event.target.value})}><option value="">Select a field</option>{fields.map((field) => <option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>)}</select><select value={row.operator || 'equals'} onChange={(event) => patchCondition(row.id,{operator:event.target.value})}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="greater_than_or_equal">Greater Than or Equal</option><option value="less_than">Less Than</option><option value="less_than_or_equal">Less Than or Equal</option><option value="contains">Contains</option><option value="starts_with">Starts With</option><option value="ends_with">Ends With</option></select><div className="gptb-gr-value"><button type="button" onClick={() => patchCondition(row.id,{valueMode:row.valueMode === 'resource' ? 'literal' : 'resource',value:''})}>{row.valueMode === 'resource' ? 'Resource' : 'Value'}</button><input value={row.value ?? ''} onChange={(event) => patchCondition(row.id,{value:event.target.value})}/></div><button type="button" aria-label={`Remove condition ${index + 1}`} onClick={() => patch({ conditions: config.conditions.filter((item) => item.id !== row.id) })}><Trash2 size={13}/></button></div>)}</div>
+        <div className="gptb-gr-field-assignments">{config.conditions.map((row,index) => { const metadata = fields.find((field) => fieldKey(field) === row.field); return <div key={row.id}><span>{index + 1}</span><select value={row.field || ''} onChange={(event) => patchCondition(row.id,{field:event.target.value,operator:'equals',value:'',valueMode:'literal'})}><option value="">Select a field</option>{fields.map((field) => <option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>)}</select><select value={row.operator || 'equals'} onChange={(event) => patchCondition(row.id,{operator:event.target.value,value:event.target.value === 'is_null' ? true : '',valueMode:'literal'})}>{deleteOperatorsFor(metadata).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>{row.operator === 'is_null' ? <select value={String(row.value ?? true)} onChange={(event) => patchCondition(row.id,{value:event.target.value === 'true'})}><option value="true">True</option><option value="false">False</option></select> : <div className="gptb-gr-value"><button type="button" onClick={() => patchCondition(row.id,{valueMode:row.valueMode === 'resource' ? 'literal' : 'resource',value:''})}>{row.valueMode === 'resource' ? 'Resource' : 'Value'}</button><input value={row.value ?? ''} onChange={(event) => patchCondition(row.id,{value:event.target.value})}/></div>}<button type="button" aria-label={`Remove condition ${index + 1}`} onClick={() => patch({ conditions: config.conditions.filter((item) => item.id !== row.id) })}><Trash2 size={13}/></button></div>})}</div>
         <button type="button" className="gptb-inline-action" onClick={() => patch({ conditions: [...config.conditions,{id:uid(),field:'',operator:'equals',valueMode:'literal',value:''}] })}><Plus size={13}/> Add Condition</button>
       </section>
     </>}
