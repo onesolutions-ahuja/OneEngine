@@ -11,6 +11,7 @@ import {
 import GPTBuilderElementProperties, {
   createElementInstance, elementCommonErrors,
 } from './GPTBuilderElementProperties'
+import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRecords'
 import './GPTBuilderPage.css'
 
 const FLOW_CATEGORIES = [
@@ -235,6 +236,7 @@ function FlowShell({ flow, onNew }) {
   const [saveError, setSaveError] = useState('')
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
   const [elements, setElements] = useState([])
+  const [resources, setResources] = useState([])
   const [editingElement, setEditingElement] = useState(null)
 
   useEffect(() => {
@@ -299,7 +301,11 @@ function FlowShell({ flow, onNew }) {
         source: element.source,
         position: element.position,
       })),
-      actions: [],
+      resources,
+      actions: elements.filter((element) => element.configured).map((element) => {
+        if (element.key === 'get_records') return getRecordsRuntimeAction(element)
+        return null
+      }).filter(Boolean),
     },
   })
 
@@ -422,7 +428,19 @@ function FlowShell({ flow, onNew }) {
           else updateElement(original)
           setEditingElement(null)
         }}
-      /> : null}
+      >{({ draft, updateConfig, setConfigured }) => activeElement.key === 'get_records'
+        ? <GPTBuilderGetRecords
+            draft={draft}
+            updateConfig={updateConfig}
+            objects={objects}
+            flowType={flow.key}
+            startConfig={startConfig}
+            elements={elements}
+            resources={resources}
+            onResourcesChange={(next) => { setResources(next); setDirty(true) }}
+            onConfiguredChange={setConfigured}
+          />
+        : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
