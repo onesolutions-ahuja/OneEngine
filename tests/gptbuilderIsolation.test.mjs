@@ -269,6 +269,7 @@ test('GPT Builder phase 4 shared properties implements Salesforce label and API-
 test('GPT Builder phase 4 matches auto-layout continuous editing and free-form dialog behavior', async () => {
   const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
   assert.match(props, /const useDialog = layout === 'free' \|\| isScreen/)
+  assert.doesNotMatch(props, /isAction/)
   assert.match(props, /onLiveChange\?\.\(next\)/)
   assert.match(props, /Changes stay in the draft when you close this panel/)
   assert.match(props, /Undo element change/)
@@ -308,6 +309,15 @@ test('GPT Builder phase 4 exposes one shared configuration-to-auto-label hook fo
   const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
   assert.match(props, /const updateConfig = \(nextConfig\)/)
   assert.match(props, /children\(\{ draft, updateConfig, setConfigured \}\)/)
+  assert.match(props, /refreshGeneratedIdentity\(draft, elements, draft\.config\)/)
+})
+
+test('GPT Builder shared properties preserve Salesforce generated-label and API-name semantics', async () => {
+  const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
+  assert.match(props, /if \(instance\.labelSource === 'manual'\) return \{ \.\.\.instance, config \}/)
+  assert.match(props, /draft\.apiNameSource === 'manual'/)
+  assert.match(props, /labelSource: 'manual'/)
+  assert.match(props, /apiNameSource: 'manual'/)
   assert.match(props, /refreshGeneratedIdentity\(draft, elements, draft\.config\)/)
 })
 
