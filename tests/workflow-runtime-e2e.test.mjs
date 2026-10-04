@@ -146,3 +146,67 @@ test('screen runtime prefills revisited inputs from workflow variables', async (
   assert.equal(inserts.length,1);
   assert.deepEqual(JSON.parse(inserts[0].params[4]),{customerName:'Kept value'});
 });
+
+test('collection filter formula and transform target resource execute end to end', async () => {
+  const ctx=makeContext({workflowVariables:{variables:{rows:[{name:'A',amount:2},{name:'B',amount:-1}]},steps:{}}});
+  const filtered=await executeWorkflowAction({
+    ...ctx,
+    action:{id:'positive',key:'COLLECTION_FILTER',collection:{path:'variables.rows'},formula:'amount > 0'},
+  });
+  assert.deepEqual(filtered.collection,[{name:'A',amount:2}]);
+
+  ctx.workflowVariables.variables.positive=filtered.collection;
+  const transformed=await executeWorkflowAction({
+    ...ctx,
+    action:{id:'map',key:'TRANSFORM',collection:{path:'variables.positive'},targetResource:'variables.payloads',transformMappings:{displayName:'item.name',total:'item.amount'}},
+  });
+  assert.deepEqual(transformed.value,[{displayName:'A',total:2}]);
+  assert.deepEqual(ctx.workflowVariables.variables.payloads,[{displayName:'A',total:2}]);
+  assert.equal(transformed.resourceName,'payloads');
+});
+
+test('subflow resolves tenant-scoped API name and maps declared outputs', async () => {
+  const queries=[];
+  const childRule={
+    id:'child-flow-id',
+    company_id:'c1',
+    name:'Appointment Child',
+    active:true,
+    active_version:2,
+    action:{
+      apiName:'Appointment_Child',
+      actions:[{id:'set-result',key:'ASSIGNMENT',variableName:'result',variableType:'text',operator:'set',value:'OK'}],
+      inputContract:[{name:'customerId',type:'text',required:true}],
+      outputContract:[{name:'result',type:'text',source:'variables.result',required:true}],
+    },
+  };
+  const db=async(sql,params=[])=>{
+    const s=String(sql);
+    queries.push({sql:s,params:[...params]});
+    if (s.includes('FROM role_permissions') && s.includes('p.code = ANY')) return {rows:(params[2]||[]).map(code=>({code}))};
+    if (s.includes('FROM platform_permission_set_assignments')) return {rows:[]};
+    if (s.includes('FROM platform_rules')) return {rows:[childRule]};
+    if (s.includes('INSERT INTO platform_workflow_runs')) return {rows:[]};
+    return {rows:[]};
+  };
+  const req={user:{id:'u1',companyId:'c1',roleId:'r1',permissions:['workflow.execute']},_workflowEffectivePermissionSets:[]};
+  const workflowVariables={variables:{customerId:'cust-1'},steps:{}};
+  const result=await executeWorkflowAction({
+    action:{
+      id:'child',
+      key:'RUN_SUBFLOW',
+      workflowId:'Appointment_Child',
+      workflowInputs:{customerId:{path:'variables.customerId'}},
+      outputMappings:{result:'variables.childResult'},
+    },
+    db,req,companyId:'c1',workflowVariables,
+  });
+  const lookup=queries.find(entry=>entry.sql.includes('FROM platform_rules'));
+  assert.ok(lookup);
+  assert.match(lookup.sql,/action->>'apiName'/);
+  assert.match(lookup.sql,/company_id=\$2 OR company_id IS NULL/);
+  assert.deepEqual(lookup.params,['Appointment_Child','c1']);
+  assert.equal(result.workflowId,'child-flow-id');
+  assert.deepEqual(result.outputs,{result:'OK'});
+  assert.equal(workflowVariables.variables.childResult,'OK');
+});
