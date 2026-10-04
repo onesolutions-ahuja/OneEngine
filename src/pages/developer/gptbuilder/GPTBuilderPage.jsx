@@ -54,7 +54,7 @@ function flowTriggerKey(flowType, start) {
   if (flowType === 'schedule') return 'scheduled'
   if (flowType === 'platform_event') return start.eventKey || 'manual'
   if (flowType !== 'record') return 'manual'
-  if (start.trigger === 'deleted') return 'after_delete'
+  if (start.trigger === 'deleted') return 'before_delete'
   const fast = start.optimize === 'fast'
   if (start.trigger === 'created') return fast ? 'before_create' : 'after_create'
   if (start.trigger === 'updated') return fast ? 'before_update' : 'after_update'
