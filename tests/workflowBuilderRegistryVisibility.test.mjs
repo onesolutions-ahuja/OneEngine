@@ -47,7 +47,7 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
   }
 });
 
-test("provider-specific test adapters stay removed in favor of the generic connector test flow", () => {
+test("provider-specific adapters stay removed in favor of metadata workflows", () => {
   const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
   for (const key of REMOVED_PROVIDER_TEST_ADAPTERS) {
     assert.equal(all.has(key), false, key + " must remain removed");
