@@ -1454,6 +1454,31 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setZoom(next)
     requestAnimationFrame(() => { canvas.scrollLeft = 0; canvas.scrollTop = 0 })
   }
+  const focusedAutoElementId = () => {
+    const target = document.activeElement?.closest?.('[data-gptb-auto-focus="true"]')
+    const id = target?.getAttribute?.('data-gptb-element-id') || ''
+    return id && id !== 'start' ? id : ''
+  }
+  const copyAutoElements = (ids) => {
+    const wanted = new Set(ids || [])
+    const picked = elements.filter((element) => wanted.has(element.id))
+    if (!picked.length) return
+    setCopiedElements(JSON.parse(JSON.stringify(picked)))
+  }
+  const deleteAutoElements = (ids, { copyFirst = false } = {}) => {
+    const removed = new Set(ids || [])
+    if (!removed.size) return
+    if (copyFirst) setCopiedElements(JSON.parse(JSON.stringify(elements.filter((element) => removed.has(element.id)))))
+    setElements((current) => current
+      .filter((element) => !removed.has(element.id))
+      .map((element) => element.key === 'group' && Array.isArray(element.config?.memberIds)
+        ? { ...element, config: { ...element.config, memberIds: element.config.memberIds.filter((id) => !removed.has(id)) } }
+        : element))
+    setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
+    setSelectedElementIds((current) => current.filter((id) => !removed.has(id)))
+    setDirty(true)
+  }
+
   useEffect(() => {
     const onKeyDown = (event) => {
       const tag = event.target?.tagName
@@ -1474,6 +1499,28 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
           return
         }
       } else shortcutSequenceRef.current = ''
+      if (layout === 'auto' && primary && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setToolboxOpen(true)
+        requestAnimationFrame(() => toolboxFocusRef.current?.focus?.())
+        return
+      }
+      if (layout === 'auto') {
+        const focusedId = focusedAutoElementId()
+        const autoIds = selectedElementIds.length ? selectedElementIds : (focusedId ? [focusedId] : [])
+        if (primary && event.key.toLowerCase() === 'c' && autoIds.length) {
+          event.preventDefault(); copyAutoElements(autoIds); return
+        }
+        if (primary && event.key.toLowerCase() === 'x' && autoIds.length) {
+          event.preventDefault(); deleteAutoElements(autoIds, { copyFirst: true }); return
+        }
+        if (primary && event.key.toLowerCase() === 'v' && copiedElements.length) {
+          event.preventDefault(); pasteCopiedElements(); return
+        }
+        if ((event.key === 'Delete' || event.key === 'Backspace') && autoIds.length) {
+          event.preventDefault(); deleteAutoElements(autoIds); return
+        }
+      }
       if (layout === 'free' && (event.key === 'Delete' || event.key === 'Backspace') && freeSelectedIds.length) {
         event.preventDefault(); removeFreeSelection(); return
       }
@@ -1797,7 +1844,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     {saveAsFlowOpen ? <GPTBuilderSaveAsFlowDialog value={flowProps} saving={saving} onCancel={() => setSaveAsFlowOpen(false)} onSave={(next) => void save(flowProps, { forceNewFlow: true, newFlow: next })}/> : null}
     {editHistoryPending ? <GPTBuilderUnsavedHistoryDialog saving={saving} onCancel={() => setEditHistoryPending(false)} onSaveAndView={() => void saveAndOpenEditHistory()}/> : null}
     {groupDeleteTarget ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-group-delete-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-group-delete-title"><header><strong id="gptb-group-delete-title">Delete Group</strong><button className="gptb-icon-button" aria-label="Close Delete Group" onClick={()=>setGroupDeleteTarget(null)}><X size={16}/></button></header><div className="gptb-properties-body"><p>What should happen to the elements in <b>{groupDeleteTarget.label}</b>?</p></div><footer><button className="gptb-button" onClick={()=>setGroupDeleteTarget(null)}>Cancel</button><button className="gptb-button" onClick={()=>deleteGroup(groupDeleteTarget.id,false)}>Keep Elements</button><button className="gptb-button is-brand" onClick={()=>deleteGroup(groupDeleteTarget.id,true)}>Delete Group and Elements</button></footer></section></div> : null}
-    {shortcutHelpOpen ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-shortcuts-title"><header><strong id="gptb-shortcuts-title">Keyboard Shortcuts</strong><button className="gptb-icon-button" aria-label="Close Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(false)}><X size={16}/></button></header><div className="gptb-properties-body"><dl className="gptb-shortcut-list"><div><dt>Zoom in / out</dt><dd>Ctrl/Cmd + Alt/Option + + / − or Ctrl/Cmd + mouse wheel</dd></div><div><dt>Zoom to fit</dt><dd>Ctrl/Cmd + Alt/Option + 1</dd></div><div><dt>Reset zoom</dt><dd>Ctrl/Cmd + Alt/Option + 0</dd></div><div><dt>Switch panel focus</dt><dd>F6</dd></div><div><dt>Toolbox / tips focus</dt><dd>g, then d</dd></div><div><dt>Select multiple elements</dt><dd>Shift + Click in Free-Form</dd></div><div><dt>Delete selected elements</dt><dd>Delete / Backspace in Free-Form</dd></div><div><dt>Element description</dt><dd>Ctrl/Cmd + I in Auto-Layout</dd></div><div><dt>View keyboard shortcuts</dt><dd>Ctrl/Cmd + / in Free-Form</dd></div></dl></div><footer><button className="gptb-button is-brand" onClick={() => setShortcutHelpOpen(false)}>Close</button></footer></section></div> : null}
+    {shortcutHelpOpen ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-shortcuts-title"><header><strong id="gptb-shortcuts-title">Keyboard Shortcuts</strong><button className="gptb-icon-button" aria-label="Close Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(false)}><X size={16}/></button></header><div className="gptb-properties-body"><dl className="gptb-shortcut-list"><div><dt>Zoom in / out</dt><dd>Ctrl/Cmd + Alt/Option + + / − or Ctrl/Cmd + mouse wheel</dd></div><div><dt>Zoom to fit</dt><dd>Ctrl/Cmd + Alt/Option + 1</dd></div><div><dt>Reset zoom</dt><dd>Ctrl/Cmd + Alt/Option + 0</dd></div><div><dt>Switch panel focus</dt><dd>F6</dd></div><div><dt>Toolbox / tips focus</dt><dd>g, then d</dd></div><div><dt>Navigate elements</dt><dd>Arrow keys in Auto-Layout</dd></div><div><dt>Cut / copy / paste</dt><dd>Ctrl/Cmd + X / C / V in Auto-Layout</dd></div><div><dt>Delete focused elements</dt><dd>Delete / Backspace in Auto-Layout</dd></div><div><dt>Open Toolbox</dt><dd>Ctrl/Cmd + K in Auto-Layout</dd></div><div><dt>Select multiple elements</dt><dd>Shift + Click in Free-Form</dd></div><div><dt>Delete selected elements</dt><dd>Delete / Backspace in Free-Form</dd></div><div><dt>Element description</dt><dd>Ctrl/Cmd + I in Auto-Layout</dd></div><div><dt>View keyboard shortcuts</dt><dd>Ctrl/Cmd + / in Free-Form</dd></div></dl></div><footer><button className="gptb-button is-brand" onClick={() => setShortcutHelpOpen(false)}>Close</button></footer></section></div> : null}
     {descriptionPopup ? <div className="gptb-description-popup" role="status">{descriptionPopup}<button aria-label="Close description" onClick={() => setDescriptionPopup(null)}><X size={13}/></button></div> : null}
   </section>
 }
