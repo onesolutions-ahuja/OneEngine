@@ -17,7 +17,9 @@ test('OneDeveloper exposes GPT Builder as a separate developer section', async (
 
 test('GPT Builder phase 2 shell follows Salesforce flow-creation and canvas chrome rules', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
-  for (const text of ['New Automation','Start From Scratch','Use a Template','Record-Triggered Flow','Screen Flow','Autolaunched Flow (No Trigger)','Schedule-Triggered Flow','Platform Event-Triggered Flow','Auto-Layout','Free-Form','Canvas zoom']) assert.ok(page.includes(text), text)
+  const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
+  for (const text of ['New Automation','Start From Scratch','Use a Template']) assert.ok(automation.includes(text), text)
+  for (const text of ['Record-Triggered Flow','Screen Flow','Autolaunched Flow (No Trigger)','Schedule-Triggered Flow','Platform Event-Triggered Flow','Auto-Layout','Free-Form','Canvas zoom']) assert.ok(page.includes(text), text)
   assert.match(page, /aria-label="Start"/)
   assert.match(page, /aria-label="Add element"/)
   assert.match(page, />End</)
@@ -161,7 +163,7 @@ test('GPT Builder phase 4 matches auto-layout continuous editing and free-form d
 
 test('GPT Builder phase 4 persists element identity and reopens element properties', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
-  assert.match(page, /const \[elements, setElements\] = useState\(\[\]\)/)
+  assert.match(page, /const \[elements, setElements\] = useState\(\(\) => structuredClone\(templateAction\.gptBuilderElements \|\| \[\]\)\)/)
   assert.match(page, /gptBuilderElements: elements\.map/)
   assert.match(page, /labelSource: element\.labelSource/)
   assert.match(page, /apiNameSource: element\.apiNameSource/)
