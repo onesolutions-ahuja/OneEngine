@@ -33,6 +33,18 @@ test('GPT Builder keeps auto-layout and free-form toolbox behavior separate', as
   assert.match(page, /setToolboxOpen/)
 })
 
+test('GPT Builder preserves elements when switching layouts and blocks invalid Free-Form conversion to Auto-Layout', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /const switchToFreeForm = \(\) =>/)
+  assert.match(page, /source: 'free'/)
+  assert.match(page, /generatedByLayoutSwitch: true/)
+  assert.match(page, /const switchToAutoLayout = \(\) =>/)
+  assert.match(page, /one or more elements without an incoming connection/)
+  assert.match(page, /one or more unsupported Step elements/)
+  assert.match(page, /source: 'auto'/)
+  assert.match(page, /role="alert"/)
+})
+
 
 test('GPT Builder phase 2 implements Salesforce Start configuration and first-save semantics', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
