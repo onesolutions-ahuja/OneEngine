@@ -1104,6 +1104,70 @@ const retailObjects = [
 ];
 
 const operationalObjects = [
+  {
+    key: "one_store_app", label: "OneStore App", plural: "OneStore Apps", table: "one_store_apps",
+    companyScoped: false,
+    config: { searchSource: true, searchLabelField: "app_name", searchIconField: "logo", searchStatusField: "status" },
+    fields: [
+      ["package_key","App Key","text","package_key",true,false],
+      ["app_name","App Name","text","app_name",true,false],
+      ["logo","Logo","text","logo",false,false],
+      ["version","Version","text","version",false,false],
+      ["status","Status","text","status",false,false],
+      ["category","Category","text","category",false,false],
+      ["description","Description","text","description",false,false],
+      ["visible","Visible","boolean","visible",false,false],
+      ["installable","Installable","boolean","installable",false,false],
+      ["last_release_version","Last Release Version","text","last_release_version",false,false],
+      ["last_release_at","Last Release","datetime","last_release_at",false,false],
+      ["updated_at","Updated","datetime","updated_at",false,false],
+    ],
+  },
+  {
+    key: "sys_settings", label: "System Setting", plural: "System Settings", table: "sys_settings",
+    config: { settingsHost: true, settingsGroup: "Settings", settingsLabel: "System Settings", settingsOrder: 10, settingsSectionSource: "record-section" },
+    fields: [
+      ["store_id","Store","lookup","store_id",false,true],
+      ["setting_key","Setting Key","text","setting_key",true,true],
+      ["setting_value","Value","json","setting_value",false,true],
+      ["value_type","Value Type","text","value_type",true,true],
+      ["section","Section","text","section",true,true],
+      ["label","Label","text","label",true,true],
+      ["description","Description","text","description",false,true],
+      ["scope","Scope","text","scope",true,true],
+      ["active","Active","boolean","active",false,true],
+      ["updated_at","Updated","datetime","updated_at",false,false],
+    ],
+  },
+  {
+    key: "connection_health", label: "Connection Health", plural: "Connection Health", table: "integration_connections",
+    fields: [
+      ["store_id","Store","lookup","store_id",false,false],
+      ["provider_name","Provider","text","provider_name",false,false],
+      ["integration_type","Type","text","integration_type",false,false],
+      ["connection_status","Status","text","connection_status",false,false],
+      ["enabled","Enabled","boolean","enabled",false,false],
+      ["last_connected_at","Last Connected","datetime","last_connected_at",false,false],
+      ["last_test_at","Last Tested","datetime","last_test_at",false,false],
+      ["last_error","Last Error","text","last_error",false,false],
+      ["updated_at","Updated","datetime","updated_at",false,false],
+    ],
+  },
+  {
+    key: "device_health", label: "Device Health", plural: "Device Health", table: "device_health",
+    fields: [
+      ["store_id","Store","lookup","store_id",false,false],
+      ["user_id","User","lookup","user_id",false,false],
+      ["device_key","Device Key","text","device_key",true,false],
+      ["device_name","Device Name","text","device_name",false,false],
+      ["device_type","Device Type","text","device_type",false,false],
+      ["app_version","App Version","text","app_version",false,false],
+      ["status","Status","text","status",false,false],
+      ["last_seen_at","Last Seen","datetime","last_seen_at",false,false],
+      ["metadata","Metadata","json","metadata",false,false],
+      ["updated_at","Updated","datetime","updated_at",false,false],
+    ],
+  },
   { key: "integration_entity_mapping", label: "Integration Entity Mapping", plural: "Integration Entity Mappings", table: "integration_entity_mappings", fields: [
     ["integration_id","Integration Connection","lookup","integration_id",true],
     ["company_id","Company","lookup","company_id",true],
@@ -1350,12 +1414,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       : null;
     const objectModuleId = objectModuleResult?.rows[0]?.id || moduleId;
     const objectResult = await pool.query(
-      `INSERT INTO platform_objects (module_id, package_id, object_key, label, plural_label, source_table, store_scoped, config)
-       VALUES ($1,(SELECT id FROM package_registry WHERE module_id=$1),$2,$3,$4,$5,$6,$7::jsonb)
-       ON CONFLICT (object_key) DO UPDATE SET label=EXCLUDED.label, plural_label=EXCLUDED.plural_label, source_table=EXCLUDED.source_table, store_scoped=EXCLUDED.store_scoped, config=COALESCE(platform_objects.config,'{}'::jsonb) || EXCLUDED.config, active=TRUE
+      `INSERT INTO platform_objects (module_id, package_id, object_key, label, plural_label, source_table, company_scoped, store_scoped, config)
+       VALUES ($1,(SELECT id FROM package_registry WHERE module_id=$1),$2,$3,$4,$5,$6,$7,$8::jsonb)
+       ON CONFLICT (object_key) DO UPDATE SET label=EXCLUDED.label, plural_label=EXCLUDED.plural_label, source_table=EXCLUDED.source_table, company_scoped=EXCLUDED.company_scoped, store_scoped=EXCLUDED.store_scoped, config=COALESCE(platform_objects.config,'{}'::jsonb) || EXCLUDED.config, active=TRUE
        WHERE platform_objects.company_id IS NULL AND platform_objects.module_id=EXCLUDED.module_id
        RETURNING id`,
-      [objectModuleId, object.key, object.label, object.plural, object.table, object.storeScoped === true, JSON.stringify(object.config || {})]
+      [objectModuleId, object.key, object.label, object.plural, object.table, object.companyScoped !== false, object.storeScoped === true, JSON.stringify(object.config || {})]
     );
     // Core Retail POS mappings must remain available after startup. The conflict
     // guard prevents a reserved key owned by a tenant/another module from being
@@ -1363,12 +1427,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     if (!objectResult.rows.length) continue;
     const objectId = objectResult.rows[0].id;
     for (let index = 0; index < object.fields.length; index += 1) {
-      const [apiName, label, fieldType, sourceColumn, required] = object.fields[index];
+      const [apiName, label, fieldType, sourceColumn, required, writableOverride] = object.fields[index];
       await pool.query(
         `INSERT INTO platform_fields (object_id, api_name, label, field_type, source_column, required, writable, display_order)
          VALUES ($1,$2,$3,$4,$5,$6,$8,$7)
          ON CONFLICT (object_id, api_name) WHERE company_id IS NULL DO UPDATE SET label=EXCLUDED.label, field_type=EXCLUDED.field_type, source_column=EXCLUDED.source_column, required=EXCLUDED.required, writable=EXCLUDED.writable, display_order=EXCLUDED.display_order`,
-        [objectId, apiName, label, fieldType, sourceColumn, required, index, Boolean(sourceColumn)]
+        [objectId, apiName, label, fieldType, sourceColumn, required, index, writableOverride === undefined ? Boolean(sourceColumn) : writableOverride === true]
       );
     }
   }
