@@ -45,19 +45,6 @@ function seriesFrom(config, result) {
   }))
 }
 
-function mergeCaseInsensitiveSeries(points) {
-  const merged = new Map()
-  for (const point of points || []) {
-    const label = String(point?.label ?? '').trim()
-    const key = label.toLowerCase()
-    if (!key) continue
-    const existing = merged.get(key)
-    if (existing) existing.value += Number(point?.value) || 0
-    else merged.set(key, { ...point, label, value: Number(point?.value) || 0 })
-  }
-  return [...merged.values()]
-}
-
 function DashboardFilterControl({ filter, value, onChange }) {
   const type = String(filter?.type || "select");
   const options = Array.isArray(filter?.options) ? filter.options.slice(0, 50) : [];
@@ -119,9 +106,7 @@ function DashboardClock() {
 function ComponentCard({ component, result, loading, currency, onRetry }) {
   const config = component?.config || {}
   const type = component?.type === 'chart' ? (config.chartType || 'bar') : component?.type
-  const rawPoints = seriesFrom(config, result)
-  const normalizePaymentLabels = /payment\s*(method|type|tender)/i.test(`${component?.title || ''} ${config?.labelField || ''}`)
-  const points = normalizePaymentLabels ? mergeCaseInsensitiveSeries(rawPoints) : rawPoints
+  const points = seriesFrom(config, result)
   const rows = Array.isArray(result?.data?.rows) ? result.data.rows : []
   const columns = Array.isArray(result?.data?.columns) ? result.data.columns : []
 
@@ -181,8 +166,7 @@ function ComponentCard({ component, result, loading, currency, onRetry }) {
     body = <div className="dash-empty">No data</div>
   }
 
-  const isSalesByPeriod = /sales\s+by\s+period/i.test(String(component?.title || ''))
-  return <section className={`dashboard-component ${isSalesByPeriod ? 'dashboard-component--sales-period' : ''}`} style={{ gridColumn: `span ${Math.max(1, Math.min(12, Number(component?.layout?.w) || 4))}` }}>
+  return <section className="dashboard-component" style={{ gridColumn: `span ${Math.max(1, Math.min(12, Number(component?.layout?.w) || 4))}` }}>
     {component?.title ? <h3>{component.title}</h3> : null}
     <div className="dashboard-component-body">{body}</div>
   </section>
