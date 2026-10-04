@@ -200,6 +200,7 @@ export default function GPTBuilderRelatedRecords({
   const [tab, setTab] = useState('fields')
   const [addOpen, setAddOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [candidateId, setCandidateId] = useState('')
   const [snapshot, setSnapshot] = useState(null)
 
   useEffect(() => {
@@ -263,6 +264,7 @@ export default function GPTBuilderRelatedRecords({
     setTab('fields')
     setAddOpen(false)
     setSearch('')
+    setCandidateId('')
   }
 
   const removeSelection = (id) => {
@@ -297,10 +299,10 @@ export default function GPTBuilderRelatedRecords({
       </div>
       <footer>{allErrors.length ? <span>{allErrors[0]}{allErrors.length > 1 ? ` (+${allErrors.length - 1} more)` : ''}</span> : <span>{selections.length} related object{selections.length === 1 ? '' : 's'} selected</span>}<div><button className="gptb-button" onClick={cancel}>Cancel</button><button className="gptb-button is-brand" disabled={Boolean(allErrors.length) || !selections.length} onClick={onClose}>Done</button></div></footer>
 
-      {addOpen ? <div className="gptb-related-add-panel"><header><button type="button" onClick={() => setAddOpen(false)}><ChevronLeft size={14}/></button><strong>Add Related Object</strong><button type="button" onClick={() => setAddOpen(false)}><X size={14}/></button></header><label><Search size={13}/><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search objects related to ${config.objectLabel || config.objectKey}...`}/></label><div>{candidates.length ? candidates.map((relationship) => {
+      {addOpen ? <div className="gptb-related-add-panel"><header><button type="button" onClick={() => { setAddOpen(false); setCandidateId('') }}><ChevronLeft size={14}/></button><strong>Add Related Object</strong><button type="button" onClick={() => { setAddOpen(false); setCandidateId('') }}><X size={14}/></button></header><label><Search size={13}/><input autoFocus value={search} onChange={(event) => { setSearch(event.target.value); setCandidateId('') }} placeholder={`Search objects related to ${config.objectLabel || config.objectKey}...`}/></label><div>{candidates.length ? candidates.map((relationship) => {
         const child = objects.find((object) => String(object.id) === String(relationship.child_object_id))
-        return <button type="button" key={relationship.id} onClick={() => addRelationship(relationship)}><Database size={14}/><span><b>{objectLabel(child)}</b><small>{relationship.label || relationship.relationship_key} · {objectKey(child)}</small></span></button>
-      }) : <p>No more related objects are available.</p>}</div></div> : null}
+        return <button type="button" key={relationship.id} className={candidateId === String(relationship.id) ? 'is-selected' : ''} onClick={() => setCandidateId(String(relationship.id))}><Database size={14}/><span><b>{objectLabel(child)}</b><small>{relationship.label || relationship.relationship_key} · {objectKey(child)}</small></span></button>
+      }) : <p>No more related objects are available.</p>}</div><footer><button className="gptb-button" onClick={() => { setAddOpen(false); setCandidateId('') }}>Cancel</button><button className="gptb-button is-brand" disabled={!candidateId} onClick={() => { const relationship = candidates.find((item) => String(item.id) === candidateId); if (relationship) addRelationship(relationship) }}>Select Object</button></footer></div> : null}
     </section>
   </div>
 }
