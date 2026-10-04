@@ -1,5 +1,6 @@
 import { evaluateCondition } from "./platformConditions.js";
 import { renderMessageTemplate } from "./messageTemplates.js";
+import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationCore.js";
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
