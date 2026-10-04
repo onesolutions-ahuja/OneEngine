@@ -3243,6 +3243,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "IN_APP_NOTIFICATION",
+    builderVisible: false,
+    systemVisible: false,
+    legacyTransport: true,
     displayName: "In-App Notification",
     description: "Create a persistent internal notification for a user or team.",
     validation: (action) => {
@@ -3265,6 +3268,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SEND_EMAIL",
+    builderVisible: false,
+    systemVisible: false,
+    legacyTransport: true,
     displayName: "Send Email",
     description: "Queue an email using the configured email provider.",
     validation: (action) => {
@@ -3286,6 +3292,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SEND_EMAIL_BREVO",
+    builderVisible: false,
+    systemVisible: false,
+    legacyTransport: true,
     displayName: "Send Email - Brevo",
     description: "Send an email through the tenant's installed Brevo connector.",
     schema: {
@@ -3312,6 +3321,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SEND_EMAIL_MAILJET",
+    builderVisible: false,
+    systemVisible: false,
+    legacyTransport: true,
     displayName: "Send Email - Mailjet",
     description: "Send an email through the tenant's installed Mailjet connector.",
     schema: {
@@ -3338,6 +3350,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "EMAIL_ALERT",
+    builderVisible: false,
+    systemVisible: false,
+    legacyTransport: true,
     displayName: "Email Alert",
     description: "Send a reusable email-template alert through the configured email provider.",
     validation: (action) => {
@@ -3367,6 +3382,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SEND_SMS",
+    builderVisible: false,
+    systemVisible: false,
+    legacyTransport: true,
     displayName: "Send SMS",
     description: "Queue an SMS using the configured SMS provider.",
     validation: (action) => {
@@ -3388,6 +3406,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
   {
     key: "SEND_WHATSAPP",
+    builderVisible: false,
+    systemVisible: false,
+    legacyTransport: true,
     displayName: "Send WhatsApp",
     description: "Queue a WhatsApp message using the configured provider.",
     validation: (action) => {
