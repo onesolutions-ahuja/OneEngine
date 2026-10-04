@@ -22,7 +22,6 @@
 
 import crypto from "crypto";
 import { createPlatformService, stubFailure } from "./platformServiceBase.js";
-import { isRealApiMode, uberRequest } from "./uberClient.js";
 
 const base = createPlatformService({ platform: "uber", displayName: "Uber Eats" });
 
@@ -221,76 +220,6 @@ function uberMenuCategoryId(categoryName) {
  * @param {Array<{id,name,description,price,vat_rate,active,category_name,uber_item_id,available_on_uber}>} products
  * @param {{storeId: string, currency?: string}} meta
  */
-export function buildMenuPayload(products, { storeId, currency = "GBP" } = {}) {
-  void currency; // Uber menu items carry prices only; store currency is fixed by the store
-
-  const groups = new Map();
-  const published = [];
-  const validationErrors = [];
-  let skippedInactive = 0;
-  let missingPrice = 0;
-
-  for (const product of products || []) {
-    if (!product || product.active === false) {
-      skippedInactive += 1;
-      continue;
-    }
-
-    const priceMinor = Math.round((Number(product.price) || 0) * 100);
-    const invalidFields = [];
-    if (!(Number(product.price) > 0)) {
-      missingPrice += 1;
-      invalidFields.push("price");
-    }
-
-    const uberItemId = String(product.uber_item_id || product.id);
-    if (!String(product.name || "").trim()) invalidFields.push("title");
-    if (!product.id) invalidFields.push("product_id");
-    if (invalidFields.length) validationErrors.push({ productId: product.id || null, fields: invalidFields });
-    const category = product.category_name || "Uncategorised";
-    const categoryId = uberMenuCategoryId(category);
-
-    if (!groups.has(categoryId)) {
-      groups.set(categoryId, { id: categoryId, title: category, items: [] });
-    }
-
-    const item = {
-      id: uberItemId,
-      title: product.name || uberItemId,
-      description: product.description || "",
-      price: Math.max(priceMinor, 0),
-      is_available: product.available_on_uber !== false,
-      external_data: `onepos:${product.id}`,
-    };
-
-    groups.get(categoryId).items.push(item);
-    published.push(item);
-  }
-
-  return {
-    menus: [
-      {
-        id: `onepos-menu-${storeId || "store"}`,
-        title: "onePOS Menu",
-        service_availability: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map((day) => ({
-          day_of_week: day,
-          time_periods: [{ start_time: "00:00", end_time: "23:59" }],
-        })),
-        categories: [...groups.values()],
-      },
-    ],
-    _meta: {
-      storeId: storeId || null,
-      publishedCount: published.length,
-      categoryCount: groups.size,
-      skippedInactiveCount: skippedInactive,
-      missingPriceCount: missingPrice,
-      publishedItemIds: published.map((item) => item.id),
-      validationErrors,
-    },
-  };
-}
-
 /*
  * Uber Eats order endpoints (Order API). NOTE: endpoint paths come from the
  * current Uber developer docs (Order API suite) - re-verify while testing in
