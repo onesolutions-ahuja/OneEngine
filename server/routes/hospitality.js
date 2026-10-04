@@ -832,7 +832,7 @@ export default function createHospitalityRouter({ authenticate, authorize, db, p
           const eligibility = isCardRedeemable(card.rows[0]);
           if (!eligibility.ok) throw Object.assign(new Error(eligibility.reason), { status: 409 });
           const cardBalance = await client.query(`SELECT COALESCE(SUM(CASE transaction_type WHEN 'redeem' THEN -amount ELSE amount END),0)::numeric AS balance
-            FROM gift_card_transactions WHERE gift_card_id=$1 AND company_id=$2`, [card.rows[0].id, req.user.companyId]);
+            FROM gift_card_ledger WHERE gift_card_id=$1 AND company_id=$2`, [card.rows[0].id, req.user.companyId]);
           const redemption = validateRedemption(cardBalance.rows[0]?.balance, payment.amount);
           if (!redemption.ok) throw Object.assign(new Error(redemption.reason), { status: 409 });
           giftCard = { id: card.rows[0].id, balance: Number(cardBalance.rows[0].balance) };
@@ -843,7 +843,7 @@ export default function createHospitalityRouter({ authenticate, authorize, db, p
           const customer = await client.query("SELECT credit_enabled,credit_limit FROM customers WHERE id=$1 AND company_id=$2 FOR UPDATE", [customerId, req.user.companyId]);
           if (!customer.rows.length || customer.rows[0].credit_enabled !== true) throw Object.assign(new Error("Customer credit is not enabled"), { status: 409 });
           const currentCredit = await client.query(`SELECT COALESCE(SUM(amount*CASE WHEN transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END),0)::numeric AS outstanding
-            FROM customer_credit_ledger WHERE company_id=$1 AND customer_id=$2`, [req.user.companyId, customerId]);
+            FROM customer_ledger WHERE company_id=$1 AND customer_id=$2`, [req.user.companyId, customerId]);
           const available = customer.rows[0].credit_limit == null ? Infinity : Number(customer.rows[0].credit_limit) - Number(currentCredit.rows[0].outstanding);
           if (payment.amount > available) throw Object.assign(new Error("Customer credit limit would be exceeded"), { status: 409 });
           creditCustomer = customerId;
@@ -860,7 +860,7 @@ export default function createHospitalityRouter({ authenticate, authorize, db, p
             FROM sales s WHERE s.id=$1 AND s.company_id=$2 AND s.store_id=$3 RETURNING id,sale_id,amount`, [row.sale_id, req.user.companyId, storeId, paymentMethod, applied]);
           if (!inserted.rows.length) throw Object.assign(new Error("Hospitality sale is outside the current company/store"), { status: 404 });
           insertedPayments.push({ ...inserted.rows[0], amount: applied, saleId: row.sale_id });
-          if (creditCustomer) await client.query(`INSERT INTO customer_credit_ledger(company_id,store_id,customer_id,transaction_type,amount,reference_type,reference_id,description,gross_amount,created_by)
+          if (creditCustomer) await client.query(`INSERT INTO customer_ledger(company_id,store_id,customer_id,transaction_type,amount,reference_type,reference_id,description,gross_amount,created_by)
             VALUES($1,$2,$3,'credit_sale',$4,'sale',$5,'Hospitality customer-credit payment',$4,$6)`, [req.user.companyId, storeId, creditCustomer, applied, row.sale_id, req.user.id]);
           remainingPayment = roundCurrency(remainingPayment - applied);
         }
@@ -869,7 +869,7 @@ export default function createHospitalityRouter({ authenticate, authorize, db, p
           let cardBalance = giftCard.balance;
           for (const inserted of insertedPayments) {
             cardBalance = roundCurrency(cardBalance - inserted.amount);
-            await client.query(`INSERT INTO gift_card_transactions(company_id,gift_card_id,transaction_type,amount,balance_after,reference_type,reference_id,description,store_id,created_by)
+            await client.query(`INSERT INTO gift_card_ledger(company_id,gift_card_id,transaction_type,amount,balance_after,reference_type,reference_id,description,store_id,created_by)
               VALUES($1,$2,'redeem',$3,$4,'hospitality_payment',$5,'Hospitality bill payment',$6,$7)`, [req.user.companyId, giftCard.id, inserted.amount, cardBalance, inserted.id, storeId, req.user.id]);
             await client.query("UPDATE payments SET provider_transaction_id=$1 WHERE id=$2", [`giftcard:${giftCard.id}`, inserted.id]);
           }
