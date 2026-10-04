@@ -1176,6 +1176,7 @@ const operationalObjects = [
       ["device_name","Device Name","text","device_name",false,false],
       ["device_type","Device Type","text","device_type",false,false],
       ["app_version","App Version","text","app_version",false,false],
+      ["health_source","Health Source","text","health_source",false,false],
       ["status","Status","text","status",false,false],
       ["last_seen_at","Last Seen","datetime","last_seen_at",false,false],
       ["metadata","Metadata","json","metadata",false,false],
