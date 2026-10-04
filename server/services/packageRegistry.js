@@ -1881,6 +1881,7 @@ function oneAssistantAppointmentRouterWorkflow() {
         {apiName:"date1",resourceType:"Variable",dataType:"Date",description:"First offered booking date."},
         {apiName:"date2",resourceType:"Variable",dataType:"Date",description:"Second offered booking date."},
         {apiName:"selectedDate",resourceType:"Variable",dataType:"Date",description:"Customer-selected booking date."},
+        {apiName:"nextDate",resourceType:"Variable",dataType:"Date",description:"Exclusive end date used to scope conflict queries."},
         {apiName:"slotChoices",resourceType:"Variable",dataType:"Text",description:"Rendered list of available slots."},
         {apiName:"slotCount",resourceType:"Variable",dataType:"Number",description:"Number of available slots."},
         {apiName:"currentTime",resourceType:"Variable",dataType:"DateTime",description:"Current server date and time."},
