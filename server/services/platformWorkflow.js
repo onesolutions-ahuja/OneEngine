@@ -1,5 +1,6 @@
 import { evaluateCondition } from "./platformConditions.js";
 import { renderMessageTemplate } from "./messageTemplates.js";
+import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationCore.js";
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
@@ -43,7 +44,7 @@ import {
 } from "./oneAssistant.js";
 
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "SEND_APPOINTMENT_MESSAGE", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
 
@@ -1387,37 +1388,6 @@ async function executeProviderSpecificEmail({
 }
 
 
-function appointmentConversationContext(action,{record,object,workflowVariables}={}) {
-  const rootObjectKey=object?.object_key||object?.objectKey||null;
-  return resolveBindingTree(action||{},{record:record||{},rootObjectKey,variables:workflowVariables||{}});
-}
-
-async function sendAppointmentWorkflowMessage({action,db,companyId,req,record,object,workflowVariables}){
-  const tenantId=companyId||req?.user?.companyId;
-  const bound=appointmentConversationContext(action,{record,object,workflowVariables});
-  const channel=String(bound.channel||record?.channel||"").toUpperCase();
-  if(!["SMS","WHATSAPP"].includes(channel)) return {status:"skipped",reason:"Unsupported appointment messaging channel"};
-  const recipient=String(bound.recipient||record?.sender||record?.from||"").trim();
-  if(!recipient) return {status:"failed",error:"Appointment response recipient is missing"};
-  const template=String(action?.message||action?.body||action?.text||"").trim();
-  if(!template) return {status:"failed",error:"Appointment response message is not configured"};
-  const templateContext=appointmentConversationContext(action?.templateContext||{},{record,object,workflowVariables});
-  let message;
-  try{
-    message=renderMessageTemplate(template,templateContext);
-  }catch(error){
-    return {status:"failed",error:error?.message||"Appointment response template is invalid"};
-  }
-  const type=channel==="SMS"?"SEND_SMS":"SEND_WHATSAPP";
-  const result=await executeRegisteredAction({
-    db,companyId:tenantId,userId:req?.user?.id||null,req,
-    action:{type,recipient,message,conversationId:bound.conversationId||record?.metadata?.conversationId||null,recordId:bound.recordId||record?.id||null},
-  });
-  if(result?.status==="SUCCESS") return {status:"completed",channel,recipient,reference:result.reference||null,message};
-  if(result?.status==="UNAVAILABLE") return {status:"failed",channel,recipient,error:result.code||"PROVIDER_UNAVAILABLE"};
-  return {status:"failed",channel,recipient,error:result?.code||result?.error?.message||"Appointment response delivery failed"};
-}
-
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
   {
@@ -1503,29 +1473,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if(result?.status==="UNAVAILABLE") return {status:"failed",channel,recipient,error:result.code||"PROVIDER_UNAVAILABLE"};
       return {status:"failed",channel,recipient,error:result?.code||result?.error?.message||"Confirmation delivery failed"};
     },
-  },  {
-    key: "SEND_APPOINTMENT_MESSAGE",
-    displayName: "Appointments - Send Response",
-    description: "Send an editable appointment workflow response through SMS or WhatsApp.",
-    schema: {
-      type: "object",
-      properties: {
-        channel: { type: "string", enum: ["SMS","WHATSAPP"] },
-        recipient: { type: "string" },
-        message: { type: "string" },
-        templateContext: { type: "object" },
-        conversationId: { type: "string" },
-      },
-      required: ["channel","recipient","message"],
-    },
-    validation: (action) => {
-      if (!action?.channel) throw new Error("Send Appointment Response requires channel");
-      if (!action?.recipient) throw new Error("Send Appointment Response requires recipient");
-      if (!String(action?.message||"").trim()) throw new Error("Send Appointment Response requires message");
-    },
-    async: false,
-    requiredPermissions: ["communications.send"],
-    executor: sendAppointmentWorkflowMessage,
   },  {
     key: "CREATE_APPOINTMENT_BOOKING_CASE",
     displayName: "Appointments - Create Booking Case",
@@ -3162,6 +3109,101 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         params
       );
       return { status: result.rows.length ? "completed" : "skipped", relationshipKey, relatedRecordId, linkField: column, unlinked: result.rows[0] || null };
+    },
+  },
+  {
+    key: "SEND_COMMUNICATION",
+    displayName: "Send Communication",
+    description: "Send a provider-neutral communication. Channel, recipient, content and template are Flow metadata; installed communication providers own transport and credentials.",
+    schema: {
+      type: "object",
+      properties: {
+        channel: { type: "string", title: "Channel" },
+        recipient: { type: "string", title: "Recipient" },
+        subject: { type: "string", title: "Subject" },
+        title: { type: "string", title: "Notification title" },
+        message: { type: "string", title: "Message" },
+        templateId: { type: "string", title: "Template" },
+        templateKey: { type: "string", title: "Template API name" },
+        templateContext: { type: "object", title: "Template context" },
+        conversationId: { type: "string", title: "Conversation" },
+        objectId: { type: "string", title: "Related object" },
+        recordId: { type: "string", title: "Related record" },
+      },
+      required: ["channel"],
+    },
+    validation: (action) => {
+      if (!action?.channel) throw new Error("Send Communication requires a channel");
+      if (!action?.message && !action?.body && !action?.text && !action?.templateId && !action?.templateKey && !action?.template) {
+        throw new Error("Send Communication requires a message or template");
+      }
+    },
+    async: true,
+    requiredPermissions: ["communications.send"],
+    executor: async (context) => {
+      const { action, db, req, companyId, record, previousRecord, object, workflowVariables } = context;
+      const bindingContext = { record, previousRecord, req, object, workflowVariables };
+      const channelValue = resolveConfiguredResource(action.channel, bindingContext, { preserveMissing: false });
+      const channel = String(channelValue || "").trim().toUpperCase();
+      if (!channel) return { status: "failed", code: "COMMUNICATION_CHANNEL_REQUIRED", retryable: false };
+
+      const resolved = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
+      const forwarded = {
+        ...resolved,
+        subject: resolveConfiguredResource(action.subject, bindingContext, { preserveMissing: false }),
+        title: resolveConfiguredResource(action.title, bindingContext, { preserveMissing: false }),
+        templateId: resolveConfiguredResource(action.templateId, bindingContext, { preserveMissing: false }),
+        template: resolveConfiguredResource(action.template || action.templateKey, bindingContext, { preserveMissing: false }),
+        conversationId: resolveConfiguredResource(action.conversationId, bindingContext, { preserveMissing: false }),
+        objectId: resolveConfiguredResource(action.objectId, bindingContext, { preserveMissing: false }),
+        recordId: resolveConfiguredResource(action.recordId, bindingContext, { preserveMissing: false }),
+      };
+
+      if (channel === "IN_APP") {
+        const tenantId = companyId || req?.user?.companyId || null;
+        if (!tenantId) return { status: "failed", code: "COMPANY_CONTEXT_REQUIRED", retryable: false };
+        let recipientUserId = resolveConfiguredResource(action.recipientUserId || action.recipient || action.to, bindingContext, { preserveMissing: false });
+        if (!recipientUserId || ["CURRENT_USER","$USER","$USER.ID"].includes(String(recipientUserId).toUpperCase())) {
+          recipientUserId = req?.user?.id || null;
+        }
+        if (!recipientUserId) return { status: "failed", code: "COMMUNICATION_RECIPIENT_REQUIRED", retryable: false };
+        const userResult = await db(
+          "SELECT id FROM users WHERE id=$1 AND company_id=$2 AND active=TRUE LIMIT 1",
+          [recipientUserId, tenantId]
+        );
+        if (!userResult.rows[0]) return { status: "failed", code: "COMMUNICATION_RECIPIENT_UNAVAILABLE", retryable: false };
+        const templateContext = forwarded.templateContext && typeof forwarded.templateContext === "object" ? forwarded.templateContext : (record || {});
+        const rawMessage = action.message ?? action.body ?? action.text ?? action.templateKey ?? action.template ?? "";
+        const rawTitle = action.title ?? action.subject ?? "";
+        const message = renderMessageTemplate(String(rawMessage), templateContext);
+        const title = rawTitle ? renderMessageTemplate(String(rawTitle), templateContext) : null;
+        await db(
+          "INSERT INTO platform_notifications (company_id,user_id,title,message,metadata) VALUES ($1,$2,$3,$4,$5::jsonb)",
+          [tenantId, recipientUserId, title, message, JSON.stringify({ source: "send_communication", channel: "IN_APP", objectId: forwarded.objectId || null, recordId: forwarded.recordId || null })]
+        );
+        await recordCommunicationEvent({
+          db,
+          companyId: tenantId,
+          channel: "IN_APP",
+          eventType: COMMUNICATION_EVENTS.SENT,
+          direction: "OUTBOUND",
+          provider: "IN_APP",
+          recipient: String(recipientUserId),
+          objectId: forwarded.objectId || null,
+          recordId: forwarded.recordId || null,
+          body: message,
+          metadata: { title, actionType: "SEND_COMMUNICATION" },
+        }).catch(() => null);
+        return { status: "completed", channel: "IN_APP", recipient: recipientUserId };
+      }
+
+      const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS", WHATSAPP: "SEND_WHATSAPP" }[channel] || null;
+      if (!legacyKey) {
+        return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
+      }
+      const transport = getWorkflowActionDefinition(legacyKey);
+      if (!transport?.executor) return { status: "failed", code: "COMMUNICATION_TRANSPORT_UNAVAILABLE", channel, retryable: false };
+      return transport.executor({ ...context, action: { ...forwarded, key: legacyKey, type: legacyKey } });
     },
   },
   {
@@ -5493,8 +5535,8 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
   // Appointment orchestration actions are safe to execute in Debug because
   // their database writes use the Debug transaction and are rolled back.
-  // SEND_APPOINTMENT_MESSAGE is intentionally omitted so outbound SMS/WhatsApp
-  // remains simulated.
+  // SEND_COMMUNICATION is intentionally omitted so external and in-app delivery
+  // remains simulated during Debug.
   ]);
 
 export function friendlyWorkflowError(error, actionType = "") {
