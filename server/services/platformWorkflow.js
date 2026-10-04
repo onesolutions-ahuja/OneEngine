@@ -210,99 +210,6 @@ const COMMUNICATION_PROVIDER_ALIASES = {
 };
 
 const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
-  {
-    key: "CONNECTOR_HEALTH_CHECK",
-    displayName: "Connector - Health Check",
-    description: "Execute the installed connector health check for the current company/store/till scope.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["connector.view"],
-    capability: "connector.health",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "CONNECTOR_HEALTH_CHECK" } }),
-  },
-  {
-    key: "CONNECTOR_ENABLE",
-    displayName: "Connector - Enable",
-    description: "Enable the installed connector instance for the current tenant scope if supported.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["connector.manage"],
-    capability: "connector.enable",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "CONNECTOR_ENABLE" } }),
-  },
-  {
-    key: "CONNECTOR_DISABLE",
-    displayName: "Connector - Disable",
-    description: "Disable the installed connector instance for the current tenant scope if supported.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["connector.manage"],
-    capability: "connector.disable",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "CONNECTOR_DISABLE" } }),
-  },
-  {
-    key: "PAYMENT_START",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Payment - Start",
-    description: "Start a payment through the assigned connector instance for the current till.",
-    validation: (action) => {
-      if (!action || typeof action !== "object") throw new Error("Payment action payload is required");
-      if (action.amount === undefined && action.total === undefined) throw new Error("Payment action requires an amount or total");
-    },
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "payment.sale",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_START" } }),
-  },
-  {
-    key: "PAYMENT_CANCEL",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Payment - Cancel",
-    description: "Cancel an in-flight payment through the assigned connector instance.",
-    validation: (action) => {
-      if (!action?.providerTransactionId && !action?.transactionId && !action?.paymentId) {
-        throw new Error("Payment cancellation requires a transaction reference");
-      }
-    },
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "payment.cancel",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_CANCEL" } }),
-  },
-  {
-    key: "OPEN_CASH_DRAWER",
-    displayName: "Cash Drawer - Open",
-    description: "Open the assigned cash drawer connector if the current till supports it.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["till.open"],
-    capability: "drawer.open",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "OPEN_CASH_DRAWER" } }),
-  },
-  {
-    key: "SCANNER_STATUS",
-    displayName: "Scanner - Status",
-    description: "Return the status of the assigned barcode scanner connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage"],
-    capability: "scanner.status",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "SCANNER_STATUS" } }),
-  },
-  {
-    key: "CONNECTOR_TEST_CONNECTION",
-    displayName: "Connector - Test Connection",
-    description: "Run the connector test connection routine for the assigned instance.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["connector.test"],
-    capability: "connector.test",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "CONNECTOR_TEST_CONNECTION" } }),
-  },
 ]);
 
 const GENERIC_CONNECTOR_EVENTS = Object.freeze([
@@ -1383,16 +1290,7 @@ async function loadRelatedGetRecordsCollections({ db, relatedRecords, targetObje
   return collections;
 }
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
-  ...GENERIC_CONNECTOR_ACTIONS,  {
-    key: "LICENCE_REQUEST_PACKAGE",
-    displayName: "Licence - Request Package",
-    description: "Create a pending package licence request and run its configured workflow.",
-    validation: (action) => { if (!action?.packageKey && !action?.package_key) throw new Error("Licence request requires a package key"); },
-    async: true,
-    requiredPermissions: ["package.manage"],
-    executor: (context) => executeLicenceRequestPackageAction(context),
-  },
-  
+  ...GENERIC_CONNECTOR_ACTIONS,    
   
   
   
