@@ -1030,11 +1030,23 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setSelectedElementIds([])
     setDirty(true)
   }
-  const focusAutoElement = (direction) => {
+  const focusAutoElement = (direction, axis = 'vertical') => {
     if (layout !== 'auto') return
     const nodes = [...document.querySelectorAll('[data-gptb-auto-focus="true"]')]
     if (!nodes.length) return
-    const activeIndex = nodes.findIndex((node) => node === document.activeElement || node.contains(document.activeElement))
+    const activeNode = nodes.find((node) => node === document.activeElement || node.contains(document.activeElement))
+    if (axis === 'horizontal' && activeNode) {
+      const activeId = activeNode.getAttribute('data-gptb-element-id') || 'start'
+      const edge = direction > 0
+        ? goToConnections.find((row) => String(row.sourceId) === String(activeId))
+        : goToConnections.find((row) => String(row.targetId) === String(activeId))
+      const targetId = direction > 0 ? edge?.targetId : edge?.sourceId
+      if (targetId) {
+        const target = nodes.find((node) => String(node.getAttribute('data-gptb-element-id') || 'start') === String(targetId))
+        if (target) { target.focus?.(); return }
+      }
+    }
+    const activeIndex = nodes.findIndex((node) => node === activeNode)
     const nextIndex = activeIndex < 0 ? (direction > 0 ? 0 : nodes.length - 1) : Math.max(0, Math.min(nodes.length - 1, activeIndex + direction))
     nodes[nextIndex]?.focus?.()
   }
@@ -1208,8 +1220,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       if (layout === 'auto' && primary && event.key.toLowerCase() === 'v' && copiedElements.length) {
         event.preventDefault(); pasteCopiedElements(); return
       }
-      if (layout === 'auto' && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-        event.preventDefault(); focusAutoElement(event.key === 'ArrowDown' ? 1 : -1); return
+      if (layout === 'auto' && ['ArrowDown','ArrowUp','ArrowLeft','ArrowRight'].includes(event.key)) {
+        event.preventDefault()
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') focusAutoElement(event.key === 'ArrowRight' ? 1 : -1, 'horizontal')
+        else focusAutoElement(event.key === 'ArrowDown' ? 1 : -1, 'vertical')
+        return
       }
       if (layout === 'auto' && primary && event.key.toLowerCase() === 'i') {
         const target = event.target?.closest?.('[data-gptb-description]')
@@ -1219,7 +1234,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       if (layout === 'auto' && primary && event.key.toLowerCase() === 'k') {
         event.preventDefault(); setToolboxOpen(true); requestAnimationFrame(() => toolboxFocusRef.current?.focus?.()); return
       }
-      if (layout === 'free' && primary && event.key === '/') { event.preventDefault(); setShortcutHelpOpen(true); return }
+      if (primary && event.key === '/') { event.preventDefault(); setShortcutHelpOpen(true); return }
       if (primary && event.altKey && (event.key === '+' || event.key === '=')) { event.preventDefault(); setZoom((value) => Math.min(150, value + 10)); return }
       if (primary && event.altKey && event.key === '-') { event.preventDefault(); setZoom((value) => Math.max(25, value - 10)); return }
       if (primary && event.altKey && event.key === '0') { event.preventDefault(); setZoom(100); return }
@@ -1290,9 +1305,9 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         onPointerUp={layout === 'free' && freeConnectorDraft ? () => setFreeConnectorDraft(null) : undefined}
       >
         <div className="gptb-canvas-stage" style={{ transform: `scale(${zoom / 100})` }}>{layout === 'auto' ? <>
-          <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} data-gptb-auto-focus="true" data-gptb-description="The Start element defines when and how the flow begins." aria-label="Start" aria-disabled={!flow.startNeedsConfiguration} onClick={flow.startNeedsConfiguration ? openStart : undefined}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
+          <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} data-gptb-auto-focus="true" data-gptb-element-id="start" data-gptb-description="The Start element defines when and how the flow begins." aria-label="Start" aria-disabled={!flow.startNeedsConfiguration} onClick={flow.startNeedsConfiguration ? openStart : undefined}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
           <div className="gptb-connector"/>
-          {elements.filter((element) => element.source === 'auto').map((element) => <div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`} key={element.id}><PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/><div className="gptb-connector"/></div>)}
+          {elements.filter((element) => element.source === 'auto').map((element) => <div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-element-id={element.id} data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`} key={element.id}><PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/><div className="gptb-connector"/></div>)}
           <div className="gptb-add-slot">
             <button className="gptb-add-node" aria-label="Add element" aria-expanded={elementPickerOpen} onClick={() => { setElementPickerOpen((value) => !value); setStartOpen(false); setDiagnosticsOpen(false); setEditingElement(null) }}><Plus size={15}/></button>
             {elementPickerOpen ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={elements.some((element) => element.source === 'auto')} copiedCount={copiedElements.length} onPaste={pasteCopiedElements} onConnect={beginConnectToElement} onSelect={(element) => chooseElement(element, 'auto')} onClose={() => setElementPickerOpen(false)}/> : null}
@@ -1372,7 +1387,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
     {saveAsFlowOpen ? <GPTBuilderSaveAsFlowDialog value={flowProps} saving={saving} onCancel={() => setSaveAsFlowOpen(false)} onSave={(next) => void save(flowProps, { forceNewFlow: true, newFlow: next })}/> : null}
     {editHistoryPending ? <GPTBuilderUnsavedHistoryDialog saving={saving} onCancel={() => setEditHistoryPending(false)} onSaveAndView={() => void saveAndOpenEditHistory()}/> : null}
-    {shortcutHelpOpen ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-shortcuts-title"><header><strong id="gptb-shortcuts-title">Keyboard Shortcuts</strong><button className="gptb-icon-button" aria-label="Close Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(false)}><X size={16}/></button></header><div className="gptb-properties-body"><dl className="gptb-shortcut-list"><div><dt>Zoom in / out</dt><dd>Ctrl/Cmd + Alt/Option + + / − or Ctrl/Cmd + mouse wheel</dd></div><div><dt>Zoom to fit</dt><dd>Ctrl/Cmd + Alt/Option + 1</dd></div><div><dt>Reset zoom</dt><dd>Ctrl/Cmd + Alt/Option + 0</dd></div><div><dt>Switch panel focus</dt><dd>F6</dd></div><div><dt>Toolbox / tips focus</dt><dd>g, then d</dd></div><div><dt>Delete selected elements</dt><dd>Delete / Backspace</dd></div><div><dt>Select multiple elements</dt><dd>Shift + Click</dd></div></dl></div><footer><button className="gptb-button is-brand" onClick={() => setShortcutHelpOpen(false)}>Close</button></footer></section></div> : null}
+    {shortcutHelpOpen ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-shortcuts-title"><header><strong id="gptb-shortcuts-title">Keyboard Shortcuts</strong><button className="gptb-icon-button" aria-label="Close Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(false)}><X size={16}/></button></header><div className="gptb-properties-body"><dl className="gptb-shortcut-list"><div><dt>Zoom in / out</dt><dd>Ctrl/Cmd + Alt/Option + + / − or Ctrl/Cmd + mouse wheel</dd></div><div><dt>Zoom to fit</dt><dd>Ctrl/Cmd + Alt/Option + 1</dd></div><div><dt>Reset zoom</dt><dd>Ctrl/Cmd + Alt/Option + 0</dd></div><div><dt>Switch panel focus</dt><dd>F6</dd></div><div><dt>Toolbox / tips focus</dt><dd>g, then d</dd></div><div><dt>Navigate Auto-Layout</dt><dd>↑ / ↓ execution order · ← / → branch or Go To path</dd></div><div><dt>Cut / copy / paste</dt><dd>Ctrl/Cmd + X / C / V in Auto-Layout</dd></div><div><dt>Delete selected elements</dt><dd>Delete / Backspace</dd></div><div><dt>Select multiple elements</dt><dd>Shift + Click in Free-Form</dd></div><div><dt>Element description</dt><dd>Ctrl/Cmd + I in Auto-Layout</dd></div><div><dt>Open Toolbox</dt><dd>Ctrl/Cmd + K in Auto-Layout</dd></div></dl></div><footer><button className="gptb-button is-brand" onClick={() => setShortcutHelpOpen(false)}>Close</button></footer></section></div> : null}
     {descriptionPopup ? <div className="gptb-description-popup" role="status">{descriptionPopup}<button aria-label="Close description" onClick={() => setDescriptionPopup(null)}><X size={13}/></button></div> : null}
   </section>
 }
