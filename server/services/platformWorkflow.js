@@ -6444,7 +6444,8 @@ export async function executeWorkflowActions({ actions, ...context }) {
     : {};
   if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
   if (!workflowVariables.steps || typeof workflowVariables.steps !== "object") workflowVariables.steps = {};
-  await hydrateWorkflowProviderResources(context, workflowVariables);
+  const providerResourceReferenced = JSON.stringify(actions).includes("variables.Provider_");
+  if (providerResourceReferenced) await hydrateWorkflowProviderResources(context, workflowVariables);
   const allActions = Array.isArray(context.allActions) ? context.allActions : actions;
   const actionById = new Map(allActions.filter((item) => item?.id).map((item) => [String(item.id), item]));
   const branchTargetIds = new Set();
@@ -6683,8 +6684,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
         }
         const selectedActions = selectedIds
           .map((id) => actionById.get(String(id)))
-          .filter(Boolean)
-          .sort((a, b) => allActions.indexOf(a) - allActions.indexOf(b));
+          .filter(Boolean);
         if (selectedActions.length) {
           const branchResults = await executeWorkflowActions({
             actions: selectedActions,
