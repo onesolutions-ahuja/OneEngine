@@ -24,7 +24,12 @@ export function nativeRuntimeAction(node, resources = []) {
     limit: p.limit === 'all' ? 200 : p.limit === 'limited' ? Number(p.maxRecords) : 1,
     store: !p.limit || p.limit === 'first' ? 'first' : 'all' }
   if (['CREATE_RECORDS', 'UPDATE_RECORDS'].includes(node.type)) {
-    if (p.valueMode && p.valueMode !== 'manual') throw new Error(`${node.label}: use field mappings to create this record`)
+    if (node.type === 'CREATE_RECORDS' && ['record', 'collection'].includes(p.valueMode)) {
+      if (!p.sourceRecord) throw new Error(`${node.label}: choose a record resource`)
+      const resourcePath = /^(variables|steps)\./.test(p.sourceRecord) || p.sourceRecord.startsWith('$') ? p.sourceRecord : `variables.${p.sourceRecord}`
+      return { ...base, key: 'CREATE_RECORD', objectKey: p.objectKey, [p.valueMode === 'collection' ? 'recordCollectionResource' : 'recordResource']: { path: resourcePath } }
+    }
+    if (p.valueMode && p.valueMode !== 'manual') throw new Error(`${node.label}: unsupported record value mode`)
     if (node.type === 'UPDATE_RECORDS' && !p.recordId) throw new Error(`${node.label}: choose the record ID to update`)
     return { ...base, key: node.type === 'CREATE_RECORDS' ? 'CREATE_RECORD' : 'UPDATE_RECORD', objectKey: p.objectKey,
       ...(p.recordId ? { recordId: configuredValue(p.recordId) } : {}),
