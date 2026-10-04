@@ -131,8 +131,7 @@ export default function GPTBuilderElementProperties({
 }) {
   const element = elementByKey(instance?.key)
   const isScreen = instance?.key === 'screen'
-  const isAction = instance?.key === 'action'
-  const useDialog = layout === 'free' || isScreen || isAction
+  const useDialog = layout === 'free' || isScreen
   const [draft, setDraft] = useState(instance)
   const [history, setHistory] = useState([])
   const original = useRef(instance)
