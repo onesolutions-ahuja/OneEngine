@@ -2896,12 +2896,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!ids.length) return { status: "skipped", deleted: null, records: [], count: 0 };
       if (ids.length > 500) throw new Error("Delete Record exceeds the maximum of 500 records");
       const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
-      const params = [ids];
-      const clauses = ["id::text = ANY($1::text[])"];
-      if (targetObject.company_scoped) { params.push(req?.user?.companyId || companyId || null); clauses.push(`company_id=$${params.length}`); }
+      const legacySingle = Boolean(action.recordId) && ids.length === 1;
+      const params = [legacySingle ? ids[0] : ids];
+      const clauses = [legacySingle ? "id=$1" : "id::text = ANY($1::text[])"];
+      if (targetObject.company_scoped) { params.push(req?.user?.companyId || companyId || null); clauses.push(`company_id=${params.length}`); }
       if (targetObject.store_scoped) {
         if (!req?.user?.storeId) throw new Error("A store session is required for this record");
-        params.push(req.user.storeId); clauses.push(`store_id=$${params.length}`);
+        params.push(req.user.storeId); clauses.push(`store_id=${params.length}`);
       }
       const result = hasActive.rows.length
         ? await db(`UPDATE "${table}" SET active=false WHERE ${clauses.join(" AND ")} RETURNING *`, params)
