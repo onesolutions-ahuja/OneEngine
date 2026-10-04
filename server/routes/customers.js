@@ -1046,7 +1046,7 @@ export default function createCustomersRouter({
         reason: notes,
         userId: req.user.id || req.user.userId || null,
       });
-      const tx = txExecution.result;
+      const tx = txResult.transaction;
 
       await db(
         `
