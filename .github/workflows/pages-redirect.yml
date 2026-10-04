@@ -41,6 +41,7 @@ jobs:
         run: |
           node scripts/build-pages-routes.mjs
           printf '%s' "$GITHUB_SHA" > dist/deploy-sha.txt
+          node scripts/workflow-builder-fingerprint.mjs > dist/workflow-builder-sha.txt
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
