@@ -1535,7 +1535,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
           defaultBranch: (element.config?.defaultBranch || []).filter((id) => !removed.has(id)),
         } }
         return element
-      })
+      }))
     setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
     setSelectedElementIds((current) => current.filter((id) => !removed.has(id)))
     setDirty(true)
