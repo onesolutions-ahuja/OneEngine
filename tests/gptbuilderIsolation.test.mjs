@@ -122,3 +122,52 @@ test('GPT Builder phase 3 keeps Screen selection in a separate editor shell', as
   assert.match(elements, /aria-label="New Screen"/)
   assert.match(elements, /gptb-element-editor-shell/)
 })
+
+
+test('GPT Builder phase 4 shared properties implements Salesforce label and API-name behavior', async () => {
+  const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
+  for (const text of [
+    'generatedLabelForElement',
+    'labelSource',
+    'apiNameSource',
+    'API Name',
+    'Description',
+    'Auto-populated from the label until you edit the API name.',
+    'uniqueApiName',
+    'uniqueLabel',
+  ]) assert.ok(props.includes(text), text)
+  assert.match(props, /labelSource === 'manual'/)
+  assert.match(props, /apiNameSource === 'manual'/)
+  assert.match(props, /labelSource: 'manual'/)
+  assert.match(props, /apiNameSource: 'manual'/)
+})
+
+test('GPT Builder phase 4 matches auto-layout continuous editing and free-form dialog behavior', async () => {
+  const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
+  assert.match(props, /const useDialog = layout === 'free' \|\| isScreen/)
+  assert.match(props, /onLiveChange\?\.\(next\)/)
+  assert.match(props, /Changes stay in the draft when you close this panel/)
+  assert.match(props, /Undo element change/)
+  assert.match(props, />Cancel<\/button>/)
+  assert.match(props, />Done<\/button>/)
+  assert.match(props, /removeNew: isNew/)
+})
+
+test('GPT Builder phase 4 persists element identity and reopens element properties', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /const \[elements, setElements\] = useState\(\[\]\)/)
+  assert.match(page, /gptBuilderElements: elements\.map/)
+  assert.match(page, /labelSource: element\.labelSource/)
+  assert.match(page, /apiNameSource: element\.apiNameSource/)
+  assert.match(page, /onOpen=\{\(\) => openElement\(element\)\}/)
+  assert.match(page, /<GPTBuilderElementProperties/)
+  assert.match(page, /setEditingElement\(\{ id: instance\.id, isNew: true \}\)/)
+})
+
+test('GPT Builder phase 4 blocks saving incomplete Screen and Action elements but allows other draft elements', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /hasUnsavableIncomplete = elements\.some/)
+  assert.match(page, /\['screen', 'action'\]\.includes\(item\.key\)/)
+  assert.match(page, /Complete Screen and Action elements before saving/)
+  assert.match(page, /Complete this element before activating the flow/)
+})
