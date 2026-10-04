@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp,
-  Copy, Eye, LayoutPanelLeft, MoreHorizontal, Play, Plus, Redo2, Save, Search,
+  Copy, Eye, History, LayoutPanelLeft, Play, Plus, Redo2, Save, Search,
   Settings2, Sparkles, Trash2, Undo2, Workflow, X, Zap, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
@@ -14,6 +14,9 @@ import GPTBuilderElementProperties, {
 import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRecords'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
+import {
+  GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
+} from './GPTBuilderSaveHistory'
 import './GPTBuilderPage.css'
 
 const FLOW_CATEGORIES = [
@@ -414,6 +417,13 @@ function FlowShell({ flow, onNew }) {
   const currentSnapshotRef = useRef(null)
   const applyingHistoryRef = useRef(false)
   const [historyRevision, setHistoryRevision] = useState(0)
+  const [saveAsOpen, setSaveAsOpen] = useState(false)
+  const [saveAsFlowOpen, setSaveAsFlowOpen] = useState(false)
+  const [editHistoryOpen, setEditHistoryOpen] = useState(false)
+  const [editHistoryPending, setEditHistoryPending] = useState(false)
+  const [editHistoryEntries, setEditHistoryEntries] = useState([])
+  const [editHistoryLoading, setEditHistoryLoading] = useState(false)
+  const [editHistoryVersion, setEditHistoryVersion] = useState(null)
 
   useEffect(() => {
     const snapshot = JSON.parse(JSON.stringify({ layout, startConfig, elements, resources, goToConnections }))
@@ -550,26 +560,145 @@ function FlowShell({ flow, onNew }) {
     },
   })
 
-  const save = async (props = flowProps) => {
+  const save = async (props = flowProps, options = {}) => {
     setSaving(true); setSaveError(''); setMessage('')
     try {
-      const response = await apiRequest(workflowId ? `/api/platform/rules/${encodeURIComponent(workflowId)}` : '/api/platform/rules', {
-        method: workflowId ? 'PUT' : 'POST',
-        body: JSON.stringify(buildPayload(props)),
+      const forceNewFlow = options.forceNewFlow === true
+      const forceNewVersion = options.forceNewVersion === true
+      const payload = {
+        ...buildPayload(props),
+        ...(forceNewVersion ? { forceNewVersion: true } : {}),
+      }
+      if (forceNewFlow) {
+        payload.name = options.newFlow?.label || props.label || 'New Flow'
+        payload.action = {
+          ...payload.action,
+          apiName: options.newFlow?.apiName || props.apiName,
+          description: options.newFlow?.description ?? props.description,
+          originalFlowId: workflowId || props.originalFlowId || undefined,
+        }
+      }
+      const response = await apiRequest(workflowId && !forceNewFlow ? `/api/platform/rules/${encodeURIComponent(workflowId)}` : '/api/platform/rules', {
+        method: workflowId && !forceNewFlow ? 'PUT' : 'POST',
+        body: JSON.stringify(payload),
       })
       const saved = response?.data || {}
       if (saved.id) setWorkflowId(String(saved.id))
-      setFlowProps(props)
+      const nextProps = forceNewFlow
+        ? { ...props, label: payload.name, apiName: payload.action.apiName, description: payload.action.description, originalFlowId: workflowId || props.originalFlowId || '' }
+        : props
+      setFlowProps(nextProps)
       setLastSavedAt(new Date().toISOString())
       setDirty(false)
       setPropertiesOpen(false)
-      setMessage('Flow saved.')
+      setSaveAsOpen(false)
+      setSaveAsFlowOpen(false)
+      setMessage(forceNewFlow ? 'Flow saved as a new flow.' : forceNewVersion ? 'Flow saved as a new version.' : 'Flow saved.')
+      return saved
     } catch (error) {
       setSaveError(error?.message || 'Unable to save flow')
       if (workflowId) setPropertiesOpen(false)
+      return null
     } finally {
       setSaving(false)
     }
+  }
+
+  const loadEditHistory = async (id = workflowId) => {
+    if (!id) return
+    setEditHistoryLoading(true)
+    try {
+      const response = await apiRequest(`/api/platform/rules/${encodeURIComponent(id)}/versions`)
+      const rows = Array.isArray(response?.data) ? response.data : []
+      setEditHistoryEntries(rows)
+      setEditHistoryVersion(rows[0]?.version ?? null)
+      setEditHistoryOpen(true)
+    } catch (error) {
+      setSaveError(error?.message || 'Unable to load edit history')
+    } finally {
+      setEditHistoryLoading(false)
+    }
+  }
+
+  const openEditHistory = async () => {
+    setSaveAsOpen(false)
+    if (dirty) { setEditHistoryPending(true); return }
+    await loadEditHistory()
+  }
+
+  const saveAndOpenEditHistory = async () => {
+    const saved = await save(flowProps)
+    setEditHistoryPending(false)
+    if (saved?.id || workflowId) await loadEditHistory(saved?.id || workflowId)
+  }
+
+  const definitionToBuilder = (definition) => {
+    const action = definition?.action || {}
+    const restoredElements = Array.isArray(action.gptBuilderElements) ? action.gptBuilderElements : []
+    setFlowProps((current) => ({
+      ...current,
+      label: definition?.name || current.label,
+      apiName: action.apiName || current.apiName,
+      description: action.description || '',
+      interviewLabel: action.interviewLabel || '',
+      runContext: action.runContext || defaultRunContextForFlowType(flow.key),
+      apiVersion: action.apiVersion || current.apiVersion,
+      triggerOrder: action.triggerOrder ?? '',
+      showProgress: action.showProgress === true,
+      progressIndicatorType: action.progressIndicatorType || 'simple_top',
+      sourceTemplateId: action.sourceTemplateId || '',
+      originalFlowId: action.originalFlowId || '',
+      isTemplate: action.isTemplate === true,
+      overridable: action.overridable === true,
+    }))
+    setStartConfig(action.start || initialStart(flow.key))
+    setStartDraft(action.start || initialStart(flow.key))
+    setLayout(action.layout?.mode === 'FREE_FORM' ? 'free' : 'auto')
+    setElements(restoredElements)
+    setResources(Array.isArray(action.resources) ? action.resources : [])
+    setGoToConnections(Array.isArray(action.goToConnections) ? action.goToConnections : [])
+    setEditingElement(null)
+    setStartOpen(false)
+    setDiagnosticsOpen(false)
+    setElementPickerOpen(false)
+  }
+
+  const restoreHistoryEntry = async (entry) => {
+    if (!workflowId || !entry?.version) return
+    setSaving(true); setSaveError('')
+    try {
+      const response = await apiRequest(`/api/platform/rules/${encodeURIComponent(workflowId)}/versions/${encodeURIComponent(entry.version)}/restore`, { method: 'POST', body: '{}' })
+      const restored = response?.data || {}
+      definitionToBuilder(restored)
+      setDirty(false)
+      setLastSavedAt(new Date().toISOString())
+      setEditHistoryOpen(false)
+      setMessage(`Restored save ${entry.version} as a new draft version.`)
+    } catch (error) {
+      setSaveError(error?.message || 'Unable to restore edit history')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveHistoryAsNewVersion = async (entry) => {
+    if (!entry?.definition) return
+    definitionToBuilder(entry.definition)
+    setEditHistoryOpen(false)
+    setDirty(true)
+    await save({
+      ...flowProps,
+      label: entry.definition?.name || flowProps.label,
+      apiName: entry.definition?.action?.apiName || flowProps.apiName,
+      description: entry.definition?.action?.description || flowProps.description,
+    }, { forceNewVersion: true })
+  }
+
+  const saveHistoryAsNewFlow = (entry) => {
+    if (entry?.definition) definitionToBuilder(entry.definition)
+    setEditHistoryOpen(false)
+    setDirty(true)
+    setSaveAsFlowOpen(true)
   }
 
   const openStart = () => { setStartDraft(structuredClone(startConfig)); setStartOpen(true); setDiagnosticsOpen(false); setElementPickerOpen(false); setEditingElement(null) }
@@ -732,6 +861,7 @@ function FlowShell({ flow, onNew }) {
   }, [layout, freeSelectedIds, zoom, elements])
 
   const flowName = workflowId ? flowProps.label : flow.label
+  const editHistorySupported = ['autolaunched','schedule','platform_event'].includes(flow.key)
   const activeElement = editingElement ? elements.find((item) => item.id === editingElement.id) || null : null
   const hasFlowErrors = issues.some((issue) => issue.level === 'error')
   const hasUnsavableIncomplete = layout === 'free'
@@ -760,12 +890,14 @@ function FlowShell({ flow, onNew }) {
         <span className="gptb-toolbar-separator"/>
         <button className="gptb-text-tool" disabled={!workflowId}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId}><Eye size={14}/> Test Mode</button> : <button className="gptb-text-tool" disabled={!workflowId}><Eye size={14}/> Debug</button>}
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
-        <button className="gptb-text-tool is-brand" disabled={!workflowId || dirty || issues.some((issue) => issue.level === 'error')}>Activate</button><button aria-label="More actions"><MoreHorizontal size={16}/></button>
+        <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
+        {editHistorySupported ? <button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button> : null}
+        <button className="gptb-text-tool is-brand" disabled={!workflowId || dirty || issues.some((issue) => issue.level === 'error')}>Activate</button>
       </div>
     </header>
     {message ? <div className="gptb-toast is-success">{message}<button aria-label="Dismiss message" onClick={() => setMessage('')}><X size={13}/></button></div> : null}
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
-    <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''}`}>
+    <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''} ${editHistoryOpen ? 'is-history-mode' : ''}`}>
       {toolboxOpen ? <Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} onClose={() => setToolboxOpen(false)}/> : null}
       <main
         ref={canvasRef}
@@ -822,6 +954,7 @@ function FlowShell({ flow, onNew }) {
         const target = elements.find((element) => element.id === issue.targetId)
         if (target) openElement(target)
       }}/> : null}
+      {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
         elements={elements}
@@ -851,6 +984,8 @@ function FlowShell({ flow, onNew }) {
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
+    {saveAsFlowOpen ? <GPTBuilderSaveAsFlowDialog value={flowProps} saving={saving} onCancel={() => setSaveAsFlowOpen(false)} onSave={(next) => void save(flowProps, { forceNewFlow: true, newFlow: next })}/> : null}
+    {editHistoryPending ? <GPTBuilderUnsavedHistoryDialog saving={saving} onCancel={() => setEditHistoryPending(false)} onSaveAndView={() => void saveAndOpenEditHistory()}/> : null}
   </section>
 }
 
