@@ -237,7 +237,7 @@ const CATALOG = [
       "communication_workflow_triggers"
     ],
     communication: {
-      channels: ["EMAIL", "SMS", "WHATSAPP"],
+      channels: ["EMAIL", "SMS", "WHATSAPP", "IN_APP"],
       events: [
         "communication.message_received",
         "communication.message_sent",
@@ -246,10 +246,12 @@ const CATALOG = [
         "communication.opted_out",
         "communication.handoff"
       ],
+      action: "SEND_COMMUNICATION",
       legacyActions: {
         EMAIL: "SEND_EMAIL",
         SMS: "SEND_SMS",
-        WHATSAPP: "SEND_WHATSAPP"
+        WHATSAPP: "SEND_WHATSAPP",
+        IN_APP: "IN_APP_NOTIFICATION"
       },
       providerMetadataSource: "integrations",
       templateSource: "platform_message_templates",
