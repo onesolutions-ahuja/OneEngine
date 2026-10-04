@@ -38,7 +38,9 @@ jobs:
 
       # Fixed route documents must return 200, not the SPA fallback's 404.
       - name: Add GitHub Pages route entry points and SPA fallback
-        run: node scripts/build-pages-routes.mjs
+        run: |
+          node scripts/build-pages-routes.mjs
+          printf '%s' "$GITHUB_SHA" > dist/deploy-sha.txt
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
