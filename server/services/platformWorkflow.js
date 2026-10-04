@@ -3971,13 +3971,18 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const outcomes = Array.isArray(action?.outcomes) ? action.outcomes : [];
       if (outcomes.length) {
         if (outcomes.length > 20) throw new Error("Decision supports a maximum of 20 outcomes");
+        const mode = String(action?.decisionLogic || "manual").toLowerCase();
+        if (!["manual","ai"].includes(mode)) throw new Error("Decision logic mode is invalid");
+        if (mode === "ai" && !String(action?.decisionInstructions || "").trim()) throw new Error("AI Decision requires Decision Instructions");
         const ids = new Set();
         for (const outcome of outcomes) {
           if (!outcome?.id || !/^[A-Za-z0-9_-]{1,100}$/.test(String(outcome.id))) throw new Error("Each Decision outcome requires a valid id");
           if (ids.has(String(outcome.id))) throw new Error("Decision outcome identifiers must be unique");
           ids.add(String(outcome.id));
           if (!String(outcome.label || "").trim()) throw new Error("Each Decision outcome requires a label");
-          if (!outcome.condition) throw new Error(`Decision outcome "${outcome.label}" requires conditions`);
+          if (mode === "ai") {
+            if (!String(outcome.instructions || "").trim()) throw new Error(`Decision outcome "${outcome.label}" requires Outcome Instructions`);
+          } else if (!outcome.condition) throw new Error(`Decision outcome "${outcome.label}" requires conditions`);
           if (outcome.branch !== undefined && !Array.isArray(outcome.branch)) throw new Error(`Decision outcome "${outcome.label}" branch must be a list`);
         }
         if (action.defaultBranch !== undefined && !Array.isArray(action.defaultBranch)) throw new Error("Decision Default branch must be a list");
@@ -4005,6 +4010,48 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       };
       const outcomes = Array.isArray(action?.outcomes) ? action.outcomes : [];
       if (outcomes.length) {
+        if (String(action?.decisionLogic || "manual").toLowerCase() === "ai") {
+          const service = req?.app?.locals?.oneEngineAgent || null;
+          if (!service || typeof service.ask !== "function") throw new Error("AI Decision service is unavailable");
+          const options = outcomes.map((outcome, index) => ({
+            id: String(outcome.id),
+            apiName: String(outcome.apiName || outcome.id),
+            label: String(outcome.label || `Outcome ${index + 1}`),
+            instructions: String(outcome.instructions || ""),
+          }));
+          const prompt = [
+            String(action.decisionInstructions || ""),
+            "Choose exactly one outcome from the options below.",
+            ...options.map((option) => `${option.id} | ${option.apiName} | ${option.label}: ${option.instructions}`),
+            "Return only the chosen outcome id, API name, or label.",
+          ].join("\n");
+          const result = await service.ask({
+            message: prompt,
+            context: {
+              record: evaluationRecord,
+              previousRecord: evaluationPreviousRecord,
+              outcomes: options,
+              companyId: req?.user?.companyId || null,
+              userId: req?.user?.id || null,
+            },
+          });
+          const answer = String(result?.answer || "").trim().toLowerCase();
+          const index = options.findIndex((option) => [option.id,option.apiName,option.label].some((value) => String(value).toLowerCase() === answer));
+          if (index >= 0) {
+            const outcome = outcomes[index];
+            return {
+              status: "completed",
+              matched: true,
+              outcomeId: String(outcome.id),
+              outcomeLabel: String(outcome.label || `Outcome ${index + 1}`),
+              outcomeIndex: index,
+              aiDecision: true,
+              provider: result?.provider || null,
+              model: result?.model || null,
+            };
+          }
+          return { status: "completed", matched: false, outcomeId: null, outcomeLabel: String(action.defaultLabel || "Default Outcome"), outcomeIndex: -1, aiDecision: true };
+        }
         for (let index = 0; index < outcomes.length; index += 1) {
           const outcome = outcomes[index];
           const matched = evaluateCondition(resolveWorkflowConditionConfig(outcome.condition, conditionContext), fields || [], evaluationRecord, evaluationPreviousRecord);
