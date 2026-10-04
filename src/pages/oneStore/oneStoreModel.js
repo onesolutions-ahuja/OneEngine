@@ -39,17 +39,21 @@ export function isStorefrontPackage(item) {
 }
 
 export function storefrontStatus(item) {
-  const installation = item?.company_installation;
-  if (item?.storefront_state === "LICENCE_REQUIRED" || item?.licensed === false) return "LICENCE_REQUIRED";
+  if (item?.storefront_state === "LICENCE_REQUIRED") return "LICENCE_REQUIRED";
   if (item?.storefront_state === "NOT_INSTALLABLE" || item?.installable === false) return "NOT_INSTALLABLE";
   if (item?.storefront_state === "UNAVAILABLE" || item?.storefront_state === "NOT_AVAILABLE" || item?.active === false) return "NOT_AVAILABLE";
+
+  const tenantStatus = String(item?.tenant_app_status || "").toUpperCase();
+  const updateStatus = String(item?.tenant_app_update_status || "").toUpperCase();
+  if (updateStatus === "UPDATE_AVAILABLE" || updateStatus === "FAILED") return "UPDATE_AVAILABLE";
+  if (tenantStatus === "ACTIVE" || tenantStatus === "INSTALLED") return "INSTALLED";
+  if (tenantStatus === "INACTIVE") return "INACTIVE";
+  if (tenantStatus === "AVAILABLE") return "AVAILABLE";
+
+  const installation = item?.company_installation;
   const installedVersion = installation?.installed_version || installation?.version;
-  if (installation?.available_version && installation.available_version !== installedVersion) {
-    return "UPDATE_AVAILABLE";
-  }
-  if (installation?.status === "active" && installedVersion && item?.version && installedVersion !== item.version) {
-    return "UPDATE_AVAILABLE";
-  }
+  if (installation?.available_version && installation.available_version !== installedVersion) return "UPDATE_AVAILABLE";
+  if (installation?.status === "active" && installedVersion && item?.version && installedVersion !== item.version) return "UPDATE_AVAILABLE";
   if (installation?.status === "active") return "INSTALLED";
   if (installation?.status === "inactive") return "INACTIVE";
   return "AVAILABLE";
@@ -57,9 +61,9 @@ export function storefrontStatus(item) {
 
 export function installedPackageVersionState(item) {
   const installation = item?.company_installation || {};
-  const installedVersion = installation.installed_version || installation.version || item?.version || "0.0.0";
-  const latestVersion = item?.version || installation.target_version || installation.available_version || installedVersion;
-  const updateStatus = String(installation.update_status || item?.update_status || "CURRENT").toUpperCase();
+  const installedVersion = item?.tenant_app_installed_version || installation.installed_version || installation.version || item?.version || "0.0.0";
+  const latestVersion = item?.tenant_app_available_version || item?.version || installation.target_version || installation.available_version || installedVersion;
+  const updateStatus = String(item?.tenant_app_update_status || installation.update_status || item?.update_status || "CURRENT").toUpperCase();
   const forced = String(installation.auto_update_policy || item?.auto_update_policy || "OPTIONAL").toUpperCase() === "FORCED";
   const labels = {
     CURRENT: "Current",
@@ -127,7 +131,10 @@ export function filterStorePackages(packages, { search = "", category = "All", v
   return (Array.isArray(packages) ? packages : []).filter((item) => {
     if (!isStorefrontPackage(item)) return false;
     const status = storefrontStatus(item);
-    const installed = Boolean(item.company_installation);
+    const tenantStatus = String(item?.tenant_app_status || "").toUpperCase();
+    const installed = tenantStatus
+      ? ["INSTALLED","ACTIVE","INACTIVE"].includes(tenantStatus)
+      : Boolean(item.company_installation);
     if (view === "Installed" && !installed) return false;
     if (view === "Available" && installed) return false;
     if (category !== "All" && (item.category || "Uncategorised") !== category) return false;
