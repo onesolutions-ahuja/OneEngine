@@ -26,6 +26,8 @@ import GPTBuilderWaitConditions, { waitConditionsRuntimeAction } from './GPTBuil
 import GPTBuilderWaitUntilDate, { waitUntilDateRuntimeAction } from './GPTBuilderWaitUntilDate'
 import GPTBuilderCustomError, { customErrorRuntimeAction } from './GPTBuilderCustomError'
 import GPTBuilderGroup from './GPTBuilderGroup'
+import GPTBuilderAction, { actionRuntimeAction } from './GPTBuilderAction'
+import GPTBuilderRunAgent, { runAgentRuntimeAction } from './GPTBuilderRunAgent'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
@@ -835,6 +837,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (element.key === 'wait_conditions') return waitConditionsRuntimeAction(element)
         if (element.key === 'wait_until_date') return waitUntilDateRuntimeAction(element, resources)
         if (element.key === 'custom_error') return customErrorRuntimeAction(element)
+        if (element.key === 'action') return actionRuntimeAction(element)
+        if (element.key === 'run_agent') return runAgentRuntimeAction(element)
         return null
       }).filter(Boolean),
     },
@@ -1542,7 +1546,21 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                                         elements={elements}
                                         onConfiguredChange={setConfigured}
                                       />
-                                    : null}</GPTBuilderElementProperties> : null}
+                                    : activeElement.key === 'action'
+                                      ? <GPTBuilderAction
+                                          draft={draft}
+                                          updateConfig={updateConfig}
+                                          resources={resources}
+                                          onConfiguredChange={setConfigured}
+                                        />
+                                      : activeElement.key === 'run_agent'
+                                        ? <GPTBuilderRunAgent
+                                            draft={draft}
+                                            updateConfig={updateConfig}
+                                            resources={resources}
+                                            onConfiguredChange={setConfigured}
+                                          />
+                                        : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => {
