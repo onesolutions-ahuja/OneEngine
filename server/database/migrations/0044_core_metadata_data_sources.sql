@@ -48,7 +48,7 @@ SELECT
   s.active,
   us.is_primary,
   us.created_at,
-  GREATEST(COALESCE(us.updated_at, us.created_at), s.updated_at) AS updated_at
+  GREATEST(us.created_at, s.updated_at) AS updated_at
 FROM user_stores us
 JOIN stores s ON s.id=us.store_id
 WHERE us.active=TRUE AND s.active=TRUE;
