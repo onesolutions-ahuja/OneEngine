@@ -173,7 +173,7 @@ test("direct Flow HTTP retains OAuth client-credentials metadata from the connec
 test("communication event ingestion is idempotent by provider message id", () => {
   const source = readFileSync(new URL("../server/services/communicationCore.js", import.meta.url), "utf8");
   assert.match(source, /provider_message_id=\$3/);
-  assert.match(source, /if \(existing\.rows\?\.\[0\]\) return existing\.rows\[0\]/);
+  assert.match(source, /if \(existing\.rows\?\.\[0\]\) return \{ \.\.\.existing\.rows\[0\], duplicate: true, workflowDispatched: false \}/);
 });
 
 test("startup verifies the canonical booking router rather than a retired WhatsApp flow", () => {
