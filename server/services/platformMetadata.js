@@ -1129,7 +1129,7 @@ const operationalObjects = [
     fields: [
       ["store_id","Store","lookup","store_id",false,true],
       ["setting_key","Setting Key","text","setting_key",true,true],
-      ["setting_value","Value","json","setting_value",false,true],
+      ["setting_value","Value","text","setting_value",false,true],
       ["value_type","Value Type","text","value_type",true,true],
       ["section","Section","text","section",true,true],
       ["label","Label","text","label",true,true],
