@@ -158,8 +158,10 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const loadTill = async () => {
     setTillStatusResolved(false)
     try {
-      const response = await apiRequest('/api/till/sessions/current')
-      setTill(response?.success ? response.data || null : null)
+      const response = await apiRequest('/api/platform/objects/till_session/records?page=1&pageSize=100')
+      const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+      const open = rows.find((row) => String(row?.status || '').toLowerCase() === 'open') || null
+      setTill(open)
     } catch {
       setTill(null)
     } finally {
@@ -1041,25 +1043,56 @@ function TillSessionPanel({ till, buttons, currency, onChanged, onMessage, onErr
   const [cashAmount, setCashAmount] = useState('')
   const [reason, setReason] = useState('')
   const meta = buttonMap(buttons)
+  const sessionUser = getStoredUser() || {}
+  const terminalId = sessionUser.tillId || sessionUser.till_id || sessionUser.terminalId || sessionUser.terminal_id || null
+  const userId = sessionUser.id || sessionUser.userId || null
 
   const open = async () => {
     try {
-      const response = await apiRequest('/api/till/sessions', { method: 'POST', body: JSON.stringify({ openingCash: Number(openingCash || 0) }) })
-      if (!response?.success) throw new Error(response?.message || 'Unable to open till')
+      if (!terminalId || !userId) throw new Error('A till and user assignment are required.')
+      const response = await apiRequest('/api/platform/objects/till_session/records', {
+        method: 'POST',
+        body: JSON.stringify({ data: {
+          terminal_id: terminalId,
+          user_id: userId,
+          opening_cash: Number(openingCash || 0),
+          status: 'open',
+        } }),
+      })
+      if (response?.success === false) throw new Error(response?.message || 'Unable to open till')
       await onChanged?.(); onMessage?.('Till opened.')
     } catch (err) { onError?.(err?.message || 'Unable to open till') }
   }
   const movement = async (type) => {
-    if (!till?.id || Number(cashAmount) <= 0) return
+    if (!till?.id || Number(cashAmount) <= 0 || !userId) return
     try {
-      await apiRequest(`/api/till/sessions/${till.id}/cash-movements`, { method: 'POST', body: JSON.stringify({ type, amount: Number(cashAmount), reason: reason || null }) })
+      const response = await apiRequest('/api/platform/objects/cash_ledger/records', {
+        method: 'POST',
+        body: JSON.stringify({ data: {
+          till_session_id: till.id,
+          user_id: userId,
+          type,
+          amount: Number(cashAmount),
+          reason: reason || null,
+        } }),
+      })
+      if (response?.success === false) throw new Error(response?.message || 'Unable to record cash movement')
       setCashAmount(''); setReason(''); await onChanged?.(); onMessage?.('Cash movement recorded.')
     } catch (err) { onError?.(err?.message || 'Unable to record cash movement') }
   }
   const close = async () => {
     try {
-      const response = await apiRequest(`/api/till/sessions/${till.id}/close`, { method: 'POST', body: JSON.stringify({ countedCash: Number(countedCash || 0) }) })
-      if (!response?.success) throw new Error(response?.message || 'Unable to close till')
+      if (!till?.id) return
+      const response = await apiRequest(`/api/platform/objects/till_session/records/${encodeURIComponent(till.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ data: {
+          status: 'closed',
+          closing_cash: Number(countedCash || 0),
+          closed_by: userId || null,
+          closed_at: new Date().toISOString(),
+        } }),
+      })
+      if (response?.success === false) throw new Error(response?.message || 'Unable to close till')
       await onChanged?.(); onMessage?.('Till closed.')
     } catch (err) { onError?.(err?.message || 'Unable to close till') }
   }
