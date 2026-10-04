@@ -7931,6 +7931,62 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
   });
 
+  router.get("/platform/objects/:objectKey/records/:recordId/buttons", authenticate, async (req, res, next) => {
+    try {
+      if (!recordIdIsValid(req.params.recordId)) return res.status(400).json({ success: false, message: "Invalid record identifier" });
+      const { object, fields } = await getRecordMetadata(req.params.objectKey, req);
+      if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) {
+        return res.status(404).json({ success: false, message: "Object records are not available" });
+      }
+      if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) {
+        return res.status(403).json({ success: false, message: "You do not have permission to view records for this object" });
+      }
+
+      const recordClauses = ["id=$1"];
+      const recordParams = [req.params.recordId];
+      if (object.company_scoped) {
+        recordParams.push(req.user.companyId);
+        recordClauses.push(`company_id=${recordParams.length}`);
+      }
+      if (object.store_scoped) {
+        if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
+        recordParams.push(req.user.storeId);
+        recordClauses.push(`store_id=${recordParams.length}`);
+      }
+      appendSystemReadScope(object, req, recordClauses, recordParams);
+      const recordResult = await db(`SELECT * FROM "${object.source_table}" WHERE ${recordClauses.join(" AND ")} LIMIT 1`, recordParams);
+      const record = recordResult.rows[0];
+      if (!record) return res.status(404).json({ success: false, message: "Record not found" });
+
+      const params = [object.id, req.user.companyId];
+      let placementSql = "";
+      if (req.query.placement) {
+        params.push(String(req.query.placement));
+        placementSql = ` AND placement=${params.length}`;
+      }
+      const buttons = await db(
+        `SELECT * FROM platform_buttons
+          WHERE object_id=$1 AND active=true
+            AND (company_id IS NULL OR company_id=$2)${placementSql}
+          ORDER BY COALESCE((config->>'order')::integer,999),created_at,label`,
+        params
+      );
+      const context = await buildUiConditionContext(req, { record, object, recordTypeId: null });
+      const visible = [];
+      for (const button of buttons.rows || []) {
+        if (button.required_permission && !(await hasExecutionPermission(req, button.required_permission))) continue;
+        if (!evaluatePlatformCondition(button.visibility_rule, fields, context)) continue;
+        visible.push(button);
+      }
+      return res.json({ success: true, data: visible });
+    } catch (error) {
+      if (error instanceof ConditionError) {
+        return res.status(422).json({ success: false, code: error.code, message: "Button visibility metadata is invalid" });
+      }
+      next(error);
+    }
+  });
+
   router.post("/platform/objects/:objectKey/records/:recordId/buttons/:buttonKey/execute", authenticate, async (req, res, next) => {
     try {
       if (!recordIdIsValid(req.params.recordId)) return res.status(400).json({ success: false, message: "Invalid record identifier" });
