@@ -1750,14 +1750,15 @@ function oneAssistantAppointmentRouterWorkflow() {
   const actions = [
     { id:"channel_router", label:"Route Communication Channel", apiName:"channel_router", key:"CONDITION",
       outcomes:[
-        {id:"sms",label:"SMS",condition:condition("channel","SMS"),branch:["sms_channel","date_1_formula","date_2_formula","now_formula","get_case","has_case"]},
-        {id:"whatsapp",label:"WhatsApp",condition:condition("channel","WHATSAPP"),branch:["whatsapp_channel","date_1_formula","date_2_formula","now_formula","get_case","has_case"]}
+        {id:"sms",label:"SMS",condition:condition("channel","SMS"),branch:["sms_channel","date_1_formula","date_2_formula","now_formula","today_formula","get_case","has_case"]},
+        {id:"whatsapp",label:"WhatsApp",condition:condition("channel","WHATSAPP"),branch:["whatsapp_channel","date_1_formula","date_2_formula","now_formula","today_formula","get_case","has_case"]}
       ],defaultLabel:"Unsupported Channel",defaultBranch:[] },
     { id:"sms_channel", label:"Use SMS Channel", apiName:"sms_channel", key:"ASSIGNMENT", variableName:"messageChannel", variableType:"text", operator:"set", value:"SMS" },
     { id:"whatsapp_channel", label:"Use WhatsApp Channel", apiName:"whatsapp_channel", key:"ASSIGNMENT", variableName:"messageChannel", variableType:"text", operator:"set", value:"WHATSAPP" },
     { id:"date_1_formula", label:"Calculate Date Choice 1", apiName:"date_1_formula", key:"FORMULA", resourceName:"date1", resultType:"date", expression:"ADDDAYS(TODAY(),1)", inputs:{} },
     { id:"date_2_formula", label:"Calculate Date Choice 2", apiName:"date_2_formula", key:"FORMULA", resourceName:"date2", resultType:"date", expression:"ADDDAYS(TODAY(),2)", inputs:{} },
     { id:"now_formula", label:"Current Date Time", apiName:"now_formula", key:"FORMULA", resourceName:"currentTime", resultType:"datetime", expression:"NOW()", inputs:{} },
+    { id:"today_formula", label:"Current Date", apiName:"today_formula", key:"FORMULA", resourceName:"currentDate", resultType:"date", expression:"TODAY()", inputs:{} },
     { id:"get_case", label:"Get Open Booking Case", apiName:"get_case", key:"GET_RECORDS", objectKey:"appointment_booking_case",
       filters:[{field:"sender",operator:"equals",value:{path:"sender"}},{field:"channel",operator:"equals",value:{path:"channel"}},{field:"status",operator:"not_equals",value:"CONFIRMED"},{field:"status",operator:"not_equals",value:"CANCELLED"},{field:"status",operator:"not_equals",value:"EXPIRED"}],
       sortField:"created_at",sortDirection:"desc",limit:1,store:"first" },
@@ -1789,7 +1790,7 @@ function oneAssistantAppointmentRouterWorkflow() {
       ],defaultLabel:"DD/MM/YYYY",defaultBranch:["parse_custom_date","custom_date_valid"] },
     { id:"parse_custom_date", label:"Parse Entered Date", apiName:"parse_custom_date", key:"FORMULA", resourceName:"selectedDate", resultType:"date", expression:"PARSEDATE(inputDate)", inputs:{inputDate:{path:"body"}} },
     { id:"custom_date_valid", label:"Entered Date Valid?", apiName:"custom_date_valid", key:"CONDITION",
-      outcomes:[{id:"yes",label:"Valid Date",condition:{match:"all",conditions:[{field:"variables.selectedDate",operator:"not_equals",value:null}]},branch:["set_next_custom_date","get_service","service_found"]}],
+      outcomes:[{id:"yes",label:"Valid Future Date",condition:{match:"all",conditions:[{field:"variables.selectedDate",operator:"not_equals",value:null},{field:"variables.selectedDate",operator:"greater_than",value:{path:"variables.currentDate"}}]},branch:["set_next_custom_date","get_service","service_found"]}],
       defaultLabel:"Invalid Date",defaultBranch:["send_invalid_date"] },
     ...send("send_invalid_date","Send Invalid Date Reply",{path:"variables.messageChannel"},invalidDateMessage),
     { id:"set_date_1", label:"Use Date Choice 1", apiName:"set_date_1", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date1"} },
@@ -1885,6 +1886,7 @@ function oneAssistantAppointmentRouterWorkflow() {
         {apiName:"slotChoices",resourceType:"Variable",dataType:"Text",description:"Rendered list of available slots."},
         {apiName:"slotCount",resourceType:"Variable",dataType:"Number",description:"Number of available slots."},
         {apiName:"currentTime",resourceType:"Variable",dataType:"DateTime",description:"Current server date and time."},
+        {apiName:"currentDate",resourceType:"Variable",dataType:"Date",description:"Current server date used to reject past customer dates."},
         {apiName:"busyIntervals",resourceType:"Variable",dataType:"Collection",description:"Existing appointments and active slot holds."},
         {apiName:"selectedSlot",resourceType:"Variable",dataType:"Record",description:"Selected appointment slot."}
       ],tests:[],builderGroups:[],builderLayout:{mode:"AUTO",positions:{},edges:[]},actions},active:true
