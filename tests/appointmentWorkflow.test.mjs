@@ -455,3 +455,15 @@ test("provider HTTP and WhatsApp delivery status are observable without secrets"
   assert.match(whatsapp, /WhatsApp delivery status/);
   assert.match(whatsapp, /trackedMessage/);
 });
+
+
+test("Workflow Builder bounds deep Decision lanes and redirects retired duplicates", () => {
+  const layout = readFileSync(new URL("../src/pages/developer/Builder2AutoLayout.jsx", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../src/pages/developer/Builder2Page.jsx", import.meta.url), "utf8");
+  assert.match(layout, /BRANCH_MAX_WIDTH = 420/);
+  assert.match(layout, /TREE_MAX_WIDTH = 2600/);
+  assert.match(layout, /Math\.min\(BRANCH_MAX_WIDTH/);
+  assert.match(page, /visualItems=\[\.\.\.flow\.querySelectorAll/);
+  assert.match(page, /Opened the active flow\. This link pointed to a retired duplicate\./);
+  assert.match(page, /window\.history\.replaceState/);
+});
