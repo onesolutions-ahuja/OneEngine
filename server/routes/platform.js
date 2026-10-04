@@ -1560,14 +1560,12 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       if (!result.rows.length) return { error: "Button must reference an existing workflow" };
       return { workflow: result.rows[0] };
     }
-    const core = listRegisteredPlatformActions().find((item) => item.key === button.targetKey);
-    if (core) return { action: core, handlerKey: core.key };
-    const custom = await db(
-      "SELECT * FROM platform_registered_actions WHERE action_key=$1 AND object_id=$2 AND (company_id IS NULL OR company_id=$3) AND active=true LIMIT 1",
-      [button.targetKey, objectId, req.user.companyId]
-    );
-    if (!custom.rows.length) return { error: "Button must reference a registered action" };
-    return { action: custom.rows[0], handlerKey: custom.rows[0].handler_key };
+    if (!isCoreFunction(button.targetKey)) {
+      return { error: "Button must reference a ONE-* Flow or an approved core function" };
+    }
+    const core = getWorkflowActionDefinition(button.targetKey);
+    if (!core) return { error: "Core function is unavailable" };
+    return { action: core, handlerKey: core.key };
   }
 
   router.get("/platform/objects/:objectId/buttons", ...manage, async (req, res) => {
@@ -3339,11 +3337,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (type === "action") {
         const actionKey = String(interaction.actionKey || "").trim();
         if (!actionKey) return res.status(400).json({ success: false, message: "A registered action key is required" });
-        const core = listRegisteredPlatformActions().find((item) => item.key === actionKey);
-        if (!core) return res.status(404).json({ success: false, message: "Registered action not found" });
-        if (["RECORD_SAVE", "RECORD_DELETE"].includes(core.key)) {
-          return res.status(409).json({ success: false, message: "RECORD_SAVE and RECORD_DELETE belong to the canonical record page lifecycle" });
+        if (!isCoreFunction(actionKey)) {
+          return res.status(404).json({ success: false, message: "Core function not found" });
         }
+        const core = getWorkflowActionDefinition(actionKey);
+        if (!core) return res.status(404).json({ success: false, message: "Core function is unavailable" });
         if (core.key === "WORKFLOW") return res.status(422).json({ success: false, message: "Use the Workflow interaction type to run workflows" });
         for (const requiredPermission of core.requiredPermissions || []) {
           if (!(await hasExecutionPermission(req, requiredPermission))) {
