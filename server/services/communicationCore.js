@@ -44,6 +44,17 @@ export async function recordCommunicationEvent({
   if (!Object.values(COMMUNICATION_EVENTS).includes(eventType)) {
     throw new Error(`Unsupported communication event: ${eventType}`);
   }
+  // Provider webhooks can retry the same message. Persist/dispatch it once.
+  // A provider message id is the stable external idempotency key.
+  if (providerMessageId) {
+    const existing = await db(
+      `SELECT * FROM platform_communication_events
+        WHERE company_id=$1 AND channel=$2 AND provider_message_id=$3
+        ORDER BY created_at DESC LIMIT 1`,
+      [companyId, normalizedChannel, providerMessageId]
+    );
+    if (existing.rows?.[0]) return { ...existing.rows[0], duplicate: true, workflowDispatched: false };
+  }
   const result = await db(
     `INSERT INTO platform_communication_events
       (company_id,channel,event_type,direction,provider,provider_message_id,recipient,sender,

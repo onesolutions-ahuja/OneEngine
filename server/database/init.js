@@ -2067,6 +2067,55 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         if (activeDuplicates.rows.length) throw new Error("Duplicate active OneAssistant booking routers remain");
         console.log("onePOS: direct Flow API connections backfilled and OneAssistant routers deduplicated");
       },
+    },
+    {
+      key: "0060_oneassistant_deep_runtime_repair",
+      version: "60",
+      name: "Repair OneAssistant runtime uniqueness and workflow error storage",
+      up: async client => {
+        await client.query("ALTER TABLE platform_workflow_runs ALTER COLUMN error_text TYPE TEXT");
+        await client.query("ALTER TABLE platform_workflow_step_runs ALTER COLUMN error_text TYPE TEXT");
+        // Historical duplicates may already have been dispatched and referenced by
+        // workflow jobs. Do not delete audit events. Enforce idempotency prospectively
+        // in recordCommunicationEvent instead of risking referential/audit loss here.
+        await client.query("CREATE INDEX IF NOT EXISTS idx_platform_communication_events_provider_message ON platform_communication_events(company_id,channel,provider_message_id) WHERE provider_message_id IS NOT NULL");
+
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+
+        // Identify the canonical router by API name/scope, not display name. Retire
+        // every other OneAssistant-owned workflow listening to this event.
+        const candidates = await client.query(
+          "SELECT id,company_id,name,action,updated_at,created_at FROM platform_rules WHERE company_id IS NOT NULL AND trigger_key='communication_message_received' AND action->>'type'='workflow' AND (action->>'scope'='one_assistant' OR action->>'apiName'='OneAssistant_Booking_Channel_Router' OR name ILIKE 'OneAssistant%') ORDER BY company_id,updated_at DESC,created_at DESC,id DESC"
+        );
+        const byCompany = new Map();
+        for (const row of candidates.rows) {
+          if (!byCompany.has(row.company_id)) byCompany.set(row.company_id, []);
+          byCompany.get(row.company_id).push(row);
+        }
+        for (const [companyId, rows] of byCompany.entries()) {
+          const canonical = rows.find((row) => row.action?.apiName === "OneAssistant_Booking_Channel_Router" || row.name === "OneAssistant - Booking Channel Router") || rows[0];
+          if (!canonical) continue;
+          await client.query(
+            "UPDATE platform_rules SET name='OneAssistant - Booking Channel Router',trigger_key=$1,conditions=$2::jsonb,action=$3::jsonb,active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW() WHERE id=$4 AND company_id=$5",
+            [router.triggerKey, JSON.stringify(router.conditions || []), JSON.stringify(router.action), canonical.id, companyId]
+          );
+          await client.query(
+            "UPDATE platform_rules SET active=FALSE,lifecycle_status='INACTIVE',updated_at=NOW() WHERE company_id=$1 AND id<>$2 AND trigger_key='communication_message_received' AND action->>'type'='workflow' AND (action->>'scope'='one_assistant' OR action->>'apiName'='OneAssistant_Booking_Channel_Router' OR name ILIKE 'OneAssistant%')",
+            [companyId, canonical.id]
+          );
+        }
+        const duplicates = await client.query(
+          "SELECT company_id,COUNT(*)::int count FROM platform_rules WHERE active=TRUE AND COALESCE(lifecycle_status,'ACTIVE')='ACTIVE' AND trigger_key='communication_message_received' AND action->>'type'='workflow' AND (action->>'scope'='one_assistant' OR action->>'apiName'='OneAssistant_Booking_Channel_Router' OR name ILIKE 'OneAssistant%') GROUP BY company_id HAVING COUNT(*)<>1"
+        );
+        if (duplicates.rows.length) throw new Error("OneAssistant event workflow uniqueness check failed");
+        const staleDefinitions = await client.query(
+          "SELECT id,name FROM platform_rules WHERE active=TRUE AND trigger_key='communication_message_received' AND action->>'apiName'='OneAssistant_Booking_Channel_Router' AND (action::text NOT LIKE '%availability_rules_found%' OR action::text NOT LIKE '%requireSuccess%')"
+        );
+        if (staleDefinitions.rows.length) throw new Error("OneAssistant canonical router refresh verification failed");
+        console.log("onePOS: OneAssistant deep runtime repair complete");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);

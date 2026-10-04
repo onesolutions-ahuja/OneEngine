@@ -2647,7 +2647,7 @@ async function startServer() {
              JOIN platform_objects o ON o.id=r.object_id
             WHERE r.company_id=$1
               AND o.object_key='communication_event'
-              AND r.name='OneAssistant - WhatsApp Booking'
+              AND r.action->>'apiName'='OneAssistant_Booking_Channel_Router'
             ORDER BY r.updated_at DESC NULLS LAST,r.created_at DESC
             LIMIT 1`,
           [companyId]
@@ -2660,7 +2660,7 @@ async function startServer() {
         console.log("onePOS: startup package targeted provisioning complete", {
           companyId,
           packageKey,
-          whatsappBookingWorkflow: bookingWorkflow.id,
+          bookingRouterWorkflow: bookingWorkflow.id,
         });
       }
 

@@ -108,10 +108,12 @@ test("booking router graph reaches service, availability, confirmation and only 
   assert.ok(start.outcomes.every((outcome) => outcome.branch.includes("create_case") && outcome.branch.includes("send_initial_prompt")));
   const validateDate = byId.get("validate_date");
   assert.ok(validateDate.outcomes.every((outcome) => outcome.branch.includes("service_found")));
-  assert.ok(validateDate.defaultBranch.includes("service_found"));
+  assert.deepEqual(validateDate.defaultBranch, ["parse_custom_date","custom_date_valid"]);
+  assert.ok(byId.get("custom_date_valid").outcomes[0].branch.includes("service_found"));
   assert.ok(byId.get("service_found").outcomes[0].branch.includes("resource_service_found"));
   assert.ok(byId.get("resource_service_found").outcomes[0].branch.includes("resource_found"));
-  assert.ok(byId.get("resource_found").outcomes[0].branch.includes("availability_found"));
+  assert.ok(byId.get("resource_found").outcomes[0].branch.includes("availability_rules_found"));
+  assert.ok(byId.get("availability_rules_found").outcomes[0].branch.includes("availability_found"));
   assert.ok(byId.get("validate_slot").outcomes.every((outcome) => outcome.branch.includes("confirm_case") && outcome.branch.includes("send_confirmation")));
   const getCase = byId.get("get_case");
   for (const status of ["CONFIRMED","CANCELLED","EXPIRED"]) {
@@ -135,6 +137,60 @@ test("WhatsApp Flow API uses normalized recipient and fails the workflow on prov
   assert.ok(apiSteps.length > 0);
   assert.ok(apiSteps.every((action) => action.requireSuccess === true));
   assert.ok(apiSteps.every((action) => action.body?.to?.path === "metadata.senderDigits"));
+});
+
+test("booking router validates custom dates, no-slot retry state and slot bounds", () => {
+  const { workflow } = oneAssistantRouter();
+  const byId = new Map(workflow.action.actions.map((action) => [action.id, action]));
+  assert.equal(byId.get("parse_custom_date")?.key, "FORMULA");
+  assert.equal(byId.get("parse_custom_date")?.expression, "PARSEDATE(inputDate)");
+  assert.deepEqual(byId.get("custom_date_valid")?.defaultBranch, ["send_invalid_date"]);
+  assert.deepEqual(byId.get("custom_date_valid")?.outcomes?.[0]?.branch?.slice(0,1), ["set_next_custom_date"]);
+  assert.ok(byId.get("custom_date_valid")?.outcomes?.[0]?.condition?.conditions?.some((condition) => condition.field === "variables.selectedDate" && condition.operator === "greater_than" && condition.value?.path === "variables.currentDate"));
+  assert.equal(byId.has("set_custom_date"), false);
+  assert.deepEqual(byId.get("availability_rules_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
+  assert.deepEqual(byId.get("availability_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
+  assert.ok(byId.get("get_busy_appointments")?.filters?.some((filter) => filter.field === "starts_at" && filter.operator === "greater_than_or_equal"));
+  assert.ok(byId.get("get_busy_appointments")?.filters?.some((filter) => filter.field === "starts_at" && filter.operator === "less_than"));
+  assert.equal(byId.get("reset_to_date")?.fieldValues?.state?.step, "AWAITING_DATE");
+  const slotDecision = byId.get("validate_slot");
+  for (let index = 0; index < 5; index += 1) {
+    assert.ok(slotDecision.outcomes[index].condition.conditions.some((condition) =>
+      condition.field === `steps.get_case.record.state.slots.${index}.startsAt` &&
+      condition.operator === "not_equals" && condition.value === null
+    ));
+  }
+});
+
+test("direct Flow HTTP retains OAuth client-credentials metadata from the connection", () => {
+  const coreSource = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  const start = coreSource.indexOf("export async function oneHttpRequest");
+  const end = coreSource.indexOf("export function oneHttpRequestDefinition", start);
+  const runtime = coreSource.slice(start, end);
+  assert.match(runtime, /tokenUrl.*token_url/);
+  assert.match(runtime, /oauth_client_credentials/);
+  assert.doesNotMatch(runtime, /operations:\s*\[\]/);
+});
+
+test("communication event ingestion is idempotent by provider message id", () => {
+  const source = readFileSync(new URL("../server/services/communicationCore.js", import.meta.url), "utf8");
+  assert.match(source, /provider_message_id=\$3/);
+  assert.match(source, /if \(existing\.rows\?\.\[0\]\) return \{ \.\.\.existing\.rows\[0\], duplicate: true, workflowDispatched: false \}/);
+});
+
+test("startup verifies the canonical booking router rather than a retired WhatsApp flow", () => {
+  const source = readFileSync(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.match(source, /OneAssistant_Booking_Channel_Router/);
+  assert.doesNotMatch(source, /r\.name='OneAssistant - WhatsApp Booking'/);
+});
+
+test("WhatsApp Flow transport has no connector-definition runtime dependency", () => {
+  const source = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
+  const start = source.indexOf('key: "SEND_COMMUNICATION"');
+  const end = source.indexOf('key: "IN_APP_NOTIFICATION"', start);
+  const sendCommunication = source.slice(start, end);
+  assert.doesNotMatch(sendCommunication, /platform_connector_definitions/);
+  assert.doesNotMatch(sendCommunication, /connector_definition_id/);
 });
 
 test("booking router exposes business logic as Builder primitives", () => {

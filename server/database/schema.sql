@@ -3486,6 +3486,9 @@ CREATE INDEX IF NOT EXISTS idx_platform_communication_deliveries_company
         ON platform_communication_events(company_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_platform_communication_events_trigger
         ON platform_communication_events(company_id, channel, event_type, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_platform_communication_events_provider_message
+        ON platform_communication_events(company_id, channel, provider_message_id)
+        WHERE provider_message_id IS NOT NULL;
 
 -- WhatsApp Assistant keeps customer-facing conversation state separate from
 -- generic delivery/audit rows. Provider credentials remain in integrations.
