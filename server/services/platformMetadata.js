@@ -1607,6 +1607,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         [moduleId, object.key, object.label, object.plural, object.table]
       );
       if (!result.rows.length) continue;
+      if (object.key === "onestore_app") {
+        await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
+      }
       for (let index = 0; index < object.fields.length; index += 1) {
         const [apiName, label, fieldType, sourceColumn, required] = object.fields[index];
         await pool.query(
@@ -1616,6 +1619,20 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
              SET label=EXCLUDED.label,field_type=EXCLUDED.field_type,source_column=EXCLUDED.source_column,
                  required=EXCLUDED.required,writable=EXCLUDED.writable,display_order=EXCLUDED.display_order`,
           [result.rows[0].id, apiName, label, fieldType, sourceColumn, required, index, Boolean(sourceColumn)]
+        );
+      }
+      if (object.key === "tenant_app") {
+        await pool.query(
+          `UPDATE platform_fields
+              SET options='["AVAILABLE","INSTALLED","ACTIVE","INACTIVE"]'::jsonb
+            WHERE object_id=$1 AND api_name='status'`,
+          [result.rows[0].id]
+        );
+        await pool.query(
+          `UPDATE platform_fields
+              SET config=COALESCE(config,'{}'::jsonb) || '{"relatedObjectKey":"onestore_app","relationshipKey":"tenant_apps"}'::jsonb
+            WHERE object_id=$1 AND api_name='onestore_app_id'`,
+          [result.rows[0].id]
         );
       }
     }
