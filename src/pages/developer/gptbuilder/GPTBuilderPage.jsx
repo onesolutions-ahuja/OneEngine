@@ -488,7 +488,7 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
 }
 
 
-function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], onClose }) {
+function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], resources = [], onClose }) {
   const [records, setRecords] = useState([])
   const [recordSearch, setRecordSearch] = useState('')
   const [recordId, setRecordId] = useState('')
@@ -501,6 +501,9 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   const [selectedTestId, setSelectedTestId] = useState('')
   const [scenarioName, setScenarioName] = useState('')
   const [savingScenario, setSavingScenario] = useState(false)
+  const [automationEnabled, setAutomationEnabled] = useState(false)
+  const [assertions, setAssertions] = useState([])
+  const executionStorageKey = `gptbuilder.execution.${workflowId || 'new'}.${mode}`
 
   useEffect(() => {
     let live = true
@@ -530,6 +533,40 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
     setResult(null)
     setError('')
   }, [mode])
+
+  useEffect(() => {
+    if (!workflowId) return
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(executionStorageKey) || 'null')
+      if (!saved || typeof saved !== 'object') return
+      setRecordId(saved.recordId || '')
+      setInputs(saved.inputs && typeof saved.inputs === 'object' ? saved.inputs : {})
+      setRollback(mode === 'test' && flowType === 'record' ? true : saved.rollback ?? (mode === 'test'))
+      setSelectedTestId(saved.selectedTestId || '')
+      setAutomationEnabled(saved.automationEnabled === true)
+      setAssertions(Array.isArray(saved.assertions) ? saved.assertions : [])
+    } catch {}
+  }, [executionStorageKey, workflowId])
+
+  useEffect(() => {
+    if (!workflowId) return
+    try {
+      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions }))
+    } catch {}
+  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions)])
+
+  const resetExecutionSettings = () => {
+    setRecordId('')
+    setRecordSearch('')
+    setInputs({})
+    setRollback(mode === 'test')
+    setSelectedTestId('')
+    setAutomationEnabled(false)
+    setAssertions([])
+    setResult(null)
+    setError('')
+    try { sessionStorage.removeItem(executionStorageKey) } catch {}
+  }
 
   const filteredRecords = records.filter((record) => {
     const needle = recordSearch.trim().toLowerCase()
@@ -579,7 +616,8 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
             ...(recordId ? { recordId } : {}),
             inputs,
             rollback: flowType === 'record' ? true : rollback,
-            assertions: [],
+            scenarioTestingAutomation: automationEnabled,
+            assertions: automationEnabled ? assertions : [],
           },
         }),
       })
@@ -610,6 +648,20 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         })}</select></label>
       </section> : null}
       {inputContract.length ? <section><h3>Define Input Values</h3>{inputContract.map((input) => <label key={input.name}><span>{input.label || input.name}{input.required ? ' *' : ''}</span><input value={inputs[input.name] ?? input.defaultValue ?? ''} onChange={(event) => setInputs((current) => ({ ...current, [input.name]: event.target.value }))}/></label>)}</section> : null}
+      {mode === 'test' ? <section><h3>Expected Results</h3>
+        <label className="gptb-properties-check"><input type="checkbox" checked={automationEnabled} onChange={(event) => setAutomationEnabled(event.target.checked)}/><span>Scenario Testing Automation</span></label>
+        {automationEnabled ? <>
+          <p className="gptb-help-text">Add assertions for the resource values you expect after the scenario runs.</p>
+          <div className="gptb-test-assertions">{assertions.map((assertion, index) => <div key={assertion.id || index}>
+            <span>{index + 1}</span>
+            <select value={assertion.resource || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, resource: event.target.value } : item))}><option value="">Select resource</option>{resources.filter((resource) => resource?.isCollection !== true).map((resource) => <option key={resource.id || resource.apiName} value={`variables.${resource.apiName}`}>{resource.label || resource.apiName}</option>)}</select>
+            <select value={assertion.operator || 'equals'} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, operator: event.target.value } : item))}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="greater_than_or_equal">Greater Than or Equal</option><option value="less_than">Less Than</option><option value="less_than_or_equal">Less Than or Equal</option><option value="is_empty">Is Empty</option><option value="is_not_empty">Is Not Empty</option></select>
+            {!['is_empty','is_not_empty'].includes(assertion.operator) ? <input value={assertion.value ?? ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} placeholder="Expected value"/> : <span/>}
+            <button type="button" aria-label={`Remove assertion ${index + 1}`} onClick={() => setAssertions((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={13}/></button>
+          </div>)}</div>
+          <button className="gptb-inline-action" type="button" onClick={() => setAssertions((current) => [...current, { id: globalThis.crypto?.randomUUID?.() || `assertion-${Date.now()}`, resource: '', operator: 'equals', value: '' }])}><Plus size={13}/> Add Assertion</button>
+        </> : null}
+      </section> : null}
       {mode !== 'run' ? <section><h3>Select Run Options</h3>
         <label className="gptb-properties-check"><input type="checkbox" checked={flowType === 'record' && mode === 'test' ? true : rollback} disabled={flowType === 'record' && mode === 'test'} onChange={(event) => setRollback(event.target.checked)}/><span>Run automation in rollback mode</span></label>
         {mode === 'test' && flowType === 'record' ? <p className="gptb-help-text">Rollback is required for record-triggered test scenarios.</p> : null}
@@ -617,7 +669,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       {error ? <div className="gptb-execution-error" role="alert">{error}</div> : null}
       {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl></section> : null}
     </div>
-    <footer><button className="gptb-button" onClick={onClose}>Close</button><button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId)} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
+    <footer><button className="gptb-button" onClick={onClose}>Close</button>{mode !== 'run' ? <button className="gptb-button" onClick={resetExecutionSettings}>Reset Settings</button> : null}<button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId)} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
   </aside>
 }
 
@@ -1320,9 +1372,6 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       if (layout === 'free' && (event.key === 'Delete' || event.key === 'Backspace') && freeSelectedIds.length) {
         event.preventDefault(); removeFreeSelection(); return
       }
-      if (layout === 'auto' && (event.key === 'Delete' || event.key === 'Backspace') && selectedElementIds.length) {
-        event.preventDefault(); removeSelectedAutoElements(); return
-      }
       if (layout === 'auto' && primary && event.key.toLowerCase() === 'c' && selectedElementIds.length) {
         event.preventDefault(); copySelectedElements(); return
       }
@@ -1343,10 +1392,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         const description = target?.getAttribute?.('data-gptb-description')
         if (description) { event.preventDefault(); setDescriptionPopup(description); return }
       }
-      if (layout === 'auto' && primary && event.key.toLowerCase() === 'k') {
-        event.preventDefault(); setToolboxOpen(true); requestAnimationFrame(() => toolboxFocusRef.current?.focus?.()); return
-      }
-      if (primary && event.key === '/') { event.preventDefault(); setShortcutHelpOpen(true); return }
+      if (layout === 'free' && primary && event.key === '/') { event.preventDefault(); setShortcutHelpOpen(true); return }
       if (primary && event.altKey && (event.key === '+' || event.key === '=')) { event.preventDefault(); setZoom((value) => Math.min(150, value + 10)); return }
       if (primary && event.altKey && event.key === '-') { event.preventDefault(); setZoom((value) => Math.max(25, value - 10)); return }
       if (primary && event.altKey && event.key === '0') { event.preventDefault(); setZoom(100); return }
@@ -1474,7 +1520,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         const target = elements.find((element) => element.id === issue.targetId)
         if (target) openElement(target)
       }}/> : null}
-      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} onClose={() => setExecutionMode(null)}/> : null}
+      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={resources} onClose={() => setExecutionMode(null)}/> : null}
       {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
