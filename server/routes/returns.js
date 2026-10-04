@@ -10,7 +10,7 @@ import { enqueuePlatformJob } from "../services/platformJobs.js";
 
 /*
  * T9M-SMALL - Sales Returns (customer + supplier) built on the existing
- * stock_returns / stock_return_items / inventory_movements / refunds
+ * stock_returns / stock_return_items / inventory_ledger / refunds
  * architecture. Every query is company-scoped, and store-scoped wherever the
  * session carries a storeId (store-level access applies app-wide).
  *
@@ -207,7 +207,7 @@ export default function createReturnsRouter({
       throw new Error("Customer credit refund Flow returned an invalid transaction");
     }
     await client.query(
-      `INSERT INTO customer_credit_ledger
+      `INSERT INTO customer_ledger
         (company_id, store_id, customer_id, transaction_type, amount,
          reference_type, reference_id, description, idempotency_key, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -913,7 +913,7 @@ export default function createReturnsRouter({
                 // Record reversal transaction
                 await db(
                   `
-                  INSERT INTO customer_loyalty_transactions 
+                  INSERT INTO customer_loyalty_ledger 
                     (company_id, customer_id, transaction_type, amount, balance_after, reference_type, reference_id, description, created_by)
                   VALUES ($1, $2, 'REVERSE', $3, $4, 'return', $5, 'Refund processed', $6)
                   `,
