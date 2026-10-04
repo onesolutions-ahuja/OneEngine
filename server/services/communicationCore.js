@@ -1,7 +1,7 @@
 import { publishPlatformEvent } from "./platformEvents.js";
 import { enqueueRecordCreatedWorkflows } from "./recordCreatedWorkflows.js";
 
-export const COMMUNICATION_CHANNELS = Object.freeze(["EMAIL", "SMS", "WHATSAPP"]);
+export const COMMUNICATION_CHANNELS = Object.freeze(["EMAIL", "SMS", "WHATSAPP", "IN_APP"]);
 
 export const COMMUNICATION_EVENTS = Object.freeze({
   RECEIVED: "communication.message_received",
