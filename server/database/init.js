@@ -1873,6 +1873,30 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         console.log("onePOS: unused SEND_APPOINTMENT_CONFIRMATION wrapper removed");
       },
+    },
+    {
+      key: "0054_remove_inactive_booking_link_wrappers",
+      version: "54",
+      name: "Remove inactive appointment booking case and link wrappers",
+      up: async client => {
+        const legacy = ["CREATE_APPOINTMENT_BOOKING_CASE","ISSUE_APPOINTMENT_BOOKING_LINK"];
+        const active = await client.query(
+          "SELECT id,name FROM platform_rules WHERE active=TRUE AND COALESCE(action->>'systemGenerated','false')<>'true' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step WHERE step->>'key'=ANY($1::text[]) OR step->>'type'=ANY($1::text[]))",
+          [legacy]
+        );
+        if (active.rows.length) {
+          throw new Error("Active workflow still references removed booking wrappers: " + active.rows.map((row) => row.name || row.id).join(", "));
+        }
+        await client.query(
+          "DELETE FROM platform_rules WHERE active=FALSE AND COALESCE(action->>'systemGenerated','false')<>'true' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(action->'actions','[]'::jsonb)) step WHERE step->>'key'=ANY($1::text[]) OR step->>'type'=ANY($1::text[]))",
+          [legacy]
+        );
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[]) AND COALESCE(user_modified,FALSE)=FALSE",
+          [["action:CREATE_APPOINTMENT_BOOKING_CASE","action:ISSUE_APPOINTMENT_BOOKING_LINK"]]
+        );
+        console.log("onePOS: inactive legacy booking case/link flows and wrappers removed");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
