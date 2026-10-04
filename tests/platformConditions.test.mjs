@@ -20,6 +20,20 @@ test('workflow Decision validation accepts Builder resource bindings as comparis
   ))
 })
 
+test('workflow Decision validation accepts Builder record-path bindings', () => {
+  assert.doesNotThrow(() => validateConditionConfig(
+    {
+      match: 'all',
+      conditions: [
+        { field: 'expires_at', operator: 'greater_than', value: { path: 'body' } },
+      ],
+    },
+    fields,
+    'Decision outcome "Valid Future Date"',
+    { allowResources: true },
+  ))
+})
+
 test('workflow Decision validation accepts step bindings and optional fallback', () => {
   assert.doesNotThrow(() => validateConditionConfig(
     {
