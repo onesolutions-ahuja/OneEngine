@@ -281,7 +281,7 @@ test('GPT Builder Action supports optional inclusion Formula Transform and autom
   assert.match(editor, /automaticOutputVariable/)
   assert.match(editor, /manualOutputMappings/)
   assert.match(editor, /Outputs from/)
-  assert.match(page, /onResourcesChange=\{\(next\) => \{ setResources\(next\); setDirty\(true\) \}\}/)
+  assert.match(page, /onResourcesChange=\{applyResourceChanges\}/)
   assert.match(platform, /outputSchema/)
   assert.match(runtime, /resolveActionBuilderBinding/)
   assert.match(runtime, /__flowInputMode === "formula"/)
@@ -583,7 +583,7 @@ test('GPT Builder recent element UI UX recheck uses metadata pickers and persist
   assert.match(waitConditions, /\$Flow\.CurrentDateTime/)
   assert.match(waitConditions, /aria-expanded=\{openState\.root/)
   assert.match(page, /objects=\{objects\}/)
-  assert.match(page, /resources=\{resources\}/)
+  assert.match(page, /resources=\{availableResources\}/)
 })
 
 test('GPT Builder Transform uses Salesforce-style source target Map sockets and connection workspace', async () => {
@@ -1261,4 +1261,18 @@ test('GPT Builder exposes masked provider metadata as reusable Flow resources', 
   assert.match(runtime, /__secureFields/)
   assert.match(runtime, /__secureValues/)
   assert.match(runtime, /text\.split\(secret\)\.join\("\*\*\*\*\*\*\*\*"\)/)
+})
+
+
+test('Decision branch lifecycle preserves path order and removes orphaned members', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  assert.match(page, /previousBranchIds/)
+  assert.match(page, /nextBranchIds/)
+  assert.match(page, /const orphaned = new Set/)
+  assert.match(page, /topLevelAutoElements/)
+  assert.match(page, /previousMemberId = pathIds\.length > 1/)
+  assert.match(page, /decision\.config\?\.outcomes/)
+  assert.match(runtime, /const providerResourceReferenced = JSON\.stringify\(actions\)\.includes\("variables\.Provider_"\)/)
+  assert.match(runtime, /const selectedActions = selectedIds\s*\.map\(\(id\) => actionById\.get\(String\(id\)\)\)\s*\.filter\(Boolean\);/)
 })
