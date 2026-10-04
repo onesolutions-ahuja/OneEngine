@@ -521,7 +521,7 @@ export default function createSalesRouter({
           );
           await client.query(
             `
-            INSERT INTO customer_loyalty_transactions
+            INSERT INTO customer_loyalty_ledger
               (company_id, customer_id, transaction_type, amount, balance_after, reference_type, description, created_by)
             VALUES ($1, $2, 'REDEEM', $3, $4, $5, $6, $7)
             `,
@@ -1097,7 +1097,7 @@ export default function createSalesRouter({
           }
           const balance = await client.query(
             `SELECT COALESCE(SUM(CASE transaction_type WHEN 'redeem' THEN -amount ELSE amount END), 0) AS balance
-             FROM gift_card_transactions WHERE gift_card_id = $1 AND company_id = $2`,
+             FROM gift_card_ledger WHERE gift_card_id = $1 AND company_id = $2`,
             [card.rows[0].id, req.user.companyId]
           );
           const redemption = validateRedemption(balance.rows[0]?.balance, total);
@@ -1538,7 +1538,7 @@ export default function createSalesRouter({
 
         if (giftCardTender) {
           await client.query(
-            `INSERT INTO gift_card_transactions
+            `INSERT INTO gift_card_ledger
               (company_id, gift_card_id, transaction_type, amount, balance_after, reference_type, reference_id, description, store_id, created_by)
              VALUES ($1, $2, 'redeem', $3, $4 - $3, 'sale', $5, 'Gift card sale', $6, $7)
              ON CONFLICT DO NOTHING RETURNING balance_after`,
@@ -1586,7 +1586,7 @@ export default function createSalesRouter({
           const signedSum = await client.query(
             `
             SELECT COALESCE(SUM(amount * CASE WHEN transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END), 0) AS outstanding
-            FROM customer_credit_ledger
+            FROM customer_ledger
             WHERE company_id = $1 AND customer_id = $2
             `,
             [req.user.companyId, customerId]
@@ -1708,7 +1708,7 @@ export default function createSalesRouter({
           }
           await client.query(
             `
-            INSERT INTO customer_credit_ledger
+            INSERT INTO customer_ledger
               (company_id, store_id, customer_id, transaction_type, amount, reference_type, reference_id, description, net_amount, vat_amount, gross_amount, idempotency_key, created_by)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
             `,
@@ -1842,7 +1842,7 @@ export default function createSalesRouter({
                   // Record transaction
                   await db(
                     `
-                    INSERT INTO customer_loyalty_transactions 
+                    INSERT INTO customer_loyalty_ledger 
                       (company_id, customer_id, transaction_type, amount, balance_after, reference_type, reference_id, description, created_by)
                     VALUES ($1, $2, 'EARN', $3, $4, 'sale', $5, 'Sale completed', $6)
                     `,
