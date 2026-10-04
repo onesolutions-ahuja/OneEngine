@@ -621,8 +621,9 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   </aside>
 }
 
-function AutoGroupCard({ group, members, onOpenGroup, onOpenMember, selecting, selectedIds, onSelectToggle, connecting, onConnectTarget }) {
+function AutoGroupCard({ group, members, onOpenGroup, onOpenMember, selecting, selectedIds, onSelectToggle, connecting, onConnectTarget, flowType, startConfig, copiedCount, onAddElement, onDeleteGroup }) {
   const storageKey = `gptbuilder.group.${group.id}.collapsed`
+  const [adding, setAdding] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(storageKey) === 'true' } catch { return false }
   })
@@ -634,10 +635,11 @@ function AutoGroupCard({ group, members, onOpenGroup, onOpenMember, selecting, s
   return <div className={`gptb-auto-group${collapsed ? ' is-collapsed' : ''}`} data-gptb-group-id={group.id}>
     <div className="gptb-auto-group-header">
       <button type="button" className="gptb-auto-group-toggle" aria-expanded={!collapsed} onClick={toggle}>{collapsed ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}<span><strong>{group.label}</strong><small>{members.length} element{members.length===1?'':'s'}</small></span></button>
-      <button type="button" className="gptb-auto-group-edit" onClick={onOpenGroup}>Edit</button>
+      <span className="gptb-auto-group-actions"><button type="button" className="gptb-auto-group-edit" onClick={onOpenGroup}>Edit</button><button type="button" className="gptb-auto-group-delete" aria-label={`Delete group ${group.label}`} onClick={onDeleteGroup}><Trash2 size={12}/></button></span>
     </div>
     {!collapsed ? <div className="gptb-auto-group-body">
-      {members.length ? members.map((element)=><div className="gptb-auto-group-member" key={element.id}><PendingElementCard instance={element} onOpen={()=>onOpenMember(element)} selecting={selecting} selected={selectedIds.includes(element.id)} onSelectToggle={()=>onSelectToggle(element.id)} connecting={connecting} onConnectTarget={()=>onConnectTarget(element.id)}/></div>) : <div className="gptb-auto-group-empty">Add or move elements into this group from its properties.</div>}
+      {members.length ? members.map((element)=><div className="gptb-auto-group-member" key={element.id}><PendingElementCard instance={element} onOpen={()=>onOpenMember(element)} selecting={selecting} selected={selectedIds.includes(element.id)} onSelectToggle={()=>onSelectToggle(element.id)} connecting={connecting} onConnectTarget={()=>onConnectTarget(element.id)}/></div>) : <div className="gptb-auto-group-empty">This group is empty.</div>}
+      <div className="gptb-group-add-slot"><button type="button" className="gptb-add-node" aria-label={`Add element to ${group.label}`} aria-expanded={adding} onClick={()=>setAdding((value)=>!value)}><Plus size={14}/></button>{adding?<ElementPicker flowType={flowType} startConfig={startConfig} hasExistingElements={members.length>0} copiedCount={copiedCount} onSelect={(element)=>{onAddElement?.(element);setAdding(false)}} onClose={()=>setAdding(false)}/>:null}</div>
     </div> : null}
   </div>
 }
@@ -696,6 +698,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [editHistoryLoading, setEditHistoryLoading] = useState(false)
   const [editHistoryVersion, setEditHistoryVersion] = useState(null)
   const [executionMode, setExecutionMode] = useState(null)
+  const [groupDeleteTarget, setGroupDeleteTarget] = useState(null)
 
   useEffect(() => {
     const snapshot = JSON.parse(JSON.stringify({ layout, startConfig, elements, resources, goToConnections }))
@@ -1213,6 +1216,43 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setDiagnosticsOpen(false)
     setEditingElement({ id: instance.id, isNew: false })
   }
+  const addElementToGroup = (groupId, element) => {
+    if (!element || element.key === 'end' || element.key === 'group') return
+    const instance = createElementInstance(element.key, elements, { source: 'auto' })
+    setElements((current) => {
+      const groupIndex = current.findIndex((item) => item.id === groupId)
+      const withMember = current.map((item) => item.id === groupId
+        ? { ...item, config: { ...(item.config || {}), memberIds: [...(item.config?.memberIds || []), instance.id] } }
+        : item)
+      if (groupIndex < 0) return [...withMember, instance]
+      return [...withMember.slice(0, groupIndex + 1), instance, ...withMember.slice(groupIndex + 1)]
+    })
+    setEditingElement({ id: instance.id, isNew: true })
+    setDirty(true)
+  }
+  const deleteGroup = (groupId, deleteMembers) => {
+    const group = elements.find((item) => item.id === groupId && item.key === 'group')
+    if (!group) { setGroupDeleteTarget(null); return }
+    const memberIds = new Set(Array.isArray(group.config?.memberIds) ? group.config.memberIds : [])
+    const removed = new Set([groupId, ...(deleteMembers ? [...memberIds] : [])])
+    setElements((current) => current.filter((item) => !removed.has(item.id)))
+    setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
+    setSelectedElementIds((current) => current.filter((id) => !removed.has(id)))
+    setGroupDeleteTarget(null)
+    setDirty(true)
+  }
+  const removeSelectedAutoElements = () => {
+    if (!selectedElementIds.length) return
+    const selectedGroups = elements.filter((item) => selectedElementIds.includes(item.id) && item.key === 'group')
+    if (selectedGroups.length) { setGroupDeleteTarget(selectedGroups[0]); return }
+    const removed = new Set(selectedElementIds)
+    setElements((current) => current.map((item) => item.key === 'group'
+      ? { ...item, config: { ...(item.config || {}), memberIds: (item.config?.memberIds || []).filter((id) => !removed.has(id)) } }
+      : item).filter((item) => !removed.has(item.id)))
+    setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
+    setSelectedElementIds([])
+    setDirty(true)
+  }
   const canvasPoint = (clientX, clientY) => {
     const canvas = canvasRef.current
     if (!canvas) return { x: 0, y: 0 }
@@ -1279,6 +1319,9 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       } else shortcutSequenceRef.current = ''
       if (layout === 'free' && (event.key === 'Delete' || event.key === 'Backspace') && freeSelectedIds.length) {
         event.preventDefault(); removeFreeSelection(); return
+      }
+      if (layout === 'auto' && (event.key === 'Delete' || event.key === 'Backspace') && selectedElementIds.length) {
+        event.preventDefault(); removeSelectedAutoElements(); return
       }
       if (layout === 'auto' && primary && event.key.toLowerCase() === 'c' && selectedElementIds.length) {
         event.preventDefault(); copySelectedElements(); return
@@ -1390,7 +1433,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
               {elementPickerOpen && autoInsertIndex === index ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={autoElements.length > 0} copiedCount={copiedElements.length} onPaste={pasteCopiedElements} onConnect={beginConnectToElement} onSelect={(element) => chooseElement(element, 'auto', null, index)} onClose={() => { setElementPickerOpen(false); setAutoInsertIndex(null) }}/>:null}
             </div>
             return <>{addSlot(0)}{visible.map((element,index)=><React.Fragment key={element.id}><div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-element-id={element.id} data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`}>{element.key==='group'
-              ? <AutoGroupCard group={element} members={(element.config?.memberIds||[]).map((id)=>autoElements.find((item)=>item.id===id)).filter(Boolean)} onOpenGroup={()=>openElement(element)} onOpenMember={openElement} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} connecting={connectMode} onConnectTarget={connectToElement}/>
+              ? <AutoGroupCard group={element} members={(element.config?.memberIds||[]).map((id)=>autoElements.find((item)=>item.id===id)).filter(Boolean)} onOpenGroup={()=>openElement(element)} onOpenMember={openElement} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} connecting={connectMode} onConnectTarget={connectToElement} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length} onAddElement={(picked)=>addElementToGroup(element.id,picked)} onDeleteGroup={()=>setGroupDeleteTarget(element)}/>
               : <PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/>}</div>{addSlot(index + 1)}</React.Fragment>)}</>
           })()}
           <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
@@ -1611,6 +1654,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
     {saveAsFlowOpen ? <GPTBuilderSaveAsFlowDialog value={flowProps} saving={saving} onCancel={() => setSaveAsFlowOpen(false)} onSave={(next) => void save(flowProps, { forceNewFlow: true, newFlow: next })}/> : null}
     {editHistoryPending ? <GPTBuilderUnsavedHistoryDialog saving={saving} onCancel={() => setEditHistoryPending(false)} onSaveAndView={() => void saveAndOpenEditHistory()}/> : null}
+    {groupDeleteTarget ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-group-delete-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-group-delete-title"><header><strong id="gptb-group-delete-title">Delete Group</strong><button className="gptb-icon-button" aria-label="Close Delete Group" onClick={()=>setGroupDeleteTarget(null)}><X size={16}/></button></header><div className="gptb-properties-body"><p>What should happen to the elements in <b>{groupDeleteTarget.label}</b>?</p></div><footer><button className="gptb-button" onClick={()=>setGroupDeleteTarget(null)}>Cancel</button><button className="gptb-button" onClick={()=>deleteGroup(groupDeleteTarget.id,false)}>Keep Elements</button><button className="gptb-button is-brand" onClick={()=>deleteGroup(groupDeleteTarget.id,true)}>Delete Group and Elements</button></footer></section></div> : null}
     {shortcutHelpOpen ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-shortcuts-title"><header><strong id="gptb-shortcuts-title">Keyboard Shortcuts</strong><button className="gptb-icon-button" aria-label="Close Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(false)}><X size={16}/></button></header><div className="gptb-properties-body"><dl className="gptb-shortcut-list"><div><dt>Zoom in / out</dt><dd>Ctrl/Cmd + Alt/Option + + / − or Ctrl/Cmd + mouse wheel</dd></div><div><dt>Zoom to fit</dt><dd>Ctrl/Cmd + Alt/Option + 1</dd></div><div><dt>Reset zoom</dt><dd>Ctrl/Cmd + Alt/Option + 0</dd></div><div><dt>Switch panel focus</dt><dd>F6</dd></div><div><dt>Toolbox / tips focus</dt><dd>g, then d</dd></div><div><dt>Navigate Auto-Layout</dt><dd>↑ / ↓ execution order · ← / → branch or Go To path</dd></div><div><dt>Cut / copy / paste</dt><dd>Ctrl/Cmd + X / C / V in Auto-Layout</dd></div><div><dt>Delete selected elements</dt><dd>Delete / Backspace</dd></div><div><dt>Select multiple elements</dt><dd>Shift + Click in Free-Form</dd></div><div><dt>Element description</dt><dd>Ctrl/Cmd + I in Auto-Layout</dd></div><div><dt>Open Toolbox</dt><dd>Ctrl/Cmd + K in Auto-Layout</dd></div></dl></div><footer><button className="gptb-button is-brand" onClick={() => setShortcutHelpOpen(false)}>Close</button></footer></section></div> : null}
     {descriptionPopup ? <div className="gptb-description-popup" role="status">{descriptionPopup}<button aria-label="Close description" onClick={() => setDescriptionPopup(null)}><X size={13}/></button></div> : null}
   </section>
