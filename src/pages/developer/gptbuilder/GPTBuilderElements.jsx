@@ -121,15 +121,25 @@ export function FreeFormElements({ flowType, startConfig }) {
   </div>
 }
 
-export function PendingElementCard({ elementKey, free = false, position = null }) {
-  const element = elementByKey(elementKey)
+export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen }) {
+  const key = instance?.key || elementKey
+  const element = elementByKey(key)
   if (!element) return null
   const Icon = element.icon
-  const style = free && position ? { left: position.x, top: position.y } : undefined
-  return <div className={`gptb-pending-element-card ${free ? 'is-free' : ''}`} style={style} aria-label={`Pending ${element.label}`}>
+  const style = free && (position || instance?.position) ? { left: (position || instance.position).x, top: (position || instance.position).y } : undefined
+  const label = instance?.label || element.label
+  return <button
+    type="button"
+    className={`gptb-pending-element-card ${free ? 'is-free' : ''}`}
+    style={style}
+    aria-label={`${label} element`}
+    onClick={!free ? onOpen : undefined}
+    onDoubleClick={free ? onOpen : undefined}
+  >
     <span className={`gptb-element-icon is-${element.category}`}><Icon size={16}/></span>
-    <span><strong>{element.label}</strong><small>Not configured</small></span>
-  </div>
+    <span><strong>{label}</strong><small>{instance?.configured ? element.label : `${element.label} · Not fully configured`}</small></span>
+    {instance?.description ? <span className="gptb-card-description" title={instance.description}><CircleHelp size={12}/></span> : null}
+  </button>
 }
 
 export function PendingElementEditor({ elementKey, onCancel }) {
