@@ -15,7 +15,7 @@ import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
 import DebugCodesAdmin from './DebugCodesAdmin'
-import GPTBuilderPage from './gptbuilder/GPTBuilderParityPage'
+import GPTBuilderPage from './gptbuilder/GPTBuilderPage'
 import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
