@@ -95,6 +95,27 @@ test('GPT Builder toolbar uses current Salesforce Run Debug View Tests and Activ
   assert.match(page, /Warnings <span>\{warningCount\}<\/span>/)
 })
 
+test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection and reopen persistence', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /Ctrl\/Cmd \+ Alt\/Option \+ \+ \/ − or Ctrl\/Cmd \+ mouse wheel/)
+  assert.match(page, /if \(event\.key === 'F6'\)/)
+  assert.match(page, /sequence === 'gd'/)
+  assert.match(page, /\['ArrowDown','ArrowUp','ArrowLeft','ArrowRight'\]/)
+  assert.match(page, /axis = 'vertical'/)
+  assert.match(page, /data-gptb-element-id="start"/)
+  assert.match(page, /data-gptb-element-id=\{element\.id\}/)
+  assert.match(page, /if \(primary && event\.key === '\/'\)/)
+  assert.match(page, /Ctrl\/Cmd \+ K in Auto-Layout/)
+  assert.match(page, /Ctrl\/Cmd \+ I in Auto-Layout/)
+  assert.match(page, /layout: \{ mode: layout === 'free' \? 'FREE_FORM' : 'AUTO' \}/)
+  assert.match(page, /position: element\.position/)
+  assert.match(page, /goToConnections,/)
+  assert.match(page, /initialWorkflowId = ''/)
+  assert.match(page, /Saved GPT Builder flow not found/)
+  assert.match(page, /setLayout\(action\.layout\?\.mode === 'FREE_FORM' \? 'free' : 'auto'\)/)
+  assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
+})
+
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
