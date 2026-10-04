@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { appointmentSlotGuardSql } from "./appointmentSlotGuard.js";
 import { readFileSync } from "node:fs";
 import { runMigrations } from "./migrations.js";
 import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
@@ -1745,6 +1746,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log("onePOS: refreshed " + (rows.rowCount || 0) + " booking routers with generic slot Flow");
       },
     }
+    ,{ key: "0048_appointment_atomic_slot_guard", version: "48", name: "Prevent overlapping appointments during ordinary record CRUD", up: client => client.query(appointmentSlotGuardSql) }
   ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
