@@ -504,6 +504,20 @@ test('GPT Builder recent element UI UX recheck uses metadata pickers and persist
   assert.match(page, /resources=\{resources\}/)
 })
 
+test('GPT Builder Transform uses Salesforce-style source target Map sockets and connection workspace', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderTransform.jsx', import.meta.url), 'utf8')
+  const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
+  assert.match(editor, /gptb-transform-visual-map/)
+  assert.match(editor, /Map source/)
+  assert.match(editor, /Map target/)
+  assert.match(editor, /pendingMapSource/)
+  assert.match(editor, /mapVisualTarget/)
+  assert.match(editor, /Existing mappings are shown between the two data structures/)
+  assert.match(editor, /Mapping Details/)
+  assert.match(css, /\.gptb-transform-visual-map/)
+  assert.match(css, /\.gptb-transform-socket/)
+  assert.match(css, /\.gptb-transform-connections/)
+})
 test('GPT Builder Transform matches current Salesforce source target mapping join aggregate and generated-resource behavior', async () => {
   const transform = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderTransform.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
