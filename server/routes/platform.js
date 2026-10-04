@@ -6468,10 +6468,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const result = await db(
         `UPDATE platform_rules SET
             object_id=$1,name=$2,trigger_key=$3,conditions=$4::jsonb,action=$5::jsonb,
-            active=$6,lifecycle_status=$7,version=$8,
+            active=$6,lifecycle_status=$7::varchar,version=$8,
             active_version=CASE WHEN $6=TRUE THEN $8 ELSE active_version END,
-            draft_version=CASE WHEN $7='DRAFT' THEN $8 ELSE draft_version END,
-            draft_definition=CASE WHEN $7='DRAFT' THEN $9::jsonb ELSE draft_definition END,
+            draft_version=CASE WHEN $7::varchar='DRAFT' THEN $8 ELSE draft_version END,
+            draft_definition=CASE WHEN $7::varchar='DRAFT' THEN $9::jsonb ELSE draft_definition END,
             user_modified=true,updated_at=NOW()
           WHERE id=$10 AND company_id=$11
           RETURNING *`,
