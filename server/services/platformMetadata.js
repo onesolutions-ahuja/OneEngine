@@ -1707,6 +1707,19 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
 
     if (tenantAppObject?.id) {
+      await pool.query(
+        `INSERT INTO platform_object_permissions
+           (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete)
+         SELECT $1,r.id,r.company_id,TRUE,FALSE,TRUE,FALSE
+           FROM roles r
+           JOIN role_permissions rp ON rp.role_id=r.id
+           JOIN permissions p ON p.id=rp.permission_id AND p.code='package.install'
+          WHERE r.company_id IS NOT NULL
+         ON CONFLICT (object_id,role_id,company_id) DO UPDATE SET
+           can_view=TRUE,can_edit=TRUE`,
+        [tenantAppObject.id]
+      ).catch(() => {});
+
       const lifecycleFlows = [
         {
           name: "OneStore - Install App",
