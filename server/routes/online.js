@@ -1109,7 +1109,7 @@ export default function createOnlineRouter({
   });
 
   /*
-   * Store selection uses the package's registered UBER_GET_STORES action.
+   * Store selection runs the package-installed Get Stores workflow.
    * The action loads this tenant's connector and the active environment,
    * keeping discovery scoped to the authenticated company.
    */
