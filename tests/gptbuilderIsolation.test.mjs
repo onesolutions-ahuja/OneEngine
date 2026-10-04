@@ -116,6 +116,61 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Screen matches Salesforce frame navigation palette drag reorder and conditional visibility behavior', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderScreen.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Components',
+    'Configure Frame',
+    'Control Navigation',
+    'Show Header',
+    'Show Footer',
+    'Previous',
+    'Next',
+    'Finish',
+    'Pause',
+    'Set Component Visibility',
+    'Drag components here',
+    'Section',
+    'Data Table',
+    'File Upload',
+    'Lookup',
+    'Multi-Select Picklist',
+  ]) assert.ok(editor.includes(text), text)
+  assert.match(editor, /application\/x-gptbuilder-screen-component/)
+  assert.match(editor, /application\/x-gptbuilder-screen-existing/)
+  assert.match(editor, /onResourcesChange/)
+  assert.match(page, /screenRuntimeAction\(element\)/)
+  assert.match(page, /activeElement\.key === 'screen'/)
+  assert.match(runtime, /key: "SCREEN"/)
+  assert.match(runtime, /nextLabel: action\.nextLabel/)
+  assert.match(runtime, /visibilityResource/)
+  assert.match(runtime, /platform_workflow_screen_sessions/)
+})
+
+test('GPT Builder Subflow matches Salesforce referenced-flow search input and output contract behavior', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderSubflow.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Referenced Flow',
+    'Search flows by label or API name',
+    'Select Input Values',
+    'Store Output Values',
+    'Open Referenced Flow',
+  ]) assert.ok(editor.includes(text), text)
+  assert.match(editor, /hasWait/)
+  assert.match(editor, /currentFlowType==='autolaunched'&&type==='screen'/)
+  assert.match(page, /subflowRuntimeAction\(element\)/)
+  assert.match(page, /activeElement\.key === 'subflow'/)
+  assert.match(runtime, /key: "RUN_SUBFLOW"/)
+  assert.match(runtime, /inputContract/)
+  assert.match(runtime, /outputContract/)
+  assert.match(runtime, /action\.outputMappings/)
+  assert.match(runtime, /workflowVariables\.variables\[variableName\] = outputs\[outputName\]/)
+})
+
 test('GPT Builder Action uses the metadata action registry with Salesforce-style search and input assignment', async () => {
   const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAction.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
