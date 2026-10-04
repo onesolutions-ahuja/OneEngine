@@ -1362,18 +1362,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: (context) => executeGlobalProductLookupAction(context),
   },
   {
-    key: "OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Open Food Facts - Lookup Product",
-    description: "Look up a barcode using the installed Open Food Facts connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "open_food_facts"),
-  },
-  {
     key: "GO_UPC_LOOKUP_PRODUCT",
     builderVisible: false,
     systemVisible: false,
