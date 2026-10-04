@@ -1,3 +1,13 @@
+INSERT INTO permissions(code,name,description)
+VALUES ('platform.runtime.read','Platform Runtime Read','Read shared metadata objects used by the OneEngine shell and generic runtime.')
+ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description;
+
+INSERT INTO role_permissions(role_id,permission_id)
+SELECT r.id,p.id
+FROM roles r
+JOIN permissions p ON p.code='platform.runtime.read'
+ON CONFLICT (role_id,permission_id) DO NOTHING;
+
 -- Core metadata data sources for the zero-custom-function architecture.
 
 CREATE TABLE IF NOT EXISTS sys_settings (
