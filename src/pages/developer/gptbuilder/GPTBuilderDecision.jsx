@@ -14,6 +14,7 @@ export const DECISION_DEFAULTS = Object.freeze({
   decisionInstructions: '',
   outcomes: [],
   defaultLabel: 'Default Outcome',
+  defaultBranch: [],
 })
 
 export function normalizeDecisionConfig(config = {}) {
