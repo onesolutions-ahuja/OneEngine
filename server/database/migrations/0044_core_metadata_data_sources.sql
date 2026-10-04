@@ -132,8 +132,5 @@ INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section
 SELECT company_id,'tax.default_vat_rate',to_jsonb(default_vat_rate),'number','Tax / VAT','Default VAT Rate','COMPANY' FROM company_settings
 ON CONFLICT DO NOTHING;
 INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
-SELECT company_id,'inventory.allow_negative_billing',to_jsonb(allow_negative_inventory_billing),'boolean','General','Allow Negative Inventory Billing','COMPANY' FROM company_settings
-ON CONFLICT DO NOTHING;
-INSERT INTO sys_settings(company_id,setting_key,setting_value,value_type,section,label,scope)
 SELECT company_id,'ui.default_landing_page',to_jsonb(default_landing_page),'text','General','Default Landing Page','COMPANY' FROM company_settings
 ON CONFLICT DO NOTHING;
