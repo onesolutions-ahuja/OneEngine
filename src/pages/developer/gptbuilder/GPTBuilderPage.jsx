@@ -13,6 +13,7 @@ import GPTBuilderElementProperties, {
 } from './GPTBuilderElementProperties'
 import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRecords'
 import GPTBuilderCreateRecords, { createRecordsRuntimeAction } from './GPTBuilderCreateRecords'
+import GPTBuilderUpdateRecords, { updateRecordsRuntimeAction } from './GPTBuilderUpdateRecords'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
@@ -789,6 +790,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       actions: elements.filter((element) => element.configured).map((element) => {
         if (element.key === 'get_records') return getRecordsRuntimeAction(element)
         if (element.key === 'create_records') return createRecordsRuntimeAction(element)
+        if (element.key === 'update_records') return updateRecordsRuntimeAction(element)
         return null
       }).filter(Boolean),
     },
@@ -1387,7 +1389,17 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
               resources={resources}
               onConfiguredChange={setConfigured}
             />
-          : null}</GPTBuilderElementProperties> : null}
+          : activeElement.key === 'update_records'
+            ? <GPTBuilderUpdateRecords
+                draft={draft}
+                updateConfig={updateConfig}
+                objects={objects}
+                resources={resources}
+                flowType={flow.key}
+                startConfig={startConfig}
+                onConfiguredChange={setConfigured}
+              />
+            : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => {
