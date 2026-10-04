@@ -32,6 +32,8 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0039_diagnostic_code_v2",
   "0040_diagnostic_catalogue_expansion",
   "0041_diagnostic_runtime_columns",
+  "0042_exact_root_cause_diagnostics",
+  "0043_platform_agents",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -215,6 +217,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Exact OneEngine root-cause diagnostic codes",
     up: client => client.query(
       readFileSync(new URL("./migrations/0042_exact_root_cause_diagnostics.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0043_platform_agents",
+    version: "43",
+    name: "Tenant agent metadata registry",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0043_platform_agents.sql", import.meta.url), "utf8")
     ),
   },
 ]);
