@@ -10,6 +10,11 @@ on:
       - "src/pages/developer/Builder2GraphCanvas.jsx"
       - "src/pages/developer/builder2Model.js"
       - "server/services/platformWorkflow.js"
+      - "server/routes/platform.js"
+      - "src/pages/flow/ScreenFlowRuntimePage.jsx"
+      - "src/styles/modules.css"
+      - "tests/builderRuntimeRecord.test.mjs"
+      - "tests/workflow-runtime-e2e.test.mjs"
 
 permissions:
   contents: read
@@ -31,3 +36,5 @@ jobs:
           npm run audit:apps
           npm run audit:workflow-coverage
           npm run build
+      - name: Run Builder/runtime regression tests
+        run: node --test tests/builderRuntimeRecord.test.mjs tests/workflow-runtime-e2e.test.mjs
