@@ -13,6 +13,16 @@ function interpolate(value, variables = {}) {
   });
 }
 
+function interpolatePayload(value, variables = {}) {
+  if (Array.isArray(value)) return value.map((item) => interpolatePayload(item, variables));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, interpolatePayload(item, variables)]));
+  if (typeof value !== "string") return value;
+  return value.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g, (_, path) => {
+    const resolved = String(path).split(".").reduce((current, key) => current == null ? undefined : current[key], variables);
+    return resolved == null ? "" : String(resolved);
+  });
+}
+
 function safeBaseUrl(value) {
   const url = new URL(String(value || ""));
   if (url.protocol !== "https:") throw new Error("ONE_HTTP_REQUEST requires an HTTPS provider base URL");
@@ -110,7 +120,8 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
     const init = { method: requestMethod, headers: requestHeaders, signal: controller.signal };
     if (body !== null && body !== undefined && !["GET"].includes(requestMethod)) {
       init.headers["Content-Type"] ||= "application/json";
-      init.body = typeof body === "string" ? body : JSON.stringify(body);
+      const renderedBody = interpolatePayload(body, { ...connectionVariables, ...(variables || {}) });
+      init.body = typeof renderedBody === "string" ? renderedBody : JSON.stringify(renderedBody);
     }
     const response = await fetch(url, init);
     const text = await response.text();
