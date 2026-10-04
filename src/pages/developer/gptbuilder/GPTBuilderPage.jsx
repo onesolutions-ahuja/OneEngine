@@ -20,6 +20,7 @@ import GPTBuilderDecision, { decisionRuntimeAction } from './GPTBuilderDecision'
 import GPTBuilderLoop, { loopRuntimeAction } from './GPTBuilderLoop'
 import GPTBuilderCollectionFilter, { collectionFilterRuntimeAction } from './GPTBuilderCollectionFilter'
 import GPTBuilderCollectionSort, { collectionSortRuntimeAction } from './GPTBuilderCollectionSort'
+import GPTBuilderTransform, { transformRuntimeAction } from './GPTBuilderTransform'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
@@ -803,6 +804,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (element.key === 'loop') return loopRuntimeAction(element, resources)
         if (element.key === 'collection_filter') return collectionFilterRuntimeAction(element, resources)
         if (element.key === 'collection_sort') return collectionSortRuntimeAction(element, resources)
+        if (element.key === 'transform') return transformRuntimeAction(element)
         return null
       }).filter(Boolean),
     },
@@ -1457,7 +1459,16 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                             resources={resources}
                             onConfiguredChange={setConfigured}
                           />
-                        : null}</GPTBuilderElementProperties> : null}
+                        : activeElement.key === 'transform'
+                          ? <GPTBuilderTransform
+                              draft={draft}
+                              updateConfig={updateConfig}
+                              resources={resources}
+                              objects={objects}
+                              onResourcesChange={(next) => { setResources(next); setDirty(true) }}
+                              onConfiguredChange={setConfigured}
+                            />
+                          : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => {
