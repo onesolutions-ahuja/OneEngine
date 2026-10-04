@@ -37,6 +37,7 @@ import { getCompanyEntitlements, hasEntitlement } from "../services/licensing.js
 import { createWorkflowRun, executeWorkflowActions } from "../services/platformWorkflow.js";
 import { interpretWhatsAppAssistantMessage } from "../services/whatsappAssistantAi.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "../services/communicationCore.js";
+import { encryptCredentials } from "../services/integrationCredentials.js";
 
 /* Test-connection rate limit: per company, fixed 1-minute window (in-memory,
  * no new dependencies). 256-bit tokens/credentials are not brute-forceable,
@@ -203,25 +204,53 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
       `SELECT id FROM integrations WHERE company_id = $1 AND provider = 'whatsapp' FOR UPDATE`,
       [companyId]
     );
+    let integrationId;
     if (existing.rows.length) {
       await client.query(
         `UPDATE integrations SET active = $2, configuration = $3, updated_at = NOW() WHERE id = $1`,
         [existing.rows[0].id, active, JSON.stringify(configuration)]
       );
-      return existing.rows[0].id;
+      integrationId = existing.rows[0].id;
+    } else {
+      const inserted = await client.query(
+        `INSERT INTO integrations (company_id, name, provider, configuration, active)
+         VALUES ($1, 'WhatsApp Business', 'whatsapp', $2, $3)
+         RETURNING id`,
+        [companyId, JSON.stringify(configuration), active]
+      );
+      integrationId = inserted.rows[0].id;
     }
-    const inserted = await client.query(
-      `INSERT INTO integrations (company_id, name, provider, configuration, active)
-       VALUES ($1, 'WhatsApp Business', 'whatsapp', $2, $3)
-       RETURNING id`,
-      [companyId, JSON.stringify(configuration), active]
+
+    // Keep the generic connector metadata used by ONE_HTTP_REQUEST in sync
+    // with the WhatsApp settings row. Flow runtime never receives raw secrets.
+    const definition = await client.query(
+      "SELECT id FROM platform_connector_definitions WHERE connector_key='whatsapp_connector' AND status='ACTIVE' LIMIT 1"
     );
-    // Audit the creator when we can attribute it.
-    if (userId) {
-      /* created_by is not part of the platform `integrations` table; the
-       * audit log below carries the actor instead. */
+    if (definition.rows[0]?.id) {
+      const token = decryptSecret(configuration.access_token);
+      const connectorConfiguration = {
+        phoneNumberId: configuration.phone_number_id || null,
+        businessAccountId: configuration.business_account_id || null,
+        defaultCountryCode: configuration.default_country_code || null,
+      };
+      const credentials = { token };
+      const existingConnection = await client.query(
+        "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)='whatsapp_connector' ORDER BY updated_at DESC LIMIT 1",
+        [companyId]
+      );
+      if (existingConnection.rows[0]?.id) {
+        await client.query(
+          "UPDATE integration_connections SET connector_definition_id=$1,connector_package_key='whatsapp_connector',connector_configuration=$2::jsonb,base_url='https://graph.facebook.com/v21.0',auth_type='bearer',credentials_encrypted=$3,enabled=$4,connection_status=$5,updated_at=NOW() WHERE id=$6 AND company_id=$7",
+          [definition.rows[0].id, JSON.stringify(connectorConfiguration), encryptCredentials(credentials), active === true, active === true ? "CONNECTED" : "NOT_CONNECTED", existingConnection.rows[0].id, companyId]
+        );
+      } else {
+        await client.query(
+          "INSERT INTO integration_connections (company_id,name,provider_name,integration_type,base_url,connector_package_key,connector_definition_id,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by) VALUES ($1,'WhatsApp Business Connection','whatsapp_connector','communication','https://graph.facebook.com/v21.0','whatsapp_connector',$2,$3::jsonb,'bearer',$4,$5,$6,$7)",
+          [companyId, definition.rows[0].id, JSON.stringify(connectorConfiguration), encryptCredentials(credentials), active === true, active === true ? "CONNECTED" : "NOT_CONNECTED", userId || null]
+        );
+      }
     }
-    return inserted.rows[0].id;
+    return integrationId;
   };
 
   /* ------------------------------- GET: masked configuration ------------------------------- */
