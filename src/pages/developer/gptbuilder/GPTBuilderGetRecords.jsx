@@ -94,7 +94,7 @@ export function getRecordsRuntimeAction(instance) {
     objectKey: c.objectKey,
     filters,
     match: c.conditionLogic === 'any' ? 'any' : 'all',
-    conditionLogic: c.conditionLogic === 'custom' ? c.customConditionLogic : undefined,
+    customConditionLogic: c.conditionLogic === 'custom' ? c.customConditionLogic : undefined,
     sortField: c.sortOrder === 'none' ? undefined : c.sortBy,
     sortDirection: c.sortOrder === 'none' ? undefined : c.sortOrder,
     limit: c.recordLimit === 'first' ? 1 : c.recordLimit === 'limited' ? Number(c.maxRecords) : 20000,
