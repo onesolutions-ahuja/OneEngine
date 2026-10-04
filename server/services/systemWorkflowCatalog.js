@@ -204,8 +204,8 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
   {
     systemKey:"flow:GPT_QUICKBOOKS_RETRY_FAILED_SYNC",name:"GPT - QuickBooks - Retry Failed Sync",triggerKey:"manual",
     action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_RETRY_FAILED_SYNC",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_RETRY_FAILED_SYNC",apiName:"GPT_QUICKBOOKS_RETRY_FAILED_SYNC",flowType:"AUTOLAUNCHED",
-      inputs:[{name:"syncType",type:"text",required:true},{name:"supplierId",type:"text"},{name:"purchaseId",type:"text"},{name:"paymentId",type:"text"},{name:"returnId",type:"text"},{name:"integrationId",type:"text",required:true}],outputs:["retryTarget"],
-      resources:[outputVariable("syncType","Text",{availableInput:true}),outputVariable("supplierId","Text",{availableInput:true}),outputVariable("purchaseId","Text",{availableInput:true}),outputVariable("paymentId","Text",{availableInput:true}),outputVariable("returnId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("retryTarget")],
+      inputs:[{name:"syncType",type:"text",required:true},{name:"supplierId",type:"text"},{name:"purchaseId",type:"text"},{name:"paymentId",type:"text"},{name:"returnId",type:"text"},{name:"integrationId",type:"text",required:true},{name:"expenseAccountId",type:"text"},{name:"paymentAccountId",type:"text"}],outputs:["retryTarget"],
+      resources:[outputVariable("syncType","Text",{availableInput:true}),outputVariable("supplierId","Text",{availableInput:true}),outputVariable("purchaseId","Text",{availableInput:true}),outputVariable("paymentId","Text",{availableInput:true}),outputVariable("returnId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("expenseAccountId","Text",{availableInput:true}),outputVariable("paymentAccountId","Text",{availableInput:true}),outputVariable("retryTarget")],
       actions:[
         {id:"choose_retry",label:"Choose Failed Sync Type",apiName:"choose_retry",key:"CONDITION",
           outcomes:[
@@ -215,9 +215,9 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
             {id:"credits",label:"Credits",condition:{match:"all",conditions:[{field:"variables.syncType",operator:"equals",value:"credits"}]},branch:["retry_credit"]}],
           defaultLabel:"Invalid",defaultBranch:[]},
         {id:"retry_vendor",label:"Retry Vendor Sync",apiName:"retry_vendor",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_VENDORS",inputMappings:{supplierId:{path:"variables.supplierId"},integrationId:{path:"variables.integrationId"}}},
-        {id:"retry_purchase",label:"Retry Purchase Sync",apiName:"retry_purchase",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_PURCHASES",inputMappings:{purchaseId:{path:"variables.purchaseId"},integrationId:{path:"variables.integrationId"}}},
-        {id:"retry_payment",label:"Retry Supplier Payment Sync",apiName:"retry_payment",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",inputMappings:{paymentId:{path:"variables.paymentId"},integrationId:{path:"variables.integrationId"}}},
-        {id:"retry_credit",label:"Retry Supplier Credit Sync",apiName:"retry_credit",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",inputMappings:{returnId:{path:"variables.returnId"},integrationId:{path:"variables.integrationId"}}},
+        {id:"retry_purchase",label:"Retry Purchase Sync",apiName:"retry_purchase",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_PURCHASES",inputMappings:{purchaseId:{path:"variables.purchaseId"},integrationId:{path:"variables.integrationId"},expenseAccountId:{path:"variables.expenseAccountId"}}},
+        {id:"retry_payment",label:"Retry Supplier Payment Sync",apiName:"retry_payment",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",inputMappings:{paymentId:{path:"variables.paymentId"},integrationId:{path:"variables.integrationId"},paymentAccountId:{path:"variables.paymentAccountId"}}},
+        {id:"retry_credit",label:"Retry Supplier Credit Sync",apiName:"retry_credit",key:"RUN_SUBFLOW",subflowApiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",inputMappings:{returnId:{path:"variables.returnId"},integrationId:{path:"variables.integrationId"},expenseAccountId:{path:"variables.expenseAccountId"}}},
         assignment("set_retry_target","Set Retry Target","retryTarget","text",{path:"variables.syncType"})
       ]}
   },
