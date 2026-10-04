@@ -436,8 +436,8 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
             !priorTrial;
           return {
             ...item,
-            licensed,
-            licence_request_status: pendingRequests.has(item.package_key) ? "PENDING" : null,
+            licensed: tenantLicensed,
+            licence_request_status: item.tenant_app_licence_status === "REQUESTED" || pendingRequests.has(item.package_key) ? "PENDING" : null,
             storefront_state: storefrontState,
             can_install: storefrontState === "AVAILABLE",
             trial_available: trialAvailable,
