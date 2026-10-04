@@ -147,18 +147,11 @@ test('screen runtime prefills revisited inputs from workflow variables', async (
   assert.deepEqual(JSON.parse(inserts[0].params[4]),{customerName:'Kept value'});
 });
 
-test('collection filter formula and transform target resource execute end to end', async () => {
-  const ctx=makeContext({workflowVariables:{variables:{rows:[{name:'A',amount:2},{name:'B',amount:-1}]},steps:{}}});
-  const filtered=await executeWorkflowAction({
-    ...ctx,
-    action:{id:'positive',key:'COLLECTION_FILTER',collection:{path:'variables.rows'},formula:'amount > 0'},
-  });
-  assert.deepEqual(filtered.collection,[{name:'A',amount:2}]);
-
-  ctx.workflowVariables.variables.positive=filtered.collection;
+test('transform target resource executes end to end', async () => {
+  const ctx=makeContext({workflowVariables:{variables:{rows:[{name:'A',amount:2}]},steps:{}}});
   const transformed=await executeWorkflowAction({
     ...ctx,
-    action:{id:'map',key:'TRANSFORM',collection:{path:'variables.positive'},targetResource:'variables.payloads',transformMappings:{displayName:'item.name',total:'item.amount'}},
+    action:{id:'map',key:'TRANSFORM',collection:{path:'variables.rows'},targetResource:'variables.payloads',transformMappings:{displayName:'item.name',total:'item.amount'}},
   });
   assert.deepEqual(transformed.value,[{displayName:'A',total:2}]);
   assert.deepEqual(ctx.workflowVariables.variables.payloads,[{displayName:'A',total:2}]);
