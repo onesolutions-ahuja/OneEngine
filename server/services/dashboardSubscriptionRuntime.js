@@ -1,6 +1,6 @@
 import { normalizeDashboardSubscription } from "./analyticsManagement.js";
 import { createDashboardExecution } from "./dashboardExecution.js";
-import { executeMediatedRegisteredAction } from "./platformWorkflow.js";
+import { executeWorkflowAction } from "./platformWorkflow.js";
 import { resolveReportSubscriptionRecipients } from "./reportSubscriptionDelivery.js";
 import { dashboardAccessAtLeast, loadDashboardPrincipalContext, resolveDashboardAccess } from "./dashboardSecurity.js";
 import { validateDashboardDefinition } from "./dashboardBuilder.js";
@@ -136,10 +136,10 @@ export async function processDashboardSubscriptionDeliveryJob({
     if(!ledger||ledger.status==="DELIVERED")continue;
     await db("UPDATE dashboard_subscription_deliveries SET status='RUNNING',last_error=NULL,updated_at=NOW() WHERE id=$1",[ledger.id]);
     try{
-      const outcome=await executeMediatedRegisteredAction({
+      const outcome=await executeWorkflowAction({
         db,companyId:row.company_id,userId:executionUser.id,
-        req:{user:{id:executionUser.id,companyId:row.company_id}},
-        action:{type:"SEND_EMAIL",recipient:recipient.email,subject:`Scheduled dashboard: ${dashboard.name}`,body},
+        req: { user: { id: executionUser.id, companyId: row.company_id, roleId: executionUser.role_id || null, storeId: executionUser.store_id || null } },
+        action: { type: "SEND_COMMUNICATION", channel: "EMAIL",recipient:recipient.email,subject:`Scheduled dashboard: ${dashboard.name}`,body},
       });
       if(!["SUCCESS","COMPLETED"].includes(String(outcome?.status||""))){
         const error=new Error(outcome?.error?.message||outcome?.code||"Dashboard subscription email delivery failed");
