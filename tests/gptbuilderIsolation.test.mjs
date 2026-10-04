@@ -116,6 +116,28 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Delete Records matches current Salesforce resource and condition modes', async () => {
+  const deleteRecords = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDeleteRecords.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'How to Find Records to Delete',
+    'Use the IDs stored in a record variable or record collection variable',
+    'Specify conditions',
+    'Record Collection',
+    'Delete Records of This Object Type',
+    'Condition Requirements',
+  ]) assert.ok(deleteRecords.includes(text), text)
+  assert.match(deleteRecords, /Current Record \(\$Record\)/)
+  assert.match(deleteRecords, /recordCollectionResource/)
+  assert.match(deleteRecords, /deleteRecordsRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'delete_records'/)
+  assert.match(page, /deleteRecordsRuntimeAction\(element\)/)
+  assert.match(runtime, /Delete Record resource contains an invalid record value/)
+  assert.match(runtime, /Delete Record condition field is unavailable/)
+  assert.match(runtime, /deletedRecords/)
+})
+
 test('GPT Builder Update Records matches current Salesforce resource and condition modes', async () => {
   const updateRecords = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderUpdateRecords.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
