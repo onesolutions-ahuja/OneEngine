@@ -57,11 +57,12 @@ SELECT
   s.city,
   s.postcode,
   s.active,
-  us.is_primary,
+  (u.store_id=s.id) AS is_primary,
   us.created_at,
   GREATEST(us.created_at, s.updated_at) AS updated_at
 FROM user_stores us
 JOIN stores s ON s.id=us.store_id
+JOIN users u ON u.id=us.user_id AND u.company_id=s.company_id
 WHERE us.active=TRUE AND s.active=TRUE;
 
 CREATE OR REPLACE VIEW device_health AS
