@@ -135,17 +135,70 @@ function validateCondition(condition, fields, context, options = {}) {
   return field;
 }
 
+function validateConditionLogic(logic, count, name) {
+  const value = String(logic || "").trim();
+  if (!value) fail(`${name}.conditionLogic is required when match is custom`);
+  if (value.length > 1000) fail(`${name}.conditionLogic must be 1000 characters or fewer`);
+  const tokens = value.match(/\d+|AND|OR|NOT|\(|\)/gi) || [];
+  if (!tokens.length || tokens.join("").toUpperCase() !== value.replace(/\s+/g, "").toUpperCase()) {
+    fail(`${name}.conditionLogic is invalid`);
+  }
+  const indexes = tokens.filter((token) => /^\d+$/.test(token)).map(Number);
+  if (!indexes.length || indexes.some((index) => index < 1 || index > count)) {
+    fail(`${name}.conditionLogic references an unavailable condition`);
+  }
+  return tokens;
+}
+
+function evaluateConditionLogic(logic, results, name = "Condition") {
+  const tokens = validateConditionLogic(logic, results.length, name);
+  let cursor = 0;
+  const parseFactor = () => {
+    const token = String(tokens[cursor++] || "");
+    if (token.toUpperCase() === "NOT") return !parseFactor();
+    if (token === "(") {
+      const value = parseOr();
+      if (tokens[cursor++] !== ")") fail(`${name}.conditionLogic has unmatched parentheses`);
+      return value;
+    }
+    if (!/^\d+$/.test(token)) fail(`${name}.conditionLogic is invalid`);
+    return Boolean(results[Number(token) - 1]);
+  };
+  const parseAnd = () => {
+    let value = parseFactor();
+    while (String(tokens[cursor] || "").toUpperCase() === "AND") {
+      cursor += 1;
+      const right = parseFactor();
+      value = value && right;
+    }
+    return value;
+  };
+  const parseOr = () => {
+    let value = parseAnd();
+    while (String(tokens[cursor] || "").toUpperCase() === "OR") {
+      cursor += 1;
+      const right = parseAnd();
+      value = value || right;
+    }
+    return value;
+  };
+  const value = parseOr();
+  if (cursor !== tokens.length) fail(`${name}.conditionLogic is invalid`);
+  return value;
+}
+
 export function validateConditionConfig(config, fields, name, options = {}) {
   if (config === undefined || config === null) return;
   if (!config || typeof config !== "object" || Array.isArray(config)) {
     fail(`${name} must be an object`);
   }
   const match = config.match || "all";
-  if (!["all", "any"].includes(match)) fail(`${name}.match must be all or any`);
+  if (!["all", "any", "custom"].includes(match)) fail(`${name}.match must be all, any, or custom`);
   if (!Array.isArray(config.conditions) || config.conditions.length < 1 || config.conditions.length > 20) {
     fail(`${name}.conditions must contain between 1 and 20 conditions`);
   }
   config.conditions.forEach((condition) => validateCondition(condition, fields, name, options));
+  if (match === "custom") validateConditionLogic(config.conditionLogic, config.conditions.length, name);
 }
 
 function matches(condition, fields, record, previousRecord) {
@@ -180,9 +233,9 @@ export function evaluateCondition(config, fields, record, previousRecord = null)
   if (!config) return true;
   validateConditionConfig(config, fields, "Condition");
   const results = config.conditions.map((condition) => matches(condition, fields, record, previousRecord));
-  return (config.match || "all") === "any"
-    ? results.some(Boolean)
-    : results.every(Boolean);
+  const match = config.match || "all";
+  if (match === "custom") return evaluateConditionLogic(config.conditionLogic, results, "Condition");
+  return match === "any" ? results.some(Boolean) : results.every(Boolean);
 }
 
 export function evaluateFieldCondition(field, key, fields, record) {
