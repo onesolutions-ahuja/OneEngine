@@ -21,6 +21,8 @@ jobs:
           set -euo pipefail
           PAGE="https://onesolutions-ahuja.github.io/OneEngine/"
           curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "$PAGE" -o /tmp/pages.html
+          DEPLOYED_SHA="$(curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "${PAGE}deploy-sha.txt")"
+          test "$DEPLOYED_SHA" = "$GITHUB_SHA"
           grep -q '/OneEngine/assets/' /tmp/pages.html
           ASSET="$(grep -oE '/OneEngine/assets/[^"]+\.js' /tmp/pages.html | head -1)"
           test -n "$ASSET"
