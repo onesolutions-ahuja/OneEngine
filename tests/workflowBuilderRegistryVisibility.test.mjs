@@ -10,6 +10,7 @@ import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCata
 
 const REMOVED_PROVIDER_TEST_ADAPTERS = [
   "OPEN_FOOD_FACTS_TEST_CONNECTION",
+  "OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
   "GO_UPC_TEST_CONNECTION",
   "QUICKBOOKS_TEST_CONNECTION",
   "SHOPIFY_TEST_CONNECTION",
@@ -19,7 +20,6 @@ const INTERNAL = [
   "PAYMENT_START",
   "PAYMENT_CANCEL",
   "GLOBAL_PRODUCT_LOOKUP_BARCODE",
-  "OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
   "GO_UPC_LOOKUP_PRODUCT",
   "ONLINE_ORDER_TRANSITION",
   "SEND_PASSWORD_RESET_EMAIL",
@@ -37,7 +37,7 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
   const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
   const builder = new Set(getWorkflowBuilderActionRegistry().map((item) => item.key));
 
-  for (const key of ["CREATE_RECORD","UPDATE_RECORD","GET_RECORDS","SEND_COMMUNICATION","CALL_CONNECTOR","HTTP_REQUEST","RUN_SUBFLOW"]) {
+  for (const key of ["CREATE_RECORD","UPDATE_RECORD","GET_RECORDS","SEND_COMMUNICATION","CALL_CONNECTOR","HTTP_REQUEST","ONE_HTTP_REQUEST","RUN_SUBFLOW"]) {
     assert.ok(builder.has(key), key + " must remain available to Flow Builder");
   }
 

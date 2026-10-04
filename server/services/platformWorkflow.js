@@ -29,6 +29,7 @@ import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
+import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 import {
   holdAppointmentSlot,
   releaseAppointmentHold,
@@ -1359,18 +1360,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["global_product.view"],
     executor: (context) => executeGlobalProductLookupAction(context),
-  },
-  {
-    key: "OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Open Food Facts - Lookup Product",
-    description: "Look up a barcode using the installed Open Food Facts connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "open_food_facts"),
   },
   {
     key: "GO_UPC_LOOKUP_PRODUCT",
@@ -3479,6 +3468,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["integrations.execute"],
     executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
   },
+  oneHttpRequestDefinition(),
   {
     key: "HTTP_REQUEST",
     displayName: "HTTP Request",

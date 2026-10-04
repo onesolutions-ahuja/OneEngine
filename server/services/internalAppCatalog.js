@@ -1071,7 +1071,7 @@ const CATALOG = [
         fieldMappings: { barcode: "code", name: "product_name", brand: "brands", category: "categories", quantity: "quantity", imageUrl: "image_front_url", country: "countries" },
         searchEndpoint: "/cgi/search.pl",
         scope: "worldwide",
-        actions: ["OPEN_FOOD_FACTS_LOOKUP_PRODUCT", "OPEN_FOOD_FACTS_SEARCH_PRODUCTS", "CONNECTOR_TEST_CONNECTION"],
+        actions: ["OPEN_FOOD_FACTS_SEARCH_PRODUCTS", "CONNECTOR_TEST_CONNECTION"],
       },
     },
   },
