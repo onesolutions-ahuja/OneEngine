@@ -272,8 +272,9 @@
 @media(max-width:760px){.gptb-transform-visual-map{grid-template-columns:1fr}.gptb-transform-connections{padding-top:0}}
 
 .gptb-test-assertions{display:grid;gap:6px}
-.gptb-test-assertions>div{display:grid;grid-template-columns:20px minmax(0,1.2fr) minmax(130px,.8fr) minmax(0,1fr) 28px;gap:6px;align-items:center}
+.gptb-test-assertions>div{display:grid;grid-template-columns:20px minmax(110px,.8fr) minmax(0,1.2fr) minmax(110px,.7fr) minmax(0,1fr) 28px;gap:6px;align-items:center}
 .gptb-test-assertions>div>span{font-size:8px;color:#706e6b;text-align:center}
+.gptb-test-assertions .gptb-assertion-target{padding:6px;border:1px solid #dddbda;border-radius:4px;background:#f7f7f7;color:#444;text-align:left}
 .gptb-test-assertions>div>button{display:grid;place-items:center;border:0;background:transparent;color:#706e6b}
 .gptb-expected-results{display:grid;gap:6px;margin-top:10px}.gptb-expected-results h4{margin:0;font-size:9px}
 .gptb-expected-results details{border:1px solid #dddbda;border-radius:4px;background:#fff;overflow:hidden}
