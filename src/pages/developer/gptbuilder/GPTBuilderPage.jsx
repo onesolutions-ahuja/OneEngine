@@ -336,8 +336,8 @@ function Toolbox({ layout, onClose, flowType, startConfig }) {
   </aside>
 }
 
-function FlowShell({ flow, onNew }) {
-  const templateAction = flow.templateRule?.action || {}
+function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
+  const templateAction = initialRule?.action || flow.templateRule?.action || {}
   const [layout, setLayout] = useState(templateAction.layout?.mode === 'FREE_FORM' ? 'free' : 'auto')
   const [toolboxOpen, setToolboxOpen] = useState(true)
   const [selecting, setSelecting] = useState(false)
@@ -348,14 +348,15 @@ function FlowShell({ flow, onNew }) {
   const [availableFlows, setAvailableFlows] = useState([])
   const [startConfig, setStartConfig] = useState(() => templateAction.start ? structuredClone(templateAction.start) : initialStart(flow.key))
   const [startDraft, setStartDraft] = useState(() => templateAction.start ? structuredClone(templateAction.start) : initialStart(flow.key))
-  const [startOpen, setStartOpen] = useState(flow.startNeedsConfiguration && !flow.templateRule)
-  const [flowProps, setFlowProps] = useState({ label: '', apiName: '', description: '', interviewLabel: '', runContext: defaultRunContextForFlowType(flow.key), apiVersion: '68.0', triggerOrder: '', showProgress: flow.key === 'screen', progressIndicatorType: 'simple_top', sourceTemplateId: '', originalFlowId: '', isTemplate: false, overridable: false })
+  const [startOpen, setStartOpen] = useState(!initialRule && flow.startNeedsConfiguration && !flow.templateRule)
+  const [flowProps, setFlowProps] = useState(() => ({ label: initialRule?.name || '', apiName: templateAction.apiName || '', description: templateAction.description || '', interviewLabel: templateAction.interviewLabel || '', runContext: templateAction.runContext || defaultRunContextForFlowType(flow.key), apiVersion: templateAction.apiVersion || '68.0', triggerOrder: templateAction.triggerOrder ?? '', showProgress: templateAction.showProgress ?? (flow.key === 'screen'), progressIndicatorType: templateAction.progressIndicatorType || 'simple_top', sourceTemplateId: templateAction.sourceTemplateId || '', originalFlowId: templateAction.originalFlowId || '', isTemplate: templateAction.isTemplate === true, overridable: templateAction.overridable === true }))
   const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
-  const [workflowId, setWorkflowId] = useState('')
+  const [workflowId, setWorkflowId] = useState(() => String(initialRule?.id || ''))
   const [saving, setSaving] = useState(false)
-  const [lastSavedAt, setLastSavedAt] = useState('')
-  const [dirty, setDirty] = useState(true)
+  const [lastSavedAt, setLastSavedAt] = useState(() => initialRule?.updated_at || initialRule?.created_at || '')
+  const [dirty, setDirty] = useState(() => !initialRule)
+  const [activeStatus, setActiveStatus] = useState(() => initialRule?.active === true || initialRule?.lifecycle_status === 'ACTIVE')
   const [message, setMessage] = useState('')
   const [saveError, setSaveError] = useState('')
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
@@ -540,7 +541,8 @@ function FlowShell({ flow, onNew }) {
         body: JSON.stringify(payload),
       })
       const saved = response?.data || {}
-      if (saved.id) setWorkflowId(String(saved.id))
+      if (saved.id) { setWorkflowId(String(saved.id)); onWorkflowSaved?.(String(saved.id)) }
+      if (saved.active !== undefined || saved.lifecycle_status) setActiveStatus(saved.active === true || saved.lifecycle_status === 'ACTIVE')
       const nextProps = forceNewFlow
         ? { ...props, label: payload.name, apiName: payload.action.apiName, description: payload.action.description, originalFlowId: workflowId || props.originalFlowId || '' }
         : props
@@ -556,6 +558,28 @@ function FlowShell({ flow, onNew }) {
       setSaveError(error?.message || 'Unable to save flow')
       if (workflowId) setPropertiesOpen(false)
       return null
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const activateFlow = async () => {
+    if (!workflowId || dirty || issues.some((issue) => issue.level === 'error')) return
+    setSaving(true); setSaveError(''); setMessage('')
+    try {
+      const payload = { ...buildPayload(flowProps), active: true, lifecycleStatus: 'ACTIVE' }
+      const response = await apiRequest(`/api/platform/rules/${encodeURIComponent(workflowId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      })
+      const activated = response?.data || {}
+      setActiveStatus(activated.active === true || activated.lifecycle_status === 'ACTIVE')
+      setLastSavedAt(new Date().toISOString())
+      setDirty(false)
+      setMessage('Flow activated.')
+      if (activated.id) onWorkflowSaved?.(String(activated.id))
+    } catch (error) {
+      setSaveError(error?.message || 'Unable to activate flow')
     } finally {
       setSaving(false)
     }
@@ -824,7 +848,7 @@ function FlowShell({ flow, onNew }) {
   return <section className="gptb-builder" aria-label="GPT Builder workspace">
     <header className="gptb-buttonbar">
       <div className="gptb-brand"><span className="gptb-brand-icon"><Workflow size={19}/></span><span><strong>Flow Builder</strong><small>{flowName}</small></span></div>
-      <div className="gptb-status"><span className="gptb-status-dot"/>Inactive <i>·</i> {lastSavedAt ? (dirty ? 'Unsaved changes' : 'Saved') : 'Never saved'}</div>
+      <div className="gptb-status"><span className="gptb-status-dot"/>{activeStatus ? 'Active' : 'Inactive'} <i>·</i> {lastSavedAt ? (dirty ? 'Unsaved changes' : 'Saved') : 'Never saved'}</div>
       <div className="gptb-toolbar" role="toolbar" aria-label="Flow Builder controls">
         <button className={toolboxOpen ? 'is-on' : ''} aria-label={toolboxOpen ? 'Hide Toolbox' : 'Show Toolbox'} onClick={() => setToolboxOpen((value) => !value)}><LayoutPanelLeft size={16}/></button>
         {layout === 'auto' ? <button className={selecting ? 'is-on' : ''} aria-label="Select Elements" onClick={() => { setSelecting((value) => !value); setSelectedElementIds([]); setConnectMode(false) }}><Copy size={16}/></button> : null}
@@ -840,7 +864,7 @@ function FlowShell({ flow, onNew }) {
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
         {editHistorySupported ? <button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button> : null}
-        <button className="gptb-text-tool is-brand" disabled={!workflowId || dirty || issues.some((issue) => issue.level === 'error')}>Activate</button>
+        <button className="gptb-text-tool is-brand" disabled={saving || !workflowId || dirty || issues.some((issue) => issue.level === 'error')} onClick={() => void activateFlow()}>Activate</button>
       </div>
     </header>
     {message ? <div className="gptb-toast is-success">{message}<button aria-label="Dismiss message" onClick={() => setMessage('')}><X size={13}/></button></div> : null}
@@ -937,8 +961,51 @@ function FlowShell({ flow, onNew }) {
   </section>
 }
 
-export default function GPTBuilderPage() {
-  const [newOpen, setNewOpen] = useState(true)
+export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen }) {
+  const [newOpen, setNewOpen] = useState(() => !initialWorkflowId)
   const [flow, setFlow] = useState(null)
-  return <section className="gptb-root" aria-label="GPT Builder">{flow ? <FlowShell key={flow.key} flow={flow} onNew={() => setNewOpen(true)}/> : <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1><p>Create a Salesforce-style automation in the isolated GPT Builder workspace.</p><button className="gptb-button is-brand" onClick={() => setNewOpen(true)}><Plus size={15}/> New Automation</button></main>}{newOpen ? <GPTBuilderNewAutomation flowTypes={FLOW_TYPES} onCreate={(definition) => { setFlow(definition); setNewOpen(false) }} onClose={() => setNewOpen(false)}/> : null}</section>
+  const [initialRule, setInitialRule] = useState(null)
+  const [loadingExisting, setLoadingExisting] = useState(Boolean(initialWorkflowId))
+  const [openError, setOpenError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    const id = String(initialWorkflowId || '')
+    if (!id) {
+      setInitialRule(null)
+      setLoadingExisting(false)
+      return () => { live = false }
+    }
+    setLoadingExisting(true)
+    setOpenError('')
+    apiRequest('/api/platform/rules')
+      .then((response) => {
+        if (!live) return
+        const rows = Array.isArray(response?.data) ? response.data : []
+        const saved = rows.find((item) => String(item?.id || '') === id)
+        if (!saved) throw new Error('Saved GPT Builder flow not found.')
+        if (saved.action?.gptBuilder !== true) throw new Error('This workflow was not created by GPT Builder.')
+        const definition = FLOW_TYPES.find((item) => item.key === saved.action?.flowType)
+        if (!definition) throw new Error('This GPT Builder flow type is not supported.')
+        setInitialRule(saved)
+        setFlow(definition)
+        setNewOpen(false)
+      })
+      .catch((error) => { if (live) { setInitialRule(null); setFlow(null); setOpenError(error?.message || 'Unable to reopen flow.') } })
+      .finally(() => { if (live) setLoadingExisting(false) })
+    return () => { live = false }
+  }, [initialWorkflowId])
+
+  const startNew = () => {
+    setInitialRule(null)
+    setNewOpen(true)
+    onWorkflowOpen?.('')
+  }
+
+  return <section className="gptb-root" aria-label="GPT Builder">
+    {loadingExisting ? <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1><p>Opening saved flow…</p></main>
+      : flow ? <FlowShell key={initialRule?.id || flow.key} flow={flow} initialRule={initialRule} onWorkflowSaved={onWorkflowOpen} onNew={startNew}/>
+      : <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1>{openError ? <p role="alert">{openError}</p> : <p>Create a Salesforce-style automation in the isolated GPT Builder workspace.</p>}<button className="gptb-button is-brand" onClick={() => setNewOpen(true)}><Plus size={15}/> New Automation</button></main>}
+    {newOpen ? <GPTBuilderNewAutomation flowTypes={FLOW_TYPES} onCreate={(definition) => { setInitialRule(null); setFlow(definition); setNewOpen(false); onWorkflowOpen?.('') }} onClose={() => setNewOpen(false)}/> : null}
+  </section>
 }
