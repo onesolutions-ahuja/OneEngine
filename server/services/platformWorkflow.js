@@ -269,33 +269,126 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
     executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_CANCEL" } }),
   },
   {
+    key: "PRINT",
+    displayName: "Print",
+    description: "Print metadata-selected content through an installed printer connector. Template, data, printer connection and copies are Flow metadata.",
+    schema: {
+      type: "object",
+      properties: {
+        connectorInstanceId: { type: "string", title: "Printer connection" },
+        capability: { type: "string", title: "Printer capability" },
+        templateKey: { type: "string", title: "Print template" },
+        templateId: { type: "string", title: "Print template id" },
+        data: { type: "object", title: "Print data" },
+        payload: { type: "object", title: "Print payload" },
+        copies: { type: "number", title: "Copies" },
+      },
+    },
+    validation: (action) => {
+      if (!action?.templateKey && !action?.templateId && !action?.template) {
+        throw new Error("Print requires a template");
+      }
+      const capability = String(action?.capability || "printer.print").trim();
+      if (!/^printer(?:\.[a-z0-9_-]+)*\.print$|^printer\.print$/i.test(capability)) {
+        throw new Error("Print requires a printer capability");
+      }
+      if (action?.copies != null && (!Number.isInteger(Number(action.copies)) || Number(action.copies) < 1 || Number(action.copies) > 20)) {
+        throw new Error("Print copies must be between 1 and 20");
+      }
+    },
+    async: true,
+    requiredPermissions: ["sale.invoice.reprint", "sale.create"],
+    executor: async (context) => {
+      const bindingContext = {
+        record: context.record,
+        previousRecord: context.previousRecord,
+        req: context.req,
+        object: context.object,
+        workflowVariables: context.workflowVariables,
+      };
+      const resolve = (value) => resolveConfiguredResource(value, bindingContext, { preserveMissing: false });
+      const capability = String(resolve(context.action?.capability) || "printer.print").trim();
+      const connectorInstanceId = resolve(context.action?.connectorInstanceId || context.action?.printerConnectionId || context.action?.connectionId) || null;
+      const templateKey = resolve(context.action?.templateKey || context.action?.template || context.action?.templateId);
+      const sourceData = resolve(context.action?.data ?? context.action?.payload) ?? context.record ?? null;
+      const copies = Number(resolve(context.action?.copies) || 1);
+      const payload = {
+        ...(sourceData && typeof sourceData === "object" && !Array.isArray(sourceData) ? sourceData : { data: sourceData }),
+        templateKey,
+        templateId: resolve(context.action?.templateId) || null,
+        copies,
+      };
+      return executeConnectorWorkflowAction({
+        ...context,
+        action: {
+          ...context.action,
+          key: "PRINT",
+          connectorInstanceId,
+          capability,
+          templateKey,
+          copies,
+          payload,
+        },
+        payload,
+      });
+    },
+  },
+  {
     key: "PRINT_RECEIPT",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Print - Receipt",
     description: "Print a receipt using the active printer connector on the assigned till.",
     validation: () => undefined,
     async: true,
     requiredPermissions: ["sale.invoice.reprint"],
     capability: "printer.print",
-    executor: async (context) => executeConnectorWorkflowAction({
-      ...context,
-      action: { ...context.action, key: "PRINT_RECEIPT" },
-      payload: context.action?.payload || {
-        saleId: context.record?.id || context.recordId || context.action?.inputs?.saleId || null,
-        receiptNumber: context.record?.receipt_number || context.record?.receiptNumber || null,
-        sale: context.record || null,
-        inputs: context.action?.inputs || {},
-      },
-    }),
+    executor: async (context) => {
+      const printer = getWorkflowActionDefinition("PRINT");
+      if (!printer?.executor) throw new Error("Generic Print action is unavailable");
+      return printer.executor({
+        ...context,
+        action: {
+          ...context.action,
+          key: "PRINT",
+          capability: context.action?.capability || "printer.print",
+          templateKey: context.action?.templateKey || "receipt",
+          data: context.action?.payload || {
+            saleId: context.record?.id || context.recordId || context.action?.inputs?.saleId || null,
+            receiptNumber: context.record?.receipt_number || context.record?.receiptNumber || null,
+            sale: context.record || null,
+            inputs: context.action?.inputs || {},
+          },
+        },
+      });
+    },
   },
   {
     key: "PRINT_KITCHEN_TICKET",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
     displayName: "Print - Kitchen Ticket",
     description: "Print a kitchen ticket using the active kitchen printer connector.",
     validation: () => undefined,
     async: true,
     requiredPermissions: ["sale.create"],
     capability: "printer.kitchen.print",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PRINT_KITCHEN_TICKET" } }),
+    executor: async (context) => {
+      const printer = getWorkflowActionDefinition("PRINT");
+      if (!printer?.executor) throw new Error("Generic Print action is unavailable");
+      return printer.executor({
+        ...context,
+        action: {
+          ...context.action,
+          key: "PRINT",
+          capability: context.action?.capability || "printer.kitchen.print",
+          templateKey: context.action?.templateKey || "kitchen_ticket",
+          data: context.action?.payload || context.record || {},
+        },
+      });
+    },
   },
   {
     key: "OPEN_CASH_DRAWER",
@@ -449,7 +542,9 @@ function permissionAllowsConnectorAction(user, actionKey) {
     .some((value) => value !== undefined && value !== null && value !== false);
   if (!hasUserIdentity) return true;
   const permissions = Array.isArray(user?.permissions) ? user.permissions : Array.isArray(user?.permissionCodes) ? user.permissionCodes : [];
-  const required = connectorActionPermission(actionKey);
+  const required = String(actionKey || "").toUpperCase() === "PRINT"
+    ? ["sale.invoice.reprint", "sale.create"]
+    : connectorActionPermission(actionKey);
   if (!required.length) return true;
   return required.some((permission) => permissions.includes(permission));
 }
@@ -468,7 +563,9 @@ export async function executeConnectorWorkflowAction({
 }) {
   const requestedKey = normalizeConnectorActionKey(action?.key || action?.actionKey || action?.type);
   if (!requestedKey) return { success: false, code: "INVALID_ACTION", message: "Connector workflow action requires a key" };
-  const capability = connectorActionCapability(requestedKey) || action?.capability || action?.requiredCapability || null;
+  const capability = requestedKey === "PRINT"
+    ? (action?.capability || action?.requiredCapability || "printer.print")
+    : (connectorActionCapability(requestedKey) || action?.capability || action?.requiredCapability || null);
   if (!capability) return { success: false, code: "UNSUPPORTED_ACTION", message: "This connector workflow action is not registered for this capability" };
   const requestedCapability = String(action?.capability || action?.requiredCapability || "").trim();
   if (requestedCapability && requestedCapability !== capability) {
