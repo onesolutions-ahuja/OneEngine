@@ -997,17 +997,28 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
       for (const value of changes) {
         for (const status of Array.isArray(value?.statuses) ? value.statuses : []) {
           if (!status?.id) continue;
-          await db(
+          const deliveryStatus = String(status.status || "UNKNOWN").toUpperCase();
+          const providerErrors = Array.isArray(status.errors)
+            ? status.errors.map((error) => ({ code: error?.code || null, title: error?.title || null }))
+            : [];
+          const updateResult = await db(
             `UPDATE whatsapp_messages
                 SET status=$1, metadata=metadata || $2::jsonb
               WHERE company_id=$3 AND provider_message_id=$4`,
             [
-              String(status.status || "UNKNOWN").toUpperCase(),
-              JSON.stringify({ statusTimestamp: status.timestamp || null }),
+              deliveryStatus,
+              JSON.stringify({ statusTimestamp: status.timestamp || null, providerErrors }),
               companyId,
               status.id,
             ]
           );
+          console.info("WhatsApp delivery status", {
+            companyId,
+            providerMessageId: status.id,
+            status: deliveryStatus,
+            trackedMessage: (updateResult.rowCount || 0) > 0,
+            errors: providerErrors,
+          });
         }
 
         const contacts = new Map(
