@@ -3486,18 +3486,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             "SELECT active,configuration FROM integrations WHERE company_id=$1 AND LOWER(provider) IN ('whatsapp','whatsapp_business') AND active=TRUE ORDER BY updated_at DESC LIMIT 1",
             [tenantId]
           );
-          const definition = await db(
-            "SELECT id FROM platform_connector_definitions WHERE connector_key='whatsapp' AND status='ACTIVE' LIMIT 1"
-          );
           const configuration = legacy.rows?.[0]?.configuration || {};
           const token = decryptSecret(configuration.access_token);
           const phoneNumberId = configuration.phone_number_id || null;
-          if (definition.rows?.[0]?.id && token && phoneNumberId) {
+          if (token && phoneNumberId) {
             await db(
               `INSERT INTO integration_connections
-                (company_id,name,provider_name,integration_type,base_url,connector_package_key,connector_definition_id,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by)
-               VALUES ($1,'WhatsApp Business Connection','whatsapp','communication','https://graph.facebook.com/v21.0','whatsapp',$2,$3::jsonb,'bearer',$4,TRUE,'CONNECTED',$5)`,
-              [tenantId, definition.rows[0].id, JSON.stringify({
+                (company_id,name,provider_name,integration_type,base_url,connector_package_key,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by)
+               VALUES ($1,'WhatsApp Business Connection','whatsapp','communication','https://graph.facebook.com/v21.0','whatsapp',$2::jsonb,'bearer',$3,TRUE,'CONNECTED',$4)`,
+              [tenantId, JSON.stringify({
                 phoneNumberId,
                 businessAccountId: configuration.business_account_id || null,
                 defaultCountryCode: configuration.default_country_code || null,
@@ -3508,7 +3505,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
         // WhatsApp is transport metadata, not a platform job/function. Execute
         // through the generic ONE_HTTP_REQUEST core using the tenant's stored
-        // connector definition, encrypted credentials and phone-number metadata.
+        // API connection metadata, encrypted credentials and phone-number metadata.
         const http = oneHttpRequestDefinition();
         const result = await http.executor({
           ...context,
