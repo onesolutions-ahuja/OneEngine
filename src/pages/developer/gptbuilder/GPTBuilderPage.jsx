@@ -28,6 +28,8 @@ import GPTBuilderCustomError, { customErrorRuntimeAction } from './GPTBuilderCus
 import GPTBuilderGroup from './GPTBuilderGroup'
 import GPTBuilderAction, { actionRuntimeAction } from './GPTBuilderAction'
 import GPTBuilderRunAgent, { runAgentRuntimeAction } from './GPTBuilderRunAgent'
+import GPTBuilderScreen, { screenRuntimeAction } from './GPTBuilderScreen'
+import GPTBuilderSubflow, { subflowRuntimeAction } from './GPTBuilderSubflow'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
@@ -839,6 +841,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (element.key === 'custom_error') return customErrorRuntimeAction(element)
         if (element.key === 'action') return actionRuntimeAction(element)
         if (element.key === 'run_agent') return runAgentRuntimeAction(element)
+        if (element.key === 'screen') return screenRuntimeAction(element)
+        if (element.key === 'subflow') return subflowRuntimeAction(element)
         return null
       }).filter(Boolean),
     },
@@ -1560,7 +1564,23 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                                             resources={resources}
                                             onConfiguredChange={setConfigured}
                                           />
-                                        : null}</GPTBuilderElementProperties> : null}
+                                        : activeElement.key === 'screen'
+                                          ? <GPTBuilderScreen
+                                              draft={draft}
+                                              updateConfig={updateConfig}
+                                              resources={resources}
+                                              onResourcesChange={(next) => { setResources(next); setDirty(true) }}
+                                              onConfiguredChange={setConfigured}
+                                            />
+                                          : activeElement.key === 'subflow'
+                                            ? <GPTBuilderSubflow
+                                                draft={draft}
+                                                updateConfig={updateConfig}
+                                                resources={resources}
+                                                currentFlowType={flow.key}
+                                                onConfiguredChange={setConfigured}
+                                              />
+                                            : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => {
