@@ -5751,6 +5751,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           workflowVersion: Number(workflow.draft_version || workflow.version || workflow.active_version || 1),
           trigger: executionMode,
           debugMode: rollbackMode,
+          debugWaitElementBehavior: executionMode === "TEST" && req.body?.debugWaitElementBehavior === true,
+          debugWaitPaths: req.body?.debugWaitPaths && typeof req.body.debugWaitPaths === "object" ? req.body.debugWaitPaths : {},
           workflowVariables,
         });
       } catch (error) {
