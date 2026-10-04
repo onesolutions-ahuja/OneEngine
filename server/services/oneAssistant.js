@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { publishPlatformEvent } from "./platformEvents.js";
 
 const HOLD_MINUTES_DEFAULT = 10;
@@ -462,66 +462,6 @@ export function calculateAppointmentPayment(service) {
 
 function hashBookingToken(token) {
   return createHash("sha256").update(String(token || "")).digest("hex");
-}
-
-export async function createAppointmentBookingCase(db, {
-  companyId, channel = "EMAIL", sourceMessageId = null, sender = null, recipient = null,
-  subject = null, body = null, customerId = null, state = {},
-} = {}) {
-  if (!companyId) throw new Error("companyId is required");
-  const normalizedChannel = String(channel || "EMAIL").toUpperCase();
-  if (!["EMAIL","SMS","WHATSAPP","WEB"].includes(normalizedChannel)) throw new Error("Unsupported booking channel");
-  if (sourceMessageId) {
-    const existing = await db(
-      `SELECT * FROM appointment_booking_cases
-        WHERE company_id=$1 AND channel=$2 AND source_message_id=$3 LIMIT 1`,
-      [companyId, normalizedChannel, sourceMessageId]
-    );
-    if (existing.rows[0]) return existing.rows[0];
-  }
-  const result = await db(
-    `INSERT INTO appointment_booking_cases
-      (company_id,channel,source_message_id,sender,recipient,subject,body,customer_id,state)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
-     RETURNING *`,
-    [companyId, normalizedChannel, sourceMessageId, sender, recipient, subject, body, customerId, JSON.stringify(state || {})]
-  );
-  const bookingCase = result.rows[0];
-  await publishPlatformEvent({
-    db,
-    companyId,
-    eventType: "appointment.booking_case_created",
-    payload: { bookingCaseId: bookingCase.id, channel: normalizedChannel, sender, subject, body },
-    idempotencyKey: `appointment-booking-case:${bookingCase.id}`,
-  });
-  return bookingCase;
-}
-
-export async function issueAppointmentPublicLink(db, {
-  companyId, bookingCaseId, purpose = "BOOK_SLOT", ttlMinutes = 15, publicBaseUrl = "",
-  metadata = {},
-} = {}) {
-  if (!companyId || !bookingCaseId) throw new Error("companyId and bookingCaseId are required");
-  const bookingCase = await db(
-    "SELECT id FROM appointment_booking_cases WHERE id=$1 AND company_id=$2 LIMIT 1",
-    [bookingCaseId, companyId]
-  );
-  if (!bookingCase.rows[0]) throw new Error("Appointment booking case not found");
-  const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + Math.max(5, Number(ttlMinutes) || 15) * 60000);
-  const result = await db(
-    `INSERT INTO appointment_public_links(company_id,booking_case_id,purpose,token_hash,expires_at,metadata)
-     VALUES($1,$2,$3,$4,$5,$6::jsonb) RETURNING id,booking_case_id,purpose,expires_at`,
-    [companyId, bookingCaseId, purpose, hashBookingToken(token), expiresAt.toISOString(), JSON.stringify(metadata || {})]
-  );
-  await db(
-    `UPDATE appointment_booking_cases
-        SET status=CASE WHEN status='NEW' THEN 'LINK_SENT' ELSE status END, updated_at=NOW()
-      WHERE id=$1 AND company_id=$2`,
-    [bookingCaseId, companyId]
-  );
-  const base = String(publicBaseUrl || "").replace(/\/$/, "");
-  return { ...result.rows[0], token, url: `${base}/assistant/book/${encodeURIComponent(token)}` };
 }
 
 export async function resolveAppointmentPublicLink(db, token, { purpose = null } = {}) {
