@@ -996,7 +996,7 @@ test('GPT Builder integrated Auto-Layout exposes insertion points between every 
   assert.match(page, /const addSlot = \(index\) =>/)
   assert.match(page, /Add element at position/)
   assert.match(page, /chooseElement\(element, 'auto', null, index\)/)
-  assert.match(page, /const target = autoElements\[insertIndex\] \|\| null/)
+  assert.match(page, /const target = topLevelAutoElements\[insertIndex\] \|\| null/)
 })
 
 test('GPT Builder integrated Loop preserves LAST_TO_FIRST ordering exactly once', async () => {
