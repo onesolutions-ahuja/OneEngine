@@ -4766,7 +4766,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw new Error("Run Agent structured output field names must be valid API names");
         if (names.has(name.toLowerCase())) throw new Error("Run Agent structured output field names must be unique");
         names.add(name.toLowerCase());
-        if (!["text","number","boolean","date","datetime"].includes(String(field?.dataType || ""))) throw new Error("Run Agent structured output field type is invalid");
+        if (!["text","number","boolean"].includes(String(field?.dataType || ""))) throw new Error("Run Agent structured output field type must be String, Number, or Boolean");
       }
     },
     async: true,
@@ -4812,8 +4812,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           const type = String(field.dataType || "text");
           if (value != null && type === "number") value = Number(value);
           if (value != null && type === "boolean") value = [true,1,"true","1"].includes(value);
-          if (value != null && ["date","datetime"].includes(type)) value = String(value);
           if (value != null && type === "text") value = String(value);
+          if (field.required === true && !present) throw new Error(`Run Agent required structured output "${name}" was not returned`);
           normalized[name] = value;
           normalized[`${name}_set`] = present;
         }
