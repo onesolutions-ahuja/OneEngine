@@ -42,7 +42,7 @@ export default function createSettingsRouter({
   const claimLegacyHardware = async (req) => {
     const deviceKey = deviceKeyFor(req)
     await db(
-      `UPDATE hardware_configurations
+      `UPDATE hardware_devices
           SET device_key=$1,updated_at=NOW()
         WHERE company_id=$2 AND store_id=$3 AND device_key='legacy-unassigned'`,
       [deviceKey, req.user.companyId, req.user.storeId]
@@ -1026,7 +1026,7 @@ export default function createSettingsRouter({
       const deviceKey=await claimLegacyHardware(req);
       const result=await db(
         `SELECT id,store_id,device_type,device_name,connection_type,connection_address,paper_width,is_default,active,last_test_result,last_tested_at
-           FROM hardware_configurations
+           FROM hardware_devices
           WHERE company_id=$1 AND store_id=$2 AND device_key=$3
           ORDER BY device_type`,
         [req.user.companyId,req.user.storeId,deviceKey]
@@ -1044,7 +1044,7 @@ export default function createSettingsRouter({
     try {
       const deviceKey=await claimLegacyHardware(req);
       const result=await db(
-        `INSERT INTO hardware_configurations (company_id,store_id,device_key,device_type,device_name,connection_type,connection_address,paper_width,is_default,active)
+        `INSERT INTO hardware_devices (company_id,store_id,device_key,device_type,device_name,connection_type,connection_address,paper_width,is_default,active)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (company_id,store_id,device_key,device_type)
          DO UPDATE SET device_name=$5,connection_type=$6,connection_address=$7,paper_width=$8,is_default=$9,active=$10,updated_at=NOW()
@@ -1065,8 +1065,8 @@ export default function createSettingsRouter({
     const message="Live hardware probe is unavailable for this connection type";
     try {
       const deviceKey=await claimLegacyHardware(req);
-      const result=await db("SELECT id FROM hardware_configurations WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND device_type=$4",[req.user.companyId,req.user.storeId,deviceKey,req.params.type]);
-      if(result.rows.length) await db("UPDATE hardware_configurations SET last_test_result=$1,last_tested_at=NOW() WHERE id=$2",[message,result.rows[0].id]);
+      const result=await db("SELECT id FROM hardware_devices WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND device_type=$4",[req.user.companyId,req.user.storeId,deviceKey,req.params.type]);
+      if(result.rows.length) await db("UPDATE hardware_devices SET last_test_result=$1,last_tested_at=NOW() WHERE id=$2",[message,result.rows[0].id]);
       res.json({success:true,data:{status:"CONFIGURED",live:false,message}});
     } catch(error) {
       console.error("Test hardware error:",error);
@@ -1080,7 +1080,7 @@ export default function createSettingsRouter({
       await claimSingleLegacyPaymentTerminal(req);
       const [hardwareResult,terminalResult]=await Promise.all([
         db(`SELECT id,device_type,device_name,connection_type,last_test_result,last_tested_at
-              FROM hardware_configurations
+              FROM hardware_devices
              WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND active=true
              ORDER BY device_type`,[req.user.companyId,req.user.storeId,deviceKey]),
         db(`SELECT * FROM payment_terminals
