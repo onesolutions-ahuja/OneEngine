@@ -62,10 +62,10 @@ function workflowResourceBinding(value) {
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const keys = Object.keys(value);
-  return typeof value.path === "string"
-    && value.path.trim() !== ""
+  const path = typeof value.path === "string" ? value.path.trim() : "";
+  return path !== ""
     && keys.every((key) => ["path", "fallback"].includes(key))
-    && /^(?:\$|steps\.|variables\.)/.test(value.path.trim());
+    && (/^(?:\$|steps\.|variables\.)/.test(path) || CONDITION_PATH.test(path));
 }
 
 function normalize(value, field) {
