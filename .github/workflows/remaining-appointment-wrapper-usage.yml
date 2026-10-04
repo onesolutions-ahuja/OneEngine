@@ -1,0 +1,57 @@
+name: Remaining Appointment Wrapper Usage Audit
+
+on:
+  push:
+    branches:
+      - audit/remaining-appointment-wrapper-usage-20261004
+    paths:
+      - ".github/workflows/remaining-appointment-wrapper-usage.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
+      ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
+      API_BASE: https://oneengine.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read production workflow metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ONEPOS_E2E_USERNAME"
+          test -n "$ONEPOS_E2E_PASSWORD"
+          PAYLOAD="$(jq -n --arg username "$ONEPOS_E2E_USERNAME" --arg password "$ONEPOS_E2E_PASSWORD" '{username:$username,password:$password,actingCompanyId:null}')"
+          LOGIN="$(curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors -H 'Content-Type: application/json' -d "$PAYLOAD" "$API_BASE/api/auth/login")"
+          TOKEN="$(printf '%s' "$LOGIN" | jq -r '.token // empty')"
+          test -n "$TOKEN"
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors -H "Authorization: Bearer $TOKEN" "$API_BASE/api/platform/rules" > /tmp/rules.json
+      - name: Report wrapper references
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const keys = ["SEND_APPOINTMENT_CONFIRMATION","CREATE_APPOINTMENT_BOOKING_CASE","ISSUE_APPOINTMENT_BOOKING_LINK","RUN_ASSISTANT_SUBFLOW","COMPLETE_APPOINTMENT_PAYMENT"];
+          const payload = JSON.parse(fs.readFileSync("/tmp/rules.json","utf8"));
+          const rows = Array.isArray(payload?.data) ? payload.data : [];
+          const report = {};
+          for (const key of keys) {
+            const refs = rows.filter((row) => JSON.stringify(row?.action || {}).includes('"' + key + '"'));
+            report[key] = {
+              total: refs.length,
+              generated: refs.filter((row) => row?.action?.systemGenerated === true).length,
+              custom: refs.filter((row) => row?.action?.systemGenerated !== true).map((row) => ({
+                id: row.id,
+                name: row.name,
+                active: row.active,
+                lifecycle: row.lifecycle_status,
+              })),
+            };
+          }
+          console.log("RULE_ROWS=" + rows.length);
+          console.log("WRAPPER_REFERENCES=" + JSON.stringify(report));
+          NODE
