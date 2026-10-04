@@ -682,16 +682,7 @@ function FlowShell({ flow, onNew }) {
   }
 
   const saveHistoryAsNewVersion = async (entry) => {
-    if (!entry?.definition) return
-    definitionToBuilder(entry.definition)
-    setEditHistoryOpen(false)
-    setDirty(true)
-    await save({
-      ...flowProps,
-      label: entry.definition?.name || flowProps.label,
-      apiName: entry.definition?.action?.apiName || flowProps.apiName,
-      description: entry.definition?.action?.description || flowProps.description,
-    }, { forceNewVersion: true })
+    await restoreHistoryEntry(entry)
   }
 
   const saveHistoryAsNewFlow = (entry) => {
