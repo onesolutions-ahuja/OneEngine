@@ -256,3 +256,100 @@
 .b2-screen-section{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px;border:1px dashed #c9c9c9;border-radius:5px;background:#fafafa}
 .b2-screen-section span{min-width:74px;padding:5px;border:1px solid #e5e5e5;border-radius:4px;background:#fff;font-size:9px}
 .b2-screen-section small{font-size:9px;color:#706e6b}
+
+
+/* Phase 3: Salesforce Flow Builder / Cosmos density and interaction polish */
+.b2-shell{
+  min-height:0;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:12px;
+  background:#f3f3f3;
+}
+.b2-top{height:50px;flex-basis:50px;padding:0 12px;gap:10px}
+.b2-title{min-width:170px;max-width:280px;gap:8px}
+.b2-title>span{min-width:0}
+.b2-title b{font-size:14px;line-height:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b2-title small{font-size:9px;line-height:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:capitalize}
+.b2-buttonbar{display:flex;align-items:center;gap:2px;min-width:0}
+.b2-buttonbar>button{width:30px!important;padding:0!important;justify-content:center}
+.b2-layout-select{height:30px!important;min-width:102px;font-size:10px}
+.b2-top-actions{gap:5px;align-items:center}
+.b2-top button,.b2-modal footer button{height:30px;padding:0 10px;font-size:11px}
+.b2-save-chevron{width:28px!important;padding:0!important}
+
+.b2-workspace{grid-template-columns:292px minmax(430px,1fr) 360px}
+.b2-tabs button{height:40px;font-size:11px}
+.b2-search,.b2-selector-search,.b2-resource-search{margin:10px 12px}
+.b2-search input,.b2-selector-search input,.b2-resource-search input{height:30px;font-size:11px}
+.b2-palette-group h4,.b2-selector h4{padding:8px 12px 5px;font-size:10px;letter-spacing:.01em}
+.b2-palette-group>button{min-height:46px;gap:8px;padding:7px 12px}
+.b2-palette-group b{font-size:11px;line-height:14px}
+.b2-palette-group small{font-size:9px;line-height:12px;margin-top:1px}
+.b2-palette-icon,.b2-node-icon{width:26px;height:26px;border-radius:5px}
+.b2-palette-icon.is-data,.b2-node-icon.is-data{background:#9050e9}
+.b2-palette-icon.is-logic,.b2-node-icon.is-logic{background:#fe9339;color:#181818}
+.b2-palette-icon.is-action,.b2-node-icon.is-action{background:#1b96ff}
+.b2-palette-icon.is-interaction,.b2-node-icon.is-interaction{background:#0b827c}
+.b2-palette-group>button[draggable="true"]{cursor:grab}
+.b2-palette-group>button[draggable="true"]:active{cursor:grabbing}
+
+.b2-canvas{background-size:14px 14px}
+.b2-flow{width:330px;margin:28px auto 90px}
+.b2-line{height:22px;background:#8e8e8e}
+.b2-add{width:22px;height:22px}
+.b2-start{
+  width:190px;min-height:46px;padding:6px 9px;
+  display:grid;grid-template-columns:28px 1fr;align-items:center;gap:7px;
+  border:1px solid #2e844a;border-radius:23px;
+}
+.b2-start-icon{width:26px;height:26px;border-radius:50%;background:#2e844a;color:#fff;display:grid;place-items:center}
+.b2-start-copy{display:grid;min-width:0;text-align:left}
+.b2-start-copy b{font-size:11px;line-height:14px}
+.b2-start-copy small{font-size:9px;line-height:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#706e6b}
+.b2-node{
+  width:238px;min-height:50px;
+  grid-template-columns:32px minmax(0,1fr) 20px;
+  padding:5px 7px;border-radius:5px;box-shadow:0 1px 1px rgba(0,0,0,.08)
+}
+.b2-node.is-selected{padding:4px 6px}
+.b2-node b{font-size:11px;line-height:14px}
+.b2-node small{font-size:9px;line-height:12px}
+.b2-node>span:nth-child(2){min-width:0}
+.b2-node>span:nth-child(2)>b,.b2-node>span:nth-child(2)>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b2-end{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px;color:#444}
+.b2-end-icon{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#ba0517;color:#fff;font-size:7px;line-height:1}
+.b2-path-summary{width:286px}
+.b2-group-header{width:270px}
+
+.b2-properties>header{height:50px;padding:0 12px}
+.b2-properties>header b{font-size:12px}
+.b2-properties>header small{font-size:9px}
+.b2-form{padding:12px;gap:11px}
+.b2-form>label{gap:4px;font-size:10px;font-weight:600}
+.b2-form input,.b2-form select{height:32px}
+.b2-form input,.b2-form select,.b2-form textarea{padding:6px 8px;font-size:11px}
+.b2-combobox{height:32px;font-size:11px}
+.b2-start-panel{top:50px;right:360px;width:390px}
+.b2-start-panel>header,.b2-drawer>header{height:50px}
+.b2-drawer{top:50px!important}
+.b2-selector{top:78px;width:min(680px,78vw);max-height:76vh}
+.b2-selector header,.b2-modal header{padding:12px 14px}
+.b2-selector h3,.b2-modal h3{font-size:14px}
+.b2-selector-body section button{min-height:46px;padding:8px}
+.b2-selector-body b{font-size:11px}.b2-selector-body small{font-size:9px;line-height:12px}
+
+.b2-rf-start{min-width:112px;min-height:38px;border-width:1px;border-radius:20px;font-size:10px}
+.b2-rf-end{min-width:70px;min-height:32px;border:0;background:transparent;gap:5px;font-size:9px}
+.b2-rf-end span{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:#ba0517;color:#fff;font-size:6px}
+.b2-rf-node{font-family:inherit}
+.b2-rf-node .b2-rf-title b{font-size:11px}.b2-rf-node .b2-rf-title small{font-size:9px}
+
+.b2-node:focus-visible,.b2-add:focus-visible,.b2-palette-group>button:focus-visible,
+.b2-selector-body button:focus-visible,.b2-manager-row:focus-visible,.b2-tabs button:focus-visible{
+  outline:2px solid #0b5cab;outline-offset:1px;
+}
+@media(max-width:1250px){
+  .b2-workspace{grid-template-columns:260px minmax(390px,1fr) 330px}
+  .b2-workspace.toolbox-closed{grid-template-columns:minmax(390px,1fr) 330px}
+  .b2-start-panel{right:330px;width:380px}
+}
