@@ -290,7 +290,7 @@ test('GPT Builder recheck matches Salesforce Save As and Edit History toolbar be
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const history = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderSaveHistory.jsx', import.meta.url), 'utf8')
   assert.match(page, /<GPTBuilderSaveAsMenu/)
-  assert.match(page, /Save as New Version/)
+  assert.match(history, /Save as New Version/)
   assert.match(history, /Save as New Flow/)
   assert.match(page, /aria-label="Edit History"/)
   assert.match(page, /\['autolaunched','schedule','platform_event'\]\.includes\(flow\.key\)/)
