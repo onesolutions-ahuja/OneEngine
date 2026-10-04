@@ -3198,6 +3198,78 @@ async function startServer() {
               const run = runResult.rows[0];
               if (!run) throw Object.assign(new Error("Waiting workflow run no longer exists"), { retryable: false });
 
+              if (payload.waitConfigurationId && String(run.status || "").toUpperCase() !== "WAITING") {
+                return { status: "COMPLETED", resumed: false, ignored: true, reason: "wait_already_resumed" };
+              }
+
+              if (payload.platformEventType) {
+                const since = payload.waitingStartedAt ? new Date(payload.waitingStartedAt) : new Date(run.updated_at || run.created_at || Date.now());
+                const safeSince = Number.isNaN(since.getTime()) ? new Date(Date.now() - 86400000) : since;
+                const events = await db(
+                  `SELECT id,event_type,payload,created_at
+                     FROM platform_events
+                    WHERE company_id=$1 AND event_type=$2 AND created_at >= $3
+                    ORDER BY created_at,id
+                    LIMIT 100`,
+                  [job.company_id, String(payload.platformEventType), safeSince]
+                );
+                const getEventPath = (value, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
+                const compareEventValue = (left, operator, right) => {
+                  const op = String(operator || "equals");
+                  if (op === "equals") return left === right || String(left ?? "") === String(right ?? "");
+                  if (op === "not_equals") return !(left === right || String(left ?? "") === String(right ?? ""));
+                  if (op === "contains") return String(left ?? "").includes(String(right ?? ""));
+                  if (op === "starts_with") return String(left ?? "").startsWith(String(right ?? ""));
+                  if (op === "ends_with") return String(left ?? "").endsWith(String(right ?? ""));
+                  if (op === "is_null") return left == null || left === "";
+                  if (op === "is_not_null") return !(left == null || left === "");
+                  const a = Number(left), b = Number(right);
+                  if (op === "greater_than") return Number.isFinite(a) && Number.isFinite(b) && a > b;
+                  if (op === "greater_than_or_equal") return Number.isFinite(a) && Number.isFinite(b) && a >= b;
+                  if (op === "less_than") return Number.isFinite(a) && Number.isFinite(b) && a < b;
+                  if (op === "less_than_or_equal") return Number.isFinite(a) && Number.isFinite(b) && a <= b;
+                  return false;
+                };
+                const filters = Array.isArray(payload.platformEventConditions) ? payload.platformEventConditions : [];
+                const matchedEvent = (events.rows || []).find((event) => filters.every((filter) => compareEventValue(
+                  getEventPath(event.payload || {}, filter.field),
+                  filter.operator,
+                  filter.value
+                )));
+                if (!matchedEvent) {
+                  const pollSeconds = Math.max(30, Math.min(86400, Number(payload.pollSeconds || 60)));
+                  await db(
+                    "UPDATE platform_action_jobs SET status='PENDING',next_attempt_at=NOW() + ($2 * INTERVAL '1 second'),updated_at=NOW() WHERE id=$1 AND status='RUNNING'",
+                    [job.id, pollSeconds]
+                  );
+                  return { status: "WAITING", deferred: true, platformEventMatched: false, nextCheckSeconds: pollSeconds };
+                }
+                if (payload.stepRunId) {
+                  await db(
+                    "UPDATE platform_workflow_step_runs SET metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND run_id=$3",
+                    [JSON.stringify({
+                      waitConfigurationId: payload.waitConfigurationId || null,
+                      waitConfigurationLabel: payload.waitConfigurationLabel || null,
+                      platformEventId: matchedEvent.id,
+                      platformEventType: matchedEvent.event_type,
+                      waitResumedAt: new Date().toISOString(),
+                    }), payload.stepRunId, run.id]
+                  );
+                }
+              }
+
+              if (payload.waitConfigurationId) {
+                await db(
+                  `UPDATE platform_action_jobs
+                      SET status='COMPLETED',completed_at=NOW(),updated_at=NOW()
+                    WHERE company_id=$1 AND kind='WAIT' AND id<>$2
+                      AND status='PENDING'
+                      AND payload->>'runId'=$3
+                      AND payload ? 'waitConfigurationId'`,
+                  [job.company_id, job.id, String(run.id)]
+                );
+              }
+
               if (payload.waitCondition) {
                 let waitRecord = {};
                 let waitFields = [];
