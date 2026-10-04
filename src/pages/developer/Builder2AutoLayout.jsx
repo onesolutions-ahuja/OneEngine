@@ -3,6 +3,30 @@ import { GitBranch, Database, Plus, Zap } from 'lucide-react'
 const BRANCH_MIN_WIDTH = 244
 const BRANCH_GAP = 28
 
+function splitSharedSuffix(paths = []) {
+  const populated = paths.filter(path => Array.isArray(path.steps) && path.steps.length)
+  if (populated.length < 2) return { paths: paths.map(path => ({ ...path, visibleSteps: path.steps || [] })), sharedSteps: [] }
+
+  const shortest = Math.min(...populated.map(path => path.steps.length))
+  let suffixLength = 0
+  for (let offset = 1; offset <= shortest; offset += 1) {
+    const candidate = populated[0].steps[populated[0].steps.length - offset]
+    if (!populated.every(path => path.steps[path.steps.length - offset] === candidate)) break
+    suffixLength = offset
+  }
+
+  if (!suffixLength) return { paths: paths.map(path => ({ ...path, visibleSteps: path.steps || [] })), sharedSteps: [] }
+
+  const sharedSteps = populated[0].steps.slice(populated[0].steps.length - suffixLength)
+  return {
+    paths: paths.map(path => ({
+      ...path,
+      visibleSteps: path.steps?.length ? path.steps.slice(0, Math.max(0, path.steps.length - suffixLength)) : [],
+    })),
+    sharedSteps,
+  }
+}
+
 export function decisionPaths(node) {
   if (node.type === 'ACTION') {
     try {
@@ -27,8 +51,13 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
     if (node.groupId && groups.find(group => group.id === node.groupId)?.collapsed) return BRANCH_MIN_WIDTH
     const paths = decisionPaths(node)
     if (!paths.length || collapsed[id]) return BRANCH_MIN_WIDTH
-    const widths = paths.map(path => pathTreeWidth(path, [...ancestors, id]))
-    return Math.max(BRANCH_MIN_WIDTH, widths.reduce((sum, width) => sum + width, 0) + BRANCH_GAP * Math.max(0, widths.length - 1))
+    const split = splitSharedSuffix(paths)
+    const widths = split.paths.map(path => pathTreeWidth({ ...path, steps: path.visibleSteps }, [...ancestors, id]))
+    const branchWidth = Math.max(BRANCH_MIN_WIDTH, widths.reduce((sum, width) => sum + width, 0) + BRANCH_GAP * Math.max(0, widths.length - 1))
+    const sharedWidth = split.sharedSteps.length
+      ? pathTreeWidth({ id: 'shared', label: 'Shared continuation', steps: split.sharedSteps }, [...ancestors, id])
+      : BRANCH_MIN_WIDTH
+    return Math.max(branchWidth, sharedWidth)
   }
 
   function pathTreeWidth(path, ancestors = []) {
@@ -43,7 +72,10 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
     if (expanded.has(id) || ancestors.includes(id)) return <button key={id} className="b2-path-reference" onClick={() => onSelect(node)}>Go to {node.label}</button>
     expanded.add(id)
     const paths = decisionPaths(node)
-    const pathWidths = paths.map(path => pathTreeWidth(path, [...ancestors, id]))
+    const split = splitSharedSuffix(paths)
+    const displayPaths = split.paths
+    const sharedSteps = split.sharedSteps
+    const pathWidths = displayPaths.map(path => pathTreeWidth({ ...path, steps: path.visibleSteps }, [...ancestors, id]))
     const totalBranchWidth = Math.max(
       BRANCH_MIN_WIDTH,
       pathWidths.reduce((sum, width) => sum + width, 0) + BRANCH_GAP * Math.max(0, pathWidths.length - 1),
@@ -66,12 +98,19 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
           <strong>{path.label}</strong>
           <small>{path.steps.length ? `${path.steps.length} ${path.steps.length === 1 ? 'step' : 'steps'}` : 'End'}</small>
         </div>)}
-      </div> : <div className="b2-decision-paths" style={branchStyle}>{paths.map((path, index) => <section key={path.id} className={`b2-decision-path ${path.id === 'default' ? 'is-default' : ''} ${path.id === 'fault' ? 'is-fault' : ''}`} style={{ width: `${pathWidths[index] || BRANCH_MIN_WIDTH}px` }}>
-        <strong>{path.label}</strong><div className="b2-line"/>
-        {path.steps.map(step => renderNode(step, [...ancestors, id]))}
-        {path.id !== 'fault' ? <button className="b2-add" aria-label={`Add element to ${node.label}: ${path.label}`} onClick={() => onAdd({ nodeId: id, outcomeId: path.id })}><Plus size={14}/></button> : null}
-        <small>{path.steps.length ? 'Path complete' : 'End'}</small>
-      </section>)}</div>) : null}
+      </div> : <>
+        <div className="b2-decision-paths" style={branchStyle}>{displayPaths.map((path, index) => <section key={path.id} className={`b2-decision-path ${path.id === 'default' ? 'is-default' : ''} ${path.id === 'fault' ? 'is-fault' : ''}`} style={{ width: `${pathWidths[index] || BRANCH_MIN_WIDTH}px` }}>
+          <strong>{path.label}</strong><div className="b2-line"/>
+          {(path.visibleSteps || []).map(step => renderNode(step, [...ancestors, id]))}
+          {path.id !== 'fault' ? <button className="b2-add" aria-label={`Add element to ${node.label}: ${path.label}`} onClick={() => onAdd({ nodeId: id, outcomeId: path.id })}><Plus size={14}/></button> : null}
+          <small>{sharedSteps.length && path.steps.length ? 'Continues below' : path.steps.length ? 'Path complete' : 'End'}</small>
+        </section>)}</div>
+        {sharedSteps.length ? <div className="b2-shared-continuation">
+          <span>Shared continuation</span>
+          <div className="b2-line"/>
+          {sharedSteps.map(step => renderNode(step, [...ancestors, id]))}
+        </div> : null}
+      </>) : null}
     </div>
   }
   return <div className="b2-flow" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}>
