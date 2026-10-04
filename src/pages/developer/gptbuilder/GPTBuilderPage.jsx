@@ -452,6 +452,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [freeSelectedIds, setFreeSelectedIds] = useState([])
   const [freeConnectorDraft, setFreeConnectorDraft] = useState(null)
   const canvasRef = useRef(null)
+  const toolbarRef = useRef(null)
+  const toolboxFocusRef = useRef(null)
+  const shortcutSequenceRef = useRef('')
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false)
+  const [descriptionPopup, setDescriptionPopup] = useState(null)
   const [copiedElements, setCopiedElements] = useState([])
   const [connectMode, setConnectMode] = useState(false)
   const [goToConnections, setGoToConnections] = useState(() => Array.isArray(templateAction.goToConnections) ? structuredClone(templateAction.goToConnections) : [])
@@ -826,6 +831,34 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setFreeSelectedIds([])
     setDirty(true)
   }
+  const cutSelectedAutoElements = () => {
+    if (!selectedElementIds.length) return
+    const removed = new Set(selectedElementIds)
+    setCopiedElements(JSON.parse(JSON.stringify(elements.filter((element) => removed.has(element.id)))))
+    setElements((current) => current.filter((element) => !removed.has(element.id)))
+    setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
+    setSelectedElementIds([])
+    setDirty(true)
+  }
+  const focusAutoElement = (direction) => {
+    if (layout !== 'auto') return
+    const nodes = [...document.querySelectorAll('[data-gptb-auto-focus="true"]')]
+    if (!nodes.length) return
+    const activeIndex = nodes.findIndex((node) => node === document.activeElement || node.contains(document.activeElement))
+    const nextIndex = activeIndex < 0 ? (direction > 0 ? 0 : nodes.length - 1) : Math.max(0, Math.min(nodes.length - 1, activeIndex + direction))
+    nodes[nextIndex]?.focus?.()
+  }
+  const switchPanelFocus = () => {
+    const panels = [
+      toolbarRef.current,
+      toolboxFocusRef.current,
+      canvasRef.current,
+      document.querySelector('.gptb-config-panel, .gptb-diagnostics, .gptb-properties-modal'),
+    ].filter(Boolean)
+    if (!panels.length) return
+    const current = panels.findIndex((panel) => panel === document.activeElement || panel.contains?.(document.activeElement))
+    panels[(current + 1) % panels.length]?.focus?.()
+  }
   const beginConnectToElement = () => {
     if (!elements.length) return
     setConnectMode(true)
@@ -906,17 +939,63 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       const tag = event.target?.tagName
       if (['INPUT','TEXTAREA','SELECT'].includes(tag) || event.target?.isContentEditable) return
       const primary = event.ctrlKey || event.metaKey
+      if (event.key === 'F6') { event.preventDefault(); switchPanelFocus(); return }
+      if (!primary && !event.altKey && !event.shiftKey) {
+        const key = String(event.key || '').toLowerCase()
+        const sequence = (shortcutSequenceRef.current + key).slice(-2)
+        shortcutSequenceRef.current = sequence
+        if (sequence === 'gd') {
+          event.preventDefault()
+          const toolbox = toolboxFocusRef.current
+          const tips = canvasRef.current?.querySelector('.gptb-canvas-help')
+          const target = toolbox && !toolbox.contains(document.activeElement) ? toolbox : tips
+          target?.focus?.()
+          shortcutSequenceRef.current = ''
+          return
+        }
+      } else shortcutSequenceRef.current = ''
       if (layout === 'free' && (event.key === 'Delete' || event.key === 'Backspace') && freeSelectedIds.length) {
         event.preventDefault(); removeFreeSelection(); return
       }
+      if (layout === 'auto' && primary && event.key.toLowerCase() === 'c' && selectedElementIds.length) {
+        event.preventDefault(); copySelectedElements(); return
+      }
+      if (layout === 'auto' && primary && event.key.toLowerCase() === 'x' && selectedElementIds.length) {
+        event.preventDefault(); cutSelectedAutoElements(); return
+      }
+      if (layout === 'auto' && primary && event.key.toLowerCase() === 'v' && copiedElements.length) {
+        event.preventDefault(); pasteCopiedElements(); return
+      }
+      if (layout === 'auto' && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault(); focusAutoElement(event.key === 'ArrowDown' ? 1 : -1); return
+      }
+      if (layout === 'auto' && primary && event.key.toLowerCase() === 'i') {
+        const target = event.target?.closest?.('[data-gptb-description]')
+        const description = target?.getAttribute?.('data-gptb-description')
+        if (description) { event.preventDefault(); setDescriptionPopup(description); return }
+      }
+      if (layout === 'auto' && primary && event.key.toLowerCase() === 'k') {
+        event.preventDefault(); setToolboxOpen(true); requestAnimationFrame(() => toolboxFocusRef.current?.focus?.()); return
+      }
+      if (layout === 'free' && primary && event.key === '/') { event.preventDefault(); setShortcutHelpOpen(true); return }
       if (primary && event.altKey && (event.key === '+' || event.key === '=')) { event.preventDefault(); setZoom((value) => Math.min(150, value + 10)); return }
       if (primary && event.altKey && event.key === '-') { event.preventDefault(); setZoom((value) => Math.max(25, value - 10)); return }
       if (primary && event.altKey && event.key === '0') { event.preventDefault(); setZoom(100); return }
       if (primary && event.altKey && event.key === '1') { event.preventDefault(); zoomToFit(); return }
     }
+    const onWheel = (event) => {
+      if (!(event.ctrlKey || event.metaKey)) return
+      event.preventDefault()
+      setZoom((value) => Math.max(25, Math.min(150, value + (event.deltaY < 0 ? 10 : -10))))
+    }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [layout, freeSelectedIds, zoom, elements])
+    const canvas = canvasRef.current
+    canvas?.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      canvas?.removeEventListener('wheel', onWheel)
+    }
+  }, [layout, freeSelectedIds, selectedElementIds, copiedElements, zoom, elements, toolboxOpen])
 
   const flowName = workflowId ? flowProps.label : flow.label
   const editHistorySupported = ['autolaunched','schedule','platform_event'].includes(flow.key)
@@ -935,7 +1014,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     <header className="gptb-buttonbar">
       <div className="gptb-brand"><span className="gptb-brand-icon"><Workflow size={19}/></span><span><strong>Flow Builder</strong><small>{flowName}</small></span></div>
       <div className="gptb-status"><span className="gptb-status-dot"/>{activeStatus ? 'Active' : 'Inactive'} <i>·</i> {lastSavedAt ? (dirty ? 'Unsaved changes' : 'Saved') : 'Never saved'}</div>
-      <div className="gptb-toolbar" role="toolbar" aria-label="Flow Builder controls">
+      <div ref={toolbarRef} tabIndex="-1" className="gptb-toolbar" role="toolbar" aria-label="Flow Builder controls">
         <button className={toolboxOpen ? 'is-on' : ''} aria-label={toolboxOpen ? 'Hide Toolbox' : 'Show Toolbox'} onClick={() => setToolboxOpen((value) => !value)}><LayoutPanelLeft size={16}/></button>
         {layout === 'auto' ? <button className={selecting ? 'is-on' : ''} aria-label="Select Elements" onClick={() => { setSelecting((value) => !value); setSelectedElementIds([]); setConnectMode(false) }}><Copy size={16}/></button> : null}
         {layout === 'auto' && selecting ? <button aria-label="Copy Elements" title="Copy Elements" disabled={!selectedElementIds.length} onClick={copySelectedElements}><Copy size={16}/><em>{selectedElementIds.length || ''}</em></button> : null}
@@ -956,10 +1035,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     {message ? <div className="gptb-toast is-success">{message}<button aria-label="Dismiss message" onClick={() => setMessage('')}><X size={13}/></button></div> : null}
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''} ${editHistoryOpen ? 'is-history-mode' : ''}`}>
-      {toolboxOpen ? <Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} onClose={() => setToolboxOpen(false)}/> : null}
+      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} onClose={() => setToolboxOpen(false)}/></div> : null}
       <main
         ref={canvasRef}
         className="gptb-canvas"
+        tabIndex="-1"
         aria-label="Flow canvas"
         onDragOver={layout === 'free' ? (event) => { if (event.dataTransfer.types.includes('application/x-gptbuilder-element') || event.dataTransfer.types.includes('application/x-gptbuilder-existing')) event.preventDefault() } : undefined}
         onDrop={dropElement}
@@ -967,9 +1047,9 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         onPointerUp={layout === 'free' && freeConnectorDraft ? () => setFreeConnectorDraft(null) : undefined}
       >
         <div className="gptb-canvas-stage" style={{ transform: `scale(${zoom / 100})` }}>{layout === 'auto' ? <>
-          <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} aria-label="Start" onClick={openStart}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
+          <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} data-gptb-auto-focus="true" data-gptb-description="The Start element defines when and how the flow begins." aria-label="Start" onClick={openStart}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
           <div className="gptb-connector"/>
-          {elements.filter((element) => element.source === 'auto').map((element) => <div className="gptb-auto-element-slot" key={element.id}><PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/><div className="gptb-connector"/></div>)}
+          {elements.filter((element) => element.source === 'auto').map((element) => <div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`} key={element.id}><PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/><div className="gptb-connector"/></div>)}
           <div className="gptb-add-slot">
             <button className="gptb-add-node" aria-label="Add element" aria-expanded={elementPickerOpen} onClick={() => { setElementPickerOpen((value) => !value); setStartOpen(false); setDiagnosticsOpen(false); setEditingElement(null) }}><Plus size={15}/></button>
             {elementPickerOpen ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={elements.some((element) => element.source === 'auto')} copiedCount={copiedElements.length} onPaste={pasteCopiedElements} onConnect={beginConnectToElement} onSelect={(element) => chooseElement(element, 'auto')} onClose={() => setElementPickerOpen(false)}/> : null}
@@ -1004,7 +1084,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
           <div className="gptb-free-hint">Drag elements from the Elements tab, move them anywhere, and drag connectors between elements.</div>
         </>}</div>
         <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(25, value - 10))} disabled={zoom <= 25}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button><button className="gptb-fit-view" aria-label="Zoom to fit" onClick={zoomToFit}>Fit</button></div>
-        <div className="gptb-canvas-help"><CircleHelp size={14}/><span>{layout === 'auto' ? 'Auto-Layout keeps the flow arranged and connected automatically.' : 'Free-Form lets you position and connect elements manually.'}</span></div>
+        <div className="gptb-canvas-help" tabIndex="-1"><CircleHelp size={14}/><span>{layout === 'auto' ? 'Auto-Layout keeps the flow arranged and connected automatically.' : 'Free-Form lets you position and connect elements manually.'}</span></div>
       </main>
       {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
       {diagnosticsOpen ? <DiagnosticsPanel issues={issues} onClose={() => setDiagnosticsOpen(false)} onIssueClick={(issue) => {
@@ -1045,6 +1125,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} availableFlows={availableFlows} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
     {saveAsFlowOpen ? <GPTBuilderSaveAsFlowDialog value={flowProps} saving={saving} onCancel={() => setSaveAsFlowOpen(false)} onSave={(next) => void save(flowProps, { forceNewFlow: true, newFlow: next })}/> : null}
     {editHistoryPending ? <GPTBuilderUnsavedHistoryDialog saving={saving} onCancel={() => setEditHistoryPending(false)} onSaveAndView={() => void saveAndOpenEditHistory()}/> : null}
+    {shortcutHelpOpen ? <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="gptb-shortcuts-title"><header><strong id="gptb-shortcuts-title">Keyboard Shortcuts</strong><button className="gptb-icon-button" aria-label="Close Keyboard Shortcuts" onClick={() => setShortcutHelpOpen(false)}><X size={16}/></button></header><div className="gptb-properties-body"><dl className="gptb-shortcut-list"><div><dt>Zoom in / out</dt><dd>Ctrl/Cmd + Alt/Option + + / − or Ctrl/Cmd + mouse wheel</dd></div><div><dt>Zoom to fit</dt><dd>Ctrl/Cmd + Alt/Option + 1</dd></div><div><dt>Reset zoom</dt><dd>Ctrl/Cmd + Alt/Option + 0</dd></div><div><dt>Switch panel focus</dt><dd>F6</dd></div><div><dt>Toolbox / tips focus</dt><dd>g, then d</dd></div><div><dt>Delete selected elements</dt><dd>Delete / Backspace</dd></div><div><dt>Select multiple elements</dt><dd>Shift + Click</dd></div></dl></div><footer><button className="gptb-button is-brand" onClick={() => setShortcutHelpOpen(false)}>Close</button></footer></section></div> : null}
+    {descriptionPopup ? <div className="gptb-description-popup" role="status">{descriptionPopup}<button aria-label="Close description" onClick={() => setDescriptionPopup(null)}><X size={13}/></button></div> : null}
   </section>
 }
 
