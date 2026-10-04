@@ -1984,6 +1984,26 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         if (stale.rows.length) throw new Error("Stale whatsapp_connector references remain in OneAssistant booking routers");
         console.log("onePOS: OneAssistant booking routers refreshed with Flow-owned WhatsApp API transport");
       },
+    },
+    {
+      key: "0058_repair_oneassistant_booking_graph",
+      version: "58",
+      name: "Repair OneAssistant booking graph and active-session selection",
+      up: async client => {
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        const required = ["is_booking_request","service_found","resource_service_found","resource_found","availability_found","confirm_case","send_confirmation"];
+        const ids = new Set(router.action.actions.map((step) => step?.id));
+        const missing = required.filter((id) => !ids.has(id));
+        if (missing.length) throw new Error("OneAssistant booking router is missing graph nodes: " + missing.join(", "));
+
+        await client.query(
+          "UPDATE platform_rules SET trigger_key=$1,conditions=$2::jsonb,action=$3::jsonb,active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW() WHERE name='OneAssistant - Booking Channel Router' AND company_id IS NOT NULL",
+          [router.triggerKey, JSON.stringify(router.conditions || []), JSON.stringify(router.action)]
+        );
+        console.log("onePOS: OneAssistant booking graph repaired for installed tenants");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
