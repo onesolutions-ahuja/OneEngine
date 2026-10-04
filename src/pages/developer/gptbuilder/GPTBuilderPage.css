@@ -161,3 +161,6 @@
 @media (max-width:760px){
   .gptb-transform-add-resource,.gptb-transform-map-grid,.gptb-wait-amount{grid-template-columns:1fr}
 }
+
+.gptb-wait-event-value{display:grid;grid-template-columns:92px minmax(0,1fr);gap:6px;align-items:center}
+@media (max-width:760px){.gptb-wait-event-value{grid-template-columns:1fr}}
