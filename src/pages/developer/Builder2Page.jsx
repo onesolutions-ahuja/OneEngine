@@ -118,6 +118,11 @@ const OPERATOR_TO_RUNTIME=Object.fromEntries(Object.entries(OPERATOR_TO_BUILDER)
 const conditionToBuilder=row=>({id:row?.id||uid(),resource:row?.field||row?.resource||'',operator:OPERATOR_TO_BUILDER[row?.operator]||row?.operator||'Equals',value:row?.value??''})
 const conditionToRuntime=row=>({field:row?.resource||row?.field||'',operator:OPERATOR_TO_RUNTIME[row?.operator]||String(row?.operator||'equals').toLowerCase().replaceAll(' ','_'),value:row?.value??''})
 const actionInputs=x=>Object.fromEntries(Object.entries(x||{}).filter(([key])=>!['id','label','apiName','api_name','description','key','type'].includes(key)))
+const LEGACY_COMMUNICATION_ACTIONS=new Set(['SEND_EMAIL','SEND_SMS','SEND_WHATSAPP','IN_APP_NOTIFICATION','SEND_APPOINTMENT_MESSAGE'])
+const communicationBinding=value=>value&&typeof value==='object'&&!Array.isArray(value)&&typeof value.path==='string'?{mode:'resource',value:value.path}:{mode:'literal',value:value??''}
+const communicationContextRows=context=>Object.entries(context&&typeof context==='object'&&!Array.isArray(context)?context:{}).map(([name,value])=>{const binding=communicationBinding(value);return{id:uid(),name,...binding}})
+const communicationRuntimeValue=(mode,value)=>mode==='resource'&&String(value||'').trim()?{path:String(value).trim()}:value
+const communicationRuntimeContext=rows=>Object.fromEntries((rows||[]).filter(row=>String(row.name||'').trim()).map(row=>[String(row.name).trim(),communicationRuntimeValue(row.mode,row.value)]))
 const runtimeActionToBuilderNode=x=>{
   const rawType=String(x?.type||x?.key||'').toUpperCase()
   const base={id:x?.id||uid(),label:x?.label||x?.displayName||rawType||'Element',apiName:x?.apiName||x?.api_name||x?.id||rawType||'Element',description:x?.description||''}
@@ -135,6 +140,18 @@ const runtimeActionToBuilderNode=x=>{
     }}
   }
   const normalized=normalizeNodeType(rawType)
+  if(rawType==='SEND_COMMUNICATION'){
+    const inputs=actionInputs(x), channel=communicationBinding(inputs.channel), recipient=communicationBinding(inputs.recipient??inputs.to)
+    return {...base,type:'ACTION',config:{
+      actionKey:rawType,inputs,inputsText:'',
+      channelMode:channel.mode,channelValue:channel.value,
+      recipientMode:recipient.mode,recipientValue:recipient.value,
+      subject:inputs.subject||'',title:inputs.title||'',
+      message:inputs.message??inputs.body??inputs.text??'',
+      template:inputs.templateId??inputs.templateKey??inputs.template??'',
+      templateContextRows:communicationContextRows(inputs.templateContext),
+    }}
+  }
   if(!BUILDER_NATIVE_RUNTIME_TYPES.has(rawType)||requiresRuntimeRecordEditor(x)){
     const inputs=actionInputs(x)
     return {...base,type:'ACTION',config:{actionKey:rawType,inputs,inputsText:JSON.stringify(inputs,null,2)}}
@@ -156,6 +173,16 @@ const builderNodeToRuntimeAction=(node,resources=[])=>{
       })),
       defaultLabel:p.defaultOutcomeLabel||'Default Outcome',
       defaultBranch:Array.isArray(p.defaultBranch)?p.defaultBranch:[],
+    }
+  }
+  if(node.type==='ACTION'&&p.actionKey==='SEND_COMMUNICATION'){
+    const inherited=p.inputs&&typeof p.inputs==='object'?p.inputs:{}
+    return {...base,...inherited,key:'SEND_COMMUNICATION',
+      channel:communicationRuntimeValue(p.channelMode||'literal',p.channelValue||''),
+      recipient:communicationRuntimeValue(p.recipientMode||'literal',p.recipientValue||''),
+      subject:p.subject||undefined,title:p.title||undefined,message:p.message||undefined,
+      templateKey:p.template||undefined,
+      templateContext:communicationRuntimeContext(p.templateContextRows),
     }
   }
   if(node.type==='ACTION'){
@@ -226,6 +253,24 @@ function BranchSteps({label,value,nodes,onChange,onAdd}) {
   return <fieldset className="b2-branch-steps"><legend>{label} Path</legend>{value.map((id,i)=><div key={id} className="b2-path-step"><span>{i+1}. {nodes.find(n=>n.id===id)?.label||id}</span><button type="button" aria-label={`Remove path step ${i+1}`} onClick={()=>onChange(value.filter((_,j)=>j!==i))}><Trash2 size={13}/></button></div>)}<label>Connect existing element<select value="" onChange={e=>{if(e.target.value)onChange([...value,e.target.value])}}><option value="">Select element?</option>{nodes.filter(n=>!value.includes(n.id)).map(n=><option value={n.id} key={n.id}>{n.label}</option>)}</select></label>{onAdd?<button type="button" onClick={onAdd}><Plus size={13}/> Add Element to Path</button>:null}</fieldset>
 }
 
+function CommunicationActionFields({p,patch,resources,objects,objectKey,onNew,flowType,startConfig}) {
+  const rows=Array.isArray(p.templateContextRows)?p.templateContextRows:[]
+  const updateRow=(id,changes)=>patch({templateContextRows:rows.map(row=>row.id===id?{...row,...changes}:row)})
+  const binding=(label,modeKey,valueKey)=>(
+    <><label>{label} Source<select value={p[modeKey]||'literal'} onChange={e=>patch({[modeKey]:e.target.value,[valueKey]:''})}><option value="literal">Fixed value</option><option value="resource">Flow resource</option></select></label>
+    {p[modeKey]==='resource'?<label>{label}<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p[valueKey]||''} onChange={value=>patch({[valueKey]:value})}/></label>:null}</>
+  )
+  return <>
+    <label>Channel Source<select value={p.channelMode||'literal'} onChange={e=>patch({channelMode:e.target.value,channelValue:''})}><option value="literal">Fixed channel</option><option value="resource">Flow resource</option></select></label>
+    {p.channelMode==='resource'?<label>Channel<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.channelValue||''} onChange={value=>patch({channelValue:value})}/></label>:<label>Channel<select value={p.channelValue||''} onChange={e=>patch({channelValue:e.target.value})}><option value="">Select channel…</option><option value="EMAIL">Email</option><option value="SMS">SMS</option><option value="WHATSAPP">WhatsApp</option><option value="IN_APP">In-app notification</option></select></label>}
+    {binding('Recipient','recipientMode','recipientValue')}
+    {p.recipientMode!=='resource'?<label>Recipient<input value={p.recipientValue||''} onChange={e=>patch({recipientValue:e.target.value})} placeholder={p.channelValue==='IN_APP'?'User ID or CURRENT_USER':'Address, number or recipient value'}/></label>:null}
+    <label>Subject / Title<input value={p.subject||p.title||''} onChange={e=>patch({subject:e.target.value,title:e.target.value})} placeholder="Optional subject or notification title"/></label>
+    <label>Template API Name<input value={p.template||''} onChange={e=>patch({template:e.target.value})} placeholder="Optional communication template"/></label>
+    <label>Message<textarea rows={7} value={p.message||''} onChange={e=>patch({message:e.target.value})} placeholder="Message body. Merge fields are supplied below."/></label>
+    <div className="b2-condition-block"><b>Template Variables</b>{rows.map((row,index)=><div className="b2-condition" key={row.id}><span>{index+1}</span><input value={row.name||''} onChange={e=>updateRow(row.id,{name:e.target.value})} placeholder="Variable name"/><select value={row.mode||'literal'} onChange={e=>updateRow(row.id,{mode:e.target.value,value:''})}><option value="literal">Value</option><option value="resource">Resource</option></select>{row.mode==='resource'?<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={row.value||''} onChange={value=>updateRow(row.id,{value})}/>:<input value={row.value||''} onChange={e=>updateRow(row.id,{value:e.target.value})} placeholder="Value"/>}<button onClick={()=>patch({templateContextRows:rows.filter(x=>x.id!==row.id)})}><Trash2 size={13}/></button></div>)}<button className="b2-text-action" onClick={()=>patch({templateContextRows:[...rows,{id:uid(),name:'',mode:'resource',value:''}]})}><Plus size={13}/> Add Template Variable</button></div>
+  </>
+}
 function ActionFaultPath({node,nodes,patch}) {
   let inputs
   try { inputs=node.config?.inputsText?JSON.parse(node.config.inputsText):node.config?.inputs||{} } catch { return null }
@@ -255,7 +300,7 @@ function Properties({node,onPatch,nodes=[],onAddBranch,objects,resources,onNew,a
     {node.type==='COLLECTION_SORT'?<><label>Collection<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.collection||''} onChange={v=>patch({collection:v})}/></label><label>Sort Order<select value={p.order||'asc'} onChange={e=>patch({order:e.target.value})}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label><label>Maximum Items<input type="number" min="0" value={p.max||''} onChange={e=>patch({max:e.target.value})}/></label></>:null}
     {node.type==='TRANSFORM'?<div className="b2-transform"><div><b>Source Data</b><ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.source||''} onChange={v=>patch({source:v})}/></div><div><b>Target Data</b><ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.target||''} onChange={v=>patch({target:v})}/></div><label>Field Mappings<textarea rows={6} value={p.mappingsText||''} onChange={e=>patch({mappingsText:e.target.value})} placeholder="Map source fields/resources to target fields"/></label></div>:null}
     {node.type==='CUSTOM_ERROR'?<><label>Where to Show the Error<select value={p.location||'record'} onChange={e=>patch({location:e.target.value})}><option value="record">In a window on the record page</option><option value="field">Inline on a field</option></select></label>{p.location==='field'?<label>Field<ResourcePicker {...{resources,objects,objectKey,onNew,flowType,startConfig}} value={p.field||''} onChange={v=>patch({field:v})}/></label>:null}<label>Error Message<textarea rows={4} value={p.message||''} onChange={e=>patch({message:e.target.value})}/></label></>:null}
-    {node.type==='ACTION'?<><label>Action<select value={p.actionKey||''} onChange={e=>patch({actionKey:e.target.value,inputs:{},inputsText:''})}><option value="">Select action…</option>{actions.map(a=><option key={a.key} value={a.key}>{a.displayName||a.label||a.key}</option>)}</select></label>{p.actionKey==='SEND_APPOINTMENT_MESSAGE'?<label>Response Message<textarea rows={7} value={p.inputs?.message||''} onChange={e=>{const inputs={...(p.inputs||{}),message:e.target.value};patch({inputs,inputsText:JSON.stringify(inputs,null,2)})}} placeholder="Message sent to the customer. Merge fields such as {{date1}} are supported."/></label>:null}{p.actionKey?<label>Input Values (JSON)<textarea rows={7} value={p.inputsText||''} onChange={e=>patch({inputsText:e.target.value})} placeholder='{"field":"value or resource binding"}'/></label>:null}<ActionFaultPath {...{node,nodes,patch}}/><p className="b2-help">Actions come from OneEngine's metadata action registry. Response text and action inputs are stored in this workflow definition.</p></>:null}
+    {node.type==='ACTION'?<><label>Action<select value={p.actionKey||''} onChange={e=>patch({actionKey:e.target.value,inputs:{},inputsText:'',channelMode:'literal',channelValue:'',recipientMode:'literal',recipientValue:'',subject:'',title:'',message:'',template:'',templateContextRows:[]})}><option value="">Select action…</option>{actions.filter(a=>!LEGACY_COMMUNICATION_ACTIONS.has(String(a.key||'').toUpperCase())).map(a=><option key={a.key} value={a.key}>{a.displayName||a.label||a.key}</option>)}</select></label>{p.actionKey==='SEND_COMMUNICATION'?<CommunicationActionFields {...{p,patch,resources,objects,objectKey,onNew,flowType,startConfig}}/>:null}{p.actionKey&&p.actionKey!=='SEND_COMMUNICATION'?<label>Input Values (JSON)<textarea rows={7} value={p.inputsText||''} onChange={e=>patch({inputsText:e.target.value})} placeholder='{"field":"value or resource binding"}'/></label>:null}<ActionFaultPath {...{node,nodes,patch}}/><p className="b2-help">{p.actionKey==='SEND_COMMUNICATION'?'Channel, recipient, template and message are stored directly in Flow metadata. Provider credentials remain secured in the installed connector.':"Actions come from OneEngine's metadata action registry."}</p></>:null}
     {node.type==='SUBFLOW'?<><label>Flow API Name<input value={p.flow||''} onChange={e=>patch({flow:e.target.value})} placeholder="Active autolaunched flow API name"/></label><label>Input Values<textarea rows={5} value={p.inputsText||''} onChange={e=>patch({inputsText:e.target.value})} placeholder="Map available input variables"/></label><label>Output Values<textarea rows={5} value={p.outputsText||''} onChange={e=>patch({outputsText:e.target.value})} placeholder="Map output variables"/></label></>:null}
   </div>
 }
