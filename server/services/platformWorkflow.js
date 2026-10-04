@@ -15,6 +15,7 @@ import { createInventoryMovement } from "./inventory.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
+import { decryptSecret } from "./onlineOrders/platformConfig.js";
 import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
 import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
 import { createShopifyAdapter } from "./shopifyAdapter.js";
@@ -3271,6 +3272,37 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         const message = String(forwarded.message || forwarded.body || forwarded.text || "").trim();
         if (!recipient || !message) {
           return { status: "failed", code: "COMMUNICATION_RECIPIENT_OR_MESSAGE_REQUIRED", channel, retryable: false };
+        }
+
+        // Backfill pre-metadata WhatsApp settings once, so existing tenants do
+        // not need to re-enter credentials after moving transport to ONE_HTTP_REQUEST.
+        const existingConnection = await db(
+          "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)='whatsapp_connector' AND enabled=TRUE LIMIT 1",
+          [tenantId]
+        );
+        if (!existingConnection.rows?.length) {
+          const legacy = await db(
+            "SELECT active,configuration FROM integrations WHERE company_id=$1 AND LOWER(provider) IN ('whatsapp','whatsapp_business') AND active=TRUE ORDER BY updated_at DESC LIMIT 1",
+            [tenantId]
+          );
+          const definition = await db(
+            "SELECT id FROM platform_connector_definitions WHERE connector_key='whatsapp_connector' AND status='ACTIVE' LIMIT 1"
+          );
+          const configuration = legacy.rows?.[0]?.configuration || {};
+          const token = decryptSecret(configuration.access_token);
+          const phoneNumberId = configuration.phone_number_id || null;
+          if (definition.rows?.[0]?.id && token && phoneNumberId) {
+            await db(
+              `INSERT INTO integration_connections
+                (company_id,name,provider_name,integration_type,base_url,connector_package_key,connector_definition_id,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by)
+               VALUES ($1,'WhatsApp Business Connection','whatsapp_connector','communication','https://graph.facebook.com/v21.0','whatsapp_connector',$2,$3::jsonb,'bearer',$4,TRUE,'CONNECTED',$5)`,
+              [tenantId, definition.rows[0].id, JSON.stringify({
+                phoneNumberId,
+                businessAccountId: configuration.business_account_id || null,
+                defaultCountryCode: configuration.default_country_code || null,
+              }), encryptCredentials({ token }), req?.user?.id || null]
+            );
+          }
         }
 
         // WhatsApp is transport metadata, not a platform job/function. Execute
