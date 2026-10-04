@@ -2323,12 +2323,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const gb = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
       const normalized = gb ? (gb[3] + "-" + gb[2] + "-" + gb[1]) : text;
       const day = new Date(normalized.includes("T") ? normalized : normalized + "T00:00:00.000Z");
-      if (Number.isNaN(day.getTime())) throw new Error("Time Window Expand date is invalid");
+      if (Number.isNaN(day.getTime()) || day.toISOString().slice(0,10) !== normalized.slice(0,10)) throw new Error("Time Window Expand date is invalid");
       const duration = Number(resolveConfiguredResource(action.durationMinutes, context, { preserveMissing: false }));
       if (!Number.isFinite(duration) || duration <= 0) throw new Error("Time Window Expand duration must be greater than zero");
       const get = (value, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
       const output = [];
-      const max = Math.max(1, Math.min(Number(action.limit || 500), 500));
+      const max = Math.max(1, Math.min(Number(action.limit || 500), 5000));
+      const days = Number(resolveConfiguredResource(action.days ?? 1, context));
+      if (!Number.isInteger(days) || days < 1 || days > 31) throw new Error("Time Window Expand days must be between 1 and 31");
+      const firstDay = new Date(day);
+      for (let offset = 0; offset < days && output.length < max; offset++) {
+      day.setTime(firstDay.getTime() + offset * 86400000);
       for (const window of windows) {
         const weekday = get(window, action.weekdayField || "weekday");
         if (weekday != null && Number(weekday) !== day.getUTCDay()) continue;
@@ -2343,6 +2348,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           output.push({startsAt:cursor.toISOString(),endsAt:slotEnd.toISOString(),date:cursor.toISOString().slice(0,10),time:cursor.toISOString().slice(11,16)});
         }
         if (output.length>=max) break;
+      }
       }
       return {status:"completed",collection:output,count:output.length};
     },
@@ -2374,6 +2380,26 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           return start < busyEnd && end > busyStart;
         });
       });
+      return {status:"completed",collection,count:collection.length};
+    },
+  },
+  {
+    key: "COLLECTION_DISTINCT", displayName: "Collection Distinct", description: "Keep the first row for each distinct field value in a collection.",
+    validation: action => { if (!action.collection || !action.field) throw new Error("Collection Distinct requires a collection and field"); },
+    async: false, requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      const rows = resolveConfiguredResource(action.collection, {record,previousRecord,req,object,workflowVariables});
+      if (!Array.isArray(rows)) throw new Error("Collection Distinct input must be a collection");
+      const seen = new Set(); const collection = [];
+      const limit = Math.max(1,Math.min(Number(action.limit || 5000),5000));
+      for (const row of rows) {
+        const value = String(action.field).split('.').reduce((current,key)=>current?.[key],row);
+        if (value == null) continue;
+        const key = JSON.stringify(value);
+        if (seen.has(key)) continue;
+        seen.add(key); collection.push(row);
+        if (collection.length >= limit) break;
+      }
       return {status:"completed",collection,count:collection.length};
     },
   },
@@ -2766,7 +2792,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         orderBy = ' ORDER BY "' + (sortMetadata.source_column || sortMetadata.api_name) + '" ' + (String(action.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC");
       }
-      const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), 200));
+      const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), 20000));
       params.push(requestedLimit);
       const where = clauses.length ? " WHERE " + clauses.join(" AND ") : "";
       const selectColumns = ["id", ...fields.map((field) => '"' + field.source_column + '" AS "' + field.api_name + '"')];
