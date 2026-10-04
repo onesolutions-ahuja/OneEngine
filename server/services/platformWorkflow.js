@@ -3519,6 +3519,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       const mergedRecord = { ...(record || {}), ...mappedInputs };
       const outputContract = Array.isArray(definition.action?.outputContract) ? definition.action.outputContract : Array.isArray(definition.outputContract) ? definition.outputContract : [];
+      const applyParentOutputs = (outputs = {}) => {
+        const outputMappings = action.outputMappings || action.outputs || action.outputMap || {};
+        if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+        for (const [outputName, target] of Object.entries(outputMappings || {})) {
+          if (!target || !Object.prototype.hasOwnProperty.call(outputs, outputName)) continue;
+          const raw = String(target).trim();
+          if (!raw.startsWith("variables.")) continue;
+          const variableName = raw.slice("variables.".length);
+          if (variableName) workflowVariables.variables[variableName] = outputs[outputName];
+        }
+      };
 
       if (stepRunId && runDb && typeof runDb === "function") {
         const parentStepResult = await runDb(
@@ -3549,6 +3560,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
               if (output.required === true && value === undefined) throw new Error(`Subflow output "${output.label || name}" was not produced`);
               outputs[name] = value;
             }
+            applyParentOutputs(outputs);
             return {
               status: "completed",
               workflowId: workflowKey,
@@ -3618,6 +3630,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           outputs[name] = value;
         }
       }
+      if (!childWaiting) applyParentOutputs(outputs);
       const childFailed = childResult.some((item) => item.result?.status === "failed");
       const childStatus = childFailed ? "FAILED" : childWaiting ? "WAITING" : "COMPLETED";
       if (childRun && runDb && typeof runDb === "function") {
