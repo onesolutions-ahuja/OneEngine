@@ -6,7 +6,7 @@ const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
 const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
-const ARITY = { IF: [3, 3], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2] };
+const ARITY = { IF: [3, 3], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], PARSEDATE: [1, 1], TRIM: [1, 1], UPPER: [1, 1] };
 export const ROLLUP_OPERATIONS = new Set(["COUNT", "SUM", "MIN", "MAX", "AVG"]);
 const baseType = type => ["number", "decimal", "currency", "percent"].includes(type) ? "number" : type;
 const formulaType = type => STRING_TYPES.has(type) ? "string" : baseType(type);
@@ -161,6 +161,7 @@ function infer(node, resolve, depth = 0) {
   if (node.name === "IF") { requireType(types[0], "boolean"); return common(types.slice(1)); }
   if (node.name === "COALESCE") return common(types);
   if (node.name === "CONCAT") return "string";
+  if (["PARSEDATE", "TRIM", "UPPER"].includes(node.name)) { requireType(types[0], "string"); return "string"; }
   if (["TODAY", "NOW", "ADDDAYS"].includes(node.name)) {
     if (node.name === "ADDDAYS") {
       requireType(types[0], "string");
@@ -205,6 +206,16 @@ function evaluate(node, get) {
   if (node.name === "NOW") return new Date().toISOString();
   const args = node.args.map(run);
   if (node.name === "CONCAT") return args.map(value => value ?? "").join("").slice(0, 10000);
+  if (node.name === "TRIM") return args[0] == null ? null : String(args[0]).trim();
+  if (node.name === "UPPER") return args[0] == null ? null : String(args[0]).toUpperCase();
+  if (node.name === "PARSEDATE") {
+    const text = String(args[0] || '').trim();
+    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+    if (!match) return null;
+    const iso = `${match[3]}-${match[2]}-${match[1]}`;
+    const date = new Date(`${iso}T00:00:00.000Z`);
+    return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== iso ? null : iso;
+  }
   if (node.name === "ADDDAYS") {
     if (args.includes(null) || !Number.isFinite(Number(args[1]))) return null;
     const date = new Date(args[0]);
