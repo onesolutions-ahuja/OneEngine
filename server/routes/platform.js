@@ -16,6 +16,7 @@ import {
   getRegisteredFunctionsRegistry,
   getWorkflowActionDefinition,
   getWorkflowActionRegistry,
+  getWorkflowBuilderActionRegistry,
   validateWorkflowAction,
   friendlyWorkflowError,
   workflowResultsContainStatus,
@@ -5045,16 +5046,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   router.get("/platform/workflow-actions", ...manage, async (req, res) => {
     res.json({
       success: true,
-      data: getWorkflowActionRegistry().map(({ key, displayName, description, async: isAsync, requiredPermissions = [], requiredEntitlement = null, schema = null, capability = null }) => ({
-        key,
-        displayName,
-        description,
-        async: isAsync === true,
-        requiredPermissions,
-        requiredEntitlement,
-        schema,
-        capability,
-      })),
+      data: getWorkflowBuilderActionRegistry()
+        .map(({ key, displayName, description, async: isAsync, requiredPermissions = [], requiredEntitlement = null, schema = null, capability = null }) => ({
+          key,
+          displayName,
+          description,
+          async: isAsync === true,
+          requiredPermissions,
+          requiredEntitlement,
+          schema,
+          capability,
+        })),
     });
   });
 
