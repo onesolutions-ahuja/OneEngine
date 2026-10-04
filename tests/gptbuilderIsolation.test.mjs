@@ -116,6 +116,44 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Action uses the metadata action registry with Salesforce-style search and input assignment', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAction.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(editor, /\/api\/platform\/workflow-actions/)
+  assert.match(editor, /Search actions/)
+  assert.match(editor, /Set Input Values/)
+  assert.match(editor, /Value/)
+  assert.match(editor, /Resource/)
+  assert.match(editor, /builderVisible!==false/)
+  assert.match(editor, /!\['RUN_AGENT','SCREEN','RUN_SUBFLOW'\]\.includes\(action\.key\)/)
+  assert.match(page, /actionRuntimeAction\(element\)/)
+  assert.match(page, /activeElement\.key === 'action'/)
+})
+
+test('GPT Builder Run Agent matches Salesforce agent request session and structured output behavior', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderRunAgent.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Select an existing agent',
+    'Create Agent',
+    'Agent Request',
+    'Session ID',
+    'Configure Structured Output',
+    'Agent Response',
+    'Structured Agent Response',
+    'Add Structured Output Field',
+  ]) assert.ok(editor.includes(text), text)
+  assert.match(editor, /_set/)
+  assert.match(page, /runAgentRuntimeAction\(element\)/)
+  assert.match(page, /activeElement\.key === 'run_agent'/)
+  assert.match(runtime, /key: "RUN_AGENT"/)
+  assert.match(runtime, /structuredOutput/)
+  assert.match(runtime, /sessionId/)
+  assert.match(runtime, /normalized\[\`\$\{name\}_set\`\] = present/)
+  assert.match(runtime, /StructuredAgentResponse/)
+})
+
 test('GPT Builder Custom Error matches Salesforce record-page and inline-field error behavior', async () => {
   const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderCustomError.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
