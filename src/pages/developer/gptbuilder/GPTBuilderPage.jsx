@@ -5,6 +5,9 @@ import {
   Settings2, Sparkles, Trash2, Undo2, Workflow, X, Zap, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
+import {
+  ElementPicker, FreeFormElements, PendingElementCard, PendingElementEditor, elementByKey,
+} from './GPTBuilderElements'
 import './GPTBuilderPage.css'
 
 const FLOW_CATEGORIES = [
@@ -196,12 +199,14 @@ function DiagnosticsPanel({ issues, onClose }) {
   </aside>
 }
 
-function Toolbox({ layout, onClose }) {
+function Toolbox({ layout, onClose, flowType, startConfig }) {
   const [tab, setTab] = useState(layout === 'free' ? 'elements' : 'manager')
   const effectiveTab = layout === 'auto' ? 'manager' : tab
   return <aside className="gptb-toolbox" aria-label="Toolbox">
     <div className="gptb-toolbox-tabs">{layout === 'free' ? <button className={effectiveTab === 'elements' ? 'is-active' : ''} onClick={() => setTab('elements')}>Elements</button> : null}<button className={effectiveTab === 'manager' ? 'is-active' : ''} onClick={() => setTab('manager')}>Manager</button><button className="gptb-toolbox-close" aria-label="Close toolbox" onClick={onClose}><X size={15}/></button></div>
-    <div className="gptb-toolbox-placeholder">{effectiveTab === 'elements' ? <><Search size={18}/><strong>Elements</strong><span>Element discovery is built in the next parity phase.</span></> : <><Workflow size={18}/><strong>Manager</strong><span>Resources and flow contents are built in the Manager phase.</span></>}</div>
+    {effectiveTab === 'elements'
+      ? <FreeFormElements flowType={flowType} startConfig={startConfig}/>
+      : <div className="gptb-toolbox-placeholder"><Workflow size={18}/><strong>Manager</strong><span>Resources and flow contents are built in the Manager phase.</span></div>}
   </aside>
 }
 
@@ -225,6 +230,8 @@ function FlowShell({ flow, onNew }) {
   const [dirty, setDirty] = useState(true)
   const [message, setMessage] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [elementPickerOpen, setElementPickerOpen] = useState(false)
+  const [pendingElement, setPendingElement] = useState(null)
 
   useEffect(() => {
     let live = true
@@ -296,8 +303,26 @@ function FlowShell({ flow, onNew }) {
     }
   }
 
-  const openStart = () => { setStartDraft(structuredClone(startConfig)); setStartOpen(true); setDiagnosticsOpen(false) }
+  const openStart = () => { setStartDraft(structuredClone(startConfig)); setStartOpen(true); setDiagnosticsOpen(false); setElementPickerOpen(false); setPendingElement(null) }
   const finishStart = () => { setStartConfig(startDraft); setStartOpen(false); setDirty(true); setMessage('') }
+  const chooseElement = (element, source = 'auto', position = null) => {
+    setElementPickerOpen(false)
+    setDiagnosticsOpen(false)
+    setStartOpen(false)
+    if (!element || element.key === 'end') return
+    setPendingElement({ key: element.key, source, position })
+  }
+  const dropElement = (event) => {
+    if (layout !== 'free') return
+    const key = event.dataTransfer.getData('application/x-gptbuilder-element')
+    if (!elementByKey(key)) return
+    event.preventDefault()
+    const rect = event.currentTarget.getBoundingClientRect()
+    const scale = zoom / 100
+    const x = Math.max(20, (event.clientX - rect.left + event.currentTarget.scrollLeft) / scale)
+    const y = Math.max(20, (event.clientY - rect.top + event.currentTarget.scrollTop) / scale)
+    chooseElement(elementByKey(key), 'free', { x, y })
+  }
   const flowName = workflowId ? flowProps.label : flow.label
 
   return <section className="gptb-builder" aria-label="GPT Builder workspace">
@@ -321,16 +346,33 @@ function FlowShell({ flow, onNew }) {
     {message ? <div className="gptb-toast is-success">{message}<button aria-label="Dismiss message" onClick={() => setMessage('')}><X size={13}/></button></div> : null}
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''}`}>
-      {toolboxOpen ? <Toolbox key={layout} layout={layout} onClose={() => setToolboxOpen(false)}/> : null}
-      <main className="gptb-canvas" aria-label="Flow canvas">
+      {toolboxOpen ? <Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} onClose={() => setToolboxOpen(false)}/> : null}
+      <main
+        className="gptb-canvas"
+        aria-label="Flow canvas"
+        onDragOver={layout === 'free' ? (event) => { if (event.dataTransfer.types.includes('application/x-gptbuilder-element')) event.preventDefault() } : undefined}
+        onDrop={dropElement}
+      >
         <div className="gptb-canvas-stage" style={{ transform: `scale(${zoom / 100})` }}>{layout === 'auto' ? <>
-          <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} aria-label="Start" onClick={openStart}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button><div className="gptb-connector"/><button className="gptb-add-node" aria-label="Add element"><Plus size={15}/></button><div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
-        </> : <><button className="gptb-free-start" onClick={openStart}><span className="gptb-start-dot"/><strong>Start</strong></button><div className="gptb-free-hint">Drag elements from the Elements tab and connect them on the canvas.</div></>}</div>
+          <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} aria-label="Start" onClick={openStart}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
+          <div className="gptb-connector"/>
+          {pendingElement?.source === 'auto' ? <><PendingElementCard elementKey={pendingElement.key}/><div className="gptb-connector"/></> : null}
+          <div className="gptb-add-slot">
+            <button className="gptb-add-node" aria-label="Add element" aria-expanded={elementPickerOpen} onClick={() => { setElementPickerOpen((value) => !value); setStartOpen(false); setDiagnosticsOpen(false); setPendingElement(null) }}><Plus size={15}/></button>
+            {elementPickerOpen ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={false} onSelect={(element) => chooseElement(element, 'auto')} onClose={() => setElementPickerOpen(false)}/> : null}
+          </div>
+          <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
+        </> : <>
+          <button className="gptb-free-start" onClick={openStart}><span className="gptb-start-dot"/><strong>Start</strong></button>
+          {pendingElement?.source === 'free' ? <PendingElementCard elementKey={pendingElement.key} free position={pendingElement.position}/> : null}
+          <div className="gptb-free-hint">Drag elements from the Elements tab and connect them on the canvas.</div>
+        </>}</div>
         <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(50, value - 10))} disabled={zoom <= 50}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button></div>
         <div className="gptb-canvas-help"><CircleHelp size={14}/><span>{layout === 'auto' ? 'Auto-Layout keeps the flow arranged and connected automatically.' : 'Free-Form lets you position and connect elements manually.'}</span></div>
       </main>
       {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
       {diagnosticsOpen ? <DiagnosticsPanel issues={issues} onClose={() => setDiagnosticsOpen(false)}/> : null}
+      {pendingElement ? <PendingElementEditor elementKey={pendingElement.key} onCancel={() => setPendingElement(null)}/> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
