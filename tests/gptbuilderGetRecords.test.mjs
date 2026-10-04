@@ -160,7 +160,7 @@ test('Get Records runtime supports Starts With, Ends With, In, Not In and advanc
 })
 
 test('GPT Builder persists configured Get Records as a real runtime action and keeps drafts as metadata', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
   const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderGetRecords.jsx', import.meta.url), 'utf8')
   assert.match(page, /elements\.filter\(\(element\) => element\.configured\)\.map/)
   assert.match(page, /getRecordsRuntimeAction\(element\)/)
