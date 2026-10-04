@@ -606,7 +606,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           CREATE TABLE IF NOT EXISTS platform_communication_events (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-            channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+            channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP','IN_APP')),
             event_type VARCHAR(100) NOT NULL,
             direction VARCHAR(20),
             provider VARCHAR(100),
@@ -1799,7 +1799,64 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log("onePOS: unified appointment communication under SEND_COMMUNICATION");
       },
     }
-  ]);
+,
+    {
+      key: "0052_migrate_legacy_communication_steps",
+      version: "52",
+      name: "Migrate legacy communication steps to Send Communication",
+      up: async client => {
+        await client.query(
+          "ALTER TABLE platform_message_templates DROP CONSTRAINT IF EXISTS platform_message_templates_channel_check"
+        );
+        await client.query(
+          "ALTER TABLE platform_message_templates ADD CONSTRAINT platform_message_templates_channel_check CHECK (channel IN ('EMAIL','SMS','WHATSAPP','IN_APP'))"
+        );
+
+        const legacyChannels = {
+          SEND_EMAIL: "EMAIL",
+          SEND_SMS: "SMS",
+          SEND_WHATSAPP: "WHATSAPP",
+          IN_APP_NOTIFICATION: "IN_APP",
+          SEND_IN_APP_NOTIFICATION: "IN_APP",
+        };
+        const migrateNode = (value) => {
+          if (Array.isArray(value)) return value.map(migrateNode);
+          if (!value || typeof value !== "object") return value;
+          const next = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, migrateNode(item)]));
+          const raw = String(next.key || next.type || "").toUpperCase();
+          const channel = legacyChannels[raw];
+          if (channel) {
+            if (String(next.key || "").toUpperCase() === raw) next.key = "SEND_COMMUNICATION";
+            if (String(next.type || "").toUpperCase() === raw) next.type = "SEND_COMMUNICATION";
+            if (!next.channel) next.channel = channel;
+          }
+          return next;
+        };
+
+        const rows = await client.query(
+          "SELECT id,action FROM platform_rules WHERE action::text ~ 'SEND_EMAIL|SEND_SMS|SEND_WHATSAPP|IN_APP_NOTIFICATION|SEND_IN_APP_NOTIFICATION'"
+        );
+        for (const row of rows.rows) {
+          const migrated = migrateNode(row.action);
+          await client.query(
+            "UPDATE platform_rules SET action=$1::jsonb,updated_at=NOW() WHERE id=$2",
+            [JSON.stringify(migrated), row.id]
+          );
+        }
+
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[]) AND COALESCE(user_modified,FALSE)=FALSE",
+          [[
+            "action:SEND_EMAIL",
+            "action:SEND_SMS",
+            "action:SEND_WHATSAPP",
+            "action:IN_APP_NOTIFICATION",
+            "action:SEND_IN_APP_NOTIFICATION"
+          ]]
+        );
+        console.log("onePOS: legacy communication workflow steps migrated to SEND_COMMUNICATION");
+      },
+    }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
   console.log("onePOS: database ready");
