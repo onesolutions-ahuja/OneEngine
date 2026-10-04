@@ -2075,6 +2075,15 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: async client => {
         await client.query("ALTER TABLE platform_workflow_runs ALTER COLUMN error_text TYPE TEXT");
         await client.query("ALTER TABLE platform_workflow_step_runs ALTER COLUMN error_text TYPE TEXT");
+        await client.query(`
+          DELETE FROM platform_communication_events newer
+          USING platform_communication_events older
+          WHERE newer.company_id=older.company_id
+            AND newer.channel=older.channel
+            AND newer.provider_message_id=older.provider_message_id
+            AND newer.provider_message_id IS NOT NULL
+            AND (newer.created_at>older.created_at OR (newer.created_at=older.created_at AND newer.id>older.id))
+        `);
         await client.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_communication_provider_message ON platform_communication_events(company_id,channel,provider_message_id) WHERE provider_message_id IS NOT NULL");
 
         const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
