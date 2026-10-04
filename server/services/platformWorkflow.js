@@ -2144,8 +2144,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       type: "object",
       properties: {
         variableName: { type: "string" },
-        variableType: { type: "string", enum: ["text","number","boolean","date","datetime","record","collection","object"] },
-        operator: { type: "string", enum: ["set","add","subtract","append"] },
+        variableType: { type: "string", enum: ["text","number","currency","boolean","date","datetime","record","collection","object","picklist","multiselect","time"] },
+        operator: { type: "string", enum: ["set","add","subtract","append","prepend","remove_first","remove_all","remove_before_first","remove_after_first","remove_position","remove_uncommon","count"] },
         value: {},
         resourceOnly: { type: "boolean" },
         assignments: {
@@ -2154,8 +2154,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             type: "object",
             properties: {
               variable: { type: "string" },
-              variableType: { type: "string", enum: ["text","number","boolean","date","datetime","record","collection","object"] },
-              operator: { type: "string", enum: ["set","add","subtract","append"] },
+              variableType: { type: "string", enum: ["text","number","currency","boolean","date","datetime","record","collection","object","picklist","multiselect","time"] },
+              operator: { type: "string", enum: ["set","add","subtract","append","prepend","remove_first","remove_all","remove_before_first","remove_after_first","remove_position","remove_uncommon","count"] },
               value: {},
             },
           },
@@ -2164,15 +2164,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       required: [],
     },
     validation: (action) => {
-      const supportedTypes = ["text","number","boolean","date","datetime","record","collection","object"];
-      const supportedOperators = ["set","add","subtract","append"];
+      const supportedTypes = ["text","number","currency","boolean","date","datetime","record","collection","object","picklist","multiselect","time"];
+      const supportedOperators = ["set","add","subtract","append","prepend","remove_first","remove_all","remove_before_first","remove_after_first","remove_position","remove_uncommon","count"];
       const rows = Array.isArray(action?.assignments) && action.assignments.length ? action.assignments : null;
       const validateAssignment = ({ name, type, operator, value }) => {
         if (!name || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name))) throw new Error("Assignment requires a valid Variable");
         if (!supportedTypes.includes(String(type || ""))) throw new Error(`Assignment for "${name}" requires a supported data type`);
         if (!supportedOperators.includes(String(operator || "set"))) throw new Error(`Assignment for "${name}" requires a supported operator`);
-        if (["add","subtract"].includes(String(operator)) && String(type) !== "number") throw new Error("Add and subtract are only supported for number variables");
-        if (String(operator) === "append" && String(type) !== "collection") throw new Error("Add is only supported for collection variables");
+        if (["add","subtract"].includes(String(operator)) && !["number","currency","date","text","picklist","multiselect"].includes(String(type))) throw new Error("Assignment operator is not supported for this variable type");
+        if (["append","prepend","remove_first","remove_all","remove_before_first","remove_after_first","remove_position","remove_uncommon"].includes(String(operator)) && !["collection","multiselect"].includes(String(type))) throw new Error("Assignment collection operator requires a collection-compatible variable");
+        if (String(operator) === "count" && !["number","currency"].includes(String(type))) throw new Error("Equals Count requires a number-compatible target");
         if (String(operator || "set") !== "set" && value === undefined) throw new Error(`Assignment for "${name}" requires a value`);
       };
       if (rows) {
@@ -2230,11 +2231,49 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         const incoming = coerce(raw);
         const current = workflowVariables.variables[name];
         let next = incoming;
-        if (operator === "add") next = Number(current || 0) + Number(incoming || 0);
-        else if (operator === "subtract") next = Number(current || 0) - Number(incoming || 0);
-        else if (operator === "append") {
-          const base = Array.isArray(current) ? current : (current == null ? [] : [current]);
-          next = [...base, ...(Array.isArray(incoming) ? incoming : [incoming])];
+        if (operator === "add") {
+          if (type === "date") {
+            const base = new Date(current);
+            if (Number.isNaN(base.getTime())) throw new Error(`Assignment variable "${name}" requires a valid date value`);
+            base.setUTCDate(base.getUTCDate() + Number(incoming || 0));
+            next = base.toISOString().slice(0, 10);
+          } else if (["text","picklist","multiselect"].includes(type)) {
+            next = String(current ?? "") + String(incoming ?? "");
+          } else next = Number(current || 0) + Number(incoming || 0);
+        } else if (operator === "subtract") {
+          if (type === "date") {
+            const base = new Date(current);
+            if (Number.isNaN(base.getTime())) throw new Error(`Assignment variable "${name}" requires a valid date value`);
+            base.setUTCDate(base.getUTCDate() - Number(incoming || 0));
+            next = base.toISOString().slice(0, 10);
+          } else next = Number(current || 0) - Number(incoming || 0);
+        } else if (operator === "count") {
+          if (!Array.isArray(incoming)) throw new Error("Equals Count requires a collection value");
+          next = incoming.length;
+        } else if (["append","prepend","remove_first","remove_all","remove_before_first","remove_after_first","remove_position","remove_uncommon"].includes(operator)) {
+          const base = type === "multiselect"
+            ? String(current || "").split(";").map((item) => item.trim()).filter(Boolean)
+            : (Array.isArray(current) ? [...current] : (current == null ? [] : [current]));
+          const values = Array.isArray(incoming) ? incoming : [incoming];
+          if (operator === "append") next = [...base, ...values];
+          else if (operator === "prepend") next = [...values, ...base];
+          else if (operator === "remove_first") {
+            next = [...base];
+            const index = next.findIndex((item) => Object.is(item, values[0]) || String(item) === String(values[0]));
+            if (index >= 0) next.splice(index, 1);
+          } else if (operator === "remove_all") next = base.filter((item) => !values.some((value) => Object.is(item, value) || String(item) === String(value)));
+          else if (operator === "remove_before_first") {
+            const index = base.findIndex((item) => Object.is(item, values[0]) || String(item) === String(values[0]));
+            next = index >= 0 ? base.slice(index) : base;
+          } else if (operator === "remove_after_first") {
+            const index = base.findIndex((item) => Object.is(item, values[0]) || String(item) === String(values[0]));
+            next = index >= 0 ? base.slice(0, index + 1) : base;
+          } else if (operator === "remove_position") {
+            const position = Number(incoming);
+            next = [...base];
+            if (Number.isInteger(position) && position >= 1 && position <= next.length) next.splice(position - 1, 1);
+          } else if (operator === "remove_uncommon") next = base.filter((item) => values.some((value) => Object.is(item, value) || String(item) === String(value)));
+          if (type === "multiselect") next = next.join("; ");
         }
         workflowVariables.variables[name] = next;
         return { variableName: name, variableType: type, operator, value: next };
