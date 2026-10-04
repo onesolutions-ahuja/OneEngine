@@ -256,3 +256,17 @@
 .gptb-group-add-slot>.gptb-element-picker{z-index:6}
 .gptb-group-delete-modal .gptb-properties-body p{margin:0;font-size:10px;line-height:1.5}
 .gptb-group-delete-modal footer{display:flex;justify-content:flex-end;gap:7px}
+
+.gptb-transform-visual-map{display:grid;grid-template-columns:minmax(0,1fr) 130px minmax(0,1fr);gap:8px;align-items:start}
+.gptb-transform-tree{min-width:0;border:1px solid #dddbda;border-radius:4px;background:#fff;overflow:hidden}
+.gptb-transform-tree>header{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 8px;border-bottom:1px solid #ecebea;background:#f7f7f7}
+.gptb-transform-tree>header strong{font-size:9px}.gptb-transform-tree>header small{font-size:7px;color:#706e6b}
+.gptb-transform-tree>div{display:grid}
+.gptb-transform-tree>div>div{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:34px;padding:5px 7px;border-bottom:1px solid #f3f3f3}
+.gptb-transform-tree>div>div:last-child{border-bottom:0}
+.gptb-transform-tree>div>div.is-pending{background:#eef4ff}.gptb-transform-tree>div>div.is-mapped{background:#f2fbf6}
+.gptb-transform-tree>div>div>span{min-width:0;display:grid;gap:1px}.gptb-transform-tree b{font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gptb-transform-tree small{font-size:7px;color:#706e6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gptb-transform-socket{width:20px;height:20px;display:grid;place-items:center;flex:0 0 auto;border:1px solid #1b96ff;border-radius:50%;background:#fff;color:#0176d3;font-size:9px}.gptb-transform-socket:disabled{border-color:#c9c9c9;color:#c9c9c9}
+.gptb-transform-connections{display:grid;gap:5px;align-content:start;padding-top:35px}.gptb-transform-connections>div{display:grid;grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);gap:3px;align-items:center;padding:4px;border-radius:3px;background:#f7f7f7;font-size:7px}.gptb-transform-connections i{text-align:center;color:#0176d3;font-style:normal}.gptb-transform-connections span{overflow:hidden;text-overflow:ellipsis}.gptb-transform-connections p{margin:0;padding:5px;color:#706e6b;font-size:7px;text-align:center}
+.gptb-transform-mapping-details{margin-top:9px;border-top:1px solid #ecebea;padding-top:8px}.gptb-transform-mapping-details>summary{cursor:pointer;font-size:9px;font-weight:700}
+@media(max-width:760px){.gptb-transform-visual-map{grid-template-columns:1fr}.gptb-transform-connections{padding-top:0}}
