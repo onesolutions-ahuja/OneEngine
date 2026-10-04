@@ -1786,7 +1786,12 @@ function oneAssistantAppointmentRouterWorkflow() {
       outcomes:[
         {id:"one",label:"Choice 1",condition:condition("body","1"),branch:["set_date_1","get_service","service_found"]},
         {id:"two",label:"Choice 2",condition:condition("body","2"),branch:["set_date_2","get_service","service_found"]}
-      ],defaultLabel:"DD/MM/YYYY",defaultBranch:["set_custom_date","get_service","service_found"] },
+      ],defaultLabel:"DD/MM/YYYY",defaultBranch:["parse_custom_date","custom_date_valid"] },
+    { id:"parse_custom_date", label:"Parse Entered Date", apiName:"parse_custom_date", key:"FORMULA", resourceName:"selectedDate", resultType:"date", expression:"PARSEDATE(inputDate)", inputs:{inputDate:{path:"body"}} },
+    { id:"custom_date_valid", label:"Entered Date Valid?", apiName:"custom_date_valid", key:"CONDITION",
+      outcomes:[{id:"yes",label:"Valid Date",condition:{match:"all",conditions:[{field:"variables.selectedDate",operator:"not_equals",value:null}]},branch:["get_service","service_found"]}],
+      defaultLabel:"Invalid Date",defaultBranch:["send_invalid_date"] },
+    ...send("send_invalid_date","Send Invalid Date Reply",{path:"variables.messageChannel"},invalidDateMessage),
     { id:"set_date_1", label:"Use Date Choice 1", apiName:"set_date_1", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date1"} },
     { id:"set_date_2", label:"Use Date Choice 2", apiName:"set_date_2", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date2"} },
     { id:"set_custom_date", label:"Use Entered Date", apiName:"set_custom_date", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"body"} },
@@ -1830,7 +1835,9 @@ function oneAssistantAppointmentRouterWorkflow() {
       collection:{path:"steps.sort_slots.collection"},lineTemplate:"{{index}}. {{item.time}}",separator:"\n",startIndex:1,limit:5 },
     { id:"availability_found", label:"Available Slots Found?", apiName:"availability_found", key:"CONDITION",
       outcomes:[{id:"yes",label:"Slots Found",condition:{match:"all",conditions:[{field:"steps.sort_slots.count",operator:"greater_than",value:0}]},branch:["save_date_state","send_slots"]}],
-      defaultLabel:"No Slots",defaultBranch:["send_no_slots"] },
+      defaultLabel:"No Slots",defaultBranch:["reset_to_date","send_no_slots"] },
+    { id:"reset_to_date", label:"Wait for Another Date", apiName:"reset_to_date", key:"UPDATE_RECORD", objectKey:"appointment_booking_case",
+      recordId:{path:"steps.get_case.record.id",fallback:{path:"steps.create_case.created.id"}},fieldValues:{status:"NEW",state:{step:"AWAITING_DATE"}} },
     { id:"save_date_state", label:"Save Selected Date", apiName:"save_date_state", key:"UPDATE_RECORD", objectKey:"appointment_booking_case",
       recordId:{path:"steps.get_case.record.id",fallback:{path:"steps.create_case.created.id"}},
       fieldValues:{service_id:{path:"steps.get_service.record.id"},status:"SLOT_SELECTED",state:{step:"AWAITING_SLOT",selectedDate:{path:"variables.selectedDate"},resourceId:{path:"steps.get_resource.record.id"},slots:{path:"steps.sort_slots.collection"}}} },
@@ -1839,11 +1846,11 @@ function oneAssistantAppointmentRouterWorkflow() {
 
     { id:"validate_slot", label:"Validate Slot Reply", apiName:"validate_slot", key:"CONDITION",
       outcomes:[
-        {id:"one",label:"Slot 1",condition:condition("body","1"),branch:["select_slot_1","create_appointment","confirm_case","send_confirmation"]},
-        {id:"two",label:"Slot 2",condition:condition("body","2"),branch:["select_slot_2","create_appointment","confirm_case","send_confirmation"]},
-        {id:"three",label:"Slot 3",condition:condition("body","3"),branch:["select_slot_3","create_appointment","confirm_case","send_confirmation"]},
-        {id:"four",label:"Slot 4",condition:condition("body","4"),branch:["select_slot_4","create_appointment","confirm_case","send_confirmation"]},
-        {id:"five",label:"Slot 5",condition:condition("body","5"),branch:["select_slot_5","create_appointment","confirm_case","send_confirmation"]}
+        {id:"one",label:"Slot 1",condition:{match:"all",conditions:[{field:"body",operator:"equals",value:"1"},{field:"steps.get_case.record.state.slots.0.startsAt",operator:"not_equals",value:null}]},branch:["select_slot_1","create_appointment","confirm_case","send_confirmation"]},
+        {id:"two",label:"Slot 2",condition:{match:"all",conditions:[{field:"body",operator:"equals",value:"2"},{field:"steps.get_case.record.state.slots.1.startsAt",operator:"not_equals",value:null}]},branch:["select_slot_2","create_appointment","confirm_case","send_confirmation"]},
+        {id:"three",label:"Slot 3",condition:{match:"all",conditions:[{field:"body",operator:"equals",value:"3"},{field:"steps.get_case.record.state.slots.2.startsAt",operator:"not_equals",value:null}]},branch:["select_slot_3","create_appointment","confirm_case","send_confirmation"]},
+        {id:"four",label:"Slot 4",condition:{match:"all",conditions:[{field:"body",operator:"equals",value:"4"},{field:"steps.get_case.record.state.slots.3.startsAt",operator:"not_equals",value:null}]},branch:["select_slot_4","create_appointment","confirm_case","send_confirmation"]},
+        {id:"five",label:"Slot 5",condition:{match:"all",conditions:[{field:"body",operator:"equals",value:"5"},{field:"steps.get_case.record.state.slots.4.startsAt",operator:"not_equals",value:null}]},branch:["select_slot_5","create_appointment","confirm_case","send_confirmation"]}
       ],defaultLabel:"Invalid Slot",defaultBranch:["send_invalid_slot"] },
     ...[1,2,3,4,5].map((number)=>({id:`select_slot_${number}`,label:`Select Slot ${number}`,apiName:`select_slot_${number}`,key:"ASSIGNMENT",variableName:"selectedSlot",variableType:"record",operator:"set",value:{path:`steps.get_case.record.state.slots.${number-1}`}})),
     ...send("send_invalid_slot","Send Invalid Slot Reply",{path:"variables.messageChannel"},invalidSlotMessage),
