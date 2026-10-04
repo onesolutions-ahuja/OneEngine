@@ -103,7 +103,7 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
   const requestMethod = String(method || "GET").toUpperCase();
   if (!ALLOWED_METHODS.has(requestMethod)) throw new Error(`Unsupported HTTP method: ${requestMethod}`);
   const requestHeaders = { Accept: "application/json", ...headers };
-  const effectiveAuthType = connection.auth_type || "none";
+  const effectiveAuthType = String(connection.auth_type || "none").toLowerCase();
   const connectionConfiguration = connection.connector_configuration || {};
   const oauthOperation = {
     key: "oauth_client_credentials",
