@@ -9,7 +9,7 @@ export const dockItems = [
   { id: 'store', label: 'OneStore', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onestore-dock-clean.svg?v=20261004a`, scaled: true },
   { id: 'till', label: 'OneTill', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onetill-dock-clean.svg?v=20261004a`, scaled: true },
   { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
-  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace-dock.png?v=20261003c`, scaled: true },
+  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg?v=20261004a`, scaled: true },
 ]
 
 const trashItem = {
@@ -20,7 +20,7 @@ const trashItem = {
 
 const mobileDockItems = [
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png` },
-  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace-dock.png?v=20261003c` },
+  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg?v=20261004a` },
   { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png` },
 ]
 
@@ -34,7 +34,7 @@ function DockItem({ item, mouseX, onActivate }) {
   const width = useSpring(widthTarget, { mass: 0.1, stiffness: 150, damping: 12 })
 
   return (
-    <motion.button ref={ref} type="button" className="efb-dock-item" style={{ width }} onClick={onActivate} aria-label={item.label}>
+    <motion.button ref={ref} type="button" className="efb-dock-item" style={{ width }} onPointerDown={item.id === 'store' ? onActivate : undefined} onClick={onActivate} aria-label={item.label}>
       <span className="efb-dock-icon-wrap">
         <img className={`${item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'}${item.id === 'developer' && item.src.includes('one-developer-dock.svg') ? ' efb-dock-image--developer' : ''}${['store','till','workspace'].includes(item.id) ? ' efb-dock-image--app-art' : ''}`} src={item.src} alt="" draggable="false" />
       </span>
