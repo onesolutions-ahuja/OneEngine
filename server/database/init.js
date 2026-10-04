@@ -2075,6 +2075,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: async client => {
         await client.query("ALTER TABLE platform_workflow_runs ALTER COLUMN error_text TYPE TEXT");
         await client.query("ALTER TABLE platform_workflow_step_runs ALTER COLUMN error_text TYPE TEXT");
+        await client.query("CREATE UNIQUE INDEX IF NOT EXISTS uq_communication_provider_message ON platform_communication_events(company_id,channel,provider_message_id) WHERE provider_message_id IS NOT NULL");
 
         const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
