@@ -4862,7 +4862,34 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (new Set(names).size !== names.length) throw new Error("Screen component names must be unique");
       const visibilityOperators = new Set(["truthy","falsy","is_empty","is_not_empty","equals","not_equals","contains","not_contains","greater_than","greater_or_equal","less_than","less_or_equal"]);
       const visibilityCompareOperators = new Set(["equals","not_equals","contains","not_contains","greater_than","greater_or_equal","less_than","less_or_equal"]);
+      const validateVisibilityLogic = (logic, count) => {
+        const value = String(logic || "").trim();
+        if (!value) throw new Error("Screen custom visibility logic is required");
+        if (value.length > 1000) throw new Error("Screen custom visibility logic must be 1000 characters or fewer");
+        const tokens = value.match(/\d+|AND|OR|NOT|\(|\)/gi) || [];
+        if (!tokens.length || tokens.join("").toUpperCase() !== value.replace(/\s+/g, "").toUpperCase()) throw new Error("Screen custom visibility logic is invalid");
+        const indexes = tokens.filter((token) => /^\d+$/.test(token)).map(Number);
+        if (!indexes.length || indexes.some((index) => index < 1 || index > count)) throw new Error("Screen custom visibility logic references an unavailable condition");
+      };
       for (const component of screen.components) {
+        const width = Number(component?.width ?? 12);
+        if (!Number.isInteger(width) || width < 1 || width > 12) throw new Error("Screen component width must be between 1 and 12 columns");
+        if (!["top","center","bottom"].includes(String(component?.verticalAlignment || "top"))) throw new Error("Screen component vertical alignment is invalid");
+        const mode = String(component?.visibilityMode || "");
+        const conditions = Array.isArray(component?.visibilityConditions) ? component.visibilityConditions : [];
+        if (mode && mode !== "always") {
+          if (!["all","any","custom"].includes(mode)) throw new Error("Screen component visibility mode is invalid");
+          if (!conditions.length) throw new Error("Screen component visibility requires at least one condition");
+          for (const condition of conditions) {
+            const operator = condition?.operator || "truthy";
+            if (!String(condition?.resource || "").trim()) throw new Error("Screen visibility condition requires a resource");
+            if (!visibilityOperators.has(operator)) throw new Error(`Unsupported screen visibility operator: ${operator}`);
+            if (String(condition.resource) === String(component.name || "")) throw new Error("A screen component cannot control its own visibility");
+            if (visibilityCompareOperators.has(operator) && String(condition?.value ?? "").trim() === "") throw new Error("Screen visibility comparison requires a compare value");
+          }
+          if (mode === "custom") validateVisibilityLogic(component.visibilityLogic, conditions.length);
+          continue;
+        }
         if (!component?.visibilityResource) continue;
         const operator = component.visibilityOperator || "truthy";
         if (!visibilityOperators.has(operator)) throw new Error(`Unsupported screen visibility operator: ${operator}`);
@@ -4891,7 +4918,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (typeof component?.defaultValue === "string" && /^(?:\$|steps\.|variables\.)/.test(component.defaultValue)) {
           next.defaultValue = resolveScreenResource(component.defaultValue);
         }
-        if (component?.visibilityResource) {
+        if (Array.isArray(component?.visibilityConditions) && component.visibilityConditions.length) {
+          next.visibilityInitialValues = component.visibilityConditions.map((condition) => resolveScreenResource(condition?.resource));
+        } else if (component?.visibilityResource) {
           next.visibilityInitialValue = resolveScreenResource(component.visibilityResource);
         }
         if (component?.type === "DATA_TABLE" && component?.dataResource) {
