@@ -27,7 +27,7 @@ test("OneAssistant uses one active communication-event router for SMS and WhatsA
   assert.ok(keys.includes("UPDATE_RECORD"));
   assert.ok(keys.includes("CONDITION"));
   assert.ok(keys.includes("ASSIGNMENT"));
-  assert.ok(keys.includes("SEND_APPOINTMENT_MESSAGE"));
+  assert.ok(keys.includes("SEND_COMMUNICATION"));
   assert.equal(keys.includes("APPOINTMENT_SESSION_CONTEXT"), false);
   assert.equal(keys.includes("PROCESS_APPOINTMENT_CONVERSATION"), false);
   assert.equal(keys.includes("PROCESS_APPOINTMENT_DATE_RESPONSE"), false);
@@ -39,7 +39,7 @@ test("OneAssistant uses one active communication-event router for SMS and WhatsA
   const channelAssignments = actions.filter((action) => action.key === "ASSIGNMENT" && action.variableName === "messageChannel");
   assert.ok(channelAssignments.some((action) => action.value === "SMS"));
   assert.ok(channelAssignments.some((action) => action.value === "WHATSAPP"));
-  const sends = actions.filter((action) => action.key === "SEND_APPOINTMENT_MESSAGE");
+  const sends = actions.filter((action) => action.key === "SEND_COMMUNICATION");
   assert.ok(sends.length > 0);
   assert.ok(sends.every((action) => action.channel?.path === "variables.messageChannel"));
   assert.ok(sends.every((action) => typeof action.message === "string" && action.message.length > 0));
@@ -90,13 +90,13 @@ test("workflow decisions can route on outputs from previous steps", async () => 
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
-  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_SORT","COLLECTION_FORMAT_TEXT","SEND_APPOINTMENT_MESSAGE"]) {
+  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_SORT","COLLECTION_FORMAT_TEXT","SEND_COMMUNICATION"]) {
     const definition = getWorkflowActionDefinition(key);
     assert.ok(definition, `${key} must be registered`);
     assert.equal(typeof definition.executor, "function");
     assert.ok(keys.includes(key), `${key} must be visible in the booking flow`);
   }
-  for (const hidden of ["APPOINTMENT_SESSION_CONTEXT","PROCESS_APPOINTMENT_CONVERSATION","PROCESS_APPOINTMENT_DATE_RESPONSE","PROCESS_APPOINTMENT_SLOT_RESPONSE","FIND_APPOINTMENT_SLOTS"]) {
+  for (const hidden of ["APPOINTMENT_SESSION_CONTEXT","PROCESS_APPOINTMENT_CONVERSATION","PROCESS_APPOINTMENT_DATE_RESPONSE","PROCESS_APPOINTMENT_SLOT_RESPONSE","FIND_APPOINTMENT_SLOTS","SEND_APPOINTMENT_MESSAGE"]) {
     assert.equal(keys.includes(hidden), false, `${hidden} must not hide booking business logic`);
   }
 
@@ -171,4 +171,41 @@ test("generic slot primitives expand, exclude overlaps and format text", async (
     record: {}, previousRecord: null, req: { user: {} }, object: null, workflowVariables,
   });
   assert.equal(formatted.text, "1. 09:00\n2. 09:30");
+});
+
+
+test("generic Send Communication supports in-app notifications", async () => {
+  const definition = getWorkflowActionDefinition("SEND_COMMUNICATION");
+  assert.ok(definition);
+  const queries = [];
+  const db = async (sql, params = []) => {
+    queries.push({ sql, params });
+    if (String(sql).includes("SELECT id FROM users")) return { rows: [{ id: "user-1" }] };
+    if (String(sql).includes("INSERT INTO platform_notifications")) return { rows: [{ id: "notification-1" }] };
+    return { rows: [] };
+  };
+  const result = await definition.executor({
+    db,
+    companyId: "company-1",
+    req: { user: { id: "user-1", companyId: "company-1" } },
+    record: { customer: { name: "Ada" } },
+    previousRecord: null,
+    object: null,
+    workflowVariables: { variables: {} },
+    action: {
+      key: "SEND_COMMUNICATION",
+      channel: "IN_APP",
+      recipient: "CURRENT_USER",
+      title: "Booking update",
+      message: "Hello {{customer.name}}",
+      templateContext: { customer: { name: "Ada" } },
+    },
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(result.channel, "IN_APP");
+  assert.ok(queries.some((entry) => String(entry.sql).includes("INSERT INTO platform_notifications")));
+});
+
+test("appointment-specific communication sender is removed from executable registry", () => {
+  assert.equal(getWorkflowActionDefinition("SEND_APPOINTMENT_MESSAGE"), null);
 });
