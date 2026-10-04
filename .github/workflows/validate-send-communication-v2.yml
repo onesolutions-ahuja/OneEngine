@@ -1,0 +1,46 @@
+name: Validate Send Communication V2
+
+on:
+  push:
+    branches:
+      - audit/send-communication-unification-v2-20261004
+    paths:
+      - ".github/workflows/validate-send-communication-v2.yml"
+      - "server/services/platformWorkflow.js"
+      - "server/services/communicationCore.js"
+      - "server/services/packageRegistry.js"
+      - "server/services/internalAppCatalog.js"
+      - "server/database/init.js"
+      - "server/database/schema.sql"
+      - "src/pages/developer/Builder2Page.jsx"
+      - "tests/appointmentWorkflow.test.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/send-communication-unification-v2-20261004
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Syntax
+        run: |
+          node --check server/services/platformWorkflow.js
+          node --check server/services/communicationCore.js
+          node --check server/services/packageRegistry.js
+          node --check server/services/internalAppCatalog.js
+          node --check server/database/init.js
+      - name: Focused tests
+        run: node --test tests/appointmentWorkflow.test.mjs
+      - name: Unit suite
+        run: npm run test:unit
+      - name: Production build
+        run: npm run build
