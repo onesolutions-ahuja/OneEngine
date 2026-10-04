@@ -79,7 +79,7 @@ function jobWorkflow(kind) {
 export function systemWorkflowDefinitions() {
   const functions = PLATFORM_FUNCTIONS.map(functionWorkflow);
   const actions = PLATFORM_ACTION_REGISTRY
-    .filter((item) => item?.key && item.key !== "WORKFLOW")
+    .filter((item) => item?.key && item.key !== "WORKFLOW" && item.systemVisible !== false)
     .map(actionWorkflow);
   const jobs = TRUSTED_JOB_KINDS.map(jobWorkflow);
   return [...functions, ...actions, ...jobs];
