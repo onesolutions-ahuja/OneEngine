@@ -1,0 +1,38 @@
+name: Validate Internal Workflow Adapter Visibility
+
+on:
+  push:
+    branches:
+      - audit/hide-internal-workflow-adapters-20261004
+    paths:
+      - ".github/workflows/validate-workflow-adapter-visibility.yml"
+      - "server/services/platformWorkflow.js"
+      - "server/routes/platform.js"
+      - "tests/workflowBuilderRegistryVisibility.test.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/hide-internal-workflow-adapters-20261004
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Syntax
+        run: |
+          node --check server/services/platformWorkflow.js
+          node --check server/routes/platform.js
+      - name: Tests
+        run: |
+          node --test tests/workflowBuilderRegistryVisibility.test.mjs
+          node --test tests/appointmentWorkflow.test.mjs
+      - name: Build
+        run: npm run build
