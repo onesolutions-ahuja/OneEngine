@@ -24,7 +24,7 @@ export function normalizeWaitConditionsConfig(config = {}) {
   return { ...WAIT_CONDITIONS_DEFAULTS, ...config }
 }
 
-export function waitConditionsConfigErrors(config = {}) {
+export function waitConditionsConfigErrors(config = {}, resources = []) {
   const c = normalizeWaitConditionsConfig(config)
   const errors = []
   if (!c.configurations.length) errors.push('Add at least one Wait Configuration.')
@@ -50,9 +50,18 @@ export function waitConditionsConfigErrors(config = {}) {
     }
     if (event.type === 'platform_event') {
       if (!String(event.eventType || '').trim()) errors.push(`${name}: select a platform event.`)
+      const eventMode = event.conditionMode || 'none'
+      if (!['none','all','any','custom'].includes(eventMode)) errors.push(`${name}: select valid platform event condition requirements.`)
+      if (eventMode !== 'none' && !(event.conditions || []).length) errors.push(`${name}: add at least one platform event condition.`)
+      if (eventMode === 'custom' && !String(event.customConditionLogic || '').trim()) errors.push(`${name}: enter platform event custom condition logic.`)
       ;(event.conditions || []).forEach((condition, conditionIndex) => {
         if (!condition.field || !condition.operator) errors.push(`${name}, platform event condition ${conditionIndex+1}: complete field and operator.`)
+        if (!['is_null','is_not_null'].includes(condition.operator) && (condition.value === '' || condition.value == null)) errors.push(`${name}, platform event condition ${conditionIndex+1}: enter or select a value.`)
+        if (condition.valueMode === 'resource' && !resources.some((resource) => resourcePath(resource) === condition.value)) errors.push(`${name}, platform event condition ${conditionIndex+1}: selected value resource is unavailable.`)
       })
+      if (event.outputVariable && !resources.some((resource) => resourcePath(resource) === event.outputVariable && resource.isCollection !== true && ['record','object'].includes(String(resource.dataType || '').toLowerCase()))) {
+        errors.push(`${name}: select a record variable for Platform Event Message output.`)
+      }
     }
   })
   return errors
@@ -79,7 +88,10 @@ export function waitConditionsRuntimeAction(instance) {
       id: row.id,
       label: row.label,
       waitCondition: conditionRuntime(row),
-      resumeEvent: row.resumeEvent,
+      resumeEvent: row.resumeEvent ? {
+        ...row.resumeEvent,
+        conditions: (row.resumeEvent.conditions || []).map((condition) => ({ ...condition })),
+      } : row.resumeEvent,
     })),
   }
 }
@@ -109,7 +121,8 @@ export default function GPTBuilderWaitConditions({ draft, updateConfig, resource
   const toggleConfiguration = (id) => persistOpenState({ ...openState, configurations: { ...(openState.configurations || {}), [id]: openState.configurations?.[id] === false } })
   const scalarResources = resources.filter((resource) => resource?.isCollection !== true)
   const dateTimeResources = scalarResources.filter((resource) => ['datetime','date'].includes(String(resource?.dataType || '').toLowerCase()))
-  const errors = useMemo(()=>waitConditionsConfigErrors(config),[JSON.stringify(config)])
+  const recordResources = scalarResources.filter((resource) => ['record','object'].includes(String(resource?.dataType || '').toLowerCase()))
+  const errors = useMemo(()=>waitConditionsConfigErrors(config, resources),[JSON.stringify(config),JSON.stringify(resources)])
   useEffect(()=>{ onConfiguredChange?.(errors.length===0,errors) },[JSON.stringify(errors)])
   const patch=(changes)=>updateConfig({...config,...changes})
   const patchConfiguration=(id,changes)=>patch({configurations:config.configurations.map((row)=>row.id===id?{...row,...changes}:row)})
@@ -133,14 +146,24 @@ export default function GPTBuilderWaitConditions({ draft, updateConfig, resource
           {row.conditionMode==='custom'?<label><span>Condition Logic <b>*</b></span><input maxLength={1000} value={row.customConditionLogic||''} onChange={(event)=>patchConfiguration(row.id,{customConditionLogic:event.target.value})} placeholder="Example: 1 AND NOT(2 OR 3)"/></label>:null}
         </>:null}
         <div className="gptb-wait-resume"><h4>Resume Event</h4>
-          <label><span>Resume When</span><select value={row.resumeEvent?.type||'specific_time'} onChange={(event)=>patchConfiguration(row.id,{resumeEvent:event.target.value==='platform_event'?{type:'platform_event',eventType:'',conditions:[]}:{type:'specific_time',baseTime:'$Flow.CurrentDateTime',offsetNumber:0,offsetUnit:'hours'}})}><option value="specific_time">A Specified Time Occurs</option><option value="platform_event">A Platform Event Message Is Received</option></select></label>
+          <label><span>Resume When</span><select value={row.resumeEvent?.type||'specific_time'} onChange={(event)=>patchConfiguration(row.id,{resumeEvent:event.target.value==='platform_event'?{type:'platform_event',eventType:'',conditionMode:'none',customConditionLogic:'',conditions:[],outputVariable:''}:{type:'specific_time',baseTime:'$Flow.CurrentDateTime',offsetNumber:0,offsetUnit:'hours'}})}><option value="specific_time">A Specified Time Occurs</option><option value="platform_event">A Platform Event Message Is Received</option></select></label>
           {(row.resumeEvent?.type||'specific_time')==='specific_time'?<>
             <label><span>Base Time <b>*</b></span><select value={row.resumeEvent?.baseTime||''} onChange={(event)=>patchResume(row.id,{baseTime:event.target.value})}><option value="$Flow.CurrentDateTime">$Flow.CurrentDateTime</option>{dateTimeResources.map((resource)=><option key={resource.id || resource.apiName} value={resourcePath(resource)}>{resourceLabel(resource)}</option>)}</select></label>
             <label><span>Offset Number</span><input type="number" step="1" value={row.resumeEvent?.offsetNumber??''} onChange={(event)=>patchResume(row.id,{offsetNumber:event.target.value})}/></label>
             <label><span>Offset Unit</span><select value={row.resumeEvent?.offsetUnit||'hours'} onChange={(event)=>patchResume(row.id,{offsetUnit:event.target.value})}><option value="hours">Hours</option><option value="days">Days</option></select></label>
           </>:<>
-            <label><span>Platform Event <b>*</b></span><select value={row.resumeEvent?.eventType||''} onChange={(event)=>patchResume(row.id,{eventType:event.target.value})}><option value="">Select a platform event</option>{eventTypes.map((event)=><option key={event.event_type||event.key||event.id} value={event.event_type||event.key||event.id}>{event.label||event.name||event.event_type||event.key}</option>)}</select></label>
-            <small>Event-field filtering is stored with this wait configuration and evaluated when matching messages arrive.</small>
+            <label><span>Platform Event <b>*</b></span><select value={row.resumeEvent?.eventType||''} onChange={(event)=>patchResume(row.id,{eventType:event.target.value,conditions:[],outputVariable:''})}><option value="">Select a platform event</option>{eventTypes.map((event)=><option key={event.event_type||event.key||event.id} value={event.event_type||event.key||event.id}>{event.label||event.name||event.event_type||event.key}</option>)}</select></label>
+            <label><span>Condition Requirements</span><select value={row.resumeEvent?.conditionMode||'none'} onChange={(event)=>patchResume(row.id,{conditionMode:event.target.value,customConditionLogic:event.target.value==='custom'?row.resumeEvent?.customConditionLogic||'':''})}><option value="none">No Conditions</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option></select></label>
+            {(row.resumeEvent?.conditionMode||'none')!=='none'?<>
+              <div className="gptb-gr-field-assignments">{(row.resumeEvent?.conditions||[]).map((condition,conditionIndex)=>{
+                const selectedEvent=eventTypes.find((event)=>(event.event_type||event.key||event.id)===row.resumeEvent?.eventType)
+                const eventFields=Array.isArray(selectedEvent?.field_schema)?selectedEvent.field_schema:[]
+                return <div key={condition.id}><span>{conditionIndex+1}</span><select value={condition.field||''} onChange={(event)=>patchResume(row.id,{conditions:(row.resumeEvent?.conditions||[]).map((item)=>item.id===condition.id?{...item,field:event.target.value}:item)})}><option value="">{eventFields.length?'Select event field':'No event fields available'}</option>{eventFields.map((field)=><option key={field.api_name||field.apiName||field.key} value={field.api_name||field.apiName||field.key}>{field.label||field.name||field.api_name||field.apiName||field.key}</option>)}</select><select value={condition.operator||'equals'} onChange={(event)=>patchResume(row.id,{conditions:(row.resumeEvent?.conditions||[]).map((item)=>item.id===condition.id?{...item,operator:event.target.value,value:['is_null','is_not_null'].includes(event.target.value)?'':item.value}:item)})}>{OPERATORS.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>{!['is_null','is_not_null'].includes(condition.operator)?<span className="gptb-wait-event-value"><select value={condition.valueMode||'literal'} onChange={(event)=>patchResume(row.id,{conditions:(row.resumeEvent?.conditions||[]).map((item)=>item.id===condition.id?{...item,valueMode:event.target.value,value:''}:item)})}><option value="literal">Value</option><option value="resource">Resource</option></select>{(condition.valueMode||'literal')==='resource'?<select value={condition.value||''} onChange={(event)=>patchResume(row.id,{conditions:(row.resumeEvent?.conditions||[]).map((item)=>item.id===condition.id?{...item,value:event.target.value}:item)})}><option value="">Select a resource</option>{scalarResources.map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resourceLabel(resource)}</option>)}</select>:<input maxLength={765} value={condition.value??''} onChange={(event)=>patchResume(row.id,{conditions:(row.resumeEvent?.conditions||[]).map((item)=>item.id===condition.id?{...item,value:event.target.value}:item)})} placeholder="Value"/>}</span>:<span/>}<button type="button" aria-label={`Remove platform event condition ${conditionIndex+1}`} onClick={()=>patchResume(row.id,{conditions:(row.resumeEvent?.conditions||[]).filter((item)=>item.id!==condition.id)})}><Trash2 size={13}/></button></div>
+              })}</div>
+              <button type="button" className="gptb-inline-action" onClick={()=>patchResume(row.id,{conditions:[...(row.resumeEvent?.conditions||[]),{id:uid('event-cond'),field:'',operator:'equals',valueMode:'literal',value:''}]})}><Plus size={13}/> Add Event Condition</button>
+              {row.resumeEvent?.conditionMode==='custom'?<label><span>Condition Logic <b>*</b></span><input maxLength={1000} value={row.resumeEvent?.customConditionLogic||''} onChange={(event)=>patchResume(row.id,{customConditionLogic:event.target.value})} placeholder="Example: 1 AND NOT(2 OR 3)"/></label>:null}
+            </>:null}
+            <label><span>Store Platform Event Message</span><select value={row.resumeEvent?.outputVariable||''} onChange={(event)=>patchResume(row.id,{outputVariable:event.target.value})}><option value="">Don't store output</option>{recordResources.map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resourceLabel(resource)}</option>)}</select></label>
           </>}
         </div>
         </> : null}
