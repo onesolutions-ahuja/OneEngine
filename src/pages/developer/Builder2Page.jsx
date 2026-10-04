@@ -142,6 +142,15 @@ const actionRowRuntimeValue=row=>{
 const actionRowsToInputs=rows=>Object.fromEntries((rows||[]).filter(row=>String(row.name||'').trim()).map(row=>[String(row.name).trim(),actionRowRuntimeValue(row)]))
 const formulaInputRows=inputs=>Object.entries(inputs&&typeof inputs==='object'&&!Array.isArray(inputs)?inputs:{}).map(([name,value])=>({id:uid(),name,...editableBinding(value)}))
 const formulaRowsToInputs=rows=>actionRowsToInputs(rows)
+const builderValue=value=>{
+  if(value&&typeof value==='object'&&!Array.isArray(value)&&typeof value.path==='string'&&Object.keys(value).every(key=>key==='path')) return value.path
+  if(value===null||value===undefined) return ''
+  if(typeof value==='object') return JSON.stringify(value)
+  return value
+}
+const fieldMapRows=map=>Object.entries(map&&typeof map==='object'&&!Array.isArray(map)?map:{}).map(([field,value])=>({id:uid(),field,value:builderValue(value)}))
+const assignmentOperatorToBuilder={set:'Equals',add:'Add',subtract:'Subtract',append:'Add Item',remove:'Remove Item'}
+
 
 const runtimeActionToBuilderNode=x=>{
   const rawType=String(x?.type||x?.key||'').toUpperCase()
@@ -160,6 +169,48 @@ const runtimeActionToBuilderNode=x=>{
     }}
   }
   const normalized=normalizeNodeType(rawType)
+  if(rawType==='GET_RECORDS'){
+    const inputs=actionInputs(x)
+    const limit=Number(inputs.limit||1)
+    return {...base,type:'GET_RECORDS',config:{
+      objectKey:inputs.objectKey||inputs.object_key||'',
+      conditionLogic:(inputs.match||'all')==='any'?'any':((inputs.filters||[]).length?'all':'none'),
+      conditions:(inputs.filters||[]).map(conditionToBuilder),
+      sortOrder:inputs.sortDirection||'none',
+      sortBy:inputs.sortField||'',
+      limit:limit<=1?'first':limit>=200?'all':'limited',
+      maxRecords:limit>1&&limit<200?limit:'',
+      store:'auto',
+    }}
+  }
+  if(['CREATE_RECORD','CREATE_RELATED_RECORD'].includes(rawType)){
+    const inputs=actionInputs(x)
+    return {...base,type:'CREATE_RECORDS',config:{
+      objectKey:inputs.objectKey||inputs.object_key||'',
+      createCount:'one',
+      valueMode:'manual',
+      fieldValues:fieldMapRows(inputs.fieldValues),
+    }}
+  }
+  if(['UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS'].includes(rawType)){
+    const inputs=actionInputs(x)
+    return {...base,type:'UPDATE_RECORDS',config:{
+      objectKey:inputs.objectKey||inputs.object_key||'',
+      recordId:builderValue(inputs.recordId||inputs.record_id||''),
+      updateMode:'conditions',
+      conditionLogic:'none',
+      conditions:[],
+      fieldValues:fieldMapRows(inputs.fieldValues),
+    }}
+  }
+  if(['ASSIGNMENT','SET_VARIABLE','ASSIGN_RECORD'].includes(rawType)){
+    const inputs=actionInputs(x)
+    return {...base,type:'ASSIGNMENT',config:{
+      resource:inputs.variableName?('variables.'+inputs.variableName):(inputs.resource||''),
+      operator:assignmentOperatorToBuilder[String(inputs.operator||'set').toLowerCase()]||'Equals',
+      value:builderValue(inputs.value),
+    }}
+  }
   if(rawType==='SEND_COMMUNICATION'){
     const inputs=actionInputs(x), channel=communicationBinding(inputs.channel), recipient=communicationBinding(inputs.recipient??inputs.to)
     return {...base,type:'ACTION',config:{
