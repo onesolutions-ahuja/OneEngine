@@ -121,7 +121,49 @@ function NewAutomation({ onCreate, onClose }) {
   </div>
 }
 
-function FieldSelect({ object, value, onChange }) {
+function startFieldType(field) {
+  return String(field?.field_type || field?.data_type || field?.type || 'text').toLowerCase()
+}
+
+function startOperators(field, allowIsChanged = false) {
+  const type = startFieldType(field)
+  const operators = [
+    ['equals', 'Equals'],
+    ['not_equals', 'Does Not Equal'],
+    ['is_empty', 'Is Null'],
+  ]
+  if (['number','decimal','currency','date','datetime','time'].includes(type)) operators.push(
+    ['greater_than', 'Greater Than'],
+    ['greater_than_or_equal', 'Greater Than or Equal'],
+    ['less_than', 'Less Than'],
+    ['less_than_or_equal', 'Less Than or Equal'],
+  )
+  if (allowIsChanged) operators.push(['changed', 'Is Changed'])
+  return operators
+}
+
+function StartConditionValue({ field, row, onChange }) {
+  if (row.operator === 'is_empty' || row.operator === 'changed') {
+    return <select value={String(row.value ?? true)} onChange={(event) => onChange(event.target.value === 'true')}><option value="true">True</option><option value="false">False</option></select>
+  }
+  const type = startFieldType(field)
+  const options = field?.config?.options || field?.config?.values || field?.options || []
+  if (['select','picklist'].includes(type) && Array.isArray(options) && options.length) {
+    return <select value={row.value ?? ''} onChange={(event) => onChange(event.target.value)}><option value="">Select a value</option>{options.map((option) => {
+      const value = typeof option === 'object' ? option.value ?? option.key ?? option.label : option
+      const label = typeof option === 'object' ? option.label ?? option.value ?? option.key : option
+      return <option key={String(value)} value={String(value)}>{String(label)}</option>
+    })}</select>
+  }
+  if (type === 'boolean') return <select value={String(row.value ?? false)} onChange={(event) => onChange(event.target.value === 'true')}><option value="false">False</option><option value="true">True</option></select>
+  if (['number','decimal','currency'].includes(type)) return <input type="number" value={row.value ?? ''} onChange={(event) => onChange(event.target.value === '' ? '' : Number(event.target.value))}/>
+  if (type === 'date') return <input type="date" value={row.value || ''} onChange={(event) => onChange(event.target.value)}/>
+  if (type === 'datetime') return <input type="datetime-local" value={row.value || ''} onChange={(event) => onChange(event.target.value)}/>
+  return <input value={row.value ?? ''} onChange={(event) => onChange(event.target.value)} placeholder="Value"/>
+}
+
+function ConditionsEditor({ object, value, onChange, allowIsChanged = false, customLogic = '', onCustomLogicChange }) {
+  const rows = value || []
   const [fields, setFields] = useState([])
   const [loading, setLoading] = useState(false)
   useEffect(() => {
@@ -129,30 +171,25 @@ function FieldSelect({ object, value, onChange }) {
     if (!object?.id) { setFields([]); return () => { live = false } }
     setLoading(true)
     apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`)
-      .then((response) => { if (live) setFields((Array.isArray(response?.data) ? response.data : []).filter((field) => field?.active !== false)) })
+      .then((response) => { if (live) setFields((Array.isArray(response?.data) ? response.data : []).filter((field) => field?.active !== false && field?.readable !== false)) })
       .catch(() => { if (live) setFields([]) })
       .finally(() => { if (live) setLoading(false) })
     return () => { live = false }
   }, [object?.id])
-  return <select value={value || ''} disabled={!object || loading} onChange={(event) => onChange(event.target.value)}>
-    <option value="">{loading ? 'Loading fields…' : object ? 'Select a field' : 'Select an object first'}</option>
-    {fields.map((field) => <option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>)}
-  </select>
-}
-
-function ConditionsEditor({ object, value, onChange }) {
-  const rows = value || []
   const patch = (index, next) => onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...next } : row))
   return <div className="gptb-conditions">
-    {rows.map((row, index) => <div className="gptb-condition-row" key={row.id || index}>
-      <FieldSelect object={object} value={row.field} onChange={(field) => patch(index, { field })}/>
-      <select value={row.operator || 'equals'} onChange={(event) => patch(index, { operator: event.target.value })}>
-        <option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="greater_than_or_equal">Greater Than or Equal</option><option value="less_than">Less Than</option><option value="less_than_or_equal">Less Than or Equal</option><option value="is_empty">Is Null</option>
-      </select>
-      {row.operator === 'is_empty' ? <select value={String(row.value ?? true)} onChange={(event) => patch(index, { value: event.target.value === 'true' })}><option value="true">True</option><option value="false">False</option></select> : <input value={row.value ?? ''} onChange={(event) => patch(index, { value: event.target.value })} placeholder="Value"/>}
-      <button aria-label={`Remove condition ${index + 1}`} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={14}/></button>
-    </div>)}
+    {rows.map((row, index) => {
+      const metadata = fields.find((field) => fieldKey(field) === row.field)
+      const operators = startOperators(metadata, allowIsChanged)
+      return <div className="gptb-condition-row" key={row.id || index}>
+        <select value={row.field || ''} disabled={!object || loading} onChange={(event) => patch(index, { field: event.target.value, operator: 'equals', value: '' })}><option value="">{loading ? 'Loading fields…' : object ? 'Select a field' : 'Select an object first'}</option>{fields.map((field) => <option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>)}</select>
+        <select value={row.operator || 'equals'} onChange={(event) => patch(index, { operator: event.target.value, value: ['changed','is_empty'].includes(event.target.value) ? true : '' })}>{operators.map(([operator,label]) => <option key={operator} value={operator}>{label}</option>)}</select>
+        <StartConditionValue field={metadata} row={row} onChange={(nextValue) => patch(index, { value: nextValue })}/>
+        <button aria-label={`Remove condition ${index + 1}`} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={14}/></button>
+      </div>
+    })}
     <button className="gptb-inline-action" onClick={() => onChange([...rows, { id: crypto.randomUUID?.() || String(Date.now()), field: '', operator: 'equals', value: '' }])}><Plus size={13}/> Add Condition</button>
+    {onCustomLogicChange ? <label className="gptb-start-custom-logic">Condition Logic<input value={customLogic || ''} onChange={(event) => onCustomLogicChange(event.target.value)} placeholder="Example: 1 AND (2 OR 3)"/></label> : null}
   </div>
 }
 
@@ -165,14 +202,14 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
       {flowType === 'record' ? <>
         <section><h3>Select Object</h3><label>Object<select value={value.objectKey || ''} onChange={(event) => onChange({ ...value, objectKey: event.target.value, conditions: [] })}><option value="">Select an object</option>{objects.map((item) => <option key={item.id || objectKey(item)} value={objectKey(item)}>{objectLabel(item)}</option>)}</select></label></section>
         <section><h3>Configure Trigger</h3><label>Trigger the Flow When<select value={value.trigger || 'created_or_updated'} onChange={(event) => onChange({ ...value, trigger: event.target.value })}><option value="created">A record is created</option><option value="updated">A record is updated</option><option value="created_or_updated">A record is created or updated</option><option value="deleted">A record is deleted</option></select></label></section>
-        <section><h3>Set Entry Conditions</h3><label>Condition Requirements<select value={value.conditionMode || 'none'} onChange={(event) => onChange({ ...value, conditionMode: event.target.value })}><option value="none">None</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="formula">Formula Evaluates to True</option></select></label>{value.conditionMode === 'formula' ? <label>Formula<textarea rows={4} value={value.formula || ''} onChange={(event) => onChange({ ...value, formula: event.target.value })} placeholder="Enter a boolean formula"/></label> : value.conditionMode !== 'none' ? <ConditionsEditor object={selectedObject} value={value.conditions} onChange={(conditions) => onChange({ ...value, conditions })}/> : null}</section>
+        <section><h3>Set Entry Conditions</h3><label>Condition Requirements<select value={value.conditionMode || 'none'} onChange={(event) => onChange({ ...value, conditionMode: event.target.value })}><option value="none">None</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option><option value="formula">Formula Evaluates to True</option></select></label>{value.conditionMode === 'formula' ? <label>Formula<textarea rows={4} value={value.formula || ''} onChange={(event) => onChange({ ...value, formula: event.target.value })} placeholder="Enter a boolean formula"/></label> : value.conditionMode !== 'none' ? <ConditionsEditor object={selectedObject} value={value.conditions} allowIsChanged={['updated','created_or_updated'].includes(value.trigger)} customLogic={value.customConditionLogic || ''} onCustomLogicChange={value.conditionMode === 'custom' ? (customConditionLogic) => onChange({ ...value, customConditionLogic }) : null} onChange={(conditions) => onChange({ ...value, conditions })}/> : null}</section>
         {showUpdateMode ? <section><h3>When to Run the Flow for Updated Records</h3><label className="gptb-radio"><input type="radio" name="gptb-update-mode" checked={(value.updateMode || 'every_time') === 'every_time'} onChange={() => onChange({ ...value, updateMode: 'every_time' })}/><span><b>Every time a record is updated and meets the condition requirements</b></span></label><label className="gptb-radio"><input type="radio" name="gptb-update-mode" checked={value.updateMode === 'transition'} onChange={() => onChange({ ...value, updateMode: 'transition' })}/><span><b>Only when a record is updated to meet the condition requirements</b></span></label></section> : null}
         {value.trigger !== 'deleted' ? <section><h3>Optimize the Flow for</h3><label className="gptb-radio"><input type="radio" name="gptb-optimize" checked={value.optimize === 'fast'} onChange={() => onChange({ ...value, optimize: 'fast', asyncPath: false, scheduledPaths: [] })}/><span><b>Fast Field Updates</b><small>Update fields on the record that triggered the flow before the record is saved.</small></span></label><label className="gptb-radio"><input type="radio" name="gptb-optimize" checked={(value.optimize || 'actions') === 'actions'} onChange={() => onChange({ ...value, optimize: 'actions' })}/><span><b>Actions and Related Records</b><small>Perform actions and update any related records after the record is saved.</small></span></label></section> : null}
         <GPTBuilderRecordTriggerPaths value={value} selectedObject={selectedObject} onChange={onChange}/>
       </> : null}
       {flowType === 'schedule' ? <>
         <section><h3>Set a Schedule</h3><div className="gptb-two-col"><label>Start Date<input type="date" value={value.startDate || ''} onChange={(event) => onChange({ ...value, startDate: event.target.value })}/></label><label>Start Time<input type="time" value={value.startTime || ''} onChange={(event) => onChange({ ...value, startTime: event.target.value })}/></label></div><label>Frequency<select value={value.frequency || 'Daily'} onChange={(event) => onChange({ ...value, frequency: event.target.value })}><option>Once</option><option>Daily</option><option>Weekly</option></select></label><details><summary>Advanced Options</summary><label>Batch Size<input type="number" min="1" max="200" value={value.batchSize ?? 200} onChange={(event) => onChange({ ...value, batchSize: Number(event.target.value) })}/><small>Enter a value from 1 through 200. The default is 200.</small></label></details></section>
-        <section><h3>Choose Object <small>(Optional)</small></h3><label>Object<select value={value.objectKey || ''} onChange={(event) => onChange({ ...value, objectKey: event.target.value, conditions: [] })}><option value="">None</option>{objects.map((item) => <option key={item.id || objectKey(item)} value={objectKey(item)}>{objectLabel(item)}</option>)}</select></label>{value.objectKey ? <><label>Condition Requirements<select value={value.conditionMode || 'none'} onChange={(event) => onChange({ ...value, conditionMode: event.target.value })}><option value="none">None</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="formula">Custom Condition Logic Is Met</option></select></label>{value.conditionMode !== 'none' ? <ConditionsEditor object={selectedObject} value={value.conditions} onChange={(conditions) => onChange({ ...value, conditions })}/> : null}</> : null}</section>
+        <section><h3>Choose Object <small>(Optional)</small></h3><label>Object<select value={value.objectKey || ''} onChange={(event) => onChange({ ...value, objectKey: event.target.value, conditions: [] })}><option value="">None</option>{objects.map((item) => <option key={item.id || objectKey(item)} value={objectKey(item)}>{objectLabel(item)}</option>)}</select></label>{value.objectKey ? <><label>Condition Requirements<select value={value.conditionMode || 'none'} onChange={(event) => onChange({ ...value, conditionMode: event.target.value })}><option value="none">None</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="formula">Custom Condition Logic Is Met</option></select></label>{value.conditionMode !== 'none' ? <ConditionsEditor object={selectedObject} value={value.conditions} customLogic={value.customConditionLogic || ''} onCustomLogicChange={value.conditionMode === 'custom' ? (customConditionLogic) => onChange({ ...value, customConditionLogic }) : null} onChange={(conditions) => onChange({ ...value, conditions })}/> : null}</> : null}</section>
       </> : null}
       {flowType === 'platform_event' ? <section><h3>Select Platform Event</h3><label>Platform Event<select value={value.eventKey || ''} onChange={(event) => onChange({ ...value, eventKey: event.target.value })}><option value="">Select an event</option>{eventTypes.map((item) => <option key={item.event_type} value={item.event_type}>{item.event_type}</option>)}</select></label>{value.eventKey ? <p className="gptb-help-text">{eventTypes.find((item) => item.event_type === value.eventKey)?.description || 'The flow runs when this event message is received.'}</p> : null}</section> : null}
     </div>
