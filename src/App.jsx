@@ -2433,12 +2433,7 @@ function Desktop({ onLock, onSignOut }) {
             />
           ) : enginePermissionNotice
         ) : activeApp === 'settings' ? (
-          <SettingsPage onOpenProfile={() => {
-            const next = { app: 'profile', section: null }
-            setRouteState(next)
-            setRoute('profile')
-            setActiveApp('profile')
-          }} />
+          <MetadataSettingsPage initialSection={routeState?.section || ''} />
         ) : activeApp === 'google-connect' ? (
           <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
