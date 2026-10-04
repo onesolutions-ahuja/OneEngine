@@ -14,6 +14,19 @@ export function runtimeCondition(row) {
   return { field: row.resource || row.field || '', operator, value: configuredValue(row.value) }
 }
 
+function parseObjectText(value, label) {
+  const text = String(value || '').trim()
+  if (!text) return {}
+  let parsed
+  try { parsed = JSON.parse(text) } catch { throw new Error(`${label} must be valid JSON`) }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${label} must be a JSON object`)
+  return parsed
+}
+
+function configuredObject(map) {
+  return Object.fromEntries(Object.entries(map || {}).map(([key, value]) => [key, configuredValue(value)]))
+}
+
 export function nativeRuntimeAction(node, resources = []) {
   const p = node.config || {}
   const base = { id: node.id, label: node.label, apiName: node.apiName, description: node.description || '', config: p }
@@ -33,5 +46,10 @@ export function nativeRuntimeAction(node, resources = []) {
   if (node.type === 'ASSIGNMENT') return { ...base, key: 'ASSIGNMENT', variableName: String(p.resource || '').replace(/^variables\./, ''),
     variableType: String(resources.find(r => r.value === p.resource)?.dataType || 'text').toLowerCase(),
     operator: { Equals: 'set', Add: 'add', Subtract: 'subtract', 'Add Item': 'append', 'Remove Item': 'remove' }[p.operator] || 'set', value: configuredValue(p.value) }
+  if (node.type === 'TRANSFORM') return { ...base, key: 'TRANSFORM', collection: configuredValue(p.source),
+    targetResource: p.target || '', transformMappings: configuredObject(parseObjectText(p.mappingsText, `${node.label}: field mappings`)) }
+  if (node.type === 'SUBFLOW') return { ...base, key: 'RUN_SUBFLOW', workflowId: p.flow || '',
+    workflowInputs: configuredObject(parseObjectText(p.inputsText, `${node.label}: input values`)),
+    outputMappings: parseObjectText(p.outputsText, `${node.label}: output values`) }
   return null
 }
