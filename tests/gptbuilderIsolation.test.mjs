@@ -54,8 +54,8 @@ test('GPT Builder phase 2 implements Salesforce Start configuration and first-sa
   assert.match(page, /apiNameFromLabel\(label\)/)
   assert.match(page, /disabled=\{saved\}/)
   assert.match(page, /The API name can’t be edited after the flow is saved/)
-  assert.match(page, /workflowId && !forceNewFlow \? `\\/api\\/platform\\/rules\\//)
-  assert.match(page, /method: workflowId && !forceNewFlow \? 'PUT' : 'POST'/)
+  assert.ok(page.includes("workflowId && !forceNewFlow ? `/api/platform/rules/"))
+  assert.ok(page.includes("method: workflowId && !forceNewFlow ? 'PUT' : 'POST'"))
 })
 
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
