@@ -74,6 +74,7 @@ export default function createOnlineRouter({
         createInventoryMovement,
       },
     });
+    if (actionKey === "RUN_SUBFLOW" && execution.result?.outputs) return execution.result.outputs;
     return execution.result;
   }
 
