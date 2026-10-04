@@ -5535,8 +5535,8 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
   // Appointment orchestration actions are safe to execute in Debug because
   // their database writes use the Debug transaction and are rolled back.
-  // SEND_APPOINTMENT_MESSAGE is intentionally omitted so outbound SMS/WhatsApp
-  // remains simulated.
+  // SEND_COMMUNICATION is intentionally omitted so external and in-app delivery
+  // remains simulated during Debug.
   ]);
 
 export function friendlyWorkflowError(error, actionType = "") {
