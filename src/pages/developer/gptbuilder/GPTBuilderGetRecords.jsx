@@ -7,6 +7,15 @@ const objectLabel = (value) => value?.label || value?.name || objectKey(value)
 const fieldKey = (value) => String(value?.api_name || value?.apiName || value?.field_key || value?.key || value?.id || '')
 const fieldLabel = (value) => value?.label || value?.name || fieldKey(value)
 const fieldType = (value) => String(value?.field_type || value?.data_type || value?.type || 'text').toLowerCase()
+const resourceTypeForField = (field) => {
+  const type = fieldType(field)
+  if (['number','decimal'].includes(type)) return 'number'
+  if (type === 'currency') return 'currency'
+  if (type === 'boolean') return 'boolean'
+  if (type === 'date') return 'date'
+  if (type === 'datetime') return 'datetime'
+  return 'text'
+}
 const uid = () => globalThis.crypto?.randomUUID?.() || `row-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export const GET_RECORDS_DEFAULTS = Object.freeze({
@@ -58,6 +67,7 @@ export function getRecordsConfigErrors(config = {}) {
   if (c.storeMode === 'choose' && !c.selectedFields.length) errors.push('Select at least one field to store.')
   if (c.storeMode === 'advanced') {
     if (c.advancedMode === 'record' && !c.advancedTarget) errors.push('Select a record variable.')
+    if (c.advancedMode === 'record' && !c.selectedFields.length) errors.push('Select at least one field to store.')
     if (c.advancedMode === 'fields' && !c.fieldAssignments.some((row) => row.field && row.resource)) errors.push('Map at least one field to a variable.')
     if (c.recordLimit !== 'first' && c.advancedMode !== 'record') errors.push('Multiple records must be stored in a record collection variable.')
   }
@@ -94,7 +104,7 @@ export function getRecordsRuntimeAction(instance) {
   }
   if (c.storeMode === 'advanced') {
     action.advancedAssignment = c.advancedMode === 'record'
-      ? { mode: c.recordLimit === 'first' ? 'record' : 'collection', resourceName: c.advancedTarget, fields: c.selectedFields }
+      ? { mode: c.recordLimit === 'first' ? 'record' : 'collection', resourceName: String(c.advancedTarget || '').replace(/^variables\./, ''), fields: c.selectedFields }
       : { mode: 'fields', mappings: c.fieldAssignments.filter((row) => row.field && row.resource).map((row) => ({ field: row.field, resourceName: String(row.resource).replace(/^variables\./, '') })) }
   }
   return action
@@ -150,9 +160,9 @@ function operatorsFor(field) {
   return [...base, ...comparisons, ...textual, ...inOps]
 }
 
-function NewVariableDialog({ objectKey: targetObject, collectionDefault = false, onCreate, onClose }) {
+function NewVariableDialog({ objectKey: targetObject, collectionDefault = false, initialDataType = '', onCreate, onClose }) {
   const [apiName, setApiName] = useState('')
-  const [dataType, setDataType] = useState(targetObject ? 'record' : 'text')
+  const [dataType, setDataType] = useState(initialDataType || (targetObject ? 'record' : 'text'))
   const [isCollection, setIsCollection] = useState(collectionDefault)
   const [objectKeyValue, setObjectKeyValue] = useState(targetObject || '')
   const valid = /^[A-Za-z][A-Za-z0-9_]*$/.test(apiName)
@@ -193,11 +203,19 @@ function ResourcePicker({ value, onChange, resources, flowType, startConfig, obj
     if (targetObject && resource.dataType === 'record' && resource.objectKey !== targetObject) return false
     return true
   })
-  const priorRows = elements.filter((element) => element.key === 'get_records' && element.configured).map((element) => ({
-    value: `steps.${element.apiName}.${element.config?.recordLimit === 'first' ? 'record' : 'records'}`,
-    label: element.label,
-    type: element.config?.recordLimit === 'first' ? 'Record' : 'Record Collection',
-  }))
+  const priorRows = expected && expected !== 'record'
+    ? []
+    : elements.filter((element) => element.key === 'get_records' && element.configured).map((element) => {
+      const object = objects.find((item) => objectKey(item) === element.config?.objectKey)
+      const first = element.config?.recordLimit === 'first'
+      return {
+        value: `steps.${element.apiName}.${first ? 'record' : 'records'}`,
+        label: element.label,
+        type: first ? 'Record' : 'Record Collection',
+        children: first && Boolean(object?.id),
+        objectId: first ? object?.id : '',
+      }
+    })
   const roots = [
     ...(flowType === 'record' && startObject ? [{ value: '$record', label: 'Current Record', type: 'Record', children: true, objectId: startObject.id }, { value: '$previous', label: 'Previous Record', type: 'Record', children: true, objectId: startObject.id }] : []),
     { value: '$user.id', label: 'Current User ID', type: 'Global Variable' },
@@ -304,7 +322,7 @@ export default function GPTBuilderGetRecords({
             {row.operator === 'is_null' ? <select value={String(row.value ?? true)} onChange={(event) => patchCondition(row.id, { value: event.target.value === 'true' })}><option value="true">True</option><option value="false">False</option></select> : <div className="gptb-gr-value">
               {!['in','not_in'].includes(row.operator) ? <button type="button" onClick={() => patchCondition(row.id, { valueMode: row.valueMode === 'resource' ? 'literal' : 'resource', value: '' })}>{row.valueMode === 'resource' ? 'Resource' : 'Value'}</button> : null}
               {row.valueMode === 'resource' || ['in','not_in'].includes(row.operator)
-                ? <ResourcePicker value={row.value || ''} onChange={(value) => patchCondition(row.id, { value, valueMode: 'resource' })} {...{resources,flowType,startConfig,objects,elements}} collection={['in','not_in'].includes(row.operator) ? true : null}/>
+                ? <ResourcePicker value={row.value || ''} onChange={(value) => patchCondition(row.id, { value, valueMode: 'resource' })} {...{resources,flowType,startConfig,objects,elements}} expected={metadata ? resourceTypeForField(metadata) : null} collection={['in','not_in'].includes(row.operator) ? true : null}/>
                 : <LiteralValue field={metadata} value={row.value} onChange={(value) => patchCondition(row.id, { value })}/>}
             </div>}
             <button type="button" className="gptb-gr-remove" aria-label={`Remove condition ${index + 1}`} onClick={() => patch({ conditions: config.conditions.filter((item) => item.id !== row.id) })}><Trash2 size={13}/></button>
@@ -344,7 +362,7 @@ export default function GPTBuilderGetRecords({
           <label><span>{config.recordLimit === 'first' ? 'Record Variable' : 'Record Collection Variable'} <b>*</b></span><ResourcePicker value={config.advancedTarget} onChange={(advancedTarget) => patch({ advancedTarget })} resources={resources} flowType={flowType} startConfig={startConfig} objects={objects} elements={elements} expected="record" targetObject={config.objectKey} collection={config.recordLimit !== 'first'} allowNew onNewResource={() => setNewResource({ purpose: 'advancedTarget', objectKey: config.objectKey, collection: config.recordLimit !== 'first' })}/></label>
           <div className="gptb-gr-field-list"><h4>Select Fields to Store</h4>{config.selectedFields.map((field, index) => <div key={`adv-${index}`}><FieldPicker fields={fields.filter((item) => !config.selectedFields.includes(fieldKey(item)) || fieldKey(item) === field)} value={field} onChange={(next) => patch({ selectedFields: config.selectedFields.map((item, itemIndex) => itemIndex === index ? next : item) })}/><button type="button" aria-label={`Remove advanced field ${index + 1}`} onClick={() => patch({ selectedFields: config.selectedFields.filter((_, itemIndex) => itemIndex !== index) })}><Trash2 size={13}/></button></div>)}<button type="button" className="gptb-inline-action" onClick={() => patch({ selectedFields: [...config.selectedFields, ''] })}><Plus size={13}/> Add Field</button></div>
         </> : <div className="gptb-gr-field-assignments">
-          {config.fieldAssignments.map((row, index) => <div key={row.id}><span>{index + 1}</span><FieldPicker fields={fields} value={row.field} onChange={(field) => patch({ fieldAssignments: config.fieldAssignments.map((item) => item.id === row.id ? { ...item, field } : item) })}/><ResourcePicker value={row.resource} onChange={(resource) => patch({ fieldAssignments: config.fieldAssignments.map((item) => item.id === row.id ? { ...item, resource } : item) })} resources={resources} flowType={flowType} startConfig={startConfig} objects={objects} elements={elements} allowNew onNewResource={() => setNewResource({ purpose: `assignment:${row.id}` })}/><button type="button" aria-label={`Remove assignment ${index + 1}`} onClick={() => patch({ fieldAssignments: config.fieldAssignments.filter((item) => item.id !== row.id) })}><Trash2 size={13}/></button></div>)}
+          {config.fieldAssignments.map((row, index) => <div key={row.id}><span>{index + 1}</span><FieldPicker fields={fields} value={row.field} onChange={(field) => patch({ fieldAssignments: config.fieldAssignments.map((item) => item.id === row.id ? { ...item, field } : item) })}/><ResourcePicker value={row.resource} onChange={(resource) => patch({ fieldAssignments: config.fieldAssignments.map((item) => item.id === row.id ? { ...item, resource } : item) })} resources={resources} flowType={flowType} startConfig={startConfig} objects={objects} elements={elements} expected={resourceTypeForField(fields.find((field) => fieldKey(field) === row.field))} collection={false} allowNew onNewResource={() => setNewResource({ purpose: `assignment:${row.id}`, dataType: resourceTypeForField(fields.find((field) => fieldKey(field) === row.field)) })}/><button type="button" aria-label={`Remove assignment ${index + 1}`} onClick={() => patch({ fieldAssignments: config.fieldAssignments.filter((item) => item.id !== row.id) })}><Trash2 size={13}/></button></div>)}
           <button type="button" className="gptb-inline-action" onClick={() => patch({ fieldAssignments: [...config.fieldAssignments, { id: uid(), field: '', resource: '' }] })}><Plus size={13}/> Add Field Assignment</button>
         </div>}
       </div> : null}
@@ -352,6 +370,6 @@ export default function GPTBuilderGetRecords({
 
     {loadingFields ? <div className="gptb-gr-loading">Loading object fields…</div> : null}
     {errors.length ? <div className="gptb-gr-errors"><b>Complete this Get Records element</b>{errors.map((error) => <span key={error}>{error}</span>)}</div> : null}
-    {newResource ? <NewVariableDialog objectKey={newResource.objectKey || ''} collectionDefault={Boolean(newResource.collection)} onCreate={storeResource} onClose={() => setNewResource(null)}/> : null}
+    {newResource ? <NewVariableDialog objectKey={newResource.objectKey || ''} collectionDefault={Boolean(newResource.collection)} initialDataType={newResource.dataType || ''} onCreate={storeResource} onClose={() => setNewResource(null)}/> : null}
   </div>
 }
