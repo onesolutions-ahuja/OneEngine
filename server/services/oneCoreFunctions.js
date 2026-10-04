@@ -1,3 +1,4 @@
+import { resolveBindingTree } from "./platformRecordPaths.js";
 import { decryptCredentials, redactHeadersForLog, redactValue } from "./integrationCredentials.js";
 
 const ALLOWED_METHODS = new Set(["GET","POST","PUT","PATCH","DELETE"]);
@@ -66,12 +67,13 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
   if (connection?.credentials_encrypted) credentials = decryptCredentials(connection.credentials_encrypted) || {};
 
   const base = safeBaseUrl(connection?.base_url || definition.base_url);
-  const renderedEndpoint = interpolate(endpoint || "/", variables);
+  const connectionVariables = { ...(connection?.connector_configuration || {}), realmId: connection?.connector_configuration?.realmId || credentials?.realmId || credentials?.realm_id || credentials?.companyId || credentials?.company_id || "" };
+  const renderedEndpoint = interpolate(endpoint || "/", { ...connectionVariables, ...(variables || {}) });
   const url = new URL(renderedEndpoint, base.toString().replace(/\/$/, "") + "/");
   if (url.origin !== base.origin) throw new Error("ONE_HTTP_REQUEST endpoint must remain on the configured provider host");
 
   for (const [key, value] of Object.entries(query || {})) {
-    if (value !== undefined && value !== null) url.searchParams.set(key, interpolate(String(value), variables));
+    if (value !== undefined && value !== null) url.searchParams.set(key, interpolate(String(value), { ...connectionVariables, ...(variables || {}) }));
   }
 
   const requestMethod = String(method || "GET").toUpperCase();
@@ -142,7 +144,7 @@ export function oneHttpRequestDefinition() {
       method: action.method,
       endpoint: action.endpoint,
       headers: action.headers || {},
-      body: action.body,
+      body: resolveBindingTree(action.body, { record, user: req?.user || null, variables: workflowVariables }),
       query: action.query || {},
       variables: { ...(record || {}), ...(workflowVariables?.variables || {}), input: workflowVariables?.input || {} },
       timeoutMs: action.timeoutMs,
