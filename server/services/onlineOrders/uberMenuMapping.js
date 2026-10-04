@@ -203,61 +203,6 @@ function normalizeMapping(configuration, customFields) {
   return mappings;
 }
 
-export function sanitizeUberMenuMapping(configuration) {
-  if (configuration == null) return null;
-  if (typeof configuration !== "object" || Array.isArray(configuration)) {
-    failInvalid("Uber menu mappings must be an object");
-  }
-  const sourceEntries = mappingList(configuration);
-  const normalized = normalizeMapping(configuration, null);
-  const fields = {};
-  for (let index = 0; index < normalized.length; index += 1) {
-    const mapping = normalized[index];
-    const [sourceTarget] = sourceEntries[index] || [];
-    const target = ({
-      name: "title",
-      category_name: "category",
-      available_on_uber: "is_available",
-    })[mapping.target] || mapping.target;
-    if (mapping.sameAsSource === false) {
-      fields[target] = { same_as_source: false, override_field: mapping.overrideField };
-    } else if (mapping.type === "constant") {
-      const value = mapping.value;
-      if (value !== null && !["string", "number", "boolean"].includes(typeof value)) {
-        failInvalid(`Constant mapping for ${sourceTarget} must be a scalar value`, { target: sourceTarget });
-      }
-      fields[target] = { same_as_source: true, type: "constant", value };
-    } else if (mapping.type === "custom") {
-      fields[target] = { same_as_source: true, type: "custom", field: mapping.field };
-    } else if (mapping.source.customField) {
-      fields[target] = {
-        same_as_source: true,
-        type: "source",
-        path: `product.custom_values.${mapping.source.customField}`,
-      };
-    } else {
-      const sourcePathByField = {
-        id: "product.id",
-        name: "product.name",
-        description: "product.description",
-        price: "product.price",
-        vat_rate: "product.vat_rate",
-        active: "product.active",
-        available_on_uber: "product.available_on_uber",
-        uber_item_id: "product.uber_item_id",
-        category_name: "product.category.name",
-        category_id: "product.category.id",
-      };
-      fields[target] = {
-        same_as_source: true,
-        type: "source",
-        path: sourcePathByField[mapping.source.productField],
-      };
-    }
-  }
-  return { fields };
-}
-
 function hasValue(value) {
   return value !== undefined && value !== null && !(typeof value === "string" && value.trim() === "");
 }
@@ -309,36 +254,3 @@ function mappedSourceValue(product, mapping) {
  * in the product's generic Platform custom_values record (or a provider
  * override under provider_overrides.uber.menu).
  */
-export function resolveUberMenuProducts(products, configuration, { customFields } = {}) {
-  const mappings = normalizeMapping(configuration, customFields);
-  if (!mappings.length) return { products: products || [], mapped: false };
-
-  const resolved = (products || []).map((product) => ({ ...product }));
-  const missingOverrides = [];
-
-  for (const mapping of mappings) {
-    for (let index = 0; index < resolved.length; index += 1) {
-      const product = resolved[index];
-      if (mapping.sameAsSource === false) {
-        const value = overrideValue(product, mapping);
-        if (!hasValue(value)) {
-          missingOverrides.push({ productId: product.id, field: mapping.targetName });
-          continue;
-        }
-        product[mapping.target] = value;
-      } else {
-        product[mapping.target] = mappedSourceValue(product, mapping);
-      }
-    }
-  }
-
-  if (missingOverrides.length) {
-    throw new UberMenuMappingError(
-      "Required Uber menu custom overrides are missing for one or more products",
-      "MISSING_REQUIRED_OVERRIDE",
-      { missingOverrides }
-    );
-  }
-
-  return { products: resolved, mapped: true };
-}
