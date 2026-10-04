@@ -13,7 +13,11 @@ on:
       - "src/pages/settings/Platform/WorkflowAdmin.jsx"
       - "src/pages/developer/Builder2Page.jsx"
       - "src/pages/developer/Builder2Page.css"
+      - "src/pages/developer/Builder2AutoLayout.jsx"
+      - "src/pages/developer/Builder2GraphCanvas.jsx"
       - "src/pages/developer/builder2Model.js"
+      - "src/navigation/routes.js"
+      - "scripts/build-pages-routes.mjs"
       - "src/pages/settings/OneBuilder.jsx"
       - "src/pages/developer/OneDeveloperPage.jsx"
       - "src/pages/settings/Platform/WorkflowRunsAdmin.jsx"
@@ -71,13 +75,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for i in {1..60}; do
-            if curl -fsS "$PLAYWRIGHT_BASE_URL" >/dev/null && curl -fsS "$ONEPOS_API_URL/api/health" >/dev/null; then
+          for i in {1..90}; do
+            DEPLOYED_SHA="$(curl -fsS "${PLAYWRIGHT_BASE_URL}deploy-sha.txt" 2>/dev/null || true)"
+            if [ "$DEPLOYED_SHA" = "$GITHUB_SHA" ] && curl -fsS "$ONEPOS_API_URL/api/health" >/dev/null; then
+              echo "Testing deployed commit $DEPLOYED_SHA"
               exit 0
             fi
+            echo "Waiting for Pages commit $GITHUB_SHA (currently ${DEPLOYED_SHA:-unavailable})..."
             sleep 5
           done
-          echo "Frontend/API did not become ready" >&2
+          echo "Exact frontend commit/API did not become ready" >&2
           exit 1
       - name: Verify E2E credentials
         shell: bash
