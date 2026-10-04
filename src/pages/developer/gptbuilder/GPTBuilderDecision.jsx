@@ -69,6 +69,7 @@ export function decisionRuntimeAction(instance) {
       label: outcome.label || `Outcome ${index + 1}`,
       apiName: outcome.apiName || apiNameFromLabel(outcome.label || `Outcome ${index + 1}`, `Outcome_${index + 1}`),
       instructions: c.logicMode === 'ai' ? outcome.instructions : undefined,
+      branch: Array.isArray(outcome.branch) ? outcome.branch : [],
       condition: c.logicMode === 'manual' ? {
         match: outcome.conditionLogic === 'any' ? 'any' : 'all',
         customConditionLogic: outcome.conditionLogic === 'custom' ? outcome.customConditionLogic : undefined,
@@ -76,6 +77,7 @@ export function decisionRuntimeAction(instance) {
       } : undefined,
     })),
     defaultLabel: c.defaultLabel || 'Default Outcome',
+    defaultBranch: Array.isArray(c.defaultBranch) ? c.defaultBranch : [],
   }
 }
 
@@ -102,7 +104,7 @@ export default function GPTBuilderDecision({ draft, updateConfig, resources, flo
   }
   const addOutcome = () => {
     const number = config.outcomes.length + 1
-    patch({ outcomes: [...config.outcomes, { id: uid(), label: `Outcome ${number}`, apiName: `Outcome_${number}`, conditionLogic: 'all', customConditionLogic: '', conditions: [], instructions: '' }] })
+    patch({ outcomes: [...config.outcomes, { id: uid(), label: `Outcome ${number}`, apiName: `Outcome_${number}`, conditionLogic: 'all', customConditionLogic: '', conditions: [], instructions: '', branch: [] }] })
   }
 
   return <div className="gptb-gr gptb-decision">
