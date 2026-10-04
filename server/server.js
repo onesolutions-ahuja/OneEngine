@@ -63,8 +63,6 @@ import createOneAssistantRouter from "./routes/oneAssistant.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
-import createTemporaryDbExportRouter from "./routes/temporaryDbExport.js";
-import { logDatabaseWorkbook } from "./services/tempDbExcelLogExport.js";
 import createAttendanceRouter from "./routes/attendance.js"; // Staff clock in/out — routes/attendance.js
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
@@ -2169,7 +2167,6 @@ app.use("/api", createKioskRouter({ authenticate, authorize, db, pool, writeAudi
 app.use("/api", createReturnsRouter({ authenticate, authorize, db, pool, createInventoryMovement, writeAudit, canonicalTransactionWriter: createCanonicalRelatedTransaction }));
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
-app.use("/api", createTemporaryDbExportRouter({ pool, env: process.env }));
 
 /*
 |--------------------------------------------------------------------------
@@ -2459,11 +2456,6 @@ async function startServer() {
     await db("SELECT NOW()");
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
     console.log("onePOS: core database ready");
-    if (process.env.TEMP_DB_EXPORT_LOG === "1") {
-      setTimeout(() => {
-        logDatabaseWorkbook(pool).catch((error) => console.error("DBXLSX|UNHANDLED|" + String(error?.message || error)));
-      }, 1000).unref?.();
-    }
 
     // Canonical development tenant seed: a clean database must become usable
     // without manual SQL or copied production data.
