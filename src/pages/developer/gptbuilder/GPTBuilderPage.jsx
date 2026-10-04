@@ -1461,6 +1461,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                             draft={draft}
                             updateConfig={updateConfig}
                             resources={resources}
+                            objects={objects}
                             onConfiguredChange={setConfigured}
                           />
                         : activeElement.key === 'transform'
