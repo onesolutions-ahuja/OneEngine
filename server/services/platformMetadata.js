@@ -1546,7 +1546,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         COALESCE(
           NULLIF(p.manifest->>'svg',''),
           NULLIF(p.manifest->>'iconUrl',''),
-          '/icons/apps/' || replace(p.package_key,'_','-') || '.svg'
+          'https://raw.githubusercontent.com/onesolutions-ahuja/OneEngine/main/public/icons/apps/' || replace(p.package_key,'_','-') || '.svg'
         ),
         COALESCE(NULLIF(p.manifest->>'landingRoute',''),NULLIF(p.manifest->>'route',''),'/workspace'),
         p.category,
