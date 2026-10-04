@@ -2501,7 +2501,7 @@ export function packageDefinition(entry) {
             objectKey: "uber_eats_connection",
             label: "Test Uber Eats Connection",
             description: "Test connector credentials and discover accessible stores.",
-            handlerKey: "UBER_TEST_CONNECTION",
+            handlerKey: "CONNECTOR_TEST_CONNECTION",
             requiredPermission: "online_orders.configure",
           },
           {
