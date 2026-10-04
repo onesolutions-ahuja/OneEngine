@@ -493,7 +493,7 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
       setStartConfig(nextStart)
       setNodes(savedActions.filter(x=>x?._builderResource!==true&&normalizeNodeType(x.type||x.key)!=='END').map(runtimeActionToBuilderNode))
       setEdges(Array.isArray(layout.edges)?layout.edges:[])
-      setResources((Array.isArray(action.resources)?action.resources:[]).map(resource=>({...resource,value:String(resource.value||'').startsWith('variables.')||String(resource.value||'').startsWith('
+      setResources((Array.isArray(action.resources)?action.resources:[]).map(resource=>({...resource,value:String(resource.value||'').startsWith('variables.')||String(resource.value||'').charAt(0)===String.fromCharCode(36)?resource.value:'variables.'+resourceNameOf(resource)})))
       setFlowTests(Array.isArray(action.tests)?action.tests:[])
       setGroups(Array.isArray(action.builderGroups)?action.builderGroups:[])
       setLayoutMode(String(layout.mode||'AUTO').toUpperCase()==='FREE_FORM'?'free':'auto')
