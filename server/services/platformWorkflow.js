@@ -4897,6 +4897,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         const width = Number(component?.width ?? 12);
         if (!Number.isInteger(width) || width < 1 || width > 12) throw new Error("Screen component width must be between 1 and 12 columns");
         if (!["top","center","bottom"].includes(String(component?.verticalAlignment || "top"))) throw new Error("Screen component vertical alignment is invalid");
+        if (component?.type === "SECTION") {
+          const columns = Number(component.columns || 1);
+          if (!Number.isInteger(columns) || columns < 1 || columns > 4) throw new Error("Screen Section must have between 1 and 4 columns");
+          const widths = Array.isArray(component.columnWidths) ? component.columnWidths.map(Number) : [];
+          if (widths.length !== columns || widths.some((value) => !Number.isInteger(value) || value < 1 || value > 12) || widths.reduce((sum, value) => sum + value, 0) !== 12) {
+            throw new Error("Screen Section column widths must total 12");
+          }
+          if (component.includeHeader === true && !String(component.heading || "").trim()) throw new Error("Screen Section header label is required");
+        }
         const mode = String(component?.visibilityMode || "");
         const conditions = Array.isArray(component?.visibilityConditions) ? component.visibilityConditions : [];
         if (mode && mode !== "always") {
