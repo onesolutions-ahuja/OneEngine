@@ -1922,7 +1922,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         collection: { type: "string" },
         sortField: { type: "string" },
         sortDirection: { type: "string", enum: ["asc","desc"] },
-        limit: { type: "number" },
+        limit: {},
       },
       required: ["collection","sortField"],
     },
@@ -2514,7 +2514,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         selectColumns.push('"' + sourceColumn + '" AS "' + field.api_name + '"');
       }
 
-      const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 20000 : 1)), 20000));
+      const configuredLimit = action.limit && typeof action.limit === "object"
+        ? resolveConfiguredResource(action.limit, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false })
+        : action.limit;
+      const requestedLimit = Math.max(1, Math.min(Number(configuredLimit || (String(action.store || "first").toLowerCase() === "all" ? 20000 : 1)), 20000));
+      if (!Number.isFinite(requestedLimit)) throw new Error("Get Records maximum record limit must resolve to a number");
       params.push(requestedLimit);
       const where = clauses.length ? " WHERE " + clauses.join(" AND ") : "";
       const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
@@ -2537,14 +2541,18 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
         const mode = String(advancedAssignment.mode || "").toLowerCase();
         if (mode === "record") {
-          workflowVariables.variables[String(advancedAssignment.resourceName)] = rows[0] || null;
+          if (rows[0] || advancedAssignment.setNullOnNoRecords === true) {
+            workflowVariables.variables[String(advancedAssignment.resourceName)] = rows[0] || null;
+          }
         } else if (mode === "collection") {
           workflowVariables.variables[String(advancedAssignment.resourceName)] = rows;
         } else if (mode === "fields") {
           const first = rows[0] || null;
-          for (const mapping of advancedAssignment.mappings || []) {
-            const name = String(mapping.resourceName || "");
-            workflowVariables.variables[name] = first ? first[String(mapping.field || "")] ?? null : null;
+          if (first || advancedAssignment.setNullOnNoRecords === true) {
+            for (const mapping of advancedAssignment.mappings || []) {
+              const name = String(mapping.resourceName || "");
+              workflowVariables.variables[name] = first ? first[String(mapping.field || "")] ?? null : null;
+            }
           }
         }
       }
