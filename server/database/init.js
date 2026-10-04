@@ -1952,6 +1952,38 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         console.log("onePOS: unused domain-specific workflow wrappers removed");
       },
+    },
+    {
+      key: "0057_refresh_oneassistant_flow_api_transport",
+      version: "57",
+      name: "Refresh OneAssistant router with Flow-owned API transport",
+      up: async client => {
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+
+        const whatsappApiSteps = router.action.actions.filter((step) => step?.key === "ONE_HTTP_REQUEST" && step?.providerKey === "whatsapp");
+        if (!whatsappApiSteps.length) throw new Error("OneAssistant booking router has no Flow-visible WhatsApp API steps");
+        if (router.action.actions.some((step) => step?.key === "SEND_COMMUNICATION" && String(step?.channel || "").toUpperCase() === "WHATSAPP")) {
+          throw new Error("OneAssistant booking router still hides WhatsApp behind SEND_COMMUNICATION");
+        }
+
+        const rows = await client.query(
+          "SELECT id,company_id FROM platform_rules WHERE company_id IS NOT NULL AND name='OneAssistant - Booking Channel Router'"
+        );
+        for (const row of rows.rows) {
+          await client.query(
+            "UPDATE platform_rules SET trigger_key=$2,conditions=$3::jsonb,action=$4::jsonb,active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW() WHERE id=$1 AND company_id=$5",
+            [row.id, router.triggerKey, JSON.stringify(router.conditions || []), JSON.stringify(router.action), row.company_id]
+          );
+        }
+
+        const stale = await client.query(
+          "SELECT id,name FROM platform_rules WHERE name='OneAssistant - Booking Channel Router' AND action::text LIKE '%whatsapp_connector%'"
+        );
+        if (stale.rows.length) throw new Error("Stale whatsapp_connector references remain in OneAssistant booking routers");
+        console.log("onePOS: OneAssistant booking routers refreshed with Flow-owned WhatsApp API transport");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);

@@ -41,8 +41,11 @@ test("OneAssistant uses one active communication-event router for SMS and WhatsA
   assert.ok(channelAssignments.some((action) => action.value === "WHATSAPP"));
   const sends = actions.filter((action) => action.key === "SEND_COMMUNICATION");
   assert.ok(sends.length > 0);
-  assert.ok(sends.every((action) => action.channel?.path === "variables.messageChannel"));
+  assert.ok(sends.every((action) => action.channel === "SMS"));
   assert.ok(sends.every((action) => typeof action.message === "string" && action.message.length > 0));
+  const whatsappApi = actions.filter((action) => action.key === "ONE_HTTP_REQUEST" && action.providerKey === "whatsapp");
+  assert.ok(whatsappApi.length > 0);
+  assert.ok(whatsappApi.every((action) => action.method === "POST" && action.endpoint === "/{{phoneNumberId}}/messages"));
 
   assert.equal(
     packageDefinitions().find((definition) => definition.packageKey === "one_assistant")
@@ -96,7 +99,7 @@ test("workflow decisions can route on outputs from previous steps", async () => 
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
-  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_SORT","COLLECTION_FORMAT_TEXT","SEND_COMMUNICATION"]) {
+  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","CONDITION","ASSIGNMENT","FORMULA","TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_SORT","COLLECTION_FORMAT_TEXT","SEND_COMMUNICATION","ONE_HTTP_REQUEST"]) {
     const definition = getWorkflowActionDefinition(key);
     assert.ok(definition, `${key} must be registered`);
     assert.equal(typeof definition.executor, "function");
@@ -222,17 +225,13 @@ test("appointment-specific communication sender is removed from executable regis
 });
 
 
-test("WhatsApp SEND_COMMUNICATION uses canonical provider metadata and generic HTTP core", () => {
-  const whatsapp = packageDefinitions().find((definition) => definition.packageKey === "whatsapp");
-  assert.ok(whatsapp, "WhatsApp package must exist");
-  const connector = whatsapp.manifest.connectors?.find((item) => item.connectorKey === "whatsapp");
-  assert.ok(connector, "WhatsApp package must provision its canonical provider metadata");
-  assert.equal(connector.authType, "bearer");
-  assert.match(connector.baseUrl, /^https:\/\/graph\.facebook\.com\//);
-
-  const source = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
-  const sendCommunication = source.slice(source.indexOf('key: "SEND_COMMUNICATION"'), source.indexOf('key: "IN_APP_NOTIFICATION"'));
-  assert.match(sendCommunication, /providerKey:\s*"whatsapp"/);
-  assert.match(sendCommunication, /oneHttpRequestDefinition/);
-  assert.doesNotMatch(sendCommunication, /SEND_WHATSAPP/);
+test("OneAssistant WhatsApp transport is visible in Flow as generic HTTP", () => {
+  const { workflow } = oneAssistantRouter();
+  const actions = workflow.action.actions;
+  const apiSteps = actions.filter((action) => action.key === "ONE_HTTP_REQUEST" && action.providerKey === "whatsapp");
+  assert.ok(apiSteps.length > 0);
+  assert.ok(apiSteps.every((action) => action.method === "POST"));
+  assert.ok(apiSteps.every((action) => action.endpoint === "/{{phoneNumberId}}/messages"));
+  assert.equal(actions.some((action) => action.key === "SEND_COMMUNICATION" && String(action.channel || "").toUpperCase() === "WHATSAPP"), false);
 });
+
