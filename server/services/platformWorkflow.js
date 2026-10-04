@@ -334,63 +334,6 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
     },
   },
   {
-    key: "PRINT_RECEIPT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Print - Receipt",
-    description: "Print a receipt using the active printer connector on the assigned till.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["sale.invoice.reprint"],
-    capability: "printer.print",
-    executor: async (context) => {
-      const printer = getWorkflowActionDefinition("PRINT");
-      if (!printer?.executor) throw new Error("Generic Print action is unavailable");
-      return printer.executor({
-        ...context,
-        action: {
-          ...context.action,
-          key: "PRINT",
-          capability: context.action?.capability || "printer.print",
-          templateKey: context.action?.templateKey || "receipt",
-          data: context.action?.payload || {
-            saleId: context.record?.id || context.recordId || context.action?.inputs?.saleId || null,
-            receiptNumber: context.record?.receipt_number || context.record?.receiptNumber || null,
-            sale: context.record || null,
-            inputs: context.action?.inputs || {},
-          },
-        },
-      });
-    },
-  },
-  {
-    key: "PRINT_KITCHEN_TICKET",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Print - Kitchen Ticket",
-    description: "Print a kitchen ticket using the active kitchen printer connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "printer.kitchen.print",
-    executor: async (context) => {
-      const printer = getWorkflowActionDefinition("PRINT");
-      if (!printer?.executor) throw new Error("Generic Print action is unavailable");
-      return printer.executor({
-        ...context,
-        action: {
-          ...context.action,
-          key: "PRINT",
-          capability: context.action?.capability || "printer.kitchen.print",
-          templateKey: context.action?.templateKey || "kitchen_ticket",
-          data: context.action?.payload || context.record || {},
-        },
-      });
-    },
-  },
-  {
     key: "OPEN_CASH_DRAWER",
     displayName: "Cash Drawer - Open",
     description: "Open the assigned cash drawer connector if the current till supports it.",
