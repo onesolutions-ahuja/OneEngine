@@ -5925,8 +5925,8 @@ export async function executeWorkflowActions({ actions, ...context }) {
         continue;
       }
       const compensationFailures = await compensateCompletedSteps(completed, context, error);
-      if (context.runId && context.db) {
-        await context.db(
+      if (context.runId && traceDb) {
+        await traceDb(
           "UPDATE platform_workflow_runs SET status='FAILED', completed_at=NOW(), error_text=$1, error_code=$2, metadata=COALESCE(metadata,'{}'::jsonb) || $3::jsonb, updated_at=NOW() WHERE id=$4 AND company_id=$5",
           [details.message, details.oeCode || "OEWE01", JSON.stringify({ rootError: details, compensationFailures }), context.runId, context.companyId || context.req?.user?.companyId]
         );

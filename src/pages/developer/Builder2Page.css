@@ -872,3 +872,9 @@
   margin-left:auto;
   margin-right:auto;
 }
+
+/* Allow forms to scroll clear of the app dock at short viewport heights. */
+.b2-shell{min-height:0;max-height:100%;overflow:hidden}
+.b2-properties,.b2-toolbox{padding-bottom:90px}
+.b2-form{scroll-padding-bottom:90px}
+.b2-drawer textarea{width:100%;box-sizing:border-box}

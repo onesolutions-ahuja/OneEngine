@@ -5597,6 +5597,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
+      if (!workflow.object_id && recordOverride) record = { ...recordOverride };
+
       for (const action of actions) validateWorkflowAction(action);
 
       run = await createWorkflowRun({
