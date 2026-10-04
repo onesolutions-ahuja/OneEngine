@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 import { packageDefinitions } from "../server/services/packageRegistry.js";
 import { getWorkflowActionDefinition } from "../server/services/platformWorkflow.js";
+import { resolveBindingTree } from "../server/services/platformRecordPaths.js";
 
 function oneAssistantRouter() {
   const pkg = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
@@ -413,4 +414,22 @@ test("workflow step identifiers are TEXT for deep Decision paths", () => {
   assert.match(init, /0063_workflow_step_identifier_text/);
   assert.match(init, /ALTER TABLE platform_workflow_step_runs ALTER COLUMN step_identifier TYPE TEXT/);
   assert.match(init, /ALTER TABLE platform_workflow_screen_sessions ALTER COLUMN step_identifier TYPE TEXT/);
+});
+
+
+test("resource fallback resolves through null overrides", () => {
+  const workflowVariables = {
+    steps: {
+      resourceService: { record: { duration_minutes: null } },
+      service: { record: { duration_minutes: 30 } },
+    },
+  };
+  const result = resolveBindingTree(
+    {
+      path: "steps.resourceService.record.duration_minutes",
+      fallback: { path: "steps.service.record.duration_minutes" },
+    },
+    { variables: workflowVariables }
+  );
+  assert.equal(result, 30);
 });
