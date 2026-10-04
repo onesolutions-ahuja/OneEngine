@@ -5688,6 +5688,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           workflowVersion,
           trigger: executionMode,
           debugMode: rollbackMode,
+          debugTrace: executionMode !== "RUN",
+          simulateExternalActions: rollbackMode,
           workflowVariables,
         });
       } catch (error) {
