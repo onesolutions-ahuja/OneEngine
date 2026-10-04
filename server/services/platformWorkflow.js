@@ -2999,35 +2999,130 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "DELETE_RECORD",
     displayName: "Delete Record",
-    description: "Delete or soft delete a record using the object's existing semantics.",
+    description: "Delete one or more records using record resources or object conditions.",
+    schema: {
+      type: "object",
+      properties: {
+        recordId: {},
+        recordResource: {},
+        recordCollectionResource: {},
+        objectKey: { type: "string" },
+        conditions: { type: "array" },
+        match: { type: "string" },
+      },
+    },
     validation: (action) => {
-      if (!action?.recordId) throw new Error("Delete Record requires a recordId");
+      if (!action || typeof action !== "object") throw new Error("Delete Record requires an action object");
+      const hasRecordId = action.recordId !== undefined;
+      const hasRecord = action.recordResource !== undefined;
+      const hasCollection = action.recordCollectionResource !== undefined;
+      const hasConditions = action.objectKey && Array.isArray(action.conditions) && action.conditions.length > 0;
+      if (!hasRecordId && !hasRecord && !hasCollection && !hasConditions) {
+        throw new Error("Delete Record requires a record resource, record collection, recordId, or object conditions");
+      }
     },
     async: false,
     requiredPermissions: ["records.delete"],
-    executor: async ({ db, action, object, req, companyId, record, previousRecord, workflowVariables }) => {
+    executor: async ({ db, action, object, req, companyId, record, previousRecord, workflowVariables = {} }) => {
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || null;
+
+      const deleteById = async ({ targetObject, recordId }) => {
+        if (!recordId) return null;
+        const table = targetObject.source_table;
+        const hasActive = await db(
+          "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'",
+          [table]
+        );
+        const params = [recordId];
+        const clauses = ["id=$1"];
+        if (targetObject.company_scoped) { params.push(runtimeCompanyId); clauses.push("company_id=$" + params.length); }
+        if (targetObject.store_scoped) {
+          if (!runtimeStoreId) throw new Error("A store session is required for this record");
+          params.push(runtimeStoreId);
+          clauses.push("store_id=$" + params.length);
+        }
+        const result = hasActive.rows.length
+          ? await db('UPDATE "' + table + '" SET active=false WHERE ' + clauses.join(" AND ") + " RETURNING *", params)
+          : await db('DELETE FROM "' + table + '" WHERE ' + clauses.join(" AND ") + " RETURNING *", params);
+        const deleted = result.rows[0] || null;
+        try {
+          if (deleted) await publishPlatformEvent({ db, companyId: runtimeCompanyId, eventType: "platform.object.record.deleted", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId, record: deleted, archived: hasActive.rows.length > 0 }, actorUserId: req?.user?.id || null });
+        } catch (error) { console.error("Platform workflow record event publication error:", error); }
+        return deleted;
+      };
+
+      if (action.recordResource !== undefined || action.recordCollectionResource !== undefined) {
+        const source = action.recordCollectionResource !== undefined
+          ? resolveConfiguredResource(action.recordCollectionResource, context, { preserveMissing: false })
+          : [resolveConfiguredResource(action.recordResource, context, { preserveMissing: false })];
+        const rows = Array.isArray(source) ? source : [];
+        const deletedRecords = [];
+        for (const row of rows) {
+          if (!row || typeof row !== "object" || Array.isArray(row)) throw new Error("Delete Record resource contains an invalid record value");
+          const rowObjectKey = row.objectKey || row.object_key || action.objectKey || object?.object_key;
+          const targetObject = await resolveWorkflowTargetObject({ db, action: { objectKey: rowObjectKey }, object, companyId, req });
+          const deleted = await deleteById({ targetObject, recordId: row.id });
+          if (deleted) deletedRecords.push(deleted);
+        }
+        return { status: deletedRecords.length ? "completed" : "skipped", deleted: deletedRecords[0] || null, deletedRecords, count: deletedRecords.length };
+      }
+
+      if (action.objectKey && Array.isArray(action.conditions) && action.conditions.length) {
+        const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+        const fieldResult = await db(
+          "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+          [targetObject.id, runtimeCompanyId]
+        );
+        const fieldByKey = new Map([["id", { api_name: "id", source_column: "id" }]]);
+        for (const field of fieldResult.rows || []) {
+          fieldByKey.set(String(field.api_name), field);
+          if (field.source_column) fieldByKey.set(String(field.source_column), field);
+        }
+        const params = [];
+        const clauses = [];
+        for (const condition of action.conditions) {
+          const metadata = fieldByKey.get(String(condition?.field || ""));
+          if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) throw new Error("Delete Record condition field is unavailable");
+          const column = '"' + (metadata.source_column || metadata.api_name) + '"';
+          const operator = String(condition.operator || "equals").toLowerCase();
+          const value = resolveConfiguredResource(condition.value, context, { preserveMissing: false });
+          params.push(value);
+          const placeholder = "$" + params.length;
+          if (operator === "equals") clauses.push(column + "=" + placeholder);
+          else if (operator === "not_equals") clauses.push(column + "<>" + placeholder);
+          else if (operator === "greater_than") clauses.push(column + ">" + placeholder);
+          else if (operator === "greater_than_or_equal") clauses.push(column + ">=" + placeholder);
+          else if (operator === "less_than") clauses.push(column + "<" + placeholder);
+          else if (operator === "less_than_or_equal") clauses.push(column + "<=" + placeholder);
+          else if (operator === "contains") clauses.push(column + "::text ILIKE '%' || " + placeholder + "::text || '%'");
+          else if (operator === "starts_with") clauses.push(column + "::text ILIKE " + placeholder + "::text || '%'");
+          else if (operator === "ends_with") clauses.push(column + "::text ILIKE '%' || " + placeholder + "::text");
+          else throw new Error("Delete Record uses unsupported condition operator");
+        }
+        const scoped = [];
+        if (targetObject.company_scoped) { params.push(runtimeCompanyId); scoped.push('"company_id"=$' + params.length); }
+        if (targetObject.store_scoped) {
+          if (!runtimeStoreId) throw new Error("A store session is required for this record");
+          params.push(runtimeStoreId);
+          scoped.push('"store_id"=$' + params.length);
+        }
+        const joiner = String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ";
+        const where = ["(" + clauses.join(joiner) + ")", ...scoped].join(" AND ");
+        const existing = await db('SELECT id FROM "' + targetObject.source_table + '" WHERE ' + where, params);
+        const deletedRecords = [];
+        for (const row of existing.rows || []) {
+          const deleted = await deleteById({ targetObject, recordId: row.id });
+          if (deleted) deletedRecords.push(deleted);
+        }
+        return { status: deletedRecords.length ? "completed" : "skipped", deleted: deletedRecords[0] || null, deletedRecords, count: deletedRecords.length };
+      }
+
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      const table = targetObject.source_table;
-      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
-      const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
-      const params = [resolvedRecordId];
-      const clauses = ["id=$1"];
-      if (targetObject.company_scoped) {
-        params.push(req?.user?.companyId || companyId || null);
-        clauses.push(`company_id=$${params.length}`);
-      }
-      if (targetObject.store_scoped) {
-        if (!req?.user?.storeId) throw new Error("A store session is required for this record");
-        params.push(req.user.storeId);
-        clauses.push(`store_id=$${params.length}`);
-      }
-      const result = hasActive.rows.length
-        ? await db(`UPDATE "${table}" SET active=false WHERE ${clauses.join(" AND ")} RETURNING *`, params)
-        : await db(`DELETE FROM "${table}" WHERE ${clauses.join(" AND ")} RETURNING *`, params);
-      try {
-        if (result.rows[0]) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.deleted", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: resolvedRecordId, record: result.rows[0], archived: hasActive.rows.length > 0 }, actorUserId: req?.user?.id || null });
-      } catch (error) { console.error("Platform workflow record event publication error:", error); }
-      return { status: result.rows.length ? "completed" : "skipped", deleted: result.rows[0] || null };
+      const resolvedRecordId = resolveConfiguredResource(action.recordId, context);
+      const deleted = await deleteById({ targetObject, recordId: resolvedRecordId });
+      return { status: deleted ? "completed" : "skipped", deleted, deletedRecords: deleted ? [deleted] : [], count: deleted ? 1 : 0 };
     },
   },
   {
