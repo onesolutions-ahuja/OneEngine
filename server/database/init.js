@@ -2265,6 +2265,16 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           expiredOpenBookingSessions: expired.rowCount,
         });
       },
+    },
+    {
+      key: "0063_workflow_step_identifier_text",
+      version: "63",
+      name: "Allow deeply nested workflow execution paths",
+      up: async client => {
+        await client.query("ALTER TABLE platform_workflow_step_runs ALTER COLUMN step_identifier TYPE TEXT");
+        await client.query("ALTER TABLE platform_workflow_screen_sessions ALTER COLUMN step_identifier TYPE TEXT");
+        console.log("onePOS: workflow step identifiers widened for nested Flow execution");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
@@ -5029,7 +5039,7 @@ ON secure_invoice_links(company_id, created_at DESC);
       CREATE TABLE IF NOT EXISTS platform_workflow_step_runs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
-        step_identifier VARCHAR(200),
+        step_identifier TEXT,
         step_order INTEGER NOT NULL DEFAULT 0,
         action_type VARCHAR(60),
         status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
@@ -5050,7 +5060,7 @@ ON secure_invoice_links(company_id, created_at DESC);
         workflow_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
         run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
         step_run_id UUID REFERENCES platform_workflow_step_runs(id) ON DELETE CASCADE,
-        step_identifier VARCHAR(200) NOT NULL,
+        step_identifier TEXT NOT NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
         screen JSONB NOT NULL DEFAULT '{}'::jsonb,
         values JSONB NOT NULL DEFAULT '{}'::jsonb,
