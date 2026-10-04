@@ -114,6 +114,8 @@ export const platformSchema = `
       CHECK (status IN ('AVAILABLE','INSTALLED','ACTIVE','INACTIVE')),
     installed_version VARCHAR(40),
     available_version VARCHAR(40),
+    licence_required BOOLEAN NOT NULL DEFAULT FALSE,
+    trial_eligible BOOLEAN NOT NULL DEFAULT FALSE,
     licence_status VARCHAR(20) NOT NULL DEFAULT 'NONE',
     trial_started_at TIMESTAMPTZ,
     trial_expires_at TIMESTAMPTZ,
@@ -124,6 +126,8 @@ export const platformSchema = `
     UNIQUE(company_id,onestore_app_id)
   );
   ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS available_version VARCHAR(40);
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS licence_required BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS trial_eligible BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS licence_status VARCHAR(20) NOT NULL DEFAULT 'NONE';
   ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ;
   ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMPTZ;
@@ -1515,6 +1519,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["status", "Status", "select", "status", true],
         ["installed_version", "Installed Version", "text", "installed_version", false],
         ["available_version", "Available Version", "text", "available_version", false],
+        ["licence_required", "Licence Required", "boolean", "licence_required", false],
+        ["trial_eligible", "Trial Eligible", "boolean", "trial_eligible", false],
         ["licence_status", "Licence Status", "select", "licence_status", false],
         ["trial_started_at", "Trial Started At", "datetime", "trial_started_at", false],
         ["trial_expires_at", "Trial Expires At", "datetime", "trial_expires_at", false],
@@ -1589,7 +1595,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
     await pool.query(`
       INSERT INTO tenant_apps
-        (company_id,onestore_app_id,status,installed_version,available_version,licence_status,update_status,installed_at,activated_at,updated_at)
+        (company_id,onestore_app_id,status,installed_version,available_version,licence_required,trial_eligible,licence_status,update_status,installed_at,activated_at,updated_at)
       SELECT
         c.id,
         a.id,
@@ -1601,7 +1607,13 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         END,
         COALESCE(i.installed_version,i.version),
         a.version,
-        CASE WHEN i.id IS NULL THEN 'NONE' ELSE 'LICENSED' END,
+        CASE WHEN p.licence_mode='TECHNICAL' OR p.billable=FALSE THEN FALSE ELSE TRUE END,
+        CASE WHEN p.licence_mode<>'TECHNICAL' AND p.billable<>FALSE AND p.installable=TRUE THEN TRUE ELSE FALSE END,
+        CASE
+          WHEN p.licence_mode='TECHNICAL' OR p.billable=FALSE THEN 'LICENSED'
+          WHEN i.id IS NULL THEN 'NONE'
+          ELSE 'LICENSED'
+        END,
         CASE
           WHEN COALESCE(i.installed_version,i.version) IS NOT NULL
            AND COALESCE(i.installed_version,i.version) <> a.version THEN 'UPDATE_AVAILABLE'
@@ -1616,6 +1628,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       LEFT JOIN company_package_installations i ON i.company_id=c.id AND i.package_id=p.id
       ON CONFLICT (company_id,onestore_app_id) DO UPDATE SET
         available_version=EXCLUDED.available_version,
+        licence_required=EXCLUDED.licence_required,
+        trial_eligible=EXCLUDED.trial_eligible,
+        licence_status=CASE
+          WHEN EXCLUDED.licence_required=FALSE THEN 'LICENSED'
+          ELSE tenant_apps.licence_status
+        END,
         update_status=CASE
           WHEN tenant_apps.installed_version IS NOT NULL
            AND tenant_apps.installed_version <> EXCLUDED.available_version THEN 'UPDATE_AVAILABLE'
@@ -1725,7 +1743,17 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           name: "OneStore - Install App",
           buttonKey: "onestore_install",
           label: "Install",
-          visibility: { match: "all", conditions: [{ field: "status", operator: "equals", value: "AVAILABLE" }] },
+          visibility: {
+            match: "all",
+            groups: [
+              { match: "all", conditions: [{ field: "status", operator: "equals", value: "AVAILABLE" }] },
+              { match: "any", conditions: [
+                { field: "licence_required", operator: "equals", value: false },
+                { field: "licence_status", operator: "equals", value: "LICENSED" },
+                { field: "licence_status", operator: "equals", value: "TRIAL" },
+              ] },
+            ],
+          },
           actions: [
             { id: "install_app", label: "Install App", apiName: "install_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INSTALLED", installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
           ],
@@ -1761,7 +1789,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           name: "OneStore - Start Trial",
           buttonKey: "onestore_trial",
           label: "Start 7-day Trial",
-          visibility: { match: "all", conditions: [{ field: "licence_status", operator: "equals", value: "NONE" }] },
+          visibility: { match: "all", conditions: [
+            { field: "licence_status", operator: "equals", value: "NONE" },
+            { field: "licence_required", operator: "equals", value: true },
+            { field: "trial_eligible", operator: "equals", value: true }
+          ] },
           actions: [
             { id: "trial_started_at", label: "Trial Start", apiName: "trial_started_at", key: "FORMULA", resourceName: "trialStartedAt", resultType: "datetime", expression: "NOW()", inputs: {} },
             { id: "trial_expires_at", label: "Trial Expiry", apiName: "trial_expires_at", key: "FORMULA", resourceName: "trialExpiresAt", resultType: "datetime", expression: "ADDDAYS(NOW(),7)", inputs: {} },
@@ -1772,7 +1804,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           name: "OneStore - Request Licence",
           buttonKey: "onestore_request_licence",
           label: "Request Licence",
-          visibility: { match: "all", conditions: [{ field: "licence_status", operator: "equals", value: "NONE" }] },
+          visibility: { match: "all", conditions: [
+            { field: "licence_status", operator: "equals", value: "NONE" },
+            { field: "licence_required", operator: "equals", value: true }
+          ] },
           actions: [
             { id: "request_licence", label: "Request Licence", apiName: "request_licence", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "REQUESTED" } },
           ],
