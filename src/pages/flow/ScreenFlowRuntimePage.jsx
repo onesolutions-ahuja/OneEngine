@@ -8,11 +8,28 @@ function emptyValue(component) {
   return component.defaultValue ?? ''
 }
 
-function widthClass(width) {
-  if (width === '1/2') return 'md:col-span-6'
-  if (width === '1/3') return 'md:col-span-4'
-  if (width === '2/3') return 'md:col-span-8'
-  return 'md:col-span-12'
+function widthColumns(width) {
+  if (width === '1/2') return 6
+  if (width === '1/3') return 4
+  if (width === '2/3') return 8
+  const numeric = Number(width)
+  return Number.isInteger(numeric) ? Math.max(1, Math.min(12, numeric)) : 12
+}
+
+function componentLayoutStyle(component, nested = false) {
+  const width = nested ? 12 : widthColumns(component?.width)
+  const alignment = String(component?.verticalAlignment || 'top')
+  const alignSelf = alignment === 'bottom' ? 'end' : alignment === 'center' ? 'center' : 'start'
+  const style = component?.style || {}
+  return {
+    gridColumn: `span ${width} / span ${width}`,
+    alignSelf,
+    color: style.textColor || undefined,
+    backgroundColor: style.backgroundColor || undefined,
+    borderColor: style.borderColor || undefined,
+    borderWidth: style.borderWidth || undefined,
+    borderRadius: style.borderRadius || undefined,
+  }
 }
 
 function localResourceValue(path, values) {
@@ -23,13 +40,11 @@ function localResourceValue(path, values) {
   return undefined
 }
 
-function componentVisible(component, values) {
-  if (component?.visible === false) return false
-  if (!component?.visibilityResource) return true
-  const localValue = localResourceValue(component.visibilityResource, values)
-  const actual = localValue === undefined ? component.visibilityInitialValue : localValue
-  const operator = component.visibilityOperator || 'truthy'
-  const expected = component.visibilityValue
+function evaluateVisibilityCondition(condition, values, fallbackValue) {
+  const localValue = localResourceValue(condition?.resource, values)
+  const actual = localValue === undefined ? fallbackValue : localValue
+  const operator = condition?.operator || 'truthy'
+  const expected = condition?.value
   const empty = actual == null || actual === '' || (Array.isArray(actual) && actual.length === 0)
   const falsy = empty || actual === false
   if (operator === 'falsy') return falsy
@@ -48,6 +63,50 @@ function componentVisible(component, values) {
     return left <= right
   }
   return !falsy
+}
+
+function evaluateVisibilityLogic(logic, results) {
+  const tokens = String(logic || '').match(/\d+|AND|OR|NOT|\(|\)/gi) || []
+  let cursor = 0
+  const factor = () => {
+    const token = String(tokens[cursor++] || '')
+    if (token.toUpperCase() === 'NOT') return !factor()
+    if (token === '(') {
+      const value = or()
+      if (tokens[cursor++] !== ')') return false
+      return value
+    }
+    return /^\d+$/.test(token) ? Boolean(results[Number(token) - 1]) : false
+  }
+  const and = () => {
+    let value = factor()
+    while (String(tokens[cursor] || '').toUpperCase() === 'AND') { cursor += 1; value = value && factor() }
+    return value
+  }
+  const or = () => {
+    let value = and()
+    while (String(tokens[cursor] || '').toUpperCase() === 'OR') { cursor += 1; value = value || and() }
+    return value
+  }
+  return tokens.length ? or() && cursor === tokens.length : false
+}
+
+function componentVisible(component, values) {
+  if (component?.visible === false) return false
+  const mode = String(component?.visibilityMode || '')
+  const conditions = Array.isArray(component?.visibilityConditions) ? component.visibilityConditions : []
+  if (mode && mode !== 'always' && conditions.length) {
+    const results = conditions.map((condition, index) => evaluateVisibilityCondition(condition, values, component?.visibilityInitialValues?.[index]))
+    if (mode === 'any') return results.some(Boolean)
+    if (mode === 'custom') return evaluateVisibilityLogic(component.visibilityLogic, results)
+    return results.every(Boolean)
+  }
+  if (!component?.visibilityResource) return true
+  return evaluateVisibilityCondition({
+    resource: component.visibilityResource,
+    operator: component.visibilityOperator,
+    value: component.visibilityValue,
+  }, values, component.visibilityInitialValue)
 }
 
 function componentOptions(component, values) {
@@ -337,15 +396,16 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
   const renderScreenComponent = (component, index, { nested = false } = {}) => {
     if (!componentVisible(component, values)) return null
     const key = component.id || index
-    const spanClass = nested ? 'col-span-12' : `col-span-12 ${widthClass(component.width)}`
+    const spanClass = 'col-span-12'
+    const layoutStyle = componentLayoutStyle(component, nested)
     const childComponents = component.id
       ? components.filter((candidate) => candidate?.layoutParentId === component.id && componentVisible(candidate, values))
       : []
 
-    if (component.type === 'CUSTOM_COMPONENT') return <div key={key} className={spanClass}>{renderRegisteredComponent(component)}</div>
+    if (component.type === 'CUSTOM_COMPONENT') return <div key={key} className={spanClass} style={layoutStyle}>{renderRegisteredComponent(component)}</div>
     if (component.type === 'SECTION') {
       const isCollapsed = component.collapsible === true && collapsedSections[component.id] === true
-      return <section key={key} className={`${spanClass} overflow-hidden rounded-xl border border-slate-200 bg-white`}>
+      return <section key={key} className={`${spanClass} overflow-hidden rounded-xl border border-slate-200 bg-white`} style={layoutStyle}>
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
           <div className="min-w-0"><div className="text-sm font-semibold text-slate-800">{component.heading || component.label || 'Section'}</div>{component.helpText ? <div className="mt-0.5 text-xs text-slate-500">{component.helpText}</div> : null}</div>
           {component.collapsible ? <button type="button" className="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100" aria-expanded={!isCollapsed} onClick={() => setCollapsedSections((current) => ({ ...current, [component.id]: !isCollapsed }))}>{isCollapsed ? 'Expand' : 'Collapse'}</button> : null}
@@ -372,15 +432,15 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       const currentStage = component.resolvedStage ?? screen.currentStage
       const currentValue = currentStage?.value ?? currentStage
       const currentOrder = Number(currentStage?.order || 0)
-      return <div key={key} className={spanClass}>
+      return <div key={key} className={spanClass} style={layoutStyle}>
         {component.progressStyle === 'bar' ? <div><div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-slate-900" style={{ width: `${stages.length ? Math.max(0, Math.min(100, ((Math.max(1, currentOrder || 1)) / stages.length) * 100)) : 0}%` }} /></div>{component.showStageLabels !== false ? <div className="mt-2 text-xs text-slate-600">{currentStage?.label || currentValue || ''}</div> : null}</div>
         : component.progressStyle === 'compact' ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">{currentStage?.label || currentValue || 'In progress'}</div>
         : <div className="flex items-center gap-2 overflow-x-auto">{stages.map((stage, stageIndex) => { const active = currentValue != null ? String(stage.value) === String(currentValue) : currentOrder ? Number(stage.order) === currentOrder : stageIndex === 0; const complete = currentOrder ? Number(stage.order) < currentOrder : false; return <div key={stage.value || stage.label || stageIndex} className="flex min-w-0 flex-1 items-center gap-2"><span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold ${active ? 'border-slate-900 bg-slate-900 text-white' : complete ? 'border-slate-400 bg-slate-200 text-slate-700' : 'border-slate-300 bg-white text-slate-500'}`}>{stageIndex + 1}</span>{component.showStageLabels !== false ? <span className={`truncate text-xs ${active ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>{stage.label}</span> : null}</div> })}</div>}
       </div>
     }
-    if (component.type === 'IMAGE') return <div key={key} className={spanClass}><img src={component.resolvedSource || component.source || ''} alt={component.altText || component.label || ''} className="max-h-80 max-w-full rounded-lg object-contain" /></div>
-    if (component.type === 'LINK') return <div key={key} className={spanClass}><a href={component.resolvedHref || component.href || '#'} target={component.linkTarget === 'new' ? '_blank' : '_self'} rel={component.linkTarget === 'new' ? 'noreferrer' : undefined} className="text-sm font-medium text-blue-700 underline">{component.label || component.resolvedHref || component.href}</a></div>
-    return <div key={key} className={spanClass}>
+    if (component.type === 'IMAGE') return <div key={key} className={spanClass} style={layoutStyle}><img src={component.resolvedSource || component.source || ''} alt={component.altText || component.label || ''} className="max-h-80 max-w-full rounded-lg object-contain" /></div>
+    if (component.type === 'LINK') return <div key={key} className={spanClass} style={layoutStyle}><a href={component.resolvedHref || component.href || '#'} target={component.linkTarget === 'new' ? '_blank' : '_self'} rel={component.linkTarget === 'new' ? 'noreferrer' : undefined} className="text-sm font-medium text-blue-700 underline">{component.label || component.resolvedHref || component.href}</a></div>
+    return <div key={key} className={spanClass} style={layoutStyle}>
       <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor={component.id || component.name}>{component.label || component.name}{component.required ? <span className="ml-1 text-red-600">*</span> : null}</label>
       {renderInput(component)}
       {component.helpText && !['CHECKBOX','TOGGLE'].includes(component.type) ? <p className="mt-1 text-xs text-slate-500">{component.helpText}</p> : null}
@@ -392,9 +452,13 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
   if (session.status === 'PAUSED') return <div className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-semibold text-slate-900">Flow paused</h1><p className="mt-3 text-sm text-slate-600">{message || 'Resume when you are ready to continue.'}</p><button type="button" className="mt-5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={async () => { try { const response = await apiRequest(`/api/platform/flow-sessions/${encodeURIComponent(session.id)}/resume`, { method: 'POST' }); hydrate(response?.data); setMessage(''); } catch (error) { setMessage(error.message || 'Unable to resume this flow.') } }}>Resume</button></div></div>
   if (session.status !== 'ACTIVE' || !screen) return <div className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-semibold text-slate-900">Flow</h1><p className="mt-3 text-sm text-slate-600">{message || `This flow session is ${String(session.status || 'closed').toLowerCase()}.`}</p></div></div>
 
+  const containerStyle = screen.style?.container || {}
+  const headerStyle = screen.style?.header || {}
+  const footerStyle = screen.style?.footer || {}
+
   return <div className="min-h-screen bg-slate-50 px-4 py-8">
-    <main className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {screen.showHeader !== false ? <header className="border-b border-slate-200 px-6 py-5">
+    <main className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" style={{backgroundColor:containerStyle.backgroundColor||undefined,borderColor:containerStyle.borderColor||undefined,borderWidth:containerStyle.borderWidth||undefined,borderRadius:containerStyle.borderRadius||undefined}}>
+      {screen.showHeader !== false ? <header className="border-b border-slate-200 px-6 py-5" style={{backgroundColor:headerStyle.backgroundColor||undefined,color:headerStyle.textColor||undefined}}>
         <h1 className="text-xl font-semibold text-slate-900">{screen.label || 'Flow'}</h1>
         {screen.description ? <p className="mt-1 text-sm text-slate-500">{screen.description}</p> : null}
         {Array.isArray(screen.stages) && screen.stages.length ? <div className="mt-4">
@@ -417,7 +481,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
         {components.filter((component) => !component?.layoutParentId).map((component, index) => renderScreenComponent(component, index))}
       </section>
       {message ? <div className="mx-6 mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{message}</div> : null}
-      {screen.showFooter !== false ? <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+      {screen.showFooter !== false ? <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4" style={{backgroundColor:footerStyle.backgroundColor||undefined}}>
         <div>{screen.allowBack ? <button type="button" disabled={busy} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50" onClick={() => submit('BACK')}>{screen.backLabel || 'Previous'}</button> : null}</div>
         <div className="flex gap-2">
           {screen.allowPause ? <button type="button" disabled={busy} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50" onClick={() => submit('PAUSE')}>{screen.pauseLabel || 'Pause'}</button> : null}
