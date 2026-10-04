@@ -305,3 +305,36 @@ test("shared decision continuations stay near the parent instead of stretching t
   expect(failures, failures.join("\n")).toEqual([]);
 });
 
+
+
+test("Open Food Facts cleanup system flows are visible and editable in the deployed Workflow Builder", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("developer/workflow-builder");
+  await expect(page.locator(".onebuilder-list-view")).toBeVisible({ timeout: 30_000 });
+
+  const search = page.locator(".onebuilder-list-view input[type='search']").first();
+  await expect(search).toBeVisible();
+  await search.fill("GPT");
+
+  const lookup = page.getByText("GPT - Open Food Facts - Lookup Product", { exact: true });
+  const connection = page.getByText("GPT - Open Food Facts - Test Connection", { exact: true });
+  await expect(lookup).toBeVisible({ timeout: 30_000 });
+  await expect(connection).toBeVisible();
+
+  await lookup.click();
+  await expect(page.locator(".b2-shell")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".b2-top")).toContainText("Workflow Builder");
+  await expect(page.locator(".b2-node").filter({ hasText: "Lookup Product" })).toBeVisible();
+  await expect(page.locator(".b2-node").filter({ hasText: "Product Found?" })).toBeVisible();
+  await expect(page.locator(".b2-node").filter({ hasText: "Set Product Outputs" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Back to flows", exact: true }).click();
+  await expect(page.locator(".onebuilder-list-view")).toBeVisible();
+  await search.fill("GPT");
+  await connection.click();
+  await expect(page.locator(".b2-shell")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".b2-node").filter({ hasText: "Call Open Food Facts" })).toBeVisible();
+  await expect(page.locator(".b2-node").filter({ hasText: "Connection Successful?" })).toBeVisible();
+
+  expect(failures, failures.join("\n")).toEqual([]);
+});
