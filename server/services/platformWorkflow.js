@@ -1857,23 +1857,35 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "COLLECTION_FILTER",
     displayName: "Collection Filter",
-    description: "Filter a collection into a new collection using Flow conditions.",
+    description: "Filter a collection into a new collection using conditions or a boolean formula.",
     schema: {
       type: "object",
       properties: {
         collection: { type: "string" },
         filters: { type: "array" },
         match: { type: "string", enum: ["all","any"] },
+        customConditionLogic: { type: "string" },
+        formula: { type: "string" },
+        mode: { type: "string", enum: ["all","any","custom","formula"] },
+        outputVariable: { type: "string" },
+        currentItemVariable: { type: "string" },
       },
-      required: ["collection","filters"],
+      required: ["collection"],
     },
     validation: (action) => {
       if (!action?.collection) throw new Error("Collection Filter requires a collection");
-      if (!Array.isArray(action.filters) || !action.filters.length) throw new Error("Collection Filter requires at least one condition");
+      const mode = String(action?.mode || action?.match || "all").toLowerCase();
+      if (mode === "formula") {
+        if (!String(action?.formula || "").trim()) throw new Error("Collection Filter formula is required");
+      } else {
+        if (!Array.isArray(action.filters) || !action.filters.length) throw new Error("Collection Filter requires at least one condition");
+        if (mode === "custom" && !String(action.customConditionLogic || "").trim()) throw new Error("Collection Filter custom condition logic is required");
+      }
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
       const context = { record, previousRecord, req, object, workflowVariables };
       const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
       const collection = Array.isArray(source) ? source : [];
@@ -1886,31 +1898,79 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           return typeof value === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value) ? Date.parse(value) : NaN;
         };
         switch (String(operator || "equals")) {
-          case "equals": return left === right || String(left ?? "") === String(right ?? "");
-          case "not_equals": return !(left === right || String(left ?? "") === String(right ?? ""));
+          case "equals": return left === right || String(left ?? "").toLowerCase() === String(right ?? "").toLowerCase();
+          case "not_equals": return !(left === right || String(left ?? "").toLowerCase() === String(right ?? "").toLowerCase());
           case "greater_than": return ordered(left) > ordered(right);
           case "greater_than_or_equal": return ordered(left) >= ordered(right);
           case "less_than": return ordered(left) < ordered(right);
           case "less_than_or_equal": return ordered(left) <= ordered(right);
-          case "contains": return String(left ?? "").toLowerCase().includes(String(right ?? "").toLowerCase());
+          case "contains": return Array.isArray(left)
+            ? left.some((item) => String(item).toLowerCase() === String(right ?? "").toLowerCase())
+            : String(left ?? "").toLowerCase().includes(String(right ?? "").toLowerCase());
           case "is_empty": return left == null || left === "" || (Array.isArray(left) && left.length === 0);
           case "is_not_empty": return !(left == null || left === "" || (Array.isArray(left) && left.length === 0));
           default: return false;
         }
       };
       const filters = Array.isArray(action.filters) ? action.filters : [];
-      const matchAny = String(action.match || "all").toLowerCase() === "any";
+      const mode = String(action.mode || action.match || "all").toLowerCase();
+      const customLogic = String(action.customConditionLogic || "").trim();
+      const evaluateCustom = (results) => {
+        if (!customLogic) return results.every(Boolean);
+        const tokens = customLogic.match(/\d+|AND|OR|NOT|\(|\)/gi) || [];
+        const normalized = tokens.map((token) => {
+          if (/^\d+$/.test(token)) {
+            const index = Number(token) - 1;
+            if (index < 0 || index >= results.length) throw new Error("Collection Filter custom condition logic references an unavailable condition");
+            return results[index] ? "true" : "false";
+          }
+          return token.toUpperCase() === "AND" ? "&&" : token.toUpperCase() === "OR" ? "||" : token.toUpperCase() === "NOT" ? "!" : token;
+        }).join(" ");
+        if (/[^truefals&|!()\s]/i.test(normalized)) throw new Error("Collection Filter custom condition logic is invalid");
+        return Function('"use strict"; return Boolean(' + normalized + ')')();
+      };
       const output = collection.filter((item) => {
+        const itemContext = {
+          ...context,
+          record: item,
+          workflowVariables: {
+            ...workflowVariables,
+            variables: {
+              ...(workflowVariables.variables || {}),
+              [String(action.currentItemVariable || "CurrentItem")]: item,
+            },
+          },
+        };
+        if (mode === "formula") {
+          const formulaInputs = {
+            CurrentItem: item,
+            [String(action.currentItemVariable || "CurrentItem")]: item,
+            record: item,
+            variables: itemContext.workflowVariables.variables,
+            steps: workflowVariables.steps || {},
+          };
+          return evaluateWorkflowFormula(String(action.formula || ""), formulaInputs) === true;
+        }
         const results = filters.map((filter) => {
-          const left = getPath(item, filter?.field);
+          const left = filter?.field ? getPath(item, filter.field) : item;
           const right = ["is_empty","is_not_empty"].includes(filter?.operator)
             ? undefined
-            : resolveConfiguredResource(filter?.value, { ...context, record: item }, { preserveMissing: false });
+            : resolveConfiguredResource(filter?.value, itemContext, { preserveMissing: false });
           return compare(left, filter?.operator, right);
         });
-        return matchAny ? results.some(Boolean) : results.every(Boolean);
+        if (mode === "any") return results.some(Boolean);
+        if (mode === "custom") return evaluateCustom(results);
+        return results.every(Boolean);
       });
-      return { status: "completed", collection: output, count: output.length };
+      const outputVariable = String(action.outputVariable || action.apiName || "").trim();
+      if (outputVariable) workflowVariables.variables[outputVariable] = output;
+      return {
+        status: "completed",
+        collection: output,
+        count: output.length,
+        outputVariable: outputVariable || null,
+        currentItemVariable: action.currentItemVariable || null,
+      };
     },
   },
   {
