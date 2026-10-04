@@ -488,6 +488,32 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
 }
 
 
+function AutoDecisionCard({ decision, elements, onOpenDecision, onOpenMember, onAddElement, selecting, selectedIds, onSelectToggle, flowType, startConfig, copiedCount }) {
+  const [openPath, setOpenPath] = useState('')
+  const outcomes = Array.isArray(decision.config?.outcomes) ? decision.config.outcomes : []
+  const paths = [
+    ...outcomes.map((outcome, index) => ({ id: outcome.id || `outcome-${index + 1}`, label: outcome.label || `Outcome ${index + 1}`, memberIds: Array.isArray(outcome.branch) ? outcome.branch : [] })),
+    { id: '__DEFAULT__', label: decision.config?.defaultLabel || 'Default Outcome', memberIds: Array.isArray(decision.config?.defaultBranch) ? decision.config.defaultBranch : [] },
+  ]
+  return <div className="gptb-auto-decision">
+    <PendingElementCard instance={decision} onOpen={onOpenDecision} selecting={selecting} selected={selectedIds.includes(decision.id)} onSelectToggle={() => onSelectToggle(decision.id)}/>
+    <div className="gptb-decision-branches" data-decision-id={decision.id}>
+      {paths.map((path) => <section className="gptb-decision-branch" key={path.id}>
+        <header><span className="gptb-decision-branch-dot"/><strong>{path.label}</strong></header>
+        <div className="gptb-decision-branch-line"/>
+        {path.memberIds.map((id) => {
+          const member = elements.find((item) => item.id === id)
+          return member ? <div className="gptb-decision-branch-member" key={id}><PendingElementCard instance={member} onOpen={() => onOpenMember(member)} selecting={selecting} selected={selectedIds.includes(member.id)} onSelectToggle={() => onSelectToggle(member.id)}/></div> : null
+        })}
+        <div className="gptb-decision-branch-add">
+          <button type="button" className="gptb-add-node" aria-label={`Add element to ${path.label}`} aria-expanded={openPath === path.id} onClick={() => setOpenPath((current) => current === path.id ? '' : path.id)}><Plus size={14}/></button>
+          {openPath === path.id ? <ElementPicker flowType={flowType} startConfig={startConfig} hasExistingElements={path.memberIds.length > 0} copiedCount={copiedCount} onSelect={(picked) => { onAddElement(decision.id, path.id, picked); setOpenPath('') }} onClose={() => setOpenPath('')}/> : null}
+        </div>
+      </section>)}
+    </div>
+  </div>
+}
+
 function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], resources = [], elements = [], onClose }) {
   const [records, setRecords] = useState([])
   const [recordSearch, setRecordSearch] = useState('')
@@ -1387,6 +1413,30 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setEditingElement({ id: instance.id, isNew: true })
     setDirty(true)
   }
+  const addElementToDecisionBranch = (decisionId, pathId, element) => {
+    if (!element || element.key === 'end' || element.key === 'group') return
+    const instance = createElementInstance(element.key, elements, { source: 'auto' })
+    setElements((current) => {
+      const decisionIndex = current.findIndex((item) => item.id === decisionId)
+      const withMember = current.map((item) => {
+        if (item.id !== decisionId) return item
+        const config = { ...(item.config || {}) }
+        if (pathId === '__DEFAULT__') {
+          config.defaultBranch = [...(Array.isArray(config.defaultBranch) ? config.defaultBranch : []), instance.id]
+        } else {
+          config.outcomes = (Array.isArray(config.outcomes) ? config.outcomes : []).map((outcome, index) => {
+            const outcomeId = outcome.id || `outcome-${index + 1}`
+            return outcomeId === pathId ? { ...outcome, branch: [...(Array.isArray(outcome.branch) ? outcome.branch : []), instance.id] } : outcome
+          })
+        }
+        return { ...item, config }
+      })
+      if (decisionIndex < 0) return [...withMember, instance]
+      return [...withMember.slice(0, decisionIndex + 1), instance, ...withMember.slice(decisionIndex + 1)]
+    })
+    setEditingElement({ id: instance.id, isNew: true })
+    setDirty(true)
+  }
   const deleteGroup = (groupId, deleteMembers) => {
     const group = elements.find((item) => item.id === groupId && item.key === 'group')
     if (!group) { setGroupDeleteTarget(null); return }
@@ -1403,9 +1453,15 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     const selectedGroups = elements.filter((item) => selectedElementIds.includes(item.id) && item.key === 'group')
     if (selectedGroups.length) { setGroupDeleteTarget(selectedGroups[0]); return }
     const removed = new Set(selectedElementIds)
-    setElements((current) => current.map((item) => item.key === 'group'
-      ? { ...item, config: { ...(item.config || {}), memberIds: (item.config?.memberIds || []).filter((id) => !removed.has(id)) } }
-      : item).filter((item) => !removed.has(item.id)))
+    setElements((current) => current.map((item) => {
+      if (item.key === 'group') return { ...item, config: { ...(item.config || {}), memberIds: (item.config?.memberIds || []).filter((id) => !removed.has(id)) } }
+      if (item.key === 'decision') return { ...item, config: {
+        ...(item.config || {}),
+        outcomes: (item.config?.outcomes || []).map((outcome) => ({ ...outcome, branch: (outcome.branch || []).filter((id) => !removed.has(id)) })),
+        defaultBranch: (item.config?.defaultBranch || []).filter((id) => !removed.has(id)),
+      } }
+      return item
+    }).filter((item) => !removed.has(item.id)))
     setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
     setSelectedElementIds([])
     setDirty(true)
@@ -1471,9 +1527,15 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     if (copyFirst) setCopiedElements(JSON.parse(JSON.stringify(elements.filter((element) => removed.has(element.id)))))
     setElements((current) => current
       .filter((element) => !removed.has(element.id))
-      .map((element) => element.key === 'group' && Array.isArray(element.config?.memberIds)
-        ? { ...element, config: { ...element.config, memberIds: element.config.memberIds.filter((id) => !removed.has(id)) } }
-        : element))
+      .map((element) => {
+        if (element.key === 'group' && Array.isArray(element.config?.memberIds)) return { ...element, config: { ...element.config, memberIds: element.config.memberIds.filter((id) => !removed.has(id)) } }
+        if (element.key === 'decision') return { ...element, config: {
+          ...(element.config || {}),
+          outcomes: (element.config?.outcomes || []).map((outcome) => ({ ...outcome, branch: (outcome.branch || []).filter((id) => !removed.has(id)) })),
+          defaultBranch: (element.config?.defaultBranch || []).filter((id) => !removed.has(id)),
+        } }
+        return element
+      })
     setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
     setSelectedElementIds((current) => current.filter((id) => !removed.has(id)))
     setDirty(true)
@@ -1609,7 +1671,12 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
           <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} data-gptb-auto-focus="true" data-gptb-element-id="start" data-gptb-description="The Start element defines when and how the flow begins." aria-label="Start" aria-disabled={!flow.startNeedsConfiguration} onClick={flow.startNeedsConfiguration ? openStart : undefined}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
           {(() => {
             const autoElements = elements.filter((element) => element.source === 'auto')
-            const memberIds = new Set(autoElements.filter((element)=>element.key==='group').flatMap((group)=>Array.isArray(group.config?.memberIds)?group.config.memberIds:[]))
+            const groupMemberIds = autoElements.filter((element)=>element.key==='group').flatMap((group)=>Array.isArray(group.config?.memberIds)?group.config.memberIds:[])
+            const decisionMemberIds = autoElements.filter((element)=>element.key==='decision').flatMap((decision)=>[
+              ...(decision.config?.outcomes || []).flatMap((outcome)=>Array.isArray(outcome.branch)?outcome.branch:[]),
+              ...(Array.isArray(decision.config?.defaultBranch)?decision.config.defaultBranch:[]),
+            ])
+            const memberIds = new Set([...groupMemberIds, ...decisionMemberIds])
             const visible = autoElements.filter((element)=>!memberIds.has(element.id))
             const addSlot = (index) => <div className="gptb-add-slot" key={`add-${index}`}>
               <div className="gptb-connector"/>
@@ -1623,7 +1690,9 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
             </div>
             return <>{addSlot(0)}{visible.map((element,index)=><React.Fragment key={element.id}><div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-element-id={element.id} data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`}>{element.key==='group'
               ? <AutoGroupCard group={element} members={(element.config?.memberIds||[]).map((id)=>autoElements.find((item)=>item.id===id)).filter(Boolean)} onOpenGroup={()=>openElement(element)} onOpenMember={openElement} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} connecting={connectMode} onConnectTarget={connectToElement} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length} onAddElement={(picked)=>addElementToGroup(element.id,picked)} onDeleteGroup={()=>setGroupDeleteTarget(element)}/>
-              : <PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/>}</div>{addSlot(index + 1)}</React.Fragment>)}</>
+              : element.key==='decision'
+                ? <AutoDecisionCard decision={element} elements={autoElements} onOpenDecision={()=>openElement(element)} onOpenMember={openElement} onAddElement={addElementToDecisionBranch} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length}/>
+                : <PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/>}</div>{addSlot(index + 1)}</React.Fragment>)}</>
           })()}
           <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
         </> : <>
