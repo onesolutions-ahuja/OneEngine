@@ -180,10 +180,19 @@ export default function GPTBuilderElementProperties({
     onCommit?.(refreshed)
   }
 
+  const updateConfig = (nextConfig) => {
+    // Keep the auto-generated label linked to configuration until the user
+    // manually edits Label. The visible refresh is finalized when the panel
+    // closes, matching Salesforce's current auto-label behavior.
+    change({ ...draft, config: nextConfig })
+  }
+
   const body = <>
     <CommonFields draft={draft} elements={elements} onChange={change} newElement={isNew}/>
     <div className="gptb-element-specific-slot">
-      {children || <div className="gptb-shared-phase-note">Element-specific configuration is added in its dedicated parity phase.</div>}
+      {typeof children === 'function'
+        ? children({ draft, updateConfig })
+        : children || <div className="gptb-shared-phase-note">Element-specific configuration is added in its dedicated parity phase.</div>}
     </div>
   </>
 
