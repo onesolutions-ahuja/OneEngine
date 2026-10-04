@@ -855,34 +855,28 @@ export function packageDefinition(entry) {
           "name": "storeId",
           "type": "text",
           "required": true
-        },
-        {
-          "name": "menu",
-          "type": "object",
-          "required": true
         }
       ],
-        "outputContract": [{"name":"success","type":"boolean","source":"variables.success"},{"name":"data","type":"object","source":"variables.data"}],
+      "outputContract": [
+        {
+          "name": "success",
+          "type": "boolean",
+          "source": "variables.success"
+        },
+        {
+          "name": "data",
+          "type": "object",
+          "source": "variables.data"
+        }
+      ],
       "resources": [
         {
           "value": "variables.storeId",
           "apiName": "storeId",
-          "label": "storeId",
+          "label": "Store ID",
           "type": "Variable",
           "dataType": "Text",
           "defaultValue": "",
-          "isCollection": false,
-          "availableInput": true,
-          "availableOutput": false,
-          "objectKey": ""
-        },
-        {
-          "value": "variables.menu",
-          "apiName": "menu",
-          "label": "menu",
-          "type": "Variable",
-          "dataType": "Object",
-          "defaultValue": null,
           "isCollection": false,
           "availableInput": true,
           "availableOutput": false,
@@ -915,6 +909,114 @@ export function packageDefinition(entry) {
       ],
       "actions": [
         {
+          "id": "get_products",
+          "label": "Get Uber-enabled Products",
+          "apiName": "get_products",
+          "key": "GET_RECORDS",
+          "objectKey": "product",
+          "filters": [
+            {
+              "field": "available_on_uber",
+              "operator": "equals",
+              "value": true
+            },
+            {
+              "field": "active",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "match": "all",
+          "store": "all",
+          "limit": 500,
+          "fieldSelection": "choose",
+          "selectedFields": [
+            "id",
+            "name",
+            "description",
+            "price",
+            "vat_rate",
+            "uber_item_id",
+            "category_id"
+          ]
+        },
+        {
+          "id": "build_items",
+          "label": "Build Uber Items",
+          "apiName": "build_items",
+          "key": "TRANSFORM",
+          "collection": "steps.get_products.records",
+          "transformMappings": {
+            "id": {
+              "coalesce": [
+                "item.uber_item_id",
+                "item.id"
+              ]
+            },
+            "title": {
+              "translations": {
+                "en_us": {
+                  "path": "$record.name"
+                }
+              }
+            },
+            "description": {
+              "translations": {
+                "en_us": {
+                  "path": "$record.description"
+                }
+              }
+            },
+            "external_data": "item.id",
+            "price_info": {
+              "price": {
+                "source": "item.price",
+                "multiply": 100,
+                "round": true
+              }
+            },
+            "tax_info": {
+              "vat_rate_percentage": "item.vat_rate"
+            }
+          }
+        },
+        {
+          "id": "build_categories",
+          "label": "Build Uber Categories",
+          "apiName": "build_categories",
+          "key": "TRANSFORM",
+          "collection": "steps.get_products.records",
+          "transformMappings": {
+            "id": "item.id",
+            "title": {
+              "translations": {
+                "en_us": {
+                  "path": "$record.name"
+                }
+              }
+            },
+            "entities": [
+              {
+                "id": {
+                  "path": "$record.uber_item_id",
+                  "fallback": {
+                    "path": "$record.id"
+                  }
+                },
+                "type": "ITEM"
+              }
+            ]
+          }
+        },
+        {
+          "id": "build_category_ids",
+          "label": "Build Category IDs",
+          "apiName": "build_category_ids",
+          "key": "TRANSFORM",
+          "collection": "steps.get_products.records",
+          "outputValue": "item.id"
+        },
+        {
           "id": "upload_menu",
           "label": "Upload Uber Eats Menu",
           "apiName": "upload_menu",
@@ -923,12 +1025,99 @@ export function packageDefinition(entry) {
           "method": "PUT",
           "endpoint": "/v2/eats/stores/{{storeId}}/menus",
           "body": {
-            "path": "variables.menu"
+            "menus": [
+              {
+                "id": "onepos-menu",
+                "title": {
+                  "translations": {
+                    "en_us": "onePOS Menu"
+                  }
+                },
+                "service_availability": [
+                  {
+                    "day_of_week": "monday",
+                    "time_periods": [
+                      {
+                        "start_time": "00:00",
+                        "end_time": "23:59"
+                      }
+                    ]
+                  },
+                  {
+                    "day_of_week": "tuesday",
+                    "time_periods": [
+                      {
+                        "start_time": "00:00",
+                        "end_time": "23:59"
+                      }
+                    ]
+                  },
+                  {
+                    "day_of_week": "wednesday",
+                    "time_periods": [
+                      {
+                        "start_time": "00:00",
+                        "end_time": "23:59"
+                      }
+                    ]
+                  },
+                  {
+                    "day_of_week": "thursday",
+                    "time_periods": [
+                      {
+                        "start_time": "00:00",
+                        "end_time": "23:59"
+                      }
+                    ]
+                  },
+                  {
+                    "day_of_week": "friday",
+                    "time_periods": [
+                      {
+                        "start_time": "00:00",
+                        "end_time": "23:59"
+                      }
+                    ]
+                  },
+                  {
+                    "day_of_week": "saturday",
+                    "time_periods": [
+                      {
+                        "start_time": "00:00",
+                        "end_time": "23:59"
+                      }
+                    ]
+                  },
+                  {
+                    "day_of_week": "sunday",
+                    "time_periods": [
+                      {
+                        "start_time": "00:00",
+                        "end_time": "23:59"
+                      }
+                    ]
+                  }
+                ],
+                "category_ids": {
+                  "path": "steps.build_category_ids.collection"
+                }
+              }
+            ],
+            "categories": {
+              "path": "steps.build_categories.collection"
+            },
+            "items": {
+              "path": "steps.build_items.collection"
+            },
+            "modifier_groups": [],
+            "display_options": {
+              "disable_item_instructions": true
+            }
           }
         },
         {
           "id": "check_result",
-          "label": "Request Successful?",
+          "label": "Menu Upload Successful?",
           "apiName": "check_result",
           "key": "CONDITION",
           "outcomes": [
@@ -947,7 +1136,7 @@ export function packageDefinition(entry) {
               },
               "branch": [
                 "set_success",
-                "set_response"
+                "set_data"
               ]
             }
           ],
@@ -968,9 +1157,9 @@ export function packageDefinition(entry) {
           "value": true
         },
         {
-          "id": "set_response",
-          "label": "Set Response",
-          "apiName": "set_response",
+          "id": "set_data",
+          "label": "Set Data",
+          "apiName": "set_data",
           "key": "ASSIGNMENT",
           "variableName": "data",
           "variableType": "object",
