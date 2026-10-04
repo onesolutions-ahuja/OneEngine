@@ -1,8 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import { resolvePrice } from "../services/pricingEngine.js";
-import { executeConnectorWorkflowAction } from "../services/platformWorkflow.js";
-import { resendInvoiceByChannel } from "../services/invoiceDelivery.js";
+import { executeWorkflowAction } from "../services/platformWorkflow.js";
 import { packageDefinitions } from "../services/packageRegistry.js";
 
 const KIOSK_MODE_TTL = process.env.KIOSK_MODE_TTL || "12h";
@@ -548,23 +547,16 @@ export default function createKioskRouter({
       if (!sale.printer_connector_id) {
         return res.status(409).json({ success: false, code: "LOCAL_PRINT_FALLBACK", message: "No One Connect receipt printer is assigned to this kiosk" });
       }
-      const result = await executeConnectorWorkflowAction({
+      const result = await executeWorkflowAction({
         db,
         req,
         companyId: req.user.companyId,
-        storeId: req.user.storeId,
-        tillId: sale.printer_till_id || null,
-        connectorDrivers,
-        writeAudit,
-        actorUserId: req.user.id || null,
+        userId: req.user.id || null,
         action: {
-          key: "PRINT_RECEIPT",
-          connectorInstanceId: sale.printer_connector_id,
-          capability: "printer.print",
-          saleId: sale.id,
-          receiptNumber: sale.receipt_number,
-          payload: {
-            connectorInstanceId: sale.printer_connector_id,
+          type: "CALL_CONNECTOR",
+          connectionId: sale.printer_connector_id,
+          operation: "printer.print",
+          input: {
             saleId: sale.id,
             receiptNumber: sale.receipt_number,
             sale,
@@ -614,20 +606,23 @@ export default function createKioskRouter({
       }
       const recipient = email || owned.rows[0].customer_email || "";
       if (!recipient) return res.status(400).json({ success: false, message: "Enter an email address for the receipt" });
-      const result = await resendInvoiceByChannel({
+      const result = await executeWorkflowAction({
         db,
-        channel: "email",
-        saleId,
+        req,
         companyId: req.user.companyId,
-        storeId: req.user.storeId || null,
         userId: req.user.id || null,
-        overrideRecipient: recipient,
+        action: {
+          type: "SEND_COMMUNICATION",
+          channel: "EMAIL",
+          recipient,
+          templateKey: "kiosk_receipt_email",
+          templateContext: { saleId },
+          objectId: "sale",
+          recordId: saleId,
+        },
       });
-      if (!result?.ok) {
-        const message = result?.reason === "not_configured"
-          ? "Email receipt delivery is not configured for this business"
-          : result?.error || result?.reason || "Email receipt could not be sent";
-        return res.status(result?.reason === "not_configured" ? 409 : 502).json({ success: false, message });
+      if (!["completed","queued","SUCCESS","COMPLETED"].includes(String(result?.status || ""))) {
+        return res.status(409).json({ success: false, message: result?.error || result?.code || "Email receipt Flow is not configured" });
       }
       await writeAudit?.(req.user.companyId, req.user.id || null, "KIOSK_RECEIPT_EMAILED", "sale", saleId, {
         kioskDeviceId: owned.rows[0].kiosk_device_id,
