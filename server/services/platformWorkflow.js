@@ -2121,12 +2121,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         return output;
       };
+      const targetResource = String(action.targetResource || "").replace(/^variables\./, "");
       if (Array.isArray(source)) {
         const collection = source.map(transformOne);
-        return { status: "completed", collection, count: collection.length, value: collection };
+        if (targetResource) workflowVariables.variables[targetResource] = collection;
+        return { status: "completed", collection, count: collection.length, value: collection, resourceName: targetResource || null };
       }
       const value = transformOne(source && typeof source === "object" ? source : {});
-      return { status: "completed", value, collection: null };
+      if (targetResource) workflowVariables.variables[targetResource] = value;
+      return { status: "completed", value, collection: null, resourceName: targetResource || null };
     },
   },
   {
@@ -3198,14 +3201,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         ? action.workflow
         : (() => {
             if (!db || typeof db !== "function") return null;
-            const id = action.workflowId || action.subflowId;
-            if (!id) return null;
-            return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
+            const idOrApiName = action.workflowId || action.subflowId;
+            if (!idOrApiName) return null;
+            const tenantId = companyId || req?.user?.companyId || null;
+            return db(
+              `SELECT * FROM platform_rules
+               WHERE active=true
+                 AND (company_id=$2 OR company_id IS NULL)
+                 AND (id::text=$1 OR action->>'apiName'=$1)
+               ORDER BY CASE WHEN company_id=$2 THEN 0 ELSE 1 END
+               LIMIT 1`,
+              [String(idOrApiName), tenantId]
+            ).then((result) => result.rows[0] || null);
           })();
       const definition = await Promise.resolve(subflowDefinition);
       if (!definition) {
         throw new Error(`Subflow "${workflowKey}" was not found or is not active`);
       }
+      const resolvedWorkflowId = definition.id || workflowKey;
       const targetCompanyId = action.companyId || definition.company_id || companyId || req?.user?.companyId;
       const runtimeCompanyId = companyId || req?.user?.companyId;
       if (targetCompanyId && runtimeCompanyId && targetCompanyId !== runtimeCompanyId) {
@@ -3213,7 +3226,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       const childActions = Array.isArray(definition.actions) ? definition.actions : Array.isArray(definition.action?.actions) ? definition.action.actions : [];
       if (!childActions.length) {
-        return { status: "skipped", workflowId: workflowKey, reason: "Subflow contains no actions" };
+        return { status: "skipped", workflowId: resolvedWorkflowId, reason: "Subflow contains no actions" };
       }
       const mappedInputs = {};
       const mappings = action.workflowInputs || action.inputs || action.inputMap || action.mappings || {};
@@ -3250,7 +3263,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           );
           const existingChild = existingChildResult.rows[0];
           if (existingChild?.status === "WAITING" || existingChild?.status === "RUNNING") {
-            return { status: "waiting", workflowId: workflowKey, runId: existingChildRunId, results: existingChild.metadata?.childResults || [] };
+            return { status: "waiting", workflowId: resolvedWorkflowId, runId: existingChildRunId, results: existingChild.metadata?.childResults || [] };
           }
           if (existingChild?.status === "FAILED") {
             throw new Error(existingChild.error_text || `Subflow "${definition.name || workflowKey}" failed`);
@@ -3266,9 +3279,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
               if (output.required === true && value === undefined) throw new Error(`Subflow output "${output.label || name}" was not produced`);
               outputs[name] = value;
             }
+            if (action.outputMappings && typeof action.outputMappings === "object" && !Array.isArray(action.outputMappings)) {
+              for (const [outputName, targetResource] of Object.entries(action.outputMappings)) {
+                if (!Object.prototype.hasOwnProperty.call(outputs, outputName)) continue;
+                const targetName = String(targetResource || "").replace(/^variables\./, "");
+                if (targetName) workflowVariables.variables[targetName] = outputs[outputName];
+              }
+            }
             return {
               status: "completed",
-              workflowId: workflowKey,
+              workflowId: resolvedWorkflowId,
               runId: existingChildRunId,
               results: existingChild.metadata?.childResults || [],
               outputs,
@@ -3284,7 +3304,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         ? await createWorkflowRun({
             db: runDb,
             companyId: targetCompanyId || runtimeCompanyId,
-            workflowId: workflowKey,
+            workflowId: resolvedWorkflowId,
             workflowName: definition.name || action.workflowName || "Subflow",
             workflowVersion: childVersion,
             objectId: object?.id || action.objectId || null,
@@ -3335,6 +3355,13 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           outputs[name] = value;
         }
       }
+      if (!childWaiting && action.outputMappings && typeof action.outputMappings === "object" && !Array.isArray(action.outputMappings)) {
+        for (const [outputName, targetResource] of Object.entries(action.outputMappings)) {
+          if (!Object.prototype.hasOwnProperty.call(outputs, outputName)) continue;
+          const targetName = String(targetResource || "").replace(/^variables\./, "");
+          if (targetName) workflowVariables.variables[targetName] = outputs[outputName];
+        }
+      }
       const childFailed = childResult.some((item) => item.result?.status === "failed");
       const childStatus = childFailed ? "FAILED" : childWaiting ? "WAITING" : "COMPLETED";
       if (childRun && runDb && typeof runDb === "function") {
@@ -3357,7 +3384,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       return {
         status: childFailed ? "failed" : childWaiting ? "waiting" : "completed",
-        workflowId: workflowKey,
+        workflowId: resolvedWorkflowId,
         runId: childRun?.id || null,
         results: childResult,
         outputs,
