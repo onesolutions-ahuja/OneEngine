@@ -1045,7 +1045,7 @@ export default function createOnlineRouter({
         db,
         req,
         companyId: req.user.companyId,
-        action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_UPLOAD_MENU", inputMappings: { storeId: req.body?.store_id || null, menu: req.body?.menu || null } },
+        action: { type: "RUN_SUBFLOW", subflowApiName: "GPT_UBER_EATS_UPLOAD_MENU", inputMappings: { storeId: req.body?.store_id || null } },
       });
 
       if (syncResult.code === "PLATFORM_DISABLED") {
