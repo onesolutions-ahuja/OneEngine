@@ -12,6 +12,7 @@ import GPTBuilderElementProperties, {
   createElementInstance, elementCommonErrors,
 } from './GPTBuilderElementProperties'
 import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRecords'
+import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import './GPTBuilderPage.css'
 
 const FLOW_CATEGORIES = [
@@ -42,8 +43,8 @@ function apiNameFromLabel(label, fallback = 'New_Flow') {
 }
 
 function initialStart(flowType) {
-  if (flowType === 'record') return { objectKey: '', trigger: 'created_or_updated', conditionMode: 'none', conditions: [], formula: '', updateMode: 'every_time', optimize: 'actions' }
-  if (flowType === 'schedule') return { startDate: '', startTime: '', frequency: 'Daily', objectKey: '', conditionMode: 'none', conditions: [], formula: '' }
+  if (flowType === 'record') return { objectKey: '', trigger: 'created_or_updated', conditionMode: 'none', conditions: [], formula: '', updateMode: 'every_time', optimize: 'actions', asyncPath: false, scheduledPaths: [] }
+  if (flowType === 'schedule') return { startDate: '', startTime: '', frequency: 'Daily', batchSize: 200, objectKey: '', conditionMode: 'none', conditions: [], formula: '' }
   if (flowType === 'platform_event') return { eventKey: '' }
   return {}
 }
@@ -157,7 +158,7 @@ function ConditionsEditor({ object, value, onChange }) {
 
 function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, onCancel }) {
   const selectedObject = objects.find((item) => objectKey(item) === value.objectKey)
-  const showUpdateMode = flowType === 'record' && ['updated', 'created_or_updated'].includes(value.trigger)
+  const showUpdateMode = flowType === 'record' && ['updated', 'created_or_updated'].includes(value.trigger) && value.conditionMode !== 'none'
   return <aside className="gptb-config-panel" aria-label="Configure Start">
     <header><div><strong>{flowType === 'schedule' ? 'Set a Schedule' : flowType === 'platform_event' ? 'Configure Start' : 'Configure Start'}</strong><small>{FLOW_TYPES.find((item) => item.key === flowType)?.label}</small></div><button className="gptb-icon-button" aria-label="Close Start configuration" onClick={onCancel}><X size={16}/></button></header>
     <div className="gptb-config-body">
@@ -166,10 +167,11 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
         <section><h3>Configure Trigger</h3><label>Trigger the Flow When<select value={value.trigger || 'created_or_updated'} onChange={(event) => onChange({ ...value, trigger: event.target.value })}><option value="created">A record is created</option><option value="updated">A record is updated</option><option value="created_or_updated">A record is created or updated</option><option value="deleted">A record is deleted</option></select></label></section>
         <section><h3>Set Entry Conditions</h3><label>Condition Requirements<select value={value.conditionMode || 'none'} onChange={(event) => onChange({ ...value, conditionMode: event.target.value })}><option value="none">None</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="formula">Formula Evaluates to True</option></select></label>{value.conditionMode === 'formula' ? <label>Formula<textarea rows={4} value={value.formula || ''} onChange={(event) => onChange({ ...value, formula: event.target.value })} placeholder="Enter a boolean formula"/></label> : value.conditionMode !== 'none' ? <ConditionsEditor object={selectedObject} value={value.conditions} onChange={(conditions) => onChange({ ...value, conditions })}/> : null}</section>
         {showUpdateMode ? <section><h3>When to Run the Flow for Updated Records</h3><label className="gptb-radio"><input type="radio" name="gptb-update-mode" checked={(value.updateMode || 'every_time') === 'every_time'} onChange={() => onChange({ ...value, updateMode: 'every_time' })}/><span><b>Every time a record is updated and meets the condition requirements</b></span></label><label className="gptb-radio"><input type="radio" name="gptb-update-mode" checked={value.updateMode === 'transition'} onChange={() => onChange({ ...value, updateMode: 'transition' })}/><span><b>Only when a record is updated to meet the condition requirements</b></span></label></section> : null}
-        {value.trigger !== 'deleted' ? <section><h3>Optimize the Flow for</h3><label className="gptb-radio"><input type="radio" name="gptb-optimize" checked={value.optimize === 'fast'} onChange={() => onChange({ ...value, optimize: 'fast' })}/><span><b>Fast Field Updates</b><small>Update fields on the record that triggered the flow before the record is saved.</small></span></label><label className="gptb-radio"><input type="radio" name="gptb-optimize" checked={(value.optimize || 'actions') === 'actions'} onChange={() => onChange({ ...value, optimize: 'actions' })}/><span><b>Actions and Related Records</b><small>Perform actions and update any related records after the record is saved.</small></span></label></section> : null}
+        {value.trigger !== 'deleted' ? <section><h3>Optimize the Flow for</h3><label className="gptb-radio"><input type="radio" name="gptb-optimize" checked={value.optimize === 'fast'} onChange={() => onChange({ ...value, optimize: 'fast', asyncPath: false, scheduledPaths: [] })}/><span><b>Fast Field Updates</b><small>Update fields on the record that triggered the flow before the record is saved.</small></span></label><label className="gptb-radio"><input type="radio" name="gptb-optimize" checked={(value.optimize || 'actions') === 'actions'} onChange={() => onChange({ ...value, optimize: 'actions' })}/><span><b>Actions and Related Records</b><small>Perform actions and update any related records after the record is saved.</small></span></label></section> : null}
+        <GPTBuilderRecordTriggerPaths value={value} selectedObject={selectedObject} onChange={onChange}/>
       </> : null}
       {flowType === 'schedule' ? <>
-        <section><h3>Set a Schedule</h3><div className="gptb-two-col"><label>Start Date<input type="date" value={value.startDate || ''} onChange={(event) => onChange({ ...value, startDate: event.target.value })}/></label><label>Start Time<input type="time" value={value.startTime || ''} onChange={(event) => onChange({ ...value, startTime: event.target.value })}/></label></div><label>Frequency<select value={value.frequency || 'Daily'} onChange={(event) => onChange({ ...value, frequency: event.target.value })}><option>Once</option><option>Daily</option><option>Weekly</option></select></label></section>
+        <section><h3>Set a Schedule</h3><div className="gptb-two-col"><label>Start Date<input type="date" value={value.startDate || ''} onChange={(event) => onChange({ ...value, startDate: event.target.value })}/></label><label>Start Time<input type="time" value={value.startTime || ''} onChange={(event) => onChange({ ...value, startTime: event.target.value })}/></label></div><label>Frequency<select value={value.frequency || 'Daily'} onChange={(event) => onChange({ ...value, frequency: event.target.value })}><option>Once</option><option>Daily</option><option>Weekly</option></select></label><details><summary>Advanced Options</summary><label>Batch Size<input type="number" min="1" max="200" value={value.batchSize ?? 200} onChange={(event) => onChange({ ...value, batchSize: Number(event.target.value) })}/><small>Enter a value from 1 through 200. The default is 200.</small></label></details></section>
         <section><h3>Choose Object <small>(Optional)</small></h3><label>Object<select value={value.objectKey || ''} onChange={(event) => onChange({ ...value, objectKey: event.target.value, conditions: [] })}><option value="">None</option>{objects.map((item) => <option key={item.id || objectKey(item)} value={objectKey(item)}>{objectLabel(item)}</option>)}</select></label>{value.objectKey ? <><label>Condition Requirements<select value={value.conditionMode || 'none'} onChange={(event) => onChange({ ...value, conditionMode: event.target.value })}><option value="none">None</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="formula">Custom Condition Logic Is Met</option></select></label>{value.conditionMode !== 'none' ? <ConditionsEditor object={selectedObject} value={value.conditions} onChange={(conditions) => onChange({ ...value, conditions })}/> : null}</> : null}</section>
       </> : null}
       {flowType === 'platform_event' ? <section><h3>Select Platform Event</h3><label>Platform Event<select value={value.eventKey || ''} onChange={(event) => onChange({ ...value, eventKey: event.target.value })}><option value="">Select an event</option>{eventTypes.map((item) => <option key={item.event_type} value={item.event_type}>{item.event_type}</option>)}</select></label>{value.eventKey ? <p className="gptb-help-text">{eventTypes.find((item) => item.event_type === value.eventKey)?.description || 'The flow runs when this event message is received.'}</p> : null}</section> : null}
@@ -178,7 +180,7 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
   </aside>
 }
 
-function FlowPropertiesModal({ value, saved, saving, onChange, onCancel, onSave }) {
+function FlowPropertiesModal({ value, saved, saving, flowType, onChange, onCancel, onSave }) {
   const [draft, setDraft] = useState(value)
   const [manualApi, setManualApi] = useState(saved)
   const valid = draft.label.trim() && /^[A-Za-z][A-Za-z0-9_]*$/.test(draft.apiName) && !draft.apiName.endsWith('_') && !draft.apiName.includes('__')
@@ -189,7 +191,16 @@ function FlowPropertiesModal({ value, saved, saving, onChange, onCancel, onSave 
         <label><span>Flow Label <b>*</b></span><input autoFocus value={draft.label} onChange={(event) => { const label = event.target.value; setDraft((current) => ({ ...current, label, apiName: !saved && !manualApi ? apiNameFromLabel(label) : current.apiName })) }}/></label>
         <label><span>Flow API Name <b>*</b></span><input value={draft.apiName} disabled={saved} onChange={(event) => { setManualApi(true); setDraft((current) => ({ ...current, apiName: event.target.value })) }}/>{saved ? <small>The API name can’t be edited after the flow is saved.</small> : <small>Auto-filled from the Flow Label. You can edit it before the first save.</small>}</label>
         <label><span>Description</span><textarea rows={4} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}/></label>
-        <details><summary>Advanced</summary><label><span>How to Run the Flow</span><select value={draft.runContext || 'default'} onChange={(event) => setDraft((current) => ({ ...current, runContext: event.target.value }))}><option value="default">Default Context</option><option value="system_with_sharing">System Context with Sharing</option><option value="system_without_sharing">System Context without Sharing</option></select></label></details>
+        <label><span>Interview Label</span><input value={draft.interviewLabel || ''} onChange={(event) => setDraft((current) => ({ ...current, interviewLabel: event.target.value }))}/><small>By default, interviews use the flow label and the current date/time.</small></label>
+        <details><summary>Advanced</summary>
+          <label><span>How to Run the Flow</span><select value={draft.runContext || 'default'} onChange={(event) => setDraft((current) => ({ ...current, runContext: event.target.value }))}><option value="default">Default Context</option><option value="system_with_sharing">System Context with Sharing</option><option value="system_without_sharing">System Context without Sharing</option></select></label>
+          <label><span>Type</span><input value={FLOW_TYPES.find((item) => item.key === flowType)?.label || flowType} disabled/></label>
+          <label><span>API Version for Running the Flow</span><select value={draft.apiVersion || '68.0'} onChange={(event) => setDraft((current) => ({ ...current, apiVersion: event.target.value }))}><option value="68.0">68.0</option><option value="67.0">67.0</option><option value="66.0">66.0</option><option value="65.0">65.0</option><option value="64.0">64.0</option></select><small>New flows use the latest supported runtime API version.</small></label>
+          {flowType === 'record' ? <label><span>Trigger Order</span><input type="number" min="1" max="2000" value={draft.triggerOrder || ''} onChange={(event) => setDraft((current) => ({ ...current, triggerOrder: event.target.value }))}/></label> : null}
+          {flowType === 'screen' ? <label className="gptb-properties-check"><input type="checkbox" checked={draft.showProgress === true} onChange={(event) => setDraft((current) => ({ ...current, showProgress: event.target.checked }))}/><span>Show a progress indicator on screen elements</span></label> : null}
+          <label className="gptb-properties-check"><input type="checkbox" checked={draft.isTemplate === true} onChange={(event) => setDraft((current) => ({ ...current, isTemplate: event.target.checked }))}/><span>Template</span></label>
+          <label className="gptb-properties-check"><input type="checkbox" checked={draft.overridable === true} onChange={(event) => setDraft((current) => ({ ...current, overridable: event.target.checked }))}/><span>Overridable</span></label>
+        </details>
       </div>
       <footer className="gptb-new-footer"><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled={!valid || saving} onClick={() => { onChange(draft); onSave(draft) }}>{saving ? 'Saving…' : 'Save'}</button></footer>
     </section>
@@ -225,7 +236,7 @@ function FlowShell({ flow, onNew }) {
   const [startConfig, setStartConfig] = useState(() => initialStart(flow.key))
   const [startDraft, setStartDraft] = useState(() => initialStart(flow.key))
   const [startOpen, setStartOpen] = useState(flow.startNeedsConfiguration)
-  const [flowProps, setFlowProps] = useState({ label: '', apiName: '', description: '', runContext: 'default' })
+  const [flowProps, setFlowProps] = useState({ label: '', apiName: '', description: '', interviewLabel: '', runContext: 'default', apiVersion: '68.0', triggerOrder: '', showProgress: false, isTemplate: false, overridable: false })
   const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [workflowId, setWorkflowId] = useState('')
@@ -281,9 +292,14 @@ function FlowShell({ flow, onNew }) {
       gptBuilder: true,
       apiName: props.apiName,
       description: props.description,
-      apiVersion: '66.0',
+      apiVersion: props.apiVersion || '68.0',
       flowType: flow.key,
       runContext: props.runContext || 'default',
+      interviewLabel: props.interviewLabel || (props.label ? `${props.label} - {!$Flow.CurrentDateTime}` : ''),
+      triggerOrder: props.triggerOrder ? Number(props.triggerOrder) : undefined,
+      showProgress: props.showProgress === true,
+      isTemplate: props.isTemplate === true,
+      overridable: props.overridable === true,
       match: startConfig.conditionMode === 'any' ? 'any' : 'all',
       entryTransition: startConfig.updateMode === 'transition' ? 'UPDATED_TO_MEET' : 'EVERY_TIME',
       start: startConfig,
@@ -381,7 +397,7 @@ function FlowShell({ flow, onNew }) {
         <button aria-label="View Properties" title="View Properties" onClick={() => setPropertiesOpen(true)}><Settings2 size={16}/></button>
         <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={() => { setLayout('auto'); setLayoutOpen(false); setDirty(true) }}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={() => { setLayout('free'); setLayoutOpen(false); setToolboxOpen(true); setDirty(true) }}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
-        <button className="gptb-text-tool" disabled={!workflowId || dirty}><Play size={14}/> Run</button><button className="gptb-text-tool" disabled={!workflowId || dirty}><Eye size={14}/> Debug</button>
+        <button className="gptb-text-tool" disabled={!workflowId}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId}><Eye size={14}/> Test Mode</button> : <button className="gptb-text-tool" disabled={!workflowId}><Eye size={14}/> Debug</button>}
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={hasUnsavableIncomplete ? 'Complete Screen and Action elements before saving.' : 'Save'} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <button className="gptb-text-tool is-brand" disabled={!workflowId || dirty || issues.some((issue) => issue.level === 'error')}>Activate</button><button aria-label="More actions"><MoreHorizontal size={16}/></button>
       </div>
@@ -443,7 +459,7 @@ function FlowShell({ flow, onNew }) {
         : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
-    {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
+    {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} flowType={flow.key} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
   </section>
 }
 
