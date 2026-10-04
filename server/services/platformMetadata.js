@@ -1148,6 +1148,28 @@ const retailObjects = [
 ];
 
 const operationalObjects = [
+  { key: "till_session", label: "Till Session", plural: "Till Sessions", table: "till_sessions", fields: [
+    ["company_id","Company","lookup","company_id",true],
+    ["store_id","Store","lookup","store_id",true],
+    ["terminal_id","Till","lookup","terminal_id",true],
+    ["user_id","Opened By","lookup","user_id",true],
+    ["opening_cash","Opening Cash","currency","opening_cash",true],
+    ["closing_cash","Closing Cash","currency","closing_cash",false],
+    ["expected_cash","Expected Cash","currency","expected_cash",false],
+    ["cash_difference","Cash Difference","currency","cash_difference",false],
+    ["status","Status","select","status",true],
+    ["opened_at","Opened At","datetime","opened_at",false],
+    ["closed_at","Closed At","datetime","closed_at",false],
+    ["closed_by","Closed By","lookup","closed_by",false],
+  ] },
+  { key: "cash_ledger", label: "Cash Ledger", plural: "Cash Ledger", table: "cash_movements", fields: [
+    ["till_session_id","Till Session","lookup","till_session_id",true],
+    ["user_id","User","lookup","user_id",true],
+    ["type","Type","select","type",true],
+    ["amount","Amount","currency","amount",true],
+    ["reason","Reason","text","reason",false],
+    ["created_at","Created At","datetime","created_at",false],
+  ] },
   { key: "integration_entity_mapping", label: "Integration Entity Mapping", plural: "Integration Entity Mappings", table: "integration_entity_mappings", fields: [
     ["integration_id","Integration Connection","lookup","integration_id",true],
     ["company_id","Company","lookup","company_id",true],
@@ -1694,6 +1716,44 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         );
       }
     }
+
+    const saleObjectForFormula = await pool.query(
+      "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=true LIMIT 1"
+    );
+    if (saleObjectForFormula.rows[0]?.id) {
+      await pool.query(
+        `UPDATE platform_fields
+            SET field_type='formula',
+                source_column=NULL,
+                writable=FALSE,
+                required=FALSE,
+                config=COALESCE(config,'{}'::jsonb) || '{"expression":"ROUND(COALESCE(total,0)-COALESCE(tax,0),2)","resultType":"currency"}'::jsonb
+          WHERE object_id=$1 AND api_name='subtotal' AND company_id IS NULL`,
+        [saleObjectForFormula.rows[0].id]
+      );
+    }
+
+    const tillSessionObjectForOptions = await pool.query(
+      "SELECT id FROM platform_objects WHERE object_key='till_session' AND company_id IS NULL AND active=true LIMIT 1"
+    );
+    if (tillSessionObjectForOptions.rows[0]?.id) {
+      await pool.query(
+        `UPDATE platform_fields SET options='["open","closed"]'::jsonb
+          WHERE object_id=$1 AND api_name='status' AND company_id IS NULL`,
+        [tillSessionObjectForOptions.rows[0].id]
+      );
+    }
+    const cashLedgerObjectForOptions = await pool.query(
+      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
+    );
+    if (cashLedgerObjectForOptions.rows[0]?.id) {
+      await pool.query(
+        `UPDATE platform_fields SET options='["cash_in","cash_out"]'::jsonb
+          WHERE object_id=$1 AND api_name='type' AND company_id IS NULL`,
+        [cashLedgerObjectForOptions.rows[0].id]
+      );
+    }
+
     const objects = await pool.query(
       `SELECT id, object_key, source_table FROM platform_objects
         WHERE company_id IS NULL AND active=true AND object_key = ANY($1::text[])`,
