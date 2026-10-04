@@ -116,6 +116,33 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Decision matches current Salesforce manual and AI outcome behavior', async () => {
+  const decision = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDecision.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Select Decision Logic',
+    'Define Manually (Default)',
+    'Define with AI (Advanced)',
+    'Decision Instructions',
+    'Outcome Order',
+    'Outcome Label',
+    'Outcome API Name',
+    'Condition Requirements',
+    'Custom Condition Logic Is Met',
+    'Default Outcome Label',
+    'New Outcome',
+  ]) assert.ok(decision.includes(text), text)
+  assert.match(decision, /flowType !== 'record'/)
+  assert.match(decision, /decisionRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'decision'/)
+  assert.match(page, /decisionRuntimeAction\(element\)/)
+  assert.match(runtime, /AI Decision requires Decision Instructions/)
+  assert.match(runtime, /AI Decision service is unavailable/)
+  assert.match(runtime, /outcomeIndex/)
+  assert.match(runtime, /defaultLabel/)
+})
+
 test('GPT Builder Assignment matches current Salesforce variable rows and type-aware operators', async () => {
   const assignment = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAssignment.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
