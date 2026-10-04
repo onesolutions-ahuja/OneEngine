@@ -136,3 +136,28 @@
 .gptb-manager-resource-dialog{width:min(540px,calc(100vw - 48px))}.gptb-manager-error{color:#ba0517!important}
 .gptb-shortcut-list{margin:0;display:grid;gap:10px}.gptb-shortcut-list>div{display:grid;grid-template-columns:minmax(130px,1fr) minmax(180px,1.4fr);gap:12px}.gptb-shortcut-list dt{font-size:10px;font-weight:700}.gptb-shortcut-list dd{margin:0;color:#706e6b;font-size:10px}
 .gptb-description-popup{position:absolute;left:50%;bottom:68px;z-index:80;transform:translateX(-50%);max-width:420px;display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #c9c9c9;border-radius:4px;background:#fff;box-shadow:0 5px 18px rgba(0,0,0,.18);font-size:10px;line-height:1.4}.gptb-description-popup button{display:grid;place-items:center;border:0;background:transparent;color:#706e6b}
+
+/* GPT Builder parity: Transform + Wait editors */
+.gptb-collapsible-section{display:grid;gap:8px}
+.gptb-section-toggle{width:100%;min-height:30px;display:flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:#181818;text-align:left;font-size:10px;font-weight:700}
+.gptb-section-toggle:hover{color:#0176d3}
+.gptb-wait-config-toggle{display:inline-flex;align-items:center;gap:4px;padding:0;border:0;background:transparent;color:#181818;font-size:9px;font-weight:700;text-align:left}
+.gptb-wait-config-toggle:hover{color:#0176d3}
+.gptb-transform-add-resource{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:end}
+.gptb-transform-selected-resources{display:grid;gap:6px}
+.gptb-transform-selected-resources>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;border:1px solid #dddbda;border-radius:4px;background:#fff}
+.gptb-transform-selected-resources>div>span{display:grid;gap:1px;min-width:0}
+.gptb-transform-selected-resources b{font-size:9px;font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.gptb-transform-selected-resources small{font-size:7px;color:#706e6b;overflow:hidden;text-overflow:ellipsis}
+.gptb-transform-selected-resources button,.gptb-transform-mapping button,.gptb-transform-join button{display:grid;place-items:center;border:0;background:transparent;color:#706e6b}
+.gptb-transform-joins,.gptb-transform-mappings{display:grid;gap:8px}
+.gptb-transform-join,.gptb-transform-mapping{display:grid;gap:7px;padding:9px;border:1px solid #dddbda;border-radius:4px;background:#fff}
+.gptb-transform-mapping.has-error{border-color:#ba0517}
+.gptb-transform-map-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.gptb-transform-mapping-tip{display:grid;gap:2px;padding:6px 7px;border-left:3px solid #ba0517;background:#fef1ee;color:#5c0010;font-size:8px;line-height:1.35}
+.gptb-transform-mapping .gptb-gr-sort-option-head>span{display:flex;align-items:center;gap:5px}
+.gptb-transform-mapping .gptb-gr-sort-option-head>span>span{display:grid;place-items:center;color:#ba0517}
+.gptb-wait-amount{display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,.7fr);gap:7px}
+@media (max-width:760px){
+  .gptb-transform-add-resource,.gptb-transform-map-grid,.gptb-wait-amount{grid-template-columns:1fr}
+}
