@@ -1223,7 +1223,22 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   }
   const finishStart = () => { setStartConfig(startDraft); setStartOpen(false); setDirty(true); setMessage('') }
   const updateElement = (next) => {
-    setElements((current) => current.map((item) => item.id === next.id ? next : item))
+    setElements((current) => {
+      const previous = current.find((item) => item.id === next.id)
+      if (previous?.key === 'decision' && next?.key === 'decision') {
+        const previousBranchIds = new Set([
+          ...(previous.config?.outcomes || []).flatMap((outcome) => Array.isArray(outcome.branch) ? outcome.branch : []),
+          ...(Array.isArray(previous.config?.defaultBranch) ? previous.config.defaultBranch : []),
+        ])
+        const nextBranchIds = new Set([
+          ...(next.config?.outcomes || []).flatMap((outcome) => Array.isArray(outcome.branch) ? outcome.branch : []),
+          ...(Array.isArray(next.config?.defaultBranch) ? next.config.defaultBranch : []),
+        ])
+        const orphaned = new Set([...previousBranchIds].filter((id) => !nextBranchIds.has(id)))
+        return current.filter((item) => !orphaned.has(item.id)).map((item) => item.id === next.id ? next : item)
+      }
+      return current.map((item) => item.id === next.id ? next : item)
+    })
     setDirty(true)
   }
   const toggleElementSelection = (id) => setSelectedElementIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
@@ -1404,7 +1419,15 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setElements((current) => {
       if (source !== 'auto' || insertIndex == null) return [...current, instance]
       const autoElements = current.filter((item) => item.source === 'auto')
-      const target = autoElements[insertIndex] || null
+      const nestedIds = new Set([
+        ...autoElements.filter((item) => item.key === 'group').flatMap((item) => item.config?.memberIds || []),
+        ...autoElements.filter((item) => item.key === 'decision').flatMap((item) => [
+          ...(item.config?.outcomes || []).flatMap((outcome) => outcome.branch || []),
+          ...(item.config?.defaultBranch || []),
+        ]),
+      ])
+      const topLevelAutoElements = autoElements.filter((item) => !nestedIds.has(item.id))
+      const target = topLevelAutoElements[insertIndex] || null
       if (target) {
         const globalIndex = current.findIndex((item) => item.id === target.id)
         return [...current.slice(0, globalIndex), instance, ...current.slice(globalIndex)]
@@ -1455,7 +1478,14 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         return { ...item, config }
       })
       if (decisionIndex < 0) return [...withMember, instance]
-      return [...withMember.slice(0, decisionIndex + 1), instance, ...withMember.slice(decisionIndex + 1)]
+      const decision = withMember[decisionIndex]
+      const pathIds = pathId === '__DEFAULT__'
+        ? (decision.config?.defaultBranch || [])
+        : ((decision.config?.outcomes || []).find((outcome,index) => (outcome.id || `outcome-${index + 1}`) === pathId)?.branch || [])
+      const previousMemberId = pathIds.length > 1 ? pathIds[pathIds.length - 2] : null
+      const previousMemberIndex = previousMemberId ? withMember.findIndex((item) => item.id === previousMemberId) : decisionIndex
+      const insertionIndex = previousMemberIndex >= 0 ? previousMemberIndex + 1 : decisionIndex + 1
+      return [...withMember.slice(0, insertionIndex), instance, ...withMember.slice(insertionIndex)]
     })
     setEditingElement({ id: instance.id, isNew: true })
     setDirty(true)
@@ -1476,6 +1506,10 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     const selectedGroups = elements.filter((item) => selectedElementIds.includes(item.id) && item.key === 'group')
     if (selectedGroups.length) { setGroupDeleteTarget(selectedGroups[0]); return }
     const removed = new Set(selectedElementIds)
+    for (const decision of elements.filter((item) => removed.has(item.id) && item.key === 'decision')) {
+      for (const id of (decision.config?.outcomes || []).flatMap((outcome) => outcome.branch || [])) removed.add(id)
+      for (const id of decision.config?.defaultBranch || []) removed.add(id)
+    }
     setElements((current) => current.map((item) => {
       if (item.key === 'group') return { ...item, config: { ...(item.config || {}), memberIds: (item.config?.memberIds || []).filter((id) => !removed.has(id)) } }
       if (item.key === 'decision') return { ...item, config: {
@@ -1547,6 +1581,10 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const deleteAutoElements = (ids, { copyFirst = false } = {}) => {
     const removed = new Set(ids || [])
     if (!removed.size) return
+    for (const decision of elements.filter((item) => removed.has(item.id) && item.key === 'decision')) {
+      for (const id of (decision.config?.outcomes || []).flatMap((outcome) => outcome.branch || [])) removed.add(id)
+      for (const id of decision.config?.defaultBranch || []) removed.add(id)
+    }
     if (copyFirst) setCopiedElements(JSON.parse(JSON.stringify(elements.filter((element) => removed.has(element.id)))))
     setElements((current) => current
       .filter((element) => !removed.has(element.id))
