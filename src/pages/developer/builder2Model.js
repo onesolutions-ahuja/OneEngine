@@ -3,7 +3,7 @@
 // so opening and saving an existing flow preserves its execution contract.
 export function requiresRuntimeRecordEditor(action) {
   const type = String(action?.type || action?.key || '').toUpperCase()
-  if (!['GET_RECORDS', 'CREATE_RECORD', 'CREATE_RELATED_RECORD', 'UPDATE_RECORD', 'UPDATE_RELATED_RECORD', 'BULK_UPDATE_RECORDS', 'DELETE_RECORD', 'ASSIGN_RECORD'].includes(type)) return false
+  if (!['GET_RECORDS', 'CREATE_RECORD', 'CREATE_RELATED_RECORD', 'UPDATE_RECORD', 'UPDATE_RELATED_RECORD', 'DELETE_RECORD', 'ASSIGN_RECORD'].includes(type)) return false
   const config = action?.config || action || {}
   return ['fieldValues', 'conditions'].some((key) => config[key] != null && !Array.isArray(config[key]))
 }
