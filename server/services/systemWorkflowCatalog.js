@@ -2,6 +2,72 @@ import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 import { TRUSTED_JOB_KINDS } from "./trustedJobKinds.js";
 
+const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
+  {
+    systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+    name: "GPT - Open Food Facts - Lookup Product",
+    triggerKey: "manual",
+    action: {
+      type: "workflow",
+      systemGenerated: true,
+      systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+      scope: "system",
+      capabilityType: "workflow",
+      capabilityKey: "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+      apiName: "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+      flowType: "AUTOLAUNCHED",
+      inputs: [{ name: "barcode", type: "text", required: true }],
+      outputs: ["found","barcode","productName","brand","imageUrl","ingredients"],
+      actions: [
+        { id: "lookup_http", label: "Lookup Product", apiName: "lookup_http", key: "ONE_HTTP_REQUEST", providerKey: "open_food_facts", method: "GET", endpoint: "/api/v2/product/{{barcode}}.json" },
+        { id: "product_found", label: "Product Found?", apiName: "product_found", key: "CONDITION", outcomes: [{ id: "found", label: "Found", condition: { match: "all", conditions: [{ field: "steps.lookup_http.success", operator: "equals", value: true },{ field: "steps.lookup_http.data.status", operator: "equals", value: 1 }] }, branch: ["assign_found"] }], defaultLabel: "Not Found", defaultBranch: ["assign_not_found"] },
+        { id: "assign_found", label: "Set Product Outputs", apiName: "assign_found", key: "ASSIGNMENT", assignments: [
+          { variable: "variables.found", variableType: "boolean", operator: "set", value: true },
+          { variable: "variables.barcode", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.code" } },
+          { variable: "variables.productName", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.product.product_name" } },
+          { variable: "variables.brand", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.product.brands" } },
+          { variable: "variables.imageUrl", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.product.image_front_url" } },
+          { variable: "variables.ingredients", variableType: "text", operator: "set", value: { path: "steps.lookup_http.data.product.ingredients_text" } }
+        ] },
+        { id: "assign_not_found", label: "Set Not Found Output", apiName: "assign_not_found", key: "ASSIGNMENT", assignments: [
+          { variable: "variables.found", variableType: "boolean", operator: "set", value: false },
+          { variable: "variables.barcode", variableType: "text", operator: "set", value: { path: "barcode" } }
+        ] }
+      ]
+    }
+  },
+  {
+    systemKey: "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
+    name: "GPT - Open Food Facts - Test Connection",
+    triggerKey: "manual",
+    action: {
+      type: "workflow",
+      systemGenerated: true,
+      systemKey: "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
+      scope: "system",
+      capabilityType: "workflow",
+      capabilityKey: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
+      apiName: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
+      flowType: "AUTOLAUNCHED",
+      outputs: ["connected","message","statusCode"],
+      actions: [
+        { id: "test_http", label: "Call Open Food Facts", apiName: "test_http", key: "ONE_HTTP_REQUEST", providerKey: "open_food_facts", method: "GET", endpoint: "/api/v2/product/737628064502.json" },
+        { id: "connection_ok", label: "Connection Successful?", apiName: "connection_ok", key: "CONDITION", outcomes: [{ id: "success", label: "Success", condition: { match: "all", conditions: [{ field: "steps.test_http.success", operator: "equals", value: true }] }, branch: ["assign_connected"] }], defaultLabel: "Failed", defaultBranch: ["assign_failed"] },
+        { id: "assign_connected", label: "Set Connected Output", apiName: "assign_connected", key: "ASSIGNMENT", assignments: [
+          { variable: "variables.connected", variableType: "boolean", operator: "set", value: true },
+          { variable: "variables.message", variableType: "text", operator: "set", value: "Connected" },
+          { variable: "variables.statusCode", variableType: "number", operator: "set", value: { path: "steps.test_http.statusCode" } }
+        ] },
+        { id: "assign_failed", label: "Set Failed Output", apiName: "assign_failed", key: "ASSIGNMENT", assignments: [
+          { variable: "variables.connected", variableType: "boolean", operator: "set", value: false },
+          { variable: "variables.message", variableType: "text", operator: "set", value: "Connection failed" },
+          { variable: "variables.statusCode", variableType: "number", operator: "set", value: { path: "steps.test_http.statusCode" } }
+        ] }
+      ]
+    }
+  }
+]);
+
 function titleCase(value = "") {
   return String(value)
     .replace(/[._-]+/g, " ")
@@ -82,7 +148,7 @@ export function systemWorkflowDefinitions() {
     .filter((item) => item?.key && item.key !== "WORKFLOW" && item.systemVisible !== false)
     .map(actionWorkflow);
   const jobs = TRUSTED_JOB_KINDS.map(jobWorkflow);
-  return [...functions, ...actions, ...jobs];
+  return [...functions, ...actions, ...jobs, ...PLATFORM_SYSTEM_WORKFLOWS];
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {
