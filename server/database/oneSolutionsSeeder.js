@@ -74,7 +74,7 @@ export async function seedOneSolutionsDemo(pool) {
     // Business divisions are a normal tenant Platform Object. Product mapping
     // is a tenant extension lookup stored through platform_record_associations.
     await client.query(`
-      CREATE TABLE IF NOT EXISTS onesolutions_business_divisions(
+      CREATE TABLE IF NOT EXISTS business_divisions(
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
         division_key VARCHAR(80) NOT NULL,
@@ -93,7 +93,7 @@ export async function seedOneSolutionsDemo(pool) {
       divisionObject=(await client.query(
         `INSERT INTO platform_objects(object_key,api_name,label,plural_label,description,source_table,company_id,company_scoped,store_scoped,active)
          VALUES('onesolutions_business_division','onesolutions_business_division','Business Division','Business Divisions',
-                'Metadata-driven OneSolutions demo business divisions','onesolutions_business_divisions',$1,TRUE,FALSE,TRUE)
+                'Metadata-driven OneSolutions demo business divisions','business_divisions',$1,TRUE,FALSE,TRUE)
          RETURNING id`,[company.id]
       )).rows[0];
     }
@@ -126,7 +126,7 @@ export async function seedOneSolutionsDemo(pool) {
     const divisionIds={};
     for (const [key,name,description] of divisions) {
       const row=(await client.query(
-        `INSERT INTO onesolutions_business_divisions(company_id,division_key,name,description,active)
+        `INSERT INTO business_divisions(company_id,division_key,name,description,active)
          VALUES($1,$2,$3,$4,TRUE)
          ON CONFLICT(company_id,division_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,active=TRUE,updated_at=NOW()
          RETURNING id`,[company.id,key,name,description]
@@ -221,7 +221,7 @@ export async function seedOneSolutionsDemo(pool) {
     // remains metadata/record driven even when a tenant adds its own divisions.
     const priceListIds={};
     const activeDivisions=(await client.query(
-      "SELECT id,division_key,name FROM onesolutions_business_divisions WHERE company_id=$1 AND active=TRUE ORDER BY name",
+      "SELECT id,division_key,name FROM business_divisions WHERE company_id=$1 AND active=TRUE ORDER BY name",
       [company.id]
     )).rows;
     for(const division of activeDivisions){
@@ -293,7 +293,7 @@ export async function seedOneSolutionsDemo(pool) {
            JOIN products product
              ON product.id=association.record_id
             AND product.company_id=$2
-           JOIN onesolutions_business_divisions division
+           JOIN business_divisions division
              ON division.id::text=association.custom_values->>'business_division_id'
             AND division.company_id=$2
           WHERE association.object_id=$1
