@@ -57,15 +57,24 @@ function eventFromRow(row) {
   return envelope(row);
 }
 
-export async function registerPlatformEventType({ db, eventType, description = null, sourcePackageId = null }) {
+export async function registerPlatformEventType({ db, eventType, description = null, sourcePackageId = null, fieldSchema = [] }) {
   const key = String(eventType || "").trim();
   if (!key || key.length > 200) throw new Error("eventType must contain 1 to 200 characters");
+  const normalizedSchema = Array.isArray(fieldSchema)
+    ? fieldSchema.map((field) => ({
+        api_name: String(field?.api_name || field?.apiName || field?.key || "").trim(),
+        label: String(field?.label || field?.name || field?.api_name || field?.apiName || field?.key || "").trim(),
+        data_type: String(field?.data_type || field?.dataType || field?.type || "text").toLowerCase(),
+      })).filter((field) => field.api_name)
+    : [];
   const result = await db(
-    `INSERT INTO platform_event_types(event_type,description,source_package_id,active)
-     VALUES($1,$2,$3,TRUE)
-     ON CONFLICT(event_type) DO UPDATE SET description=EXCLUDED.description,source_package_id=EXCLUDED.source_package_id,active=TRUE
+    `INSERT INTO platform_event_types(event_type,description,source_package_id,field_schema,active)
+     VALUES($1,$2,$3,$4::jsonb,TRUE)
+     ON CONFLICT(event_type) DO UPDATE SET description=EXCLUDED.description,source_package_id=EXCLUDED.source_package_id,
+       field_schema=CASE WHEN jsonb_array_length(EXCLUDED.field_schema)>0 THEN EXCLUDED.field_schema ELSE platform_event_types.field_schema END,
+       active=TRUE
      RETURNING *`,
-    [key, description, sourcePackageId]
+    [key, description, sourcePackageId, JSON.stringify(normalizedSchema)]
   );
   return result.rows[0];
 }
