@@ -116,6 +116,47 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Custom Error matches Salesforce record-page and inline-field error behavior', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderCustomError.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  for (const text of [
+    'In a window on a record page',
+    'As an inline error on a field',
+    'Enter text',
+    'Select a resource',
+    'Error Message',
+  ]) assert.ok(editor.includes(text), text)
+  assert.match(editor, /maxLength=\{255\}/)
+  assert.match(editor, /apiRequest\(\`\/api\/platform\/objects\//)
+  assert.match(page, /customErrorRuntimeAction\(element\)/)
+  assert.match(page, /activeElement\.key === 'custom_error'/)
+  assert.match(elements, /element\.key === 'custom_error'\) return flowType === 'record'/)
+  assert.match(runtime, /key: "CUSTOM_ERROR"/)
+  assert.match(runtime, /resolveConfiguredResource\(action\.errorMessage/)
+  assert.match(runtime, /error\.location = action\.errorLocation/)
+  assert.match(runtime, /CUSTOM_FLOW_ERROR/)
+})
+
+test('GPT Builder Group matches Salesforce auto-layout visual grouping and browser-local collapse behavior', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderGroup.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  assert.match(editor, /Groups organize auto-layout elements visually and don't change runtime behavior/)
+  assert.match(editor, /memberIds/)
+  assert.match(editor, /groupedElsewhere/)
+  assert.match(page, /gptbuilder\.group\.\$\{group\.id\}\.collapsed/)
+  assert.match(page, /localStorage\.setItem\(storageKey/)
+  assert.match(page, /AutoGroupCard/)
+  assert.match(page, /element\.key==='group'/)
+  assert.match(page, /activeElement\.key === 'group'/)
+  assert.match(elements, /element\.key === 'group'\) return layout === 'auto'/)
+  assert.match(css, /\.gptb-auto-group/)
+  assert.doesNotMatch(page, /if \(element\.key === 'group'\) return .*RuntimeAction/)
+})
+
 test('GPT Builder Wait Until Date matches Salesforce Enter Date and Get from Attribute UX and runtime behavior', async () => {
   const wait = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderWaitUntilDate.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
