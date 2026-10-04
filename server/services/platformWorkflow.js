@@ -1519,17 +1519,25 @@ async function loadRelatedGetRecordsCollections({ db, relatedRecords, targetObje
     }
 
     const perParentLimit = Math.max(1, Math.min(Number(related.limit || 20000), 20000));
-    const queryLimit = Math.min(20000, Math.max(perParentLimit, perParentLimit * parentIds.length));
-    params.push(queryLimit);
-    const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + childObject.source_table + '" WHERE ' + clauses.join(" AND ") + orderBy + " LIMIT $" + params.length;
+    params.push(perParentLimit);
+    const perParentLimitPlaceholder = "$" + params.length;
+    const rowOrder = related.sortField
+      ? orderBy.replace(/^ ORDER BY /, "")
+      : '"id" ASC';
+    const innerQuery = 'SELECT ' + selectColumns.join(", ")
+      + ', ROW_NUMBER() OVER (PARTITION BY "' + relation.child_field_source_column + '" ORDER BY ' + rowOrder + ') AS "__row_num"'
+      + ' FROM "' + childObject.source_table + '" WHERE ' + clauses.join(" AND ");
+    const query = 'SELECT * FROM (' + innerQuery + ') AS ranked WHERE "__row_num" <= '
+      + perParentLimitPlaceholder + ' ORDER BY "__parent_id", "__row_num"';
     const result = await db(query, params);
     const byParent = new Map();
     for (const raw of result.rows || []) {
       const parentId = String(raw.__parent_id ?? "");
       const clean = { ...raw };
       delete clean.__parent_id;
+      delete clean.__row_num;
       const bucket = byParent.get(parentId) || [];
-      if (bucket.length < perParentLimit) bucket.push(clean);
+      bucket.push(clean);
       byParent.set(parentId, bucket);
     }
 
