@@ -207,10 +207,22 @@ function FlowPropertiesModal({ value, saved, saving, flowType, onChange, onCance
   </div>
 }
 
-function DiagnosticsPanel({ issues, onClose }) {
+function DiagnosticsPanel({ issues, onClose, onIssueClick }) {
+  const errorCount = issues.filter((issue) => issue.level === 'error').length
+  const warningCount = issues.filter((issue) => issue.level === 'warning').length
+  const [tab, setTab] = useState(errorCount ? 'error' : 'warning')
+  const visible = issues.filter((issue) => issue.level === tab)
+  const grouped = visible.reduce((map, issue) => {
+    const key = issue.group || issue.title || 'Flow'
+    const current = map.get(key) || []
+    current.push(issue)
+    map.set(key, current)
+    return map
+  }, new Map())
   return <aside className="gptb-diagnostics" aria-label="Errors and Warnings">
     <header><strong>Errors and Warnings</strong><button className="gptb-icon-button" aria-label="Close Errors and Warnings" onClick={onClose}><X size={16}/></button></header>
-    <div>{issues.length ? issues.map((issue) => <div className={`gptb-diagnostic is-${issue.level}`} key={issue.id}>{issue.level === 'error' ? <AlertTriangle size={16}/> : <CircleHelp size={16}/>}<span><b>{issue.title}</b><small>{issue.detail}</small></span></div>) : <div className="gptb-no-issues"><CheckCircle2 size={22}/><strong>No errors or warnings</strong></div>}</div>
+    <nav className="gptb-diagnostic-tabs"><button className={tab === 'error' ? 'is-active' : ''} onClick={() => setTab('error')}>Errors <span>{errorCount}</span></button><button className={tab === 'warning' ? 'is-active' : ''} onClick={() => setTab('warning')}>Warnings <span>{warningCount}</span></button></nav>
+    <div>{visible.length ? [...grouped.entries()].map(([group, rows]) => <section className="gptb-diagnostic-group" key={group}><h4>{group}</h4>{rows.map((issue) => <div className={`gptb-diagnostic is-${issue.level}`} key={issue.id}>{issue.level === 'error' ? <AlertTriangle size={16}/> : <CircleHelp size={16}/>}<span><button type="button" onClick={() => onIssueClick?.(issue)}>{issue.title}</button><small>{issue.detail}</small></span></div>)}</section>) : <div className="gptb-no-issues"><CheckCircle2 size={22}/><strong>No {tab === 'error' ? 'errors' : 'warnings'}</strong></div>}</div>
   </aside>
 }
 
@@ -265,16 +277,16 @@ function FlowShell({ flow, onNew }) {
 
   const issues = useMemo(() => {
     const next = []
-    if (flow.key === 'record' && !startConfig.objectKey) next.push({ id: 'record-object', level: 'error', title: 'Start isn’t configured', detail: 'Select the object that triggers this flow.' })
-    if (flow.key === 'schedule' && (!startConfig.startDate || !startConfig.startTime)) next.push({ id: 'schedule', level: 'error', title: 'Schedule isn’t configured', detail: 'Enter a start date and start time.' })
-    if (flow.key === 'platform_event' && !startConfig.eventKey) next.push({ id: 'event', level: 'error', title: 'Platform event isn’t configured', detail: 'Select the event that triggers this flow.' })
-    if (!elements.length) next.push({ id: 'elements', level: 'error', title: 'The flow has no executable elements', detail: 'Add at least one element before activating the flow.' })
+    if (flow.key === 'record' && !startConfig.objectKey) next.push({ id: 'record-object', level: 'error', group: 'Start', targetId: 'start', title: 'Start isn’t configured', detail: 'Select the object that triggers this flow.' })
+    if (flow.key === 'schedule' && (!startConfig.startDate || !startConfig.startTime)) next.push({ id: 'schedule', level: 'error', group: 'Start', targetId: 'start', title: 'Schedule isn’t configured', detail: 'Enter a start date and start time.' })
+    if (flow.key === 'platform_event' && !startConfig.eventKey) next.push({ id: 'event', level: 'error', group: 'Start', targetId: 'start', title: 'Platform event isn’t configured', detail: 'Select the event that triggers this flow.' })
+    if (!elements.length) next.push({ id: 'elements', level: 'error', group: 'Flow', title: 'The flow has no executable elements', detail: 'Add at least one element before activating the flow.' })
     elements.forEach((element) => {
       const common = elementCommonErrors(element, elements)
-      common.forEach((detail, index) => next.push({ id: `element-${element.id}-common-${index}`, level: 'error', title: `${element.label || 'Element'} needs attention`, detail }))
-      if (!element.configured) next.push({ id: `element-${element.id}-incomplete`, level: 'error', title: `${element.label || 'Element'} isn’t fully configured`, detail: 'Complete this element before activating the flow.' })
+      common.forEach((detail, index) => next.push({ id: `element-${element.id}-common-${index}`, level: 'error', group: element.label || 'Element', targetId: element.id, title: `${element.label || 'Element'} needs attention`, detail }))
+      if (!element.configured) next.push({ id: `element-${element.id}-incomplete`, level: 'error', group: element.label || 'Element', targetId: element.id, title: `${element.label || 'Element'} isn’t fully configured`, detail: 'Complete this element before activating the flow.' })
     })
-    if (dirty && workflowId) next.push({ id: 'unsaved', level: 'warning', title: 'Unsaved changes', detail: 'Save the flow before Run, Debug, or Activate uses the latest design.' })
+    if (dirty && workflowId) next.push({ id: 'unsaved', level: 'warning', group: 'Flow', title: 'Unsaved changes', detail: 'Run, Test, and Debug use the most recent saved version until you save these changes.' })
     return next
   }, [flow.key, startConfig, dirty, workflowId, elements])
 
@@ -393,7 +405,7 @@ function FlowShell({ flow, onNew }) {
         <button className={selecting ? 'is-on' : ''} aria-label="Select Elements" onClick={() => setSelecting((value) => !value)}><Copy size={16}/></button>
         <span className="gptb-toolbar-separator"/>
         <button aria-label="Undo" disabled><Undo2 size={16}/></button><button aria-label="Redo" disabled><Redo2 size={16}/></button>
-        <button className={issues.length ? 'has-issues' : ''} aria-label="Errors and Warnings" title="Errors and Warnings" onClick={() => { setDiagnosticsOpen((value) => !value); setStartOpen(false) }}><AlertTriangle size={16}/>{issues.length ? <em>{issues.length}</em> : null}</button>
+        {issues.length ? <button className={issues.some((issue) => issue.level === 'error') ? 'has-issues is-error' : 'has-issues is-warning'} aria-label={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} title={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} onClick={() => { setDiagnosticsOpen((value) => !value); setStartOpen(false); setEditingElement(null) }}><AlertTriangle size={16}/><em>{issues.filter((issue) => issue.level === (issues.some((row) => row.level === 'error') ? 'error' : 'warning')).length}</em></button> : null}
         <button aria-label="View Properties" title="View Properties" onClick={() => setPropertiesOpen(true)}><Settings2 size={16}/></button>
         <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={() => { setLayout('auto'); setLayoutOpen(false); setDirty(true) }}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={() => { setLayout('free'); setLayoutOpen(false); setToolboxOpen(true); setDirty(true) }}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
@@ -430,7 +442,11 @@ function FlowShell({ flow, onNew }) {
         <div className="gptb-canvas-help"><CircleHelp size={14}/><span>{layout === 'auto' ? 'Auto-Layout keeps the flow arranged and connected automatically.' : 'Free-Form lets you position and connect elements manually.'}</span></div>
       </main>
       {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
-      {diagnosticsOpen ? <DiagnosticsPanel issues={issues} onClose={() => setDiagnosticsOpen(false)}/> : null}
+      {diagnosticsOpen ? <DiagnosticsPanel issues={issues} onClose={() => setDiagnosticsOpen(false)} onIssueClick={(issue) => {
+        if (issue.targetId === 'start') { openStart(); return }
+        const target = elements.find((element) => element.id === issue.targetId)
+        if (target) openElement(target)
+      }}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
         elements={elements}
