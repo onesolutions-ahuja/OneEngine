@@ -94,7 +94,7 @@ test("merged Builder2 keeps core element and resource authoring surfaces functio
   await page.getByRole("button", { name: /New Resource/i }).click();
   const resourceDialog = page.locator(".b2-modal").filter({ hasText: "New Resource" });
   await expect(resourceDialog).toBeVisible();
-  await expect(resourceDialog.getByText("Resource Type", { exact: true })).toBeVisible();
+  await expect(resourceDialog.getByLabel("Resource Type")).toBeVisible();
   await resourceDialog.getByRole("button", { name: "Cancel", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "Save", exact: false }).first()).toBeVisible();
@@ -104,11 +104,25 @@ test("merged Builder2 keeps core element and resource authoring surfaces functio
 });
 
 
-test("persisted appointment workflow renders without OEFR101", async ({ page }) => {
+test("saved Workflow Builder deep link reloads through the Pages-safe fixed route", async ({ page }) => {
   const failures = watchRuntimeFailures(page);
-  await page.goto("developer/workflow-builder/1d5e7954-ce74-4637-a2b8-04780fab168c");
+  await page.goto("developer/workflow-builder");
+  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
+
+  await page.locator(".b2-form").getByLabel("Label").first().fill("E2E Deep Link Flow");
+  await page.getByRole("button", { name: "Save", exact: false }).first().click();
+  await expect(page.locator(".b2-runtime-message")).toContainText("Flow saved", { timeout: 20_000 });
+
+  await expect.poll(() => new URL(page.url()).searchParams.get("workflowId"), { timeout: 20_000 }).not.toBeNull();
+  const savedUrl = new URL(page.url());
+  expect(savedUrl.pathname).toContain("/OneEngine/developer/workflow-builder");
+  expect(savedUrl.searchParams.get("workflowId")).toBeTruthy();
+
+  const response = await page.goto(savedUrl.toString());
+  expect(response?.status()).toBe(200);
   await expect(page.locator(".b2-shell")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/OEFR101/)).toHaveCount(0);
+
   expect(failures, failures.join("\n")).toEqual([]);
 });
 
@@ -200,7 +214,7 @@ test("properties panel uses the reviewed geometry and really scrolls with long n
 test("screen switches and subflow configuration stay functional after the UI-only styling pass", async ({ page }) => {
   const failures = watchRuntimeFailures(page);
   await page.goto("developer/workflow-builder");
-  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
+  await createFlowOfType(page, "Screen Flow");
 
   const palette = page.locator(".b2-palette-group");
   await palette.getByRole("button", { name: /^Screen\b/ }).first().click();
