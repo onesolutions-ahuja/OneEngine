@@ -2899,10 +2899,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const legacySingle = Boolean(action.recordId) && ids.length === 1;
       const params = [legacySingle ? ids[0] : ids];
       const clauses = [legacySingle ? "id=$1" : "id::text = ANY($1::text[])"];
-      if (targetObject.company_scoped) { params.push(req?.user?.companyId || companyId || null); clauses.push(`company_id=${params.length}`); }
+      if (targetObject.company_scoped) { params.push(req?.user?.companyId || companyId || null); clauses.push(`company_id=$${params.length}`); }
       if (targetObject.store_scoped) {
         if (!req?.user?.storeId) throw new Error("A store session is required for this record");
-        params.push(req.user.storeId); clauses.push(`store_id=${params.length}`);
+        params.push(req.user.storeId); clauses.push(`store_id=$${params.length}`);
       }
       const result = hasActive.rows.length
         ? await db(`UPDATE "${table}" SET active=false WHERE ${clauses.join(" AND ")} RETURNING *`, params)
