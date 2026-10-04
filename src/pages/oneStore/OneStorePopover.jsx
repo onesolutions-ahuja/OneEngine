@@ -24,6 +24,8 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   const [category,setCategory]=useState('All')
   const [selectedKey,setSelectedKey]=useState(()=>String(initialSelectedPackageKey||''))
   const [workingKey,setWorkingKey]=useState('')
+  const [recordActions,setRecordActions]=useState([])
+  const [actionsLoading,setActionsLoading]=useState(false)
   const canManage=canManagePackages
 
   const load=async({refreshCatalogue=false}={})=>{
@@ -67,54 +69,39 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   },[shown,selectedKey])
   const selected=shown.find(i=>i.package_key===selectedKey)||packages.find(i=>i.package_key===selectedKey)||shown[0]||null
   const dependencies=selected?packageDependencies(selected):[]
-  const installedKeys=new Set(packages.filter(i=>i.company_installation).map(i=>i.package_key))
+  const installedKeys=new Set(packages.filter(i=>['INSTALLED','ACTIVE','INACTIVE'].includes(String(i?.tenant_app_status||'').toUpperCase())).map(i=>i.package_key))
 
-  const actionFor=item=>{
-    const status=storefrontStatus(item)
-    const installed=Boolean(item.company_installation)
-    if(status==='LICENCE_REQUIRED')return item.licence_request_status==='PENDING'?{label:'Request Pending',disabled:true}:{label:'Request Licence',action:'request-licence'}
-    if(status==='NOT_INSTALLABLE'||status==='NOT_AVAILABLE')return {label:STATUS_LABELS[status],disabled:true}
-    if(status==='UPDATE_AVAILABLE'){
-      const forced=String(item.company_installation?.auto_update_policy||item.auto_update_policy||'OPTIONAL').toUpperCase()==='FORCED'
-      return forced?{label:'Forced update',disabled:true}:{label:'Update now',action:'upgrade'}
-    }
-    if(installed&&item.company_installation.status==='inactive')return {label:'Reinstall',action:'install'}
-    if(installed)return {label:'Installed',disabled:true,secondary:'deactivate'}
-    return {label:'Install',action:'install'}
-  }
+  useEffect(()=>{
+    let live=true
+    const recordId=selected?.tenant_app_record_id
+    if(!recordId){setRecordActions([]);setActionsLoading(false);return()=>{live=false}}
+    setActionsLoading(true)
+    apiRequest(`/api/platform/objects/tenant_app/records/${encodeURIComponent(recordId)}/buttons?placement=onestore_action`)
+      .then(response=>{if(live)setRecordActions(Array.isArray(response?.data)?response.data:[])})
+      .catch(err=>{if(live){setRecordActions([]);setError(err?.message||'Unable to load app actions')}})
+      .finally(()=>{if(live)setActionsLoading(false)})
+    return()=>{live=false}
+  },[selected?.tenant_app_record_id,selected?.tenant_app_status,selected?.tenant_app_licence_status,selected?.tenant_app_update_status])
 
-  const run=async(item,action)=>{
-    if(!item?.package_key||!canManage)return
+  const run=async(item,button)=>{
+    if(!item?.tenant_app_record_id||!button?.button_key||!canManage)return
     try{
       setWorkingKey(item.package_key);setError('');setNotice('')
-      const key=encodeURIComponent(item.package_key)
-      if(action==='trial'){
-        const r=await apiRequest(`/api/packages/${key}/activate-trial`,{method:'POST',timeoutMs:60000})
-        if(r?.success===false)throw new Error(r?.message||'Unable to activate free trial')
-        setNotice(`7-day free trial activated for ${item.name}. Install is now available.`)
-      }else if(action==='request-licence'){
-        const r=await apiRequest(`/api/packages/${key}/request-licence`,{method:'POST',timeoutMs:60000})
-        if(r?.success===false)throw new Error(r?.message||'Unable to request licence')
-        setNotice('Licence request sent.')
-      }else if(action==='upgrade'){
-        const r=await apiRequest(`/api/packages/${key}/upgrade`,{method:'POST',timeoutMs:60000})
-        if(r?.success===false)throw new Error(r?.message||'Unable to update app')
-        setNotice(`${item.name} update queued.`)
-      }else{
-        const endpoint=action==='install'?'install':action==='activate'?'reactivate':action==='uninstall'?'uninstall':'deactivate'
-        const r=await apiRequest(`/api/packages/${key}/${endpoint}`,{method:'POST',timeoutMs:60000})
-        if(r?.success===false)throw new Error(r?.message||`Unable to ${action} app`)
-        setNotice(action==='install'?`${item.name} installed.`:action==='activate'?`${item.name} activated.`:action==='uninstall'?`${item.name} uninstalled. Existing data and configuration were preserved.`:`${item.name} deactivated.`)
-      }
+      const r=await apiRequest(
+        `/api/platform/objects/tenant_app/records/${encodeURIComponent(item.tenant_app_record_id)}/buttons/${encodeURIComponent(button.button_key)}/execute`,
+        {method:'POST',timeoutMs:60000,body:JSON.stringify({})}
+      )
+      if(r?.success===false)throw new Error(r?.message||'Unable to run app action')
+      setNotice(`${button.label} completed for ${item.name}.`)
       await load({refreshCatalogue:true})
-    }catch(err){setError(err?.message||'Package action failed')}
+    }catch(err){setError(err?.message||'App action failed')}
     finally{setWorkingKey('')}
   }
 
-  const version=selected?.company_installation?installedPackageVersionState(selected):null
-  const selectedAction=selected?actionFor(selected):null
+  const hasTenantInstall=['INSTALLED','ACTIVE','INACTIVE'].includes(String(selected?.tenant_app_status||'').toUpperCase())
+  const version=hasTenantInstall?installedPackageVersionState(selected):null
   const openInstalled=()=>{
-    if(!selected?.company_installation)return
+    if(String(selected?.tenant_app_status||'').toUpperCase()!=='ACTIVE')return
     const route=resolveAppOpenRoute(selected)
     onOpenRoute?.(route)
     onClose?.()
@@ -159,13 +146,15 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
           {dependencies.length?<div className="onestore-deps"><b>Dependencies</b>{dependencies.map(dep=><div key={dep.key}><span>{packages.find(p=>p.package_key===dep.key)?.name||dep.key}</span><small>{installedKeys.has(dep.key)?'Included':'Installed automatically'}{dep.optional?' · Optional':''}</small></div>)}</div>:null}
           {workingKey===selected.package_key?<progress className="onestore-action-progress" aria-label="App action in progress"/>:null}
           <div className="onestore-actions">
-            {selectedAction?.secondary?<button disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,selectedAction.secondary)}>Deactivate</button>:null}
-            {selected?.company_installation?.status==='active'?<button disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,'uninstall')}>Uninstall</button>:null}
-            {selected?.company_installation&&storefrontStatus(selected)==='INSTALLED'?<button onClick={openInstalled}>Open</button>:null}
-            {selected?.trial_available===true?<button className="module-primary-button" disabled={!canManage||workingKey===selected.package_key} onClick={()=>run(selected,'trial')}>{workingKey===selected.package_key?'Working…':`Free ${selected.trial_days||7}-day trial`}</button>:null}
-            {selectedAction?.action?<button className="module-primary-button" disabled={selectedAction.disabled||!canManage||workingKey===selected.package_key} onClick={()=>run(selected,selectedAction.action)}>{workingKey===selected.package_key?'Working…':selectedAction.label}</button>:selectedAction?.label?<button disabled>{selectedAction.label}</button>:null}
+            {String(selected?.tenant_app_status||'').toUpperCase()==='ACTIVE'?<button onClick={openInstalled}>Open</button>:null}
+            {actionsLoading?<button disabled>Loading actions…</button>:recordActions.map((button,index)=><button
+              key={button.id||button.button_key}
+              className={index===recordActions.length-1?'module-primary-button':''}
+              disabled={!canManage||workingKey===selected.package_key}
+              onClick={()=>run(selected,button)}
+            >{workingKey===selected.package_key?'Working…':button.label}</button>)}
           </div>
-          {!canManage&&selectedAction?.action?<small className="onestore-no-permission">Package management permission is required.</small>:null}
+          {!canManage&&recordActions.length?<small className="onestore-no-permission">Package management permission is required.</small>:null}
         </>}
       </aside>
     </div>
