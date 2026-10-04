@@ -36,6 +36,7 @@ export default function PackageBuilderAdmin({ onMessage, onError }) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [pageBuilderOpen, setPageBuilderOpen] = useState(false);
+  const [pageBuilderPageId, setPageBuilderPageId] = useState("");
 
   const loadBase = async () => {
     try {
@@ -156,16 +157,19 @@ export default function PackageBuilderAdmin({ onMessage, onError }) {
 
   if (pageBuilderOpen) {
     return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">Package Page Builder</div>
-            <div className="text-xs text-slate-500">Uses the existing Page Builder and component/action registries. No package-specific execution code is created.</div>
-          </div>
-          <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" onClick={() => setPageBuilderOpen(false)}>Back to package</button>
-        </div>
-        <CustomPageBuilder onMessage={onMessage} onError={onError} />
-      </div>
+      <CustomPageBuilder
+        onMessage={onMessage}
+        onError={onError}
+        initialAppId={app?.id || selectedId}
+        initialPageId={pageBuilderPageId}
+        context="developer"
+        lockApp
+        onBack={() => {
+          setPageBuilderOpen(false);
+          setPageBuilderPageId("");
+          if (app?.id || selectedId) void openApp(app?.id || selectedId);
+        }}
+      />
     );
   }
 
@@ -225,7 +229,7 @@ export default function PackageBuilderAdmin({ onMessage, onError }) {
                   <h3 className="text-base font-semibold text-slate-900">App canvas</h3>
                   <p className="text-sm text-slate-500">Each node is an existing platform page. Open it in the existing Page Builder to place components and wire their events to registered actions or workflows.</p>
                 </div>
-                <button type="button" onClick={() => setPageBuilderOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm"><AppWindow size={15}/>Open Page Builder</button>
+                <button type="button" onClick={() => { setPageBuilderPageId(""); setPageBuilderOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm"><AppWindow size={15}/>Open Page Builder</button>
               </div>
 
               <div className="mt-5 overflow-x-auto pb-2">
@@ -238,7 +242,7 @@ export default function PackageBuilderAdmin({ onMessage, onError }) {
                   {pages.map((page) => (
                     <div key={page.id} className="flex items-center gap-3">
                       <ChevronRight size={18} className="text-slate-300" />
-                      <button type="button" onClick={() => setPageBuilderOpen(true)} className="flex h-24 w-44 flex-col justify-center rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-blue-300">
+                      <button type="button" onClick={() => { setPageBuilderPageId(page.id); setPageBuilderOpen(true); }} className="flex h-24 w-44 flex-col justify-center rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-blue-300">
                         <AppWindow size={18} className="text-slate-600" />
                         <strong className="mt-1 truncate text-sm">{page.label}</strong>
                         <span className="truncate text-[11px] text-slate-500">{page.page_type || "custom"}{page.definition?.objectKey ? ` · ${page.definition.objectKey}` : ""}</span>
