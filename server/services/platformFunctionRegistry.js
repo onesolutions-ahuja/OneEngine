@@ -7,6 +7,7 @@ import { dispatchIntegrationEvent } from "./integrationDispatcher.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { clockInAttendance, clockOutAttendance } from "./attendanceActions.js";
 import { issueAccountToken } from "./accountPolicy.js";
+import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveReceiptQrSettings, revokeTemporaryReceiptDownloadsForSale } from "./receiptQr.js";
 
 // Temporary compatibility registry.
 //
@@ -166,6 +167,60 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
         },
         entityId: inputs.entityId,
       }),
+  },
+  {
+    key: "receipt.temporary_link.create",
+    category: "DOCUMENT",
+    description: "Create a short-lived receipt download link. Flow owns when and why it is created.",
+    inputs: { type: "object", required: ["saleId"] },
+    outputs: { type: "object" },
+    permissions: ["sale.view"],
+    handler: async ({ inputs = {}, db, companyId, req }) => {
+      const tenantId = companyId || req?.user?.companyId;
+      const settings = await resolveReceiptQrSettings(db, tenantId);
+      const expiryMinutes = Number.isFinite(Number(inputs.expiryMinutes))
+        ? Number(inputs.expiryMinutes)
+        : settings.expiryMinutes;
+      const result = await createTemporaryReceiptDownload({
+        db,
+        companyId: tenantId,
+        storeId: req?.user?.storeId || null,
+        tillId: req?.user?.tillId || null,
+        saleId: inputs.saleId,
+        expiryMinutes,
+      });
+      if (!result.ok) throw new Error(result.message || "Unable to create temporary receipt link");
+      const baseUrl = req?.protocol && req?.get
+        ? `${req.protocol}://${req.get("host")}`
+        : "";
+      const url = buildReceiptQrDownloadUrl(result.token, baseUrl);
+      return {
+        status: "completed",
+        id: result.id,
+        saleId: inputs.saleId,
+        token: result.token,
+        url,
+        qrcodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`,
+        expiresAt: result.expiresAt,
+        expiresMinutes: expiryMinutes,
+      };
+    },
+  },
+  {
+    key: "receipt.temporary_link.revoke",
+    category: "DOCUMENT",
+    description: "Revoke active temporary receipt links for a sale. Flow owns when revocation occurs.",
+    inputs: { type: "object", required: ["saleId"] },
+    outputs: { type: "object" },
+    permissions: ["sale.view"],
+    handler: async ({ inputs = {}, db, companyId, req }) => {
+      const result = await revokeTemporaryReceiptDownloadsForSale({
+        db,
+        companyId: companyId || req?.user?.companyId,
+        saleId: inputs.saleId,
+      });
+      return { status: "completed", saleId: inputs.saleId, revoked: result.revoked || 0 };
+    },
   },
   {
     key: "account.registration.token.issue",
