@@ -264,13 +264,11 @@ export default function createSettingsRouter({
           cs.product_view, cs.dock_quick_access,
           cs.customer_display_enabled,
           s.id AS store_id, s.name AS store_name,
-          t.id AS till_id, t.name AS till_name, t.terminal_number
+          NULL::uuid AS till_id, NULL::text AS till_name, NULL::text AS terminal_number
         FROM companies c
         LEFT JOIN company_settings cs ON cs.company_id = c.id
         LEFT JOIN stores s ON s.id = $2 AND s.company_id = c.id
-        LEFT JOIN terminals t ON t.store_id = s.id AND t.active = true
         WHERE c.id = $1
-        ORDER BY t.created_at
         LIMIT 1
         `,
         [req.user.companyId, req.user.storeId]
