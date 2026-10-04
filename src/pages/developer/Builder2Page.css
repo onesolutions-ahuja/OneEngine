@@ -24,6 +24,8 @@
 .b2-line{height:32px}.b2-add{width:24px;height:24px}.b2-add svg{width:13px;height:13px}.b2-end{font-size:10px}
 .b2-zoom{top:8px;left:8px;height:30px}.b2-zoom button{width:28px;height:28px}.b2-zoom span{font-size:9px}
 .b2-runtime-message{position:absolute;z-index:70;top:58px;left:50%;transform:translateX(-50%);border:1px solid #91db8b;border-radius:4px;background:#f1fbea;padding:6px 12px;color:#2e844a;font-size:10px;box-shadow:0 2px 8px #0001}
+.b2-runtime-message.is-error{border-color:#ea8888;background:#fff0f0;color:#ba0517}
+.b2-runtime-message.is-warning{border-color:#e4b85e;background:#fff8e6;color:#8c4b02}
 @media(max-width:1250px){.b2-top{grid-template-columns:150px minmax(150px,1fr) auto}.b2-top-actions>button{padding:0 7px;font-size:10px}.b2-workspace{grid-template-columns:210px minmax(380px,1fr) 280px}}
 
 /* Builder2 free-form graph canvas */
