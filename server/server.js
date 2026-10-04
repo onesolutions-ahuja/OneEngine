@@ -35,16 +35,11 @@ import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 
-import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
-import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
 import createIntegrationsRouter from "./routes/integrations.js";
 import createProviderOAuthRouter from "./routes/providerOAuth.js";
-import createDashboardRouter from "./routes/dashboard.js";
-import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
-import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
 import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
 import createPlatformDeploymentsRouter from "./routes/platformDeployments.js";
@@ -58,13 +53,7 @@ import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enfor
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
-import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
-import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
-import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
-import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
-import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
-import { ONE_CONNECT_PROVIDER_DRIVER_KEYS, createOneConnectProviderDriver } from "./services/oneConnectProviders.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
 import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
@@ -79,21 +68,10 @@ import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegis
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { reconcileCompanyPackageEntitlements } from "./services/packageEntitlements.js";
 import { requireEntitlement } from "./services/licensing.js";
-import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime } from "./services/googleConnect.js";
-import { createJarvis } from "./services/jarvis/index.js";
-import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
-import { createCanonicalRelatedTransaction, syncCanonicalSaleTransaction } from "./services/canonicalTransactions.js";
-import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // JARVES V2 - licence gate
 import { companyAdministrativeAccess, permissionAllows } from "./services/authorization.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
 import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname } from "./services/tenantResolver.js";
 import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool } from "./services/tenantDatabase.js";
-/* Inventory primitives live in services/inventory.js (shared with every
- * stock writer: POS sales, purchases, returns, adjustments). */
-import {
-  createInventoryMovement,
-  inventoryMovementTypes,
-} from "./services/inventory.js";
 
 const { Pool } = pg;
 
@@ -354,9 +332,6 @@ app.use((req, res, next) => {
   req.tenantPool = pool;
   next();
 });
-/* T10P: Scan & Go checkout deducts stock through the SAME inventory ledger
- * helper the till and online orders use (no second inventory mechanism). */
-app.locals.createInventoryMovement = createInventoryMovement;
 
 /*
  * A backend error on an idle pool connection (network blip, Postgres restart,
@@ -440,31 +415,8 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
-connectorDrivers.register(createReferencePaymentDriver());
-connectorDrivers.register(createPaypalQrDriver());
-connectorDrivers.register(createSmsGateDriver());
-connectorDrivers.register(createBrevoDriver());
-connectorDrivers.register(createMailjetDriver());
-for (const providerKey of ONE_CONNECT_PROVIDER_DRIVER_KEYS) {
-  connectorDrivers.register(createOneConnectProviderDriver(providerKey));
-}
 app.locals.connectorDrivers = connectorDrivers;
-
-async function testPaymentTerminal(terminal) {
-  if (!terminal || !terminal.active || !terminal.provider || !terminal.connection_url) {
-    return { status: "NOT_CONFIGURED", message: "Not configured" };
-  }
-
-  const provider = paymentProviders.get(terminal.provider.toLowerCase());
-
-  if (!provider) {
-    return { status: "PROVIDER_NOT_SUPPORTED", message: "Provider not supported" };
-  }
-
-  return provider.testConnection(terminal);
-}
 
 /*
  * Audit logging must never break the operation being audited - see
@@ -483,7 +435,6 @@ const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
 }).catch((error) => console.error("Workflow trace retention cleanup error:", error?.message || error));
 setTimeout(purgeWorkflowTraceBatch, 60_000).unref?.();
 setInterval(purgeWorkflowTraceBatch, 6 * 60 * 60 * 1000).unref?.();
-const globalProductLookupService = createGlobalProductLookupService();
 
 /*
 |--------------------------------------------------------------------------
@@ -581,31 +532,6 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
     return next(nextError);
   }
 });
-
-/*
-|--------------------------------------------------------------------------
-| JARVIS AI assistant (V1 - authenticated text questions)
-|--------------------------------------------------------------------------
-|
-| Built once at boot from the environment. GEMINI_API_KEY is read here,
-| server-side only: it is never sent to the browser and never returned in a
-| response. The AI provider sits behind a service abstraction
-| (services/jarvis/*) so a future OpenAI / local model does not change this
-| endpoint. See JARVIS.md.
-|
-| This changes NO existing behaviour - it only adds the JARVIS service used
-| by the dedicated routes/jarvis.js router registered further below.
-*/
-/*
- * JARVES read-only tools + licence gate. Built once at boot from the EXISTING
- * db helper and admin-bypass helper - no new permission system, and the tool
- * runner only ever runs SELECTs scoped to the caller's verified company/store.
-*/
-const jarvis = createJarvis({ tools: createJarvisTools({ db, canViewCompanyCustomers }) });
-const jarvesAccess = createJarvesAccessChecker({ db });
-// Shared, server-only AI service for authenticated Flow actions. No provider
-// credentials are exposed through app.locals; callers only receive ask().
-app.locals.oneEngineAgent = jarvis;
 
 /*
 |--------------------------------------------------------------------------
