@@ -112,6 +112,7 @@ test("booking router exposes business logic as Builder primitives", () => {
     "CREATE_APPOINTMENT_PAYMENT_REQUEST",
     "CALCULATE_APPOINTMENT_PAYMENT",
     "CONFIRM_APPOINTMENT",
+    "SEND_APPOINTMENT_CONFIRMATION",
   ]) {
     assert.equal(getWorkflowActionDefinition(removed), null, removed + " must be removed from the executable registry");
   }

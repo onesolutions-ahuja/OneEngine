@@ -1856,6 +1856,23 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         console.log("onePOS: legacy communication workflow steps migrated to SEND_COMMUNICATION");
       },
+    },
+    {
+      key: "0053_remove_unused_appointment_confirmation_wrapper",
+      version: "53",
+      name: "Remove unused appointment confirmation wrapper",
+      up: async client => {
+        const custom = await client.query(
+          "SELECT id,name FROM platform_rules WHERE COALESCE(action->>'systemGenerated','false')<>'true' AND action::text LIKE '%SEND_APPOINTMENT_CONFIRMATION%'"
+        );
+        if (custom.rows.length) {
+          throw new Error("Custom workflow still references SEND_APPOINTMENT_CONFIRMATION: " + custom.rows.map((row) => row.name || row.id).join(", "));
+        }
+        await client.query(
+          "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'='action:SEND_APPOINTMENT_CONFIRMATION' AND COALESCE(user_modified,FALSE)=FALSE"
+        );
+        console.log("onePOS: unused SEND_APPOINTMENT_CONFIRMATION wrapper removed");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
