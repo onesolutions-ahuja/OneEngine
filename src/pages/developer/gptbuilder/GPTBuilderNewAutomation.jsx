@@ -50,7 +50,7 @@ export default function GPTBuilderNewAutomation({ flowTypes, onCreate, onClose }
     const definition = flowTypes.find((item) => item.key === template.action?.flowType)
       || flowTypes.find((item) => item.key === 'autolaunched')
       || flowTypes[0]
-    if (definition) onCreate({ ...definition, template })
+    if (definition) onCreate({ ...definition, templateRule: template })
   }
 
   if (step === 'source') return <div className="gptb-modal-backdrop">
@@ -70,7 +70,7 @@ export default function GPTBuilderNewAutomation({ flowTypes, onCreate, onClose }
       <div className="gptb-template-body">
         <label className="gptb-modal-search"><Search size={15}/><input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} aria-label="Search templates" placeholder="Search templates"/></label>
         {templateLoading ? <div className="gptb-empty-template"><Copy size={30}/><strong>Loading templates…</strong></div>
-          : templateRows.length ? <div className="gptb-template-grid">{templateRows.map((template) => <button type="button" key={template.id} className={selectedTemplate === String(template.id) ? 'is-selected' : ''} onClick={() => setSelectedTemplate(String(template.id))}><span className="gptb-source-icon"><Copy size={18}/></span><span><strong>{template.name}</strong><small>{template.action?.description || 'Flow Template'}</small></span><i>{selectedTemplate === String(template.id) ? '✓' : ''}</i></button>)}</div>
+          : templateRows.length ? <div className="gptb-template-grid" role="listbox" aria-label="Flow templates">{templateRows.map((template) => <button type="button" role="option" aria-selected={selectedTemplate === String(template.id)} key={template.id} className={selectedTemplate === String(template.id) ? 'is-selected' : ''} onClick={() => setSelectedTemplate(String(template.id))}><span className="gptb-source-icon"><Copy size={18}/></span><span><strong>{template.name}</strong><small>{template.action?.description || 'Flow Template'}</small></span><i>{selectedTemplate === String(template.id) ? '✓' : ''}</i></button>)}</div>
           : <div className="gptb-empty-template"><Copy size={30}/><strong>No templates found</strong><span>{templateSearch ? 'Try a different search term.' : 'No flow templates are available.'}</span></div>}
       </div>
       <footer className="gptb-new-footer"><button className="gptb-button" onClick={() => setStep('source')}><ChevronLeft size={14}/> Back</button><span className="gptb-footer-spacer"/><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!selectedTemplate} onClick={createFromTemplate}>Create</button></footer>
