@@ -2236,13 +2236,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const collection = Array.isArray(source) ? source : [];
       const getPath = (value, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
       const compare = (left, operator, right) => {
+        const ordered = (value) => {
+          if (value == null || value === "") return NaN;
+          const numeric = Number(value);
+          if (Number.isFinite(numeric)) return numeric;
+          return typeof value === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value) ? Date.parse(value) : NaN;
+        };
         switch (String(operator || "equals")) {
           case "equals": return left === right || String(left ?? "") === String(right ?? "");
           case "not_equals": return !(left === right || String(left ?? "") === String(right ?? ""));
-          case "greater_than": return Number(left) > Number(right);
-          case "greater_than_or_equal": return Number(left) >= Number(right);
-          case "less_than": return Number(left) < Number(right);
-          case "less_than_or_equal": return Number(left) <= Number(right);
+          case "greater_than": return ordered(left) > ordered(right);
+          case "greater_than_or_equal": return ordered(left) >= ordered(right);
+          case "less_than": return ordered(left) < ordered(right);
+          case "less_than_or_equal": return ordered(left) <= ordered(right);
           case "contains": return String(left ?? "").toLowerCase().includes(String(right ?? "").toLowerCase());
           case "is_empty": return left == null || left === "" || (Array.isArray(left) && left.length === 0);
           case "is_not_empty": return !(left == null || left === "" || (Array.isArray(left) && left.length === 0));
@@ -5249,7 +5255,7 @@ function workflowBindingContext({ record, previousRecord, req, object, workflowV
 }
 
 function resolveConfiguredResource(value, context = {}, { preserveMissing = true } = {}) {
-  if (value && typeof value === "object" && !Array.isArray(value) && typeof value.path === "string") {
+  if (value && typeof value === "object") {
     return resolveBindingTree(value, workflowBindingContext(context));
   }
   if (typeof value !== "string") return value;

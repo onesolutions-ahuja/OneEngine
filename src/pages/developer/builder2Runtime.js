@@ -10,7 +10,8 @@ export function configuredValue(value) {
 
 const operators = { Equals: 'equals', 'Does Not Equal': 'not_equals', 'Is Null': 'is_empty', 'Is Changed': 'changed', 'Greater Than': 'greater_than', 'Greater Than or Equal': 'greater_than_or_equal', 'Less Than': 'less_than', 'Less Than or Equal': 'less_than_or_equal' }
 export function runtimeCondition(row) {
-  return { field: row.resource || row.field || '', operator: operators[row.operator] || row.operator || 'equals', value: configuredValue(row.value) }
+  const operator = row.operator === 'Is Null' && String(row.value) === 'false' ? 'is_not_empty' : operators[row.operator] || row.operator || 'equals'
+  return { field: row.resource || row.field || '', operator, value: configuredValue(row.value) }
 }
 
 export function nativeRuntimeAction(node, resources = []) {
