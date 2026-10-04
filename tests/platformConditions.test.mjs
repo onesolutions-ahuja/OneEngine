@@ -83,7 +83,8 @@ test('condition engine supports Salesforce-style custom condition logic with NOT
   assert.doesNotThrow(() => validateConditionConfig(config, fields, 'Start'))
   assert.equal(evaluateCondition(config, fields, { expires_at: '2026-10-20T00:00:00Z' }), true)
   assert.equal(evaluateCondition(config, fields, { expires_at: '2026-10-15T00:00:00Z' }), true)
-  assert.equal(evaluateCondition(config, fields, { expires_at: '2026-11-20T00:00:00Z' }), false)
+  assert.equal(evaluateCondition(config, fields, { expires_at: '2026-11-20T00:00:00Z' }), true)
+  assert.equal(evaluateCondition(config, fields, { expires_at: '2026-09-20T00:00:00Z' }), false)
 })
 
 test('condition engine rejects custom logic that references unavailable rows', () => {
