@@ -116,6 +116,29 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Update Records matches current Salesforce resource and condition modes', async () => {
+  const updateRecords = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderUpdateRecords.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'How to Find Records to Update and Set Their Values',
+    'Use the IDs and all field values from a record or record collection',
+    'Specify conditions to identify records, and set fields individually',
+    'Record Collection',
+    'Condition Requirements',
+    'Set Field Values for the',
+  ]) assert.ok(updateRecords.includes(text), text)
+  assert.match(updateRecords, /Current Record \(\$Record\)/)
+  assert.match(updateRecords, /recordCollectionResource/)
+  assert.match(updateRecords, /updateRecordsRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'update_records'/)
+  assert.match(page, /updateRecordsRuntimeAction\(element\)/)
+  assert.match(runtime, /recordCollectionResource/)
+  assert.match(runtime, /Update Record resource contains an invalid record value/)
+  assert.match(runtime, /Update Record condition field is unavailable/)
+  assert.match(runtime, /updatedRecords/)
+})
+
 test('GPT Builder Create Records matches current Salesforce creation modes and generic runtime', async () => {
   const createRecords = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderCreateRecords.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
