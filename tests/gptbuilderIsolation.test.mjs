@@ -55,13 +55,16 @@ test('GPT Builder phase 2 implements Salesforce Start configuration and first-sa
   assert.match(page, /method: workflowId \? 'PUT' : 'POST'/)
 })
 
-test('GPT Builder toolbar gates run debug and activate against the latest saved design', async () => {
+test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
-  assert.match(page, /disabled=\{!workflowId \|\| dirty\}><Play/)
-  assert.match(page, /disabled=\{!workflowId \|\| dirty\}><Eye/)
+  assert.match(page, /disabled=\{!workflowId\}><Play/)
+  assert.match(page, /Test Mode/)
+  assert.match(page, /> Debug<\/button>/)
   assert.match(page, /disabled=\{!workflowId \|\| dirty \|\| issues\.some/)
-  assert.match(page, /Errors and Warnings/)
+  assert.match(page, /Show Errors/)
+  assert.match(page, /Show Warnings/)
   assert.match(page, /Unsaved changes/)
+  assert.match(page, /Run, Test, and Debug use the most recent saved version/)
 })
 
 
@@ -80,7 +83,9 @@ test('GPT Builder phase 3 exposes Salesforce element groups and core elements', 
     "label: 'Collection Filter'",
     "label: 'Collection Sort'",
     "label: 'Transform'",
-    "label: 'Wait'",
+    "label: 'Wait for Amount of Time'",
+    "label: 'Wait for Conditions'",
+    "label: 'Wait Until Date'",
     "label: 'Custom Error'",
     "label: 'Group'",
     "label: 'Get Records'",
@@ -98,6 +103,7 @@ test('GPT Builder phase 3 applies Salesforce flow-type and layout availability r
   assert.match(elements, /\['record', 'screen', 'autolaunched'\]\.includes\(flowType\)/)
   assert.match(elements, /fastRecord/)
   assert.match(elements, /'assignment', 'decision', 'loop', 'get_records', 'update_records', 'custom_error', 'group'/)
+  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]/)
 })
 
 test('GPT Builder phase 3 matches auto-layout picker and free-form drag discovery behavior', async () => {
@@ -185,4 +191,38 @@ test('GPT Builder phase 4 exposes one shared configuration-to-auto-label hook fo
   assert.match(props, /const updateConfig = \(nextConfig\)/)
   assert.match(props, /children\(\{ draft, updateConfig, setConfigured \}\)/)
   assert.match(props, /refreshGeneratedIdentity\(draft, elements, draft\.config\)/)
+})
+
+
+test('GPT Builder recheck implements Salesforce undo redo multi-select copy paste and Go To affordances', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  assert.match(page, /undoFlowChange/)
+  assert.match(page, /redoFlowChange/)
+  assert.match(page, /copySelectedElements/)
+  assert.match(page, /pasteCopiedElements/)
+  assert.match(page, /beginConnectToElement/)
+  assert.match(elements, /Paste \{copiedCount\} Element/)
+  assert.match(elements, /Connect to element/)
+})
+
+test('GPT Builder recheck includes Salesforce Start custom logic formula builder async and scheduled paths', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const formula = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderFormulaBuilder.jsx', import.meta.url), 'utf8')
+  const startOptions = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderStartOptions.jsx', import.meta.url), 'utf8')
+  assert.match(page, /Custom Condition Logic Is Met/)
+  assert.match(page, /Is Changed/)
+  assert.match(formula, /Insert a Resource/)
+  assert.match(formula, /Insert a Function/)
+  assert.match(formula, /Check Syntax/)
+  assert.match(startOptions, /Run Asynchronously/)
+  assert.match(startOptions, /Add Scheduled Paths \(Optional\)/)
+  assert.match(startOptions, /Batch Size/)
+})
+
+test('GPT Builder auto-generated labels apply in auto-layout and free-form and preserve manual edits', async () => {
+  const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
+  assert.match(props, /const generated = uniqueLabel\(generatedLabelForElement/)
+  assert.match(props, /labelSource: 'auto'/)
+  assert.match(props, /if \(instance\.labelSource === 'manual'\)/)
 })
