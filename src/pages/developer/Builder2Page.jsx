@@ -229,6 +229,66 @@ const runtimeActionToBuilderNode=x=>{
       value:builderValue(inputs.value),
     }}
   }
+  if(rawType==='COLLECTION_FILTER'){
+    const inputs=actionInputs(x)
+    return {...base,type:'COLLECTION_FILTER',config:{
+      collection:builderValue(inputs.collection),
+      filterMode:inputs.formula?'formula':'conditions',
+      filterFormula:inputs.formula||'',
+      conditionLogic:(inputs.match||'all')==='any'?'any':'all',
+      conditions:(inputs.filters||[]).map(conditionToBuilder),
+    }}
+  }
+  if(rawType==='COLLECTION_SORT'){
+    const inputs=actionInputs(x)
+    return {...base,type:'COLLECTION_SORT',config:{
+      collection:builderValue(inputs.collection),sortField:inputs.sortField||'',order:inputs.sortDirection||'asc',max:inputs.limit||''
+    }}
+  }
+  if(rawType==='TRANSFORM'){
+    const inputs=actionInputs(x)
+    return {...base,type:'TRANSFORM',config:{
+      source:builderValue(inputs.collection),target:inputs.targetResource||'',mappingsText:JSON.stringify(inputs.transformMappings||{},null,2)
+    }}
+  }
+  if(rawType==='CUSTOM_ERROR'){
+    const inputs=actionInputs(x)
+    return {...base,type:'CUSTOM_ERROR',config:{location:inputs.errorField?'field':'record',field:inputs.errorField||'',message:inputs.errorMessage||''}}
+  }
+  if(['WAIT','WAIT_UNTIL_DATE','WAIT_FOR_CONDITIONS'].includes(rawType)){
+    const inputs=actionInputs(x)
+    if(rawType==='WAIT_UNTIL_DATE')return {...base,type:'WAIT',config:{waitType:'date',dateResource:builderValue(inputs.resumeAt)}}
+    if(rawType==='WAIT_FOR_CONDITIONS')return {...base,type:'WAIT',config:{waitType:'conditions',conditionLogic:inputs.waitCondition?.match==='any'?'any':'all',conditions:(inputs.waitCondition?.conditions||[]).map(conditionToBuilder)}}
+    const seconds=Number(inputs.durationSeconds??inputs.waitSeconds??0)
+    const unit=seconds&&seconds%86400===0?'days':seconds&&seconds%3600===0?'hours':'minutes'
+    const divisor=unit==='days'?86400:unit==='hours'?3600:60
+    return {...base,type:'WAIT',config:{waitType:'duration',amount:seconds?seconds/divisor:'',unit}}
+  }
+  if(rawType==='RUN_SUBFLOW'){
+    const inputs=actionInputs(x)
+    return {...base,type:'SUBFLOW',config:{
+      flow:inputs.workflowId||inputs.subflowId||'',
+      inputsText:JSON.stringify(inputs.workflowInputs||inputs.inputs||{},null,2),
+      outputsText:JSON.stringify(inputs.outputMappings||{},null,2),
+    }}
+  }
+  if(rawType==='LOOP'){
+    const inputs=actionInputs(x)
+    return {...base,type:'LOOP',config:{
+      collection:builderValue(inputs.collection),itemVariable:inputs.itemVariable||'',
+      direction:String(inputs.iterationOrder||'FIRST_TO_LAST').toUpperCase()==='LAST_TO_FIRST'?'last':'first',
+      bodyBranch:Array.isArray(inputs.bodyBranch)?inputs.bodyBranch:[],
+    }}
+  }
+  if(rawType==='SCREEN'){
+    const inputs=actionInputs(x), screen=inputs.screen&&typeof inputs.screen==='object'?inputs.screen:{}
+    return {...base,type:'SCREEN',config:{
+      ...screen,
+      components:(screen.components||[]).map(component=>({...component,apiName:component.apiName||component.name||'',choices:Array.isArray(component.choices)?component.choices:(component.options||[]).map(option=>option?.value??option?.label??option)})),
+      showFooter:inputs.showFooter!==false,
+      navigation:inputs.allowFinish?'finish':inputs.allowBack?'both':'next',
+    }}
+  }
   if(rawType==='SEND_COMMUNICATION'){
     const inputs=actionInputs(x), channel=communicationBinding(inputs.channel), recipient=communicationBinding(inputs.recipient??inputs.to)
     return {...base,type:'ACTION',config:{
