@@ -156,7 +156,7 @@ function operatorsFor(field) {
   const textual = ['text','email','phone','select','multiselect'].includes(type)
     ? [['contains','Contains'],['starts_with','Starts With'],['ends_with','Ends With']]
     : []
-  const inOps = type === 'select' ? [] : [['in','In'],['not_in','Not In']]
+  const inOps = ['select','multiselect'].includes(type) ? [] : [['in','In'],['not_in','Not In']]
   return [...base, ...comparisons, ...textual, ...inOps]
 }
 
