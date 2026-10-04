@@ -46,6 +46,12 @@ test("OneAssistant uses one active communication-event router for SMS and WhatsA
 
   assert.equal(
     packageDefinitions().find((definition) => definition.packageKey === "one_assistant")
+      .manifest.workflows.some((item) => item.name === "OneAssistant - Email Booking"),
+    false,
+    "inactive legacy Email booking flow must not be packaged"
+  );
+  assert.equal(
+    packageDefinitions().find((definition) => definition.packageKey === "one_assistant")
       .manifest.workflows.some((item) => item.name === "OneAssistant - SMS Booking"),
     false,
     "legacy SMS event flow must not be installed alongside the router"
@@ -113,6 +119,8 @@ test("booking router exposes business logic as Builder primitives", () => {
     "CALCULATE_APPOINTMENT_PAYMENT",
     "CONFIRM_APPOINTMENT",
     "SEND_APPOINTMENT_CONFIRMATION",
+    "ISSUE_APPOINTMENT_BOOKING_LINK",
+    "CREATE_APPOINTMENT_BOOKING_CASE",
   ]) {
     assert.equal(getWorkflowActionDefinition(removed), null, removed + " must be removed from the executable registry");
   }
