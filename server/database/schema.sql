@@ -3411,7 +3411,7 @@ ON platform_workflow_runs(company_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS platform_workflow_step_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
-    step_identifier VARCHAR(200),
+    step_identifier TEXT,
     step_order INTEGER NOT NULL DEFAULT 0,
     action_type VARCHAR(60),
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','SKIPPED','WAITING','STOPPED')),
