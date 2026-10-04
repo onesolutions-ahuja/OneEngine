@@ -8,6 +8,7 @@ import {
   sanitizeUberStoreMappings,
   sanitizeUberStoreMenuMappings,
 } from "../services/onlineOrders/platformConfig.js";
+import { encryptCredentials } from "../services/integrationCredentials.js";
 import { UBER_MENU_MAPPING_SCHEMA } from "../services/onlineOrders/uberMenuMapping.js";
 import {
   JARVES_ALLOWANCE_RESULTS,
