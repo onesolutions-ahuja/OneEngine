@@ -1,8 +1,12 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
+import { apiRequest } from '../../../services/api'
 
 const uid = () => globalThis.crypto?.randomUUID?.() || `cs-${Date.now()}-${Math.random().toString(36).slice(2)}`
 const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
+const fieldKey = (value) => String(value?.api_name || value?.apiName || value?.field_key || value?.key || value?.id || '')
+const fieldLabel = (value) => value?.label || value?.name || fieldKey(value)
 
 export const COLLECTION_SORT_DEFAULTS = Object.freeze({
   collection: '',
@@ -70,9 +74,22 @@ export function collectionSortRuntimeAction(instance, resources = []) {
   }
 }
 
-export default function GPTBuilderCollectionSort({ draft, updateConfig, resources, onConfiguredChange }) {
+export default function GPTBuilderCollectionSort({ draft, updateConfig, resources, objects = [], onConfiguredChange }) {
   const config = normalizeCollectionSortConfig(draft.config)
   const selected = resources.find((resource) => resourcePath(resource) === config.collection)
+  const selectedObject = objects.find((item) => objectKey(item) === selected?.objectKey || String(item?.id || '') === String(selected?.objectKey || ''))
+  const [fields, setFields] = useState([])
+  const [fieldsLoading, setFieldsLoading] = useState(false)
+  useEffect(() => {
+    let live = true
+    if (!selected?.objectKey || !selectedObject?.id) { setFields([]); return () => { live = false } }
+    setFieldsLoading(true)
+    apiRequest(`/api/platform/objects/${encodeURIComponent(selectedObject.id)}/fields`)
+      .then((response) => { if (live) setFields((Array.isArray(response?.data) ? response.data : []).filter((field) => field?.active !== false && field?.readable !== false)) })
+      .catch(() => { if (live) setFields([]) })
+      .finally(() => { if (live) setFieldsLoading(false) })
+    return () => { live = false }
+  }, [selectedObject?.id, selected?.objectKey])
   const errors = useMemo(() => collectionSortConfigErrors(config, resources), [JSON.stringify(config), JSON.stringify(resources)])
   useEffect(() => { onConfiguredChange?.(errors.length === 0, errors) }, [JSON.stringify(errors)])
   const patch = (changes) => updateConfig({ ...config, ...changes })
@@ -97,7 +114,7 @@ export default function GPTBuilderCollectionSort({ draft, updateConfig, resource
       {selected?.objectKey ? <>
         <div className="gptb-gr-sort-options">{options.map((row,index)=><div className="gptb-gr-sort-option" key={row.id}>
           <div className="gptb-gr-sort-option-head"><strong>Sort Option {index + 1}</strong>{options.length > 1 ? <button type="button" aria-label={`Remove sort option ${index + 1}`} onClick={()=>patch({sortOptions:options.filter((item)=>item.id!==row.id)})}><Trash2 size={13}/></button> : null}</div>
-          <label><span>Sort By <b>*</b></span><input value={row.field || ''} onChange={(event)=>patchOption(row.id,{field:event.target.value})} placeholder="Field API Name"/></label>
+          <label><span>Sort By <b>*</b></span><select value={row.field || ''} disabled={fieldsLoading || !fields.length} onChange={(event)=>patchOption(row.id,{field:event.target.value})}><option value="">{fieldsLoading ? 'Loading fields...' : fields.length ? 'Select a field' : 'No fields available'}</option>{fields.map((field)=><option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>)}</select></label>
           <label><span>Sort Order <b>*</b></span><select value={row.direction || 'asc'} onChange={(event)=>patchOption(row.id,{direction:event.target.value})}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
           <label className="gptb-properties-check"><input type="checkbox" checked={row.nullsFirst === true} onChange={(event)=>patchOption(row.id,{nullsFirst:event.target.checked})}/><span>Put empty string and null values first</span></label>
         </div>)}</div>
