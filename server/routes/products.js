@@ -1072,7 +1072,7 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
        * this product (all movements are written against the operator's
        * store). The OPENING movement type exists in the inventory ledger, so
        * the initial quantity is established through the EXISTING mechanism:
-       * traceable (inventory_movements row, reason "Opening stock"), never
+       * traceable (inventory_ledger row, reason "Opening stock"), never
        * duplicated, and never touched again by product edits. A zero opening
        * quantity still writes an explicit OPENING row so the starting balance
        * is on the audit trail; track_stock=OFF products skip it entirely —
