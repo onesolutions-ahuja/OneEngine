@@ -16,7 +16,6 @@ import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
 import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
-import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
 import { createShopifyAdapter } from "./shopifyAdapter.js";
 import { exportShopifyFulfillment, exportShopifyRefund, syncShopifyInventory, syncShopifyProducts } from "./shopifySync.js";
 import { processShopifyWebhookEvent } from "./onlineOrders/shopifyWebhookProcessor.js";
