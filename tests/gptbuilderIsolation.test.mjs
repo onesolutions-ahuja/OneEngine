@@ -116,6 +116,29 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Loop matches current Salesforce collection direction and current-item behavior', async () => {
+  const loop = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderLoop.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Collection Variable',
+    'First Item to Last Item',
+    'Last Item to First Item',
+    'Loop Variable',
+    'Current Item from Loop',
+  ]) assert.ok(loop.includes(text), text)
+  assert.match(loop, /resources\.filter\(\(resource\) => resource\.isCollection\)/)
+  assert.match(loop, /CurrentItem_/)
+  assert.match(loop, /itemType/)
+  assert.match(loop, /itemObjectKey/)
+  assert.match(page, /activeElement\.key === 'loop'/)
+  assert.match(page, /loopRuntimeAction\(element, resources\)/)
+  assert.match(runtime, /FIRST_TO_LAST/)
+  assert.match(runtime, /LAST_TO_FIRST/)
+  assert.match(runtime, /orderedCollection/)
+  assert.doesNotMatch(runtime, /Loop requires at least one body step/)
+})
+
 test('GPT Builder Decision matches current Salesforce manual and AI outcome behavior', async () => {
   const decision = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDecision.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
