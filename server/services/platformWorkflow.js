@@ -2308,10 +2308,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         objectKey: { type: "string" },
         filters: { type: "array" },
         match: { type: "string" },
+        customConditionLogic: { type: "string" },
         sortField: { type: "string" },
         sortDirection: { type: "string" },
         limit: { type: "number" },
         store: { type: "string" },
+        fieldSelection: { type: "string" },
+        selectedFields: { type: "array" },
+        advancedAssignment: { type: "object" },
       },
       required: ["objectKey"],
     },
@@ -2320,10 +2324,53 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (action?.filters !== undefined && !Array.isArray(action.filters)) throw new Error("Get Records filters must be a list");
       if (action?.match && !["all", "any"].includes(String(action.match).toLowerCase())) throw new Error("Get Records match must be all or any");
       if (action?.sortDirection && !["asc", "desc"].includes(String(action.sortDirection).toLowerCase())) throw new Error("Get Records sort direction must be ascending or descending");
+      if (action?.fieldSelection && !["auto", "choose", "advanced"].includes(String(action.fieldSelection).toLowerCase())) {
+        throw new Error("Get Records field selection mode is invalid");
+      }
+      if (action?.selectedFields !== undefined && !Array.isArray(action.selectedFields)) {
+        throw new Error("Get Records selected fields must be a list");
+      }
+      const customLogic = String(action?.customConditionLogic || "").trim();
+      if (customLogic) {
+        const remainder = customLogic.replace(/\bAND\b|\bOR\b|\d+|[()\s]/gi, "");
+        if (remainder) throw new Error("Get Records custom condition logic is invalid");
+        const indexes = customLogic.match(/\d+/g) || [];
+        const filterCount = Array.isArray(action?.filters) ? action.filters.length : 0;
+        if (!indexes.length || indexes.some((value) => Number(value) < 1 || Number(value) > filterCount)) {
+          throw new Error("Get Records custom condition logic references an unavailable condition");
+        }
+      }
+      if (action?.advancedAssignment !== undefined) {
+        const assignment = action.advancedAssignment;
+        if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
+          throw new Error("Get Records advanced assignment must be an object");
+        }
+        const mode = String(assignment.mode || "").toLowerCase();
+        if (!["record", "collection", "fields"].includes(mode)) throw new Error("Get Records advanced assignment mode is invalid");
+        if (["record", "collection"].includes(mode)) {
+          if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(assignment.resourceName || ""))) {
+            throw new Error("Get Records advanced record assignment requires a valid variable API name");
+          }
+          if (assignment.fields !== undefined && !Array.isArray(assignment.fields)) {
+            throw new Error("Get Records advanced record fields must be a list");
+          }
+        }
+        if (mode === "fields") {
+          if (!Array.isArray(assignment.mappings) || !assignment.mappings.length) {
+            throw new Error("Get Records advanced field assignments require at least one mapping");
+          }
+          for (const mapping of assignment.mappings) {
+            if (!String(mapping?.field || "").trim()) throw new Error("Get Records advanced field assignment requires a field");
+            if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(mapping?.resourceName || ""))) {
+              throw new Error("Get Records advanced field assignment requires a valid variable API name");
+            }
+          }
+        }
+      }
     },
     async: false,
     requiredPermissions: ["records.view"],
-    executor: async ({ db, action, req, object, companyId, record, previousRecord, workflowVariables }) => {
+    executor: async ({ db, action, req, object, companyId, record, previousRecord, workflowVariables = {} }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
       const fieldResult = await db(
@@ -2363,12 +2410,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         const column = '"' + (metadata.source_column || metadata.api_name) + '"';
         const operator = String(filter?.operator || "equals").toLowerCase();
         const value = resolveConfiguredResource(filter?.value, { record, previousRecord, req, object, workflowVariables });
-        if (operator === "is_empty") {
-          filterClauses.push("(" + column + " IS NULL OR " + column + "::text='')");
+        if (operator === "is_empty" || operator === "is_null") {
+          const shouldBeNull = filter?.value === undefined ? true : Boolean(value);
+          filterClauses.push(shouldBeNull
+            ? "(" + column + " IS NULL OR " + column + "::text='')"
+            : "(" + column + " IS NOT NULL AND " + column + "::text<>'')");
           continue;
         }
-        if (operator === "is_not_empty") {
+        if (operator === "is_not_empty" || operator === "is_not_null") {
           filterClauses.push("(" + column + " IS NOT NULL AND " + column + "::text<>'')");
+          continue;
+        }
+        if (operator === "in" || operator === "not_in") {
+          if (!Array.isArray(value)) throw new Error(`Get Records ${operator === "in" ? "In" : "Not In"} operator requires a collection resource`);
+          params.push(value.map((item) => item == null ? "" : String(item)));
+          const placeholder = parameter(params.length);
+          filterClauses.push(operator === "in"
+            ? column + "::text = ANY(" + placeholder + "::text[])"
+            : "NOT (" + column + "::text = ANY(" + placeholder + "::text[]))");
           continue;
         }
         params.push(value);
@@ -2380,10 +2439,50 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         else if (operator === "less_than") filterClauses.push(column + "<" + placeholder);
         else if (operator === "less_than_or_equal") filterClauses.push(column + "<=" + placeholder);
         else if (operator === "contains") filterClauses.push(column + "::text ILIKE '%' || " + placeholder + "::text || '%'");
+        else if (operator === "starts_with") filterClauses.push(column + "::text ILIKE " + placeholder + "::text || '%'");
+        else if (operator === "ends_with") filterClauses.push(column + "::text ILIKE '%' || " + placeholder + "::text");
         else throw new Error(`Get Records uses unsupported operator "${operator}"`);
       }
+
       if (filterClauses.length) {
-        clauses.push("(" + filterClauses.join(String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ") + ")");
+        const customLogic = String(action.customConditionLogic || "").trim();
+        if (customLogic) {
+          const tokens = customLogic.match(/\d+|AND|OR|\(|\)/gi) || [];
+          let cursor = 0;
+          const parseFactor = () => {
+            const token = tokens[cursor++];
+            if (token === "(") {
+              const inner = parseOr();
+              if (tokens[cursor++] !== ")") throw new Error("Get Records custom condition logic has unmatched parentheses");
+              return "(" + inner + ")";
+            }
+            if (!/^\d+$/.test(String(token || ""))) throw new Error("Get Records custom condition logic is invalid");
+            const index = Number(token) - 1;
+            if (index < 0 || index >= filterClauses.length) throw new Error("Get Records custom condition logic references an unavailable condition");
+            return "(" + filterClauses[index] + ")";
+          };
+          const parseAnd = () => {
+            let value = parseFactor();
+            while (String(tokens[cursor] || "").toUpperCase() === "AND") {
+              cursor += 1;
+              value += " AND " + parseFactor();
+            }
+            return value;
+          };
+          const parseOr = () => {
+            let value = parseAnd();
+            while (String(tokens[cursor] || "").toUpperCase() === "OR") {
+              cursor += 1;
+              value += " OR " + parseAnd();
+            }
+            return value;
+          };
+          const compiled = parseOr();
+          if (cursor !== tokens.length) throw new Error("Get Records custom condition logic is invalid");
+          clauses.push("(" + compiled + ")");
+        } else {
+          clauses.push("(" + filterClauses.join(String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ") + ")");
+        }
       }
 
       let orderBy = "";
@@ -2394,19 +2493,66 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         }
         orderBy = ' ORDER BY "' + (sortMetadata.source_column || sortMetadata.api_name) + '" ' + (String(action.sortDirection || "asc").toLowerCase() === "desc" ? "DESC" : "ASC");
       }
-      const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 50 : 1)), 20000));
+
+      const fieldSelection = String(action.fieldSelection || "auto").toLowerCase();
+      const advancedAssignment = action.advancedAssignment && typeof action.advancedAssignment === "object" ? action.advancedAssignment : null;
+      const requestedFieldKeys = fieldSelection === "auto"
+        ? []
+        : [...new Set([
+            ...(Array.isArray(action.selectedFields) ? action.selectedFields : []),
+            ...(Array.isArray(advancedAssignment?.fields) ? advancedAssignment.fields : []),
+            ...(Array.isArray(advancedAssignment?.mappings) ? advancedAssignment.mappings.map((mapping) => mapping?.field) : []),
+          ].filter(Boolean).map(String))];
+      let selectedMetadata = fields;
+      if (fieldSelection !== "auto") {
+        selectedMetadata = requestedFieldKeys.map((key) => {
+          const metadata = fieldByKey.get(key);
+          if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) {
+            throw new Error(`Get Records selected field "${key}" is unavailable`);
+          }
+          return metadata;
+        });
+      }
+      const selectColumns = ["id"];
+      const seenColumns = new Set(["id"]);
+      for (const field of selectedMetadata) {
+        const sourceColumn = String(field.source_column || field.api_name || "");
+        if (!sourceColumn || sourceColumn === "id" || seenColumns.has(sourceColumn)) continue;
+        seenColumns.add(sourceColumn);
+        selectColumns.push('"' + sourceColumn + '" AS "' + field.api_name + '"');
+      }
+
+      const requestedLimit = Math.max(1, Math.min(Number(action.limit || (String(action.store || "first").toLowerCase() === "all" ? 20000 : 1)), 20000));
       params.push(requestedLimit);
       const where = clauses.length ? " WHERE " + clauses.join(" AND ") : "";
-      const selectColumns = ["id", ...fields.map((field) => '"' + field.source_column + '" AS "' + field.api_name + '"')];
       const query = 'SELECT ' + selectColumns.join(", ") + ' FROM "' + table + '"' + where + orderBy + " LIMIT " + parameter(params.length);
       const result = await db(query, params);
       const rows = result.rows || [];
+
+      if (advancedAssignment) {
+        if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+        const mode = String(advancedAssignment.mode || "").toLowerCase();
+        if (mode === "record") {
+          workflowVariables.variables[String(advancedAssignment.resourceName)] = rows[0] || null;
+        } else if (mode === "collection") {
+          workflowVariables.variables[String(advancedAssignment.resourceName)] = rows;
+        } else if (mode === "fields") {
+          const first = rows[0] || null;
+          for (const mapping of advancedAssignment.mappings || []) {
+            const name = String(mapping.resourceName || "");
+            workflowVariables.variables[name] = first ? first[String(mapping.field || "")] ?? null : null;
+          }
+        }
+      }
+
       return {
         status: "completed",
         objectKey: targetObject.object_key,
         record: rows[0] || null,
         records: String(action.store || "first").toLowerCase() === "all" ? rows : (rows[0] ? [rows[0]] : []),
         count: rows.length,
+        fieldSelection,
+        selectedFields: fieldSelection === "auto" ? null : requestedFieldKeys,
       };
     },
   },
