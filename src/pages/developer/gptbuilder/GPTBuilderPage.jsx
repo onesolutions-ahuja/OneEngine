@@ -6,8 +6,11 @@ import {
 } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 import {
-  ElementPicker, FreeFormElements, PendingElementCard, PendingElementEditor, elementByKey,
+  ElementPicker, FreeFormElements, PendingElementCard, elementByKey,
 } from './GPTBuilderElements'
+import GPTBuilderElementProperties, {
+  createElementInstance, elementCommonErrors,
+} from './GPTBuilderElementProperties'
 import './GPTBuilderPage.css'
 
 const FLOW_CATEGORIES = [
@@ -231,7 +234,8 @@ function FlowShell({ flow, onNew }) {
   const [message, setMessage] = useState('')
   const [saveError, setSaveError] = useState('')
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
-  const [pendingElement, setPendingElement] = useState(null)
+  const [elements, setElements] = useState([])
+  const [editingElement, setEditingElement] = useState(null)
 
   useEffect(() => {
     let live = true
@@ -251,10 +255,15 @@ function FlowShell({ flow, onNew }) {
     if (flow.key === 'record' && !startConfig.objectKey) next.push({ id: 'record-object', level: 'error', title: 'Start isn’t configured', detail: 'Select the object that triggers this flow.' })
     if (flow.key === 'schedule' && (!startConfig.startDate || !startConfig.startTime)) next.push({ id: 'schedule', level: 'error', title: 'Schedule isn’t configured', detail: 'Enter a start date and start time.' })
     if (flow.key === 'platform_event' && !startConfig.eventKey) next.push({ id: 'event', level: 'error', title: 'Platform event isn’t configured', detail: 'Select the event that triggers this flow.' })
-    next.push({ id: 'elements', level: 'error', title: 'The flow has no executable elements', detail: 'Add at least one element before activating the flow.' })
+    if (!elements.length) next.push({ id: 'elements', level: 'error', title: 'The flow has no executable elements', detail: 'Add at least one element before activating the flow.' })
+    elements.forEach((element) => {
+      const common = elementCommonErrors(element, elements)
+      common.forEach((detail, index) => next.push({ id: `element-${element.id}-common-${index}`, level: 'error', title: `${element.label || 'Element'} needs attention`, detail }))
+      if (!element.configured) next.push({ id: `element-${element.id}-incomplete`, level: 'error', title: `${element.label || 'Element'} isn’t fully configured`, detail: 'Complete this element before activating the flow.' })
+    })
     if (dirty && workflowId) next.push({ id: 'unsaved', level: 'warning', title: 'Unsaved changes', detail: 'Save the flow before Run, Debug, or Activate uses the latest design.' })
     return next
-  }, [flow.key, startConfig, dirty, workflowId])
+  }, [flow.key, startConfig, dirty, workflowId, elements])
 
   const startConfigured = !issues.some((issue) => ['record-object', 'schedule', 'event'].includes(issue.id))
   const buildPayload = (props = flowProps) => ({
@@ -277,6 +286,19 @@ function FlowShell({ flow, onNew }) {
       entryTransition: startConfig.updateMode === 'transition' ? 'UPDATED_TO_MEET' : 'EVERY_TIME',
       start: startConfig,
       layout: { mode: layout === 'free' ? 'FREE_FORM' : 'AUTO' },
+      gptBuilderElements: elements.map((element) => ({
+        id: element.id,
+        key: element.key,
+        label: element.label,
+        apiName: element.apiName,
+        description: element.description,
+        labelSource: element.labelSource,
+        apiNameSource: element.apiNameSource,
+        config: element.config,
+        configured: element.configured,
+        source: element.source,
+        position: element.position,
+      })),
       actions: [],
     },
   })
@@ -303,14 +325,27 @@ function FlowShell({ flow, onNew }) {
     }
   }
 
-  const openStart = () => { setStartDraft(structuredClone(startConfig)); setStartOpen(true); setDiagnosticsOpen(false); setElementPickerOpen(false); setPendingElement(null) }
+  const openStart = () => { setStartDraft(structuredClone(startConfig)); setStartOpen(true); setDiagnosticsOpen(false); setElementPickerOpen(false); setEditingElement(null) }
   const finishStart = () => { setStartConfig(startDraft); setStartOpen(false); setDirty(true); setMessage('') }
+  const updateElement = (next) => {
+    setElements((current) => current.map((item) => item.id === next.id ? next : item))
+    setDirty(true)
+  }
   const chooseElement = (element, source = 'auto', position = null) => {
     setElementPickerOpen(false)
     setDiagnosticsOpen(false)
     setStartOpen(false)
     if (!element || element.key === 'end') return
-    setPendingElement({ key: element.key, source, position })
+    const instance = createElementInstance(element.key, elements, { source, position })
+    setElements((current) => [...current, instance])
+    setEditingElement({ id: instance.id, isNew: true })
+    setDirty(true)
+  }
+  const openElement = (instance) => {
+    setElementPickerOpen(false)
+    setStartOpen(false)
+    setDiagnosticsOpen(false)
+    setEditingElement({ id: instance.id, isNew: false })
   }
   const dropElement = (event) => {
     if (layout !== 'free') return
@@ -324,6 +359,8 @@ function FlowShell({ flow, onNew }) {
     chooseElement(elementByKey(key), 'free', { x, y })
   }
   const flowName = workflowId ? flowProps.label : flow.label
+  const activeElement = editingElement ? elements.find((item) => item.id === editingElement.id) || null : null
+  const hasUnsavableIncomplete = elements.some((item) => !item.configured && ['screen', 'action'].includes(item.key))
 
   return <section className="gptb-builder" aria-label="GPT Builder workspace">
     <header className="gptb-buttonbar">
@@ -339,7 +376,7 @@ function FlowShell({ flow, onNew }) {
         <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={() => { setLayout('auto'); setLayoutOpen(false); setDirty(true) }}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={() => { setLayout('free'); setLayoutOpen(false); setToolboxOpen(true); setDirty(true) }}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
         <button className="gptb-text-tool" disabled={!workflowId || dirty}><Play size={14}/> Run</button><button className="gptb-text-tool" disabled={!workflowId || dirty}><Eye size={14}/> Debug</button>
-        <button className="gptb-text-tool" disabled={saving} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
+        <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={hasUnsavableIncomplete ? 'Complete Screen and Action elements before saving.' : 'Save'} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <button className="gptb-text-tool is-brand" disabled={!workflowId || dirty || issues.some((issue) => issue.level === 'error')}>Activate</button><button aria-label="More actions"><MoreHorizontal size={16}/></button>
       </div>
     </header>
@@ -356,15 +393,15 @@ function FlowShell({ flow, onNew }) {
         <div className="gptb-canvas-stage" style={{ transform: `scale(${zoom / 100})` }}>{layout === 'auto' ? <>
           <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} aria-label="Start" onClick={openStart}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
           <div className="gptb-connector"/>
-          {pendingElement?.source === 'auto' ? <><PendingElementCard elementKey={pendingElement.key}/><div className="gptb-connector"/></> : null}
+          {elements.filter((element) => element.source === 'auto').map((element) => <div className="gptb-auto-element-slot" key={element.id}><PendingElementCard instance={element} onOpen={() => openElement(element)}/><div className="gptb-connector"/></div>)}
           <div className="gptb-add-slot">
-            <button className="gptb-add-node" aria-label="Add element" aria-expanded={elementPickerOpen} onClick={() => { setElementPickerOpen((value) => !value); setStartOpen(false); setDiagnosticsOpen(false); setPendingElement(null) }}><Plus size={15}/></button>
+            <button className="gptb-add-node" aria-label="Add element" aria-expanded={elementPickerOpen} onClick={() => { setElementPickerOpen((value) => !value); setStartOpen(false); setDiagnosticsOpen(false); setEditingElement(null) }}><Plus size={15}/></button>
             {elementPickerOpen ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={false} onSelect={(element) => chooseElement(element, 'auto')} onClose={() => setElementPickerOpen(false)}/> : null}
           </div>
           <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
         </> : <>
           <button className="gptb-free-start" onClick={openStart}><span className="gptb-start-dot"/><strong>Start</strong></button>
-          {pendingElement?.source === 'free' ? <PendingElementCard elementKey={pendingElement.key} free position={pendingElement.position}/> : null}
+          {elements.filter((element) => element.source === 'free').map((element) => <PendingElementCard key={element.id} instance={element} free onOpen={() => openElement(element)}/>)}
           <div className="gptb-free-hint">Drag elements from the Elements tab and connect them on the canvas.</div>
         </>}</div>
         <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(50, value - 10))} disabled={zoom <= 50}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button></div>
@@ -372,7 +409,20 @@ function FlowShell({ flow, onNew }) {
       </main>
       {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
       {diagnosticsOpen ? <DiagnosticsPanel issues={issues} onClose={() => setDiagnosticsOpen(false)}/> : null}
-      {pendingElement ? <PendingElementEditor elementKey={pendingElement.key} onCancel={() => setPendingElement(null)}/> : null}
+      {activeElement ? <GPTBuilderElementProperties
+        instance={activeElement}
+        elements={elements}
+        layout={layout}
+        isNew={Boolean(editingElement?.isNew)}
+        onLiveChange={updateElement}
+        onClose={(next) => { updateElement(next); setEditingElement(null) }}
+        onCommit={(next) => { updateElement(next); setEditingElement(null) }}
+        onCancel={(original, options) => {
+          if (options?.removeNew) setElements((current) => current.filter((item) => item.id !== activeElement.id))
+          else updateElement(original)
+          setEditingElement(null)
+        }}
+      /> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
     {propertiesOpen ? <FlowPropertiesModal value={flowProps} saved={Boolean(workflowId)} saving={saving} onChange={(next) => { setFlowProps(next); setDirty(true) }} onCancel={() => setPropertiesOpen(false)} onSave={(next) => void save(next)}/> : null}
