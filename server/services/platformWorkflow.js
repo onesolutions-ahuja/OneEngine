@@ -26,7 +26,7 @@ import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
-import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
+import { oneHttpRequestDefinition } from "./coreFunctions.js";
 import {
   holdAppointmentSlot,
   releaseAppointmentHold,
