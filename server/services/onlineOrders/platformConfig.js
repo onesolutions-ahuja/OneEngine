@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { sanitizeUberMenuMapping } from "./uberMenuMapping.js";
 
 /*
  * Online platform configuration storage (Uber Eats / Deliveroo)
@@ -68,7 +67,7 @@ export function sanitizeUberStoreMenuMappings(value) {
     externalIds.add(uberStoreId);
     return {
       uber_store_id: uberStoreId,
-      menu_mapping: sanitizeUberMenuMapping(configuration.menu_mapping),
+      menu_mapping: configuration.menu_mapping,
     };
   });
 }
@@ -139,7 +138,7 @@ export function buildStoredConfiguration(input = {}, existingConfiguration = {})
   }
 
   if (Object.prototype.hasOwnProperty.call(input, "menu_mapping") && input.menu_mapping !== undefined) {
-    next.menu_mapping = sanitizeUberMenuMapping(input.menu_mapping);
+    next.menu_mapping = input.menu_mapping;
   }
   if (Object.prototype.hasOwnProperty.call(input, "store_mappings") && input.store_mappings !== undefined) {
     next.store_mappings = sanitizeUberStoreMappings(input.store_mappings);
@@ -176,7 +175,7 @@ export function maskConfiguration(configuration = {}) {
   };
 
   if (configuration.menu_mapping && typeof configuration.menu_mapping === "object") {
-    masked.menu_mapping = sanitizeUberMenuMapping(configuration.menu_mapping);
+    masked.menu_mapping = configuration.menu_mapping;
   }
 
   for (const field of SECRET_FIELDS) {
