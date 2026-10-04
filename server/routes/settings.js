@@ -1189,7 +1189,7 @@ export default function createSettingsRouter({
             req,
             input: { subflowApiName: "GPT_UBER_EATS_GET_STORES" },
             source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "RUN_SUBFLOW" },
-          }).then((execution) => execution.result),
+          }).then((execution) => execution.result?.outputs || execution.result),
           db("SELECT id FROM stores WHERE company_id=$1 AND active=true", [companyId]),
         ]);
       } catch (error) {
@@ -1323,7 +1323,7 @@ export default function createSettingsRouter({
           input: { subflowApiName: "GPT_UBER_EATS_GET_STORES" },
           source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "RUN_SUBFLOW" },
         });
-        const discovery = discoveryExecution.result;
+        const discovery = discoveryExecution.result?.outputs || discoveryExecution.result;
         const stores = Array.isArray(discovery?.data?.stores)
           ? discovery.data.stores
           : Array.isArray(discovery?.data)
