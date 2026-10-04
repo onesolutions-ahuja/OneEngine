@@ -152,7 +152,7 @@ export default function createInventoryRouter({
             p.cost_price,
             p.category_id,
             cat.name AS category_name
-          FROM inventory_movements m
+          FROM inventory_ledger m
           INNER JOIN products p ON p.id = m.product_id
           LEFT JOIN categories cat ON cat.id = p.category_id
           LEFT JOIN stores s ON s.id = m.store_id
@@ -352,7 +352,7 @@ export default function createInventoryRouter({
     async (req, res) => {
       try {
         const result = await db(
-          "SELECT p.id, p.name, p.stock_quantity current_stock, COALESCE(SUM(m.quantity_change),0) ledger_balance FROM products p LEFT JOIN inventory_movements m ON m.product_id=p.id AND m.company_id=$1 WHERE p.id=$2 AND p.company_id=$1 GROUP BY p.id",
+          "SELECT p.id, p.name, p.stock_quantity current_stock, COALESCE(SUM(m.quantity_change),0) ledger_balance FROM products p LEFT JOIN inventory_ledger m ON m.product_id=p.id AND m.company_id=$1 WHERE p.id=$2 AND p.company_id=$1 GROUP BY p.id",
           [req.user.companyId, req.query.productId]
         );
         if (!result.rows.length)
@@ -361,7 +361,7 @@ export default function createInventoryRouter({
             .json({ success: false, message: "Product not found" });
         const row = result.rows[0];
         const movements = await db(
-          "SELECT m.created_at, m.movement_type, m.quantity_change, m.balance_after, m.reference_type, m.reference_id, u.username, m.reason FROM inventory_movements m LEFT JOIN users u ON u.id=m.created_by WHERE m.product_id=$1 AND m.company_id=$2 AND m.store_id=$3 ORDER BY m.created_at, m.id",
+          "SELECT m.created_at, m.movement_type, m.quantity_change, m.balance_after, m.reference_type, m.reference_id, u.username, m.reason FROM inventory_ledger m LEFT JOIN users u ON u.id=m.created_by WHERE m.product_id=$1 AND m.company_id=$2 AND m.store_id=$3 ORDER BY m.created_at, m.id",
           [req.query.productId, req.user.companyId, req.user.storeId]
         );
         res.json({
@@ -944,7 +944,7 @@ export default function createInventoryRouter({
           `
           SELECT m.movement_type, m.store_id, s.name AS store_name,
                  m.quantity_change, m.balance_after, m.created_at, u.username
-          FROM inventory_movements m
+          FROM inventory_ledger m
           LEFT JOIN stores s ON s.id = m.store_id
           LEFT JOIN users u ON u.id = m.created_by
           WHERE m.reference_type = 'STOCK_TRANSFER' AND m.reference_id = $1
