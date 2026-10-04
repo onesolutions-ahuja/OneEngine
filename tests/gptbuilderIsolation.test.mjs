@@ -172,7 +172,7 @@ test('GPT Builder phase 4 persists element identity and reopens element properti
 
 test('GPT Builder phase 4 blocks saving incomplete Screen and Action elements but allows other draft elements', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
-  assert.match(page, /hasUnsavableIncomplete = elements\.some/)
+  assert.match(page, /hasUnsavableIncomplete = layout === 'free'/)
   assert.match(page, /\['screen', 'action'\]\.includes\(item\.key\)/)
   assert.match(page, /Complete Screen and Action elements before saving/)
   assert.match(page, /Complete this element before activating the flow/)
@@ -233,4 +233,27 @@ test('GPT Builder recheck matches Salesforce draft-save rules by layout mode', a
   assert.match(page, /const hasUnsavableIncomplete = layout === 'free'/)
   assert.match(page, /Resolve flow errors before saving in Free-Form/)
   assert.match(page, /elements\.some\(\(item\) => !item\.configured && \['screen', 'action'\]\.includes\(item\.key\)\)/)
+})
+
+
+test('GPT Builder phase 2 recheck matches current Salesforce flow version properties', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  for (const text of [
+    'Source Template',
+    'Original Flow',
+    'Progress Indicator Type',
+    'Simple: Top of Screen',
+    'Path: Top of Screen',
+    'Simple: Footer of Screen',
+    'User or System Context—Depends on How Flow Is Launched',
+    'User Context—Enforces User Permissions',
+    'System Context with Sharing—Enforces Record-Level Access',
+    'System Context Without Sharing—Access All Data',
+  ]) assert.ok(page.includes(text), text)
+  assert.match(page, /showProgress: flow\.key === 'screen'/)
+  assert.match(page, /interviewLabelFromFlowLabel\(label\)/)
+  assert.match(page, /saved \? 'Done' : 'Save'/)
+  assert.match(page, /\['screen','autolaunched'\]\.includes\(flowType\)/)
+  assert.match(page, /Number\.parseFloat\(draft\.apiVersion \|\| '68\.0'\) >= 68/)
+  assert.match(page, /defaultRunContextForFlowType\(flow\.key\)/)
 })
