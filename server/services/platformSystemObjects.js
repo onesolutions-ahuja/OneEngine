@@ -23,7 +23,7 @@ const definitions = [
   ["online_order", "online_orders", "online_orders.view", "/app/online-orders"],
   ["system_settings", "company_settings", "settings.manage", "/app/settings"],
   ["sys_settings", "sys_settings", "platform.runtime.read", "/app/settings"],
-  ["one_store_app", "one_store_apps", "platform.runtime.read", "/app"],
+  ["one_store_app", "one_store_apps", "platform.runtime.read", "/app", { companyScoped: false }],
   ["available_store", "available_stores", "platform.runtime.read", "/app"],
   ["connection_health", "integration_connections", "platform.runtime.read", "/app"],
   ["device_health", "device_health", "platform.runtime.read", "/app"],
