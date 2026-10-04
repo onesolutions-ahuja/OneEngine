@@ -25,6 +25,9 @@ jobs:
           ASSET="$(grep -oE '/OneEngine/assets/[^"]+\.js' /tmp/pages.html | head -1)"
           test -n "$ASSET"
           curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI "https://onesolutions-ahuja.github.io$ASSET" >/dev/null
+          # Saved Workflow Builder links use the fixed Pages route plus a query id,
+          # so direct opens return HTTP 200 instead of the SPA 404 fallback.
+          curl --retry 6 --retry-all-errors --retry-delay 5 -fsSI             "https://onesolutions-ahuja.github.io/OneEngine/developer/workflow-builder?workflowId=smoke-test" >/dev/null
 
       - name: Test backend legacy browser redirect
         run: |
