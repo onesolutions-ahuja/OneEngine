@@ -115,13 +115,13 @@ test('Get Records runtime compiles custom logic, sorting, limits, and selected f
   assert.equal(result.status, 'completed')
   assert.equal(result.count, 1)
   assert.deepEqual(result.selectedFields, ['status'])
-  const query = calls.find((call) => call.sql.startsWith('SELECT '))?.sql || ''
+  const query = calls.find((call) => call.sql.includes('FROM "orders"'))?.sql || ''
   assert.match(query, /SELECT id, "status" AS "status" FROM "orders"/)
   assert.match(query, /"status"=\$1/)
   assert.match(query, /"amount">\$2/)
   assert.match(query, /ORDER BY "amount" DESC/)
   assert.doesNotMatch(query, /"amount" AS "amount"/)
-  assert.equal(calls.find((call) => call.sql.startsWith('SELECT ')).params.at(-1), 5)
+  assert.equal(calls.find((call) => call.sql.includes('FROM "orders"')).params.at(-1), 5)
 })
 
 test('Get Records runtime supports Starts With, Ends With, In, Not In and advanced variable assignment', async () => {
@@ -152,7 +152,7 @@ test('Get Records runtime supports Starts With, Ends With, In, Not In and advanc
   })
   assert.equal(result.record.status, 'Active')
   assert.equal(workflowVariables.variables.chosenStatus, 'Active')
-  const query = calls.find((call) => call.sql.startsWith('SELECT '))?.sql || ''
+  const query = calls.find((call) => call.sql.includes('FROM "orders"'))?.sql || ''
   assert.match(query, /ILIKE \$1::text \|\| '%'/)
   assert.match(query, /ILIKE '%' \|\| \$2::text/)
   assert.match(query, /= ANY\(\$3::text\[\]\)/)
