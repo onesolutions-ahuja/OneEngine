@@ -7671,7 +7671,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const gb = catalog.groups.findIndex((group) => group.key === b.groupKey);
         return ga - gb || Number(a.order || 0) - Number(b.order || 0) || String(a.label).localeCompare(String(b.label));
       });
-      res.json({ success: true, data: catalog });
+
+      const runtimeObjects = await Promise.all(visibleHostedObjects.map(async (object) => {
+        const actions = ["view","create","edit","delete"];
+        const access = await Promise.all(actions.map((action) => hasPlatformObjectPermission(db, req, object.id, action)));
+        return {
+          ...object,
+          permissions: Object.fromEntries(actions.map((action, index) => [`can_${action}`, access[index]])),
+        };
+      }));
+
+      res.json({ success: true, data: { ...catalog, objects: runtimeObjects } });
     } catch (error) { next(error); }
   });
 
