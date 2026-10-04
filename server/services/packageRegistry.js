@@ -1709,11 +1709,44 @@ export const packageRegistrySchema = `
 
 function oneAssistantAppointmentRouterWorkflow() {
   const condition = (field, value) => ({ match: "all", conditions: [{ field, operator: "equals", value }] });
-  const send = (id, label, channel, message, templateContext = {}) => ({
-    id, label, apiName: id, key: "SEND_COMMUNICATION", channel,
-    recipient: { path: "sender" }, message, templateContext,
-    conversationId: { path: "metadata.conversationId" },
-  });
+  // Communication stays Flow-visible. WhatsApp is an ordinary API step; credentials/base URL remain secure metadata.
+  const send = (id, label, channel, message, templateContext = {}) => {
+    const renderedMessage = { template: message, context: templateContext };
+    return {
+      id, label, apiName: id, key: "CONDITION",
+      outcomes: [
+        {
+          id: "whatsapp", label: "WhatsApp", condition: condition("variables.messageChannel", "WHATSAPP"),
+          branch: [id + "_whatsapp_api"],
+        },
+        {
+          id: "sms", label: "SMS", condition: condition("variables.messageChannel", "SMS"),
+          branch: [id + "_sms"],
+        },
+      ],
+      defaultLabel: "Unsupported Channel", defaultBranch: [],
+      inlineActions: [
+        {
+          id: id + "_whatsapp_api", label: label + " - WhatsApp API", apiName: id + "_whatsapp_api",
+          key: "ONE_HTTP_REQUEST", providerKey: "whatsapp", method: "POST",
+          endpoint: "/{{phoneNumberId}}/messages",
+          body: {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: { path: "sender" },
+            type: "text",
+            text: { body: renderedMessage },
+          },
+        },
+        {
+          id: id + "_sms", label: label + " - SMS", apiName: id + "_sms",
+          key: "SEND_COMMUNICATION", channel: "SMS",
+          recipient: { path: "sender" }, message, templateContext,
+          conversationId: { path: "metadata.conversationId" },
+        },
+      ],
+    };
+  };
   const dateMessage = "Welcome. Please choose an appointment date:\n1. {{date1}}\n2. {{date2}}\n3. Enter another date as DD/MM/YYYY\n\nReply 1, 2, or a date in DD/MM/YYYY format.";
   const slotsMessage = "Available times for {{selectedDate}}:\n{{slotChoices}}\n\nReply with 1-{{slotCount}}.";
   const invalidDateMessage = "Please share a correct input: reply 1, 2, or enter a future date in DD/MM/YYYY format.";
