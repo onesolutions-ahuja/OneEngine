@@ -123,11 +123,11 @@ function paletteGroups(registry) {
   return groups;
 }
 
-export default function CustomPageBuilder({ onMessage, onError }) {
+export default function CustomPageBuilder({ onMessage, onError, initialAppId = "", initialPageId = "", context = "user", lockApp = false, onBack = null }) {
   const [apps, setApps] = useState([]);
-  const [appId, setAppId] = useState("");
+  const [appId, setAppId] = useState(() => String(initialAppId || ""));
   const [pages, setPages] = useState([]);
-  const [pageId, setPageId] = useState("");
+  const [pageId, setPageId] = useState(() => String(initialPageId || ""));
   const [page, setPage] = useState(null);
   const [draft, setDraft] = useState(() => newPageDraft());
   const registry = useComponentRegistry();
@@ -149,6 +149,16 @@ export default function CustomPageBuilder({ onMessage, onError }) {
     apiRequest("/api/platform/apps").then((response) => setApps(response.data || [])).catch((error) => onError?.(error.message));
     apiRequest("/api/platform/objects").then((response) => setObjects(Array.isArray(response?.data?.objects) ? response.data.objects : Array.isArray(response?.data) ? response.data : [])).catch(() => {});
   }, [onError]);
+
+  useEffect(() => {
+    if (initialAppId && String(initialAppId) !== String(appId || "")) setAppId(String(initialAppId));
+  }, [initialAppId]);
+
+  useEffect(() => {
+    if (!initialPageId || !pages.length) return;
+    const target = pages.find((row) => String(row.id) === String(initialPageId));
+    if (target && String(pageId || "") !== String(target.id)) loadPage(target);
+  }, [initialPageId, pages]);
 
   useEffect(() => {
     if (!appId) { setPages([]); setPageId(""); setPage(null); return; }
@@ -440,7 +450,10 @@ const updateNode = (nodeId, changes) => {
         if (saved?.id) await loadVersions(saved.id);
         onMessage?.("Draft saved.");
       } else {
-        let targetApp = appId || apps[0]?.id;
+        let targetApp = appId || (context === "developer" ? "" : apps[0]?.id);
+        if (!targetApp && context === "developer") {
+          throw new Error("Developer Page Builder requires a package app context.");
+        }
         if (!targetApp) {
           const createdApp = await apiRequest("/api/platform/apps", { method: "POST", body: JSON.stringify({ label: "Custom Pages", appKey: "custom_pages" }) });
           setApps((current) => [...current, createdApp.data]);
@@ -849,10 +862,18 @@ const updateNode = (nodeId, changes) => {
 
       {/* Toolbar — page name, device modes, preview, undo/redo, save. */}
       <div className="cpb-toolbar">
-        <select className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" value={appId} onChange={(event) => { setAppId(event.target.value); setPageId(""); setPage(null); }} aria-label="App">
-          <option value="">New page…</option>
-          {apps.map((app) => <option key={app.id} value={app.id}>{app.label}</option>)}
-        </select>
+        {onBack ? <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={onBack}><ArrowLeft size={13}/> Back</button> : null}
+        {context === "developer" ? <span className="cpb-chip">Developer Page Builder</span> : null}
+        {!lockApp ? (
+          <select className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" value={appId} onChange={(event) => { setAppId(event.target.value); setPageId(""); setPage(null); }} aria-label="App">
+            <option value="">New page…</option>
+            {apps.map((app) => <option key={app.id} value={app.id}>{app.label}</option>)}
+          </select>
+        ) : (
+          <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm font-medium">
+            {apps.find((candidate) => String(candidate.id) === String(appId))?.label || "Package app"}
+          </span>
+        )}
         <select className="max-w-52 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" value={pageId} onChange={(event) => loadPage(pages.find((row) => row.id === event.target.value) || null)} aria-label="Page">
           <option value="">{appId ? "Select page…" : "New page…"}</option>
           {pages.map((row) => <option key={row.id} value={row.id}>{row.label}</option>)}
