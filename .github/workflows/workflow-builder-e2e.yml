@@ -18,6 +18,8 @@ on:
       - "src/pages/developer/builder2Model.js"
       - "src/navigation/routes.js"
       - "scripts/build-pages-routes.mjs"
+      - "scripts/workflow-builder-fingerprint.mjs"
+      - ".github/workflows/pages-redirect.yml"
       - "src/pages/settings/OneBuilder.jsx"
       - "src/pages/developer/OneDeveloperPage.jsx"
       - "src/pages/settings/Platform/WorkflowRunsAdmin.jsx"
@@ -75,16 +77,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          EXPECTED_BUILDER_SHA="$(node scripts/workflow-builder-fingerprint.mjs)"
           for i in {1..90}; do
-            DEPLOYED_SHA="$(curl -fsS "${PLAYWRIGHT_BASE_URL}deploy-sha.txt" 2>/dev/null || true)"
-            if [ "$DEPLOYED_SHA" = "$GITHUB_SHA" ] && curl -fsS "$ONEPOS_API_URL/api/health" >/dev/null; then
-              echo "Testing deployed commit $DEPLOYED_SHA"
+            DEPLOYED_BUILDER_SHA="$(curl -fsS "${PLAYWRIGHT_BASE_URL}workflow-builder-sha.txt" 2>/dev/null || true)"
+            if [ "$DEPLOYED_BUILDER_SHA" = "$EXPECTED_BUILDER_SHA" ] && curl -fsS "$ONEPOS_API_URL/api/health" >/dev/null; then
+              echo "Testing deployed Workflow Builder fingerprint $DEPLOYED_BUILDER_SHA"
               exit 0
             fi
-            echo "Waiting for Pages commit $GITHUB_SHA (currently ${DEPLOYED_SHA:-unavailable})..."
+            echo "Waiting for Workflow Builder fingerprint $EXPECTED_BUILDER_SHA (currently ${DEPLOYED_BUILDER_SHA:-unavailable})..."
             sleep 5
           done
-          echo "Exact frontend commit/API did not become ready" >&2
+          echo "Matching Workflow Builder frontend/API did not become ready" >&2
           exit 1
       - name: Verify E2E credentials
         shell: bash
