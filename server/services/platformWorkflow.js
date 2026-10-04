@@ -5056,56 +5056,111 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "WAIT_FOR_CONDITIONS",
     displayName: "Wait for Conditions",
-    description: "Pause a workflow until record conditions are met.",
+    description: "Pause a workflow for the first eligible specific-time or platform-event resume configuration.",
     schema: {
       type: "object",
       properties: {
+        waitConfigurations: { type: "array" },
         waitCondition: { type: "object" },
         pollSeconds: { type: "number" },
         maxWaitUntil: { type: "string" },
       },
-      required: ["waitCondition"],
+      required: [],
     },
     validation: (action) => {
-      if (!action?.waitCondition) throw new Error("Wait for Conditions requires conditions");
-      const pollSeconds = Number(action.pollSeconds || 60);
-      if (!Number.isFinite(pollSeconds) || pollSeconds < 30) throw new Error("Wait for Conditions poll interval must be at least 30 seconds");
-      if (action.maxWaitUntil && Number.isNaN(new Date(action.maxWaitUntil).getTime())) throw new Error("Wait for Conditions stop-waiting time is invalid");
+      const configs = Array.isArray(action?.waitConfigurations) && action.waitConfigurations.length
+        ? action.waitConfigurations
+        : (action?.waitCondition ? [{ id: "legacy", label: "Wait Configuration", waitCondition: action.waitCondition, resumeEvent: { type: "specific_time", baseTime: action.maxWaitUntil || "$Flow.CurrentDateTime", offsetNumber: 0, offsetUnit: "hours" } }] : []);
+      if (!configs.length) throw new Error("Wait for Conditions requires at least one wait configuration");
+      for (const config of configs) {
+        if (!String(config?.label || "").trim()) throw new Error("Wait for Conditions configuration label is required");
+        const event = config?.resumeEvent || {};
+        if (!["specific_time","platform_event"].includes(String(event.type || ""))) throw new Error("Wait for Conditions requires a supported resume event");
+        if (event.type === "specific_time") {
+          if (!event.baseTime) throw new Error("Wait for Conditions specific-time event requires a base time");
+          if (event.offsetNumber !== "" && event.offsetNumber != null && !Number.isInteger(Number(event.offsetNumber))) throw new Error("Wait for Conditions offset number must be a whole number");
+          if (event.offsetNumber !== "" && event.offsetNumber != null && !["hours","days"].includes(String(event.offsetUnit || ""))) throw new Error("Wait for Conditions offset unit must be Hours or Days");
+        }
+        if (event.type === "platform_event" && !String(event.eventType || "").trim()) throw new Error("Wait for Conditions platform event is required");
+      }
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, fields = [], object = null, workflowVariables = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
-      const condition = resolveWorkflowConditionConfig(action.waitCondition, { record, previousRecord, req, object, workflowVariables });
-      if (evaluateCondition(condition, fields || [], record || {}, previousRecord || null)) {
-        return { status: "completed", conditionMet: true };
-      }
       if (!runId) throw new Error("Wait for Conditions requires a persisted workflow run");
-      const pollSeconds = Math.max(30, Number(action.pollSeconds || 60));
-      const runAt = new Date(Date.now() + pollSeconds * 1000);
-      const maxWaitUntil = action.maxWaitUntil ? new Date(action.maxWaitUntil) : null;
-      if (maxWaitUntil && !Number.isNaN(maxWaitUntil.getTime()) && runAt > maxWaitUntil) runAt.setTime(maxWaitUntil.getTime());
-      const job = await enqueuePlatformJob({
-        db,
-        companyId: tenantId,
-        kind: "WAIT",
-        payload: {
+      const legacyConfig = action?.waitCondition ? [{
+        id: "legacy",
+        label: "Wait Configuration",
+        waitCondition: action.waitCondition,
+        resumeEvent: { type: "specific_time", baseTime: action.maxWaitUntil || "$Flow.CurrentDateTime", offsetNumber: 0, offsetUnit: "hours" },
+      }] : [];
+      const configs = Array.isArray(action?.waitConfigurations) && action.waitConfigurations.length ? action.waitConfigurations : legacyConfig;
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const eligible = [];
+      for (const config of configs) {
+        let conditionMet = true;
+        if (config?.waitCondition) {
+          const condition = resolveWorkflowConditionConfig(config.waitCondition, context);
+          conditionMet = evaluateCondition(condition, fields || [], record || {}, previousRecord || null);
+        }
+        if (conditionMet) eligible.push(config);
+      }
+      if (!eligible.length) return { status: "completed", waited: false, defaultPath: true, eligibleConfigurations: [] };
+
+      const jobs = [];
+      const waitingStartedAt = new Date().toISOString();
+      for (const config of eligible) {
+        const event = config.resumeEvent || {};
+        let runAt = new Date();
+        const payload = {
           runId,
           stepRunId,
-          waitCondition: condition,
-          pollSeconds,
-          maxWaitUntil: maxWaitUntil && !Number.isNaN(maxWaitUntil.getTime()) ? maxWaitUntil.toISOString() : null,
-        },
-        runAt,
-        idempotencyKey: `${tenantId || "workflow"}:wait-condition:${runId}:${stepRunId || action.id || "step"}`,
-      });
-      if (job?.id && stepRunId) {
-        await db("UPDATE platform_workflow_step_runs SET durable_job_id=$1,updated_at=NOW() WHERE id=$2", [job.id, stepRunId]);
+          waitConfigurationId: config.id || null,
+          waitConfigurationLabel: config.label || null,
+          waitingStartedAt,
+          resumeEvent: event,
+        };
+        if (event.type === "specific_time") {
+          const resolvedBase = resolveConfiguredResource(event.baseTime, context, { preserveMissing: false });
+          const base = new Date(resolvedBase === "$Flow.CurrentDateTime" ? Date.now() : resolvedBase);
+          if (Number.isNaN(base.getTime())) throw new Error(`Wait for Conditions base time is invalid for "${config.label}"`);
+          const offset = Number(event.offsetNumber || 0);
+          runAt = new Date(base);
+          if (String(event.offsetUnit || "hours") === "days") runAt.setTime(runAt.getTime() + offset * 86400000);
+          else runAt.setTime(runAt.getTime() + offset * 3600000);
+          payload.resumeAt = runAt.toISOString();
+        } else {
+          runAt = new Date(Date.now() + Math.max(30, Number(action.pollSeconds || 60)) * 1000);
+          payload.platformEventType = String(event.eventType);
+          payload.platformEventConditions = Array.isArray(event.conditions) ? event.conditions : [];
+          payload.pollSeconds = Math.max(30, Number(action.pollSeconds || 60));
+        }
+        const job = await enqueuePlatformJob({
+          db,
+          companyId: tenantId,
+          kind: "WAIT",
+          payload,
+          runAt,
+          idempotencyKey: `${tenantId || "workflow"}:wait-conditions:${runId}:${stepRunId || action.id || "step"}:${config.id || config.label}`,
+        });
+        if (job?.id) jobs.push({ id: job.id, configurationId: config.id || null, label: config.label || null, resumeAt: runAt.toISOString(), type: event.type });
       }
-      if (job?.id && runId && tenantId) {
-        await db("UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [runId, tenantId]);
+      if (jobs.length && stepRunId) {
+        await db("UPDATE platform_workflow_step_runs SET durable_job_id=$1,metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW() WHERE id=$3", [
+          jobs[0].id,
+          JSON.stringify({ waitConfigurationJobs: jobs }),
+          stepRunId,
+        ]);
       }
-      return { status: job ? "waiting" : "skipped", jobId: job?.id || null, conditionMet: false, nextCheckAt: runAt.toISOString(), maxWaitUntil: maxWaitUntil?.toISOString?.() || null };
+      if (jobs.length && tenantId) await db("UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [runId, tenantId]);
+      return {
+        status: jobs.length ? "waiting" : "skipped",
+        waited: jobs.length > 0,
+        defaultPath: false,
+        jobs,
+        eligibleConfigurations: eligible.map((config) => ({ id: config.id || null, label: config.label || null })),
+      };
     },
   },
   {
