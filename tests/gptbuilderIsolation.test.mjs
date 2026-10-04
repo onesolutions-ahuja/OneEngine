@@ -314,3 +314,17 @@ test('GPT Builder edit history makes the canvas read-only while reviewing saves'
   assert.match(css, /gptb-workspace\.is-history-mode \.gptb-toolbox/)
   assert.match(css, /pointer-events:none/)
 })
+
+
+test('GPT Builder recheck makes Use a Template functional instead of a placeholder', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /apiRequest\('\/api\/platform\/rules'\)/)
+  assert.match(page, /action\?\.isTemplate === true/)
+  assert.match(page, /Search templates/)
+  assert.match(page, /role="listbox"/)
+  assert.match(page, /templateRule: selectedTemplate/)
+  assert.match(page, /templateAction\.gptBuilderElements/)
+  assert.match(page, /templateAction\.resources/)
+  assert.match(page, /templateAction\.goToConnections/)
+  assert.match(page, /flow\.startNeedsConfiguration && !flow\.templateRule/)
+})
