@@ -1632,14 +1632,12 @@ app.get("/api/auth/bootstrap", authenticate, async (req, res) => {
                 'code', s.code,
                 'name', s.name,
                 'active', s.active,
-                'is_primary', (u.store_id=s.id)
+                'is_primary', true
               )
               ORDER BY s.name
             )
-            FROM user_stores us
-            JOIN stores s ON s.id=us.store_id
-            WHERE us.user_id=u.id
-              AND us.active=true
+            FROM stores s
+            WHERE s.id=u.store_id
               AND s.company_id=u.company_id
               AND s.active=true
           ),
@@ -1700,13 +1698,11 @@ app.get("/api/auth/me/stores", authenticate, async (req, res) => {
     }
 
     const result = await db(
-      `SELECT s.id,s.code,s.name,s.active,(u.store_id=s.id) AS is_primary
-         FROM user_stores us
-         JOIN stores s ON s.id=us.store_id
-         LEFT JOIN users u ON u.id=us.user_id
-        WHERE us.user_id=$2
-          AND us.active=true
-          AND s.company_id=$1
+      `SELECT s.id,s.code,s.name,s.active,TRUE AS is_primary
+         FROM users u
+         JOIN stores s ON s.id=u.store_id AND s.company_id=u.company_id
+        WHERE u.id=$2
+          AND u.company_id=$1
           AND s.active=true
         ORDER BY s.name`,
       [req.user.companyId, req.user.id]
