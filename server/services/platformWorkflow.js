@@ -3523,6 +3523,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (!definition) {
         throw new Error(`Subflow "${workflowKey}" was not found or is not active`);
       }
+      const resolvedWorkflowId = definition.id || workflowKey;
       const targetCompanyId = action.companyId || definition.company_id || companyId || req?.user?.companyId;
       const runtimeCompanyId = companyId || req?.user?.companyId;
       if (targetCompanyId && runtimeCompanyId && targetCompanyId !== runtimeCompanyId) {
@@ -3530,7 +3531,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       const childActions = Array.isArray(definition.actions) ? definition.actions : Array.isArray(definition.action?.actions) ? definition.action.actions : [];
       if (!childActions.length) {
-        return { status: "skipped", workflowId: workflowKey, reason: "Subflow contains no actions" };
+        return { status: "skipped", workflowId: resolvedWorkflowId, reason: "Subflow contains no actions" };
       }
       const mappedInputs = {};
       const mappings = action.workflowInputs || action.inputs || action.inputMap || action.mappings || {};
@@ -3567,7 +3568,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           );
           const existingChild = existingChildResult.rows[0];
           if (existingChild?.status === "WAITING" || existingChild?.status === "RUNNING") {
-            return { status: "waiting", workflowId: workflowKey, runId: existingChildRunId, results: existingChild.metadata?.childResults || [] };
+            return { status: "waiting", workflowId: resolvedWorkflowId, runId: existingChildRunId, results: existingChild.metadata?.childResults || [] };
           }
           if (existingChild?.status === "FAILED") {
             throw new Error(existingChild.error_text || `Subflow "${definition.name || workflowKey}" failed`);
@@ -3592,7 +3593,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             }
             return {
               status: "completed",
-              workflowId: workflowKey,
+              workflowId: resolvedWorkflowId,
               runId: existingChildRunId,
               results: existingChild.metadata?.childResults || [],
               outputs,
@@ -3608,7 +3609,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         ? await createWorkflowRun({
             db: runDb,
             companyId: targetCompanyId || runtimeCompanyId,
-            workflowId: workflowKey,
+            workflowId: resolvedWorkflowId,
             workflowName: definition.name || action.workflowName || "Subflow",
             workflowVersion: childVersion,
             objectId: object?.id || action.objectId || null,
@@ -3688,7 +3689,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       return {
         status: childFailed ? "failed" : childWaiting ? "waiting" : "completed",
-        workflowId: workflowKey,
+        workflowId: resolvedWorkflowId,
         runId: childRun?.id || null,
         results: childResult,
         outputs,
