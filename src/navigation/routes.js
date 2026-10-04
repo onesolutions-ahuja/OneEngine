@@ -39,7 +39,10 @@ export function readRoute() {
   }
   if (parts[0] === 'developer') {
     const section = parts[1] || 'objects'
-    const workflowId = section === 'workflow-builder' && parts[2] ? decodeURIComponent(parts[2]) : ''
+    const params = new URLSearchParams(window.location.search || '')
+    const workflowId = section === 'workflow-builder'
+      ? decodeURIComponent(parts[2] || params.get('workflowId') || '')
+      : ''
     return { app: 'developer', section, workflowId }
   }
   if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
@@ -102,7 +105,7 @@ export function setRoute(app, section = null, options = {}) {
   const next = app === 'settings'
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
     : app === 'developer'
-      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}${section === 'workflow-builder' && options?.workflowId ? `/${encodeURIComponent(options.workflowId)}` : ''}`
+      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}${section === 'workflow-builder' && options?.workflowId ? `?workflowId=${encodeURIComponent(options.workflowId)}` : ''}`
     : app === 'dashboard'
       ? `${base}/dashboard`
     : app === 'till'
@@ -187,5 +190,6 @@ export function setRoute(app, section = null, options = {}) {
           : `${base}/workspace`
         : `${base}/`
   try { sessionStorage.setItem('onepos.lastRoute', next) } catch {}
-  if (window.location.pathname !== next) window.history.pushState(null, '', next)
+  const current = `${window.location.pathname}${window.location.search}`
+  if (current !== next) window.history.pushState(null, '', next)
 }
