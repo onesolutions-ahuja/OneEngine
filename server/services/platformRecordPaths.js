@@ -107,7 +107,7 @@ export function resolveBindingTree(value, context = {}) {
   if (!value || typeof value !== "object") return value;
   if (typeof value.path === "string" && Object.keys(value).every((key) => ["path", "fallback"].includes(key))) {
     const resolved = resolveContextPathValue(value.path, context);
-    return resolved === undefined ? value.fallback : resolved;
+    return resolved == null ? resolveBindingTree(value.fallback, context) : resolved;
   }
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveBindingTree(item, context)]));
 }
