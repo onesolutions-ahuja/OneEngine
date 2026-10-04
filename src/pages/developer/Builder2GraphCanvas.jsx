@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { ReactFlow, Background, Controls, Handle, Position, addEdge, useEdgesState, useNodesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -34,7 +34,8 @@ function persistentEdgesOnly(edges=[]) {
   return edges.filter(edge=>edge.source!==START_ID&&edge.target!==END_ID&&edge.target!==START_ID&&edge.source!==END_ID)
 }
 
-export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,onEdgesChangeExternal,onSelect,onOpen}) {
+export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,onEdgesChangeExternal,onSelect,onOpen,onDropElement}) {
+  const instanceRef=useRef(null)
   const initialNodes=useMemo(()=>{
     const body=nodes.map((n,i)=>({
       id:n.id,
@@ -97,8 +98,19 @@ export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,o
     }))
   },[onEdgesChange,setRfEdges,onEdgesChangeExternal])
 
+  const dropElement=useCallback(event=>{
+    event.preventDefault()
+    const raw=event.dataTransfer?.getData('application/x-oneengine-flow-element')
+    if(!raw)return
+    try{
+      const definition=JSON.parse(raw)
+      const position=instanceRef.current?.screenToFlowPosition?.({x:event.clientX,y:event.clientY})||{x:280,y:120}
+      onDropElement?.(definition,position)
+    }catch{}
+  },[onDropElement])
+
   return <div className="b2-rf-canvas">
-    <ReactFlow nodes={rfNodes} edges={rfEdges} nodeTypes={nodeTypes} onNodesChange={nodeChange} onEdgesChange={edgeChange} onConnect={connect} onNodeClick={(_,n)=>{if(![START_ID,END_ID].includes(n.id))onSelect?.(n.id)}} fitView deleteKeyCode={['Backspace','Delete']} multiSelectionKeyCode="Shift">
+    <ReactFlow nodes={rfNodes} edges={rfEdges} nodeTypes={nodeTypes} onNodesChange={nodeChange} onEdgesChange={edgeChange} onConnect={connect} onNodeClick={(_,n)=>{if(![START_ID,END_ID].includes(n.id))onSelect?.(n.id)}} onInit={instance=>{instanceRef.current=instance}} onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect='copy'}} onDrop={dropElement} fitView deleteKeyCode={['Backspace','Delete']} multiSelectionKeyCode="Shift">
       <Background/>
       <Controls showInteractive/>
     </ReactFlow>
