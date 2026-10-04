@@ -116,6 +116,37 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
 
+test('GPT Builder Assignment matches current Salesforce variable rows and type-aware operators', async () => {
+  const assignment = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAssignment.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  for (const text of [
+    'Set Variable Values',
+    'Assignments run in the order shown.',
+    'Add Assignment',
+    'Equals',
+    'Add',
+    'Subtract',
+    'Add At Start',
+    'Remove First',
+    'Remove All',
+    'Remove Before First',
+    'Remove After First',
+    'Remove Position',
+    'Remove Uncommon',
+    'Equals Count',
+  ]) assert.ok(assignment.includes(text), text)
+  assert.match(assignment, /assignmentOperators/)
+  assert.match(assignment, /assignmentRuntimeAction/)
+  assert.match(page, /activeElement\.key === 'assignment'/)
+  assert.match(page, /assignmentRuntimeAction\(element, resources\)/)
+  assert.match(runtime, /remove_before_first/)
+  assert.match(runtime, /remove_after_first/)
+  assert.match(runtime, /remove_uncommon/)
+  assert.match(runtime, /Equals Count requires a collection value/)
+  assert.match(runtime, /type === "date"/)
+})
+
 test('GPT Builder Delete Records matches current Salesforce resource and condition modes', async () => {
   const deleteRecords = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDeleteRecords.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
