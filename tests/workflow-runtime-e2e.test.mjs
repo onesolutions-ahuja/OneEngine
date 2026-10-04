@@ -73,6 +73,37 @@ test('waiting nested branch is detected recursively', () => {
   assert.equal(workflowResultsContainStatus(entries,'waiting'),true);
 });
 
+test('Debug tracing and external-action simulation are independently controlled', async () => {
+  const writes=[];
+  const db=async(sql,params=[])=>{
+    const q=String(sql);
+    if (q.includes('FROM role_permissions') && q.includes('p.code = ANY')) return {rows:(params[2]||[]).map(code=>({code}))};
+    if (q.includes('FROM platform_permission_set_assignments')) return {rows:[]};
+    if (q.startsWith('INSERT INTO platform_notifications')) {
+      writes.push({sql:q,params:[...params]});
+      return {rows:[]};
+    }
+    return {rows:[]};
+  };
+  const req={user:{id:'u1',companyId:'c1',roleId:'r1',permissions:['workflow.execute','notifications.write']},_workflowEffectivePermissionSets:[]};
+  const action={id:'notify',type:'IN_APP_NOTIFICATION',message:'Hello'};
+
+  const simulated=await executeWorkflowAction({
+    action,db,req,companyId:'c1',workflowVariables:{variables:{},steps:{}},
+    debugMode:true,debugTrace:true,simulateExternalActions:true,
+  });
+  assert.equal(simulated.simulated,true);
+  assert.equal(writes.length,0);
+
+  const executed=await executeWorkflowAction({
+    action,db,req,companyId:'c1',workflowVariables:{variables:{},steps:{}},
+    debugMode:false,debugTrace:true,simulateExternalActions:false,
+  });
+  assert.equal(executed.status,'completed');
+  assert.equal(executed.persistent,true);
+  assert.equal(writes.length,1);
+});
+
 test('record CRUD respects tenant and store scope and maps workflow resources', async () => {
   const object = { id:'obj1', object_key:'case', source_table:'case_records', company_id:'c1', company_scoped:true, store_scoped:true, active:true };
   const fields = [
