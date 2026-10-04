@@ -178,7 +178,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
    * (product category name), movementTypes + productIds lists. All optional
    * and backward compatible; company/store isolation unchanged.
    */
-  router.get("/reports/inventory-movements", authenticate, authorize("reports.inventory_movements.view", "inventory.movements.view"), async (req, res) => {
+  router.get("/reports/inventory-movements", authenticate, authorize("reports.inventory_ledger.view", "inventory.movements.view"), async (req, res) => {
     try {
       const limit = Math.max(1, Math.min(10000, Number(req.query.limit) || 500));
       const offset = Math.max(0, Number(req.query.offset) || 0);
@@ -242,7 +242,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
           m.reference_id,
           u.username,
           m.reason
-        FROM inventory_movements m
+        FROM inventory_ledger m
         INNER JOIN products p ON p.id = m.product_id
         INNER JOIN companies c ON c.id = m.company_id
         LEFT JOIN categories cat ON cat.id = p.category_id
@@ -261,7 +261,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         SELECT COUNT(*)::int AS total,
           COALESCE(SUM(m.quantity_change), 0) AS quantity,
           COALESCE(SUM(m.quantity_change * COALESCE(p.cost_price, 0)), 0) AS value
-        FROM inventory_movements m
+        FROM inventory_ledger m
         INNER JOIN products p ON p.id = m.product_id
         INNER JOIN companies c ON c.id = m.company_id
         LEFT JOIN categories cat ON cat.id = p.category_id
@@ -443,7 +443,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         INNER JOIN companies c ON c.id = st.company_id
         LEFT JOIN users u ON u.id = ts.user_id
         LEFT JOIN users cl ON cl.id = ts.closed_by
-        LEFT JOIN cash_movements cm ON cm.till_session_id = ts.id
+        LEFT JOIN cash_ledger cm ON cm.till_session_id = ts.id
         WHERE ts.company_id = $1 AND ts.store_id = $2
           AND ($3::date IS NULL OR (ts.opened_at AT TIME ZONE c.timezone)::date >= $3::date)
           AND ($4::date IS NULL OR (ts.opened_at AT TIME ZONE c.timezone)::date <= $4::date)
@@ -521,8 +521,8 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
                ts.expected_cash, ts.cash_difference,
                (ts.opened_at AT TIME ZONE c.timezone)::date AS business_date,
                t.name AS terminal_name, u.username AS opened_by_name, cl.username AS closed_by_name,
-               COALESCE((SELECT SUM(amount) FROM cash_movements cm WHERE cm.till_session_id = ts.id AND cm.type = 'cash_in'), 0) AS cash_in_total,
-               COALESCE((SELECT SUM(amount) FROM cash_movements cm WHERE cm.till_session_id = ts.id AND cm.type = 'cash_out'), 0) AS cash_out_total,
+               COALESCE((SELECT SUM(amount) FROM cash_ledger cm WHERE cm.till_session_id = ts.id AND cm.type = 'cash_in'), 0) AS cash_in_total,
+               COALESCE((SELECT SUM(amount) FROM cash_ledger cm WHERE cm.till_session_id = ts.id AND cm.type = 'cash_out'), 0) AS cash_out_total,
                (
                  SELECT COALESCE(SUM(sa.total), 0)
                  FROM sales sa
@@ -567,7 +567,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const difference = closed ? Number(row.cash_difference) || 0 : null;
       const movements = await db(
         `SELECT cm.id, cm.type, cm.amount, cm.reason, cm.created_at, u.username
-         FROM cash_movements cm
+         FROM cash_ledger cm
          LEFT JOIN users u ON u.id = cm.user_id
          WHERE cm.till_session_id = $3
          ORDER BY cm.created_at DESC
