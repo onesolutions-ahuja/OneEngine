@@ -336,6 +336,91 @@ function Toolbox({ layout, onClose, flowType, startConfig }) {
   </aside>
 }
 
+
+function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], onClose }) {
+  const [records, setRecords] = useState([])
+  const [recordSearch, setRecordSearch] = useState('')
+  const [recordId, setRecordId] = useState('')
+  const [inputs, setInputs] = useState({})
+  const [rollback, setRollback] = useState(mode === 'test')
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    if (!objectKey || flowType !== 'record') return () => { live = false }
+    apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey)}/records?limit=50`)
+      .then((response) => {
+        if (!live) return
+        const rows = response?.records || response?.data?.records || (Array.isArray(response?.data) ? response.data : [])
+        setRecords(Array.isArray(rows) ? rows : [])
+      })
+      .catch((requestError) => { if (live) setError(requestError?.message || 'Unable to load records.') })
+    return () => { live = false }
+  }, [objectKey, flowType])
+
+  useEffect(() => {
+    setRollback(mode === 'test')
+    setResult(null)
+    setError('')
+  }, [mode])
+
+  const filteredRecords = records.filter((record) => {
+    const needle = recordSearch.trim().toLowerCase()
+    if (!needle) return true
+    return Object.values(record || {}).some((value) => String(value ?? '').toLowerCase().includes(needle))
+  }).slice(0, 50)
+
+  const execute = async () => {
+    setRunning(true); setError(''); setResult(null)
+    try {
+      const endpoint = mode === 'run'
+        ? `/api/platform/rules/${encodeURIComponent(workflowId)}/run`
+        : `/api/platform/rules/${encodeURIComponent(workflowId)}/debug`
+      const response = await apiRequest(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...(recordId ? { recordId } : {}),
+          inputs,
+          ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
+          ...(mode === 'test' ? { mode: 'test', rollback: flowType === 'record' ? true : rollback } : {}),
+        }),
+      })
+      setResult(response?.data || {})
+    } catch (requestError) {
+      setError(requestError?.message || `Unable to ${mode} flow.`)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const title = mode === 'test' ? 'Test' : mode === 'debug' ? 'Debug' : 'Run'
+  const needsRecord = flowType === 'record'
+  return <aside className="gptb-config-panel gptb-execution-panel" aria-label={title}>
+    <header><div><strong>{title}</strong><small>Uses the most recent saved version.</small></div><button className="gptb-icon-button" aria-label={`Close ${title}`} onClick={onClose}><X size={16}/></button></header>
+    <div className="gptb-config-body">
+      {mode === 'test' ? <section><h3>Test Scenario</h3><p className="gptb-help-text">Configure test data and run options for this scenario.</p></section> : null}
+      {needsRecord ? <section><h3>{mode === 'test' ? 'Set Triggering Record' : 'Triggering Record'}</h3>
+        <label><span>Search records</span><span className="gptb-execution-search"><Search size={13}/><input value={recordSearch} onChange={(event) => setRecordSearch(event.target.value)} placeholder="Search records…"/></span></label>
+        <label><span>Record</span><select value={recordId} onChange={(event) => setRecordId(event.target.value)}><option value="">Select a record…</option>{filteredRecords.map((record) => {
+          const id = String(record?.id || record?.record_id || '')
+          const label = record?.name || record?.label || record?.display_name || record?.title || id
+          return <option key={id} value={id}>{String(label)}{String(label) !== id ? ` — ${id}` : ''}</option>
+        })}</select></label>
+      </section> : null}
+      {inputContract.length ? <section><h3>Define Input Values</h3>{inputContract.map((input) => <label key={input.name}><span>{input.label || input.name}{input.required ? ' *' : ''}</span><input value={inputs[input.name] ?? input.defaultValue ?? ''} onChange={(event) => setInputs((current) => ({ ...current, [input.name]: event.target.value }))}/></label>)}</section> : null}
+      {mode !== 'run' ? <section><h3>Select Run Options</h3>
+        <label className="gptb-properties-check"><input type="checkbox" checked={flowType === 'record' && mode === 'test' ? true : rollback} disabled={flowType === 'record' && mode === 'test'} onChange={(event) => setRollback(event.target.checked)}/><span>Run automation in rollback mode</span></label>
+        {mode === 'test' && flowType === 'record' ? <p className="gptb-help-text">Rollback is required for record-triggered test scenarios.</p> : null}
+      </section> : null}
+      {error ? <div className="gptb-execution-error" role="alert">{error}</div> : null}
+      {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl></section> : null}
+    </div>
+    <footer><button className="gptb-button" onClick={onClose}>Close</button><button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId)} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
+  </aside>
+}
+
 function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const templateAction = initialRule?.action || flow.templateRule?.action || {}
   const [layout, setLayout] = useState(templateAction.layout?.mode === 'FREE_FORM' ? 'free' : 'auto')
@@ -382,6 +467,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [editHistoryEntries, setEditHistoryEntries] = useState([])
   const [editHistoryLoading, setEditHistoryLoading] = useState(false)
   const [editHistoryVersion, setEditHistoryVersion] = useState(null)
+  const [executionMode, setExecutionMode] = useState(null)
 
   useEffect(() => {
     const snapshot = JSON.parse(JSON.stringify({ layout, startConfig, elements, resources, goToConnections }))
@@ -860,7 +946,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <button aria-label="View Properties" title="View Properties" onClick={() => setPropertiesOpen(true)}><Settings2 size={16}/></button>
         <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={() => { setLayout('auto'); setLayoutOpen(false); setDirty(true) }}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={() => { setLayout('free'); setLayoutOpen(false); setToolboxOpen(true); setDirty(true) }}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
-        <button className="gptb-text-tool" disabled={!workflowId}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId}><Eye size={14}/> Test Mode</button> : <button className="gptb-text-tool" disabled={!workflowId}><Eye size={14}/> Debug</button>}
+        <button className="gptb-text-tool" disabled={!workflowId} onClick={() => setExecutionMode('run')}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId} onClick={() => setExecutionMode('test')}><Eye size={14}/> Test</button> : <button className="gptb-text-tool" disabled={!workflowId} onClick={() => setExecutionMode('debug')}><Eye size={14}/> Debug</button>}
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
         {editHistorySupported ? <button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button> : null}
@@ -926,6 +1012,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         const target = elements.find((element) => element.id === issue.targetId)
         if (target) openElement(target)
       }}/> : null}
+      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} onClose={() => setExecutionMode(null)}/> : null}
       {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
