@@ -548,17 +548,30 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
     const canvas=canvasRef.current
     const flow=canvas?.querySelector('.b2-flow')
     if(!canvas||!flow)return
-    const rawWidth=Math.max(1,flow.scrollWidth||flow.getBoundingClientRect().width)
-    const target=Math.max(30,Math.min(100,Math.floor(((canvas.clientWidth-48)/rawWidth)*100)))
+    const scale=Math.max(.01,zoom/100)
+    const flowRect=flow.getBoundingClientRect()
+    const visualItems=[...flow.querySelectorAll('.b2-start,.b2-node,.b2-decision-path>strong,.b2-path-reference,.b2-end')]
+    let minLeft=0,maxRight=Math.max(flow.scrollWidth,flowRect.width)/scale
+    if(visualItems.length){
+      minLeft=Infinity
+      maxRight=-Infinity
+      for(const item of visualItems){
+        const rect=item.getBoundingClientRect()
+        minLeft=Math.min(minLeft,(rect.left-flowRect.left)/scale)
+        maxRight=Math.max(maxRight,(rect.right-flowRect.left)/scale)
+      }
+    }
+    const rawWidth=Math.max(1,maxRight-minLeft)
+    const target=Math.max(20,Math.min(100,Math.floor(((canvas.clientWidth-56)/rawWidth)*100)))
     setZoom(target)
-    requestAnimationFrame(()=>{
-      const start=canvas.querySelector('.b2-start')
-      if(!start)return
-      const canvasRect=canvas.getBoundingClientRect(), startRect=start.getBoundingClientRect()
-      const startCenter=canvas.scrollLeft+(startRect.left-canvasRect.left)+(startRect.width/2)
-      canvas.scrollLeft=Math.max(0,startCenter-(canvas.clientWidth/2))
-      canvas.scrollTop=0
-    })
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const anchor=(selected&&canvas.querySelector(`[data-node-id="${selected}"]`))||canvas.querySelector('.b2-start')
+      if(!anchor)return
+      const canvasRect=canvas.getBoundingClientRect(), anchorRect=anchor.getBoundingClientRect()
+      const anchorCenter=canvas.scrollLeft+(anchorRect.left-canvasRect.left)+(anchorRect.width/2)
+      canvas.scrollLeft=Math.max(0,anchorCenter-(canvas.clientWidth/2))
+      if(!selected)canvas.scrollTop=0
+    }))
   }
   const selectCanvasNode=(id,{openAction=true}={})=>{
     const node=nodes.find(n=>n.id===id)
@@ -657,11 +670,14 @@ export default function Builder2Page({initialWorkflowId='',initialFlowType='',in
     if(layoutMode!=='auto'||!nodes.length)return
     const centerKey=`${workflowId||'draft'}:${nodes.length}:${Object.values(branchCollapsed).filter(Boolean).length}`
     if(centeredWorkflowRef.current===centerKey)return
-    const frame=requestAnimationFrame(()=>{
-      fitFlowToCanvas()
-      centeredWorkflowRef.current=centerKey
+    let inner=0
+    const outer=requestAnimationFrame(()=>{
+      inner=requestAnimationFrame(()=>{
+        fitFlowToCanvas()
+        centeredWorkflowRef.current=centerKey
+      })
     })
-    return()=>cancelAnimationFrame(frame)
+    return()=>{cancelAnimationFrame(outer);if(inner)cancelAnimationFrame(inner)}
   },[workflowId,nodes.length,layoutMode,branchCollapsed])
   const issues=useMemo(()=>validateDefinition({flowType,startConfig,nodes,edges,resources}),[flowType,startConfig,nodes,edges,resources])
   if(screenEditing){const n=nodes.find(x=>x.id===screenEditing);if(n)return <ScreenEditor node={n} onPatch={patch} onClose={()=>setScreenEditing('')}/>}
