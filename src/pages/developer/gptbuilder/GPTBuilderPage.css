@@ -282,3 +282,8 @@
 .gptb-expected-results details>dl{display:grid;gap:4px;margin:0;padding:7px;border-top:1px solid #ecebea}
 .gptb-expected-results details>dl>div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:6px}.gptb-expected-results dt{font-size:7px;color:#706e6b}.gptb-expected-results dd{margin:0;font-size:8px;overflow-wrap:anywhere}
 @media(max-width:760px){.gptb-test-assertions>div{grid-template-columns:1fr}.gptb-test-assertions>div>span{text-align:left}.gptb-expected-results details>dl>div{grid-template-columns:1fr}}
+
+.gptb-debug-wait-paths{display:grid;gap:7px;padding:7px 0 2px}
+.gptb-debug-wait-paths>label{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(0,1fr);gap:8px;align-items:center}
+.gptb-debug-wait-paths>label>span{font-size:8px;font-weight:600;color:#444}
+@media(max-width:760px){.gptb-debug-wait-paths>label{grid-template-columns:1fr}}
