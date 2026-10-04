@@ -326,7 +326,11 @@ test("Open Food Facts cleanup system flows are visible and editable in the deplo
   await expect(page.locator(".b2-top")).toContainText("Workflow Builder");
   await expect(page.locator(".b2-node").filter({ hasText: "Lookup Product" })).toBeVisible();
   await expect(page.locator(".b2-node").filter({ hasText: "Product Found?" })).toBeVisible();
-  await expect(page.locator(".b2-node").filter({ hasText: "Set Product Outputs" })).toBeVisible();
+  await expect(page.locator(".b2-node").filter({ hasText: "Set Found" })).toBeVisible();
+  await page.locator(".b2-node").filter({ hasText: "Set Product Name" }).click();
+  const lookupProps = page.locator(".b2-properties");
+  await expect(lookupProps.getByText("productName", { exact: true })).toBeVisible();
+  await expect(lookupProps.getByLabel("Value")).toHaveValue("steps.lookup_http.data.product.product_name");
 
   await page.getByRole("button", { name: "Back to flows", exact: true }).click();
   await expect(page.locator(".onebuilder-list-view")).toBeVisible();
@@ -335,6 +339,10 @@ test("Open Food Facts cleanup system flows are visible and editable in the deplo
   await expect(page.locator(".b2-shell")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".b2-node").filter({ hasText: "Call Open Food Facts" })).toBeVisible();
   await expect(page.locator(".b2-node").filter({ hasText: "Connection Successful?" })).toBeVisible();
+  await page.locator(".b2-node").filter({ hasText: "Set Connected" }).first().click();
+  const connectionProps = page.locator(".b2-properties");
+  await expect(connectionProps.getByText("connected", { exact: true })).toBeVisible();
+  await expect(connectionProps.getByLabel("Value")).toHaveValue("true");
 
   expect(failures, failures.join("\n")).toEqual([]);
 });

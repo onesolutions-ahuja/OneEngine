@@ -34,3 +34,25 @@ test("Open Food Facts GPT flows are platform system flows, not tenant package fl
     assert.ok(keys.includes("ASSIGNMENT"));
   }
 });
+
+
+test("Open Food Facts system flows expose editable output resources and explicit assignment targets", () => {
+  const definitions = systemWorkflowDefinitions();
+  const lookup = definitions.find((flow) => flow.systemKey === "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT");
+  const connection = definitions.find((flow) => flow.systemKey === "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION");
+
+  assert.deepEqual(lookup.action.resources.filter((r) => r.availableOutput).map((r) => r.apiName),
+    ["barcode","found","productName","brand","imageUrl","ingredients"]);
+  assert.equal(lookup.action.resources.find((r) => r.apiName === "barcode").availableInput, true);
+  assert.deepEqual(
+    lookup.action.actions.filter((a) => a.key === "ASSIGNMENT").map((a) => a.variableName),
+    ["found","barcode","productName","brand","imageUrl","ingredients","found"]
+  );
+
+  assert.deepEqual(connection.action.resources.filter((r) => r.availableOutput).map((r) => r.apiName),
+    ["connected","message","statusCode"]);
+  assert.deepEqual(
+    connection.action.actions.filter((a) => a.key === "ASSIGNMENT").map((a) => a.variableName),
+    ["connected","message","statusCode","connected","message","statusCode"]
+  );
+});
