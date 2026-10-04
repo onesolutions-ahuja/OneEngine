@@ -1,5 +1,6 @@
 import { evaluateCondition } from "./platformConditions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
+import { evaluateWorkflowFormula } from "./platformFormula.js";
 import { createWorkflowRun, executeWorkflowActions, workflowResultsContainStatus } from "./platformWorkflow.js";
 import { systemObject, isExtensionField } from "./platformSystemObjects.js";
 
@@ -13,7 +14,47 @@ function apiRecord(fields, record) {
   return result;
 }
 
+function normalizeStartFormula(expression) {
+  let value = String(expression || "").trim();
+  value = value
+    .replace(/\{!\s*\$Record__Prior\.([A-Za-z_][A-Za-z0-9_]*)\s*\}/g, "Prior_$1")
+    .replace(/\{!\s*\$Record\.([A-Za-z_][A-Za-z0-9_]*)\s*\}/g, "Record_$1")
+    .replace(/\$Record__Prior\.([A-Za-z_][A-Za-z0-9_]*)/g, "Prior_$1")
+    .replace(/\$Record\.([A-Za-z_][A-Za-z0-9_]*)/g, "Record_$1")
+    .replace(/ISCHANGED\s*\(\s*Record_([A-Za-z_][A-Za-z0-9_]*)\s*\)/gi, "Changed_$1")
+    .replace(/PRIORVALUE\s*\(\s*Record_([A-Za-z_][A-Za-z0-9_]*)\s*\)/gi, "Prior_$1")
+    .replace(/\bISNEW\s*\(\s*\)/gi, "IsNew")
+    .replace(/\bTRUE\b/gi, "true")
+    .replace(/\bFALSE\b/gi, "false")
+    .replace(/<>/g, "!=")
+    .replace(/(?<![<>=!])=(?!=)/g, "==");
+  return value;
+}
+
+function startFormulaInputs(fields, record, previousRecord) {
+  const inputs = {
+    IsNew: !previousRecord,
+    Record_id: record?.id ?? null,
+    Prior_id: previousRecord?.id ?? null,
+    Changed_id: (record?.id ?? null) !== (previousRecord?.id ?? null),
+  };
+  for (const field of fields || []) {
+    if (!field?.api_name) continue;
+    const current = record?.[field.api_name] !== undefined ? record[field.api_name] : field.source_column ? record?.[field.source_column] : undefined;
+    const prior = previousRecord?.[field.api_name] !== undefined ? previousRecord[field.api_name] : field.source_column ? previousRecord?.[field.source_column] : undefined;
+    inputs["Record_" + field.api_name] = current ?? null;
+    inputs["Prior_" + field.api_name] = prior ?? null;
+    inputs["Changed_" + field.api_name] = JSON.stringify(current ?? null) !== JSON.stringify(prior ?? null);
+  }
+  return inputs;
+}
+
 function ruleMatches(rule, fields, record, previousRecord) {
+  const formula = String(rule.action?.entryFormula || "").trim();
+  if (formula) {
+    const result = evaluateWorkflowFormula(normalizeStartFormula(formula), startFormulaInputs(fields, record, previousRecord));
+    return result === true;
+  }
   const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
   if (!conditions.length) return true;
   return evaluateCondition({
