@@ -127,7 +127,7 @@ export function FreeFormElements({ flowType, startConfig }) {
   </div>
 }
 
-export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen, selecting = false, selected = false, onSelectToggle, connecting = false, onConnectTarget }) {
+export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen, selecting = false, selected = false, onSelectToggle, connecting = false, onConnectTarget, onFreeSelect, onFreeMoveStart, onConnectorStart, onConnectorEnd }) {
   const key = instance?.key || elementKey
   const element = elementByKey(key)
   if (!element) return null
@@ -140,13 +140,21 @@ export function PendingElementCard({ elementKey, instance = null, free = false, 
     style={style}
     aria-label={`${label} element`}
     aria-pressed={selecting ? selected : undefined}
+    draggable={free}
+    onDragStart={free ? (event) => {
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('application/x-gptbuilder-existing', instance?.id || '')
+      onFreeMoveStart?.(event)
+    } : undefined}
     onClick={!free ? () => {
       if (connecting) { onConnectTarget?.(); return }
       if (selecting) { onSelectToggle?.(); return }
       onOpen?.()
-    } : undefined}
-    onDoubleClick={free ? onOpen : undefined}
+    } : (event) => onFreeSelect?.(event)}
+    onDoubleClick={free ? (event) => { event.preventDefault(); onOpen?.() } : undefined}
   >
+    {free ? <span className="gptb-free-connector is-input" aria-hidden="true" onPointerUp={(event) => { event.stopPropagation(); onConnectorEnd?.(event) }}/>: null}
+    {free ? <span className="gptb-free-connector is-output" aria-hidden="true" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); onConnectorStart?.(event) }}/>: null}
     {selecting ? <span className="gptb-select-element-node" aria-hidden="true">{selected ? '✓' : '+'}</span> : null}
     <span className={`gptb-element-icon is-${element.category}`}><Icon size={16}/></span>
     <span><strong>{label}</strong><small>{instance?.configured ? element.label : `${element.label} · Not fully configured`}</small></span>
