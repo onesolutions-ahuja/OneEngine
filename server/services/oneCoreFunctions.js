@@ -29,7 +29,8 @@ async function applyAuth(headers, authType, credentials, { connectionId = null, 
     const auth = (Array.isArray(operations) ? operations : []).find((entry) => entry?.key === "oauth_client_credentials") || {};
     const clientId = credentials?.clientId || credentials?.client_id;
     const clientSecret = credentials?.clientSecret || credentials?.client_secret;
-    const tokenUrl = auth.tokenUrls?.[configuration?.environment] || auth.tokenUrl;\n    if (!clientId || !clientSecret || !tokenUrl) throw new Error("Provider connection is missing OAuth client credentials metadata");
+    const tokenUrl = auth.tokenUrls?.[configuration?.environment] || auth.tokenUrl;
+    if (!clientId || !clientSecret || !tokenUrl) throw new Error("Provider connection is missing OAuth client credentials metadata");
     const cacheKey = `${connectionId || "connection"}:${auth.scope || ""}`;
     let cached = OAUTH_CLIENT_CREDENTIALS_CACHE.get(cacheKey);
     if (!cached || cached.expiresAt <= Date.now() + 60000) {
