@@ -2140,7 +2140,7 @@ export function packageDefinition(entry) {
             credentialsSchema: [{ key: "token", type: "secret", required: true, label: "OAuth access token" }],
             operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/v1/eats/stores" }],
           },
-          whatsapp_connector: {
+          whatsapp: {
             authType: "bearer",
             baseUrl: "https://graph.facebook.com/v21.0",
             credentialsSchema: [{ key: "token", type: "secret", required: true, label: "Meta access token" }],

@@ -3372,7 +3372,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         // Backfill pre-metadata WhatsApp settings once, so existing tenants do
         // not need to re-enter credentials after moving transport to ONE_HTTP_REQUEST.
         const existingConnection = await db(
-          "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)='whatsapp_connector' AND enabled=TRUE LIMIT 1",
+          "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)='whatsapp' AND enabled=TRUE LIMIT 1",
           [tenantId]
         );
         if (!existingConnection.rows?.length) {
@@ -3381,7 +3381,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             [tenantId]
           );
           const definition = await db(
-            "SELECT id FROM platform_connector_definitions WHERE connector_key='whatsapp_connector' AND status='ACTIVE' LIMIT 1"
+            "SELECT id FROM platform_connector_definitions WHERE connector_key='whatsapp' AND status='ACTIVE' LIMIT 1"
           );
           const configuration = legacy.rows?.[0]?.configuration || {};
           const token = decryptSecret(configuration.access_token);
@@ -3390,7 +3390,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             await db(
               `INSERT INTO integration_connections
                 (company_id,name,provider_name,integration_type,base_url,connector_package_key,connector_definition_id,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by)
-               VALUES ($1,'WhatsApp Business Connection','whatsapp_connector','communication','https://graph.facebook.com/v21.0','whatsapp_connector',$2,$3::jsonb,'bearer',$4,TRUE,'CONNECTED',$5)`,
+               VALUES ($1,'WhatsApp Business Connection','whatsapp','communication','https://graph.facebook.com/v21.0','whatsapp',$2,$3::jsonb,'bearer',$4,TRUE,'CONNECTED',$5)`,
               [tenantId, definition.rows[0].id, JSON.stringify({
                 phoneNumberId,
                 businessAccountId: configuration.business_account_id || null,
@@ -3408,7 +3408,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           ...context,
           companyId: tenantId,
           action: {
-            providerKey: "whatsapp_connector",
+            providerKey: "whatsapp",
             method: "POST",
             endpoint: "/{{phoneNumberId}}/messages",
             body: {
@@ -3436,7 +3436,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           channel: "WHATSAPP",
           eventType: COMMUNICATION_EVENTS.SENT,
           direction: "OUTBOUND",
-          provider: "whatsapp_connector",
+          provider: "whatsapp",
           recipient,
           objectId: forwarded.objectId || null,
           recordId: forwarded.recordId || null,
@@ -3450,7 +3450,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return {
           status: "completed",
           channel: "WHATSAPP",
-          provider: "whatsapp_connector",
+          provider: "whatsapp",
           statusCode: result.statusCode,
           reference: result?.data?.messages?.[0]?.id || null,
         };

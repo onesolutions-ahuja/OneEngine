@@ -220,3 +220,19 @@ test("generic Send Communication supports in-app notifications", async () => {
 test("appointment-specific communication sender is removed from executable registry", () => {
   assert.equal(getWorkflowActionDefinition("SEND_APPOINTMENT_MESSAGE"), null);
 });
+
+
+test("WhatsApp SEND_COMMUNICATION uses canonical provider metadata and generic HTTP core", () => {
+  const whatsapp = packageDefinitions().find((definition) => definition.packageKey === "whatsapp");
+  assert.ok(whatsapp, "WhatsApp package must exist");
+  const connector = whatsapp.manifest.connectors?.find((item) => item.connectorKey === "whatsapp");
+  assert.ok(connector, "WhatsApp package must provision its canonical provider metadata");
+  assert.equal(connector.authType, "bearer");
+  assert.match(connector.baseUrl, /^https:\/\/graph\.facebook\.com\//);
+
+  const source = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
+  const sendCommunication = source.slice(source.indexOf('key: "SEND_COMMUNICATION"'), source.indexOf('key: "IN_APP_NOTIFICATION"'));
+  assert.match(sendCommunication, /providerKey:\s*"whatsapp"/);
+  assert.match(sendCommunication, /oneHttpRequestDefinition/);
+  assert.doesNotMatch(sendCommunication, /SEND_WHATSAPP/);
+});
