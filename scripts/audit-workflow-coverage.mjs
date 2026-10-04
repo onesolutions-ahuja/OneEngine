@@ -44,9 +44,7 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
     const createsRun = /\bcreateWorkflowRun\s*\(/.test(body);
     const executesWorkflow = /\bexecuteWorkflowActions?\s*\(/.test(body);
     const executesSystemWorkflow = /\bexecuteSystemWorkflow\s*\(/.test(body);
-    const executesRegisteredAction = /\bexecuteRegisteredAction\s*\(/.test(body);
     const ensuresBusinessCommand = /\bensureBusinessCommandRun\??\.\s*\(/.test(body);
-    const invokesFunctionRegistry = /\b(?:getRegisteredFunction|executePlatformFunction)\b/.test(body);
     const authenticated = routerLevelAuth
       || /\bauthenticate\b/.test(body)
       || authAliases.some((alias) => new RegExp("\\.\\.\\." + alias + "\\b|\\b" + alias + "\\b").test(body));
@@ -61,10 +59,8 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
       createsRun,
       executesWorkflow,
       executesSystemWorkflow,
-      executesRegisteredAction,
       ensuresBusinessCommand,
       gatewayMediated,
-      invokesFunctionRegistry,
       authenticated,
       globalGatewayCovered: globalGatewayEnabled && authenticated,
     };
