@@ -1,0 +1,43 @@
+name: Validate Generic Print
+
+on:
+  push:
+    branches:
+      - audit/generic-print-20261004
+    paths:
+      - ".github/workflows/validate-generic-print.yml"
+      - "server/services/platformWorkflow.js"
+      - "server/routes/kiosk.js"
+      - "server/services/platformMetadata.js"
+      - "server/database/init.js"
+      - "tests/genericPrint.test.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/generic-print-20261004
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Syntax
+        run: |
+          node --check server/services/platformWorkflow.js
+          node --check server/routes/kiosk.js
+          node --check server/services/platformMetadata.js
+          node --check server/database/init.js
+      - name: Tests
+        run: |
+          node --test tests/genericPrint.test.mjs
+          node --test tests/workflowBuilderRegistryVisibility.test.mjs
+          node --test tests/appointmentWorkflow.test.mjs
+      - name: Build
+        run: npm run build
