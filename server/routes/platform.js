@@ -1516,98 +1516,32 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     });
   });
 
-  router.get("/platform/objects/:objectId/registered-actions", ...manage, async (req, res) => {
-    const result = await db(`SELECT * FROM platform_registered_actions WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true ORDER BY label`, [req.params.objectId, req.user.companyId]);
-    res.json({ success: true, data: result.rows });
+  router.get("/platform/objects/:objectId/registered-actions", ...manage, async (_req, res) => {
+    res.json({ success: true, data: [] });
   });
 
-  async function registeredActionDeactivationBlockers(action, req) {
-    const [buttons, bindings] = await Promise.all([
-      db(
-        "SELECT COUNT(*)::int AS count FROM platform_buttons WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true AND target_type='action' AND COALESCE(target_key,action_key)=$3",
-        [action.object_id, req.user.companyId, action.action_key]
-      ),
-      db(
-        "SELECT COUNT(*)::int AS count FROM platform_action_bindings WHERE object_id=$1 AND (company_id IS NULL OR company_id=$2) AND active=true AND action_key=$3",
-        [action.object_id, req.user.companyId, action.action_key]
-      ),
-    ]);
-    const blockers = [];
-    const buttonCount = Number(buttons.rows[0]?.count || 0);
-    const bindingCount = Number(bindings.rows[0]?.count || 0);
-    if (buttonCount) blockers.push(`${buttonCount} button${buttonCount === 1 ? "" : "s"}`);
-    if (bindingCount) blockers.push(`${bindingCount} action binding${bindingCount === 1 ? "" : "s"}`);
-    return blockers;
-  }
-
-  router.post("/platform/objects/:objectId/registered-actions", ...manage, async (req, res) => {
-    const actionKey = String(req.body?.actionKey || req.body?.action_key || "").trim();
-    const handlerKey = String(req.body?.handlerKey || req.body?.handler_key || "").trim();
-    const label = String(req.body?.label || "").trim();
-    if (!actionKey || !handlerKey || !label) return res.status(400).json({ success: false, message: "actionKey, handlerKey and label are required" });
-    if (!listRegisteredPlatformActions().some((item) => item.key === handlerKey)) return res.status(400).json({ success: false, code: "UNREGISTERED_HANDLER", message: "Custom actions must use a registered handler" });
-    const result = await db(`INSERT INTO platform_registered_actions (company_id,object_id,action_key,label,description,handler_key,required_permission,config) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb) RETURNING *`, [req.user.companyId, req.params.objectId, actionKey, label, req.body?.description || null, handlerKey, req.body?.requiredPermission || null, JSON.stringify(req.body?.config || {})]);
-    res.status(201).json({ success: true, data: result.rows[0] });
+  router.post("/platform/objects/:objectId/registered-actions", ...manage, async (_req, res) => {
+    res.status(410).json({
+      success: false,
+      code: "CUSTOM_ACTIONS_DISABLED",
+      message: "Custom actions are disabled. Use a ONE-* Flow or an approved core function.",
+    });
   });
 
-  router.put("/platform/objects/:objectId/registered-actions/:actionId", ...manage, async (req, res) => {
-    const existing = await db(
-      "SELECT * FROM platform_registered_actions WHERE id=$1 AND object_id=$2 AND company_id=$3",
-      [req.params.actionId, req.params.objectId, req.user.companyId]
-    );
-    if (!existing.rows.length) return res.status(404).json({ success: false, message: "Registered action not found" });
-
-    const old = existing.rows[0];
-    const actionKey = String(req.body?.actionKey ?? req.body?.action_key ?? old.action_key).trim();
-    const handlerKey = String(req.body?.handlerKey ?? req.body?.handler_key ?? old.handler_key).trim();
-    const label = String(req.body?.label ?? old.label).trim();
-    const active = req.body?.active === undefined ? old.active !== false : req.body.active === true;
-
-    if (!actionKey || !handlerKey || !label) {
-      return res.status(400).json({ success: false, message: "actionKey, handlerKey and label are required" });
-    }
-    if (!listRegisteredPlatformActions().some((item) => item.key === handlerKey)) {
-      return res.status(400).json({ success: false, code: "UNREGISTERED_HANDLER", message: "Custom actions must use a registered handler" });
-    }
-
-    const result = await db(
-      `UPDATE platform_registered_actions
-          SET action_key=$1,label=$2,description=$3,handler_key=$4,required_permission=$5,
-              config=$6::jsonb,active=$7,user_modified=true,updated_at=NOW()
-        WHERE id=$8 AND object_id=$9 AND company_id=$10
-        RETURNING *`,
-      [actionKey, label, req.body?.description ?? old.description, handlerKey,
-        req.body?.requiredPermission ?? req.body?.required_permission ?? old.required_permission,
-        JSON.stringify(req.body?.config ?? old.config ?? {}), active,
-        old.id, req.params.objectId, req.user.companyId]
-    );
-    res.json({ success: true, data: result.rows[0] });
+  router.put("/platform/objects/:objectId/registered-actions/:actionId", ...manage, async (_req, res) => {
+    res.status(410).json({
+      success: false,
+      code: "CUSTOM_ACTIONS_DISABLED",
+      message: "Custom actions are disabled. Use a ONE-* Flow or an approved core function.",
+    });
   });
 
-  router.delete("/platform/objects/:objectId/registered-actions/:actionId", ...manage, async (req, res) => {
-    const existing = await db(
-      "SELECT * FROM platform_registered_actions WHERE id=$1 AND object_id=$2 AND company_id=$3",
-      [req.params.actionId, req.params.objectId, req.user.companyId]
-    );
-    const action = existing.rows[0];
-    if (!action) return res.status(404).json({ success: false, message: "Registered action not found" });
-    const blockers = await registeredActionDeactivationBlockers(action, req);
-    if (blockers.length) {
-      return res.status(409).json({
-        success: false,
-        code: "ACTION_IN_USE",
-        message: `Action cannot be deactivated while it is used by ${blockers.join(", ")}.`,
-        blockers,
-      });
-    }
-    const result = await db(
-      `UPDATE platform_registered_actions
-          SET active=false,user_modified=true,updated_at=NOW()
-        WHERE id=$1 AND object_id=$2 AND company_id=$3
-        RETURNING id`,
-      [action.id, req.params.objectId, req.user.companyId]
-    );
-    res.json({ success: true, data: result.rows[0] });
+  router.delete("/platform/objects/:objectId/registered-actions/:actionId", ...manage, async (_req, res) => {
+    res.status(410).json({
+      success: false,
+      code: "CUSTOM_ACTIONS_DISABLED",
+      message: "Custom actions are disabled. Use a ONE-* Flow or an approved core function.",
+    });
   });
 
   router.get("/platform/button-variants", ...manage, (req, res) => {
