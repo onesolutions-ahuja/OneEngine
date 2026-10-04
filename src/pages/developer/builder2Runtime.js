@@ -23,12 +23,39 @@ export function nativeRuntimeAction(node, resources = []) {
     sortDirection: p.sortOrder === 'none' ? undefined : p.sortOrder,
     limit: p.limit === 'all' ? 200 : p.limit === 'limited' ? Number(p.maxRecords) : 1,
     store: !p.limit || p.limit === 'first' ? 'first' : 'all' }
-  if (['CREATE_RECORDS', 'UPDATE_RECORDS'].includes(node.type)) {
-    if (p.valueMode && p.valueMode !== 'manual') throw new Error(`${node.label}: use field mappings to create this record`)
-    if (node.type === 'UPDATE_RECORDS' && !p.recordId) throw new Error(`${node.label}: choose the record ID to update`)
-    return { ...base, key: node.type === 'CREATE_RECORDS' ? 'CREATE_RECORD' : 'UPDATE_RECORD', objectKey: p.objectKey,
-      ...(p.recordId ? { recordId: configuredValue(p.recordId) } : {}),
+  if (node.type === 'CREATE_RECORDS') {
+    const valueMode = p.valueMode || 'manual'
+    if (valueMode === 'record') {
+      if (!p.sourceRecord) throw new Error(`${node.label}: choose the record resource to create`)
+      return { ...base, key: 'CREATE_RECORD', objectKey: p.objectKey, sourceRecord: configuredValue(p.sourceRecord) }
+    }
+    if (valueMode === 'collection') {
+      if (!p.sourceRecord) throw new Error(`${node.label}: choose the record collection to create`)
+      return { ...base, key: 'CREATE_RECORD', objectKey: p.objectKey, sourceRecords: configuredValue(p.sourceRecord) }
+    }
+    return { ...base, key: 'CREATE_RECORD', objectKey: p.objectKey,
       fieldValues: Object.fromEntries((p.fieldValues || []).filter(row => row.field).map(row => [row.field, configuredValue(row.value)])) }
+  }
+  if (node.type === 'UPDATE_RECORDS') {
+    const fieldValues = Object.fromEntries((p.fieldValues || []).filter(row => row.field).map(row => [row.field, configuredValue(row.value)]))
+    if (p.recordId) return { ...base, key: 'UPDATE_RECORD', objectKey: p.objectKey, recordId: configuredValue(p.recordId), fieldValues }
+    if ((p.updateMode || 'conditions') === 'record') {
+      if (!p.sourceRecord) throw new Error(`${node.label}: choose a record or record collection to update`)
+      return { ...base, key: 'BULK_UPDATE_RECORDS', objectKey: p.objectKey, records: configuredValue(p.sourceRecord) }
+    }
+    return { ...base, key: 'BULK_UPDATE_RECORDS', objectKey: p.objectKey,
+      filters: p.conditionLogic === 'none' ? [] : (p.conditions || []).filter(c => c.resource || c.field).map(runtimeCondition),
+      match: p.conditionLogic === 'any' ? 'any' : 'all', fieldValues }
+  }
+  if (node.type === 'DELETE_RECORDS') {
+    if (p.recordId) return { ...base, key: 'DELETE_RECORD', objectKey: p.objectKey, recordId: configuredValue(p.recordId) }
+    if ((p.deleteMode || 'conditions') === 'record') {
+      if (!p.sourceRecord) throw new Error(`${node.label}: choose a record or record collection to delete`)
+      return { ...base, key: 'DELETE_RECORD', objectKey: p.objectKey, records: configuredValue(p.sourceRecord) }
+    }
+    return { ...base, key: 'DELETE_RECORD', objectKey: p.objectKey,
+      filters: p.conditionLogic === 'none' ? [] : (p.conditions || []).filter(c => c.resource || c.field).map(runtimeCondition),
+      match: p.conditionLogic === 'any' ? 'any' : 'all' }
   }
   if (node.type === 'ASSIGNMENT') return { ...base, key: 'ASSIGNMENT', variableName: String(p.resource || '').replace(/^variables\./, ''),
     variableType: String(resources.find(r => r.value === p.resource)?.dataType || 'text').toLowerCase(),
