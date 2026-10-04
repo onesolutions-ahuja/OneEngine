@@ -2301,15 +2301,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         itemVariable: { type: "string" },
         iterationOrder: { type: "string", enum: ["FIRST_TO_LAST","LAST_TO_FIRST"] },
         bodyBranch: { type: "array" },
+        itemType: { type: "string" },
+        itemObjectKey: { type: "string" },
       },
-      required: ["collection","itemVariable","bodyBranch"],
+      required: ["collection","itemVariable"],
     },
     validation: (action) => {
       if (!action?.collection) throw new Error("Loop requires a collection resource");
       if (!action?.itemVariable || !/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(action.itemVariable))) {
         throw new Error("Loop requires a valid current item variable name");
       }
-      if (!Array.isArray(action.bodyBranch) || !action.bodyBranch.length) throw new Error("Loop requires at least one body step");
+      if (action.bodyBranch !== undefined && !Array.isArray(action.bodyBranch)) throw new Error("Loop body branch must be a list");
       if (action?.iterationOrder && !["FIRST_TO_LAST","LAST_TO_FIRST"].includes(String(action.iterationOrder).toUpperCase())) {
         throw new Error("Loop iteration order must be FIRST_TO_LAST or LAST_TO_FIRST");
       }
@@ -2320,11 +2322,16 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const collection = resolveConfiguredResource(action.collection, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
       if (!Array.isArray(collection)) throw new Error("Loop collection must resolve to a collection");
       if (collection.length > 500) throw new Error("Loop collection exceeds the maximum of 500 items");
+      const orderedCollection = String(action.iterationOrder || "FIRST_TO_LAST").toUpperCase() === "LAST_TO_FIRST"
+        ? [...collection].reverse()
+        : collection;
       return {
         status: "completed",
         itemVariable: String(action.itemVariable),
-        count: collection.length,
-        collection,
+        itemType: action.itemType || null,
+        itemObjectKey: action.itemObjectKey || null,
+        count: orderedCollection.length,
+        collection: orderedCollection,
       };
     },
   },
