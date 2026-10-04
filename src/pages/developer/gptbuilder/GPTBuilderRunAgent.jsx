@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { apiRequest } from '../../../services/api'
 import { Plus, Trash2 } from 'lucide-react'
 
 const uid = (prefix='agent') => globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -34,6 +35,7 @@ export function runAgentConfigErrors(config = {}, resources = []) {
     if (!String(c.createdAgent.label || '').trim()) errors.push('New Agent: enter a Label.')
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(String(c.createdAgent.apiName || '')) || String(c.createdAgent.apiName || '').endsWith('_') || String(c.createdAgent.apiName || '').includes('__')) errors.push('New Agent: enter a valid API Name.')
     if (!String(c.createdAgent.instructions || '').trim()) errors.push('New Agent: enter Instructions.')
+    if (!Array.isArray(c.createdAgent.actions) || !c.createdAgent.actions.length) errors.push('New Agent: add at least one action before Create & Activate.')
   }
   if (c.requestMode === 'resource') {
     if (!resources.some((resource)=>resourcePath(resource)===c.request && resource.isCollection!==true)) errors.push('Select an Agent Request resource.')
@@ -47,7 +49,7 @@ export function runAgentConfigErrors(config = {}, resources = []) {
       if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) errors.push(`Structured output ${index+1}: enter a valid field name.`)
       if (names.has(name.toLowerCase())) errors.push(`Structured output ${index+1}: field names must be unique.`)
       names.add(name.toLowerCase())
-      if (!['text','number','boolean','date','datetime'].includes(field.dataType)) errors.push(`Structured output ${index+1}: select a data type.`)
+      if (!['text','number','boolean'].includes(field.dataType)) errors.push(`Structured output ${index+1}: select String, Number, or Boolean.`)
     })
   }
   return errors
@@ -66,7 +68,7 @@ export function runAgentRuntimeAction(instance) {
     agentDefinition: c.agentMode==='create'?c.createdAgent:undefined,
     agentPrompt: c.requestMode==='resource'?{path:c.request}:c.request,
     sessionId: c.sessionIdMode==='resource'?{path:c.sessionId}:undefined,
-    structuredOutput: structuredFields.map((field)=>({name:field.name,dataType:field.dataType,description:field.description||''})),
+    structuredOutput: structuredFields.map((field)=>({name:field.name,dataType:field.dataType,description:field.description||'',required:field.required===true})),
     agentResponseVariable: `${instance.apiName}_AgentResponse`,
     agentSessionVariable: `${instance.apiName}_SessionId`,
     structuredResponseVariable: `${instance.apiName}_StructuredAgentResponse`,
@@ -82,6 +84,16 @@ function apiNameFromLabel(label){
 
 export default function GPTBuilderRunAgent({ draft, updateConfig, resources = [], onConfiguredChange }) {
   const config=normalizeRunAgentConfig(draft.config)
+  const [availableActions,setAvailableActions]=useState([])
+  const [actionQuery,setActionQuery]=useState('')
+  useEffect(()=>{
+    let live=true
+    apiRequest('/api/platform/workflow-actions').then((response)=>{
+      if(!live)return
+      setAvailableActions((Array.isArray(response?.data)?response.data:[]).filter((action)=>action?.builderVisible!==false && !['RUN_AGENT','SCREEN'].includes(action.key)))
+    }).catch(()=>{if(live)setAvailableActions([])})
+    return()=>{live=false}
+  },[])
   const errors=useMemo(()=>runAgentConfigErrors(config,resources),[JSON.stringify(config),JSON.stringify(resources)])
   useEffect(()=>{onConfiguredChange?.(errors.length===0,errors)},[JSON.stringify(errors)])
   const patch=(changes)=>updateConfig({...config,...changes})
@@ -100,7 +112,8 @@ export default function GPTBuilderRunAgent({ draft, updateConfig, resources = []
         <label><span>Description</span><textarea rows={2} value={config.createdAgent.description} onChange={(event)=>patchCreated({description:event.target.value})}/></label>
         <label><span>User Access</span><input value={config.createdAgent.userAccess} onChange={(event)=>patchCreated({userAccess:event.target.value})} placeholder="Running user or agent user"/></label>
         <label><span>Instructions <b>*</b></span><textarea rows={5} value={config.createdAgent.instructions} onChange={(event)=>patchCreated({instructions:event.target.value})} placeholder="Describe what the agent does and how it should reason."/></label>
-        <small>Create & Activate is represented in the flow metadata when this element is saved.</small>
+        <div className="gptb-agent-actions"><h4>Actions <b>*</b></h4><input value={actionQuery} onChange={(event)=>setActionQuery(event.target.value)} placeholder="Search actions..."/><div>{availableActions.filter((action)=>!actionQuery.trim()||`${action.displayName||''} ${action.key||''}`.toLowerCase().includes(actionQuery.trim().toLowerCase())).slice(0,40).map((action)=><label className="gptb-properties-check" key={action.key}><input type="checkbox" checked={config.createdAgent.actions.includes(action.key)} onChange={(event)=>patchCreated({actions:event.target.checked?[...config.createdAgent.actions,action.key]:config.createdAgent.actions.filter((key)=>key!==action.key)})}/><span><b>{action.displayName||action.key}</b><small>{action.description||action.key}</small></span></label>)}</div></div>
+        <small>Create & Activate requires at least one action. The selected actions become the agent's tool set.</small>
       </div>}
     </section>
 
@@ -113,7 +126,7 @@ export default function GPTBuilderRunAgent({ draft, updateConfig, resources = []
 
     <section><h3>Configure Structured Output</h3>
       <label className="gptb-properties-check"><input type="checkbox" checked={config.structuredEnabled} onChange={(event)=>patch({structuredEnabled:event.target.checked})}/><span>Return structured agent response</span></label>
-      {config.structuredEnabled?<><div className="gptb-agent-structured-list">{config.structuredFields.map((field,index)=><div key={field.id}><span>{index+1}</span><input value={field.name||''} onChange={(event)=>patch({structuredFields:config.structuredFields.map((item)=>item.id===field.id?{...item,name:event.target.value}:item)})} placeholder="Field name"/><select value={field.dataType||'text'} onChange={(event)=>patch({structuredFields:config.structuredFields.map((item)=>item.id===field.id?{...item,dataType:event.target.value}:item)})}><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option></select><input value={field.description||''} onChange={(event)=>patch({structuredFields:config.structuredFields.map((item)=>item.id===field.id?{...item,description:event.target.value}:item)})} placeholder="Description"/><button type="button" aria-label={`Remove structured output ${index+1}`} onClick={()=>patch({structuredFields:config.structuredFields.filter((item)=>item.id!==field.id)})}><Trash2 size={13}/></button></div>)}</div><button type="button" className="gptb-inline-action" onClick={()=>patch({structuredFields:[...config.structuredFields,{id:uid('field'),name:'',dataType:'text',description:''}]})}><Plus size={13}/> Add Structured Output Field</button><small>Each field also exposes a related Boolean <code>_set</code> flag at runtime.</small></>:null}
+      {config.structuredEnabled?<><div className="gptb-agent-structured-list">{config.structuredFields.map((field,index)=><div key={field.id}><span>{index+1}</span><input value={field.name||''} onChange={(event)=>patch({structuredFields:config.structuredFields.map((item)=>item.id===field.id?{...item,name:event.target.value}:item)})} placeholder="Field name"/><select value={field.dataType||'text'} onChange={(event)=>patch({structuredFields:config.structuredFields.map((item)=>item.id===field.id?{...item,dataType:event.target.value}:item)})}><option value="text">String</option><option value="number">Number</option><option value="boolean">Boolean</option></select><input value={field.description||''} onChange={(event)=>patch({structuredFields:config.structuredFields.map((item)=>item.id===field.id?{...item,description:event.target.value}:item)})} placeholder="Description"/><label className="gptb-agent-required"><input type="checkbox" checked={field.required===true} onChange={(event)=>patch({structuredFields:config.structuredFields.map((item)=>item.id===field.id?{...item,required:event.target.checked}:item)})}/><span>Required</span></label><button type="button" aria-label={`Remove structured output ${index+1}`} onClick={()=>patch({structuredFields:config.structuredFields.filter((item)=>item.id!==field.id)})}><Trash2 size={13}/></button></div>)}</div><button type="button" className="gptb-inline-action" onClick={()=>patch({structuredFields:[...config.structuredFields,{id:uid('field'),name:'',dataType:'text',description:'',required:false}]})}><Plus size={13}/> Add Structured Output Field</button><small>Valid data types are String, Number, and Boolean. Each field also exposes a related Boolean <code>_set</code> flag at runtime.</small></>:null}
     </section>
 
     <section><h3>Outputs</h3><dl className="gptb-agent-outputs"><div><dt>Agent Response</dt><dd>{draft.apiName}_AgentResponse</dd></div><div><dt>Session ID</dt><dd>{draft.apiName}_SessionId</dd></div><div><dt>Structured Agent Response</dt><dd>{draft.apiName}_StructuredAgentResponse</dd></div></dl></section>
