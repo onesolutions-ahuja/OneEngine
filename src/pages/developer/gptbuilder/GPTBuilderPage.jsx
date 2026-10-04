@@ -13,7 +13,7 @@ import GPTBuilderElementProperties, {
 } from './GPTBuilderElementProperties'
 import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRecords'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
-import GPTBuilderFormulaBuilder from './GPTBuilderFormulaBuilder'
+import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import './GPTBuilderPage.css'
 
 const FLOW_CATEGORIES = [
@@ -194,9 +194,71 @@ function ConditionsEditor({ object, value, onChange, allowIsChanged = false, cus
   </div>
 }
 
+function validateStartConditionLogic(logic, count) {
+  const text = String(logic || '').trim()
+  if (!text) return 'Enter condition logic.'
+  const tokens = text.match(/\d+|AND|OR|NOT|\(|\)/gi) || []
+  if (!tokens.length || tokens.join('').toUpperCase() !== text.replace(/\s+/g, '').toUpperCase()) return 'Enter valid condition logic.'
+  const refs = tokens.filter((token) => /^\d+$/.test(token)).map(Number)
+  if (!refs.length || refs.some((number) => number < 1 || number > count)) return 'Condition logic references a condition that isn’t available.'
+  let depth = 0
+  for (const token of tokens) {
+    if (token === '(') depth += 1
+    if (token === ')') depth -= 1
+    if (depth < 0) return 'Condition logic has unmatched parentheses.'
+  }
+  return depth === 0 ? '' : 'Condition logic has unmatched parentheses.'
+}
+
+function startConfigurationErrors(flowType, value) {
+  const errors = []
+  if (flowType === 'record') {
+    if (!value.objectKey) errors.push('Select an object.')
+    if (!value.trigger) errors.push('Select when the flow is triggered.')
+    if (value.conditionMode === 'formula') {
+      const error = basicFormulaCheck(value.formula)
+      if (error) errors.push(error)
+    } else if (value.conditionMode !== 'none') {
+      if (!(value.conditions || []).length) errors.push('Add at least one entry condition.')
+      ;(value.conditions || []).forEach((row, index) => {
+        if (!row.field) errors.push(`Condition ${index + 1}: select a field.`)
+        if (!row.operator) errors.push(`Condition ${index + 1}: select an operator.`)
+        if (!['is_empty', 'changed'].includes(row.operator) && (row.value === '' || row.value == null)) errors.push(`Condition ${index + 1}: enter a value.`)
+      })
+      if (value.conditionMode === 'custom') {
+        const error = validateStartConditionLogic(value.customConditionLogic, (value.conditions || []).length)
+        if (error) errors.push(error)
+      }
+    }
+    if (value.trigger !== 'deleted' && !['fast','actions'].includes(value.optimize)) errors.push('Select how to optimize the flow.')
+  }
+  if (flowType === 'schedule') {
+    if (!value.startDate) errors.push('Enter a start date.')
+    if (!value.startTime) errors.push('Enter a start time.')
+    if (!['Once','Daily','Weekly'].includes(value.frequency || 'Daily')) errors.push('Select a supported frequency.')
+    const batchSize = Number(value.batchSize ?? 200)
+    if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 200) errors.push('Batch Size must be from 1 through 200.')
+    if (value.objectKey && value.conditionMode !== 'none') {
+      if (!(value.conditions || []).length) errors.push('Add at least one entry condition.')
+      if (value.conditionMode === 'custom') {
+        const error = validateStartConditionLogic(value.customConditionLogic, (value.conditions || []).length)
+        if (error) errors.push(error)
+      }
+    }
+  }
+  if (flowType === 'platform_event' && !value.eventKey) errors.push('Select a platform event.')
+  return errors
+}
+
 function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, onCancel }) {
+  const [attemptedDone, setAttemptedDone] = useState(false)
   const selectedObject = objects.find((item) => objectKey(item) === value.objectKey)
   const showUpdateMode = flowType === 'record' && ['updated', 'created_or_updated'].includes(value.trigger) && value.conditionMode !== 'none'
+  const errors = startConfigurationErrors(flowType, value)
+  const finish = () => {
+    setAttemptedDone(true)
+    if (!errors.length) onDone()
+  }
   return <aside className="gptb-config-panel" aria-label="Configure Start">
     <header><div><strong>{flowType === 'schedule' ? 'Set a Schedule' : flowType === 'platform_event' ? 'Configure Start' : 'Configure Start'}</strong><small>{FLOW_TYPES.find((item) => item.key === flowType)?.label}</small></div><button className="gptb-icon-button" aria-label="Close Start configuration" onClick={onCancel}><X size={16}/></button></header>
     <div className="gptb-config-body">
@@ -214,7 +276,8 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
       </> : null}
       {flowType === 'platform_event' ? <section><h3>Select Platform Event</h3><label>Platform Event<select value={value.eventKey || ''} onChange={(event) => onChange({ ...value, eventKey: event.target.value })}><option value="">Select an event</option>{eventTypes.map((item) => <option key={item.event_type} value={item.event_type}>{item.event_type}</option>)}</select></label>{value.eventKey ? <p className="gptb-help-text">{eventTypes.find((item) => item.event_type === value.eventKey)?.description || 'The flow runs when this event message is received.'}</p> : null}</section> : null}
     </div>
-    <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" onClick={onDone}>Done</button></footer>
+    {attemptedDone && errors.length ? <div className="gptb-start-errors" role="alert"><AlertTriangle size={14}/><span>{errors.map((error) => <small key={error}>{error}</small>)}</span></div> : null}
+    <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" onClick={finish}>Done</button></footer>
   </aside>
 }
 
