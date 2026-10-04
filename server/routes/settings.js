@@ -1318,10 +1318,10 @@ export default function createSettingsRouter({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
-          systemKey: "action:UBER_GET_STORES",
+          systemKey: "action:RUN_SUBFLOW",
           req,
-          input: {},
-          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "UBER_GET_STORES" },
+          input: { subflowApiName: "GPT_UBER_EATS_GET_STORES" },
+          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "RUN_SUBFLOW" },
         });
         const discovery = discoveryExecution.result;
         const stores = Array.isArray(discovery?.data?.stores)
