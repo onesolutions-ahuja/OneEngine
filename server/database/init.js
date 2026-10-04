@@ -8,6 +8,8 @@ import { backfillLegacyRuleFieldReferences } from "../services/platformRuleRefer
 import { oneAssistantSchema } from "../services/oneAssistant.js";
 import { packageDefinitions } from "../services/packageRegistry.js";
 import { platformSchema } from "../services/platformMetadata.js";
+import { encryptCredentials } from "../services/integrationCredentials.js";
+import { decryptSecret } from "../services/secretCrypto.js";
 
 export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
