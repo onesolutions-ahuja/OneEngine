@@ -262,9 +262,11 @@ CREATE TABLE IF NOT EXISTS platform_event_types (
   event_type VARCHAR(200) PRIMARY KEY,
   description TEXT,
   source_package_id UUID REFERENCES package_registry(id) ON DELETE SET NULL,
+  field_schema JSONB NOT NULL DEFAULT '[]'::jsonb,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE platform_event_types ADD COLUMN IF NOT EXISTS field_schema JSONB NOT NULL DEFAULT '[]'::jsonb;
 INSERT INTO platform_event_types(event_type,description,active)
 VALUES
   ('platform.object.record.created','A Platform Object record was created.',TRUE),
