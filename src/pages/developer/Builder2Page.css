@@ -206,3 +206,31 @@
   .b2-workspace.toolbox-closed{grid-template-columns:minmax(430px,1fr) 320px}
   .b2-start-panel{right:320px;width:390px}
 }
+
+.b2-group-header{width:260px;margin:2px 0 5px}
+.b2-group-header>button{
+  width:100%;
+  min-height:46px;
+  display:grid;
+  grid-template-columns:20px 1fr auto;
+  align-items:center;
+  gap:7px;
+  border:1px solid #9050e9;
+  border-radius:7px;
+  background:#fff;
+  padding:7px 9px;
+  text-align:left;
+  box-shadow:0 1px 2px rgba(0,0,0,.06);
+}
+.b2-group-header>button:hover{background:#faf7ff}
+.b2-group-header>button>span:nth-child(2){display:grid;gap:1px}
+.b2-group-header b{font-size:11px;font-weight:650}
+.b2-group-header small{font-size:9px;color:#706e6b}
+.b2-path-controls{justify-content:center;gap:3px;padding:2px 0}
+.b2-path-controls button{
+  width:24px;height:24px;
+  display:grid;place-items:center;
+  border:0;border-radius:4px;
+  background:transparent;color:#526681;padding:0;
+}
+.b2-path-controls button:hover{background:#eef4ff;color:#0176d3}
