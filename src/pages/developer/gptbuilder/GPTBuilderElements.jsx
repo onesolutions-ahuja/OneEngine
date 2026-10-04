@@ -1,6 +1,6 @@
 import React from 'react'
 import {
-  ArrowUpDown, Boxes, CircleHelp, Clock3, Database, Filter, GitBranch,
+  ArrowUpDown, Boxes, CircleHelp, Clock3, Copy, Database, Filter, GitBranch,
   LayoutPanelLeft, ListChecks, Pencil, Plus, Repeat2, Search, Shuffle,
   Trash2, TriangleAlert, Workflow, X, Zap,
 } from 'lucide-react'
