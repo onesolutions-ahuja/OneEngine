@@ -116,60 +116,23 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     user = await pool.query(`INSERT INTO users (company_id,role_id,username,email,password_hash,full_name,active,must_change_password) VALUES ($1,$2,$3,$3,$4,$5,TRUE,TRUE) RETURNING id,password_hash,company_id`, [company.id,roleId,email,hash,name]);
   }
 
-  // Keep store access explicit and RBAC-consistent. The bootstrap user may be
-  // created after the store-access migration has already run, so reconcile its
-  // user_stores mappings on every startup instead of relying on a one-time
-  // migration. This is not a bypass: canAccessStore still checks user_stores.
-  await pool.query(
-    `INSERT INTO user_stores (user_id, store_id, active)
-     SELECT $1, s.id, TRUE
-       FROM stores s
-      WHERE s.company_id=$2
-        AND s.active=TRUE
-     ON CONFLICT (user_id,store_id)
-     DO UPDATE SET active=TRUE`,
-    [user.rows[0].id, company.id]
-  );
-
-  // Ensure the session has a valid default store while still allowing the
-  // normal active-store selector to switch among explicitly assigned stores.
+  // Legacy user_stores was intentionally removed. Keep only the user's
+  // default store pointer here; wider/multi-store access is metadata-driven.
   await pool.query(
     `UPDATE users u
-        SET store_id = (
-              SELECT us.store_id
-                FROM user_stores us
-                JOIN stores s ON s.id=us.store_id
-               WHERE us.user_id=u.id
-                 AND us.active=TRUE
-                 AND s.active=TRUE
-                 AND s.company_id=u.company_id
-               ORDER BY s.created_at ASC, s.id ASC
-               LIMIT 1
+        SET store_id = COALESCE(
+              (
+                SELECT s.id
+                  FROM stores s
+                 WHERE s.company_id=u.company_id
+                   AND s.active=TRUE
+                 ORDER BY s.created_at ASC, s.id ASC
+                 LIMIT 1
+              ),
+              u.store_id
             ),
             updated_at = NOW()
-      WHERE u.id=$1
-        AND EXISTS (
-          SELECT 1
-            FROM user_stores assigned
-            JOIN stores assigned_store ON assigned_store.id=assigned.store_id
-           WHERE assigned.user_id=u.id
-             AND assigned.active=TRUE
-             AND assigned_store.active=TRUE
-             AND assigned_store.company_id=u.company_id
-        )
-        AND (
-          u.store_id IS NULL
-          OR NOT EXISTS (
-            SELECT 1
-              FROM user_stores current_assignment
-              JOIN stores current_store ON current_store.id=current_assignment.store_id
-             WHERE current_assignment.user_id=u.id
-               AND current_assignment.store_id=u.store_id
-               AND current_assignment.active=TRUE
-               AND current_store.active=TRUE
-               AND current_store.company_id=u.company_id
-          )
-        )`,
+      WHERE u.id=$1`,
     [user.rows[0].id]
   );
 
