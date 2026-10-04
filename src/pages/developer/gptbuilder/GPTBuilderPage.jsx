@@ -14,6 +14,7 @@ import GPTBuilderElementProperties, {
 import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRecords'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
+import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
 import {
   GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
 } from './GPTBuilderSaveHistory'
@@ -113,83 +114,6 @@ function startSummary(flowType, start, objects) {
   return flowType === 'screen' ? 'Screen Flow' : 'No Trigger'
 }
 
-function NewAutomation({ onCreate, onClose }) {
-  const [step, setStep] = useState('source')
-  const [source, setSource] = useState('scratch')
-  const [category, setCategory] = useState('frequent')
-  const [selected, setSelected] = useState('record')
-  const [search, setSearch] = useState('')
-  const [templates, setTemplates] = useState([])
-  const [templateLoading, setTemplateLoading] = useState(false)
-  const [selectedTemplateId, setSelectedTemplateId] = useState('')
-  const rows = useMemo(() => {
-    const needle = search.trim().toLowerCase()
-    return FLOW_TYPES.filter((flow) => {
-      const inCategory = category === 'frequent' ? flow.featured : flow.category === category
-      return inCategory && (!needle || `${flow.label} ${flow.description}`.toLowerCase().includes(needle))
-    })
-  }, [category, search])
-
-  useEffect(() => {
-    let live = true
-    if (step !== 'template') return () => { live = false }
-    setTemplateLoading(true)
-    apiRequest('/api/platform/rules')
-      .then((response) => {
-        if (!live) return
-        const rows = (Array.isArray(response?.data) ? response.data : []).filter((item) => item?.action?.type === 'workflow' && item?.action?.isTemplate === true)
-        setTemplates(rows)
-        setSelectedTemplateId((current) => current || String(rows[0]?.id || ''))
-      })
-      .catch(() => { if (live) setTemplates([]) })
-      .finally(() => { if (live) setTemplateLoading(false) })
-    return () => { live = false }
-  }, [step])
-
-  const templateRows = useMemo(() => {
-    const needle = search.trim().toLowerCase()
-    return templates.filter((item) => !needle || `${item.name || ''} ${item.action?.apiName || ''} ${item.action?.description || ''}`.toLowerCase().includes(needle))
-  }, [templates, search])
-
-  if (step === 'source') return <div className="gptb-modal-backdrop">
-    <section className="gptb-new-automation" role="dialog" aria-modal="true" aria-labelledby="gptb-new-title">
-      <header className="gptb-new-head"><div><h2 id="gptb-new-title">New Automation</h2><p>How do you want to start?</p></div><button className="gptb-icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></header>
-      <div className="gptb-source-grid">
-        <button className={`gptb-source-card ${source === 'scratch' ? 'is-selected' : ''}`} onClick={() => setSource('scratch')}><span className="gptb-source-icon"><Plus size={21}/></span><strong>Start From Scratch</strong><span>Build a new automation from an empty canvas.</span><i>{source === 'scratch' ? '✓' : ''}</i></button>
-        <button className={`gptb-source-card ${source === 'template' ? 'is-selected' : ''}`} onClick={() => setSource('template')}><span className="gptb-source-icon"><Copy size={20}/></span><strong>Use a Template</strong><span>Start from a reusable automation template.</span><i>{source === 'template' ? '✓' : ''}</i></button>
-      </div>
-      <footer className="gptb-new-footer"><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" onClick={() => setStep(source === 'scratch' ? 'type' : 'template')}>Next</button></footer>
-    </section>
-  </div>
-
-  if (step === 'template') {
-    const selectedTemplate = templates.find((item) => String(item.id) === String(selectedTemplateId)) || null
-    return <div className="gptb-modal-backdrop">
-      <section className="gptb-new-automation gptb-template-dialog" role="dialog" aria-modal="true" aria-labelledby="gptb-template-title">
-        <header className="gptb-new-head"><div><h2 id="gptb-template-title">New Automation</h2><p>Use a Template</p></div><button className="gptb-icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></header>
-        <div className="gptb-template-body">
-          <label className="gptb-modal-search"><Search size={15}/><input value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search templates" placeholder="Search templates"/></label>
-          {templateLoading ? <div className="gptb-empty-template"><Copy size={30}/><strong>Loading templates…</strong></div> : templateRows.length ? <div className="gptb-template-list" role="listbox">{templateRows.map((item) => <button type="button" role="option" aria-selected={String(item.id) === String(selectedTemplateId)} className={String(item.id) === String(selectedTemplateId) ? 'is-selected' : ''} key={item.id} onClick={() => setSelectedTemplateId(String(item.id))}><span className="gptb-source-icon"><Copy size={18}/></span><span><b>{item.name}</b><small>{item.action?.description || item.action?.apiName || 'Flow Template'}</small><i>{FLOW_TYPES.find((type) => type.key === item.action?.flowType)?.label || item.action?.flowType || 'Flow'}</i></span></button>)}</div> : <div className="gptb-empty-template"><Copy size={30}/><strong>No templates available</strong><span>No published flow templates match your search.</span></div>}
-        </div>
-        <footer className="gptb-new-footer"><button className="gptb-button" onClick={() => { setSearch(''); setStep('source') }}><ChevronLeft size={14}/> Back</button><span className="gptb-footer-spacer"/><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!selectedTemplate} onClick={() => { const type = FLOW_TYPES.find((item) => item.key === selectedTemplate?.action?.flowType) || FLOW_TYPES.find((item) => item.key === 'autolaunched'); onCreate({ ...type, templateRule: selectedTemplate }) }}>Create</button></footer>
-      </section>
-    </div>
-  }
-
-  return <div className="gptb-modal-backdrop">
-    <section className="gptb-new-automation gptb-type-dialog" role="dialog" aria-modal="true" aria-labelledby="gptb-type-title">
-      <header className="gptb-new-head"><div><h2 id="gptb-type-title">New Automation</h2><p>Start From Scratch</p></div><button className="gptb-icon-button" aria-label="Close" onClick={onClose}><X size={18}/></button></header>
-      <div className="gptb-type-layout">
-        <aside className="gptb-type-categories">{FLOW_CATEGORIES.map((item) => <button key={item.key} className={category === item.key ? 'is-active' : ''} onClick={() => { setCategory(item.key); setSearch('') }}><span>{item.label}</span><ChevronRight size={14}/></button>)}</aside>
-        <div className="gptb-type-content">
-          <label className="gptb-modal-search"><Search size={15}/><input value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search automation types" placeholder="Search automation types"/></label>
-          <div className="gptb-type-grid">{rows.length ? rows.map((flow) => { const Icon = flow.icon; return <button key={flow.key} className={`gptb-type-card ${selected === flow.key ? 'is-selected' : ''}`} onClick={() => setSelected(flow.key)}><span className={`gptb-type-icon is-${flow.tone}`}><Icon size={21}/></span><span><strong>{flow.label}</strong><small>{flow.description}</small></span><i>{selected === flow.key ? '✓' : ''}</i></button> }) : <div className="gptb-no-results">No automation types match your search.</div>}</div>
-        </div>
-      </div>
-      <footer className="gptb-new-footer"><button className="gptb-button" onClick={() => setStep('source')}><ChevronLeft size={14}/> Back</button><span className="gptb-footer-spacer"/><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" onClick={() => onCreate(FLOW_TYPES.find((flow) => flow.key === selected))}>Create</button></footer>
-    </section>
-  </div>
-}
 
 function startFieldType(field) {
   return String(field?.field_type || field?.data_type || field?.type || 'text').toLowerCase()
@@ -352,6 +276,7 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
 
 function FlowPropertiesModal({ value, saved, saving, flowType, availableFlows, onChange, onCancel, onSave }) {
   const [draft, setDraft] = useState(value)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [manualApi, setManualApi] = useState(saved)
   const [manualInterview, setManualInterview] = useState(saved || Boolean(value.interviewLabel))
   const valid = draft.label.trim() && /^[A-Za-z][A-Za-z0-9_]*$/.test(draft.apiName) && !draft.apiName.endsWith('_') && !draft.apiName.includes('__')
@@ -363,7 +288,8 @@ function FlowPropertiesModal({ value, saved, saving, flowType, availableFlows, o
         <label><span>Flow API Name <b>*</b></span><input value={draft.apiName} disabled={saved} onChange={(event) => { setManualApi(true); setDraft((current) => ({ ...current, apiName: event.target.value })) }}/>{saved ? <small>The API name can’t be edited after the flow is saved.</small> : <small>Auto-filled from the Flow Label. You can edit it before the first save.</small>}</label>
         <label><span>Description</span><textarea rows={4} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}/></label>
         <label><span>Interview Label</span><input value={draft.interviewLabel || ''} placeholder="Insert a resource..." onChange={(event) => { setManualInterview(true); setDraft((current) => ({ ...current, interviewLabel: event.target.value })) }}/><small>Default: {interviewLabelFromFlowLabel(draft.label) || 'Flow Label {!$Flow.CurrentDateTime}'}</small></label>
-        <details><summary>Advanced</summary>
+        <button type="button" className="gptb-inline-action gptb-properties-advanced-toggle" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((value) => !value)}>{advancedOpen ? 'Hide Advanced' : 'Show Advanced'} <ChevronDown size={13}/></button>
+        {advancedOpen ? <div className="gptb-properties-advanced">
           {['screen','autolaunched'].includes(flowType) ? <label><span>How to Run the Flow</span><select value={draft.runContext || 'default'} onChange={(event) => setDraft((current) => ({ ...current, runContext: event.target.value }))}><option value="default">User or System Context—Depends on How Flow Is Launched</option>{Number.parseFloat(draft.apiVersion || '68.0') >= 68 ? <option value="user_enforced">User Context—Enforces User Permissions</option> : null}<option value="system_with_sharing">System Context with Sharing—Enforces Record-Level Access</option><option value="system_without_sharing">System Context Without Sharing—Access All Data</option></select></label> : null}
           <label><span>Type</span><input value={FLOW_TYPES.find((item) => item.key === flowType)?.label || flowType} disabled/></label>
           <label><span>Source Template</span><FlowReferencePicker value={draft.sourceTemplateId || ''} onChange={(sourceTemplateId) => setDraft((current) => ({ ...current, sourceTemplateId }))} flows={availableFlows || []} kind="template"/></label>
@@ -373,7 +299,7 @@ function FlowPropertiesModal({ value, saved, saving, flowType, availableFlows, o
           <label><span>API Version for Running the Flow</span><select value={draft.apiVersion || '68.0'} onChange={(event) => { const apiVersion = event.target.value; setDraft((current) => ({ ...current, apiVersion, runContext: Number.parseFloat(apiVersion) < 68 && current.runContext === 'user_enforced' ? 'default' : current.runContext })) }}><option value="68.0">68.0</option><option value="67.0">67.0</option><option value="66.0">66.0</option><option value="65.0">65.0</option><option value="64.0">64.0</option></select><small>New flows use the latest supported runtime API version.</small></label>
           {flowType === 'record' ? <label><span>Trigger Order</span><input type="number" min="1" max="2000" value={draft.triggerOrder || ''} onChange={(event) => setDraft((current) => ({ ...current, triggerOrder: event.target.value }))}/></label> : null}
           {flowType === 'screen' ? <><label className="gptb-properties-check"><input type="checkbox" checked={draft.showProgress === true} onChange={(event) => setDraft((current) => ({ ...current, showProgress: event.target.checked }))}/><span>Show a progress indicator on screen elements</span></label>{draft.showProgress ? <label><span>Progress Indicator Type</span><select value={draft.progressIndicatorType || 'simple_top'} onChange={(event) => setDraft((current) => ({ ...current, progressIndicatorType: event.target.value }))}><option value="simple_top">Simple: Top of Screen</option><option value="path_top">Path: Top of Screen</option><option value="simple_footer">Simple: Footer of Screen</option></select></label> : null}</> : null}
-        </details>
+        </div> : null}
       </div>
       <footer className="gptb-new-footer"><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled={!valid || saving} onClick={() => { onChange(draft); onSave(draft) }}>{saving ? 'Saving…' : saved ? 'Done' : 'Save'}</button></footer>
     </section>
@@ -1014,5 +940,5 @@ function FlowShell({ flow, onNew }) {
 export default function GPTBuilderPage() {
   const [newOpen, setNewOpen] = useState(true)
   const [flow, setFlow] = useState(null)
-  return <section className="gptb-root" aria-label="GPT Builder">{flow ? <FlowShell key={flow.key} flow={flow} onNew={() => setNewOpen(true)}/> : <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1><p>Create a Salesforce-style automation in the isolated GPT Builder workspace.</p><button className="gptb-button is-brand" onClick={() => setNewOpen(true)}><Plus size={15}/> New Automation</button></main>}{newOpen ? <NewAutomation onCreate={(definition) => { setFlow(definition); setNewOpen(false) }} onClose={() => setNewOpen(false)}/> : null}</section>
+  return <section className="gptb-root" aria-label="GPT Builder">{flow ? <FlowShell key={flow.key} flow={flow} onNew={() => setNewOpen(true)}/> : <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1><p>Create a Salesforce-style automation in the isolated GPT Builder workspace.</p><button className="gptb-button is-brand" onClick={() => setNewOpen(true)}><Plus size={15}/> New Automation</button></main>}{newOpen ? <GPTBuilderNewAutomation flowTypes={FLOW_TYPES} onCreate={(definition) => { setFlow(definition); setNewOpen(false) }} onClose={() => setNewOpen(false)}/> : null}</section>
 }
