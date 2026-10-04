@@ -5,7 +5,7 @@ import { evaluateWorkflowFormula } from '../server/services/platformFormula.js'
 import { normalizeStartFormula, startFormulaInputs } from '../server/services/platformAutomation.js'
 
 test('GPT Builder Start exposes Salesforce entry-condition modes and validates before Done', async () => {
-  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderParityPage.jsx', import.meta.url), 'utf8')
   for (const label of [
     'All Conditions Are Met (AND)',
     'Any Condition Is Met (OR)',
