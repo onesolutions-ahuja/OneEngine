@@ -5047,7 +5047,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({
       success: true,
       data: getWorkflowBuilderActionRegistry()
-        .map(({ key, displayName, description, async: isAsync, requiredPermissions = [], requiredEntitlement = null, schema = null, capability = null }) => ({
+        .map(({ key, displayName, description, async: isAsync, requiredPermissions = [], requiredEntitlement = null, schema = null, outputSchema = null, capability = null }) => ({
           key,
           displayName,
           description,
@@ -5055,6 +5055,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           requiredPermissions,
           requiredEntitlement,
           schema,
+          outputSchema,
           capability,
         })),
     });
