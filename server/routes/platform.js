@@ -5689,7 +5689,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         },
       });
 
-      if (record && Array.isArray(workflow.conditions) && workflow.conditions.length) {
+      if (record && Array.isArray(workflow.conditions) && workflow.conditions.length && req.body?.skipStartConditionRequirements !== true) {
         const startMatched = evaluateCondition(
           { match: workflow.action?.match || "all", conditions: workflow.conditions },
           fields,
@@ -5816,9 +5816,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       };
       const assertions = Array.isArray(req.body?.assertions) ? req.body.assertions : [];
       const assertionResult = evaluateWorkflowAssertions(debugData, assertions, { record, user: req.user });
-      const testPassed = executionMode === "TEST"
-        ? (assertions.length ? assertionResult.passed : finalStatus === "COMPLETED")
-        : null;
+      const testPassed = executionMode === "TEST" && assertions.length ? assertionResult.passed : null;
       return res.json({
         success: true,
         data: {
@@ -6838,7 +6836,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     if (!saved.rows.length) return res.status(404).json({ success: false, message: "Saved test not found" });
     const test = saved.rows[0];
     const config = test.config && typeof test.config === "object" ? test.config : {};
-    req.body = { ...(req.body || {}), mode: "test", assertions: Array.isArray(config.assertions) ? config.assertions : [], ...(config.recordMode === "specific" && config.recordId ? { recordId: config.recordId } : {}) };
+    req.body = { ...(req.body || {}), mode: "test", assertions: Array.isArray(config.assertions) ? config.assertions : [], skipStartConditionRequirements: config.skipStartConditionRequirements === true, ...(config.recordMode === "specific" && config.recordId ? { recordId: config.recordId } : {}) };
     const originalJson = res.json.bind(res);
     res.json = async (payload) => {
       try {
