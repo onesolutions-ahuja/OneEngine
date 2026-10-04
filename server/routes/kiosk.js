@@ -558,12 +558,11 @@ export default function createKioskRouter({
         writeAudit,
         actorUserId: req.user.id || null,
         action: {
-          key: "PRINT_RECEIPT",
+          key: "PRINT",
           connectorInstanceId: sale.printer_connector_id,
           capability: "printer.print",
-          saleId: sale.id,
-          receiptNumber: sale.receipt_number,
-          payload: {
+          templateKey: "receipt",
+          data: {
             connectorInstanceId: sale.printer_connector_id,
             saleId: sale.id,
             receiptNumber: sale.receipt_number,
