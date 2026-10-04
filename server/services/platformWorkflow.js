@@ -3495,12 +3495,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     displayName: "Run Subflow",
     description: "Run another approved workflow as a child workflow.",
     validation: (action) => {
-      if (!action?.workflowId && !action?.subflowId && !(action?.workflow && Array.isArray(action.workflow.actions))) throw new Error("Run Subflow requires a workflowId");
+      if (!action?.workflowId && !action?.subflowId && !action?.subflowApiName && !(action?.workflow && Array.isArray(action.workflow.actions))) throw new Error("Run Subflow requires a workflowId or subflowApiName");
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, db, traceDb = null, debugMode = false, companyId, req, record, previousRecord, object, fields, workflowVariables = {}, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
-      const workflowKey = action.workflowId || action.subflowId || action.workflow?.id || action.workflow?.key || "inline-subflow";
+      const workflowKey = action.workflowId || action.subflowId || action.subflowApiName || action.workflow?.id || action.workflow?.key || "inline-subflow";
       const runDb = debugMode && traceDb && typeof traceDb === "function" ? traceDb : db;
       const stack = Array.isArray(workflowStack) ? workflowStack.slice() : [];
       if (stack.includes(workflowKey)) {
@@ -3515,8 +3515,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         : (() => {
             if (!db || typeof db !== "function") return null;
             const id = action.workflowId || action.subflowId;
-            if (!id) return null;
-            return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
+            if (id) return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
+            const apiName = action.subflowApiName;
+            if (!apiName) return null;
+            return db(`SELECT * FROM platform_rules WHERE company_id=$1 AND active=true AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2) ORDER BY updated_at DESC LIMIT 1`, [companyId || req?.user?.companyId, apiName]).then((result) => result.rows[0] || null);
           })();
       const definition = await Promise.resolve(subflowDefinition);
       if (!definition) {
@@ -3532,7 +3534,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "skipped", workflowId: workflowKey, reason: "Subflow contains no actions" };
       }
       const mappedInputs = {};
-      const mappings = action.workflowInputs || action.inputs || action.inputMap || action.mappings || {};
+      const mappings = action.workflowInputs || action.inputMappings || action.inputs || action.inputMap || action.mappings || {};
       for (const [targetKey, sourceBinding] of Object.entries(mappings)) {
         const sourceValue = resolveConfiguredResource(sourceBinding, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
         if (sourceValue !== undefined) mappedInputs[targetKey] = sourceValue;
