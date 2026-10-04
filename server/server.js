@@ -1797,20 +1797,6 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 |--------------------------------------------------------------------------
 */
 
-app.use(
-  "/api",
-  createCustomersRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    canViewCompanyCustomers,
-    hasCompanyAdminAccess,
-    associateCustomerWithStore,
-    savePlatformRecord: saveDomainConfiguration,
-    requireLoyaltyEntitlement: requireEntitlement(db, "loyalty"),
-  })
-);
 
 /*
 
@@ -1820,35 +1806,13 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-app.use("/api", createEanLookupRouter({ authenticate, db, lookupService: globalProductLookupService }));
 
 /* T10D: Self-Checkout session routes (enter/exit the restricted mode). */
-app.use("/api", createSelfCheckoutRouter({
-  authenticate,
-  authorize,
-  db,
-  bcrypt,
-  writeAudit,
-  requireSelfCheckoutEntitlement: requireEntitlement(db, "self_checkout"),
-  getCompanyEntitlements: (companyId) => getCompanyEntitlements(db, companyId),
-}));
 
 /* T10P: Scan & Go — customer scan sessions (token-authenticated, store/company
  * resolved server-side from the session; see routes/scanAndGo.js). */
-app.use("/api", createScanGoRouter({ authenticate, db, pool, writeAudit }));
-app.use("/api", createMobileScannerRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createGlobalProductLookupRouter({
-  authenticate,
-  authorize,
-  db,
-  writeAudit,
-  lookupService: globalProductLookupService,
-  connectorDrivers,
-}));
 
-app.use("/api", createDashboardRouter({ authenticate, authorize, db }));
-app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
 
 /*
  * JARVIS AI assistant (V1) - POST /api/jarvis, GET /api/jarvis/status.
@@ -1856,16 +1820,6 @@ app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canV
  * store, role and permission codes come from the verified session claims and
  * the existing role_permissions lookup (read-only).
  */
-app.use(
-  "/api",
-  createJarvisRouter({
-    authenticate,
-    jarvis,
-    getRolePermissionCodes,
-    jarvesAccess,
-    entitlementAccess: (companyId) => getCompanyEntitlements(db, companyId),
-  })
-);
 app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
 app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasPermission }));
 app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
@@ -1876,28 +1830,9 @@ app.use("/api", createIdentityAssuranceRouter({ authenticate, authorize, db, cre
 app.use("/api", createIdentityProviderLoginRouter({ db, createToken, decryptCredentials, encryptCredentials }));
 app.use("/api", createSecurityGovernanceRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeAudit }));
-app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool, canAccessStore }));
-app.use("/api", createClientWebShopRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  createInventoryMovement,
-  getCompanyEntitlements: (companyId) => getCompanyEntitlements(db, companyId),
-}));
-app.use("/api", createOwnDeliveryRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  canAccessStore,
-  createInventoryMovement,
-  writeAudit,
-}));
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
-app.use("/api", createPaypalQrRouter({ authenticate, authorize, db, connectorDrivers, writeAudit }));
 app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
 app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
@@ -1965,11 +1900,7 @@ app.use("/api", createSettingsRouter({
     return requireEntitlement(db, "loyalty")(req, res, next);
   },
 }));
-app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
-app.use("/api", createWhatsAppSettingsRouter({ authenticate, authorize, db, pool, writeAudit }));
-app.use("/api", createOneAssistantRouter({ pool, authenticate, authorize }));
-app.use("/api", createSmsGateWebhookRouter({ pool }));
-app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool, writeAudit }));
+ /* routes/customerAuth.js exports a router instance (self-contained) */
 
 /*
 |--------------------------------------------------------------------------
@@ -1991,32 +1922,6 @@ app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool,
 |   PUT  /api/products/:id          (product.edit)
 |   DEL  /api/products/:id          (product.delete)
 */
-app.use(
-  "/api",
-  createProductsRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    createInventoryMovement,
-    writeAudit,
-    canAccessStore,
-    savePlatformRecord: saveDomainConfiguration,
-  })
-);
-app.use(
-  "/api",
-  createProductFeaturesRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-  })
-);
-app.use(
-  "/api",
-  createPricingRouter({ authenticate, authorize, db, pool })
-);
 
 /*
 |--------------------------------------------------------------------------
@@ -2032,37 +1937,13 @@ app.use(
 |   POST /api/inventory/adjustments     (inventory.adjust)
 |   GET  /api/inventory/reconciliation  (inventory.view)
 */
-app.use(
-  "/api",
-  createInventoryRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    createInventoryMovement,
-    inventoryMovementTypes,
-    canAccessStore,
-    canViewCompanyCustomers,
-  })
-);
 
 /*
  * BATCH / EXPIRY TRACKING — store-level batch API (same access model,
  * same movement primitive; batches never bypass the authoritative stock).
  */
-app.use(
-  "/api",
-  createInventoryBatchesRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    canAccessStore,
-  })
-);
 
 /* T10H: read-only replenishment suggestions (planning layer, no writes). */
-app.use("/api", createReplenishmentRouter({ authenticate, authorize, db }));
 
 /*
 |--------------------------------------------------------------------------
@@ -2081,16 +1962,6 @@ app.use("/api", createReplenishmentRouter({ authenticate, authorize, db }));
 |   PATCH /api/suppliers/:id/status  (inventory.adjust)
 */
 
-app.use(
-  "/api",
-  createSuppliersRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    savePlatformRecord: saveDomainConfiguration,
-  })
-);
 
 /*
 |--------------------------------------------------------------------------
@@ -2107,27 +1978,8 @@ app.use(
 |   POST /api/purchases              (inventory.adjust)
 |   POST /api/purchases/:id/receive  (inventory.adjust)
 */
-app.use(
-  "/api",
-  createPurchasesRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    createInventoryMovement,
-    savePlatformRecord: saveDomainConfiguration,
-  })
-);
-app.use(
-  "/api",
-  createSupplierAccountsRouter({ authenticate, authorize, db, pool })
-);
 
-app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, createInventoryMovement, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
-app.use("/api", createLayawaysRouter({ authenticate, authorize, db, pool, createInventoryMovement }));
-app.use("/api", createKioskRouter({ authenticate, authorize, db, pool, writeAudit, connectorDrivers }));
 
-app.use("/api", createReturnsRouter({ authenticate, authorize, db, pool, createInventoryMovement, writeAudit, canonicalTransactionWriter: createCanonicalRelatedTransaction }));
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
@@ -2143,16 +1995,6 @@ app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCo
 | records are company-scoped and store-restricted through the canonical
 | canViewCompanyCustomers / canAccessStore helpers.
 */
-app.use(
-  "/api",
-  createAttendanceRouter({
-    authenticate,
-    db,
-    canViewCompanyCustomers,
-    canAccessStore,
-    writeAudit,
-  })
-);
 
 /* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
 app.use(
@@ -2166,7 +2008,6 @@ app.use(
   })
 );
 
-app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyCustomers, hasPermission }));
 
 /*
 |--------------------------------------------------------------------------
@@ -2178,7 +2019,6 @@ app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStor
 | storage, generic 404s) plus admin create/revoke endpoints under
 | /api/sales/:saleId/secure-links using the existing permission model.
 */
-app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudit }));
 
 /*
 | Online Orders (Uber Eats / Deliveroo foundation) - product platform
@@ -2186,26 +2026,11 @@ app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudi
 | isolated in services/onlineOrders/* (stubbed until real API credentials).
 */
 
-app.use(
-  "/api",
-  createOnlineRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    writeAudit,
-    createInventoryMovement,
-  })
-);
 
 /*
 | T9A - generic integration foundation (provider-agnostic). Credentials are
 | encrypted at rest; no Sales/Purchases data is sent anywhere by this module.
 */
-app.use(
-  "/api",
-  createShopifyWebhooksRouter({ db, writeAudit })
-);
 
 app.use(
   "/api",
@@ -2233,15 +2058,6 @@ app.use(
 | dispatcher to real sale data over the existing T9A connection system.
 | All routes are accounting.export gated and company-scoped.
 */
-app.use(
-  "/api/accounting",
-  createAccountingExportRouter({
-    authenticate,
-    authorize,
-    db,
-    writeAudit,
-  })
-);
 
 
 /*
@@ -2253,7 +2069,6 @@ app.use(
 | store-wide listing (?scope=store), payload limits. Same authentication,
 | sale.hold permission gate and company/store/user scoping as before.
 */
-app.use("/api", createHeldSalesRouter({ authenticate, authorize, db }));
 
 /*
 |--------------------------------------------------------------------------
@@ -2270,17 +2085,6 @@ app.use("/api", createHeldSalesRouter({ authenticate, authorize, db }));
 | canViewCompanyCustomers functions so behaviour is unchanged.
 */
 
-app.use(
-  "/api",
-  createTillRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    getRolePermissionCodes,
-    canViewCompanyCustomers,
-  })
-);
 
 /*
 |--------------------------------------------------------------------------
