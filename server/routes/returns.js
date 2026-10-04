@@ -3,7 +3,6 @@ import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { validateSalesReturn } from "../src/services/salesReturn.js";
 import { upsertBatchRow, syncBatchMovement } from "../services/inventory.js";
-import { buildAdjustmentTransaction } from "../services/customerCredit.js";
 import { registerExchangeRoutes } from "./exchanges.js";
 import { createCanonicalRelatedTransaction } from "../services/canonicalTransactions.js";
 import { allocateRefund, remainingRefundable } from "../services/paymentRefunds.js";
@@ -162,20 +161,51 @@ export default function createReturnsRouter({
   }
 
   async function recordCustomerCreditRefund(client, {
-    companyId, customerId, storeId, amount, returnId, userId, description,
+    companyId, customerId, storeId, amount, returnId, userId, description, req,
   }) {
     if (!customerId || !(Number(amount) > 0)) return;
-    const transaction = buildAdjustmentTransaction({
+    const execution = await executeSystemWorkflow({
+      db,
       companyId,
-      customerId,
-      storeId,
-      amount,
-      adjustmentType: "debit_note",
-      reason: description || "Customer credit sale refund",
-      referenceId: returnId,
-      referenceType: "sale_return",
       userId,
+      systemKey: "flow:customer.credit.transaction.build_adjustment",
+      req,
+      storeId,
+      input: {
+        companyId,
+        customerId,
+        storeId,
+        amount,
+        adjustmentType: "debit_note",
+        reason: description || "Customer credit sale refund",
+        referenceId: returnId,
+        referenceType: "sale_return",
+        userId,
+      },
+      source: {
+        type: "api",
+        method: req?.method,
+        path: req?.originalUrl || req?.path,
+        capability: "customer.credit.transaction.build_adjustment",
+      },
     });
+    if (execution.status !== "COMPLETED") {
+      throw new Error("Customer credit refund Flow did not complete");
+    }
+    const transaction = execution?.result?.transaction;
+    if (
+      !transaction
+      || transaction.transaction_type !== "debit_note"
+      || String(transaction.company_id) !== String(companyId)
+      || String(transaction.customer_id) !== String(customerId)
+      || String(transaction.store_id || "") !== String(storeId || "")
+      || String(transaction.created_by || "") !== String(userId || "")
+      || Math.round(Number(transaction.amount) * 100) !== Math.round(Number(amount) * 100)
+      || transaction.reference_type !== "sale_return"
+      || String(transaction.reference_id || "") !== String(returnId)
+    ) {
+      throw new Error("Customer credit refund Flow returned an invalid transaction");
+    }
     await client.query(
       `INSERT INTO customer_credit_ledger
         (company_id, store_id, customer_id, transaction_type, amount,
@@ -757,6 +787,7 @@ export default function createReturnsRouter({
                 returnId,
                 userId: req.user.id,
                 description: reason || "Customer credit sale refund",
+                req,
               });
             }
           }

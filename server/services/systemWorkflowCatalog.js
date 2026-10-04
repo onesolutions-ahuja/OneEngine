@@ -19,6 +19,425 @@ const assignment = (id, label, variableName, variableType, value) => ({
   id, label, apiName: id, key: "ASSIGNMENT", variableName, variableType, operator: "set", value,
 });
 
+const creditInput = (name, type, { required = false, defaultValue = null } = {}) => ({
+  name,
+  label: name,
+  type,
+  required,
+  defaultValue,
+});
+const creditFormula = (id, resourceName, resultType, expression, inputs) => ({
+  id,
+  label: resourceName,
+  apiName: id,
+  key: "FORMULA",
+  resourceName,
+  resultType,
+  expression,
+  inputs,
+});
+const creditResourceType = (type) => ({
+  text: "Text",
+  number: "Number",
+  boolean: "Boolean",
+  object: "Object",
+  record: "Record",
+  collection: "Collection",
+  date: "Date",
+  datetime: "DateTime",
+})[String(type || "text").toLowerCase()] || "Text";
+const creditFlow = ({ key, name, inputs, outputs, actions }) => {
+  const resources = [
+    ...inputs.map((input) => outputVariable(input.name, creditResourceType(input.type), {
+      availableInput: true,
+      availableOutput: false,
+      defaultValue: input.defaultValue,
+      isCollection: input.type === "collection",
+    })),
+    ...outputs.map((output) => outputVariable(output.name, creditResourceType(output.type), {
+      availableInput: false,
+      availableOutput: true,
+      isCollection: output.type === "collection",
+    })),
+  ];
+  const resourceNames = new Set(resources.map((resource) => resource.apiName));
+  for (const action of actions) {
+    const actionType = String(action?.type || action?.key || "").toUpperCase();
+    const candidates = actionType === "FORMULA"
+      ? [{ name: action.resourceName, type: action.resultType }]
+      : actionType === "ASSIGNMENT"
+        ? [{ name: action.variableName, type: action.variableType }]
+        : actionType === "LOOP"
+          ? [{ name: action.itemVariable, type: "object" }]
+          : ["COLLECTION_FILTER", "TRANSFORM"].includes(actionType)
+            ? [{ name: action.outputVariable, type: "collection" }]
+            : [];
+    for (const candidate of candidates) {
+      const name = String(candidate.name || "");
+      if (!name || resourceNames.has(name)) continue;
+      resources.push(outputVariable(name, creditResourceType(candidate.type), {
+        availableInput: false,
+        availableOutput: true,
+        defaultValue: candidate.type === "collection" ? [] : candidate.type === "object" ? {} : "",
+        isCollection: candidate.type === "collection",
+      }));
+      resourceNames.add(name);
+    }
+  }
+  return {
+    systemKey: `flow:${key}`,
+    name: `COPILOT- ${name}`,
+    triggerKey: "manual",
+    action: {
+      type: "workflow",
+      systemGenerated: true,
+      systemKey: `flow:${key}`,
+      scope: "system",
+      capabilityType: "workflow",
+      capabilityKey: key,
+      apiName: key.replaceAll(".", "_"),
+      flowType: "AUTOLAUNCHED",
+      inputs,
+      outputs: outputs.map((output) => output.name),
+      inputContract: inputs,
+      outputContract: outputs,
+      resources,
+      actions,
+    },
+  };
+};
+
+const CUSTOMER_CREDIT_SYSTEM_WORKFLOWS = [
+  creditFlow({
+    key: "customer.credit.limit.check",
+    name: "Customer Credit Limit Check",
+    inputs: [
+      creditInput("currentBalanceCents", "number", { required: true }),
+      creditInput("saleAmountCents", "number", { required: true }),
+      creditInput("creditLimitCents", "number"),
+    ],
+    outputs: [
+      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+      { name: "availableCreditCents", label: "Available Credit Cents", type: "number", source: "variables.availableCreditCents" },
+      { name: "projectedBalanceCents", label: "Projected Balance Cents", type: "number", source: "variables.projectedBalanceCents" },
+    ],
+    actions: [
+      creditFormula("projected_balance", "projectedBalanceCents", "number", "currentBalanceCents + saleAmountCents", {
+        currentBalanceCents: { path: "variables.currentBalanceCents" },
+        saleAmountCents: { path: "variables.saleAmountCents" },
+      }),
+      creditFormula("available_credit", "availableCreditCents", "number", "IF(ISBLANK(creditLimitCents), 0, creditLimitCents - currentBalanceCents)", {
+        creditLimitCents: { path: "variables.creditLimitCents" },
+        currentBalanceCents: { path: "variables.currentBalanceCents" },
+      }),
+      creditFormula("credit_allowed", "allowed", "boolean", "ISBLANK(creditLimitCents) || projectedBalanceCents <= creditLimitCents", {
+        creditLimitCents: { path: "variables.creditLimitCents" },
+        projectedBalanceCents: { path: "variables.projectedBalanceCents" },
+      }),
+    ],
+  }),
+  creditFlow({
+    key: "customer.credit.payment.check",
+    name: "Customer Credit Payment Check",
+    inputs: [
+      creditInput("currentBalanceCents", "number", { required: true }),
+      creditInput("paymentAmountCents", "number", { required: true }),
+    ],
+    outputs: [
+      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+      { name: "overpaymentCents", label: "Overpayment Cents", type: "number", source: "variables.overpaymentCents" },
+    ],
+    actions: [
+      creditFormula("normalized_balance", "normalizedBalanceCents", "number", "MAX(0, ROUND(currentBalanceCents, 0))", {
+        currentBalanceCents: { path: "variables.currentBalanceCents" },
+      }),
+      creditFormula("normalized_payment", "normalizedPaymentCents", "number", "ROUND(paymentAmountCents, 0)", {
+        paymentAmountCents: { path: "variables.paymentAmountCents" },
+      }),
+      creditFormula("overpayment", "overpaymentCents", "number", "IF(normalizedPaymentCents > normalizedBalanceCents, normalizedPaymentCents - normalizedBalanceCents, 0)", {
+        normalizedPaymentCents: { path: "variables.normalizedPaymentCents" },
+        normalizedBalanceCents: { path: "variables.normalizedBalanceCents" },
+      }),
+      creditFormula("payment_allowed", "allowed", "boolean", "normalizedPaymentCents > 0 && normalizedPaymentCents <= normalizedBalanceCents", {
+        normalizedPaymentCents: { path: "variables.normalizedPaymentCents" },
+        normalizedBalanceCents: { path: "variables.normalizedBalanceCents" },
+      }),
+    ],
+  }),
+  creditFlow({
+    key: "customer.credit.adjustment.check",
+    name: "Customer Credit Adjustment Check",
+    inputs: [
+      creditInput("currentBalanceCents", "number", { required: true }),
+      creditInput("adjustmentAmountCents", "number", { required: true }),
+      creditInput("adjustmentType", "text", { required: true }),
+      creditInput("creditLimitCents", "number"),
+    ],
+    outputs: [{ name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" }],
+    actions: [
+      creditFormula("adjustment_check", "allowed", "boolean", 'IF(adjustmentType == "credit_note", ISBLANK(creditLimitCents) || currentBalanceCents + adjustmentAmountCents <= creditLimitCents, adjustmentAmountCents <= currentBalanceCents)', {
+        currentBalanceCents: { path: "variables.currentBalanceCents" },
+        adjustmentAmountCents: { path: "variables.adjustmentAmountCents" },
+        adjustmentType: { path: "variables.adjustmentType" },
+        creditLimitCents: { path: "variables.creditLimitCents" },
+      }),
+    ],
+  }),
+  creditFlow({
+    key: "customer.credit.transaction.build_sale",
+    name: "Customer Credit Sale Transaction",
+    inputs: [
+      creditInput("saleId", "text", { required: true }),
+      creditInput("customerId", "text", { required: true }),
+      creditInput("companyId", "text", { required: true }),
+      creditInput("storeId", "text"),
+      creditInput("amount", "number", { required: true }),
+      creditInput("totalTax", "number", { defaultValue: 0 }),
+      creditInput("netAmount", "number", { defaultValue: 0 }),
+      creditInput("grossAmount", "number", { defaultValue: 0 }),
+      creditInput("vatRate", "number", { defaultValue: 0 }),
+      creditInput("paymentMethod", "text"),
+      creditInput("userId", "text", { required: true }),
+      creditInput("receiptNumber", "text"),
+      creditInput("description", "text"),
+    ],
+    outputs: [{ name: "transaction", label: "Transaction", type: "object", source: "variables.transaction" }],
+    actions: [
+      creditFormula("rounded_sale_amount", "roundedAmount", "number", "ROUND(amount, 2)", { amount: { path: "variables.amount" } }),
+      creditFormula("rounded_sale_tax", "roundedTax", "number", "ROUND(totalTax, 2)", { totalTax: { path: "variables.totalTax" } }),
+      creditFormula("rounded_sale_net", "roundedNetAmount", "number", "ROUND(netAmount, 2)", { netAmount: { path: "variables.netAmount" } }),
+      creditFormula("rounded_sale_gross", "roundedGrossAmount", "number", "ROUND(grossAmount, 2)", { grossAmount: { path: "variables.grossAmount" } }),
+      creditFormula("sale_description", "transactionDescription", "text", 'IF(ISBLANK(description), CONCAT("Credit sale ", IF(ISBLANK(receiptNumber), saleId, receiptNumber)), description)', {
+        description: { path: "variables.description" },
+        receiptNumber: { path: "variables.receiptNumber" },
+        saleId: { path: "variables.saleId" },
+      }),
+      assignment("build_sale_transaction", "Build Credit Sale Transaction", "transaction", "object", {
+        company_id: { path: "variables.companyId" },
+        customer_id: { path: "variables.customerId" },
+        store_id: { path: "variables.storeId" },
+        transaction_type: "credit_sale",
+        amount: { path: "variables.roundedAmount" },
+        balance_after: null,
+        reference_type: "sale",
+        reference_id: { path: "variables.saleId" },
+        description: { path: "variables.transactionDescription" },
+        vat_amount: { path: "variables.roundedTax" },
+        net_amount: { path: "variables.roundedNetAmount" },
+        gross_amount: { path: "variables.roundedGrossAmount" },
+        vat_rate: { path: "variables.vatRate" },
+        payment_method: { path: "variables.paymentMethod" },
+        created_by: { path: "variables.userId" },
+      }),
+    ],
+  }),
+  creditFlow({
+    key: "customer.credit.transaction.build_payment",
+    name: "Customer Credit Payment Transaction",
+    inputs: [
+      creditInput("customerId", "text", { required: true }),
+      creditInput("companyId", "text", { required: true }),
+      creditInput("storeId", "text"),
+      creditInput("amount", "number", { required: true }),
+      creditInput("paymentMethod", "text"),
+      creditInput("userId", "text", { required: true }),
+      creditInput("referenceId", "text"),
+      creditInput("referenceType", "text", { defaultValue: "payment" }),
+      creditInput("notes", "text"),
+    ],
+    outputs: [{ name: "transaction", label: "Transaction", type: "object", source: "variables.transaction" }],
+    actions: [
+      creditFormula("rounded_payment_amount", "roundedAmount", "number", "ROUND(amount, 2)", { amount: { path: "variables.amount" } }),
+      creditFormula("payment_description", "transactionDescription", "text", 'IF(ISBLANK(notes), CONCAT("Payment received (", IF(ISBLANK(paymentMethod), "N/A", paymentMethod), ")"), notes)', {
+        notes: { path: "variables.notes" },
+        paymentMethod: { path: "variables.paymentMethod" },
+      }),
+      assignment("build_payment_transaction", "Build Payment Transaction", "transaction", "object", {
+        company_id: { path: "variables.companyId" },
+        customer_id: { path: "variables.customerId" },
+        store_id: { path: "variables.storeId" },
+        transaction_type: "payment",
+        amount: { path: "variables.roundedAmount" },
+        balance_after: null,
+        reference_type: { path: "variables.referenceType" },
+        reference_id: { path: "variables.referenceId" },
+        description: { path: "variables.transactionDescription" },
+        payment_method: { path: "variables.paymentMethod" },
+        created_by: { path: "variables.userId" },
+      }),
+    ],
+  }),
+  creditFlow({
+    key: "customer.credit.transaction.build_adjustment",
+    name: "Customer Credit Adjustment Transaction",
+    inputs: [
+      creditInput("customerId", "text", { required: true }),
+      creditInput("companyId", "text", { required: true }),
+      creditInput("storeId", "text"),
+      creditInput("amount", "number", { required: true }),
+      creditInput("adjustmentType", "text", { required: true }),
+      creditInput("userId", "text", { required: true }),
+      creditInput("reason", "text"),
+      creditInput("referenceId", "text"),
+      creditInput("referenceType", "text", { defaultValue: "adjustment" }),
+    ],
+    outputs: [{ name: "transaction", label: "Transaction", type: "object", source: "variables.transaction" }],
+    actions: [
+      creditFormula("is_credit_note", "isCreditNote", "boolean", 'adjustmentType == "credit_note"', {
+        adjustmentType: { path: "variables.adjustmentType" },
+      }),
+      creditFormula("rounded_adjustment_amount", "roundedAmount", "number", "ROUND(amount, 2)", { amount: { path: "variables.amount" } }),
+      creditFormula("adjustment_description", "transactionDescription", "text", 'IF(ISBLANK(reason), IF(isCreditNote, "Credit adjustment", "Debit adjustment"), reason)', {
+        reason: { path: "variables.reason" },
+        isCreditNote: { path: "variables.isCreditNote" },
+      }),
+      creditFormula("adjustment_transaction_type", "transactionType", "text", 'IF(isCreditNote, "credit_note", "debit_note")', {
+        isCreditNote: { path: "variables.isCreditNote" },
+      }),
+      assignment("build_adjustment_transaction", "Build Adjustment Transaction", "transaction", "object", {
+        company_id: { path: "variables.companyId" },
+        customer_id: { path: "variables.customerId" },
+        store_id: { path: "variables.storeId" },
+        transaction_type: { path: "variables.transactionType" },
+        amount: { path: "variables.roundedAmount" },
+        balance_after: null,
+        reference_type: { path: "variables.referenceType" },
+        reference_id: { path: "variables.referenceId" },
+        description: { path: "variables.transactionDescription" },
+        created_by: { path: "variables.userId" },
+      }),
+    ],
+  }),
+  creditFlow({
+    key: "customer.credit.statement.generate",
+    name: "Customer Credit Statement",
+    inputs: [
+      creditInput("transactions", "collection", { required: true, defaultValue: [] }),
+      creditInput("fromDate", "text"),
+      creditInput("toDate", "text"),
+      creditInput("storeId", "text"),
+      creditInput("customerId", "text"),
+      creditInput("companyId", "text"),
+    ],
+    outputs: [{ name: "statement", label: "Statement", type: "object", source: "variables.statement" }],
+    actions: [
+      creditFormula("to_date_boundary", "toDateBoundary", "text", 'IF(ISBLANK(toDate), "", IF(CONTAINS(toDate, "T"), toDate, CONCAT(toDate, "T23:59:59.999Z")))', {
+        toDate: { path: "variables.toDate" },
+      }),
+      {
+        id: "filter_prior_transactions",
+        label: "Filter Prior Transactions",
+        apiName: "filter_prior_transactions",
+        key: "COLLECTION_FILTER",
+        collection: "variables.transactions",
+        mode: "formula",
+        formula: '!ISBLANK(fromDate) && CurrentItem_created_at < fromDate',
+        outputVariable: "priorTransactions",
+      },
+      {
+        id: "filter_statement_transactions",
+        label: "Filter Statement Transactions",
+        apiName: "filter_statement_transactions",
+        key: "COLLECTION_FILTER",
+        collection: "variables.transactions",
+        mode: "formula",
+        formula: '(ISBLANK(fromDate) || CurrentItem_created_at >= fromDate) && (ISBLANK(toDateBoundary) || CurrentItem_created_at <= toDateBoundary)',
+        outputVariable: "statementTransactions",
+      },
+      {
+        id: "sort_statement_transactions",
+        label: "Sort Statement Transactions",
+        apiName: "sort_statement_transactions",
+        key: "COLLECTION_SORT",
+        collection: "variables.statementTransactions",
+        sortOptions: [{ field: "created_at", direction: "asc" }],
+      },
+      assignment("initialize_opening_balance", "Initialize Opening Balance", "openingBalanceCents", "number", 0),
+      {
+        id: "calculate_opening_balance",
+        label: "Calculate Opening Balance",
+        apiName: "calculate_opening_balance",
+        key: "LOOP",
+        collection: "variables.priorTransactions",
+        itemVariable: "currentTransaction",
+        bodyBranch: ["prior_signed_amount", "add_prior_balance"],
+      },
+      creditFormula("prior_signed_amount", "signedAmountCents", "number", 'ROUND(amount * 100, 0) * IF(transactionType == "payment" || transactionType == "debit_note", -1, 1)', {
+        amount: { path: "variables.currentTransaction.amount" },
+        transactionType: { path: "variables.currentTransaction.transaction_type" },
+      }),
+      {
+        ...assignment("add_prior_balance", "Add Prior Balance", "openingBalanceCents", "number", { path: "variables.signedAmountCents" }),
+        operator: "add",
+      },
+      assignment("initialize_running_balance", "Initialize Running Balance", "runningBalanceCents", "number", { path: "variables.openingBalanceCents" }),
+      assignment("initialize_statement_rows", "Initialize Statement Rows", "statementRows", "collection", []),
+      {
+        id: "build_statement_rows",
+        label: "Build Statement Rows",
+        apiName: "build_statement_rows",
+        key: "LOOP",
+        collection: "variables.statementTransactions",
+        itemVariable: "currentTransaction",
+        bodyBranch: [
+          "statement_signed_amount",
+          "add_running_balance",
+          "statement_signed_amount_major",
+          "statement_running_balance_major",
+          "statement_transaction_date",
+          "append_statement_row",
+        ],
+      },
+      creditFormula("statement_signed_amount", "signedAmountCents", "number", 'ROUND(amount * 100, 0) * IF(transactionType == "payment" || transactionType == "debit_note", -1, 1)', {
+        amount: { path: "variables.currentTransaction.amount" },
+        transactionType: { path: "variables.currentTransaction.transaction_type" },
+      }),
+      {
+        ...assignment("add_running_balance", "Add Running Balance", "runningBalanceCents", "number", { path: "variables.signedAmountCents" }),
+        operator: "add",
+      },
+      creditFormula("statement_signed_amount_major", "signedAmount", "number", "signedAmountCents / 100", {
+        signedAmountCents: { path: "variables.signedAmountCents" },
+      }),
+      creditFormula("statement_running_balance_major", "runningBalance", "number", "runningBalanceCents / 100", {
+        runningBalanceCents: { path: "variables.runningBalanceCents" },
+      }),
+      creditFormula("statement_transaction_date", "transactionDate", "text", "IF(ISBLANK(createdAt), transactionDate, createdAt)", {
+        createdAt: { path: "variables.currentTransaction.created_at" },
+        transactionDate: { path: "variables.currentTransaction.transaction_date" },
+      }),
+      {
+        ...assignment("append_statement_row", "Append Statement Row", "statementRows", "collection", {
+          transaction_type: { path: "variables.currentTransaction.transaction_type" },
+          amount: { path: "variables.currentTransaction.amount" },
+          reference_type: { path: "variables.currentTransaction.reference_type" },
+          reference_id: { path: "variables.currentTransaction.reference_id" },
+          description: { path: "variables.currentTransaction.description" },
+          created_at: { path: "variables.currentTransaction.created_at" },
+          amount_display: { path: "variables.signedAmount" },
+          running_balance: { path: "variables.runningBalance" },
+          transaction_date: { path: "variables.transactionDate" },
+        }),
+        operator: "append",
+      },
+      creditFormula("opening_balance_major", "openingBalance", "number", "openingBalanceCents / 100", {
+        openingBalanceCents: { path: "variables.openingBalanceCents" },
+      }),
+      creditFormula("closing_balance_major", "closingBalance", "number", "runningBalanceCents / 100", {
+        runningBalanceCents: { path: "variables.runningBalanceCents" },
+      }),
+      assignment("build_statement", "Build Statement", "statement", "object", {
+        openingBalance: { path: "variables.openingBalance" },
+        transactions: { path: "variables.statementRows" },
+        closingBalance: { path: "variables.closingBalance" },
+        storeId: { path: "variables.storeId" },
+        customerId: { path: "variables.customerId" },
+        companyId: { path: "variables.companyId" },
+      }),
+    ],
+  }),
+];
+
 const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
   {
     systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
@@ -314,7 +733,7 @@ export function systemWorkflowDefinitions() {
     .filter((item) => item?.key && item.key !== "WORKFLOW" && item.systemVisible !== false)
     .map(actionWorkflow);
   const jobs = TRUSTED_JOB_KINDS.map(jobWorkflow);
-  return [...functions, ...actions, ...jobs, ...PLATFORM_SYSTEM_WORKFLOWS];
+  return [...functions, ...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS];
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {

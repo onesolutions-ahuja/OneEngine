@@ -1,4 +1,3 @@
-import { checkCreditLimit, checkPayment, buildPaymentTransaction, buildAdjustmentTransaction } from "./customerCredit.js";
 import { createInventoryMovement } from "./inventory.js";
 import { receivePurchase } from "./purchaseReceiving.js";
 import { executeSupplierPayment } from "./supplierPaymentExecution.js";
@@ -15,26 +14,6 @@ import { issueAccountToken } from "./accountPolicy.js";
 // capabilities are migrated to visible metadata/Flow and removed from this
 // registry as their callers are converted to generic primitives.
 export const PLATFORM_FUNCTIONS = Object.freeze([
-  {
-    key: "customer.credit.limit.check",
-    category: "CUSTOMER_CREDIT",
-    description: "Run the current customer-credit limit check.",
-    inputs: { type: "object", required: ["currentBalanceCents", "saleAmountCents", "creditLimitCents"] },
-    outputs: { type: "object" },
-    permissions: ["customer_credit.use"],
-    handler: async ({ inputs = {} }) =>
-      checkCreditLimit(Number(inputs.currentBalanceCents), Number(inputs.saleAmountCents), Number(inputs.creditLimitCents)),
-  },
-  {
-    key: "customer.credit.payment.check",
-    category: "CUSTOMER_CREDIT",
-    description: "Validate the current customer-credit payment amount.",
-    inputs: { type: "object", required: ["currentBalanceCents", "paymentAmountCents"] },
-    outputs: { type: "object" },
-    permissions: ["customer_credit.use"],
-    handler: async ({ inputs = {} }) =>
-      checkPayment(Number(inputs.currentBalanceCents), Number(inputs.paymentAmountCents)),
-  },
   {
     key: "purchase.receive",
     category: "PURCHASING",
@@ -69,24 +48,6 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
         defaultStoreId: req?.user?.storeId,
         input: inputs,
       }),
-  },
-  {
-    key: "customer.credit.transaction.build_payment",
-    category: "CUSTOMER",
-    description: "Compatibility capability while customer-credit posting is migrated to Flow.",
-    inputs: { type: "object" },
-    outputs: { type: "object" },
-    permissions: ["customer_credit.use"],
-    handler: async ({ inputs = {} }) => buildPaymentTransaction(inputs),
-  },
-  {
-    key: "customer.credit.transaction.build_adjustment",
-    category: "CUSTOMER",
-    description: "Compatibility capability while customer-credit adjustments are migrated to Flow.",
-    inputs: { type: "object" },
-    outputs: { type: "object" },
-    permissions: ["customer_credit.manage"],
-    handler: async ({ inputs = {} }) => buildAdjustmentTransaction(inputs),
   },
   {
     key: "online_order.create",

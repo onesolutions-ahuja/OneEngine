@@ -1943,6 +1943,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         };
         if (mode === "formula") {
           const formulaInputs = {
+            ...(workflowVariables.variables || {}),
+            ...Object.fromEntries(Object.entries(item || {})
+              .filter(([name]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+              .map(([name, value]) => [`CurrentItem_${name}`, value])),
             CurrentItem: item,
             [String(action.currentItemVariable || "CurrentItem")]: item,
             record: item,

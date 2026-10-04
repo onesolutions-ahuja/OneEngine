@@ -66,7 +66,7 @@ authoritative services.
   uniqueness checks, or inventory integrity.
 - The POS/till and other specialized product interfaces were retained.
 
-### Intentionally retained hard-coded logic
+### Intentionally retained protected logic
 
 - Product core fields remain in the Product form because the Product domain
   endpoint owns their canonical normalization and persistence.
@@ -128,8 +128,14 @@ Supplier migration after the Customer test gaps are resolved.
 - Generic Platform writes remain blocked for Customer records.
 - Customer CRUD, tenant/store isolation, duplicate-identifier handling, and
   Platform extension validation remain server-authoritative.
-- Credit, loyalty, segmentation, gift-card, and POS flows remain on their
-  existing protected services and specialized interfaces.
+- Customer Credit limit/payment decisions, ledger-transaction construction,
+  payment, adjustment, and statement calculations are native editable System
+  Flows. Their names start with `COPILOT-`, and their operations are represented
+  by Flow Builder formula, assignment, collection, and loop nodes rather than
+  calls to registered customer-credit functions.
+- Existing sale, payment, adjustment, refund, and statement entry points invoke
+  those Flows. Protected route/database boundaries continue to enforce tenant
+  scope, transaction integrity, and trusted ledger identities and amounts.
 
 ### Fix made
 
@@ -140,8 +146,13 @@ Supplier migration after the Customer test gaps are resolved.
 
 ### Intentionally retained hard-coded logic
 
-- Outstanding balances and credit limits remain server-side and transactional.
-- Credit-sale enforcement remains in the sale and credit services.
+- Outstanding balances and limit inputs are computed server-side; the
+  customer-credit limit decision runs through editable Flow nodes before the
+  sale transaction commits.
+- Credit transaction objects and statement rows are constructed by editable
+  Flow nodes. Routes validate protected identity and amount fields before
+  writing ledger entries, so Flow edits cannot change tenant or transaction
+  ownership.
 - Loyalty balances remain ledger-derived and protected from browser-controlled
   mutation.
 - Gift-card balances and redemption integrity remain in the gift-card service.

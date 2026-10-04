@@ -1,7 +1,6 @@
 import express from "express";
 import { createHash } from "node:crypto";
 import { allocateBatchConsumption } from "../services/inventory.js";
-import { checkCreditLimit, buildCreditSaleTransaction } from "../services/customerCredit.js";
 import { normaliseGiftCardCode, isCardRedeemable, validateRedemption } from "../services/giftCards.js";
 import { validateRedeemConfig, validateRedeemablePoints } from "../src/utils/loyaltyPoints.js";
 import { computeBasketTotals, roundCurrency, resolveEffectivePrice } from "../src/utils/saleTotals.js";
@@ -1594,27 +1593,119 @@ export default function createSalesRouter({
           );
           const currentOutstandingCents = Math.round(Number(signedSum.rows[0].outstanding || 0) * 100);
           const limitCents = Math.round((Number(cc.credit_limit) || 0) * 100);
-          const limitCheck = checkCreditLimit(currentOutstandingCents, saleTotalCents, limitCents);
-          if (!limitCheck.allowed) {
+          let limitExecution;
+          try {
+            limitExecution = await executeSystemWorkflow({
+              db,
+              companyId: req.user.companyId,
+              userId: req.user.id || null,
+              systemKey: "flow:customer.credit.limit.check",
+              req,
+              storeId: req.user.storeId || null,
+              input: {
+                currentBalanceCents: currentOutstandingCents,
+                saleAmountCents: saleTotalCents,
+                creditLimitCents: cc.credit_limit == null ? null : limitCents,
+              },
+              source: {
+                type: "api",
+                method: req.method,
+                path: req.originalUrl || req.path,
+                capability: "customer.credit.limit.check",
+              },
+            });
+          } catch (error) {
+            if (error?.code !== "CUSTOM_FLOW_ERROR") throw error;
             await client.query("ROLLBACK");
             return res.status(409).json({
               success: false,
-              message: `Credit limit exceeded. Available credit: £${((Number(cc.credit_limit) || 0) - currentOutstandingCents / 100).toFixed(2)}`,
+              message: error.message || "Customer credit limit Flow blocked this sale",
+            });
+          }
+          if (limitExecution?.status !== "COMPLETED") {
+            await client.query("ROLLBACK");
+            return res.status(503).json({
+              success: false,
+              message: "Customer credit limit Flow did not complete",
+            });
+          }
+          const limitCheck = limitExecution?.result;
+          const allowed = typeof limitCheck?.allowed === "boolean"
+            ? limitCheck.allowed
+            : limitCheck?.variableName === "allowed" && typeof limitCheck.value === "boolean"
+              ? limitCheck.value
+              : null;
+          if (allowed !== true) {
+            await client.query("ROLLBACK");
+            if (allowed !== false) {
+              return res.status(503).json({
+                success: false,
+                message: "Customer credit limit Flow did not return a valid decision",
+              });
+            }
+            const availableCreditCents = Number.isFinite(Number(limitCheck.availableCreditCents))
+              ? Number(limitCheck.availableCreditCents)
+              : limitCents - currentOutstandingCents;
+            return res.status(409).json({
+              success: false,
+              message: `Credit limit exceeded. Available credit: £${(availableCreditCents / 100).toFixed(2)}`,
             });
           }
 
-          const ledgerTx = buildCreditSaleTransaction({
-            saleId,
-            customerId,
+          const transactionExecution = await executeSystemWorkflow({
+            db,
             companyId: req.user.companyId,
-            storeId: req.user.storeId,
-            amount: Number(total) || 0,
-            totalTax: Number(tax) || 0,
-            netAmount: Number(subtotal) || 0,
-            grossAmount: Number(total) || 0,
-            userId: req.user.id,
-            receiptNumber: sale.rows[0].receipt_number,
+            userId: req.user.id || null,
+            systemKey: "flow:customer.credit.transaction.build_sale",
+            req,
+            storeId: req.user.storeId || null,
+            input: {
+              saleId,
+              customerId,
+              companyId: req.user.companyId,
+              storeId: req.user.storeId,
+              amount: Number(total) || 0,
+              totalTax: Number(tax) || 0,
+              netAmount: Number(subtotal) || 0,
+              grossAmount: Number(total) || 0,
+              userId: req.user.id,
+              receiptNumber: sale.rows[0].receipt_number,
+            },
+            source: {
+              type: "api",
+              method: req.method,
+              path: req.originalUrl || req.path,
+              capability: "customer.credit.transaction.build_sale",
+            },
           });
+          if (transactionExecution?.status !== "COMPLETED") {
+            await client.query("ROLLBACK");
+            return res.status(503).json({
+              success: false,
+              message: "Customer credit sale Flow did not complete",
+            });
+          }
+          const ledgerTx = transactionExecution?.result?.transaction;
+          const expectedAmount = Math.round((Number(total) || 0) * 100);
+          const validLedgerTx = ledgerTx
+            && ledgerTx.transaction_type === "credit_sale"
+            && String(ledgerTx.company_id) === String(req.user.companyId)
+            && String(ledgerTx.customer_id) === String(customerId)
+            && ledgerTx.reference_type === "sale"
+            && String(ledgerTx.reference_id) === String(saleId)
+            && String(ledgerTx.store_id || "") === String(req.user.storeId || "")
+            && String(ledgerTx.created_by || "") === String(req.user.id || "")
+            && Math.round(Number(ledgerTx.amount) * 100) === expectedAmount
+            && Math.round(Number(ledgerTx.net_amount) * 100) === Math.round((Number(subtotal) || 0) * 100)
+            && Math.round(Number(ledgerTx.vat_amount) * 100) === Math.round((Number(tax) || 0) * 100)
+            && Math.round(Number(ledgerTx.gross_amount) * 100) === expectedAmount;
+          if (!validLedgerTx) {
+            await client.query("ROLLBACK");
+            return res.status(503).json({
+              success: false,
+              message: "Customer credit sale Flow did not return a valid ledger transaction",
+            });
+          }
           await client.query(
             `
             INSERT INTO customer_credit_ledger

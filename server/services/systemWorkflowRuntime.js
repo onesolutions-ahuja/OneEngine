@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ensureSystemWorkflowCatalog } from "./systemWorkflowCatalog.js";
 import { createWorkflowRun, executeWorkflowActions, workflowResultsContainStatus } from "./platformWorkflow.js";
+import { resolveWorkflowResource } from "./platformRecordPaths.js";
 
 function safeSource(req, source = null) {
   return {
@@ -58,6 +59,45 @@ function runtimeAction(action, capabilityType, runtimeInput = {}) {
     return { ...action, ...(runtimeInput || {}) };
   }
   return action;
+}
+
+function systemFlowInputs(contract, supplied) {
+  if (!Array.isArray(contract) || !contract.length) return {};
+  const allowed = new Set(contract.map((item) => String(item?.name || "")).filter(Boolean));
+  const unexpected = Object.keys(supplied).find((name) => !allowed.has(name));
+  if (unexpected) throw new Error(`System Flow input "${unexpected}" is not declared`);
+  const variables = {};
+  for (const item of contract) {
+    const name = String(item?.name || "");
+    const hasValue = Object.prototype.hasOwnProperty.call(supplied, name);
+    const value = hasValue ? supplied[name] : item?.defaultValue;
+    if (item?.required === true && (value === undefined || value === null || value === "")) {
+      throw new Error(`System Flow input "${item.label || name}" is required`);
+    }
+    if (value === undefined) continue;
+    if (value === null) {
+      variables[name] = null;
+      continue;
+    }
+    const type = String(item.type || "text").toLowerCase();
+    if (["number", "currency"].includes(type)) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) throw new Error(`System Flow input "${item.label || name}" must be numeric`);
+      variables[name] = numeric;
+    } else if (type === "boolean") {
+      if (typeof value !== "boolean") throw new Error(`System Flow input "${item.label || name}" must be true or false`);
+      variables[name] = value;
+    } else if (type === "collection") {
+      if (!Array.isArray(value)) throw new Error(`System Flow input "${item.label || name}" must be a collection`);
+      variables[name] = value;
+    } else if (type === "object" || type === "record") {
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`System Flow input "${item.label || name}" must be an object`);
+      variables[name] = value;
+    } else {
+      variables[name] = String(value);
+    }
+  }
+  return variables;
 }
 
 export async function executeSystemWorkflow({
@@ -125,6 +165,12 @@ export async function executeSystemWorkflow({
   const actions = (workflow.action?.actions || []).map((action) =>
     runtimeAction(action, capabilityType, input)
   );
+  const workflowVariables = {
+    variables: capabilityType === "workflow"
+      ? systemFlowInputs(workflow.action?.inputContract, input)
+      : {},
+    steps: {},
+  };
 
   const parentRunId = req?.ensureBusinessCommandRun
     ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, tillId })
@@ -150,6 +196,7 @@ export async function executeSystemWorkflow({
       tillId: runtimeReq.user.tillId || null,
       correlationId,
       source: sourceInfo,
+      inputNames: Object.keys(workflowVariables.variables),
     },
   });
 
@@ -170,6 +217,7 @@ export async function executeSystemWorkflow({
       runId: run?.id || null,
       workflowVersion: Number(workflow.active_version || workflow.version || 1),
       trigger: workflow.trigger_key || "system",
+      workflowVariables,
       ...extraContext,
     });
     const waiting = workflowResultsContainStatus(results, "waiting");
@@ -179,7 +227,18 @@ export async function executeSystemWorkflow({
         [run.id, companyId]
       );
     }
-    return { runId: run.id, correlationId, status: waiting ? "WAITING" : "COMPLETED", results, result: results.at(-1)?.result ?? null };
+    let result = results.at(-1)?.result ?? null;
+    if (capabilityType === "workflow" && Array.isArray(workflow.action?.outputContract) && workflow.action.outputContract.length) {
+      result = {};
+      for (const output of workflow.action.outputContract) {
+        const name = String(output?.name || "");
+        const sourcePath = String(output?.source || `variables.${name}`);
+        const value = resolveWorkflowResource(sourcePath, { variables: workflowVariables, record, object, user: runtimeReq.user });
+        if (!name || value === undefined) throw new Error(`System Flow output "${output?.label || name}" is unavailable`);
+        result[name] = value;
+      }
+    }
+    return { runId: run.id, correlationId, status: waiting ? "WAITING" : "COMPLETED", results, result, workflowVariables };
   } catch (error) {
     await db(
       `UPDATE platform_workflow_runs

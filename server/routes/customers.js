@@ -3,7 +3,6 @@ import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import {
   toCents,
   fromCents,
-  generateStatement,
 } from "../services/customerCredit.js";
 import {
   validateIssueValue,
@@ -31,12 +30,12 @@ export default function createCustomersRouter({
 }) {
   const router = express.Router();
 
-  async function runCustomerFunction(req, key, input = {}) {
+  async function runCustomerFlow(req, key, input = {}) {
     return executeSystemWorkflow({
       db,
       companyId: req.user.companyId,
       userId: req.user.id || req.user.userId || null,
-      systemKey: `function:${key}`,
+      systemKey: `flow:${key}`,
       req,
       input,
       storeId: req.user.storeId || null,
@@ -913,12 +912,18 @@ export default function createCustomersRouter({
         return res.status(400).json({ success: false, message: "Invalid payment method" });
 
       const outstanding = await outstandingCents(req.user.companyId, req.params.id);
-      /* Service contract: checkPayment(currentBalanceCents, paymentAmountCents). */
-      const checkExecution = await runCustomerFunction(req, "customer.credit.payment.check", {
+      /* Payment amounts are compared in integer cents before the Flow decision. */
+      const checkExecution = await runCustomerFlow(req, "customer.credit.payment.check", {
         currentBalanceCents: outstanding,
         paymentAmountCents: cents,
       });
+      if (checkExecution.status !== "COMPLETED") {
+        return res.status(503).json({ success: false, message: "Customer payment Flow did not complete" });
+      }
       const check = checkExecution.result;
+      if (typeof check?.allowed !== "boolean") {
+        return res.status(503).json({ success: false, message: "Customer payment Flow did not return a valid decision" });
+      }
       if (!check.allowed)
         return res.status(409).json({ success: false, message: "Payment exceeds the outstanding balance" });
 
@@ -940,12 +945,35 @@ export default function createCustomersRouter({
         }
       }
 
-      const txExecution = await runCustomerFunction(req, "customer.credit.transaction.build_payment", {
-        amount: req.body.amount,
+      const txExecution = await runCustomerFlow(req, "customer.credit.transaction.build_payment", {
+        customerId: req.params.id,
+        companyId: req.user.companyId,
+        storeId: req.user.storeId || null,
+        amount: fromCents(cents),
         paymentMethod: method,
         userId: req.user.id || req.user.userId || null,
+        referenceId: req.body.referenceId || null,
+        referenceType: "payment",
+        notes: null,
       });
-      const tx = txExecution.result;
+      if (txExecution.status !== "COMPLETED") {
+        return res.status(503).json({ success: false, message: "Customer payment transaction Flow did not complete" });
+      }
+      const tx = txExecution.result?.transaction;
+      if (
+        !tx
+        || tx.transaction_type !== "payment"
+        || String(tx.company_id) !== String(req.user.companyId)
+        || String(tx.customer_id) !== String(req.params.id)
+        || String(tx.store_id || "") !== String(req.user.storeId || "")
+        || String(tx.created_by || "") !== String(req.user.id || req.user.userId || "")
+        || Math.round(Number(tx.amount) * 100) !== cents
+        || tx.payment_method !== method
+        || tx.reference_type !== "payment"
+        || String(tx.reference_id || "") !== String(req.body.referenceId || "")
+      ) {
+        return res.status(503).json({ success: false, message: "Customer payment Flow returned an invalid transaction" });
+      }
 
       const inserted = await db(
         `
@@ -1005,23 +1033,27 @@ export default function createCustomersRouter({
         return res.status(400).json({ success: false, message: "Adjustment reason is required" });
 
       const outstanding = await outstandingCents(req.user.companyId, req.params.id);
-      /*
-       * Sign convention (matches txSign + the outstanding SQL): credit_note
-       * INCREASES what the customer owes (must respect the credit limit);
-       * debit_note DECREASES it (cannot exceed the outstanding balance).
-       */
-      if (type === "credit_note") {
-        const limitCents = Math.round((Number(customer.credit_limit) || 0) * 100);
-        const limitExecution = await runCustomerFunction(req, "customer.credit.limit.check", {
-          currentBalanceCents: outstanding,
-          saleAmountCents: cents,
-          creditLimitCents: limitCents,
+      const adjustmentCheck = await runCustomerFlow(req, "customer.credit.adjustment.check", {
+        currentBalanceCents: outstanding,
+        adjustmentAmountCents: cents,
+        adjustmentType: type,
+        creditLimitCents: customer.credit_limit == null
+          ? null
+          : Math.round((Number(customer.credit_limit) || 0) * 100),
+      });
+      if (adjustmentCheck.status !== "COMPLETED") {
+        return res.status(503).json({ success: false, message: "Customer adjustment Flow did not complete" });
+      }
+      if (typeof adjustmentCheck.result?.allowed !== "boolean") {
+        return res.status(503).json({ success: false, message: "Customer adjustment Flow did not return a valid decision" });
+      }
+      if (!adjustmentCheck.result.allowed) {
+        return res.status(409).json({
+          success: false,
+          message: type === "credit_note"
+            ? "Credit note would exceed the customer's credit limit"
+            : "Debit note exceeds the outstanding balance",
         });
-        const limitCheck = limitExecution.result;
-        if (!limitCheck.allowed)
-          return res.status(409).json({ success: false, message: "Credit note would exceed the customer's credit limit" });
-      } else if (cents > outstanding) {
-        return res.status(409).json({ success: false, message: "Debit note exceeds the outstanding balance" });
       }
 
       const idempotencyKey = req.body.idempotencyKey
@@ -1041,13 +1073,34 @@ export default function createCustomersRouter({
         }
       }
 
-      const txExecution = await runCustomerFunction(req, "customer.credit.transaction.build_adjustment", {
+      const txExecution = await runCustomerFlow(req, "customer.credit.transaction.build_adjustment", {
+        customerId: req.params.id,
+        companyId: req.user.companyId,
+        storeId: req.user.storeId || null,
         adjustmentType: type,
-        amount: req.body.amount,
+        amount: fromCents(cents),
         reason: notes,
         userId: req.user.id || req.user.userId || null,
+        referenceId: req.body.referenceId || null,
+        referenceType: "adjustment",
       });
-      const tx = txExecution.result;
+      if (txExecution.status !== "COMPLETED") {
+        return res.status(503).json({ success: false, message: "Customer adjustment transaction Flow did not complete" });
+      }
+      const tx = txExecution.result?.transaction;
+      if (
+        !tx
+        || tx.transaction_type !== type
+        || String(tx.company_id) !== String(req.user.companyId)
+        || String(tx.customer_id) !== String(req.params.id)
+        || String(tx.store_id || "") !== String(req.user.storeId || "")
+        || String(tx.created_by || "") !== String(req.user.id || req.user.userId || "")
+        || Math.round(Number(tx.amount) * 100) !== cents
+        || tx.reference_type !== "adjustment"
+        || String(tx.reference_id || "") !== String(req.body.referenceId || "")
+      ) {
+        return res.status(503).json({ success: false, message: "Customer adjustment Flow returned an invalid transaction" });
+      }
 
       await db(
         `
@@ -1209,13 +1262,20 @@ export default function createCustomersRouter({
         `,
         [req.user.companyId, req.params.id]
       );
-      const statement = generateStatement({
+      const statementExecution = await runCustomerFlow(req, "customer.credit.statement.generate", {
         transactions: result.rows,
         fromDate: req.query.from ? String(req.query.from) : null,
         toDate: req.query.to ? String(req.query.to) : null,
         customerId: req.params.id,
         companyId: req.user.companyId,
       });
+      if (statementExecution.status !== "COMPLETED") {
+        return res.status(503).json({ success: false, message: "Customer statement Flow did not complete" });
+      }
+      const statement = statementExecution.result?.statement;
+      if (!statement || !Array.isArray(statement.transactions)) {
+        throw new Error("Customer credit statement Flow did not return a valid statement");
+      }
 
       res.json({ success: true, data: { customer: { id: customer.id, name: customer.name }, statement } });
     } catch (error) {
