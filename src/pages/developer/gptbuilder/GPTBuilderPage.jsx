@@ -604,7 +604,9 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
     setRollback(flowType === 'record' || savedAutomationEnabled ? true : (config.rollback ?? true))
     setAssertions(Array.isArray(config.assertions) ? config.assertions.map((assertion, index) => ({
       id: assertion.id || `saved-assertion-${index + 1}`,
+      type: String(assertion.type || 'RESOURCE_CONDITION').toUpperCase(),
       resource: assertion.resource || '',
+      stepId: assertion.stepId || '',
       operator: assertion.operator || 'equals',
       value: assertion.expected ?? assertion.value ?? '',
     })) : [])
@@ -618,6 +620,24 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
     if (!needle) return true
     return Object.values(record || {}).some((value) => String(value ?? '').toLowerCase().includes(needle))
   }).slice(0, 50)
+
+  const serializeAssertion = (assertion) => {
+    const type = String(assertion?.type || 'RESOURCE_CONDITION').toUpperCase()
+    if (type === 'RUN_STATUS') return { type, expected: assertion.value || 'COMPLETED' }
+    if (type === 'STEP_STATUS') return { type, stepId: assertion.stepId || '', expected: assertion.value || 'COMPLETED' }
+    if (type === 'DECISION_OUTCOME') return { type, stepId: assertion.stepId || '', expected: assertion.value || '' }
+    return { type: 'RESOURCE_CONDITION', resource: assertion.resource || '', operator: assertion.operator || 'equals', expected: assertion.value }
+  }
+
+  const assertionIsComplete = (assertion) => {
+    const type = String(assertion?.type || 'RESOURCE_CONDITION').toUpperCase()
+    if (type === 'RUN_STATUS') return Boolean(assertion.value)
+    if (type === 'STEP_STATUS') return Boolean(assertion.stepId && assertion.value)
+    if (type === 'DECISION_OUTCOME') return Boolean(assertion.stepId && assertion.value)
+    if (!assertion.resource) return false
+    return ['is_empty','is_not_empty'].includes(assertion.operator) || assertion.value !== ''
+  }
+  const invalidAssertions = automationEnabled && assertions.some((assertion) => !assertionIsComplete(assertion))
 
   const execute = async () => {
     setRunning(true); setError(''); setResult(null)
@@ -633,7 +653,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           ...(recordId ? { recordId } : {}),
           inputs,
           ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
-          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false, debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {}, assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [] } : {}),
+          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false, debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {}, assertions: automationEnabled ? assertions.map(serializeAssertion) : [] } : {}),
         }),
       })
       setResult(response?.data || {})
@@ -665,7 +685,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
             skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false,
             debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false,
             debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {},
-            assertions: automationEnabled ? assertions.map((assertion) => ({ type: 'RESOURCE_CONDITION', resource: assertion.resource, operator: assertion.operator || 'equals', expected: assertion.value })) : [],
+            assertions: automationEnabled ? assertions.map(serializeAssertion) : [],
           },
         }),
       })
@@ -686,7 +706,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   return <aside className="gptb-config-panel gptb-execution-panel" aria-label={title}>
     <header><div><strong>{title}</strong><small>Uses the most recent saved version.</small></div><button className="gptb-icon-button" aria-label={`Close ${title}`} onClick={onClose}><X size={16}/></button></header>
     <div className="gptb-config-body">
-      {mode === 'test' ? <section><h3>Test Scenario</h3><p className="gptb-help-text">Configure test data and run options for this scenario.</p><label><span>Saved Test</span><select value={selectedTestId} onChange={(event) => selectSavedTest(event.target.value)}><option value="">New Scenario</option>{savedTests.map((test) => <option key={test.id} value={test.id}>{test.name}{test.last_status ? ` — ${test.last_status}` : ''}</option>)}</select></label><label><span>Scenario Name</span><input value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="Enter test name"/></label><button className="gptb-inline-action" disabled={savingScenario || !scenarioName.trim()} onClick={() => void saveScenario()}><Save size={13}/> {savingScenario ? 'Saving…' : 'Save Scenario'}</button></section> : null}
+      {mode === 'test' ? <section><h3>Test Scenario</h3><p className="gptb-help-text">Configure test data and run options for this scenario.</p><label><span>Saved Test</span><select value={selectedTestId} onChange={(event) => selectSavedTest(event.target.value)}><option value="">New Scenario</option>{savedTests.map((test) => <option key={test.id} value={test.id}>{test.name}{test.last_status ? ` — ${test.last_status}` : ''}</option>)}</select></label><label><span>Scenario Name</span><input value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="Enter test name"/></label><button className="gptb-inline-action" disabled={savingScenario || !scenarioName.trim() || invalidAssertions} onClick={() => void saveScenario()}><Save size={13}/> {savingScenario ? 'Saving…' : 'Save Scenario'}</button></section> : null}
       {needsRecord ? <section><h3>{mode === 'test' ? 'Set Triggering Record' : 'Triggering Record'}</h3>
         <label><span>Search records</span><span className="gptb-execution-search"><Search size={13}/><input value={recordSearch} onChange={(event) => setRecordSearch(event.target.value)} placeholder="Search records…"/></span></label>
         <label><span>Record</span><select value={recordId} onChange={(event) => setRecordId(event.target.value)}><option value="">Select a record…</option>{filteredRecords.map((record) => {
@@ -699,15 +719,41 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       {mode === 'test' ? <section><h3>Expected Results</h3>
         <label className="gptb-properties-check"><input type="checkbox" checked={automationEnabled} onChange={(event) => setAutomationEnabled(event.target.checked)}/><span>Scenario Testing Automation</span></label>
         {automationEnabled ? <>
-          <p className="gptb-help-text">Add assertions for the resource values you expect after the scenario runs.</p>
-          <div className="gptb-test-assertions">{assertions.map((assertion, index) => <div key={assertion.id || index}>
-            <span>{index + 1}</span>
-            <select value={assertion.resource || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, resource: event.target.value } : item))}><option value="">Select resource</option>{resources.filter((resource) => resource?.isCollection !== true).map((resource) => <option key={resource.id || resource.apiName} value={`variables.${resource.apiName}`}>{resource.label || resource.apiName}</option>)}</select>
-            <select value={assertion.operator || 'equals'} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, operator: event.target.value } : item))}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="greater_than_or_equal">Greater Than or Equal</option><option value="less_than">Less Than</option><option value="less_than_or_equal">Less Than or Equal</option><option value="is_empty">Is Empty</option><option value="is_not_empty">Is Not Empty</option></select>
-            {!['is_empty','is_not_empty'].includes(assertion.operator) ? <input value={assertion.value ?? ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} placeholder="Expected value"/> : <span/>}
-            <button type="button" aria-label={`Remove assertion ${index + 1}`} onClick={() => setAssertions((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={13}/></button>
-          </div>)}</div>
-          <button className="gptb-inline-action" type="button" onClick={() => setAssertions((current) => [...current, { id: globalThis.crypto?.randomUUID?.() || `assertion-${Date.now()}`, resource: '', operator: 'equals', value: '' }])}><Plus size={13}/> Add Assertion</button>
+          <p className="gptb-help-text">Add expected results for the overall run, individual elements, Decision outcomes, or resource values.</p>
+          <div className="gptb-test-assertions">{assertions.map((assertion, index) => {
+            const type = String(assertion.type || 'RESOURCE_CONDITION').toUpperCase()
+            const decision = elements.find((element) => element.id === assertion.stepId && element.key === 'decision')
+            const decisionOutcomes = decision?.config?.outcomes || []
+            return <div key={assertion.id || index}>
+              <span>{index + 1}</span>
+              <select aria-label={`Assertion ${index + 1} type`} value={type} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value, resource: '', stepId: '', operator: 'equals', value: event.target.value === 'RUN_STATUS' || event.target.value === 'STEP_STATUS' ? 'COMPLETED' : '' } : item))}>
+                <option value="RESOURCE_CONDITION">Resource Value</option>
+                <option value="RUN_STATUS">Run Status</option>
+                <option value="STEP_STATUS">Element Status</option>
+                <option value="DECISION_OUTCOME">Decision Outcome</option>
+              </select>
+              {type === 'RESOURCE_CONDITION' ? <>
+                <select value={assertion.resource || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, resource: event.target.value } : item))}><option value="">Select resource</option>{resources.filter((resource) => resource?.isCollection !== true).map((resource) => <option key={resource.id || resource.apiName} value={`variables.${resource.apiName}`}>{resource.label || resource.apiName}</option>)}</select>
+                <select value={assertion.operator || 'equals'} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, operator: event.target.value } : item))}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="greater_than_or_equal">Greater Than or Equal</option><option value="less_than">Less Than</option><option value="less_than_or_equal">Less Than or Equal</option><option value="is_empty">Is Empty</option><option value="is_not_empty">Is Not Empty</option></select>
+                {!['is_empty','is_not_empty'].includes(assertion.operator) ? <input value={assertion.value ?? ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} placeholder="Expected value"/> : <span/>}
+              </> : type === 'RUN_STATUS' ? <>
+                <span className="gptb-assertion-target">Entire automation</span>
+                <span className="gptb-assertion-target">Status</span>
+                <select value={assertion.value || 'COMPLETED'} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))}><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option><option value="NOT_STARTED">Not Started</option></select>
+              </> : type === 'STEP_STATUS' ? <>
+                <select value={assertion.stepId || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, stepId: event.target.value } : item))}><option value="">Select element</option>{elements.filter((element) => element.key !== 'group').map((element) => <option key={element.id} value={element.id}>{element.label || element.apiName}</option>)}</select>
+                <span className="gptb-assertion-target">Status</span>
+                <select value={assertion.value || 'COMPLETED'} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))}><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option><option value="NOT_RUN">Not Run</option></select>
+              </> : <>
+                <select value={assertion.stepId || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, stepId: event.target.value, value: '' } : item))}><option value="">Select Decision</option>{elements.filter((element) => element.key === 'decision').map((element) => <option key={element.id} value={element.id}>{element.label || element.apiName}</option>)}</select>
+                <span className="gptb-assertion-target">Outcome</span>
+                <select value={assertion.value || ''} disabled={!assertion.stepId} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))}><option value="">Select outcome</option>{decisionOutcomes.map((outcome, outcomeIndex) => <option key={outcome.id || outcomeIndex} value={outcome.id || `outcome-${outcomeIndex + 1}`}>{outcome.label || `Outcome ${outcomeIndex + 1}`}</option>)}<option value="__DEFAULT__">{decision?.config?.defaultLabel || 'Default Outcome'}</option></select>
+              </>}
+              <button type="button" aria-label={`Remove assertion ${index + 1}`} onClick={() => setAssertions((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={13}/></button>
+            </div>
+          })}</div>
+          <button className="gptb-inline-action" type="button" onClick={() => setAssertions((current) => [...current, { id: globalThis.crypto?.randomUUID?.() || `assertion-${Date.now()}`, type: 'RESOURCE_CONDITION', resource: '', stepId: '', operator: 'equals', value: '' }])}><Plus size={13}/> Add Assertion</button>
+          {invalidAssertions ? <p className="gptb-execution-error" role="alert">Complete every assertion before saving or running the scenario.</p> : null}
         </> : null}
       </section> : null}
       {mode !== 'run' ? <section><h3>Select Run Options</h3>
@@ -728,7 +774,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       {error ? <div className="gptb-execution-error" role="alert">{error}</div> : null}
       {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
     </div>
-    <footer><button className="gptb-button" onClick={onClose}>Close</button>{mode !== 'run' ? <button className="gptb-button" onClick={resetExecutionSettings}>Reset Settings</button> : null}<button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId)} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
+    <footer><button className="gptb-button" onClick={onClose}>Close</button>{mode !== 'run' ? <button className="gptb-button" onClick={resetExecutionSettings}>Reset Settings</button> : null}<button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId) || invalidAssertions} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
   </aside>
 }
 
