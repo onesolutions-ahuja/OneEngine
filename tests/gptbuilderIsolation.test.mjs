@@ -171,3 +171,18 @@ test('GPT Builder phase 4 blocks saving incomplete Screen and Action elements bu
   assert.match(page, /Complete Screen and Action elements before saving/)
   assert.match(page, /Complete this element before activating the flow/)
 })
+
+
+test('GPT Builder phase 4 keeps element API identity out of the card until requested in the info tooltip', async () => {
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  assert.match(elements, /API Name: \{instance\.apiName\}/)
+  assert.match(elements, /role="tooltip"/)
+  assert.match(elements, /instance\.description/)
+})
+
+test('GPT Builder phase 4 exposes one shared configuration-to-auto-label hook for later element editors', async () => {
+  const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
+  assert.match(props, /const updateConfig = \(nextConfig\)/)
+  assert.match(props, /children\(\{ draft, updateConfig \}\)/)
+  assert.match(props, /refreshGeneratedIdentity\(draft, elements, draft\.config\)/)
+})
