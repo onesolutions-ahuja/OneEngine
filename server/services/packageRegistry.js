@@ -2140,6 +2140,12 @@ export function packageDefinition(entry) {
             credentialsSchema: [{ key: "token", type: "secret", required: true, label: "OAuth access token" }],
             operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/v1/eats/stores" }],
           },
+          whatsapp_connector: {
+            authType: "bearer",
+            baseUrl: "https://graph.facebook.com/v21.0",
+            credentialsSchema: [{ key: "token", type: "secret", required: true, label: "Meta access token" }],
+            operations: [{ key: "send_message", name: "Send WhatsApp Message", method: "POST", path: "/{{phoneNumberId}}/messages" }],
+          },
         };
         const definition = definitions[entry.key];
         if (!definition) return [];
