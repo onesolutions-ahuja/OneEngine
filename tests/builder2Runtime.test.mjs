@@ -31,3 +31,27 @@ test('assignment preserves variable type and references', () => {
   assert.deepEqual(action.value, { path: 'channel' })
   assert.equal(configuredValue('APPOINTMENT'), 'APPOINTMENT')
 })
+
+test('native transform stores its output target and requires JSON field mappings', () => {
+  const action=nativeRuntimeAction({type:'TRANSFORM',label:'Map customer',config:{
+    source:'variables.customers',target:'variables.payloads',mappingsText:'{"name":"item.name","email":"item.email"}',
+  }})
+  getWorkflowActionDefinition(action.key).validation(action)
+  assert.deepEqual(action.collection,{path:'variables.customers'})
+  assert.equal(action.targetResource,'variables.payloads')
+  assert.deepEqual(action.transformMappings,{name:'item.name',email:'item.email'})
+  assert.throws(()=>nativeRuntimeAction({type:'TRANSFORM',label:'Bad map',config:{source:'variables.rows',target:'variables.out',mappingsText:'not-json'}}),/valid JSON/)
+})
+
+test('native subflow maps API name inputs and outputs without exposing IDs', () => {
+  const action=nativeRuntimeAction({type:'SUBFLOW',label:'Book child',config:{
+    flow:'Appointment_Child',
+    inputsText:'{"customerId":"variables.customerId"}',
+    outputsText:'{"result":"variables.result"}',
+  }})
+  getWorkflowActionDefinition(action.key).validation(action)
+  assert.equal(action.key,'RUN_SUBFLOW')
+  assert.equal(action.workflowId,'Appointment_Child')
+  assert.deepEqual(action.workflowInputs,{customerId:{path:'variables.customerId'}})
+  assert.deepEqual(action.outputMappings,{result:'variables.result'})
+})
