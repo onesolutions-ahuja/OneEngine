@@ -5512,7 +5512,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         passed = isDefaultOutcome
           ? ["__DEFAULT__", "Default", "Default Outcome"].includes(expected)
           : String(actual ?? "") === expected;
-      } else if (type === "RESOURCE_EQUALS") {
+      } else if (type === "RESOURCE_EQUALS" || type === "RESOURCE_CONDITION") {
         actual = resolveWorkflowResource(assertion.resource, {
           record: context.record || null,
           previousRecord: context.previousRecord || null,
@@ -5520,13 +5520,32 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           variables: debugData?.variables || {},
         });
         const expected = assertion.expected;
-        passed = actual != null && typeof actual === "object"
-          ? JSON.stringify(actual) === JSON.stringify(expected)
-          : String(actual ?? "") === String(expected ?? "");
+        const operator = type === "RESOURCE_EQUALS" ? "equals" : String(assertion.operator || "equals");
+        const empty = (value) => value == null || value === "" || (Array.isArray(value) && value.length === 0);
+        const compare = (left, right) => {
+          if (left != null && typeof left === "object") return JSON.stringify(left) === JSON.stringify(right);
+          if (Number.isFinite(Number(left)) && Number.isFinite(Number(right)) && String(left).trim() !== "" && String(right).trim() !== "") {
+            const a = Number(left), b = Number(right);
+            if (operator === "greater_than") return a > b;
+            if (operator === "greater_than_or_equal") return a >= b;
+            if (operator === "less_than") return a < b;
+            if (operator === "less_than_or_equal") return a <= b;
+            return operator === "not_equals" ? a !== b : a === b;
+          }
+          const a = String(left ?? ""), b = String(right ?? "");
+          if (operator === "greater_than") return a > b;
+          if (operator === "greater_than_or_equal") return a >= b;
+          if (operator === "less_than") return a < b;
+          if (operator === "less_than_or_equal") return a <= b;
+          return operator === "not_equals" ? a !== b : a === b;
+        };
+        if (operator === "is_empty") passed = empty(actual);
+        else if (operator === "is_not_empty") passed = !empty(actual);
+        else passed = compare(actual, expected);
       } else {
         actual = "Unsupported assertion";
       }
-      return { index, type, passed, expected: assertion?.expected, actual, label: assertion?.label || null, stepId: assertion?.stepId || null, resource: assertion?.resource || null };
+      return { index, type, passed, expected: assertion?.expected, actual, operator: assertion?.operator || (type === "RESOURCE_EQUALS" ? "equals" : null), label: assertion?.label || null, stepId: assertion?.stepId || null, resource: assertion?.resource || null };
     });
     return { passed: checks.every((check) => check.passed), checks };
   }
@@ -5690,9 +5709,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: rollbackMode, externalActionsSimulated: rollbackMode, variables: { variables: {}, steps: {} } };
           const assertions = Array.isArray(req.body?.assertions) ? req.body.assertions : [];
           const assertionResult = evaluateWorkflowAssertions(notStartedData, assertions, { record, user: req.user });
-          const testPassed = executionMode === "TEST"
-            ? (assertions.length ? assertionResult.passed : false)
-            : null;
+          const testPassed = executionMode === "TEST" && assertions.length ? assertionResult.passed : null;
           return res.json({ success: true, data: { ...notStartedData, assertionResult, testPassed } });
         }
       }
@@ -6776,7 +6793,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     for (let index = 0; index < assertions.length; index += 1) {
       const assertion = assertions[index] || {};
       const type = String(assertion.type || "RUN_STATUS").toUpperCase();
-      if (!["RUN_STATUS", "STEP_STATUS", "DECISION_OUTCOME", "RESOURCE_EQUALS"].includes(type)) return `Assertion ${index + 1} has an unsupported type`;
+      if (!["RUN_STATUS", "STEP_STATUS", "DECISION_OUTCOME", "RESOURCE_EQUALS", "RESOURCE_CONDITION"].includes(type)) return `Assertion ${index + 1} has an unsupported type`;
       if (type === "STEP_STATUS" && (!assertion.stepId || !byId.has(String(assertion.stepId)))) return `Assertion ${index + 1} must reference an existing element`;
       if (type === "DECISION_OUTCOME") {
         const decision = byId.get(String(assertion.stepId || ""));
@@ -6785,7 +6802,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const outcomes = Array.isArray(decision.outcomes) ? decision.outcomes : Array.isArray(decision.config?.outcomes) ? decision.config.outcomes : [];
         if (!["__DEFAULT__", "Default", "Default Outcome"].includes(expected) && !outcomes.some((outcome) => String(outcome?.id || "") === expected)) return `Assertion ${index + 1} must reference a valid Decision outcome`;
       }
-      if (type === "RESOURCE_EQUALS" && !String(assertion.resource || "").trim()) return `Assertion ${index + 1} must select a resource`;
+      if (["RESOURCE_EQUALS","RESOURCE_CONDITION"].includes(type) && !String(assertion.resource || "").trim()) return `Assertion ${index + 1} must select a resource`;
+      if (type === "RESOURCE_CONDITION" && !["equals","not_equals","greater_than","greater_than_or_equal","less_than","less_than_or_equal","is_empty","is_not_empty"].includes(String(assertion.operator || "equals"))) {
+        return `Assertion ${index + 1} has an unsupported operator`;
+      }
     }
     return "";
   }
