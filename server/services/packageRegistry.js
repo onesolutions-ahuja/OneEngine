@@ -632,7 +632,47 @@ export function packageDefinition(entry) {
                 { id:"set_not_connected",label:"Set Not Connected",apiName:"set_not_connected",key:"ASSIGNMENT",variableName:"connected",variableType:"boolean",operator:"set",value:false }
               ]
             }
-          }
+,
+          {
+            objectKey: "uber_eats_connection",
+            name: "GPT - Uber Eats - Upload Menu",
+            triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE",
+            action: { type:"workflow",scope:"uber_eats",flowType:"AUTOLAUNCHED",apiName:"GPT_UBER_EATS_UPLOAD_MENU",capabilityKey:"GPT_UBER_EATS_UPLOAD_MENU",
+              inputs:[{name:"storeId",type:"text",required:true},{name:"menu",type:"object",required:true}],outputs:["success","response"],
+              resources:[
+                {value:"variables.storeId",apiName:"storeId",label:"Store ID",type:"Variable",dataType:"Text",defaultValue:"",isCollection:false,availableInput:true,availableOutput:false,objectKey:""},
+                {value:"variables.menu",apiName:"menu",label:"Menu",type:"Variable",dataType:"Object",defaultValue:null,isCollection:false,availableInput:true,availableOutput:false,objectKey:""},
+                {value:"variables.success",apiName:"success",label:"Success",type:"Variable",dataType:"Boolean",defaultValue:false,isCollection:false,availableInput:false,availableOutput:true,objectKey:""},
+                {value:"variables.response",apiName:"response",label:"Response",type:"Variable",dataType:"Object",defaultValue:null,isCollection:false,availableInput:false,availableOutput:true,objectKey:""}],
+              actions:[
+                {id:"upload_menu",label:"Upload Menu",apiName:"upload_menu",key:"ONE_HTTP_REQUEST",providerKey:"uber_eats",method:"PUT",endpoint:"/v2/eats/stores/{{storeId}}/menus",body:{path:"variables.menu"}},
+                {id:"upload_ok",label:"Menu Upload Successful?",apiName:"upload_ok",key:"CONDITION",outcomes:[{id:"yes",label:"Success",condition:{match:"all",conditions:[{field:"steps.upload_menu.success",operator:"equals",value:true}]},branch:["set_upload_success","set_upload_response"]}],defaultLabel:"Failed",defaultBranch:["set_upload_failed","set_upload_error"]},
+                {id:"set_upload_success",label:"Set Success",apiName:"set_upload_success",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:true},
+                {id:"set_upload_response",label:"Set Response",apiName:"set_upload_response",key:"ASSIGNMENT",variableName:"response",variableType:"object",operator:"set",value:{path:"steps.upload_menu.data"}},
+                {id:"set_upload_failed",label:"Set Failed",apiName:"set_upload_failed",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:false},
+                {id:"set_upload_error",label:"Set Error Response",apiName:"set_upload_error",key:"ASSIGNMENT",variableName:"response",variableType:"object",operator:"set",value:{path:"steps.upload_menu.data"}}
+              ]}
+          },
+          {
+            objectKey: "online_order",
+            name: "GPT - Uber Eats - Accept Order",
+            triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE",
+            action: { type:"workflow",scope:"uber_eats",flowType:"AUTOLAUNCHED",apiName:"GPT_UBER_EATS_ACCEPT_ORDER",capabilityKey:"GPT_UBER_EATS_ACCEPT_ORDER",
+              inputs:[{name:"orderId",type:"text",required:true},{name:"readyForPickupTimeSecs",type:"number",required:false}],outputs:["success","response"],
+              resources:[
+                {value:"variables.orderId",apiName:"orderId",label:"Order ID",type:"Variable",dataType:"Text",defaultValue:"",isCollection:false,availableInput:true,availableOutput:false,objectKey:""},
+                {value:"variables.readyForPickupTimeSecs",apiName:"readyForPickupTimeSecs",label:"Ready For Pickup Seconds",type:"Variable",dataType:"Number",defaultValue:null,isCollection:false,availableInput:true,availableOutput:false,objectKey:""},
+                {value:"variables.success",apiName:"success",label:"Success",type:"Variable",dataType:"Boolean",defaultValue:false,isCollection:false,availableInput:false,availableOutput:true,objectKey:""},
+                {value:"variables.response",apiName:"response",label:"Response",type:"Variable",dataType:"Object",defaultValue:null,isCollection:false,availableInput:false,availableOutput:true,objectKey:""}],
+              actions:[
+                {id:"accept_order",label:"Accept Uber Eats Order",apiName:"accept_order",key:"ONE_HTTP_REQUEST",providerKey:"uber_eats",method:"POST",endpoint:"/v1/eats/orders/{{orderId}}/accept_pos_order",body:{ready_for_pickup_time_secs:{path:"variables.readyForPickupTimeSecs"}}},
+                {id:"accept_ok",label:"Order Accepted?",apiName:"accept_ok",key:"CONDITION",outcomes:[{id:"yes",label:"Accepted",condition:{match:"all",conditions:[{field:"steps.accept_order.success",operator:"equals",value:true}]},branch:["set_accept_success","set_accept_response"]}],defaultLabel:"Failed",defaultBranch:["set_accept_failed","set_accept_error"]},
+                {id:"set_accept_success",label:"Set Success",apiName:"set_accept_success",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:true},
+                {id:"set_accept_response",label:"Set Response",apiName:"set_accept_response",key:"ASSIGNMENT",variableName:"response",variableType:"object",operator:"set",value:{path:"steps.accept_order.data"}},
+                {id:"set_accept_failed",label:"Set Failed",apiName:"set_accept_failed",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:false},
+                {id:"set_accept_error",label:"Set Error Response",apiName:"set_accept_error",key:"ASSIGNMENT",variableName:"response",variableType:"object",operator:"set",value:{path:"steps.accept_order.data"}}
+              ]}
+          }          }
         ]
       } : {}),
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
