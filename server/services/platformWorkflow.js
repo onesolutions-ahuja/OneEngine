@@ -6431,6 +6431,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       results.push({ stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result: priorResult, stepRunId: stepRun.id, idempotentReplay: true });
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = priorResult;
       if (item.apiName) workflowVariables.steps[item.apiName] = priorResult;
+      applyWorkflowActionOutputStorage(item, priorResult, workflowVariables);
       restoreWorkflowRuntimeState(priorResult, workflowVariables, item.id || `step-${globalIndex + 1}`, resolveWorkflowActionType(item));
       if (priorResult?.faultHandled !== true) completed.push({ action: item, stepRunId: stepRun.id, index: globalIndex });
       continue;
@@ -6583,6 +6584,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
       const entry = { stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result, stepRunId: stepRun?.id || null };
       workflowVariables.steps[item.id || `step-${globalIndex + 1}`] = result;
       if (item.apiName) workflowVariables.steps[item.apiName] = result;
+      applyWorkflowActionOutputStorage(item, result, workflowVariables);
       results.push(entry);
 
       if (result?.status === "failed") throw new WorkflowExecutionError(errorDetails(result.error || result), []);
