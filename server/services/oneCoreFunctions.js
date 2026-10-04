@@ -104,7 +104,18 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
   if (!ALLOWED_METHODS.has(requestMethod)) throw new Error(`Unsupported HTTP method: ${requestMethod}`);
   const requestHeaders = { Accept: "application/json", ...headers };
   const effectiveAuthType = connection.auth_type || "none";
-  await applyAuth(requestHeaders, effectiveAuthType, credentials, { connectionId: connection.id, operations: [], configuration: connection.connector_configuration || {} });
+  const connectionConfiguration = connection.connector_configuration || {};
+  const oauthOperation = {
+    key: "oauth_client_credentials",
+    tokenUrl: connectionConfiguration.tokenUrl || connectionConfiguration.token_url || null,
+    tokenUrls: connectionConfiguration.tokenUrls || connectionConfiguration.token_urls || {},
+    scope: connectionConfiguration.scope || connectionConfiguration.oauthScope || connectionConfiguration.oauth_scope || "",
+  };
+  await applyAuth(requestHeaders, effectiveAuthType, credentials, {
+    connectionId: connection.id,
+    operations: effectiveAuthType === "oauth2_client_credentials" ? [oauthOperation] : [],
+    configuration: connectionConfiguration,
+  });
   const effectiveTimeout = Math.max(100, Math.min(120000, Number(timeoutMs || 15000)));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), effectiveTimeout);
