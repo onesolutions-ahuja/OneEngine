@@ -836,3 +836,39 @@
   .b2-workspace{grid-template-columns:220px minmax(360px,1fr)}
   .b2-properties{width:360px}
 }
+
+
+/* Shared decision continuation layout — 2026-10-04 */
+.b2-shared-continuation{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  width:max-content;
+  min-width:244px;
+  margin:2px auto 22px;
+}
+.b2-shared-continuation::before{
+  content:"";
+  width:1px;
+  height:18px;
+  background:#8fa3ba;
+}
+.b2-shared-continuation>span{
+  padding:4px 10px;
+  border:1px solid #c6cbd2;
+  border-radius:999px;
+  background:#f7f8fa;
+  color:#5c6570;
+  font-size:10px;
+  line-height:1.2;
+  font-weight:600;
+}
+.b2-shared-continuation>.b2-line{
+  height:20px;
+  background:#8fa3ba;
+}
+.b2-shared-continuation>.b2-step-wrap{
+  margin-left:auto;
+  margin-right:auto;
+}
