@@ -2193,39 +2193,39 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "TRANSFORM",
     displayName: "Transform",
-    description: "Map source data to a new target shape without writing records.",
+    description: "Map, join, aggregate, and transform source data into a generated target resource without writing records.",
     schema: {
       type: "object",
       properties: {
         collection: { type: "string" },
+        sources: { type: "array" },
+        target: { type: "object" },
+        joins: { type: "array" },
         transformMappings: { type: "object" },
+        outputVariable: { type: "string" },
         outputValue: {},
       },
-      required: ["collection","transformMappings"],
+      required: ["transformMappings"],
     },
     validation: (action) => {
-      if (!action?.collection) throw new Error("Transform requires a source Resource");
+      const sources = Array.isArray(action?.sources) && action.sources.length ? action.sources : (action?.collection ? [action.collection] : []);
+      if (!sources.length) throw new Error("Transform requires at least one source Resource");
       if (action.outputValue === undefined && (!action.transformMappings || typeof action.transformMappings !== "object" || !Object.keys(action.transformMappings).length)) throw new Error("Transform requires at least one mapping or output value");
+      if (sources.length > 1) {
+        if (!Array.isArray(action.joins) || !action.joins.length) throw new Error("Transform requires join keys when multiple source collections are used");
+        for (const join of action.joins) {
+          if (!join?.leftSource || !join?.rightSource || !join?.leftKey || !join?.rightKey) throw new Error("Transform join configuration is incomplete");
+        }
+      }
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, record, previousRecord, req, object, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
       const context = { record, previousRecord, req, object, workflowVariables };
-      const source = resolveConfiguredResource(action.collection, context, { preserveMissing: false });
-      const mappings = action.transformMappings || {};
-      const resolveTransformValue = (sourceValue, item) => {
-        let value;
-        if (typeof sourceValue === "string" && sourceValue.startsWith("item.")) value = String(sourceValue).slice(5).split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], item);
-        else if (sourceValue === "item") value = item;
-        else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Array.isArray(sourceValue.coalesce)) {
-          value = sourceValue.coalesce.map((entry) => resolveTransformValue(entry, item)).find((entry) => entry !== undefined && entry !== null && entry !== "");
-        } else if (sourceValue && typeof sourceValue === "object" && !Array.isArray(sourceValue) && Object.prototype.hasOwnProperty.call(sourceValue, "source")) {
-          value = resolveTransformValue(sourceValue.source, item);
-          if (sourceValue.multiply !== undefined) value = Number(value) * Number(sourceValue.multiply);
-          if (sourceValue.round === true) value = Math.round(Number(value));
-        } else value = resolveConfiguredResource(sourceValue, { ...context, record: item }, { preserveMissing: false });
-        return value;
-      };
+      const sourcePaths = Array.isArray(action.sources) && action.sources.length ? action.sources : [action.collection].filter(Boolean);
+      const sourceEntries = sourcePaths.map((path) => [path, resolveConfiguredResource(path, context, { preserveMissing: false })]);
+      const getPath = (value, path) => String(path || "").split(".").filter(Boolean).reduce((current, part) => current == null ? undefined : current?.[part], value);
       const assignPath = (target, path, value) => {
         const parts = String(path || "").split(".").filter(Boolean);
         if (!parts.length) return;
@@ -2235,20 +2235,110 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           else cursor = cursor[part] ||= {};
         });
       };
-      const transformOne = (item) => {
-        const output = {};
-        for (const [targetPath, sourceValue] of Object.entries(mappings)) {
-          const value = resolveTransformValue(sourceValue, item);
-          assignPath(output, targetPath, value);
+      const sourceName = (path) => String(path || "").replace(/^variables\./, "");
+      const sourceValue = (expression, item, rowContext = {}) => {
+        if (expression == null) return expression;
+        if (typeof expression === "string") {
+          if (expression === "item") return item;
+          if (expression.startsWith("item.")) return getPath(item, expression.slice(5));
+          const eachMatch = /^\[\$EachItem\](?:\.(.+))?$/.exec(expression);
+          if (eachMatch) return eachMatch[1] ? getPath(item, eachMatch[1]) : item;
+          const sourceMatch = /^([A-Za-z_][A-Za-z0-9_]*)\.(.+)$/.exec(expression);
+          if (sourceMatch && Object.prototype.hasOwnProperty.call(rowContext, sourceMatch[1])) return getPath(rowContext[sourceMatch[1]], sourceMatch[2]);
         }
+        return resolveConfiguredResource(expression, { ...context, record: item }, { preserveMissing: false });
+      };
+      const resolveMapping = (mapping, item, rowContext, sourceCollections) => {
+        if (mapping && typeof mapping === "object" && !Array.isArray(mapping)) {
+          if (Object.prototype.hasOwnProperty.call(mapping, "fixed")) return mapping.fixed;
+          if (mapping.formula != null) {
+            const formula = String(mapping.formula || "").replace(/\[\$EachItem\]/g, "CurrentItem");
+            return evaluateWorkflowFormula(formula, {
+              CurrentItem: item,
+              record: item,
+              variables: { ...(workflowVariables.variables || {}), ...rowContext },
+              steps: workflowVariables.steps || {},
+            });
+          }
+          if (mapping.aggregate) {
+            const firstCollection = sourceCollections.find((entry) => Array.isArray(entry[1]))?.[1] || [];
+            if (String(mapping.aggregate).toLowerCase() === "count") return firstCollection.length;
+            if (String(mapping.aggregate).toLowerCase() === "sum") return firstCollection.reduce((total, entry) => total + Number(getPath(entry, mapping.field) || 0), 0);
+          }
+          if (mapping.valueMap) {
+            const raw = sourceValue(mapping.source, item, rowContext);
+            const definition = action.valueMaps?.[mapping.valueMap] || workflowVariables.valueMaps?.[mapping.valueMap] || null;
+            if (!definition) return raw;
+            const entries = definition.entries || definition.values || {};
+            if (Object.prototype.hasOwnProperty.call(entries, raw)) return entries[raw];
+            if (definition.defaultBehavior === "fail") throw new Error(`Transform Value Map "${mapping.valueMap}" has no mapping for value "${raw}"`);
+            if (definition.defaultBehavior === "default") return definition.defaultValue;
+            return raw;
+          }
+          if (Array.isArray(mapping.coalesce)) return mapping.coalesce.map((entry) => resolveMapping(entry, item, rowContext, sourceCollections)).find((entry) => entry !== undefined && entry !== null && entry !== "");
+          if (Object.prototype.hasOwnProperty.call(mapping, "source")) {
+            let value = sourceValue(mapping.source, item, rowContext);
+            if (mapping.multiply !== undefined) value = Number(value) * Number(mapping.multiply);
+            if (mapping.round === true) value = Math.round(Number(value));
+            return value;
+          }
+        }
+        return sourceValue(mapping, item, rowContext);
+      };
+      const joins = Array.isArray(action.joins) ? action.joins : [];
+      let rows;
+      if (sourceEntries.length <= 1) {
+        const value = sourceEntries[0]?.[1];
+        rows = Array.isArray(value)
+          ? value.map((item) => ({ item, context: { [sourceName(sourceEntries[0]?.[0])]: item } }))
+          : [{ item: value && typeof value === "object" ? value : {}, context: { [sourceName(sourceEntries[0]?.[0])]: value } }];
+      } else {
+        const first = sourceEntries[0];
+        rows = (Array.isArray(first[1]) ? first[1] : []).map((item) => ({ item, context: { [sourceName(first[0])]: item } }));
+        for (const join of joins) {
+          const leftName = sourceName(join.leftSource);
+          const rightName = sourceName(join.rightSource);
+          const rightEntry = sourceEntries.find(([path]) => path === join.rightSource);
+          if (!rightEntry || !Array.isArray(rightEntry[1])) continue;
+          const next = [];
+          for (const row of rows) {
+            const leftItem = row.context[leftName];
+            if (!leftItem) continue;
+            const leftKey = getPath(leftItem, join.leftKey);
+            for (const rightItem of rightEntry[1]) {
+              const rightKey = getPath(rightItem, join.rightKey);
+              if (leftKey === rightKey || String(leftKey ?? "") === String(rightKey ?? "")) {
+                next.push({ item: { ...row.item, ...rightItem }, context: { ...row.context, [rightName]: rightItem } });
+              }
+            }
+          }
+          rows = next;
+        }
+      }
+      const mappings = action.transformMappings || {};
+      const transformOne = (row) => {
+        const output = {};
+        for (const [targetPath, mapping] of Object.entries(mappings)) assignPath(output, targetPath, resolveMapping(mapping, row.item, row.context, sourceEntries));
         return output;
       };
-      if (Array.isArray(source)) {
-        const collection = action.outputValue !== undefined ? source.map((item) => resolveTransformValue(action.outputValue, item)) : source.map(transformOne);
-        return { status: "completed", collection, count: collection.length, value: collection };
+      let value;
+      if (action.outputValue !== undefined) {
+        const values = rows.map((row) => resolveMapping(action.outputValue, row.item, row.context, sourceEntries));
+        value = Array.isArray(sourceEntries[0]?.[1]) || action?.target?.isCollection ? values : values[0];
+      } else {
+        const values = rows.map(transformOne);
+        value = action?.target?.isCollection || Array.isArray(sourceEntries[0]?.[1]) ? values : values[0];
       }
-      const value = action.outputValue !== undefined ? resolveTransformValue(action.outputValue, source && typeof source === "object" ? source : {}) : transformOne(source && typeof source === "object" ? source : {});
-      return { status: "completed", value, collection: null };
+      const outputVariable = String(action.outputVariable || action.apiName || "").trim();
+      if (outputVariable) workflowVariables.variables[outputVariable] = value;
+      return {
+        status: "completed",
+        value,
+        collection: Array.isArray(value) ? value : null,
+        count: Array.isArray(value) ? value.length : null,
+        outputVariable: outputVariable || null,
+        target: action.target || null,
+      };
     },
   },
   {
