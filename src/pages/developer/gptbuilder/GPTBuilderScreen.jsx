@@ -5,12 +5,12 @@ const uid=(prefix='cmp')=>globalThis.crypto?.randomUUID?.()||`${prefix}-${Date.n
 const resourcePath=(resource)=>resource?`variables.${resource.apiName}`:''
 const COMPONENTS=[
   ['DISPLAY_TEXT','Display Text','display'],['TEXT','Text','input'],['LONG_TEXT','Long Text Area','input'],['NUMBER','Number','input'],['CURRENCY','Currency','input'],
-  ['CHECKBOX','Checkbox','input'],['PICKLIST','Picklist','input'],['RADIO','Radio Buttons','input'],['DATE','Date','input'],['DATETIME','Date/Time','input'],
-  ['EMAIL','Email','input'],['PHONE','Phone','input'],['URL','URL','input'],['PASSWORD','Password','input'],['SECTION','Section','layout'],
+  ['CHECKBOX','Checkbox','input'],['CHECKBOX_GROUP','Checkbox Group','input'],['PICKLIST','Picklist','input'],['MULTISELECT','Multi-Select Picklist','input'],['RADIO','Radio Buttons','input'],['DATE','Date','input'],['DATETIME','Date/Time','input'],
+  ['EMAIL','Email','input'],['PHONE','Phone','input'],['URL','URL','input'],['PASSWORD','Password','input'],['SLIDER','Slider','input'],['TOGGLE','Toggle','input'],['LOOKUP','Lookup','input'],['ADDRESS','Address','input'],['NAME','Name','input'],['SECTION','Section','layout'],
   ['DATA_TABLE','Data Table','display'],['IMAGE','Image','display'],['LINK','Link','display'],['FILE_UPLOAD','File Upload','input'],['PROGRESS','Progress Indicator','display'],
 ]
-const inputType=(type)=>['TEXT','LONG_TEXT','NUMBER','CURRENCY','CHECKBOX','PICKLIST','RADIO','DATE','DATETIME','EMAIL','PHONE','URL','PASSWORD','FILE_UPLOAD'].includes(type)
-const dataTypeFor=(type)=>({NUMBER:'number',CURRENCY:'currency',CHECKBOX:'boolean',DATE:'date',DATETIME:'datetime',FILE_UPLOAD:'text'}[type]||'text')
+const inputType=(type)=>['TEXT','LONG_TEXT','NUMBER','CURRENCY','CHECKBOX','CHECKBOX_GROUP','PICKLIST','MULTISELECT','RADIO','DATE','DATETIME','EMAIL','PHONE','URL','PASSWORD','SLIDER','TOGGLE','LOOKUP','ADDRESS','NAME','FILE_UPLOAD'].includes(type)
+const dataTypeFor=(type)=>({NUMBER:'number',CURRENCY:'currency',SLIDER:'number',CHECKBOX:'boolean',TOGGLE:'boolean',CHECKBOX_GROUP:'text',MULTISELECT:'text',DATE:'date',DATETIME:'datetime',ADDRESS:'object',NAME:'object',FILE_UPLOAD:'text'}[type]||'text')
 const apiName=(label='Component')=>{
   let value=String(label).trim().replace(/[^A-Za-z0-9]+/g,'_').replace(/_+/g,'_').replace(/^_+|_+$/g,'')
   if(!value)value='Component'
@@ -53,8 +53,8 @@ function defaultComponent(type,label){
   const name=apiName(label)
   return{id:uid(),type,name,label,input:inputType(type),required:false,readOnly:false,helpText:'',defaultValue:'',visibilityMode:'always',visibilityResource:'',visibilityOperator:'truthy',visibilityValue:'',columns:type==='SECTION'?2:undefined,text:type==='DISPLAY_TEXT'?'Display text':undefined,options:['Option 1','Option 2']}
 }
-function ComponentPreview({component,selected,onSelect}){
-  return <button type="button" className={`gptb-screen-preview-component${selected?' is-selected':''}`} onClick={onSelect}>
+function ComponentPreview({component,selected,onSelect,onDragStart,onDragOver,onDrop}){
+  return <button type="button" draggable className={`gptb-screen-preview-component${selected?' is-selected':''}`} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onClick={onSelect}>
     <span className="gptb-screen-drag"><GripVertical size={13}/></span>
     <span className="gptb-screen-preview-body">
       {component.visibilityMode&&component.visibilityMode!=='always'?<Eye size={11}/>:null}
@@ -80,6 +80,12 @@ export default function GPTBuilderScreen({draft,updateConfig,resources=[],onReso
     patch({components:[...config.components,next]});setSelectedId(next.id)
   }
   const removeComponent=(id)=>{patch({components:config.components.filter((component)=>component.id!==id)});setSelectedId('screen')}
+  const moveComponent=(sourceId,targetId)=>{
+    if(!sourceId||!targetId||sourceId===targetId)return
+    const next=[...config.components],from=next.findIndex((component)=>component.id===sourceId),to=next.findIndex((component)=>component.id===targetId)
+    if(from<0||to<0)return
+    const [item]=next.splice(from,1);next.splice(to,0,item);patch({components:next})
+  }
   useEffect(()=>{
     if(!draft.id||!onResourcesChange)return
     const generated=config.components.filter((component)=>inputType(component.type)&&component.name).map((component)=>({
@@ -92,9 +98,9 @@ export default function GPTBuilderScreen({draft,updateConfig,resources=[],onReso
   },[draft.id,JSON.stringify(config.components)])
 
   return <div className="gptb-screen-builder">
-    <aside className="gptb-screen-palette"><h3>Components</h3>{['input','display','layout'].map((category)=><div key={category}><h4>{category}</h4>{COMPONENTS.filter(([, ,kind])=>kind===category).map(([type,label])=><button type="button" key={type} onClick={()=>addComponent(type,label)}><Plus size={12}/>{label}</button>)}</div>)}</aside>
+    <aside className="gptb-screen-palette"><h3>Components</h3>{['input','display','layout'].map((category)=><div key={category}><h4>{category}</h4>{COMPONENTS.filter(([, ,kind])=>kind===category).map(([type,label])=><button type="button" draggable key={type} onDragStart={(event)=>{event.dataTransfer.setData('application/x-gptbuilder-screen-component',JSON.stringify({type,label}))}} onClick={()=>addComponent(type,label)}><Plus size={12}/>{label}</button>)}</div>)}</aside>
     <main className="gptb-screen-preview"><button type="button" className={`gptb-screen-frame-header${selectedId==='screen'?' is-selected':''}`} onClick={()=>setSelectedId('screen')}>{config.showHeader?draft.label:'Header hidden'}</button>
-      <div className="gptb-screen-preview-content">{config.components.length?config.components.map((component)=><ComponentPreview key={component.id} component={component} selected={selectedId===component.id} onSelect={()=>setSelectedId(component.id)}/>):<span className="gptb-screen-empty">Add components from the palette.</span>}</div>
+      <div className="gptb-screen-preview-content" onDragOver={(event)=>event.preventDefault()} onDrop={(event)=>{const raw=event.dataTransfer.getData('application/x-gptbuilder-screen-component');if(raw){event.preventDefault();try{const item=JSON.parse(raw);addComponent(item.type,item.label)}catch{}}}}>{config.components.length?config.components.map((component)=><ComponentPreview key={component.id} component={component} selected={selectedId===component.id} onSelect={()=>setSelectedId(component.id)} onDragStart={(event)=>event.dataTransfer.setData('application/x-gptbuilder-screen-existing',component.id)} onDragOver={(event)=>event.preventDefault()} onDrop={(event)=>{const source=event.dataTransfer.getData('application/x-gptbuilder-screen-existing');if(source){event.preventDefault();moveComponent(source,component.id)}}}/>):<span className="gptb-screen-empty">Drag components here or add them from the palette.</span>}</div>
       {config.showFooter?<footer><button type="button" disabled>{config.allowBack?config.previousLabel:'Previous hidden'}</button><button type="button" disabled>{config.allowNext?config.nextLabel:config.finishLabel}</button></footer>:null}
     </main>
     <aside className="gptb-screen-properties">
@@ -106,6 +112,9 @@ export default function GPTBuilderScreen({draft,updateConfig,resources=[],onReso
         {selected.type==='DISPLAY_TEXT'?<label><span>Text <b>*</b></span><textarea rows={4} value={selected.text||''} onChange={(event)=>patchComponent(selected.id,{text:event.target.value})}/></label>:null}
         {inputType(selected.type)?<><label><span>Label <b>*</b></span><input value={selected.label||''} onChange={(event)=>patchComponent(selected.id,{label:event.target.value})}/></label><label><span>Help Text</span><input value={selected.helpText||''} onChange={(event)=>patchComponent(selected.id,{helpText:event.target.value})}/></label><label className="gptb-properties-check"><input type="checkbox" checked={selected.required===true} onChange={(event)=>patchComponent(selected.id,{required:event.target.checked})}/><span>Require</span></label><label className="gptb-properties-check"><input type="checkbox" checked={selected.readOnly===true} onChange={(event)=>patchComponent(selected.id,{readOnly:event.target.checked})}/><span>Read Only</span></label><label><span>Default Value</span><input value={selected.defaultValue??''} onChange={(event)=>patchComponent(selected.id,{defaultValue:event.target.value})}/></label></>:null}
         {selected.type==='SECTION'?<label><span>Columns</span><select value={selected.columns||2} onChange={(event)=>patchComponent(selected.id,{columns:Number(event.target.value)})}>{[1,2,3,4].map((n)=><option key={n} value={n}>{n}</option>)}</select></label>:null}
+        {['PICKLIST','RADIO','CHECKBOX_GROUP','MULTISELECT'].includes(selected.type)?<label><span>Choices</span><textarea rows={4} value={(selected.options||[]).join('\n')} onChange={(event)=>patchComponent(selected.id,{options:event.target.value.split('\n').filter(Boolean).map((value)=>({label:value,value}))})} placeholder="One option per line"/></label>:null}
+        {selected.type==='SLIDER'?<><label><span>Minimum</span><input type="number" value={selected.min??0} onChange={(event)=>patchComponent(selected.id,{min:Number(event.target.value)})}/></label><label><span>Maximum</span><input type="number" value={selected.max??100} onChange={(event)=>patchComponent(selected.id,{max:Number(event.target.value)})}/></label><label><span>Step</span><input type="number" value={selected.step??1} onChange={(event)=>patchComponent(selected.id,{step:Number(event.target.value)})}/></label></>:null}
+        {selected.type==='LOOKUP'?<><label><span>Object API Name</span><input value={selected.lookupObject||''} onChange={(event)=>patchComponent(selected.id,{lookupObject:event.target.value})}/></label><label><span>Display Field</span><input value={selected.lookupField||''} onChange={(event)=>patchComponent(selected.id,{lookupField:event.target.value})}/></label></>:null}
         <section><h4>Set Component Visibility</h4><label><span>When to Display Component</span><select value={selected.visibilityMode||'always'} onChange={(event)=>patchComponent(selected.id,{visibilityMode:event.target.value})}><option value="always">Always</option><option value="condition">When conditions are met</option></select></label>{selected.visibilityMode==='condition'?<><label><span>Resource</span><select value={selected.visibilityResource||''} onChange={(event)=>patchComponent(selected.id,{visibilityResource:event.target.value})}><option value="">Select a resource</option>{resources.filter((resource)=>resource.generatedByElementId!==draft.id||resource.apiName!==selected.name).map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resource.label||resource.apiName}</option>)}</select></label><label><span>Operator</span><select value={selected.visibilityOperator||'truthy'} onChange={(event)=>patchComponent(selected.id,{visibilityOperator:event.target.value})}>{[['truthy','Is True'],['falsy','Is False'],['is_empty','Is Empty'],['is_not_empty','Is Not Empty'],['equals','Equals'],['not_equals','Does Not Equal'],['contains','Contains'],['greater_than','Greater Than'],['less_than','Less Than']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{!['truthy','falsy','is_empty','is_not_empty'].includes(selected.visibilityOperator)?<label><span>Value</span><input value={selected.visibilityValue??''} onChange={(event)=>patchComponent(selected.id,{visibilityValue:event.target.value})}/></label>:null}</>:null}</section>
       </>:null}
     </aside>
