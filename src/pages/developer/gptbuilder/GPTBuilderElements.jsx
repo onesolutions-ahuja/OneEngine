@@ -1,6 +1,6 @@
 import React from 'react'
 import {
-  ArrowUpDown, Boxes, CircleHelp, Clock3, Copy, Database, Filter, GitBranch,
+  ArrowUpDown, Bot, Boxes, CircleHelp, Clock3, Copy, Database, Filter, GitBranch,
   LayoutPanelLeft, ListChecks, Pencil, Plus, Repeat2, Search, Shuffle,
   Trash2, TriangleAlert, Workflow, X, Zap,
 } from 'lucide-react'
@@ -12,7 +12,8 @@ export const ELEMENT_CATEGORIES = [
 ]
 
 export const ELEMENTS = [
-  { key: 'action', label: 'Action', category: 'interaction', icon: Zap, description: 'Run an available action, such as a communication, approval, or external integration.' },
+  { key: 'action', label: 'Action', category: 'interaction', icon: Zap, description: 'Run an available action, such as a communication, approval, Apex action, or external integration.' },
+  { key: 'run_agent', label: 'Run Agent', category: 'interaction', icon: Bot, description: 'Use an active agent to handle a task dynamically and return its response to the flow.' },
   { key: 'screen', label: 'Screen', category: 'interaction', icon: LayoutPanelLeft, description: 'Display information to users or collect information from them.' },
   { key: 'subflow', label: 'Subflow', category: 'interaction', icon: Workflow, description: 'Run another active flow and pass values between the parent flow and subflow.' },
 
@@ -46,8 +47,11 @@ export function getAvailableElements({ flowType, startConfig = {}, layout = 'aut
     if (element.key === 'group') return layout === 'auto'
     if (element.key === 'transform') return ['record', 'screen', 'autolaunched'].includes(flowType)
     if (['wait_duration', 'wait_conditions', 'wait_until_date'].includes(element.key)) {
-      return ['autolaunched', 'schedule', 'platform_event'].includes(flowType)
+      if (flowType === 'screen' || fastRecord) return false
+      return ['record', 'autolaunched', 'schedule', 'platform_event'].includes(flowType)
     }
+
+    if (element.key === 'run_agent' && fastRecord) return false
 
     if (fastRecord) {
       // Current Salesforce before-save guidance and examples expose the
