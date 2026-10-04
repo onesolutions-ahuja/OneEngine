@@ -146,6 +146,7 @@ test("booking router validates custom dates, no-slot retry state and slot bounds
   assert.equal(byId.get("parse_custom_date")?.expression, "PARSEDATE(inputDate)");
   assert.deepEqual(byId.get("custom_date_valid")?.defaultBranch, ["send_invalid_date"]);
   assert.deepEqual(byId.get("custom_date_valid")?.outcomes?.[0]?.branch?.slice(0,1), ["set_next_custom_date"]);
+  assert.ok(byId.get("custom_date_valid")?.outcomes?.[0]?.condition?.conditions?.some((condition) => condition.field === "variables.selectedDate" && condition.operator === "greater_than" && condition.value?.path === "variables.currentDate"));
   assert.equal(byId.has("set_custom_date"), false);
   assert.deepEqual(byId.get("availability_rules_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
   assert.deepEqual(byId.get("availability_found")?.defaultBranch, ["reset_to_date","send_no_slots"]);
