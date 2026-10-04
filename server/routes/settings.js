@@ -1185,10 +1185,10 @@ export default function createSettingsRouter({
             db,
             companyId,
             userId: req.user.id || null,
-            systemKey: "action:UBER_GET_STORES",
+            systemKey: "workflow:GPT_UBER_EATS_GET_STORES",
             req,
             input: {},
-            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "UBER_GET_STORES" },
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "GPT_UBER_EATS_GET_STORES" },
           }).then((execution) => execution.result),
           db("SELECT id FROM stores WHERE company_id=$1 AND active=true", [companyId]),
         ]);
