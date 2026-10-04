@@ -236,7 +236,7 @@ const builderNodeToRuntimeAction=(node,{edges=[],resources=[]}={})=>{
   if(node.type==='TRANSFORM')return {...base,type:'TRANSFORM',collection:p.source,transformMappings:parseObjectText(p.mappingsText)}
   if(node.type==='CUSTOM_ERROR')return {...base,type:'CUSTOM_ERROR',errorMessage:p.message,errorField:p.location==='field'?p.field:undefined}
   if(node.type==='SUBFLOW')return {...base,type:'RUN_SUBFLOW',workflowId:p.flow,inputs:p.inputs||parseObjectText(p.inputsText),outputMappings:p.outputs||parseObjectText(p.outputsText)}
-  if(node.type==='SCREEN')return {...base,type:'SCREEN',screen:{...p,label:node.label,apiName:node.apiName,components:(p.components||[]).map(item=>({...item,name:item.name||item.apiName||item.id}))},allowBack:p.navigation!=='next'&&p.navigation!=='finish',allowNext:p.navigation!=='finish',allowFinish:p.navigation==='finish',showFooter:p.showFooter!==false}
+  if(node.type==='SCREEN')return {...base,type:'SCREEN',screen:{...p,label:node.label,apiName:node.apiName,components:(p.components||[]).map(item=>({...item,name:item.name||item.apiName||item.id}))},allowBack:p.navigation!=='next'&&p.navigation!=='finish',allowNext:p.navigation!=='finish',allowFinish:p.navigation==='finish',allowPause:p.allowPause===true,showFooter:p.showFooter!==false}
   if(node.type==='ACTION'){
     let inputs=p.inputs&&typeof p.inputs==='object'?p.inputs:{}
     if(String(p.inputsText||'').trim()){
