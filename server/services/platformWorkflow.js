@@ -5176,33 +5176,143 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "WAIT_UNTIL_DATE",
     displayName: "Wait Until Date",
-    description: "Pause a workflow until a specific Date/Time Resource.",
+    description: "Pause a workflow until a calendar date/time or a Date/DateTime attribute.",
     schema: {
       type: "object",
-      properties: { resumeAt: {} },
-      required: ["resumeAt"],
+      properties: {
+        mode: { type: "string", enum: ["enter_date","get_attribute"] },
+        resumeDate: { type: "string" },
+        resumeTime: { type: "string" },
+        timeZone: { type: "string" },
+        attribute: {},
+        attributeType: { type: "string" },
+        relativeEnabled: { type: "boolean" },
+        relativeNumber: { type: "number" },
+        relativeUnit: { type: "string", enum: ["hours","days"] },
+        relativeWhen: { type: "string", enum: ["before","after"] },
+        specificTimeEnabled: { type: "boolean" },
+        attributeResumeTime: { type: "string" },
+        attributeTimeZone: { type: "string" },
+        resumeAt: {},
+      },
+      required: [],
     },
     validation: (action) => {
-      if (!action?.resumeAt) throw new Error("Wait Until Date requires a date/time Resource");
+      const mode = action?.mode || (action?.resumeAt ? "get_attribute" : "");
+      if (!["enter_date","get_attribute"].includes(mode)) throw new Error("Wait Until Date requires Enter Date or Get from Attribute");
+      if (mode === "enter_date") {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(action?.resumeDate || ""))) throw new Error("Wait Until Date requires a valid Resume Date");
+        if (action?.resumeTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(action.resumeTime))) throw new Error("Wait Until Date Resume Time is invalid");
+      } else {
+        if (!(action?.attribute || action?.resumeAt)) throw new Error("Wait Until Date requires a Date or Date/Time attribute");
+        if (action?.relativeEnabled === true) {
+          if (!Number.isInteger(Number(action.relativeNumber)) || Number(action.relativeNumber) < 0) throw new Error("Wait Until Date relative number must be a whole number of 0 or greater");
+          if (!["hours","days"].includes(String(action.relativeUnit || ""))) throw new Error("Wait Until Date relative unit must be Hours or Days");
+          if (!["before","after"].includes(String(action.relativeWhen || ""))) throw new Error("Wait Until Date relative timing must be Before or After");
+        }
+        if (action?.specificTimeEnabled === true && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(action?.attributeResumeTime || ""))) {
+          throw new Error("Wait Until Date attribute Resume Time is invalid");
+        }
+      }
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, companyId, req, runId = null, stepRunId = null, record = null, previousRecord = null, object = null, workflowVariables = {} }) => {
       const tenantId = companyId || req?.user?.companyId;
-      const resolvedResumeAt = resolveConfiguredResource(action.resumeAt, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
-      const runAt = new Date(resolvedResumeAt);
-      if (Number.isNaN(runAt.getTime())) throw new Error("Wait Until Date value is invalid");
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const orgTimeZone = String(req?.user?.timeZone || req?.user?.timezone || "UTC");
+      const validZone = (value) => {
+        const zone = String(value || orgTimeZone);
+        try { new Intl.DateTimeFormat("en-US", { timeZone: zone }).format(new Date()); return zone; }
+        catch { return orgTimeZone; }
+      };
+      const zonedParts = (date, timeZone) => {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone,
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit",
+          hourCycle: "h23",
+        }).formatToParts(date);
+        return Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+      };
+      const localToUtc = (year, month, day, hour, minute, timeZone) => {
+        let guess = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const parts = zonedParts(new Date(guess), timeZone);
+          const rendered = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second || 0));
+          const desired = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+          const delta = desired - rendered;
+          if (Math.abs(delta) < 1000) break;
+          guess += delta;
+        }
+        return new Date(guess);
+      };
+      const nextLocalDay = (year, month, day) => {
+        const date = new Date(Date.UTC(year, month - 1, day));
+        date.setUTCDate(date.getUTCDate() + 1);
+        return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+      };
+
+      const mode = action?.mode || (action?.resumeAt ? "get_attribute" : "enter_date");
+      let runAt = new Date();
+      if (mode === "enter_date") {
+        const zone = validZone(action.timeZone);
+        const [year, month, day] = String(action.resumeDate).split("-").map(Number);
+        const [hour, minute] = String(action.resumeTime || "00:00").split(":").map(Number);
+        runAt = localToUtc(year, month, day, hour, minute, zone);
+      } else {
+        const raw = resolveConfiguredResource(action.attribute || action.resumeAt, context, { preserveMissing: false });
+        const zone = validZone(action.attributeTimeZone);
+        const attributeType = String(action.attributeType || "").toLowerCase();
+        if (raw == null || raw === "") {
+          runAt = new Date();
+        } else if (attributeType === "date" && /^\d{4}-\d{2}-\d{2}$/.test(String(raw))) {
+          const [year, month, day] = String(raw).split("-").map(Number);
+          runAt = localToUtc(year, month, day, 0, 0, zone);
+        } else {
+          runAt = new Date(raw);
+          if (Number.isNaN(runAt.getTime())) runAt = new Date();
+        }
+
+        if (action.relativeEnabled === true) {
+          const amount = Number(action.relativeNumber || 0) * (String(action.relativeWhen) === "before" ? -1 : 1);
+          const unit = String(action.relativeUnit || "days");
+          runAt = new Date(runAt.getTime() + amount * (unit === "hours" ? 3600000 : 86400000));
+        }
+
+        if (action.specificTimeEnabled === true) {
+          const [hour, minute] = String(action.attributeResumeTime).split(":").map(Number);
+          const local = zonedParts(runAt, zone);
+          let dateParts = { year: Number(local.year), month: Number(local.month), day: Number(local.day) };
+          let candidate = localToUtc(dateParts.year, dateParts.month, dateParts.day, hour, minute, zone);
+          if (candidate.getTime() < Date.now()) {
+            dateParts = nextLocalDay(dateParts.year, dateParts.month, dateParts.day);
+            candidate = localToUtc(dateParts.year, dateParts.month, dateParts.day, hour, minute, zone);
+          }
+          runAt = candidate;
+        } else if (runAt.getTime() < Date.now()) {
+          runAt = new Date();
+        }
+      }
+
+      if (Number.isNaN(runAt.getTime())) runAt = new Date();
       const job = await enqueuePlatformJob({
         db,
         companyId: tenantId,
         kind: "WAIT",
-        payload: { resumeAt: runAt.toISOString(), runId, stepRunId },
+        payload: {
+          resumeAt: runAt.toISOString(),
+          runId,
+          stepRunId,
+          waitUntilDate: true,
+          mode,
+        },
         runAt,
         idempotencyKey: `${tenantId || "workflow"}:wait-until:${runId || "no-run"}:${stepRunId || action.id || runAt.toISOString()}`,
       });
       if (job?.id && stepRunId) await db("UPDATE platform_workflow_step_runs SET durable_job_id=$1,updated_at=NOW() WHERE id=$2", [job.id, stepRunId]);
       if (job?.id && runId && tenantId) await db("UPDATE platform_workflow_runs SET status='WAITING',completed_at=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [runId, tenantId]);
-      return { status: job ? "waiting" : "skipped", jobId: job?.id || null, resumeAt: runAt.toISOString() };
+      return { status: job ? "waiting" : "skipped", jobId: job?.id || null, resumeAt: runAt.toISOString(), mode };
     },
   },
   {
