@@ -21,7 +21,7 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
     return <div key={id} className="b2-step-wrap">
       <button data-node-id={id} className={`b2-node ${selected === id || selectedMany.includes(id) ? 'is-selected' : ''}`} onClick={() => onSelect(node)}>
         <span className="b2-node-icon">{paths.length ? <GitBranch size={16}/> : node.type === 'ACTION' ? <Zap size={16}/> : <Database size={16}/>}</span>
-        <span><b>{node.label}</b><small>{node.type.replaceAll('_', ' ')}</small></span>
+        <span title={node.type.replaceAll('_',' ')+' · '+node.apiName}><b>{node.label}</b><span className="b2-node-meta">ⓘ</span></span>
       </button>
       <div className="b2-path-controls"><button type="button" aria-label={`Copy ${node.label}`} onClick={() => onCopy(id)}>Copy</button><button type="button" aria-label={`Delete ${node.label}`} onClick={() => onDelete(id)}>Delete</button>{paths.length ? <button type="button" onClick={() => onToggle(id)}>{collapsed[id] ? 'Expand Paths' : 'Collapse Paths'}</button> : null}</div>
       <div className="b2-line"/>
@@ -37,6 +37,6 @@ export default function Builder2AutoLayout({ nodes, selected, selectedMany = [],
     <button className="b2-start" onClick={onStart}><span>Start</span><small>{startConfig.objectKey ? `${startConfig.objectKey} · ${String(startConfig.trigger).replaceAll('_', ' ')}` : 'Configure Trigger'}</small></button>
     <div className="b2-line"/>
     {nodes.filter(node => !referenced.has(node.id)).map(node => renderNode(node.id))}
-    <button className="b2-add" aria-label="Add element to main path" onClick={() => onAdd(null)}><Plus size={14}/></button><div className="b2-line"/><div className="b2-end">■ <span>End</span></div>
+    <button className="b2-add" aria-label="Add element to main path" onClick={() => onAdd(null)}><Plus size={14}/></button><div className="b2-line"/><div className="b2-end" title="End"><span aria-hidden="true">■</span><b className="sr-only">End</b></div>
   </div>
 }
