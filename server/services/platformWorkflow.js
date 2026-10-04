@@ -1423,143 +1423,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["package.manage"],
     executor: (context) => executeLicenceRequestPackageAction(context),
   },
-  {
-    key: "GLOBAL_PRODUCT_LOOKUP_BARCODE",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Global Product - Lookup Barcode",
-    description: "Resolve an external barcode using enabled, installed product lookup providers in configured priority order.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context),
-  },
-  {
-    key: "GO_UPC_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Go-UPC - Lookup Product",
-    description: "Look up a barcode using the installed Go-UPC connector and company credential.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
-  },
-  {
-    key: "ONLINE_ORDER_TRANSITION",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Online Order Lifecycle Transition",
-    description: "Apply a provider-neutral direct online order lifecycle transition using the canonical service.",
-    validation: (action) => {
-      if (!ONLINE_ORDER_TRANSITION_TARGETS.has(String(action?.toStatus || "").toUpperCase())) {
-        throw new Error("Online Order Lifecycle Transition requires a supported lifecycle target");
-      }
-    },
-    async: false,
-    requiredPermissions: ["online_orders.manage"],
-    executor: executeOnlineOrderTransition,
-  },
-  {
-    key: "SEND_PASSWORD_RESET_EMAIL",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Send Password Reset Email",
-    description: "Issue a tenant-scoped expiring password-reset token and queue the configured reset email for the selected User/Employee record.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["user.manage"],
-    executor: async ({ db, req, companyId, record, recordId, stepRunId }) => {
-      const company = companyId || req?.user?.companyId;
-      const userId = record?.id || recordId;
-      if (!company || !userId) throw new Error("Password reset requires a company and user record");
-      const result = await db(
-        `SELECT u.id,u.email,u.active,cs.password_reset_email_enabled,cs.password_reset_expiry_minutes
-           FROM users u
-           JOIN company_settings cs ON cs.company_id=u.company_id
-          WHERE u.id=$1 AND u.company_id=$2 LIMIT 1`,
-        [userId, company]
-      );
-      const user = result.rows[0];
-      if (!user) throw new Error("User not found");
-      if (!user.active) throw new Error("Password reset cannot be sent to an inactive user");
-      if (!user.password_reset_email_enabled) throw new Error("Password reset email is disabled in Settings");
-      const recipient = normalizeEmail(user.email);
-      if (!recipient) throw new Error("User has no email address");
-      const token = await issueAccountToken(db, {
-        companyId: company, userId: user.id, purpose: "PASSWORD_RESET",
-        expiresMinutes: user.password_reset_expiry_minutes || 60,
-      });
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
-      if (!provider.configured) throw new Error(provider.error || "Email provider is not configured");
-      const job = await enqueuePlatformJob({
-        db, companyId: company, kind: "SEND_EMAIL", runAt: new Date(),
-        payload: { recipient, to: recipient, templateKey: "PASSWORD_RESET", variables: { token, userId: user.id, expiresMinutes: user.password_reset_expiry_minutes || 60 }, _roleId: req?.user?.roleId, _stepRunId: stepRunId },
-        idempotencyKey: `${company}:password-reset:${user.id}:${stepRunId || Date.now()}`,
-      });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null, expiresMinutes: user.password_reset_expiry_minutes || 60 };
-    },
-  },
-  {
-    key: "SEND_USER_INVITATION",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Send User Invitation",
-    description: "Issue a tenant-scoped registration token and queue the configured invitation email for the selected User/Employee record.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["user.manage"],
-    executor: async ({ db, req, companyId, record, recordId, stepRunId }) => {
-      const company = companyId || req?.user?.companyId;
-      const userId = record?.id || recordId;
-      if (!company || !userId) throw new Error("User invitation requires a company and user record");
-      const result = await db(
-        `SELECT u.id,u.email,u.active,c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.registration_link_expiry_minutes
-           FROM users u
-           JOIN companies c ON c.id=u.company_id
-           JOIN company_settings cs ON cs.company_id=u.company_id
-          WHERE u.id=$1 AND u.company_id=$2 LIMIT 1`,
-        [userId, company]
-      );
-      const user = result.rows[0];
-      if (!user) throw new Error("User not found");
-      if (!user.email_registration_enabled) throw new Error("Email registration is disabled in Settings");
-      const recipient = normalizeEmail(user.email);
-      if (!recipient) throw new Error("User has no email address");
-      if (!domainAllowed(recipient, user.user_email_domain, user.domain_users_only)) {
-        throw new Error("User email is outside the allowed company domain");
-      }
-      const token = await issueAccountToken(db, {
-        companyId: company,
-        userId: user.id,
-        purpose: "REGISTRATION",
-        expiresMinutes: user.registration_link_expiry_minutes || 1440,
-      });
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
-      if (!provider.configured) throw new Error(provider.error || "Email provider is not configured");
-      const job = await enqueuePlatformJob({
-        db,
-        companyId: company,
-        kind: "SEND_EMAIL",
-        runAt: new Date(),
-        payload: {
-          recipient,
-          to: recipient,
-          templateKey: "USER_INVITATION",
-          variables: { token, userId: user.id, expiresMinutes: user.registration_link_expiry_minutes || 1440 },
-          _roleId: req?.user?.roleId,
-          _stepRunId: stepRunId,
-        },
-        idempotencyKey: `${company}:user-invite:${user.id}:${stepRunId || Date.now()}`,
-      });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null, expiresMinutes: user.registration_link_expiry_minutes || 1440 };
-    },
-  },
+  
+  
+  
+  
+  
   {
     key: "CALL_CONNECTOR",
     displayName: "Call Connector",
@@ -1636,57 +1504,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["records.update"],
     executor: async ({ action, object }) => ({ status: "completed", field: action.field, value: action.value, objectId: object?.id || null }),
   },
-  {
-    key: "JARVES_INTERACTION",
-    displayName: "JARVES Interaction",
-    description: "Present JARVES with one of three configured video behaviours and Voice, Message, or Ask for Input interaction.",
-    schema: {
-      type: "object",
-      properties: {
-        behaviour: { type: "string", enum: ["behaviour_1", "behaviour_2", "behaviour_3"] },
-        interaction: { type: "string", enum: ["voice", "message", "ask_input"] },
-        content: { type: "string" },
-        responseVariable: { type: "string" },
-      },
-      required: ["behaviour", "interaction"],
-    },
-    validation: (action) => {
-      if (!["behaviour_1", "behaviour_2", "behaviour_3"].includes(action?.behaviour)) throw new Error("JARVES Interaction requires one of three registered behaviours");
-      if (!["voice", "message", "ask_input"].includes(action?.interaction)) throw new Error("JARVES Interaction requires voice, message, or ask_input");
-      if (action.interaction === "ask_input" && !action.responseVariable) throw new Error("JARVES Ask for Input requires responseVariable");
-    },
-    async: false,
-    requiredPermissions: ["workflow.execute"],
-    executor: async ({ action }) => ({
-      status: action.interaction === "ask_input" ? "awaiting_input" : "completed",
-      uiDirective: {
-        component: "jarves",
-        behaviour: action.behaviour,
-        interaction: action.interaction,
-        content: action.content || "",
-        responseVariable: action.responseVariable || null,
-      },
-    }),
-  },
-  {
-    key: "TILL_UI_ACTION",
-    displayName: "Till UI Action",
-    description: "Dispatch a metadata-defined Retail POS interaction to the Till shell. Business mutations still execute through their canonical protected endpoints/connectors.",
-    validation: (action) => {
-      const uiAction = String(action?.uiAction || action?.ui_action || "").trim();
-      if (!uiAction || !/^[a-z0-9_.-]{1,80}$/i.test(uiAction)) throw new Error("Till UI Action requires a valid uiAction");
-    },
-    async: false,
-    requiredPermissions: [],
-    executor: async ({ action }) => ({
-      status: "completed",
-      uiDirective: {
-        component: "till",
-        action: String(action.uiAction || action.ui_action),
-        config: action.config || {},
-      },
-    }),
-  },
+  
+  
   {
     key: "SHOW_MESSAGE",
     displayName: "Show Message",
