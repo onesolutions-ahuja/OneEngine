@@ -238,3 +238,50 @@ test("screen switches and subflow configuration stay functional after the UI-onl
   expect(failures, failures.join("\n")).toEqual([]);
 });
 
+test("shared decision continuations stay near the parent instead of stretching the canvas", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  await page.goto("developer/workflow-builder");
+  await createFlowOfType(page, "Autolaunched Flow (No Trigger)");
+
+  const palette = page.locator(".b2-palette-group");
+  await palette.getByRole("button", { name: /Decision/ }).first().click();
+  await palette.getByRole("button", { name: /Assignment/ }).first().click();
+
+  const decisionNode = page.locator(".b2-node").filter({ hasText: "Decision" }).first();
+  await decisionNode.click();
+
+  const properties = page.locator(".b2-properties");
+  const branchSelects = properties.locator(".b2-branch-steps select");
+  await expect(branchSelects).toHaveCount(2);
+  await branchSelects.nth(0).selectOption({ label: "Assignment" });
+  await branchSelects.nth(1).selectOption({ label: "Assignment" });
+
+  const shared = page.locator(".b2-shared-continuation");
+  await expect(shared).toBeVisible();
+  await expect(shared).toContainText("Shared continuation");
+  await expect(shared.locator(".b2-node").filter({ hasText: "Assignment" })).toHaveCount(1);
+
+  const geometry = await page.evaluate(() => {
+    const decision = [...document.querySelectorAll(".b2-node")].find((node) => node.textContent?.includes("Decision"));
+    const paths = document.querySelector(".b2-decision-paths");
+    const shared = document.querySelector(".b2-shared-continuation");
+    if (!decision || !paths || !shared) return null;
+    const d = decision.getBoundingClientRect();
+    const p = paths.getBoundingClientRect();
+    const s = shared.getBoundingClientRect();
+    return {
+      decisionCenter: d.left + d.width / 2,
+      pathCenter: p.left + p.width / 2,
+      sharedCenter: s.left + s.width / 2,
+      pathWidth: p.width,
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(Math.abs(geometry.pathCenter - geometry.decisionCenter)).toBeLessThan(80);
+  expect(Math.abs(geometry.sharedCenter - geometry.decisionCenter)).toBeLessThan(80);
+  expect(geometry.pathWidth).toBeLessThan(900);
+
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
