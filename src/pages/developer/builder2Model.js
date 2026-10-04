@@ -129,8 +129,22 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='DECISION') (n.config?.outcomes||[]).forEach((o,i)=>{if(!String(o?.label||'').trim()) add('error','DECISION_OUTCOME_LABEL',`${n.label}: Outcome ${i+1} needs a label.`,n.id);if(!(o?.conditions||[]).some(x=>x?.resource)) add('error','DECISION_OUTCOME_CONDITION',`${n.label}: ${o?.label||`Outcome ${i+1}`} needs conditions.`,n.id)})
     if (n.type==='WAIT' && (n.config?.waitType||'duration')==='duration' && !(Number(n.config?.amount)>0)) add('error','WAIT_DURATION_REQUIRED',`${n.label}: Enter a wait duration.`,n.id)
     if (n.type==='WAIT' && n.config?.waitType==='date' && !n.config?.dateResource) add('error','WAIT_DATE_REQUIRED',`${n.label}: Select a date/time resource.`,n.id)
-    if (n.type==='WAIT' && n.config?.waitType==='event' && !String(n.config?.eventKey||'').trim()) add('error','WAIT_EVENT_REQUIRED',`${n.label}: Enter an event API name.`,n.id)
-    if (n.type==='SCREEN'&&!(n.config?.components||[]).length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
+    if (n.type==='WAIT' && n.config?.waitType==='event') add('error','WAIT_EVENT_UNSUPPORTED',`${n.label}: Wait Until Event is not supported by the current workflow runtime.`,n.id)
+    if (n.type==='WAIT' && n.config?.waitType==='conditions' && !(n.config?.conditions||[]).some(row=>row?.resource)) add('error','WAIT_CONDITION_REQUIRED',`${n.label}: Add at least one wait condition.`,n.id)
+    if (n.type==='SCREEN') {
+      const components=Array.isArray(n.config?.components)?n.config.components:[]
+      if(!components.length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
+      const names=new Set()
+      for(const component of components){
+        const name=String(component?.apiName||component?.name||'').trim()
+        if(!name) add('error','SCREEN_COMPONENT_NAME',`${n.label}: Every screen component needs an API Name.`,n.id)
+        else if(names.has(name.toLowerCase())) add('error','SCREEN_COMPONENT_DUPLICATE',`${n.label}: Duplicate screen component API Name ${name}.`,n.id)
+        else names.add(name.toLowerCase())
+        if(['RADIO','CHECKBOX_GROUP','SELECT','MULTI_SELECT','MULTISELECT'].includes(component.type)&&!component.choiceResource&&!(component.options||component.choices||[]).length) add('error','SCREEN_CHOICES_REQUIRED',`${n.label}: ${component.label||name} needs choices or a Choice Resource.`,n.id)
+        if(component.type==='DATA_TABLE'&&!component.dataResource) add('error','SCREEN_DATA_TABLE_RESOURCE',`${n.label}: ${component.label||name} needs a Data Resource.`,n.id)
+        if(component.type==='FILE_UPLOAD'&&!component.fileObjectKey) add('error','SCREEN_FILE_OBJECT',`${n.label}: ${component.label||name} needs a target object.`,n.id)
+      }
+    }
   }
   const names=new Set()
   for (const r of resources) {
