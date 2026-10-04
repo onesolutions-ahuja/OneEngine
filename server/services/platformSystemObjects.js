@@ -12,13 +12,13 @@ const definitions = [
   ["sale", "sales", "sale.view", "/app/reports"],
   ["payment", "payments", "reports.payments.view", "/app/reports"],
   ["financial_ledger", "financial_ledger_entries", "reports.payments.view", "/app/reports"],
-  ["inventory_movement", "inventory_movements", "inventory.view", "/app/inventory"],
+  ["inventory_movement", "inventory_ledger", "inventory.view", "/app/inventory"],
   ["inventory_batch", "inventory_batches", "inventory.view", "/app/inventory"],
   ["customer_credit_account", "customers", "customer.credit.view", "/app/customers"],
-  ["customer_credit_ledger", "customer_credit_ledger", "customer.credit.view", "/app/customers"],
+  ["customer_ledger", "customer_ledger", "customer.credit.view", "/app/customers"],
   ["inventory", "product_store_stock", "inventory.view", "/app/inventory"],
   ["purchase", "purchases", "purchase.view", "/app/purchases"],
-  ["purchase_receipt", "purchase_receipts", "purchase.view", "/app/purchases"],
+  ["purchase_receipt", "purchase_ledger", "purchase.view", "/app/purchases"],
   ["supplier_invoice", "supplier_invoices", "purchase.view", "/app/suppliers"],
   ["online_order", "online_orders", "online_orders.view", "/app/online-orders"],
   ["system_settings", "company_settings", "settings.manage", "/app/settings"],
@@ -31,7 +31,7 @@ const definitions = [
   ["permission", "permissions", "role.manage", "/app/settings/roles-permissions", { companyScoped: false }],
   ["role_permission", "role_permissions", "role.manage", "/app/settings/roles-permissions"],
   ["payment_terminal", "payment_terminals", "payment.manage", "/app/settings/payment-terminals"],
-  ["hardware_configuration", "hardware_configurations", "settings.manage", "/app/settings/hardware"],
+  ["hardware_configuration", "hardware_devices", "settings.manage", "/app/settings/hardware"],
   ["integration", "integrations", "integration.manage", "/app/settings/connections"],
   ["message_template", "platform_message_templates", "settings.manage", "/app/settings/message-templates"],
 ];
@@ -111,7 +111,7 @@ export function platformFieldSql(field, object) {
 }
 
 export function appendSystemReadScope(object, req, clauses, params) {
-  if (["product_store_stock", "inventory_movements", "inventory_batches", "purchases", "purchase_receipts", "online_orders", "sales", "customer_credit_ledger"].includes(object?.source_table) && !object.store_scoped) {
+  if (["product_store_stock", "inventory_ledger", "inventory_batches", "purchases", "purchase_ledger", "online_orders", "sales", "customer_ledger"].includes(object?.source_table) && !object.store_scoped) {
     if (!req.user.storeId) throw Object.assign(new Error("A store session is required"), { status: 403 });
     params.push(req.user.storeId);
     clauses.push(`store_id=$${params.length}`);
