@@ -581,100 +581,1312 @@ export function packageDefinition(entry) {
           required: true,
         }];
       })(),
-      ...(entry.key === "uber_eats" ? {
-        workflows: [
-          {
-            objectKey: "uber_eats_connection",
-            name: "GPT - Uber Eats - Get Stores",
-            triggerKey: "manual",
-            active: true,
-            lifecycleStatus: "ACTIVE",
-            action: {
-              type: "workflow", scope: "uber_eats", flowType: "AUTOLAUNCHED",
-              apiName: "GPT_UBER_EATS_GET_STORES", capabilityKey: "GPT_UBER_EATS_GET_STORES",
-              inputs: [], outputs: ["stores","success"],
-              resources: [
-                { value:"variables.stores",apiName:"stores",label:"Stores",type:"Variable",dataType:"Object",defaultValue:null,isCollection:true,availableInput:false,availableOutput:true,objectKey:"" },
-                { value:"variables.success",apiName:"success",label:"Success",type:"Variable",dataType:"Boolean",defaultValue:false,isCollection:false,availableInput:false,availableOutput:true,objectKey:"" }
-              ],
-              actions: [
-                { id:"get_stores",label:"Get Uber Eats Stores",apiName:"get_stores",key:"ONE_HTTP_REQUEST",providerKey:"uber_eats",method:"GET",endpoint:"/v1/eats/stores" },
-                { id:"stores_ok",label:"Stores Request Successful?",apiName:"stores_ok",key:"CONDITION",
-                  outcomes:[{id:"yes",label:"Success",condition:{match:"all",conditions:[{field:"steps.get_stores.success",operator:"equals",value:true}]},branch:["set_stores","set_success"]}],
-                  defaultLabel:"Failed",defaultBranch:["set_failed"] },
-                { id:"set_stores",label:"Set Stores",apiName:"set_stores",key:"ASSIGNMENT",variableName:"stores",variableType:"object",operator:"set",value:{path:"steps.get_stores.data.stores",fallback:{path:"steps.get_stores.data"}} },
-                { id:"set_success",label:"Set Success",apiName:"set_success",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:true },
-                { id:"set_failed",label:"Set Failed",apiName:"set_failed",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:false }
+      ...(entry.key === "uber_eats" ? { workflows: [
+  {
+    "objectKey": "uber_eats_connection",
+    "name": "GPT - Uber Eats - Get Stores",
+    "triggerKey": "manual",
+    "active": true,
+    "lifecycleStatus": "ACTIVE",
+    "action": {
+      "type": "workflow",
+      "scope": "uber_eats",
+      "flowType": "AUTOLAUNCHED",
+      "apiName": "GPT_UBER_EATS_GET_STORES",
+      "capabilityKey": "GPT_UBER_EATS_GET_STORES",
+      "inputs": [],
+      "outputs": [
+        "success",
+        "response"
+      ],
+      "resources": [
+        {
+          "value": "variables.success",
+          "apiName": "success",
+          "label": "Success",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.response",
+          "apiName": "response",
+          "label": "Response",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        }
+      ],
+      "actions": [
+        {
+          "id": "get_stores",
+          "label": "Get Uber Eats Stores",
+          "apiName": "get_stores",
+          "key": "ONE_HTTP_REQUEST",
+          "providerKey": "uber_eats",
+          "method": "GET",
+          "endpoint": "/v1/eats/stores"
+        },
+        {
+          "id": "check_result",
+          "label": "Request Successful?",
+          "apiName": "check_result",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Success",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_stores.success",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "set_success",
+                "set_response"
               ]
             }
-          },
-          {
-            objectKey: "uber_eats_connection",
-            name: "GPT - Uber Eats - Test Connection",
-            triggerKey: "manual",
-            active: true,
-            lifecycleStatus: "ACTIVE",
-            action: {
-              type: "workflow", scope: "uber_eats", flowType: "AUTOLAUNCHED",
-              apiName: "GPT_UBER_EATS_TEST_CONNECTION", capabilityKey: "GPT_UBER_EATS_TEST_CONNECTION",
-              inputs: [], outputs: ["connected","stores"],
-              resources: [
-                { value:"variables.connected",apiName:"connected",label:"Connected",type:"Variable",dataType:"Boolean",defaultValue:false,isCollection:false,availableInput:false,availableOutput:true,objectKey:"" },
-                { value:"variables.stores",apiName:"stores",label:"Stores",type:"Variable",dataType:"Object",defaultValue:null,isCollection:true,availableInput:false,availableOutput:true,objectKey:"" }
-              ],
-              actions: [
-                { id:"discover_stores",label:"Run Store Discovery",apiName:"discover_stores",key:"RUN_SUBFLOW",subflowApiName:"GPT_UBER_EATS_GET_STORES",inputMappings:{} },
-                { id:"connection_ok",label:"Connection Successful?",apiName:"connection_ok",key:"CONDITION",
-                  outcomes:[{id:"yes",label:"Connected",condition:{match:"all",conditions:[{field:"steps.discover_stores.outputs.success",operator:"equals",value:true}]},branch:["set_connected","set_test_stores"]}],
-                  defaultLabel:"Failed",defaultBranch:["set_not_connected"] },
-                { id:"set_connected",label:"Set Connected",apiName:"set_connected",key:"ASSIGNMENT",variableName:"connected",variableType:"boolean",operator:"set",value:true },
-                { id:"set_test_stores",label:"Set Stores",apiName:"set_test_stores",key:"ASSIGNMENT",variableName:"stores",variableType:"object",operator:"set",value:{path:"steps.discover_stores.outputs.stores"} },
-                { id:"set_not_connected",label:"Set Not Connected",apiName:"set_not_connected",key:"ASSIGNMENT",variableName:"connected",variableType:"boolean",operator:"set",value:false }
+          ],
+          "defaultLabel": "Failed",
+          "defaultBranch": [
+            "set_failed",
+            "set_error"
+          ]
+        },
+        {
+          "id": "set_success",
+          "label": "Set Success",
+          "apiName": "set_success",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": true
+        },
+        {
+          "id": "set_response",
+          "label": "Set Response",
+          "apiName": "set_response",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.get_stores.data"
+          }
+        },
+        {
+          "id": "set_failed",
+          "label": "Set Failed",
+          "apiName": "set_failed",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": false
+        },
+        {
+          "id": "set_error",
+          "label": "Set Error",
+          "apiName": "set_error",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.get_stores.data"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "objectKey": "uber_eats_connection",
+    "name": "GPT - Uber Eats - Test Connection",
+    "triggerKey": "manual",
+    "active": true,
+    "lifecycleStatus": "ACTIVE",
+    "action": {
+      "type": "workflow",
+      "scope": "uber_eats",
+      "flowType": "AUTOLAUNCHED",
+      "apiName": "GPT_UBER_EATS_TEST_CONNECTION",
+      "capabilityKey": "GPT_UBER_EATS_TEST_CONNECTION",
+      "inputs": [],
+      "outputs": [
+        "success",
+        "response"
+      ],
+      "resources": [
+        {
+          "value": "variables.success",
+          "apiName": "success",
+          "label": "Success",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.response",
+          "apiName": "response",
+          "label": "Response",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        }
+      ],
+      "actions": [
+        {
+          "id": "test_connection",
+          "label": "Test Uber Eats Connection",
+          "apiName": "test_connection",
+          "key": "ONE_HTTP_REQUEST",
+          "providerKey": "uber_eats",
+          "method": "GET",
+          "endpoint": "/v1/eats/stores"
+        },
+        {
+          "id": "check_result",
+          "label": "Request Successful?",
+          "apiName": "check_result",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Success",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.test_connection.success",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "set_success",
+                "set_response"
               ]
             }
-,
-          {
-            objectKey: "uber_eats_connection",
-            name: "GPT - Uber Eats - Upload Menu",
-            triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE",
-            action: { type:"workflow",scope:"uber_eats",flowType:"AUTOLAUNCHED",apiName:"GPT_UBER_EATS_UPLOAD_MENU",capabilityKey:"GPT_UBER_EATS_UPLOAD_MENU",
-              inputs:[{name:"storeId",type:"text",required:true},{name:"menu",type:"object",required:true}],outputs:["success","response"],
-              resources:[
-                {value:"variables.storeId",apiName:"storeId",label:"Store ID",type:"Variable",dataType:"Text",defaultValue:"",isCollection:false,availableInput:true,availableOutput:false,objectKey:""},
-                {value:"variables.menu",apiName:"menu",label:"Menu",type:"Variable",dataType:"Object",defaultValue:null,isCollection:false,availableInput:true,availableOutput:false,objectKey:""},
-                {value:"variables.success",apiName:"success",label:"Success",type:"Variable",dataType:"Boolean",defaultValue:false,isCollection:false,availableInput:false,availableOutput:true,objectKey:""},
-                {value:"variables.response",apiName:"response",label:"Response",type:"Variable",dataType:"Object",defaultValue:null,isCollection:false,availableInput:false,availableOutput:true,objectKey:""}],
-              actions:[
-                {id:"upload_menu",label:"Upload Menu",apiName:"upload_menu",key:"ONE_HTTP_REQUEST",providerKey:"uber_eats",method:"PUT",endpoint:"/v2/eats/stores/{{storeId}}/menus",body:{path:"variables.menu"}},
-                {id:"upload_ok",label:"Menu Upload Successful?",apiName:"upload_ok",key:"CONDITION",outcomes:[{id:"yes",label:"Success",condition:{match:"all",conditions:[{field:"steps.upload_menu.success",operator:"equals",value:true}]},branch:["set_upload_success","set_upload_response"]}],defaultLabel:"Failed",defaultBranch:["set_upload_failed","set_upload_error"]},
-                {id:"set_upload_success",label:"Set Success",apiName:"set_upload_success",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:true},
-                {id:"set_upload_response",label:"Set Response",apiName:"set_upload_response",key:"ASSIGNMENT",variableName:"response",variableType:"object",operator:"set",value:{path:"steps.upload_menu.data"}},
-                {id:"set_upload_failed",label:"Set Failed",apiName:"set_upload_failed",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:false},
-                {id:"set_upload_error",label:"Set Error Response",apiName:"set_upload_error",key:"ASSIGNMENT",variableName:"response",variableType:"object",operator:"set",value:{path:"steps.upload_menu.data"}}
-              ]}
-          },
-          {
-            objectKey: "online_order",
-            name: "GPT - Uber Eats - Accept Order",
-            triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE",
-            action: { type:"workflow",scope:"uber_eats",flowType:"AUTOLAUNCHED",apiName:"GPT_UBER_EATS_ACCEPT_ORDER",capabilityKey:"GPT_UBER_EATS_ACCEPT_ORDER",
-              inputs:[{name:"orderId",type:"text",required:true},{name:"readyForPickupTimeSecs",type:"number",required:false}],outputs:["success","response"],
-              resources:[
-                {value:"variables.orderId",apiName:"orderId",label:"Order ID",type:"Variable",dataType:"Text",defaultValue:"",isCollection:false,availableInput:true,availableOutput:false,objectKey:""},
-                {value:"variables.readyForPickupTimeSecs",apiName:"readyForPickupTimeSecs",label:"Ready For Pickup Seconds",type:"Variable",dataType:"Number",defaultValue:null,isCollection:false,availableInput:true,availableOutput:false,objectKey:""},
-                {value:"variables.success",apiName:"success",label:"Success",type:"Variable",dataType:"Boolean",defaultValue:false,isCollection:false,availableInput:false,availableOutput:true,objectKey:""},
-                {value:"variables.response",apiName:"response",label:"Response",type:"Variable",dataType:"Object",defaultValue:null,isCollection:false,availableInput:false,availableOutput:true,objectKey:""}],
-              actions:[
-                {id:"accept_order",label:"Accept Uber Eats Order",apiName:"accept_order",key:"ONE_HTTP_REQUEST",providerKey:"uber_eats",method:"POST",endpoint:"/v1/eats/orders/{{orderId}}/accept_pos_order",body:{ready_for_pickup_time_secs:{path:"variables.readyForPickupTimeSecs"}}},
-                {id:"accept_ok",label:"Order Accepted?",apiName:"accept_ok",key:"CONDITION",outcomes:[{id:"yes",label:"Accepted",condition:{match:"all",conditions:[{field:"steps.accept_order.success",operator:"equals",value:true}]},branch:["set_accept_success","set_accept_response"]}],defaultLabel:"Failed",defaultBranch:["set_accept_failed","set_accept_error"]},
-                {id:"set_accept_success",label:"Set Success",apiName:"set_accept_success",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:true},
-                {id:"set_accept_response",label:"Set Response",apiName:"set_accept_response",key:"ASSIGNMENT",variableName:"response",variableType:"object",operator:"set",value:{path:"steps.accept_order.data"}},
-                {id:"set_accept_failed",label:"Set Failed",apiName:"set_accept_failed",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:false},
-                {id:"set_accept_error",label:"Set Error Response",apiName:"set_accept_error",key:"ASSIGNMENT",variableName:"response",variableType:"object",operator:"set",value:{path:"steps.accept_order.data"}}
-              ]}
-          }          }
-        ]
-      } : {}),
+          ],
+          "defaultLabel": "Failed",
+          "defaultBranch": [
+            "set_failed",
+            "set_error"
+          ]
+        },
+        {
+          "id": "set_success",
+          "label": "Set Success",
+          "apiName": "set_success",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": true
+        },
+        {
+          "id": "set_response",
+          "label": "Set Response",
+          "apiName": "set_response",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.test_connection.data"
+          }
+        },
+        {
+          "id": "set_failed",
+          "label": "Set Failed",
+          "apiName": "set_failed",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": false
+        },
+        {
+          "id": "set_error",
+          "label": "Set Error",
+          "apiName": "set_error",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.test_connection.data"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "objectKey": "uber_eats_connection",
+    "name": "GPT - Uber Eats - Upload Menu",
+    "triggerKey": "manual",
+    "active": true,
+    "lifecycleStatus": "ACTIVE",
+    "action": {
+      "type": "workflow",
+      "scope": "uber_eats",
+      "flowType": "AUTOLAUNCHED",
+      "apiName": "GPT_UBER_EATS_UPLOAD_MENU",
+      "capabilityKey": "GPT_UBER_EATS_UPLOAD_MENU",
+      "inputs": [
+        {
+          "name": "storeId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "menu",
+          "type": "object",
+          "required": true
+        }
+      ],
+      "outputs": [
+        "success",
+        "response"
+      ],
+      "resources": [
+        {
+          "value": "variables.storeId",
+          "apiName": "storeId",
+          "label": "storeId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.menu",
+          "apiName": "menu",
+          "label": "menu",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.success",
+          "apiName": "success",
+          "label": "Success",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.response",
+          "apiName": "response",
+          "label": "Response",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        }
+      ],
+      "actions": [
+        {
+          "id": "upload_menu",
+          "label": "Upload Uber Eats Menu",
+          "apiName": "upload_menu",
+          "key": "ONE_HTTP_REQUEST",
+          "providerKey": "uber_eats",
+          "method": "PUT",
+          "endpoint": "/v2/eats/stores/{{storeId}}/menus",
+          "body": {
+            "path": "variables.menu"
+          }
+        },
+        {
+          "id": "check_result",
+          "label": "Request Successful?",
+          "apiName": "check_result",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Success",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.upload_menu.success",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "set_success",
+                "set_response"
+              ]
+            }
+          ],
+          "defaultLabel": "Failed",
+          "defaultBranch": [
+            "set_failed",
+            "set_error"
+          ]
+        },
+        {
+          "id": "set_success",
+          "label": "Set Success",
+          "apiName": "set_success",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": true
+        },
+        {
+          "id": "set_response",
+          "label": "Set Response",
+          "apiName": "set_response",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.upload_menu.data"
+          }
+        },
+        {
+          "id": "set_failed",
+          "label": "Set Failed",
+          "apiName": "set_failed",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": false
+        },
+        {
+          "id": "set_error",
+          "label": "Set Error",
+          "apiName": "set_error",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.upload_menu.data"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "objectKey": "online_order",
+    "name": "GPT - Uber Eats - Accept Order",
+    "triggerKey": "manual",
+    "active": true,
+    "lifecycleStatus": "ACTIVE",
+    "action": {
+      "type": "workflow",
+      "scope": "uber_eats",
+      "flowType": "AUTOLAUNCHED",
+      "apiName": "GPT_UBER_EATS_ACCEPT_ORDER",
+      "capabilityKey": "GPT_UBER_EATS_ACCEPT_ORDER",
+      "inputs": [
+        {
+          "name": "orderId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "readyForPickupTimeSecs",
+          "type": "number",
+          "required": false
+        }
+      ],
+      "outputs": [
+        "success",
+        "response"
+      ],
+      "resources": [
+        {
+          "value": "variables.orderId",
+          "apiName": "orderId",
+          "label": "orderId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.readyForPickupTimeSecs",
+          "apiName": "readyForPickupTimeSecs",
+          "label": "readyForPickupTimeSecs",
+          "type": "Variable",
+          "dataType": "Number",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.success",
+          "apiName": "success",
+          "label": "Success",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.response",
+          "apiName": "response",
+          "label": "Response",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        }
+      ],
+      "actions": [
+        {
+          "id": "accept_order",
+          "label": "Accept Uber Eats Order",
+          "apiName": "accept_order",
+          "key": "ONE_HTTP_REQUEST",
+          "providerKey": "uber_eats",
+          "method": "POST",
+          "endpoint": "/v1/eats/orders/{{orderId}}/accept_pos_order",
+          "body": {
+            "ready_for_pickup_time_secs": {
+              "path": "variables.readyForPickupTimeSecs"
+            }
+          }
+        },
+        {
+          "id": "check_result",
+          "label": "Request Successful?",
+          "apiName": "check_result",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Success",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.accept_order.success",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "set_success",
+                "set_response"
+              ]
+            }
+          ],
+          "defaultLabel": "Failed",
+          "defaultBranch": [
+            "set_failed",
+            "set_error"
+          ]
+        },
+        {
+          "id": "set_success",
+          "label": "Set Success",
+          "apiName": "set_success",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": true
+        },
+        {
+          "id": "set_response",
+          "label": "Set Response",
+          "apiName": "set_response",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.accept_order.data"
+          }
+        },
+        {
+          "id": "set_failed",
+          "label": "Set Failed",
+          "apiName": "set_failed",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": false
+        },
+        {
+          "id": "set_error",
+          "label": "Set Error",
+          "apiName": "set_error",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.accept_order.data"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "objectKey": "online_order",
+    "name": "GPT - Uber Eats - Deny Order",
+    "triggerKey": "manual",
+    "active": true,
+    "lifecycleStatus": "ACTIVE",
+    "action": {
+      "type": "workflow",
+      "scope": "uber_eats",
+      "flowType": "AUTOLAUNCHED",
+      "apiName": "GPT_UBER_EATS_DENY_ORDER",
+      "capabilityKey": "GPT_UBER_EATS_DENY_ORDER",
+      "inputs": [
+        {
+          "name": "orderId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "outputs": [
+        "success",
+        "response"
+      ],
+      "resources": [
+        {
+          "value": "variables.orderId",
+          "apiName": "orderId",
+          "label": "orderId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.reason",
+          "apiName": "reason",
+          "label": "reason",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.success",
+          "apiName": "success",
+          "label": "Success",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.response",
+          "apiName": "response",
+          "label": "Response",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        }
+      ],
+      "actions": [
+        {
+          "id": "deny_order",
+          "label": "Deny Uber Eats Order",
+          "apiName": "deny_order",
+          "key": "ONE_HTTP_REQUEST",
+          "providerKey": "uber_eats",
+          "method": "POST",
+          "endpoint": "/v1/eats/orders/{{orderId}}/deny_pos_order",
+          "body": {
+            "reason": {
+              "path": "variables.reason"
+            }
+          }
+        },
+        {
+          "id": "check_result",
+          "label": "Request Successful?",
+          "apiName": "check_result",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Success",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.deny_order.success",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "set_success",
+                "set_response"
+              ]
+            }
+          ],
+          "defaultLabel": "Failed",
+          "defaultBranch": [
+            "set_failed",
+            "set_error"
+          ]
+        },
+        {
+          "id": "set_success",
+          "label": "Set Success",
+          "apiName": "set_success",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": true
+        },
+        {
+          "id": "set_response",
+          "label": "Set Response",
+          "apiName": "set_response",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.deny_order.data"
+          }
+        },
+        {
+          "id": "set_failed",
+          "label": "Set Failed",
+          "apiName": "set_failed",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": false
+        },
+        {
+          "id": "set_error",
+          "label": "Set Error",
+          "apiName": "set_error",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.deny_order.data"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "objectKey": "product",
+    "name": "GPT - Uber Eats - Update Item Price",
+    "triggerKey": "manual",
+    "active": true,
+    "lifecycleStatus": "ACTIVE",
+    "action": {
+      "type": "workflow",
+      "scope": "uber_eats",
+      "flowType": "AUTOLAUNCHED",
+      "apiName": "GPT_UBER_EATS_UPDATE_ITEM_PRICE",
+      "capabilityKey": "GPT_UBER_EATS_UPDATE_ITEM_PRICE",
+      "inputs": [
+        {
+          "name": "storeId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "itemId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "outputs": [
+        "success",
+        "response"
+      ],
+      "resources": [
+        {
+          "value": "variables.storeId",
+          "apiName": "storeId",
+          "label": "storeId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.itemId",
+          "apiName": "itemId",
+          "label": "itemId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.price",
+          "apiName": "price",
+          "label": "price",
+          "type": "Variable",
+          "dataType": "Number",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.success",
+          "apiName": "success",
+          "label": "Success",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.response",
+          "apiName": "response",
+          "label": "Response",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        }
+      ],
+      "actions": [
+        {
+          "id": "update_price",
+          "label": "Update Uber Eats Item Price",
+          "apiName": "update_price",
+          "key": "ONE_HTTP_REQUEST",
+          "providerKey": "uber_eats",
+          "method": "POST",
+          "endpoint": "/v2/eats/stores/{{storeId}}/menus/items/{{itemId}}",
+          "body": {
+            "price": {
+              "path": "variables.price"
+            }
+          }
+        },
+        {
+          "id": "check_result",
+          "label": "Request Successful?",
+          "apiName": "check_result",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Success",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.update_price.success",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "set_success",
+                "set_response"
+              ]
+            }
+          ],
+          "defaultLabel": "Failed",
+          "defaultBranch": [
+            "set_failed",
+            "set_error"
+          ]
+        },
+        {
+          "id": "set_success",
+          "label": "Set Success",
+          "apiName": "set_success",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": true
+        },
+        {
+          "id": "set_response",
+          "label": "Set Response",
+          "apiName": "set_response",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.update_price.data"
+          }
+        },
+        {
+          "id": "set_failed",
+          "label": "Set Failed",
+          "apiName": "set_failed",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": false
+        },
+        {
+          "id": "set_error",
+          "label": "Set Error",
+          "apiName": "set_error",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.update_price.data"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "objectKey": "product",
+    "name": "GPT - Uber Eats - Set Item Unavailable",
+    "triggerKey": "manual",
+    "active": true,
+    "lifecycleStatus": "ACTIVE",
+    "action": {
+      "type": "workflow",
+      "scope": "uber_eats",
+      "flowType": "AUTOLAUNCHED",
+      "apiName": "GPT_UBER_EATS_SET_ITEM_UNAVAILABLE",
+      "capabilityKey": "GPT_UBER_EATS_SET_ITEM_UNAVAILABLE",
+      "inputs": [
+        {
+          "name": "storeId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "itemId",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "outputs": [
+        "success",
+        "response"
+      ],
+      "resources": [
+        {
+          "value": "variables.storeId",
+          "apiName": "storeId",
+          "label": "storeId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.itemId",
+          "apiName": "itemId",
+          "label": "itemId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.success",
+          "apiName": "success",
+          "label": "Success",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.response",
+          "apiName": "response",
+          "label": "Response",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        }
+      ],
+      "actions": [
+        {
+          "id": "set_unavailable",
+          "label": "Set Uber Eats Item Unavailable",
+          "apiName": "set_unavailable",
+          "key": "ONE_HTTP_REQUEST",
+          "providerKey": "uber_eats",
+          "method": "POST",
+          "endpoint": "/v2/eats/stores/{{storeId}}/menus/items/{{itemId}}",
+          "body": {
+            "suspension_info": {
+              "suspension": {
+                "suspend_until": -1,
+                "reason": "OUT_OF_STOCK"
+              }
+            }
+          }
+        },
+        {
+          "id": "check_result",
+          "label": "Request Successful?",
+          "apiName": "check_result",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Success",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.set_unavailable.success",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "set_success",
+                "set_response"
+              ]
+            }
+          ],
+          "defaultLabel": "Failed",
+          "defaultBranch": [
+            "set_failed",
+            "set_error"
+          ]
+        },
+        {
+          "id": "set_success",
+          "label": "Set Success",
+          "apiName": "set_success",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": true
+        },
+        {
+          "id": "set_response",
+          "label": "Set Response",
+          "apiName": "set_response",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.set_unavailable.data"
+          }
+        },
+        {
+          "id": "set_failed",
+          "label": "Set Failed",
+          "apiName": "set_failed",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": false
+        },
+        {
+          "id": "set_error",
+          "label": "Set Error",
+          "apiName": "set_error",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.set_unavailable.data"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "objectKey": "product",
+    "name": "GPT - Uber Eats - Set Item Available",
+    "triggerKey": "manual",
+    "active": true,
+    "lifecycleStatus": "ACTIVE",
+    "action": {
+      "type": "workflow",
+      "scope": "uber_eats",
+      "flowType": "AUTOLAUNCHED",
+      "apiName": "GPT_UBER_EATS_SET_ITEM_AVAILABLE",
+      "capabilityKey": "GPT_UBER_EATS_SET_ITEM_AVAILABLE",
+      "inputs": [
+        {
+          "name": "storeId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "itemId",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "outputs": [
+        "success",
+        "response"
+      ],
+      "resources": [
+        {
+          "value": "variables.storeId",
+          "apiName": "storeId",
+          "label": "storeId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.itemId",
+          "apiName": "itemId",
+          "label": "itemId",
+          "type": "Variable",
+          "dataType": "Text",
+          "defaultValue": "",
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.success",
+          "apiName": "success",
+          "label": "Success",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        },
+        {
+          "value": "variables.response",
+          "apiName": "response",
+          "label": "Response",
+          "type": "Variable",
+          "dataType": "Object",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": true,
+          "objectKey": ""
+        }
+      ],
+      "actions": [
+        {
+          "id": "set_available",
+          "label": "Set Uber Eats Item Available",
+          "apiName": "set_available",
+          "key": "ONE_HTTP_REQUEST",
+          "providerKey": "uber_eats",
+          "method": "POST",
+          "endpoint": "/v2/eats/stores/{{storeId}}/menus/items/{{itemId}}",
+          "body": {
+            "suspension_info": {}
+          }
+        },
+        {
+          "id": "check_result",
+          "label": "Request Successful?",
+          "apiName": "check_result",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Success",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.set_available.success",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "set_success",
+                "set_response"
+              ]
+            }
+          ],
+          "defaultLabel": "Failed",
+          "defaultBranch": [
+            "set_failed",
+            "set_error"
+          ]
+        },
+        {
+          "id": "set_success",
+          "label": "Set Success",
+          "apiName": "set_success",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": true
+        },
+        {
+          "id": "set_response",
+          "label": "Set Response",
+          "apiName": "set_response",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.set_available.data"
+          }
+        },
+        {
+          "id": "set_failed",
+          "label": "Set Failed",
+          "apiName": "set_failed",
+          "key": "ASSIGNMENT",
+          "variableName": "success",
+          "variableType": "boolean",
+          "operator": "set",
+          "value": false
+        },
+        {
+          "id": "set_error",
+          "label": "Set Error",
+          "apiName": "set_error",
+          "key": "ASSIGNMENT",
+          "variableName": "response",
+          "variableType": "object",
+          "operator": "set",
+          "value": {
+            "path": "steps.set_available.data"
+          }
+        }
+      ]
+    }
+  }
+] } : {}),
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
       ...(entry.key === "one_kiosk" ? {
         workflows: [
