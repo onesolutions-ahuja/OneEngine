@@ -25,51 +25,72 @@ async function openFlow(page, name) {
   await expect(page.locator(".b2-top")).toContainText("Workflow Builder");
 }
 
-test("Uber Get Stores is visible/editable and completes Workflow Builder Test Mode safely", async ({ page }) => {
+async function runTestMode(page, { name, nodes, inputs = {}, expectedVariables = {} }) {
   const failures = watchRuntimeFailures(page);
-  await openFlow(page, "GPT - Uber Eats - Get Stores");
-
-  await expect(page.locator(".b2-node").filter({ hasText: "Get Uber Eats Stores" })).toBeVisible();
-  await expect(page.locator(".b2-node").filter({ hasText: "Request Successful?" })).toBeVisible();
+  await openFlow(page, name);
+  for (const label of nodes) await expect(page.locator(".b2-node").filter({ hasText: label }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Test Mode", exact: true }).click();
   const drawer = page.locator(".b2-drawer").filter({ hasText: "Test Mode" });
   await expect(drawer).toBeVisible();
+  for (const [key, value] of Object.entries(inputs)) await drawer.getByLabel(key).fill(String(value));
   await drawer.getByRole("button", { name: "Run Test", exact: true }).click();
 
   const result = drawer.locator(".b2-test-result");
   await expect(result).toBeVisible({ timeout: 30_000 });
   const payload = JSON.parse(await result.textContent());
-  expect(payload.status).toBe("COMPLETED");
-  expect(payload.rolledBack).toBe(true);
-  expect(payload.externalActionsSimulated).toBe(true);
-  expect(payload.testPassed).toBe(true);
+  expect(payload.status, name).toBe("COMPLETED");
+  expect(payload.rolledBack, name).toBe(true);
+  expect(payload.externalActionsSimulated, name).toBe(true);
+  expect(payload.testPassed, name).toBe(true);
+  for (const [key, value] of Object.entries(expectedVariables)) expect(payload.variables?.variables?.[key], name + " variable " + key).toBe(value);
   expect(failures, failures.join("\n")).toEqual([]);
-});
+}
 
-test("Uber Update Item Price exposes required inputs and completes Formula -> HTTP Test Mode safely", async ({ page }) => {
-  const failures = watchRuntimeFailures(page);
-  await openFlow(page, "GPT - Uber Eats - Update Item Price");
+const cases = [
+  {
+    name: "GPT - Uber Eats - Get Stores",
+    nodes: ["Get Uber Eats Stores", "Request Successful?"],
+  },
+  {
+    name: "GPT - Uber Eats - Test Connection",
+    nodes: ["Test Uber Eats Connection", "Request Successful?"],
+  },
+  {
+    name: "GPT - Uber Eats - Upload Menu",
+    nodes: ["Get Uber-enabled Products", "Build Uber Items", "Upload Uber Eats Menu", "Menu Upload Successful?"],
+    inputs: { storeId: "e2e-store" },
+  },
+  {
+    name: "GPT - Uber Eats - Accept Order",
+    nodes: ["Accept Uber Eats Order", "Request Successful?"],
+    inputs: { orderId: "e2e-order" },
+  },
+  {
+    name: "GPT - Uber Eats - Deny Order",
+    nodes: ["Deny Uber Eats Order", "Request Successful?"],
+    inputs: { orderId: "e2e-order", reason: "E2E test denial" },
+  },
+  {
+    name: "GPT - Uber Eats - Update Item Price",
+    nodes: ["Calculate Minor Unit Price", "Update Uber Eats Item Price", "Request Successful?"],
+    inputs: { storeId: "e2e-store", itemId: "e2e-item", price: 12.34 },
+    expectedVariables: { priceMinor: 1234 },
+  },
+  {
+    name: "GPT - Uber Eats - Set Item Unavailable",
+    nodes: ["Set Uber Eats Item Unavailable", "Request Successful?"],
+    inputs: { storeId: "e2e-store", itemId: "e2e-item", suspendUntil: 1893456000 },
+  },
+  {
+    name: "GPT - Uber Eats - Set Item Available",
+    nodes: ["Set Uber Eats Item Available", "Request Successful?"],
+    inputs: { storeId: "e2e-store", itemId: "e2e-item" },
+  },
+];
 
-  await expect(page.locator(".b2-node").filter({ hasText: "Convert Price to Minor Units" })).toBeVisible();
-  await expect(page.locator(".b2-node").filter({ hasText: "Update Uber Eats Item Price" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Test Mode", exact: true }).click();
-  const drawer = page.locator(".b2-drawer").filter({ hasText: "Test Mode" });
-  await expect(drawer).toBeVisible();
-
-  await drawer.getByLabel("storeId").fill("e2e-store");
-  await drawer.getByLabel("itemId").fill("e2e-item");
-  await drawer.getByLabel("price").fill("12.34");
-  await drawer.getByRole("button", { name: "Run Test", exact: true }).click();
-
-  const result = drawer.locator(".b2-test-result");
-  await expect(result).toBeVisible({ timeout: 30_000 });
-  const payload = JSON.parse(await result.textContent());
-  expect(payload.status).toBe("COMPLETED");
-  expect(payload.rolledBack).toBe(true);
-  expect(payload.externalActionsSimulated).toBe(true);
-  expect(payload.testPassed).toBe(true);
-  expect(payload.variables?.variables?.priceMinor).toBe(1234);
-  expect(failures, failures.join("\n")).toEqual([]);
-});
+for (const scenario of cases) {
+  test(scenario.name + " opens in Workflow Builder and passes Test Mode", async ({ page }) => {
+    await runTestMode(page, scenario);
+  });
+}
