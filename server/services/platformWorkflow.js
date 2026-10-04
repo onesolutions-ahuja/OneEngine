@@ -28,7 +28,7 @@ import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platfo
 import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
-import { createGlobalProductLookupService, testGlobalProductProvider } from "./globalProductLookup.js";
+import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import {
   holdAppointmentSlot,
   releaseAppointmentHold,
@@ -58,14 +58,6 @@ async function executeGlobalProductLookupAction(context, providerKey = null) {
   } catch (error) {
     return { success: false, code: error?.code || "LOOKUP_FAILED", message: error?.code === "INVALID_BARCODE" ? error.message : "Unable to look up this barcode" };
   }
-}
-
-async function executeGlobalProductProviderTest(context, providerKey) {
-  const companyId = context.companyId || context.req?.user?.companyId;
-  if (context.req?.user?.companyId && String(context.req.user.companyId) !== String(companyId)) {
-    return { success: false, code: "INVALID_COMPANY", message: "Product lookup company context is invalid" };
-  }
-  return testGlobalProductProvider({ db: context.db, companyId, providerKey });
 }
 
 function redact(value, depth = 0) {
@@ -514,6 +506,37 @@ export async function executeConnectorWorkflowAction({
     const instance = instanceResult.rows[0];
     if (!instance) return { success: false, code: "CONNECTOR_NOT_FOUND", message: "Installed connector instance not found" };
     const driver = connectorDrivers?.get(instance.connector_package_key);
+    if (!driver && requestedKey === "CONNECTOR_TEST_CONNECTION" && instance.connector_definition_id) {
+      try {
+        const executeConnectorAction = createConnectorActionExecutor({ db });
+        const test = await executeConnectorAction({
+          companyId: tenantCompanyId,
+          connectionId: instance.id,
+          operation: "test_connection",
+          actorUserId: actorUserId || req?.user?.id || null,
+        });
+        const testResult = { ...test, testMode: false };
+        await db(
+          `UPDATE integration_connections
+              SET connection_status='CONNECTED',last_error=NULL,last_test_at=NOW(),
+                  last_test_result=$1::jsonb,last_connected_at=NOW(),updated_at=NOW()
+            WHERE id=$2 AND company_id=$3`,
+          [JSON.stringify(testResult), instance.id, tenantCompanyId]
+        );
+        await writeAudit?.(tenantCompanyId, actorUserId || req?.user?.id || null, "connector.instance.tested", "integration_connection", instance.id, { packageKey: instance.connector_package_key, success: true, metadataDriven: true });
+        return { success: true, status: "CONNECTED", connectorInstanceId: instance.id, connectorPackageKey: instance.connector_package_key, capability, requestedKey, result: testResult };
+      } catch (error) {
+        const message = String(error?.message || "Connector test failed").slice(0, 500);
+        await db(
+          `UPDATE integration_connections
+              SET connection_status='ERROR',last_error=$1,last_test_at=NOW(),
+                  last_test_result=$2::jsonb,updated_at=NOW()
+            WHERE id=$3 AND company_id=$4`,
+          [message, JSON.stringify({ success: false, message, metadataDriven: true }), instance.id, tenantCompanyId]
+        );
+        return { success: false, status: "ERROR", code: error?.code || "TEST_FAILED", message, connectorInstanceId: instance.id, connectorPackageKey: instance.connector_package_key, capability, requestedKey };
+      }
+    }
     if (!driver) return { success: false, code: "PROVIDER_NOT_SUPPORTED", message: "Connector app has no runtime driver", connectorInstanceId: instance.id };
 
     const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
@@ -761,52 +784,6 @@ function extractUberStoreIds(data) {
     status: typeof store.status === "string" ? store.status : store.status?.type || null,
     integrationEnabled: store.integration_enabled == null ? null : store.integration_enabled === true,
   }));
-}
-
-async function runUberStoreConnectionTest(runtime, service) {
-  if (runtime.enabled !== true) {
-    return {
-      success: false,
-      code: "PLATFORM_DISABLED",
-      message: "Uber Eats integration is disabled in Settings - Online Platforms",
-      attempts: [],
-      stores: [],
-    };
-  }
-
-  const environments = [runtime.environment || "sandbox"];
-  if (environments[0] !== "production") environments.push("production");
-  const attempts = [];
-  for (const environment of environments) {
-    const response = await service.getStores({ ...runtime, environment });
-    attempts.push({
-      environment,
-      success: response.success === true,
-      httpStatus: response.httpStatus ?? null,
-      code: response.code || null,
-      message: response.message || null,
-      stores: response.success ? extractUberStoreIds(response.data) : [],
-      uberResponse: response.data ?? null,
-    });
-    if (response.success) break;
-  }
-
-  const successAttempt = attempts.find((attempt) => attempt.success);
-  const lastAttempt = attempts[attempts.length - 1];
-  const successMessage = successAttempt
-    ? successAttempt.stores.length
-      ? `Uber connection OK (${successAttempt.environment}) - ${successAttempt.stores.length} store(s) found`
-      : successAttempt.environment === "sandbox"
-        ? "No Sandbox stores are currently provisioned for this application."
-        : "No stores are currently provisioned for this application."
-    : null;
-  return {
-    success: Boolean(successAttempt),
-    message: successMessage || lastAttempt?.message || "Uber API rejected the request - see the raw response",
-    code: successAttempt ? null : lastAttempt?.code || null,
-    attempts,
-    stores: successAttempt ? successAttempt.stores : [],
-  };
 }
 
 async function executeUberOrderAction(context, operation) {
@@ -1396,18 +1373,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: (context) => executeGlobalProductLookupAction(context, "open_food_facts"),
   },
   {
-    key: "OPEN_FOOD_FACTS_TEST_CONNECTION",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Open Food Facts - Test Connection",
-    description: "Verify the Open Food Facts barcode API connection without credentials.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage"],
-    executor: (context) => executeGlobalProductProviderTest(context, "open_food_facts"),
-  },
-  {
     key: "GO_UPC_LOOKUP_PRODUCT",
     builderVisible: false,
     systemVisible: false,
@@ -1418,18 +1383,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["global_product.view"],
     executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
-  },
-  {
-    key: "GO_UPC_TEST_CONNECTION",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Go-UPC - Test Connection",
-    description: "Verify the configured Go-UPC API key without returning it.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage"],
-    executor: (context) => executeGlobalProductProviderTest(context, "go_upc"),
   },
   {
     key: "ONLINE_ORDER_TRANSITION",
@@ -4252,32 +4205,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "QUICKBOOKS_TEST_CONNECTION",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Test QuickBooks Connection",
-    description: "Verify the enabled, company-scoped QuickBooks connection without returning credentials.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage"],
-    executor: async (context) => {
-      try {
-        const loaded = await loadProviderConnection(context, "quickbooks");
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", message: "QuickBooks connection is not configured" };
-        const { credentials } = loaded;
-        const result = await createQuickBooksAdapter().testConnection({
-          environment: credentials.environment,
-          realmId: credentials.realmId || credentials.realm_id,
-          accessToken: credentials.accessToken || credentials.access_token,
-        });
-        return { success: true, ...result };
-      } catch {
-        return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the QuickBooks connection. Review the settings and retry." };
-      }
-    },
-  },
-  {
     key: "QUICKBOOKS_SYNC_VENDORS",
     builderVisible: false,
     systemVisible: false,
@@ -4422,41 +4349,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { success: true, retried: syncType, ...result };
       } catch (error) {
         return { success: false, code: "SYNC_RETRY_FAILED", retryable: error?.retryable !== false, message: String(error?.message || "QuickBooks sync retry failed").slice(0, 500) };
-      }
-    },
-  },
-  {
-    key: "SHOPIFY_TEST_CONNECTION",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Test Shopify Connection",
-    description: "Verify the enabled, company- and store-scoped Shopify connection without returning credentials.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage"],
-    executor: async (context) => {
-      try {
-        const companyId = context.companyId || context.req?.user?.companyId;
-        const requestCompanyId = context.req?.user?.companyId;
-        if (requestCompanyId && String(requestCompanyId) !== String(companyId)) {
-          return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the Shopify connection. Review the settings and retry." };
-        }
-        const unavailable = await shopifyPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", message: "Shopify connection is not configured" };
-        const { connection, credentials } = loaded;
-        const shopDomain = credentials.shopDomain || credentials.shop_domain || connection.base_url;
-        const domain = String(shopDomain || "").replace(/^https?:\/\//i, "").replace(/\/$/, "");
-        const result = await createShopifyAdapter().testConnection({
-          shopDomain: domain,
-          apiVersion: credentials.apiVersion || credentials.api_version,
-          accessToken: credentials.accessToken || credentials.access_token,
-        });
-        return { success: true, ...result };
-      } catch {
-        return { success: false, code: "CONNECTION_FAILED", message: "Unable to verify the Shopify connection. Review the settings and retry." };
       }
     },
   },
@@ -4679,21 +4571,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         };
       }
       return service.getStores(runtime);
-    },
-  },
-  {
-    key: "UBER_TEST_CONNECTION",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Test Uber Eats Connection",
-    description: "Test the configured Uber Eats connector and discover its accessible stores.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.configure"],
-    executor: async (context) => {
-      const { runtime, service } = await loadUberWorkflowContext(context);
-      return runUberStoreConnectionTest(runtime, service);
     },
   },
   {
