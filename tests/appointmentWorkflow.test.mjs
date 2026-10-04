@@ -164,6 +164,18 @@ test("direct Flow HTTP retains OAuth client-credentials metadata from the connec
   assert.doesNotMatch(runtime, /operations:\s*\[\]/);
 });
 
+test("communication event ingestion is idempotent by provider message id", () => {
+  const source = readFileSync(new URL("../server/services/communicationCore.js", import.meta.url), "utf8");
+  assert.match(source, /provider_message_id=\$3/);
+  assert.match(source, /if \(existing\.rows\?\.\[0\]\) return existing\.rows\[0\]/);
+});
+
+test("startup verifies the canonical booking router rather than a retired WhatsApp flow", () => {
+  const source = readFileSync(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.match(source, /OneAssistant_Booking_Channel_Router/);
+  assert.doesNotMatch(source, /r\.name='OneAssistant - WhatsApp Booking'/);
+});
+
 test("booking router exposes business logic as Builder primitives", () => {
   const { workflow } = oneAssistantRouter();
   const keys = workflow.action.actions.map((action) => action.key);
