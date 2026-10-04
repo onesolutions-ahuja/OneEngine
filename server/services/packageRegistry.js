@@ -907,26 +907,6 @@ export function packageDefinition(entry) {
         workflows: [
           oneAssistantAppointmentRouterWorkflow(),
           {
-            objectKey: "communication_event",
-            name: "OneAssistant - Email Booking",
-            triggerKey: "communication_message_received",
-            conditions: [{ field: "channel", operator: "equals", value: "EMAIL" }, { field: "body", operator: "contains", value: "appointment" }],
-            action: {
-              type: "workflow",
-              scope: "one_assistant",
-              channel: "EMAIL",
-              subflowCapability: "assistant.communication.EMAIL",
-              requiredPackageKey: "email_connector",
-              priority: 10,
-              actions: [
-                { id: "create_case", key: "CREATE_APPOINTMENT_BOOKING_CASE", channel: "EMAIL" },
-                { id: "issue_link", key: "ISSUE_APPOINTMENT_BOOKING_LINK", bookingCaseId: { path: "steps.create_case.bookingCase.id" }, ttlMinutes: 30 },
-                { id: "send_link", key: "SEND_COMMUNICATION", channel: "EMAIL", recipient: { path: "sender" }, templateKey: "assistant_email_booking_link", templateContext: { bookingUrl: { path: "steps.issue_link.link.url" } } }
-              ]
-            },
-            active: false,
-          },
-          {
             objectKey: "appointment_booking_case",
             name: "OneAssistant - Payment Router",
             triggerKey: "appointment_payment_required",
