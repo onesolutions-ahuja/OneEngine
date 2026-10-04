@@ -130,7 +130,23 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='WAIT' && (n.config?.waitType||'duration')==='duration' && !(Number(n.config?.amount)>0)) add('error','WAIT_DURATION_REQUIRED',`${n.label}: Enter a wait duration.`,n.id)
     if (n.type==='WAIT' && n.config?.waitType==='date' && !n.config?.dateResource) add('error','WAIT_DATE_REQUIRED',`${n.label}: Select a date/time resource.`,n.id)
     if (n.type==='WAIT' && n.config?.waitType==='event' && !String(n.config?.eventKey||'').trim()) add('error','WAIT_EVENT_REQUIRED',`${n.label}: Enter an event API name.`,n.id)
-    if (n.type==='SCREEN'&&!(n.config?.components||[]).length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
+    if (n.type==='SCREEN') {
+      const components=Array.isArray(n.config?.components)?n.config.components:[]
+      if(!components.length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
+      const componentNames=new Set()
+      for(const component of components){
+        const name=String(component?.apiName||component?.name||'').trim()
+        if(!name) add('error','SCREEN_COMPONENT_NAME',`${n.label}: Every screen component needs an API Name.`,n.id)
+        else if(!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(name)) add('error','SCREEN_COMPONENT_API_NAME',`${n.label}: ${component.label||name} has an invalid API Name.`,n.id)
+        else if(componentNames.has(name.toLowerCase())) add('error','SCREEN_COMPONENT_DUPLICATE',`${n.label}: Duplicate screen component API Name ${name}.`,n.id)
+        else componentNames.add(name.toLowerCase())
+        if(['RADIO','CHECKBOX_GROUP','SELECT','MULTI_SELECT'].includes(component.type)&&!component.choiceResource&&!(component.options||[]).length) add('error','SCREEN_CHOICES_REQUIRED',`${n.label}: ${component.label||name} needs choices or a Choice Resource.`,n.id)
+        if(component.type==='DATA_TABLE'&&!component.dataResource) add('error','SCREEN_DATA_TABLE_RESOURCE',`${n.label}: ${component.label||name} needs a Data Resource.`,n.id)
+        if(component.type==='FILE_UPLOAD'&&!component.fileObjectKey) add('error','SCREEN_FILE_OBJECT',`${n.label}: ${component.label||name} needs a target object.`,n.id)
+        if(component.visibilityResource&&['equals','not_equals','contains','not_contains','greater_than','greater_or_equal','less_than','less_or_equal'].includes(component.visibilityOperator)&&String(component.visibilityValue??'').trim()==='') add('error','SCREEN_VISIBILITY_VALUE',`${n.label}: ${component.label||name} needs a visibility compare value.`,n.id)
+        if(component.layoutParentId&&!components.some(parent=>parent.id===component.layoutParentId&&['SECTION','COLUMNS'].includes(parent.type))) add('error','SCREEN_LAYOUT_PARENT',`${n.label}: ${component.label||name} references a missing layout container.`,n.id)
+      }
+    }
   }
   const names=new Set()
   for (const r of resources) {
