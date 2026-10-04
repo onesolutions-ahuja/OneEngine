@@ -581,6 +581,60 @@ export function packageDefinition(entry) {
           required: true,
         }];
       })(),
+      ...(entry.key === "uber_eats" ? {
+        workflows: [
+          {
+            objectKey: "uber_eats_connection",
+            name: "GPT - Uber Eats - Get Stores",
+            triggerKey: "manual",
+            active: true,
+            lifecycleStatus: "ACTIVE",
+            action: {
+              type: "workflow", scope: "uber_eats", flowType: "AUTOLAUNCHED",
+              apiName: "GPT_UBER_EATS_GET_STORES", capabilityKey: "GPT_UBER_EATS_GET_STORES",
+              inputs: [], outputs: ["stores","success"],
+              resources: [
+                { value:"variables.stores",apiName:"stores",label:"Stores",type:"Variable",dataType:"Object",defaultValue:null,isCollection:true,availableInput:false,availableOutput:true,objectKey:"" },
+                { value:"variables.success",apiName:"success",label:"Success",type:"Variable",dataType:"Boolean",defaultValue:false,isCollection:false,availableInput:false,availableOutput:true,objectKey:"" }
+              ],
+              actions: [
+                { id:"get_stores",label:"Get Uber Eats Stores",apiName:"get_stores",key:"ONE_HTTP_REQUEST",providerKey:"uber_eats",method:"GET",endpoint:"/v1/eats/stores" },
+                { id:"stores_ok",label:"Stores Request Successful?",apiName:"stores_ok",key:"CONDITION",
+                  outcomes:[{id:"yes",label:"Success",condition:{match:"all",conditions:[{field:"steps.get_stores.success",operator:"equals",value:true}]},branch:["set_stores","set_success"]}],
+                  defaultLabel:"Failed",defaultBranch:["set_failed"] },
+                { id:"set_stores",label:"Set Stores",apiName:"set_stores",key:"ASSIGNMENT",variableName:"stores",variableType:"object",operator:"set",value:{path:"steps.get_stores.data.stores",fallback:{path:"steps.get_stores.data"}} },
+                { id:"set_success",label:"Set Success",apiName:"set_success",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:true },
+                { id:"set_failed",label:"Set Failed",apiName:"set_failed",key:"ASSIGNMENT",variableName:"success",variableType:"boolean",operator:"set",value:false }
+              ]
+            }
+          },
+          {
+            objectKey: "uber_eats_connection",
+            name: "GPT - Uber Eats - Test Connection",
+            triggerKey: "manual",
+            active: true,
+            lifecycleStatus: "ACTIVE",
+            action: {
+              type: "workflow", scope: "uber_eats", flowType: "AUTOLAUNCHED",
+              apiName: "GPT_UBER_EATS_TEST_CONNECTION", capabilityKey: "GPT_UBER_EATS_TEST_CONNECTION",
+              inputs: [], outputs: ["connected","stores"],
+              resources: [
+                { value:"variables.connected",apiName:"connected",label:"Connected",type:"Variable",dataType:"Boolean",defaultValue:false,isCollection:false,availableInput:false,availableOutput:true,objectKey:"" },
+                { value:"variables.stores",apiName:"stores",label:"Stores",type:"Variable",dataType:"Object",defaultValue:null,isCollection:true,availableInput:false,availableOutput:true,objectKey:"" }
+              ],
+              actions: [
+                { id:"discover_stores",label:"Run Store Discovery",apiName:"discover_stores",key:"RUN_SUBFLOW",subflowApiName:"GPT_UBER_EATS_GET_STORES",inputMappings:{} },
+                { id:"connection_ok",label:"Connection Successful?",apiName:"connection_ok",key:"CONDITION",
+                  outcomes:[{id:"yes",label:"Connected",condition:{match:"all",conditions:[{field:"steps.discover_stores.outputs.success",operator:"equals",value:true}]},branch:["set_connected","set_test_stores"]}],
+                  defaultLabel:"Failed",defaultBranch:["set_not_connected"] },
+                { id:"set_connected",label:"Set Connected",apiName:"set_connected",key:"ASSIGNMENT",variableName:"connected",variableType:"boolean",operator:"set",value:true },
+                { id:"set_test_stores",label:"Set Stores",apiName:"set_test_stores",key:"ASSIGNMENT",variableName:"stores",variableType:"object",operator:"set",value:{path:"steps.discover_stores.outputs.stores"} },
+                { id:"set_not_connected",label:"Set Not Connected",apiName:"set_not_connected",key:"ASSIGNMENT",variableName:"connected",variableType:"boolean",operator:"set",value:false }
+              ]
+            }
+          }
+        ]
+      } : {}),
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
       ...(entry.key === "one_kiosk" ? {
         workflows: [
