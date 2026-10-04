@@ -2642,31 +2642,36 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "BULK_UPDATE_RECORDS",
     displayName: "Bulk Update Records",
-    description: "Update a collection of records in one workflow data operation.",
+    description: "Update records identified by a collection or metadata field conditions.",
     schema: {
       type: "object",
       properties: {
         objectKey: { type: "string" },
-        recordIds: { type: "string" },
+        recordIds: {},
+        filters: { type: "array" },
+        match: { type: "string" },
         fieldValues: { type: "object" },
       },
-      required: ["objectKey","recordIds","fieldValues"],
+      required: ["objectKey","fieldValues"],
     },
     validation: (action) => {
       if (!action?.objectKey && !action?.objectId && !action?.object) throw new Error("Bulk Update Records requires an object");
-      if (!action?.recordIds) throw new Error("Bulk Update Records requires a record collection");
+      if (!action?.recordIds && !(Array.isArray(action?.filters) && action.filters.length)) throw new Error("Bulk Update Records requires a record collection or conditions");
       if (!action?.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) throw new Error("Bulk Update Records requires field values");
+      if (action?.match && !["all","any"].includes(String(action.match).toLowerCase())) throw new Error("Bulk Update Records match must be all or any");
     },
     async: false,
     requiredPermissions: ["records.update"],
     executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      const rawCollection = resolveConfiguredResource(action.recordIds, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
-      if (!Array.isArray(rawCollection)) throw new Error("Bulk Update Records collection must resolve to a collection");
-      const ids = [...new Set(rawCollection.map((item) => {
-        if (item && typeof item === "object") return item.id || item.recordId || null;
-        return item;
-      }).filter(Boolean).map(String))];
+      let ids;
+      if (action.recordIds) {
+        const rawCollection = resolveConfiguredResource(action.recordIds, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+        if (!Array.isArray(rawCollection)) throw new Error("Bulk Update Records collection must resolve to a collection");
+        ids = [...new Set(rawCollection.map((item) => item && typeof item === "object" ? item.id || item.recordId || null : item).filter(Boolean).map(String))];
+      } else {
+        ids = await resolveWorkflowFilterRecordIds({ db, targetObject, action, req, companyId, record, previousRecord, object, workflowVariables });
+      }
       if (!ids.length) return { status: "completed", updated: [], count: 0 };
       if (ids.length > 500) throw new Error("Bulk Update Records exceeds the maximum of 500 records");
       const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
@@ -2681,7 +2686,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         params.push(req?.user?.companyId || companyId || null);
         clauses.push(`company_id=$${params.length}`);
       }
-      if (targetObject.store_scoped && req?.user?.storeId) {
+      if (targetObject.store_scoped) {
+        if (!req?.user?.storeId) throw new Error("A store session is required for this record operation");
         params.push(req.user.storeId);
         clauses.push(`store_id=$${params.length}`);
       }
@@ -2817,28 +2823,33 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "CREATE_RECORD",
     displayName: "Create Record",
-    description: "Create a record on an object using field mappings.",
+    description: "Create one record from field mappings or a record resource.",
     schema: {
       type: "object",
       properties: {
         objectKey: { type: "string" },
         objectId: { type: "string" },
         fieldValues: { type: "object" },
+        sourceRecord: {},
       },
-      required: ["fieldValues"],
     },
     validation: (action) => {
       if (!action || typeof action !== "object") throw new Error("Create Record requires an action object");
-      if (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) {
-        throw new Error("Create Record requires fieldValues to be an object");
-      }
+      const hasFieldValues = action.fieldValues && typeof action.fieldValues === "object" && !Array.isArray(action.fieldValues);
+      if (!hasFieldValues && !action.sourceRecord) throw new Error("Create Record requires field values or a record resource");
     },
     async: false,
     requiredPermissions: ["records.create"],
     executor: async ({ db, action, req, object, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      let resolvedFieldValues;
+      if (action.sourceRecord) {
+        const sourceRecord = resolveConfiguredResource(action.sourceRecord, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+        resolvedFieldValues = await resolveWorkflowRecordFieldValues({ db, object: targetObject, sourceRecord, req });
+      } else {
+        resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
+      }
       const entries = Object.entries(resolvedFieldValues || {});
       if (!entries.length) return { status: "completed", created: null };
       const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
@@ -2866,22 +2877,73 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "CREATE_RECORDS",
+    displayName: "Create Records",
+    description: "Create records from a record collection resource.",
+    schema: {
+      type: "object",
+      properties: { objectKey: { type: "string" }, objectId: { type: "string" }, sourceRecord: {} },
+      required: ["sourceRecord"],
+    },
+    validation: (action) => {
+      if (!action?.sourceRecord) throw new Error("Create Records requires a record collection resource");
+    },
+    async: false,
+    requiredPermissions: ["records.create"],
+    executor: async ({ db, action, req, object, companyId, record, previousRecord, workflowVariables }) => {
+      const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      const sourceRecords = resolveConfiguredResource(action.sourceRecord, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+      if (!Array.isArray(sourceRecords)) throw new Error("Create Records resource must resolve to a record collection");
+      if (sourceRecords.length > 500) throw new Error("Create Records exceeds the maximum of 500 records");
+      const created = [];
+      for (const sourceRecord of sourceRecords) {
+        const fieldValues = await resolveWorkflowRecordFieldValues({ db, object: targetObject, sourceRecord, req });
+        const entries = Object.entries(fieldValues || {});
+        if (!entries.length) continue;
+        const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
+        await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req });
+        const columns = mappedFields.map((field) => `"${field.source_column}"`);
+        const params = entries.map(([, value]) => value);
+        const values = entries.map((_, index) => `$${index + 1}`);
+        if (targetObject.company_scoped) {
+          columns.push('"company_id"');
+          values.push(`$${params.length + 1}`);
+          params.push(req?.user?.companyId || companyId);
+        }
+        if (targetObject.store_scoped) {
+          if (!req?.user?.storeId) throw new Error("A store session is required for this record");
+          columns.push('"store_id"');
+          values.push(`$${params.length + 1}`);
+          params.push(req.user.storeId);
+        }
+        const inserted = await db(`INSERT INTO "${targetObject.source_table}" (${columns.join(", ")}) VALUES (${values.join(", ")}) RETURNING *`, params);
+        if (inserted.rows?.[0]) created.push(inserted.rows[0]);
+      }
+      for (const item of created) {
+        try {
+          await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.created", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: item.id, record: item }, actorUserId: req?.user?.id || null });
+        } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      }
+      return { status: "completed", created, count: created.length };
+    },
+  },
+  {
     key: "UPDATE_RECORD",
     displayName: "Update Record",
-    description: "Update an existing record using field mappings.",
+    description: "Update one or more existing records using field mappings or a record resource.",
     schema: {
       type: "object",
       properties: {
-        recordId: { type: "string" },
+        recordId: {},
         fieldValues: { type: "object" },
+        sourceRecord: {},
       },
-      required: ["recordId", "fieldValues"],
     },
     validation: (action) => {
       if (!action || typeof action !== "object") throw new Error("Update Record requires an action object");
-      if (!action.recordId) throw new Error("Update Record requires a recordId");
-      if (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) {
-        throw new Error("Update Record requires fieldValues to be an object");
+      const hasFieldValues = action.fieldValues && typeof action.fieldValues === "object" && !Array.isArray(action.fieldValues);
+      if (!action.sourceRecord && (!action.recordId || !hasFieldValues)) {
+        throw new Error("Update Record requires a record resource or recordId with fieldValues");
       }
     },
     async: false,
@@ -2889,30 +2951,53 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
+      const updateOne = async (recordId, fieldValues) => {
+        const entries = Object.entries(fieldValues || {});
+        if (!recordId || !entries.length) return null;
+        const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
+        const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: recordId });
+        const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
+        const params = [...entries.map(([, value]) => value), String(recordId)];
+        const clauses = ["id=$" + params.length];
+        if (targetObject.company_scoped) {
+          params.push(req?.user?.companyId || companyId || null);
+          clauses.push(`company_id=$${params.length}`);
+        }
+        if (targetObject.store_scoped) {
+          if (!req?.user?.storeId) throw new Error("A store session is required for this record");
+          params.push(req.user.storeId);
+          clauses.push(`store_id=$${params.length}`);
+        }
+        const result = await db(`UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`, params);
+        const updated = result.rows[0] || null;
+        if (updated?.id) {
+          try {
+            await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.updated", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated }, actorUserId: req?.user?.id || null });
+          } catch (error) { console.error("Platform workflow record event publication error:", error); }
+        }
+        return { updated, duplicateWarning: duplicateAction === "WARN" };
+      };
+
+      if (action.sourceRecord) {
+        const resolved = resolveConfiguredResource(action.sourceRecord, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+        const sourceRecords = Array.isArray(resolved) ? resolved : [resolved];
+        if (sourceRecords.length > 500) throw new Error("Update Record exceeds the maximum of 500 records");
+        const updated = [];
+        for (const sourceRecord of sourceRecords) {
+          if (!sourceRecord || typeof sourceRecord !== "object" || Array.isArray(sourceRecord) || !sourceRecord.id) {
+            throw new Error("Update Record resource must contain a record ID");
+          }
+          const values = await resolveWorkflowRecordFieldValues({ db, object: targetObject, sourceRecord, req });
+          const result = await updateOne(sourceRecord.id, values);
+          if (result?.updated) updated.push(result.updated);
+        }
+        return { status: "completed", updated: updated.length === 1 ? updated[0] : updated, records: updated, count: updated.length };
+      }
+
       const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
       const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
-      const entries = Object.entries(resolvedFieldValues || {});
-      if (!entries.length) return { status: "completed", updated: null };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: resolvedRecordId });
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
-      const params = [...entries.map(([, value]) => value), resolvedRecordId];
-      const clauses = ["id=$" + params.length];
-      if (targetObject.company_scoped) {
-        params.push(req?.user?.companyId || companyId || null);
-        clauses.push(`company_id=$${params.length}`);
-      }
-      if (targetObject.store_scoped) {
-        params.push(req?.user?.storeId || null);
-        clauses.push(`store_id=$${params.length}`);
-      }
-      const query = `UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`;
-      const result = await db(query, params);
-      const updated = result.rows[0] || null;
-      try {
-        if (updated?.id) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.updated", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated }, actorUserId: req?.user?.id || null });
-      } catch (error) { console.error("Platform workflow record event publication error:", error); }
-      return { status: result.rows.length ? "completed" : "skipped", updated, duplicateWarning: duplicateAction === "WARN" };
+      const result = await updateOne(resolvedRecordId, resolvedFieldValues);
+      return { status: result?.updated ? "completed" : "skipped", updated: result?.updated || null, duplicateWarning: result?.duplicateWarning === true };
     },
   },
   {
@@ -3032,19 +3117,33 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "DELETE_RECORD",
     displayName: "Delete Record",
-    description: "Delete or soft delete a record using the object's existing semantics.",
+    description: "Delete or soft delete records identified by ID, record resources, or metadata field conditions.",
     validation: (action) => {
-      if (!action?.recordId) throw new Error("Delete Record requires a recordId");
+      const hasFilters = Array.isArray(action?.filters) && action.filters.length > 0;
+      if (!action?.recordId && !action?.sourceRecord && !hasFilters) throw new Error("Delete Record requires a record, record collection, or conditions");
+      if (action?.match && !["all","any"].includes(String(action.match).toLowerCase())) throw new Error("Delete Record match must be all or any");
     },
     async: false,
     requiredPermissions: ["records.delete"],
     executor: async ({ db, action, object, req, companyId, record, previousRecord, workflowVariables }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
-      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
+      let ids = [];
+      if (action.sourceRecord) {
+        const resolved = resolveConfiguredResource(action.sourceRecord, { record, previousRecord, req, object, workflowVariables }, { preserveMissing: false });
+        const records = Array.isArray(resolved) ? resolved : [resolved];
+        ids = [...new Set(records.map((item) => item && typeof item === "object" ? item.id || item.recordId || null : item).filter(Boolean).map(String))];
+      } else if (Array.isArray(action.filters) && action.filters.length) {
+        ids = await resolveWorkflowFilterRecordIds({ db, targetObject, action, req, companyId, record, previousRecord, object, workflowVariables });
+      } else {
+        const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
+        if (resolvedRecordId) ids = [String(resolvedRecordId)];
+      }
+      if (!ids.length) return { status: "skipped", deleted: null, deletedRecords: [], count: 0 };
+      if (ids.length > 500) throw new Error("Delete Record exceeds the maximum of 500 records");
       const hasActive = await db(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'`, [table]);
-      const params = [resolvedRecordId];
-      const clauses = ["id=$1"];
+      const params = [ids];
+      const clauses = ["id::text = ANY($1::text[])"];
       if (targetObject.company_scoped) {
         params.push(req?.user?.companyId || companyId || null);
         clauses.push(`company_id=$${params.length}`);
@@ -3057,10 +3156,17 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const result = hasActive.rows.length
         ? await db(`UPDATE "${table}" SET active=false WHERE ${clauses.join(" AND ")} RETURNING *`, params)
         : await db(`DELETE FROM "${table}" WHERE ${clauses.join(" AND ")} RETURNING *`, params);
-      try {
-        if (result.rows[0]) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.deleted", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: resolvedRecordId, record: result.rows[0], archived: hasActive.rows.length > 0 }, actorUserId: req?.user?.id || null });
-      } catch (error) { console.error("Platform workflow record event publication error:", error); }
-      return { status: result.rows.length ? "completed" : "skipped", deleted: result.rows[0] || null };
+      for (const deleted of result.rows || []) {
+        try {
+          await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.deleted", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: deleted.id, record: deleted, archived: hasActive.rows.length > 0 }, actorUserId: req?.user?.id || null });
+        } catch (error) { console.error("Platform workflow record event publication error:", error); }
+      }
+      return {
+        status: result.rows.length ? "completed" : "skipped",
+        deleted: result.rows.length === 1 ? result.rows[0] : null,
+        deletedRecords: result.rows || [],
+        count: result.rows?.length || 0,
+      };
     },
   },
   {
@@ -5279,6 +5385,104 @@ function resolveFieldValueMap(input, context = {}) {
   ]));
 }
 
+async function resolveWorkflowRecordFieldValues({ db, object, sourceRecord, req = null }) {
+  if (!sourceRecord || typeof sourceRecord !== "object" || Array.isArray(sourceRecord)) {
+    throw new Error("Record resource must resolve to a record");
+  }
+  const metadataResult = await db(
+    `SELECT *
+       FROM platform_fields
+      WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)
+      ORDER BY display_order,label`,
+    [object.id, req?.user?.companyId || object.company_id]
+  );
+  const metadata = req?.user
+    ? await applyFieldSecurity(db, metadataResult.rows || [], req)
+    : (metadataResult.rows || []);
+  const values = {};
+  for (const field of metadata) {
+    if (field.active === false || field.writable === false || !isSafeIdentifier(field.source_column || field.api_name || "")) continue;
+    const apiName = String(field.api_name || field.source_column || "");
+    const sourceColumn = String(field.source_column || "");
+    if (Object.prototype.hasOwnProperty.call(sourceRecord, apiName)) values[apiName] = sourceRecord[apiName];
+    else if (sourceColumn && Object.prototype.hasOwnProperty.call(sourceRecord, sourceColumn)) values[apiName] = sourceRecord[sourceColumn];
+  }
+  return values;
+}
+
+async function resolveWorkflowFilterRecordIds({ db, targetObject, action, req, companyId, record, previousRecord, object, workflowVariables }) {
+  const filters = Array.isArray(action.filters) ? action.filters : [];
+  if (!filters.length) throw new Error("Record conditions require at least one filter");
+  if (filters.length > 100) throw new Error("Record conditions support up to 100 filters");
+
+  const metadataResult = await db(
+    "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+    [targetObject.id, req?.user?.companyId || companyId]
+  );
+  const securedFields = req?.user
+    ? await applyFieldSecurity(db, metadataResult.rows || [], req)
+    : (metadataResult.rows || []);
+  const fieldByKey = new Map([["id", { api_name: "id", source_column: "id", readable: true }]]);
+  for (const field of securedFields) {
+    if (field.readable === false) continue;
+    fieldByKey.set(String(field.api_name || ""), field);
+    if (field.source_column) fieldByKey.set(String(field.source_column), field);
+  }
+
+  const params = [];
+  const parameter = (position) => String.fromCharCode(36) + position;
+  const scopeClauses = [];
+  if (targetObject.company_scoped) {
+    params.push(req?.user?.companyId || companyId || null);
+    scopeClauses.push('"company_id"=' + parameter(params.length));
+  }
+  if (targetObject.store_scoped) {
+    if (!req?.user?.storeId) throw new Error("A store session is required for this record operation");
+    params.push(req.user.storeId);
+    scopeClauses.push('"store_id"=' + parameter(params.length));
+  }
+
+  const filterClauses = [];
+  for (const filter of filters) {
+    const metadata = fieldByKey.get(String(filter?.field || ""));
+    if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name || "")) {
+      throw new Error(`Record condition field "${filter?.field || ""}" is unavailable`);
+    }
+    const column = '"' + (metadata.source_column || metadata.api_name) + '"';
+    const operator = String(filter?.operator || "equals").toLowerCase();
+    const value = resolveConfiguredResource(filter?.value, { record, previousRecord, req, object, workflowVariables });
+    if (operator === "changed") throw new Error("Changed conditions require a trigger record and cannot identify arbitrary database records");
+    if (operator === "is_empty") {
+      filterClauses.push("(" + column + " IS NULL OR " + column + "::text='')");
+      continue;
+    }
+    if (operator === "is_not_empty") {
+      filterClauses.push("(" + column + " IS NOT NULL AND " + column + "::text<>'')");
+      continue;
+    }
+    params.push(value);
+    const placeholder = parameter(params.length);
+    if (operator === "equals") filterClauses.push(column + "=" + placeholder);
+    else if (operator === "not_equals") filterClauses.push(column + "<>" + placeholder);
+    else if (operator === "greater_than") filterClauses.push(column + ">" + placeholder);
+    else if (operator === "greater_than_or_equal") filterClauses.push(column + ">=" + placeholder);
+    else if (operator === "less_than") filterClauses.push(column + "<" + placeholder);
+    else if (operator === "less_than_or_equal") filterClauses.push(column + "<=" + placeholder);
+    else if (operator === "contains") filterClauses.push(column + "::text ILIKE '%' || " + placeholder + "::text || '%'");
+    else throw new Error(`Record condition operator "${operator}" is unsupported`);
+  }
+
+  const joiner = String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ";
+  const clauses = [...scopeClauses, "(" + filterClauses.join(joiner) + ")"];
+  const result = await db(
+    `SELECT id FROM "${targetObject.source_table}" WHERE ${clauses.join(" AND ")} LIMIT 501`,
+    params
+  );
+  const ids = (result.rows || []).map((row) => row.id).filter(Boolean).map(String);
+  if (ids.length > 500) throw new Error("Record operation matches more than the maximum of 500 records");
+  return ids;
+}
+
 async function resolveWorkflowTargetObject({ db, action = {}, object = null, companyId, req }) {
   const runtimeCompanyId = companyId || req?.user?.companyId || null;
   if (!runtimeCompanyId || (req?.user?.companyId && String(req.user.companyId) !== String(runtimeCompanyId))) {
@@ -5422,6 +5626,7 @@ async function assertWorkflowActionPermission(context, definition) {
 const WORKFLOW_OBJECT_ACCESS = Object.freeze({
   GET_RECORDS: "view",
   CREATE_RECORD: "create",
+  CREATE_RECORDS: "create",
   CREATE_RELATED_RECORD: "create",
   UPDATE_RECORD: "edit",
   UPDATE_RELATED_RECORD: "edit",
@@ -5488,7 +5693,7 @@ async function assertWorkflowObjectPermission(context, actionType) {
 
 const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
-  "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
+  "CREATE_RECORD","CREATE_RECORDS","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
   "BULK_UPDATE_RECORDS","SCHEDULE_PATH","RUN_SUBFLOW","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
   // Appointment orchestration actions are safe to execute in Debug because
