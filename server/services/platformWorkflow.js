@@ -4771,7 +4771,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ action, record, previousRecord, req, object, workflowVariables = {}, agentService = null }) => {
+    executor: async ({ action, db, companyId = null, record, previousRecord, req, object, workflowVariables = {}, agentService = null }) => {
       const service = agentService || req?.app?.locals?.oneEngineAgent || null;
       if (!service || typeof service.ask !== "function") throw new Error("OneEngine agent service is unavailable");
       if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
@@ -4782,14 +4782,36 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const resolvedSession = action.sessionId
         ? resolveConfiguredResource(action.sessionId, contextBase, { preserveMissing: false })
         : null;
-      const agentDefinition = action.agentDefinition && typeof action.agentDefinition === "object" ? action.agentDefinition : null;
+      const agentKey = String(action.agentKey || "oneengine_assistant");
+      let agentDefinition = action.agentDefinition && typeof action.agentDefinition === "object" ? action.agentDefinition : null;
+      if (!agentDefinition && agentKey !== "oneengine_assistant") {
+        if (!db || typeof db !== "function") throw new Error("Run Agent cannot load the selected agent");
+        const agentResult = await db(
+          `SELECT id,label,api_name,description,user_access,instructions,actions,active
+             FROM platform_agents
+            WHERE company_id=$1 AND api_name=$2 AND active=true
+            LIMIT 1`,
+          [companyId || req?.user?.companyId, agentKey]
+        );
+        const agentRow = agentResult.rows?.[0] || null;
+        if (!agentRow) throw new Error(`Run Agent selected agent "${agentKey}" is not active or does not exist`);
+        agentDefinition = {
+          id: agentRow.id,
+          label: agentRow.label,
+          apiName: agentRow.api_name,
+          description: agentRow.description || "",
+          userAccess: agentRow.user_access || "",
+          instructions: agentRow.instructions || "",
+          actions: Array.isArray(agentRow.actions) ? agentRow.actions : [],
+        };
+      }
       const safeContext = {
         companyId: req?.user?.companyId || null,
         storeId: req?.user?.storeId || null,
         roleId: req?.user?.roleId || null,
         userId: req?.user?.id || null,
         permissions: Array.isArray(req?.user?.permissions) ? req.user.permissions : [],
-        agentKey: action.agentKey || "oneengine_assistant",
+        agentKey,
         agentDefinition,
         sessionId: resolvedSession || null,
       };
@@ -4827,7 +4849,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       workflowVariables.variables[structuredVar] = structuredSpec.length ? structured : null;
       return {
         status: "completed",
-        agentKey: action.agentKey || "oneengine_assistant",
+        agentKey,
         answer: structuredSpec.length ? null : (result?.answer ?? null),
         sessionId,
         structuredResponse: structuredSpec.length ? structured : null,
