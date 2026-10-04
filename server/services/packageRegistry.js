@@ -1784,16 +1784,19 @@ function oneAssistantAppointmentRouterWorkflow() {
 
     { id:"validate_date", label:"Validate Date Reply", apiName:"validate_date", key:"CONDITION",
       outcomes:[
-        {id:"one",label:"Choice 1",condition:condition("body","1"),branch:["set_date_1","get_service","service_found"]},
-        {id:"two",label:"Choice 2",condition:condition("body","2"),branch:["set_date_2","get_service","service_found"]}
+        {id:"one",label:"Choice 1",condition:condition("body","1"),branch:["set_date_1","next_date_1","get_service","service_found"]},
+        {id:"two",label:"Choice 2",condition:condition("body","2"),branch:["set_date_2","next_date_2","get_service","service_found"]}
       ],defaultLabel:"DD/MM/YYYY",defaultBranch:["parse_custom_date","custom_date_valid"] },
     { id:"parse_custom_date", label:"Parse Entered Date", apiName:"parse_custom_date", key:"FORMULA", resourceName:"selectedDate", resultType:"date", expression:"PARSEDATE(inputDate)", inputs:{inputDate:{path:"body"}} },
+    { id:"next_custom_date", label:"Entered Date End", apiName:"next_custom_date", key:"FORMULA", resourceName:"nextDate", resultType:"date", expression:"ADDDAYS(inputDate,1)", inputs:{inputDate:{path:"variables.selectedDate"}} },
     { id:"custom_date_valid", label:"Entered Date Valid?", apiName:"custom_date_valid", key:"CONDITION",
-      outcomes:[{id:"yes",label:"Valid Date",condition:{match:"all",conditions:[{field:"variables.selectedDate",operator:"not_equals",value:null}]},branch:["get_service","service_found"]}],
+      outcomes:[{id:"yes",label:"Valid Date",condition:{match:"all",conditions:[{field:"variables.selectedDate",operator:"not_equals",value:null}]},branch:["next_custom_date","get_service","service_found"]}],
       defaultLabel:"Invalid Date",defaultBranch:["send_invalid_date"] },
     ...send("send_invalid_date","Send Invalid Date Reply",{path:"variables.messageChannel"},invalidDateMessage),
     { id:"set_date_1", label:"Use Date Choice 1", apiName:"set_date_1", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date1"} },
+    { id:"next_date_1", label:"Date Choice 1 End", apiName:"next_date_1", key:"FORMULA", resourceName:"nextDate", resultType:"date", expression:"ADDDAYS(inputDate,1)", inputs:{inputDate:{path:"variables.date1"}} },
     { id:"set_date_2", label:"Use Date Choice 2", apiName:"set_date_2", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"variables.date2"} },
+    { id:"next_date_2", label:"Date Choice 2 End", apiName:"next_date_2", key:"FORMULA", resourceName:"nextDate", resultType:"date", expression:"ADDDAYS(inputDate,1)", inputs:{inputDate:{path:"variables.date2"}} },
     { id:"set_custom_date", label:"Use Entered Date", apiName:"set_custom_date", key:"ASSIGNMENT", variableName:"selectedDate", variableType:"date", operator:"set", value:{path:"body"} },
     { id:"get_service", label:"Get Active Appointment Service", apiName:"get_service", key:"GET_RECORDS", objectKey:"appointment_service",
       filters:[{field:"active",operator:"equals",value:true}],sortField:"name",sortDirection:"asc",limit:1,store:"first" },
@@ -1822,7 +1825,7 @@ function oneAssistantAppointmentRouterWorkflow() {
       durationMinutes:{path:"steps.get_resource_service.record.duration_minutes",fallback:{path:"steps.get_service.record.duration_minutes"}},
       startField:"start_time",endField:"end_time",weekdayField:"weekday",intervalField:"slot_interval_minutes",limit:200 },
     { id:"get_busy_appointments", label:"Get Busy Appointments", apiName:"get_busy_appointments", key:"GET_RECORDS", objectKey:"appointment",
-      filters:[{field:"resource_id",operator:"equals",value:{path:"steps.get_resource.record.id"}},{field:"status",operator:"not_equals",value:"CANCELLED"},{field:"status",operator:"not_equals",value:"NO_SHOW"}],store:"all",limit:200 },
+      filters:[{field:"resource_id",operator:"equals",value:{path:"steps.get_resource.record.id"}},{field:"status",operator:"not_equals",value:"CANCELLED"},{field:"status",operator:"not_equals",value:"NO_SHOW"},{field:"starts_at",operator:"greater_than_or_equal",value:{path:"variables.selectedDate"}},{field:"starts_at",operator:"less_than",value:{path:"variables.nextDate"}}],store:"all",limit:200 },
     { id:"get_busy_holds", label:"Get Active Slot Holds", apiName:"get_busy_holds", key:"GET_RECORDS", objectKey:"appointment_slot_hold",
       filters:[{field:"resource_id",operator:"equals",value:{path:"steps.get_resource.record.id"}},{field:"status",operator:"equals",value:"ACTIVE"},{field:"expires_at",operator:"greater_than",value:{path:"variables.currentTime"}}],store:"all",limit:200 },
     { id:"set_busy_appointments", label:"Set Busy Appointment Intervals", apiName:"set_busy_appointments", key:"ASSIGNMENT",
