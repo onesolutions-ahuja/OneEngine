@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   getWorkflowActionDefinition,
@@ -34,6 +35,19 @@ const INTERNAL = [
   "SHOPIFY_SYNC_PRODUCTS",
   "SHOPIFY_EXPORT_REFUND",
 ];
+
+test("workflow editor uses the workflow catalogue without record-page lifecycle duplicates", () => {
+  const editor = readFileSync(new URL("../src/pages/developer/Builder2Page.jsx", import.meta.url), "utf8");
+  assert.ok(editor.includes("apiRequest('/api/platform/workflow-actions')"));
+  assert.equal(editor.includes("apiRequest('/api/platform/action-registry')"), false);
+  const keys = new Set(getWorkflowBuilderActionRegistry().map((item) => item.key));
+  for (const key of ["CREATE_RECORD", "UPDATE_RECORD", "DELETE_RECORD"]) {
+    assert.ok(keys.has(key), key + " must remain available to Flow Builder");
+  }
+  for (const key of ["RECORD_SAVE", "RECORD_DELETE"]) {
+    assert.equal(keys.has(key), false, key + " belongs to the record page lifecycle");
+  }
+});
 
 test("internal adapters stay executable but are hidden from Flow Builder", () => {
   const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
