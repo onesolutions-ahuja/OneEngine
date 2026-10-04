@@ -12,8 +12,6 @@ import {
   createWorkflowRun,
   executeWorkflowAction,
   executeWorkflowActions,
-  getRegisteredFunction,
-  getRegisteredFunctionsRegistry,
   getWorkflowActionDefinition,
   getWorkflowActionRegistry,
   getWorkflowBuilderActionRegistry,
@@ -5054,7 +5052,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   router.get("/platform/function-registry", ...manage, async (req, res) => {
     res.json({
       success: true,
-      data: getRegisteredFunctionsRegistry().map(({ handler, validation, ...definition }) => definition),
+      data: [].map(({ handler, validation, ...definition }) => definition),
     });
   });
 
@@ -6543,6 +6541,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   router.post("/platform/rules", ...manage, async (req, res) => {
     try {
       const { objectId = null, objectKey = null, name, triggerKey, conditions = [], action = {}, active = false, lifecycleStatus, version } = req.body || {};
+      if (action?.type === "workflow" && !String(name || "").trim().startsWith("ONE-")) {
+        return res.status(400).json({ success: false, message: 'Flow names must start with "ONE-".' });
+      }
       const resolvedObject = objectId || objectKey ? await getObject(objectId || objectKey, req) : null;
       if ((objectId || objectKey) && !resolvedObject) return res.status(400).json({ success: false, message: "Object not found" });
       const lifecycleState = await normalizeRuleLifecycle({ active, lifecycle_status: lifecycleStatus, version }, active);
@@ -6597,6 +6598,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (!existing.rows.length) return res.status(404).json({ success: false, message: "Rule not found or not editable" });
       const rule = existing.rows[0];
       const isWorkflow = rule.action?.type === "workflow";
+      const requestedAction = req.body?.action !== undefined ? req.body.action : rule.action;
+      const requestedName = req.body?.name !== undefined ? req.body.name : rule.name;
+      if ((isWorkflow || requestedAction?.type === "workflow") && !String(requestedName || "").trim().startsWith("ONE-")) {
+        return res.status(400).json({ success: false, message: 'Flow names must start with "ONE-".' });
+      }
       const draftBase = isWorkflow && rule.draft_definition && typeof rule.draft_definition === "object"
         ? {
             ...rule,
@@ -8123,7 +8129,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       if (action === "call_function") {
         const functionKey = component.functionKey || component.function_key;
-        const definition = getRegisteredFunction(functionKey);
+        const definition = null;
         if (!definition) return res.status(422).json({ success: false, message: "Configured registered function is unavailable" });
         const execution = await executeSystemWorkflow({
           db,
