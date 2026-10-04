@@ -37,6 +37,12 @@ test('decision executes only selected branch and skips branch targets at top lev
   assert.equal(results.filter(r=>['yesStep','noStep','defaultStep'].includes(r.stepId)).length,0);
 });
 
+test('builder API names expose stable step outputs while retaining original identifiers', async () => {
+  const ctx = makeContext();
+  await executeWorkflowActions({ actions: [{ id: 'generated-id', apiName: 'Choose_Channel', key: 'ASSIGNMENT', variableName: 'channel', variableType: 'text', value: 'SMS' }], ...ctx });
+  assert.equal(ctx.workflowVariables.steps.Choose_Channel, ctx.workflowVariables.steps['generated-id']);
+});
+
 test('loop executes body exactly once per item in reverse order and restores prior current item', async () => {
   const actions=[
     {id:'items',type:'ASSIGNMENT',variableName:'items',variableType:'collection',operator:'set',value:[1,2,3]},
