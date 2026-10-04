@@ -112,6 +112,78 @@ test("persisted appointment workflow renders without OEFR101", async ({ page }) 
   expect(failures, failures.join("\n")).toEqual([]);
 });
 
+test("Run uses the saved-version execution endpoint instead of Debug", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  const workflowId = "1d5e7954-ce74-4637-a2b8-04780fab168c";
+  await page.goto(`developer/workflow-builder/${workflowId}`);
+  await expect(page.locator(".b2-shell")).toBeVisible({ timeout: 20_000 });
+
+  let runBody = null;
+  await page.route(`**/api/platform/rules/${workflowId}/run`, async (route) => {
+    runBody = JSON.parse(route.request().postData() || "{}");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: { status: "COMPLETED", rolledBack: false, externalActionsSimulated: false } }),
+    });
+  });
+
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.locator(".b2-drawer").filter({ hasText: "Run Flow" })).toBeVisible();
+  await page.getByRole("button", { name: "Run Saved Version", exact: true }).click();
+  await expect.poll(() => runBody).not.toBeNull();
+  expect(runBody.mode).toBe("run");
+  expect(runBody.definition).toBeUndefined();
+  await expect(page.locator(".b2-runtime-message")).toContainText("Run: COMPLETED");
+
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
+test("Debug rollback toggle changes execution semantics and Debug uses the saved version", async ({ page }) => {
+  const failures = watchRuntimeFailures(page);
+  const workflowId = "1d5e7954-ce74-4637-a2b8-04780fab168c";
+
+  await page.route("**/api/platform/rules", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    const payload = await response.json();
+    const rows = Array.isArray(payload?.data) ? payload.data : [];
+    const nextRows = rows.map((row) => String(row?.id || "") === workflowId
+      ? { ...row, trigger_key: "manual", action: { ...(row.action || {}), flowType: "screen" } }
+      : row);
+    await route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, data: nextRows }) });
+  });
+
+  let debugBody = null;
+  await page.route(`**/api/platform/rules/${workflowId}/debug`, async (route) => {
+    debugBody = JSON.parse(route.request().postData() || "{}");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: { status: "COMPLETED", rolledBack: false, externalActionsSimulated: false, resourceHistory: [] } }),
+    });
+  });
+
+  await page.goto(`developer/workflow-builder/${workflowId}`);
+  await expect(page.locator(".b2-shell")).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Debug", exact: true }).click();
+
+  const drawer = page.locator(".b2-drawer").filter({ hasText: "Debug" });
+  const rollback = drawer.getByRole("checkbox", { name: "Roll back changes after debugging" });
+  await expect(rollback).toBeChecked();
+  await rollback.uncheck();
+  await expect(drawer).toContainText("Rollback is off");
+
+  await drawer.getByRole("button", { name: "Run Debug", exact: true }).click();
+  await expect.poll(() => debugBody).not.toBeNull();
+  expect(debugBody.mode).toBe("debug");
+  expect(debugBody.debugOptions?.rollbackMode).toBe(false);
+  expect(debugBody.definition).toBeUndefined();
+  await expect(drawer.locator(".b2-test-result")).toContainText('"rolledBack": false');
+
+  expect(failures, failures.join("\n")).toEqual([]);
+});
+
 test("decision collapse keeps branch summaries visible and expand restores the child nodes", async ({ page }) => {
   const failures = watchRuntimeFailures(page);
   await page.goto("developer/workflow-builder");
