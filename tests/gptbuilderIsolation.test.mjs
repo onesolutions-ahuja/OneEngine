@@ -63,3 +63,62 @@ test('GPT Builder toolbar gates run debug and activate against the latest saved 
   assert.match(page, /Errors and Warnings/)
   assert.match(page, /Unsaved changes/)
 })
+
+
+test('GPT Builder phase 3 exposes Salesforce element groups and core elements', async () => {
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  for (const text of [
+    "label: 'Interaction'",
+    "label: 'Logic'",
+    "label: 'Data'",
+    "label: 'Action'",
+    "label: 'Screen'",
+    "label: 'Subflow'",
+    "label: 'Assignment'",
+    "label: 'Decision'",
+    "label: 'Loop'",
+    "label: 'Collection Filter'",
+    "label: 'Collection Sort'",
+    "label: 'Transform'",
+    "label: 'Wait'",
+    "label: 'Custom Error'",
+    "label: 'Group'",
+    "label: 'Get Records'",
+    "label: 'Create Records'",
+    "label: 'Update Records'",
+    "label: 'Delete Records'",
+  ]) assert.ok(elements.includes(text), text)
+})
+
+test('GPT Builder phase 3 applies Salesforce flow-type and layout availability rules', async () => {
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  assert.match(elements, /element\.key === 'screen'\) return flowType === 'screen'/)
+  assert.match(elements, /element\.key === 'custom_error'\) return flowType === 'record'/)
+  assert.match(elements, /element\.key === 'group'\) return layout === 'auto'/)
+  assert.match(elements, /\['record', 'screen', 'autolaunched'\]\.includes\(flowType\)/)
+  assert.match(elements, /fastRecord/)
+  assert.match(elements, /'assignment', 'decision', 'loop', 'get_records', 'update_records', 'custom_error', 'group'/)
+})
+
+test('GPT Builder phase 3 matches auto-layout picker and free-form drag discovery behavior', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  assert.match(page, /<ElementPicker/)
+  assert.match(page, /aria-label="Add element" aria-expanded=\{elementPickerOpen\}/)
+  assert.match(page, /application\/x-gptbuilder-element/)
+  assert.match(page, /onDrop=\{dropElement\}/)
+  assert.match(page, /<PendingElementEditor/)
+  assert.match(elements, /placeholder="Search elements\.\.\."/)
+  assert.match(elements, /draggable=\{draggable\}/)
+  assert.match(elements, /Connect to element/)
+  assert.match(elements, /onSelect\?\.\(\{ key: 'end'/)
+  assert.match(elements, /role="tooltip"/)
+})
+
+test('GPT Builder phase 3 keeps Screen selection in a separate editor shell', async () => {
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  assert.match(elements, /element\.key === 'screen'/)
+  assert.match(elements, /gptb-element-editor-modal-backdrop/)
+  assert.match(elements, /aria-label="New Screen"/)
+  assert.match(elements, /gptb-element-editor-shell/)
+})
