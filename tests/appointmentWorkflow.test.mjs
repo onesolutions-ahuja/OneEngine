@@ -176,13 +176,13 @@ test("Decision supports indexed collection paths used by appointment slot choice
 });
 
 test("generic Flow HTTP preserves provider base URL paths", () => {
-  const coreSource = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  const coreSource = readFileSync(new URL("../server/services/coreFunctions.js", import.meta.url), "utf8");
   assert.match(coreSource, /renderedEndpoint\.replace\(\/\^\\\/\+\//);
   assert.match(coreSource, /absoluteEndpoint/);
 });
 
 test("generic Flow HTTP runtime does not depend on connector definitions", () => {
-  const coreSource = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  const coreSource = readFileSync(new URL("../server/services/coreFunctions.js", import.meta.url), "utf8");
   const start = coreSource.indexOf("export async function oneHttpRequest");
   const end = coreSource.indexOf("export function oneHttpRequestDefinition", start);
   const runtime = coreSource.slice(start, end);
@@ -223,7 +223,7 @@ test("booking router validates custom dates, no-slot retry state and slot bounds
 });
 
 test("direct Flow HTTP retains OAuth client-credentials metadata from the connection", () => {
-  const coreSource = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  const coreSource = readFileSync(new URL("../server/services/coreFunctions.js", import.meta.url), "utf8");
   const start = coreSource.indexOf("export async function oneHttpRequest");
   const end = coreSource.indexOf("export function oneHttpRequestDefinition", start);
   const runtime = coreSource.slice(start, end);
@@ -448,7 +448,7 @@ test("Workflow Builder exposes WhatsApp HTTP message templates and child navigat
 });
 
 test("provider HTTP and WhatsApp delivery status are observable without secrets", () => {
-  const core = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
+  const core = readFileSync(new URL("../server/services/coreFunctions.js", import.meta.url), "utf8");
   const whatsapp = readFileSync(new URL("../server/routes/whatsapp.js", import.meta.url), "utf8");
   assert.match(core, /Provider HTTP request completed/);
   assert.match(core, /providerMessageId/);
