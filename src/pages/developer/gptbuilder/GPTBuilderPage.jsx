@@ -594,6 +594,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [selecting, setSelecting] = useState(false)
   const [zoom, setZoom] = useState(100)
   const [layoutOpen, setLayoutOpen] = useState(false)
+  const [layoutSwitchError, setLayoutSwitchError] = useState('')
   const [objects, setObjects] = useState([])
   const [eventTypes, setEventTypes] = useState([])
   const [availableFlows, setAvailableFlows] = useState([])
@@ -1025,6 +1026,58 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     const current = panels.findIndex((panel) => panel === document.activeElement || panel.contains?.(document.activeElement))
     panels[(current + 1) % panels.length]?.focus?.()
   }
+  const switchToFreeForm = () => {
+    if (layout === 'free') { setLayoutOpen(false); return }
+    const autoElements = elements.filter((element) => element.source === 'auto')
+    const generatedEdges = autoElements.map((element, index) => ({
+      sourceId: index === 0 ? 'start' : autoElements[index - 1].id,
+      targetId: element.id,
+      generatedByLayoutSwitch: true,
+    }))
+    setElements((current) => current.map((element, index) => element.source === 'auto'
+      ? { ...element, source: 'free', position: element.position || { x: 360, y: 150 + (index * 120) } }
+      : element))
+    setGoToConnections((current) => {
+      const explicit = current.filter((edge) => edge.generatedByLayoutSwitch !== true)
+      const explicitPairs = new Set(explicit.map((edge) => `${edge.sourceId}->${edge.targetId}`))
+      return [...explicit, ...generatedEdges.filter((edge) => !explicitPairs.has(`${edge.sourceId}->${edge.targetId}`))]
+    })
+    setLayout('free')
+    setLayoutOpen(false)
+    setToolboxOpen(true)
+    setSelectedElementIds([])
+    setConnectMode(false)
+    setLayoutSwitchError('')
+    setDirty(true)
+  }
+
+  const switchToAutoLayout = () => {
+    if (layout === 'auto') { setLayoutOpen(false); return }
+    const freeElements = elements.filter((element) => element.source === 'free')
+    const incoming = new Set((goToConnections || []).map((edge) => String(edge.targetId)))
+    const unsupported = freeElements.filter((element) => element.key === 'step')
+    const unconnected = freeElements.filter((element) => !incoming.has(String(element.id)))
+    if (unsupported.length || unconnected.length) {
+      const details = [
+        unsupported.length ? 'one or more unsupported Step elements' : '',
+        unconnected.length ? 'one or more elements without an incoming connection' : '',
+      ].filter(Boolean).join(' and ')
+      setLayoutSwitchError(`This flow can’t switch to Auto-Layout because it has ${details}.`)
+      setLayoutOpen(false)
+      return
+    }
+    setElements((current) => current.map((element) => element.source === 'free'
+      ? { ...element, source: 'auto', position: null }
+      : element))
+    setGoToConnections((current) => current.filter((edge) => edge.generatedByLayoutSwitch !== true))
+    setLayout('auto')
+    setLayoutOpen(false)
+    setFreeSelectedIds([])
+    setFreeConnectorDraft(null)
+    setLayoutSwitchError('')
+    setDirty(true)
+  }
+
   const beginConnectToElement = () => {
     if (!elements.length) return
     setConnectMode(true)
@@ -1189,7 +1242,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <button aria-label="Undo" title="Undo" disabled={!historyRef.current.length} onClick={undoFlowChange}><Undo2 size={16}/></button><button aria-label="Redo" title="Redo" disabled={!futureRef.current.length} onClick={redoFlowChange}><Redo2 size={16}/></button>
         {issues.length ? <button className={issues.some((issue) => issue.level === 'error') ? 'has-issues is-error' : 'has-issues is-warning'} aria-label={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} title={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} onClick={() => { setDiagnosticsOpen((value) => !value); setStartOpen(false); setEditingElement(null) }}><AlertTriangle size={16}/><em>{issues.filter((issue) => issue.level === (issues.some((row) => row.level === 'error') ? 'error' : 'warning')).length}</em></button> : null}
         <button aria-label="View Properties" title="View Properties" onClick={() => setPropertiesOpen(true)}><Settings2 size={16}/></button>
-        <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={() => { setLayout('auto'); setLayoutOpen(false); setDirty(true) }}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={() => { setLayout('free'); setLayoutOpen(false); setToolboxOpen(true); setDirty(true) }}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
+        <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={switchToAutoLayout}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={switchToFreeForm}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
         <button className="gptb-text-tool" disabled={!workflowId} onClick={() => setExecutionMode('run')}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId} onClick={() => setExecutionMode('test')}><Eye size={14}/> Test</button> : <button className="gptb-text-tool" disabled={!workflowId} onClick={() => setExecutionMode('debug')}><Eye size={14}/> Debug</button>}
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
@@ -1200,6 +1253,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     </header>
     {message ? <div className="gptb-toast is-success">{message}<button aria-label="Dismiss message" onClick={() => setMessage('')}><X size={13}/></button></div> : null}
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
+    {layoutSwitchError ? <div className="gptb-toast is-error" role="alert">{layoutSwitchError}<button aria-label="Dismiss layout error" onClick={() => setLayoutSwitchError('')}><X size={13}/></button></div> : null}
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''} ${editHistoryOpen ? 'is-history-mode' : ''}`}>
       {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={resources} goToConnections={goToConnections} onResourcesChange={(next) => { setResources(next); setDirty(true) }} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
       <main
