@@ -40,6 +40,7 @@ import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit l
 
 import createIntegrationsRouter from "./routes/integrations.js";
 import createProviderOAuthRouter from "./routes/providerOAuth.js";
+import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
 import createPlatformDeploymentsRouter from "./routes/platformDeployments.js";
@@ -1741,6 +1742,7 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
  */
 app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
 app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasPermission }));
+app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
 app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
