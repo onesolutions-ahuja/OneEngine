@@ -60,9 +60,9 @@ test('GPT Builder fast-field-update element list is restricted to Salesforce-sup
   assert.match(elements, /\['assignment', 'decision', 'get_records', 'loop'\]\.includes\(element\.key\)/)
 })
 
-test('Action and Screen keep dialog Done-Cancel editing while other auto-layout elements use the draft panel', async () => {
+test('Screen keeps dialog Done-Cancel editing while other auto-layout elements use the continuous draft panel', async () => {
   const props = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
   assert.match(props, /const isScreen = instance\?\.key === 'screen'/)
-  assert.match(props, /const isAction = instance\?\.key === 'action'/)
-  assert.match(props, /layout === 'free' \|\| isScreen \|\| isAction/)
+  assert.match(props, /const useDialog = layout === 'free' \|\| isScreen/)
+  assert.doesNotMatch(props, /const isAction = instance\?\.key === 'action'/)
 })
