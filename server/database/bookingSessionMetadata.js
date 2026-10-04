@@ -1,5 +1,5 @@
 export const bookingSessionMetadataSql = `
-  UPDATE platform_fields field SET writable=TRUE,updated_at=NOW()
+  UPDATE platform_fields field SET writable=TRUE
     FROM platform_objects object
    WHERE field.object_id=object.id AND object.object_key='appointment_booking_case'
      AND object.source_table='appointment_booking_cases'
