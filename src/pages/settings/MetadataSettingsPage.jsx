@@ -479,6 +479,14 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
 
       const sectionedPairs = await Promise.all(sectioned.map(async (object) => {
         try {
+          const sourceMode = object?.config?.settingsSectionSource || object?.config?.settings_section_source
+          if (sourceMode === 'record-section') {
+            const recordRes = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=500`)
+            return [object.id, {
+              fields: [],
+              rows: Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : [],
+            }]
+          }
           const [fieldRes, recordRes] = await Promise.all([
             apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`),
             apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=500`),
