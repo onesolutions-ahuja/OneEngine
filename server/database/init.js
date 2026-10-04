@@ -2116,6 +2116,45 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         if (staleDefinitions.rows.length) throw new Error("OneAssistant canonical router refresh verification failed");
         console.log("onePOS: OneAssistant deep runtime repair complete");
       },
+    },
+    {
+      key: "0061_oneassistant_timeout_flow_and_test_reset",
+      version: "61",
+      name: "Add OneAssistant inactivity timeout flow and reset existing booking sessions",
+      up: async client => {
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+
+        const expired = await client.query(
+          `UPDATE appointment_booking_cases
+              SET status='EXPIRED',
+                  state=COALESCE(state,'{}'::jsonb)||'{"step":"EXPIRED","waitToken":null}'::jsonb,
+                  updated_at=NOW()
+            RETURNING id`
+        );
+
+        const refreshed = await client.query(
+          `UPDATE platform_rules
+              SET trigger_key=$1,
+                  conditions=$2::jsonb,
+                  action=$3::jsonb,
+                  active=TRUE,
+                  lifecycle_status='ACTIVE',
+                  updated_at=NOW()
+            WHERE company_id IS NOT NULL
+              AND trigger_key='communication_message_received'
+              AND action->>'type'='workflow'
+              AND (action->>'apiName'='OneAssistant_Booking_Channel_Router'
+                   OR name='OneAssistant - Booking Channel Router')`,
+          [router.triggerKey, JSON.stringify(router.conditions || []), JSON.stringify(router.action)]
+        );
+
+        console.log("onePOS: OneAssistant 15-minute timeout flow activated", {
+          expiredBookingSessions: expired.rowCount,
+          refreshedRouters: refreshed.rowCount,
+        });
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
