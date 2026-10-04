@@ -84,6 +84,84 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
         assignment("set_failed_status", "Set Failed Status Code", "statusCode", "number", { path: "steps.test_http.statusCode" }),
       ]
     }
+  },
+  {
+    systemKey: "flow:GPT_QUICKBOOKS_SYNC_VENDORS",
+    name: "GPT - QuickBooks - Sync Vendors",
+    triggerKey: "manual",
+    action: {
+      type: "workflow", systemGenerated: true, systemKey: "flow:GPT_QUICKBOOKS_SYNC_VENDORS",
+      scope: "system", capabilityType: "workflow", capabilityKey: "GPT_QUICKBOOKS_SYNC_VENDORS",
+      apiName: "GPT_QUICKBOOKS_SYNC_VENDORS", flowType: "AUTOLAUNCHED",
+      inputs: [{ name: "supplierId", type: "text", required: true }, { name: "integrationId", type: "text", required: true }],
+      outputs: ["externalId","syncToken","mappingId"],
+      resources: [
+        outputVariable("supplierId","Text",{ availableInput:true }), outputVariable("integrationId","Text",{ availableInput:true }),
+        outputVariable("externalId"), outputVariable("syncToken"), outputVariable("mappingId")
+      ],
+      actions: [
+        { id:"get_supplier", label:"Get Supplier", apiName:"get_supplier", key:"GET_RECORDS", objectKey:"supplier", filters:[{field:"id",operator:"equals",value:{path:"variables.supplierId"}}], limit:1, store:"first" },
+        { id:"get_mapping", label:"Get QuickBooks Vendor Mapping", apiName:"get_mapping", key:"GET_RECORDS", objectKey:"integration_entity_mapping",
+          filters:[{field:"integration_id",operator:"equals",value:{path:"variables.integrationId"}},{field:"entity_type",operator:"equals",value:"supplier"},{field:"local_entity_id",operator:"equals",value:{path:"variables.supplierId"}}], limit:1, store:"first" },
+        { id:"vendor_mapped", label:"Vendor Already Mapped?", apiName:"vendor_mapped", key:"CONDITION",
+          outcomes:[{id:"mapped",label:"Mapped",condition:{match:"all",conditions:[{field:"steps.get_mapping.count",operator:"greater_than",value:0}]},branch:["update_vendor"]}],
+          defaultLabel:"New Vendor",defaultBranch:["create_vendor"] },
+        { id:"create_vendor", label:"Create QuickBooks Vendor", apiName:"create_vendor", key:"ONE_HTTP_REQUEST", providerKey:"quickbooks", method:"POST", endpoint:"/v3/company/{{realmId}}/vendor",
+          body:{ DisplayName:{path:"steps.get_supplier.record.name"}, PrimaryEmailAddr:{Address:{path:"steps.get_supplier.record.email"}}, PrimaryPhone:{FreeFormNumber:{path:"steps.get_supplier.record.phone"}}, BillAddr:{Line1:{path:"steps.get_supplier.record.address"}} } },
+        { id:"update_vendor", label:"Update QuickBooks Vendor", apiName:"update_vendor", key:"ONE_HTTP_REQUEST", providerKey:"quickbooks", method:"POST", endpoint:"/v3/company/{{realmId}}/vendor",
+          body:{ Id:{path:"steps.get_mapping.record.external_id"}, SyncToken:{path:"steps.get_mapping.record.metadata.syncToken"}, sparse:true, DisplayName:{path:"steps.get_supplier.record.name"}, PrimaryEmailAddr:{Address:{path:"steps.get_supplier.record.email"}}, PrimaryPhone:{FreeFormNumber:{path:"steps.get_supplier.record.phone"}}, BillAddr:{Line1:{path:"steps.get_supplier.record.address"}} } },
+        { id:"vendor_created", label:"New Vendor Created?", apiName:"vendor_created", key:"CONDITION",
+          outcomes:[{id:"yes",label:"Created",condition:{match:"all",conditions:[{field:"steps.create_vendor.success",operator:"equals",value:true}]},branch:["create_vendor_mapping"]}],
+          defaultLabel:"Existing Vendor Updated",defaultBranch:["update_vendor_mapping"] },
+        { id:"create_vendor_mapping", label:"Create Vendor Mapping", apiName:"create_vendor_mapping", key:"CREATE_RECORD", objectKey:"integration_entity_mapping",
+          fieldValues:{integration_id:{path:"variables.integrationId"},entity_type:"supplier",local_entity_id:{path:"variables.supplierId"},external_id:{path:"steps.create_vendor.data.Vendor.Id"},mapping_status:"LINKED",metadata:{syncToken:{path:"steps.create_vendor.data.Vendor.SyncToken"},displayName:{path:"steps.create_vendor.data.Vendor.DisplayName"}}} },
+        { id:"update_vendor_mapping", label:"Update Vendor Mapping", apiName:"update_vendor_mapping", key:"UPDATE_RECORD", objectKey:"integration_entity_mapping", recordId:{path:"steps.get_mapping.record.id"},
+          fieldValues:{external_id:{path:"steps.update_vendor.data.Vendor.Id"},mapping_status:"LINKED",safe_error:null,metadata:{syncToken:{path:"steps.update_vendor.data.Vendor.SyncToken"},displayName:{path:"steps.update_vendor.data.Vendor.DisplayName"}}} },
+        assignment("set_vendor_external_create","Set Vendor External ID","externalId","text",{path:"steps.create_vendor.data.Vendor.Id"}),
+        assignment("set_vendor_sync_create","Set Vendor Sync Token","syncToken","text",{path:"steps.create_vendor.data.Vendor.SyncToken"}),
+        assignment("set_vendor_mapping_create","Set Vendor Mapping ID","mappingId","text",{path:"steps.create_vendor_mapping.created.id"}),
+        assignment("set_vendor_external_update","Set Updated Vendor External ID","externalId","text",{path:"steps.update_vendor.data.Vendor.Id"}),
+        assignment("set_vendor_sync_update","Set Updated Vendor Sync Token","syncToken","text",{path:"steps.update_vendor.data.Vendor.SyncToken"}),
+        assignment("set_vendor_mapping_update","Set Updated Vendor Mapping ID","mappingId","text",{path:"steps.get_mapping.record.id"})
+      ]
+    }
+  },
+  {
+    systemKey: "flow:GPT_QUICKBOOKS_SYNC_PURCHASES",
+    name: "GPT - QuickBooks - Sync Purchases",
+    triggerKey: "manual",
+    action: {
+      type:"workflow", systemGenerated:true, systemKey:"flow:GPT_QUICKBOOKS_SYNC_PURCHASES",
+      scope:"system", capabilityType:"workflow", capabilityKey:"GPT_QUICKBOOKS_SYNC_PURCHASES",
+      apiName:"GPT_QUICKBOOKS_SYNC_PURCHASES", flowType:"AUTOLAUNCHED",
+      inputs:[{name:"purchaseId",type:"text",required:true},{name:"integrationId",type:"text",required:true}],
+      outputs:["externalId","syncToken","mappingId"],
+      resources:[outputVariable("purchaseId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("externalId"),outputVariable("syncToken"),outputVariable("mappingId")],
+      actions:[
+        {id:"get_purchase",label:"Get Purchase",apiName:"get_purchase",key:"GET_RECORDS",objectKey:"purchase",filters:[{field:"id",operator:"equals",value:{path:"variables.purchaseId"}}],limit:1,store:"first"},
+        {id:"get_vendor_mapping",label:"Get Supplier QuickBooks Mapping",apiName:"get_vendor_mapping",key:"GET_RECORDS",objectKey:"integration_entity_mapping",
+          filters:[{field:"integration_id",operator:"equals",value:{path:"variables.integrationId"}},{field:"entity_type",operator:"equals",value:"supplier"},{field:"local_entity_id",operator:"equals",value:{path:"steps.get_purchase.record.supplier_id"}}],limit:1,store:"first"},
+        {id:"get_purchase_mapping",label:"Get Purchase QuickBooks Mapping",apiName:"get_purchase_mapping",key:"GET_RECORDS",objectKey:"integration_entity_mapping",
+          filters:[{field:"integration_id",operator:"equals",value:{path:"variables.integrationId"}},{field:"entity_type",operator:"equals",value:"purchase"},{field:"local_entity_id",operator:"equals",value:{path:"variables.purchaseId"}}],limit:1,store:"first"},
+        {id:"get_lines",label:"Get Purchase Lines",apiName:"get_lines",key:"GET_RECORDS",objectKey:"purchase_line",filters:[{field:"purchase_id",operator:"equals",value:{path:"variables.purchaseId"}}],store:"all",limit:500},
+        {id:"purchase_already_synced",label:"Purchase Already Synced?",apiName:"purchase_already_synced",key:"CONDITION",
+          outcomes:[{id:"yes",label:"Already Synced",condition:{match:"all",conditions:[{field:"steps.get_purchase_mapping.count",operator:"greater_than",value:0},{field:"steps.get_purchase_mapping.record.mapping_status",operator:"equals",value:"LINKED"}]},branch:["set_existing_purchase_external","set_existing_purchase_mapping"]}],
+          defaultLabel:"Export Bill",defaultBranch:["export_bill"]},
+        {id:"export_bill",label:"Export QuickBooks Bill",apiName:"export_bill",key:"ONE_HTTP_REQUEST",providerKey:"quickbooks",method:"POST",endpoint:"/v3/company/{{realmId}}/bill",
+          body:{VendorRef:{value:{path:"steps.get_vendor_mapping.record.external_id"}},TxnDate:{path:"steps.get_purchase.record.purchase_date"},DocNumber:{path:"steps.get_purchase.record.reference_number"},
+            Line:{path:"steps.get_lines.records"}}},
+        {id:"bill_exported",label:"Bill Exported?",apiName:"bill_exported",key:"CONDITION",
+          outcomes:[{id:"yes",label:"Success",condition:{match:"all",conditions:[{field:"steps.export_bill.success",operator:"equals",value:true}]},branch:["create_purchase_mapping","set_purchase_external","set_purchase_sync","set_purchase_mapping"]}],
+          defaultLabel:"Failed",defaultBranch:[]},
+        {id:"create_purchase_mapping",label:"Create Purchase Mapping",apiName:"create_purchase_mapping",key:"CREATE_RECORD",objectKey:"integration_entity_mapping",
+          fieldValues:{integration_id:{path:"variables.integrationId"},entity_type:"purchase",local_entity_id:{path:"variables.purchaseId"},external_id:{path:"steps.export_bill.data.Bill.Id"},mapping_status:"LINKED",metadata:{syncToken:{path:"steps.export_bill.data.Bill.SyncToken"}}}},
+        assignment("set_purchase_external","Set Purchase External ID","externalId","text",{path:"steps.export_bill.data.Bill.Id"}),
+        assignment("set_purchase_sync","Set Purchase Sync Token","syncToken","text",{path:"steps.export_bill.data.Bill.SyncToken"}),
+        assignment("set_purchase_mapping","Set Purchase Mapping ID","mappingId","text",{path:"steps.create_purchase_mapping.created.id"}),
+        assignment("set_existing_purchase_external","Set Existing Purchase External ID","externalId","text",{path:"steps.get_purchase_mapping.record.external_id"}),
+        assignment("set_existing_purchase_mapping","Set Existing Purchase Mapping ID","mappingId","text",{path:"steps.get_purchase_mapping.record.id"})
+      ]
+    }
   }
 ]);
 
