@@ -5017,7 +5017,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
 
 export function getWorkflowActionRegistry() {
-  return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
+  return WORKFLOW_ACTION_REGISTRY.slice();
 }
 
 export function getWorkflowBuilderActionRegistry() {
@@ -5026,7 +5026,7 @@ export function getWorkflowBuilderActionRegistry() {
 
 export function getWorkflowActionDefinition(key) {
   const normalized = String(key || "").toUpperCase();
-  return (WORKFLOW_ACTION_MAP.get(normalized) || DYNAMIC_CONNECTOR_ACTIONS.find((entry) => String(entry.key || "").toUpperCase() === normalized) || null);
+  return WORKFLOW_ACTION_MAP.get(normalized) || null;
 }
 
 export function validateWorkflowAction(action) {
