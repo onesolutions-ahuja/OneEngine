@@ -6,7 +6,6 @@ import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { dispatchIntegrationEvent } from "./integrationDispatcher.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { clockInAttendance, clockOutAttendance } from "./attendanceActions.js";
-import { issueAccountToken } from "./accountPolicy.js";
 
 // Temporary compatibility registry.
 //
@@ -165,21 +164,6 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
           storeId: inputs.storeId || req?.user?.storeId,
         },
         entityId: inputs.entityId,
-      }),
-  },
-  {
-    key: "account.registration.token.issue",
-    category: "SECURITY",
-    description: "Issue a registration token; retained temporarily for the active account lifecycle route.",
-    inputs: { type: "object", required: ["userId"] },
-    outputs: { type: "string" },
-    permissions: ["users.manage"],
-    handler: async ({ inputs = {}, db, companyId, req }) =>
-      issueAccountToken(db, {
-        companyId: companyId || req?.user?.companyId,
-        userId: inputs.userId,
-        purpose: "REGISTRATION",
-        expiresMinutes: inputs.expiresMinutes || 1440,
       }),
   },
 ]);
