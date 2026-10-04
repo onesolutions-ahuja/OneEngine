@@ -13,9 +13,10 @@ CREATE TABLE IF NOT EXISTS sys_settings (
   scope VARCHAR(20) NOT NULL DEFAULT 'COMPANY' CHECK (scope IN ('COMPANY','STORE','USER','DEVICE')),
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(company_id, setting_key, COALESCE(store_id, '00000000-0000-0000-0000-000000000000'::uuid))
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sys_settings_scope_key
+  ON sys_settings(company_id, setting_key, COALESCE(store_id, '00000000-0000-0000-0000-000000000000'::uuid));
 CREATE INDEX IF NOT EXISTS idx_sys_settings_company_section ON sys_settings(company_id, section, active);
 
 CREATE TABLE IF NOT EXISTS device_heartbeats (
