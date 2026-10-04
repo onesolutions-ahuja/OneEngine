@@ -1710,43 +1710,34 @@ export const packageRegistrySchema = `
 function oneAssistantAppointmentRouterWorkflow() {
   const condition = (field, value) => ({ match: "all", conditions: [{ field, operator: "equals", value }] });
   // Communication stays Flow-visible. WhatsApp is an ordinary API step; credentials/base URL remain secure metadata.
-  const send = (id, label, channel, message, templateContext = {}) => {
-    const renderedMessage = { template: message, context: templateContext };
-    return {
+  const send = (id, label, channel, message, templateContext = {}) => [
+    {
       id, label, apiName: id, key: "CONDITION",
       outcomes: [
-        {
-          id: "whatsapp", label: "WhatsApp", condition: condition("variables.messageChannel", "WHATSAPP"),
-          branch: [id + "_whatsapp_api"],
-        },
-        {
-          id: "sms", label: "SMS", condition: condition("variables.messageChannel", "SMS"),
-          branch: [id + "_sms"],
-        },
+        { id: "whatsapp", label: "WhatsApp", condition: condition("variables.messageChannel", "WHATSAPP"), branch: [id + "_whatsapp_api"] },
+        { id: "sms", label: "SMS", condition: condition("variables.messageChannel", "SMS"), branch: [id + "_sms"] },
       ],
       defaultLabel: "Unsupported Channel", defaultBranch: [],
-      inlineActions: [
-        {
-          id: id + "_whatsapp_api", label: label + " - WhatsApp API", apiName: id + "_whatsapp_api",
-          key: "ONE_HTTP_REQUEST", providerKey: "whatsapp", method: "POST",
-          endpoint: "/{{phoneNumberId}}/messages",
-          body: {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: { path: "sender" },
-            type: "text",
-            text: { body: renderedMessage },
-          },
-        },
-        {
-          id: id + "_sms", label: label + " - SMS", apiName: id + "_sms",
-          key: "SEND_COMMUNICATION", channel: "SMS",
-          recipient: { path: "sender" }, message, templateContext,
-          conversationId: { path: "metadata.conversationId" },
-        },
-      ],
-    };
-  };
+    },
+    {
+      id: id + "_whatsapp_api", label: label + " - WhatsApp API", apiName: id + "_whatsapp_api",
+      key: "ONE_HTTP_REQUEST", providerKey: "whatsapp", method: "POST",
+      endpoint: "/{{phoneNumberId}}/messages",
+      body: {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: { path: "sender" },
+        type: "text",
+        text: { body: { template: message, context: templateContext } },
+      },
+    },
+    {
+      id: id + "_sms", label: label + " - SMS", apiName: id + "_sms",
+      key: "SEND_COMMUNICATION", channel: "SMS",
+      recipient: { path: "sender" }, message, templateContext,
+      conversationId: { path: "metadata.conversationId" },
+    },
+  ];
   const dateMessage = "Welcome. Please choose an appointment date:\n1. {{date1}}\n2. {{date2}}\n3. Enter another date as DD/MM/YYYY\n\nReply 1, 2, or a date in DD/MM/YYYY format.";
   const slotsMessage = "Available times for {{selectedDate}}:\n{{slotChoices}}\n\nReply with 1-{{slotCount}}.";
   const invalidDateMessage = "Please share a correct input: reply 1, 2, or enter a future date in DD/MM/YYYY format.";
@@ -1779,7 +1770,7 @@ function oneAssistantAppointmentRouterWorkflow() {
       defaultLabel:"New Session",defaultBranch:["create_case","send_initial_prompt"] },
     { id:"create_case", label:"Create Booking Case", apiName:"create_case", key:"CREATE_RECORD", objectKey:"appointment_booking_case",
       fieldValues:{channel:{path:"channel"},sender:{path:"sender"},recipient:{path:"recipient"},status:"NEW",customer_id:{path:"metadata.customerId",fallback:null},state:{step:"AWAITING_DATE"}} },
-    send("send_initial_prompt","Send Date Choices",{path:"variables.messageChannel"},dateMessage,{date1:{path:"variables.date1"},date2:{path:"variables.date2"}}),
+    ...send("send_initial_prompt","Send Date Choices",{path:"variables.messageChannel"},dateMessage,{date1:{path:"variables.date1"},date2:{path:"variables.date2"}}),
     { id:"route_state", label:"Route Booking State", apiName:"route_state", key:"CONDITION",
       outcomes:[
         {id:"date",label:"Waiting for Date",condition:condition("steps.get_case.record.state.step","AWAITING_DATE"),branch:["validate_date"]},
@@ -1801,7 +1792,7 @@ function oneAssistantAppointmentRouterWorkflow() {
     { id:"service_found", label:"Service Available?", apiName:"service_found", key:"CONDITION",
       outcomes:[{id:"yes",label:"Service Found",condition:{match:"all",conditions:[{field:"steps.get_service.count",operator:"greater_than",value:0}]},branch:["get_resource_service"]}],
       defaultLabel:"No Service",defaultBranch:["send_no_service"] },
-    send("send_no_service","Send No Service Reply",{path:"variables.messageChannel"},"No appointment service is currently available."),
+    ...send("send_no_service","Send No Service Reply",{path:"variables.messageChannel"},"No appointment service is currently available."),
     { id:"get_resource_service", label:"Get Service Resource Assignment", apiName:"get_resource_service", key:"GET_RECORDS", objectKey:"appointment_resource_service",
       filters:[{field:"service_id",operator:"equals",value:{path:"steps.get_service.record.id"}},{field:"active",operator:"equals",value:true}],limit:1,store:"first" },
     { id:"resource_service_found", label:"Service Resource Available?", apiName:"resource_service_found", key:"CONDITION",
@@ -1812,7 +1803,7 @@ function oneAssistantAppointmentRouterWorkflow() {
     { id:"resource_found", label:"Resource Available?", apiName:"resource_found", key:"CONDITION",
       outcomes:[{id:"yes",label:"Resource Found",condition:{match:"all",conditions:[{field:"steps.get_resource.count",operator:"greater_than",value:0}]},branch:["get_availability"]}],
       defaultLabel:"No Resource",defaultBranch:["send_no_resource"] },
-    send("send_no_resource","Send No Resource Reply",{path:"variables.messageChannel"},"No appointment resource is currently available."),
+    ...send("send_no_resource","Send No Resource Reply",{path:"variables.messageChannel"},"No appointment resource is currently available."),
     { id:"get_availability", label:"Get Availability Rules", apiName:"get_availability", key:"GET_RECORDS", objectKey:"appointment_availability_rule",
       filters:[{field:"resource_id",operator:"equals",value:{path:"steps.get_resource.record.id"}},{field:"active",operator:"equals",value:true}],store:"all",limit:50 },
     { id:"expand_slots", label:"Expand Availability Windows", apiName:"expand_slots", key:"TIME_WINDOW_EXPAND",
@@ -1840,8 +1831,8 @@ function oneAssistantAppointmentRouterWorkflow() {
     { id:"save_date_state", label:"Save Selected Date", apiName:"save_date_state", key:"UPDATE_RECORD", objectKey:"appointment_booking_case",
       recordId:{path:"steps.get_case.record.id",fallback:{path:"steps.create_case.created.id"}},
       fieldValues:{service_id:{path:"steps.get_service.record.id"},status:"SLOT_SELECTED",state:{step:"AWAITING_SLOT",selectedDate:{path:"variables.selectedDate"},resourceId:{path:"steps.get_resource.record.id"},slots:{path:"steps.sort_slots.collection"}}} },
-    send("send_slots","Send Available Slots",{path:"variables.messageChannel"},slotsMessage,{selectedDate:{path:"variables.selectedDate"},slotChoices:{path:"steps.format_slots.text"},slotCount:{path:"steps.sort_slots.count"}}),
-    send("send_no_slots","Send No Slots Reply",{path:"variables.messageChannel"},"There are no available appointments on {{selectedDate}}. Please reply with another date in DD/MM/YYYY format.",{selectedDate:{path:"variables.selectedDate"}}),
+    ...send("send_slots","Send Available Slots",{path:"variables.messageChannel"},slotsMessage,{selectedDate:{path:"variables.selectedDate"},slotChoices:{path:"steps.format_slots.text"},slotCount:{path:"steps.sort_slots.count"}}),
+    ...send("send_no_slots","Send No Slots Reply",{path:"variables.messageChannel"},"There are no available appointments on {{selectedDate}}. Please reply with another date in DD/MM/YYYY format.",{selectedDate:{path:"variables.selectedDate"}}),
 
     { id:"validate_slot", label:"Validate Slot Reply", apiName:"validate_slot", key:"CONDITION",
       outcomes:[
@@ -1852,7 +1843,7 @@ function oneAssistantAppointmentRouterWorkflow() {
         {id:"five",label:"Slot 5",condition:condition("body","5"),branch:["select_slot_5","create_appointment"]}
       ],defaultLabel:"Invalid Slot",defaultBranch:["send_invalid_slot"] },
     ...[1,2,3,4,5].map((number)=>({id:`select_slot_${number}`,label:`Select Slot ${number}`,apiName:`select_slot_${number}`,key:"ASSIGNMENT",variableName:"selectedSlot",variableType:"record",operator:"set",value:{path:`steps.get_case.record.state.slots.${number-1}`}})),
-    send("send_invalid_slot","Send Invalid Slot Reply",{path:"variables.messageChannel"},invalidSlotMessage),
+    ...send("send_invalid_slot","Send Invalid Slot Reply",{path:"variables.messageChannel"},invalidSlotMessage),
     { id:"create_appointment", label:"Create Appointment", apiName:"create_appointment", key:"CREATE_RECORD", objectKey:"appointment",
       fieldValues:{
         service_id:{path:"steps.get_case.record.service_id"},resource_id:{path:"steps.get_case.record.state.resourceId"},
@@ -1862,7 +1853,7 @@ function oneAssistantAppointmentRouterWorkflow() {
       } },
     { id:"confirm_case", label:"Mark Booking Confirmed", apiName:"confirm_case", key:"UPDATE_RECORD", objectKey:"appointment_booking_case",
       recordId:{path:"steps.get_case.record.id"},fieldValues:{status:"CONFIRMED",appointment_id:{path:"steps.create_appointment.created.id"},state:{step:"CONFIRMED"}} },
-    send("send_confirmation","Send Appointment Confirmation",{path:"variables.messageChannel"},confirmationMessage,{appointmentDate:{path:"variables.selectedSlot.date"},appointmentTime:{path:"variables.selectedSlot.time"}}),
+    ...send("send_confirmation","Send Appointment Confirmation",{path:"variables.messageChannel"},confirmationMessage,{appointmentDate:{path:"variables.selectedSlot.date"},appointmentTime:{path:"variables.selectedSlot.time"}}),
   ];
 
   return {
