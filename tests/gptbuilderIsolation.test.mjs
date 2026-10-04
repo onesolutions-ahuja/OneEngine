@@ -284,3 +284,33 @@ test('GPT Builder phase 2 recheck uses Salesforce Show Advanced and current scre
   assert.match(page, /User Context—Enforces User Permissions/)
   assert.match(page, /Number\.parseFloat\(draft\.apiVersion \|\| '68\.0'\) >= 68/)
 })
+
+
+test('GPT Builder recheck matches Salesforce Save As and Edit History toolbar behavior', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const history = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderSaveHistory.jsx', import.meta.url), 'utf8')
+  assert.match(page, /<GPTBuilderSaveAsMenu/)
+  assert.match(page, /Save as New Version/)
+  assert.match(history, /Save as New Flow/)
+  assert.match(page, /aria-label="Edit History"/)
+  assert.match(page, /\['autolaunched','schedule','platform_event'\]\.includes\(flow\.key\)/)
+  assert.match(history, /This Flow Has Unsaved Changes/)
+  assert.match(history, /Save and View Edit History/)
+  assert.match(page, /\/api\/platform\/rules\/\$\{encodeURIComponent\(id\)\}\/versions/)
+  assert.match(page, /\/versions\/\$\{encodeURIComponent\(entry\.version\)\}\/restore/)
+})
+
+test('GPT Builder Save as New Flow auto-populates an editable API name', async () => {
+  const history = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderSaveHistory.jsx', import.meta.url), 'utf8')
+  assert.match(history, /apiNameFromLabel/)
+  assert.match(history, /setManualApi\(true\)/)
+  assert.match(history, /Flow Label/)
+  assert.match(history, /Flow API Name/)
+  assert.doesNotMatch(history, /disabled=\{.*apiName/)
+})
+
+test('GPT Builder edit history makes the canvas read-only while reviewing saves', async () => {
+  const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
+  assert.match(css, /gptb-workspace\.is-history-mode \.gptb-toolbox/)
+  assert.match(css, /pointer-events:none/)
+})
