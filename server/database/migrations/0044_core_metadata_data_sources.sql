@@ -35,6 +35,24 @@ CREATE TABLE IF NOT EXISTS device_heartbeats (
 );
 CREATE INDEX IF NOT EXISTS idx_device_heartbeats_company_seen ON device_heartbeats(company_id, last_seen_at DESC);
 
+CREATE OR REPLACE VIEW available_stores AS
+SELECT
+  us.id,
+  s.company_id,
+  us.user_id,
+  s.id AS store_id,
+  s.name,
+  s.code,
+  s.city,
+  s.postcode,
+  s.active,
+  us.is_primary,
+  us.created_at,
+  GREATEST(COALESCE(us.updated_at, us.created_at), s.updated_at) AS updated_at
+FROM user_stores us
+JOIN stores s ON s.id=us.store_id
+WHERE us.active=TRUE AND s.active=TRUE;
+
 CREATE OR REPLACE VIEW device_health AS
 SELECT
   id, company_id, store_id, user_id, device_key, device_name, device_type, app_version,
