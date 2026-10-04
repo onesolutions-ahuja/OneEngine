@@ -3301,7 +3301,7 @@ CREATE TABLE IF NOT EXISTS platform_message_templates (
     name VARCHAR(200) NOT NULL,
     api_key VARCHAR(100) NOT NULL,
     description TEXT,
-    channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+    channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP','IN_APP')),
     object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
     subject TEXT,
     body TEXT NOT NULL,
