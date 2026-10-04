@@ -216,7 +216,7 @@ function FlowShell({ flow, onNew }) {
   const [startConfig, setStartConfig] = useState(() => initialStart(flow.key))
   const [startDraft, setStartDraft] = useState(() => initialStart(flow.key))
   const [startOpen, setStartOpen] = useState(flow.startNeedsConfiguration)
-  const [flowProps, setFlowProps] = useState({ label: 'New Flow', apiName: 'New_Flow', description: '', runContext: 'default' })
+  const [flowProps, setFlowProps] = useState({ label: '', apiName: '', description: '', runContext: 'default' })
   const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [workflowId, setWorkflowId] = useState('')
