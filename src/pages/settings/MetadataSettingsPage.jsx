@@ -464,7 +464,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
       Promise.resolve({ user: getStoredUser() }),
     ]).then(async ([catalogRes, meRes]) => {
       if (!live) return
-      const hosts = Array.isArray(catalogRes?.data) ? catalogRes.data : []
+      const hosts = Array.isArray(catalogRes?.data?.objects) ? catalogRes.data.objects : Array.isArray(catalogRes?.data) ? catalogRes.data : []
       writeSettingsCatalogCache(hosts)
       setObjects(hosts)
       setObjectPermissions(Object.fromEntries(hosts.map((object) => [object.id, object.permissions || null])))
@@ -479,16 +479,16 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
 
       const sectionedPairs = await Promise.all(sectioned.map(async (object) => {
         try {
-          const recordRes = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=500`)
+          const [fieldRes, recordRes] = await Promise.all([
+            apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`),
+            apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=500`),
+          ])
           return [object.id, {
-            fields: Array.isArray(object.fields) ? object.fields : [],
+            fields: Array.isArray(fieldRes?.data) ? fieldRes.data : [],
             rows: Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : [],
           }]
         } catch {
-          return [object.id, {
-            fields: Array.isArray(object.fields) ? object.fields : [],
-            rows: [],
-          }]
+          return [object.id, { fields: [], rows: [] }]
         }
       }))
       if (!live) return
