@@ -270,3 +270,15 @@
 .gptb-transform-connections{display:grid;gap:5px;align-content:start;padding-top:35px}.gptb-transform-connections>div{display:grid;grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);gap:3px;align-items:center;padding:4px;border-radius:3px;background:#f7f7f7;font-size:7px}.gptb-transform-connections i{text-align:center;color:#0176d3;font-style:normal}.gptb-transform-connections span{overflow:hidden;text-overflow:ellipsis}.gptb-transform-connections p{margin:0;padding:5px;color:#706e6b;font-size:7px;text-align:center}
 .gptb-transform-mapping-details{margin-top:9px;border-top:1px solid #ecebea;padding-top:8px}.gptb-transform-mapping-details>summary{cursor:pointer;font-size:9px;font-weight:700}
 @media(max-width:760px){.gptb-transform-visual-map{grid-template-columns:1fr}.gptb-transform-connections{padding-top:0}}
+
+.gptb-test-assertions{display:grid;gap:6px}
+.gptb-test-assertions>div{display:grid;grid-template-columns:20px minmax(0,1.2fr) minmax(130px,.8fr) minmax(0,1fr) 28px;gap:6px;align-items:center}
+.gptb-test-assertions>div>span{font-size:8px;color:#706e6b;text-align:center}
+.gptb-test-assertions>div>button{display:grid;place-items:center;border:0;background:transparent;color:#706e6b}
+.gptb-expected-results{display:grid;gap:6px;margin-top:10px}.gptb-expected-results h4{margin:0;font-size:9px}
+.gptb-expected-results details{border:1px solid #dddbda;border-radius:4px;background:#fff;overflow:hidden}
+.gptb-expected-results summary{display:flex;align-items:center;gap:7px;padding:7px;cursor:pointer;font-size:8px}
+.gptb-expected-results summary>span{font-weight:700}.gptb-expected-results summary>b{font-size:8px;overflow-wrap:anywhere}
+.gptb-expected-results details>dl{display:grid;gap:4px;margin:0;padding:7px;border-top:1px solid #ecebea}
+.gptb-expected-results details>dl>div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:6px}.gptb-expected-results dt{font-size:7px;color:#706e6b}.gptb-expected-results dd{margin:0;font-size:8px;overflow-wrap:anywhere}
+@media(max-width:760px){.gptb-test-assertions>div{grid-template-columns:1fr}.gptb-test-assertions>div>span{text-align:left}.gptb-expected-results details>dl>div{grid-template-columns:1fr}}
