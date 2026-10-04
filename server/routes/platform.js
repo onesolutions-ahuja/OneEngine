@@ -31,6 +31,7 @@ import { resolvePageLayout, resolveAssignedPageLayout } from "../services/platfo
 import { searchPlatformRecords } from "../services/platformSearch.js";
 import { PLATFORM_FIELD_TYPE_SET } from "../services/platformFieldTypes.js";
 import { listRegisteredPlatformActions } from "../services/platformActionRegistry.js";
+import { isCoreFunction, listCoreFunctions } from "../services/coreFunctions.js";
 import { listPlatformComponents } from "../services/platformComponentRegistry.js";
 import { BUTTON_VARIANTS, validateButtonDefinition } from "../services/platformButtonRegistry.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
@@ -230,13 +231,8 @@ async function validateLayoutDefinition(db, definition, object, req) {
           );
           if (!target.rows.length) return "Button must reference an existing workflow";
         } else {
-          const core = listRegisteredPlatformActions().some((item) => item.key === button.targetKey);
-          if (!core) {
-            const target = await db(
-              "SELECT id FROM platform_registered_actions WHERE action_key=$1 AND object_id=$2 AND (company_id IS NULL OR company_id=$3) AND active=true LIMIT 1",
-              [button.targetKey, object.id, req.user.companyId]
-            );
-            if (!target.rows.length) return "Button must reference a registered action";
+          if (!isCoreFunction(button.targetKey)) {
+            return "Button must reference a ONE-* Flow or an approved core function";
           }
         }
       } catch (error) { return error.message; }
