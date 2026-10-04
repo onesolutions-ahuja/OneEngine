@@ -46,7 +46,8 @@ export function getAvailableElements({ flowType, startConfig = {}, layout = 'aut
     if (element.key === 'custom_error') return flowType === 'record'
     if (element.key === 'group') return layout === 'auto'
     if (element.key === 'transform') return ['record', 'screen', 'autolaunched'].includes(flowType)
-    if (['wait_duration', 'wait_conditions', 'wait_until_date'].includes(element.key)) {
+    if (element.key === 'wait_duration') return ['autolaunched', 'schedule'].includes(flowType)
+    if (['wait_conditions', 'wait_until_date'].includes(element.key)) {
       if (flowType === 'screen' || fastRecord) return false
       return ['record', 'autolaunched', 'schedule', 'platform_event'].includes(flowType)
     }
