@@ -159,6 +159,7 @@ export function oneHttpRequestDefinition() {
         body: { title: "Body" },
         variables: { type: "object", title: "Template variables" },
         timeoutMs: { type: "number", title: "Timeout (ms)" },
+        requireSuccess: { type: "boolean", title: "Fail Flow on HTTP Error" },
       },
       required: ["providerKey","endpoint"],
     },
@@ -169,7 +170,8 @@ export function oneHttpRequestDefinition() {
     },
     async: true,
     requiredPermissions: ["integrations.execute"],
-    executor: async ({ db, companyId, storeId, req, action, workflowVariables = {}, record = {} }) => oneHttpRequest({
+    executor: async ({ db, companyId, storeId, req, action, workflowVariables = {}, record = {} }) => {
+      const result = await oneHttpRequest({
       db,
       companyId: companyId || req?.user?.companyId,
       storeId: storeId || req?.user?.storeId || null,
@@ -186,6 +188,13 @@ export function oneHttpRequestDefinition() {
         ...resolveBindingTree(action.variables || {}, { record, user: req?.user || null, variables: workflowVariables }),
       },
       timeoutMs: action.timeoutMs,
-    }),
+      });
+      if (action.requireSuccess === true && result?.success === false) {
+        const error = new Error(`Provider request failed with HTTP ${result.statusCode || "error"}`);
+        error.providerResult = result;
+        throw error;
+      }
+      return result;
+    },
   };
 }
