@@ -185,22 +185,40 @@ const runtimeActionToBuilderNode=x=>{
   }
   if(['CREATE_RECORD','CREATE_RELATED_RECORD'].includes(rawType)){
     const inputs=actionInputs(x)
+    const valueMode=inputs.sourceRecords?'collection':inputs.sourceRecord?'record':'manual'
     return {...base,type:'CREATE_RECORDS',config:{
       objectKey:inputs.objectKey||inputs.object_key||'',
-      createCount:'one',
-      valueMode:'manual',
+      createCount:valueMode==='collection'?'multiple':'one',
+      valueMode,
+      sourceRecord:builderValue(inputs.sourceRecords||inputs.sourceRecord||''),
       fieldValues:fieldMapRows(inputs.fieldValues),
     }}
   }
   if(['UPDATE_RECORD','UPDATE_RELATED_RECORD','BULK_UPDATE_RECORDS'].includes(rawType)){
     const inputs=actionInputs(x)
+    const resourceMode=rawType==='BULK_UPDATE_RECORDS'&&Boolean(inputs.records)
+    const filters=Array.isArray(inputs.filters)?inputs.filters:[]
     return {...base,type:'UPDATE_RECORDS',config:{
       objectKey:inputs.objectKey||inputs.object_key||'',
       recordId:builderValue(inputs.recordId||inputs.record_id||''),
-      updateMode:'conditions',
-      conditionLogic:'none',
-      conditions:[],
+      updateMode:resourceMode?'record':'conditions',
+      sourceRecord:resourceMode?builderValue(inputs.records):'',
+      conditionLogic:filters.length?((inputs.match||'all')==='any'?'any':'all'):'none',
+      conditions:filters.map(conditionToBuilder),
       fieldValues:fieldMapRows(inputs.fieldValues),
+    }}
+  }
+  if(rawType==='DELETE_RECORD'){
+    const inputs=actionInputs(x)
+    const resource=inputs.records||inputs.recordIds||''
+    const filters=Array.isArray(inputs.filters)?inputs.filters:[]
+    return {...base,type:'DELETE_RECORDS',config:{
+      objectKey:inputs.objectKey||inputs.object_key||'',
+      recordId:builderValue(inputs.recordId||inputs.record_id||''),
+      deleteMode:resource?'record':'conditions',
+      sourceRecord:builderValue(resource),
+      conditionLogic:filters.length?((inputs.match||'all')==='any'?'any':'all'):'none',
+      conditions:filters.map(conditionToBuilder),
     }}
   }
   if(['ASSIGNMENT','SET_VARIABLE','ASSIGN_RECORD'].includes(rawType)){
