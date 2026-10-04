@@ -391,3 +391,15 @@ test("OneAssistant WhatsApp transport is visible in Flow as generic HTTP", () =>
   assert.equal(actions.some((action) => action.key === "SEND_COMMUNICATION" && String(action.channel || "").toUpperCase() === "WHATSAPP"), false);
 });
 
+
+
+test("single-router migration retires converted legacy appointment workflows", () => {
+  const source = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
+  assert.match(source, /0062_oneassistant_single_event_router/);
+  assert.match(source, /System · Action · Appointments - Process Conversation/);
+  assert.match(source, /System · Action · Appointments - Send Conversation Reply/);
+  assert.match(source, /System · Action · Appointments - Process Date Response/);
+  assert.match(source, /System · Action · Appointments - Process Slot Response/);
+  assert.match(source, /id<>\$2/);
+  assert.match(source, /OneAssistant event router dedupe verification failed/);
+});
