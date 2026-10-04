@@ -2745,51 +2745,140 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   {
     key: "UPDATE_RECORD",
     displayName: "Update Record",
-    description: "Update an existing record using field mappings.",
+    description: "Update one or more records using record resources or object conditions.",
     schema: {
       type: "object",
       properties: {
-        recordId: { type: "string" },
+        recordId: {},
+        recordResource: {},
+        recordCollectionResource: {},
+        objectKey: { type: "string" },
+        conditions: { type: "array" },
+        match: { type: "string" },
         fieldValues: { type: "object" },
       },
-      required: ["recordId", "fieldValues"],
     },
     validation: (action) => {
       if (!action || typeof action !== "object") throw new Error("Update Record requires an action object");
-      if (!action.recordId) throw new Error("Update Record requires a recordId");
-      if (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues)) {
-        throw new Error("Update Record requires fieldValues to be an object");
+      const hasRecordId = action.recordId !== undefined;
+      const hasRecord = action.recordResource !== undefined;
+      const hasCollection = action.recordCollectionResource !== undefined;
+      const hasConditions = action.objectKey && Array.isArray(action.conditions);
+      if (!hasRecordId && !hasRecord && !hasCollection && !hasConditions) {
+        throw new Error("Update Record requires a record resource, record collection, recordId, or object conditions");
+      }
+      if (hasConditions && (!action.fieldValues || typeof action.fieldValues !== "object" || Array.isArray(action.fieldValues))) {
+        throw new Error("Update Record condition mode requires fieldValues");
       }
     },
     async: false,
     requiredPermissions: ["records.update"],
-    executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables }) => {
+    executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables = {} }) => {
+      const context = { record, previousRecord, req, object, workflowVariables };
+      const runtimeCompanyId = req?.user?.companyId || companyId || null;
+      const runtimeStoreId = req?.user?.storeId || null;
+
+      const updateById = async ({ targetObject, recordId, payload }) => {
+        if (!recordId) throw new Error("Update Record requires a record ID");
+        const entries = Object.entries(payload || {}).filter(([key]) => key !== "id");
+        if (!entries.length) return null;
+        const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
+        const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req, excludeRecordId: recordId });
+        const sets = mappedFields.map((field, index) => '"' + field.source_column + '"=$' + (index + 1)).join(", ");
+        const params = [...entries.map(([, value]) => value), recordId];
+        const clauses = ["id=$" + params.length];
+        if (targetObject.company_scoped) { params.push(runtimeCompanyId); clauses.push("company_id=$" + params.length); }
+        if (targetObject.store_scoped && runtimeStoreId) { params.push(runtimeStoreId); clauses.push("store_id=$" + params.length); }
+        const result = await db('UPDATE "' + targetObject.source_table + '" SET ' + sets + ' WHERE ' + clauses.join(" AND ") + " RETURNING *", params);
+        return { record: result.rows[0] || null, duplicateWarning: duplicateAction === "WARN" };
+      };
+
+      if (action.recordResource !== undefined || action.recordCollectionResource !== undefined) {
+        const source = action.recordCollectionResource !== undefined
+          ? resolveConfiguredResource(action.recordCollectionResource, context, { preserveMissing: false })
+          : [resolveConfiguredResource(action.recordResource, context, { preserveMissing: false })];
+        const rows = Array.isArray(source) ? source : [];
+        if (!rows.length) return { status: "skipped", updated: null, updatedRecords: [], count: 0 };
+        const updatedRecords = [];
+        let duplicateWarning = false;
+        for (const row of rows) {
+          if (!row || typeof row !== "object" || Array.isArray(row)) throw new Error("Update Record resource contains an invalid record value");
+          const rowObjectKey = row.objectKey || row.object_key || action.objectKey || object?.object_key;
+          const targetObject = await resolveWorkflowTargetObject({ db, action: { objectKey: rowObjectKey }, object, companyId, req });
+          const result = await updateById({ targetObject, recordId: row.id, payload: row });
+          if (result?.record) updatedRecords.push(result.record);
+          duplicateWarning ||= Boolean(result?.duplicateWarning);
+        }
+        return {
+          status: updatedRecords.length ? "completed" : "skipped",
+          updated: updatedRecords[0] || null,
+          updatedRecords,
+          count: updatedRecords.length,
+          duplicateWarning,
+        };
+      }
+
+      if (action.objectKey && Array.isArray(action.conditions)) {
+        const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+        const fieldResult = await db(
+          "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
+          [targetObject.id, runtimeCompanyId]
+        );
+        const fieldByKey = new Map([["id", { api_name: "id", source_column: "id" }]]);
+        for (const field of fieldResult.rows || []) {
+          fieldByKey.set(String(field.api_name), field);
+          if (field.source_column) fieldByKey.set(String(field.source_column), field);
+        }
+        const params = [];
+        const clauses = [];
+        for (const condition of action.conditions || []) {
+          const metadata = fieldByKey.get(String(condition?.field || ""));
+          if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) throw new Error("Update Record condition field is unavailable");
+          const column = '"' + (metadata.source_column || metadata.api_name) + '"';
+          const operator = String(condition.operator || "equals").toLowerCase();
+          const value = resolveConfiguredResource(condition.value, context, { preserveMissing: false });
+          params.push(value);
+          const placeholder = "$" + params.length;
+          if (operator === "equals") clauses.push(column + "=" + placeholder);
+          else if (operator === "not_equals") clauses.push(column + "<>" + placeholder);
+          else if (operator === "greater_than") clauses.push(column + ">" + placeholder);
+          else if (operator === "less_than") clauses.push(column + "<" + placeholder);
+          else throw new Error("Update Record uses unsupported condition operator");
+        }
+        const scoped = [];
+        if (targetObject.company_scoped) { params.push(runtimeCompanyId); scoped.push('"company_id"=$' + params.length); }
+        if (targetObject.store_scoped && runtimeStoreId) { params.push(runtimeStoreId); scoped.push('"store_id"=$' + params.length); }
+        const conditionSql = clauses.length
+          ? "(" + clauses.join(String(action.match || "all").toLowerCase() === "any" ? " OR " : " AND ") + ")"
+          : "TRUE";
+        const where = [conditionSql, ...scoped].join(" AND ");
+        const existing = await db('SELECT id FROM "' + targetObject.source_table + '" WHERE ' + where, params);
+        const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, context);
+        const updatedRecords = [];
+        let duplicateWarning = false;
+        for (const row of existing.rows || []) {
+          const result = await updateById({ targetObject, recordId: row.id, payload: resolvedFieldValues });
+          if (result?.record) updatedRecords.push(result.record);
+          duplicateWarning ||= Boolean(result?.duplicateWarning);
+        }
+        return {
+          status: updatedRecords.length ? "completed" : "skipped",
+          updated: updatedRecords[0] || null,
+          updatedRecords,
+          count: updatedRecords.length,
+          duplicateWarning,
+        };
+      }
+
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      const table = targetObject.source_table;
-      const resolvedRecordId = resolveConfiguredResource(action.recordId, { record, previousRecord, req, object, workflowVariables });
-      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, { record, previousRecord, req, object, workflowVariables });
-      const entries = Object.entries(resolvedFieldValues || {});
-      if (!entries.length) return { status: "completed", updated: null };
-      const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
-      const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: req?.user?.companyId || companyId, req, excludeRecordId: resolvedRecordId });
-      const sets = mappedFields.map((field, index) => `"${field.source_column}"=$${index + 1}`).join(", ");
-      const params = [...entries.map(([, value]) => value), resolvedRecordId];
-      const clauses = ["id=$" + params.length];
-      if (targetObject.company_scoped) {
-        params.push(req?.user?.companyId || companyId || null);
-        clauses.push(`company_id=$${params.length}`);
-      }
-      if (targetObject.store_scoped) {
-        params.push(req?.user?.storeId || null);
-        clauses.push(`store_id=$${params.length}`);
-      }
-      const query = `UPDATE "${table}" SET ${sets} WHERE ${clauses.join(" AND ")} RETURNING *`;
-      const result = await db(query, params);
-      const updated = result.rows[0] || null;
+      const resolvedRecordId = resolveConfiguredResource(action.recordId, context);
+      const resolvedFieldValues = resolveFieldValueMap(action.fieldValues || {}, context);
+      const result = await updateById({ targetObject, recordId: resolvedRecordId, payload: resolvedFieldValues });
+      const updated = result?.record || null;
       try {
-        if (updated?.id) await publishPlatformEvent({ db, companyId: req?.user?.companyId || companyId, eventType: "platform.object.record.updated", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated }, actorUserId: req?.user?.id || null });
+        if (updated?.id) await publishPlatformEvent({ db, companyId: runtimeCompanyId, eventType: "platform.object.record.updated", payload: { objectId: targetObject.id, objectKey: targetObject.object_key, recordId: updated.id, record: updated }, actorUserId: req?.user?.id || null });
       } catch (error) { console.error("Platform workflow record event publication error:", error); }
-      return { status: result.rows.length ? "completed" : "skipped", updated, duplicateWarning: duplicateAction === "WARN" };
+      return { status: updated ? "completed" : "skipped", updated, updatedRecords: updated ? [updated] : [], count: updated ? 1 : 0, duplicateWarning: Boolean(result?.duplicateWarning) };
     },
   },
   {
