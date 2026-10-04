@@ -73,31 +73,24 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
   if (!companyId) throw new Error("ONE_HTTP_REQUEST requires company context");
   if (!providerKey) throw new Error("ONE_HTTP_REQUEST requires providerKey");
 
-  const definitionResult = await db(
-    `SELECT id,connector_key,base_url,auth_type,timeout_ms,status,operations
-       FROM platform_connector_definitions
-      WHERE LOWER(connector_key)=LOWER($1) AND status='ACTIVE'
-      LIMIT 1`,
-    [providerKey]
-  );
-  const definition = definitionResult.rows?.[0];
-  if (!definition) throw new Error(`Provider metadata not found: ${providerKey}`);
-
+  // Flow HTTP resolves the tenant's generic API connection directly.
+  // Connector/package definitions are install-time/UI metadata and are not a runtime dependency.
   const connectionResult = await db(
     `SELECT id,base_url,auth_type,credentials_encrypted,connector_configuration
        FROM integration_connections
       WHERE company_id=$1 AND enabled=true
-        AND (LOWER(provider_name)=LOWER($2) OR connector_definition_id=$3)
-        AND (store_id IS NULL OR store_id=$4)
+        AND LOWER(provider_name)=LOWER($2)
+        AND (store_id IS NULL OR store_id=$3)
       ORDER BY (store_id IS NULL),updated_at DESC
       LIMIT 1`,
-    [companyId, providerKey, definition.id, storeId]
+    [companyId, providerKey, storeId]
   );
   const connection = connectionResult.rows?.[0] || null;
+  if (!connection) throw new Error(`API connection metadata not found: ${providerKey}`);
   let credentials = {};
   if (connection?.credentials_encrypted) credentials = decryptCredentials(connection.credentials_encrypted) || {};
 
-  const base = safeBaseUrl(connection?.base_url || definition.base_url);
+  const base = safeBaseUrl(connection.base_url);
   const connectionVariables = { ...(connection?.connector_configuration || {}), realmId: connection?.connector_configuration?.realmId || credentials?.realmId || credentials?.realm_id || credentials?.companyId || credentials?.company_id || "" };
   const renderedEndpoint = interpolate(endpoint || "/", { ...connectionVariables, ...(variables || {}) });
   const url = new URL(renderedEndpoint, base.toString().replace(/\/$/, "") + "/");
@@ -110,9 +103,9 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
   const requestMethod = String(method || "GET").toUpperCase();
   if (!ALLOWED_METHODS.has(requestMethod)) throw new Error(`Unsupported HTTP method: ${requestMethod}`);
   const requestHeaders = { Accept: "application/json", ...headers };
-  const effectiveAuthType = String(definition.auth_type || "").toLowerCase() === "oauth2_client_credentials" ? definition.auth_type : (connection?.auth_type || definition.auth_type);
-  await applyAuth(requestHeaders, effectiveAuthType, credentials, { connectionId: connection?.id || definition.id, operations: definition.operations || [], configuration: connection?.connector_configuration || {} });
-  const effectiveTimeout = Math.max(100, Math.min(120000, Number(timeoutMs || definition.timeout_ms || 15000)));
+  const effectiveAuthType = connection.auth_type || "none";
+  await applyAuth(requestHeaders, effectiveAuthType, credentials, { connectionId: connection.id, operations: [], configuration: connection.connector_configuration || {} });
+  const effectiveTimeout = Math.max(100, Math.min(120000, Number(timeoutMs || 15000)));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), effectiveTimeout);
 

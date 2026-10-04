@@ -8,6 +8,8 @@ import { backfillLegacyRuleFieldReferences } from "../services/platformRuleRefer
 import { oneAssistantSchema } from "../services/oneAssistant.js";
 import { packageDefinitions } from "../services/packageRegistry.js";
 import { platformSchema } from "../services/platformMetadata.js";
+import { encryptCredentials } from "../services/integrationCredentials.js";
+import { decryptSecret } from "../services/secretCrypto.js";
 
 export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
@@ -2003,6 +2005,67 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           [router.triggerKey, JSON.stringify(router.conditions || []), JSON.stringify(router.action)]
         );
         console.log("onePOS: OneAssistant booking graph repaired for installed tenants");
+      },
+    },
+    {
+      key: "0059_direct_flow_api_connections_and_oneassistant_dedupe",
+      version: "59",
+      name: "Use direct Flow API connections and deduplicate OneAssistant routers",
+      up: async client => {
+        // Backfill WhatsApp's generic API connection directly from the tenant's
+        // existing encrypted settings. No connector definition is required.
+        const tenants = await client.query(
+          "SELECT company_id,configuration,active FROM integrations WHERE LOWER(provider) IN ('whatsapp','whatsapp_business')"
+        );
+        for (const row of tenants.rows) {
+          const configuration = row.configuration || {};
+          const token = decryptSecret(configuration.access_token);
+          const phoneNumberId = configuration.phone_number_id || null;
+          if (!token || !phoneNumberId) continue;
+          const connectorConfiguration = {
+            phoneNumberId,
+            businessAccountId: configuration.business_account_id || null,
+            defaultCountryCode: configuration.default_country_code || null,
+          };
+          const existing = await client.query(
+            "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)='whatsapp' ORDER BY updated_at DESC LIMIT 1",
+            [row.company_id]
+          );
+          if (existing.rows[0]?.id) {
+            await client.query(
+              "UPDATE integration_connections SET base_url='https://graph.facebook.com/v21.0',connector_configuration=$1::jsonb,auth_type='bearer',credentials_encrypted=$2,enabled=$3,connection_status=$4,updated_at=NOW() WHERE id=$5",
+              [JSON.stringify(connectorConfiguration), encryptCredentials({ token }), row.active === true, row.active === true ? 'CONNECTED' : 'NOT_CONNECTED', existing.rows[0].id]
+            );
+          } else {
+            await client.query(
+              "INSERT INTO integration_connections(company_id,name,provider_name,integration_type,base_url,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status) VALUES($1,'WhatsApp Business Connection','whatsapp','communication','https://graph.facebook.com/v21.0',$2::jsonb,'bearer',$3,$4,$5)",
+              [row.company_id, JSON.stringify(connectorConfiguration), encryptCredentials({ token }), row.active === true, row.active === true ? 'CONNECTED' : 'NOT_CONNECTED']
+            );
+          }
+        }
+
+        // Exactly one active managed OneAssistant router per tenant. Historical
+        // duplicates caused one inbound event to execute several booking flows.
+        const duplicates = await client.query(
+          "SELECT company_id,array_agg(id ORDER BY updated_at DESC,created_at DESC,id DESC) ids FROM platform_rules WHERE name='OneAssistant - Booking Channel Router' AND company_id IS NOT NULL GROUP BY company_id HAVING COUNT(*) > 1"
+        );
+        for (const row of duplicates.rows) {
+          const keep = row.ids[0];
+          await client.query(
+            "UPDATE platform_rules SET active=FALSE,lifecycle_status='RETIRED',updated_at=NOW() WHERE company_id=$1 AND name='OneAssistant - Booking Channel Router' AND id<>$2",
+            [row.company_id, keep]
+          );
+          await client.query(
+            "UPDATE platform_rules SET active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW() WHERE id=$1",
+            [keep]
+          );
+        }
+
+        const activeDuplicates = await client.query(
+          "SELECT company_id,COUNT(*) count FROM platform_rules WHERE name='OneAssistant - Booking Channel Router' AND active=TRUE AND COALESCE(lifecycle_status,'ACTIVE')='ACTIVE' GROUP BY company_id HAVING COUNT(*)>1"
+        );
+        if (activeDuplicates.rows.length) throw new Error("Duplicate active OneAssistant booking routers remain");
+        console.log("onePOS: direct Flow API connections backfilled and OneAssistant routers deduplicated");
       },
     }  ]);
 
