@@ -2,7 +2,8 @@ import express from "express";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing.js";
-import { globalProductProviderConfigKeys, globalProductProviderDefaults, testGlobalProductProvider } from "../services/globalProductLookup.js";
+import { globalProductProviderConfigKeys, globalProductProviderDefaults } from "../services/globalProductLookup.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const PROVIDER_KEYS = Object.freeze(Object.keys(globalProductProviderConfigKeys));
 const PROVIDER_HOSTS = Object.freeze({
@@ -290,16 +291,24 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
   router.post("/global-products/providers/:providerKey/test", authenticate, authorize("integration.manage"), async (req, res) => {
     const providerKey = String(req.params.providerKey || "");
     if (!PROVIDER_KEYS.includes(providerKey)) return res.status(404).json({ success: false, message: "Unknown product lookup provider" });
-    const result = await testGlobalProductProvider({ db, companyId: req.user.companyId, providerKey });
-    if (["go_upc","upcitemdb","barcode_nest"].includes(providerKey)) {
-      const error = result.success ? null : result.message || result.code || "Provider test failed";
-      await db(
-        `UPDATE integration_connections SET last_connected_at=CASE WHEN $1 THEN NOW() ELSE last_connected_at END,
-                last_error=$2,connection_status=$3,updated_at=NOW()
-          WHERE company_id=$4 AND LOWER(provider_name)=LOWER($5) AND store_id IS NULL`,
-        [result.success, error, result.success ? "CONNECTED" : "ERROR", req.user.companyId, providerKey]
-      );
+    const instanceResult = await db(
+      "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND store_id IS NULL ORDER BY updated_at DESC LIMIT 1",
+      [req.user.companyId, providerKey]
+    );
+    const connectorInstanceId = instanceResult.rows?.[0]?.id || null;
+    if (!connectorInstanceId) {
+      return res.status(400).json({ success: false, code: "NOT_CONFIGURED", message: "Configure this provider before testing the connection" });
     }
+    const execution = await executeSystemWorkflow({
+      db,
+      companyId: req.user.companyId,
+      userId: req.user.id || null,
+      systemKey: "action:CONNECTOR_TEST_CONNECTION",
+      req,
+      input: { connectorInstanceId },
+      source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "CONNECTOR_TEST_CONNECTION" },
+    });
+    const result = execution.result || { success: false, code: "TEST_FAILED", message: "Provider test did not return a result" };
     await writeAudit?.(req.user.companyId, req.user.id, "global_product_provider_tested", "global_product_provider", providerKey, {
       success: result.success, code: result.code || null,
     });
