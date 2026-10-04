@@ -77,7 +77,7 @@ export function lowStockRow(product) {
 /*
  * The authoritative stock-change primitive: atomically updates the
  * store-scoped stock position (product_store_stock) and appends to the
- * inventory_movements ledger. Moved verbatim from server.js (same queries,
+ * inventory_ledger ledger. Moved verbatim from server.js (same queries,
  * same SALE-only negative-balance rule) so every writer shares one code
  * path; server.js now imports this instead of defining its own.
  *
@@ -179,7 +179,7 @@ export async function createInventoryMovement(client, {
 
   const movementResult = await client.query(
     `
-    INSERT INTO inventory_movements (
+    INSERT INTO inventory_ledger (
       company_id,
       product_id,
       store_id,
@@ -227,7 +227,7 @@ export async function createInventoryMovement(client, {
   if (batchId || canonicalTransactionId) {
     try {
       await client.query(
-        "UPDATE inventory_movements SET batch_id=COALESCE($1,batch_id), transaction_id=COALESCE($2,transaction_id) WHERE id=$3",
+        "UPDATE inventory_ledger SET batch_id=COALESCE($1,batch_id), transaction_id=COALESCE($2,transaction_id) WHERE id=$3",
         [batchId || null, canonicalTransactionId || null, movementResult.rows[0].id]
       );
       movementResult.rows[0].batch_id = batchId || null;
@@ -285,7 +285,7 @@ export async function rebuildInventoryBalances(client, { companyId, storeId = nu
      SELECT m.company_id,m.store_id,m.product_id,COALESCE(SUM(m.quantity_change),0),
             COUNT(*),MAX(m.created_at),
             COALESCE(SUM(m.quantity_change),0)-COALESCE(ps.quantity,0)
-     FROM inventory_movements m
+     FROM inventory_ledger m
      LEFT JOIN product_store_stock ps ON ps.company_id=m.company_id
        AND ps.store_id=m.store_id AND ps.product_id=m.product_id
      WHERE ${where.join(" AND ")}
@@ -317,7 +317,7 @@ export async function reconcileInventoryBalances(client, { companyId, storeId = 
     `WITH ledger AS (
        SELECT m.company_id,m.store_id,m.product_id,COALESCE(SUM(m.quantity_change),0) AS ledger_quantity,
               COUNT(*) AS movement_count,MAX(m.created_at) AS last_movement_at
-       FROM inventory_movements m WHERE ${movementWhere.join(" AND ")}
+       FROM inventory_ledger m WHERE ${movementWhere.join(" AND ")}
        GROUP BY m.company_id,m.store_id,m.product_id
      )
      SELECT COALESCE(l.company_id,ps.company_id) AS company_id,
