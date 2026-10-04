@@ -498,7 +498,7 @@ export default function createInventoryBatchesRouter({
    * (wastage, breakage, damage, supplier return of a specific batch).
    *
    * Decreases REQUIRE a canonical reason (Wastage / Breakage / Other) via
-   * the EXISTING resolveAdjustmentReason rules, then write an
+   * the editable inventory flow rules, then write an
    * ADJUSTMENT_OUT movement through the shared primitive and debit the
    * named batch — one transaction, one consistent story. Expired stock is
    * NEVER auto-deleted: wastage of expired stock is an explicit, auditable
