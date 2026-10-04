@@ -1010,7 +1010,7 @@ const CATALOG = [
       authentication: { type: "oauth2", credentialStorage: "integration_connections.credentials_encrypted" },
       settings: ["environment", "accounting_mode", "sync_customers", "sync_suppliers", "sync_products", "sync_sales", "sync_payments", "sync_refunds", "sync_purchases", "sync_supplier_payments", "sync_supplier_credits"],
       mappings: ["vat_code", "sales_income_account", "accounts_payable_account", "inventory_asset_account", "expense_account", "card_account", "cash_account", "payment_account", "refund_account", "discount_account", "service_charge_account", "delivery_account", "payment_method"],
-      actions: ["CONNECTOR_TEST_CONNECTION", "QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS", "QUICKBOOKS_SYNC_SUPPLIER_CREDITS", "QUICKBOOKS_RETRY_FAILED_SYNC"],
+      actions: ["CONNECTOR_TEST_CONNECTION"],
     },
   },
   {
