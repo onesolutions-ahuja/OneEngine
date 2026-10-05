@@ -2015,6 +2015,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                                                 currentFlowType={flow.key}
                                                 onConfiguredChange={setConfigured}
                                               />
+                                            : ['approval_stage','approval_step','approval_background_step'].includes(activeElement.key)
+                                              ? <GPTBuilderApprovalElement draft={draft} updateConfig={updateConfig} onConfiguredChange={setConfigured}/>
                                             : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
