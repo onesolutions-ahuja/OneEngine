@@ -1990,6 +1990,117 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     );
     const saleObjectId = saleObjectResult.rows[0]?.id || null;
     if (saleObjectId) {
+      const tillWorkflowDefinitions = [
+        {
+          name: "OneTill - Validate Price Override",
+          apiName: "ONETILL_VALIDATE_PRICE_OVERRIDE",
+          actions: [
+            { id: "get_product", label: "Get Product", apiName: "get_product", key: "GET_RECORDS", objectKey: "product",
+              filters: [{ field: "id", operator: "equals", value: { path: "record.productId" } }], limit: 1, store: "first" },
+            { id: "price_is_valid", label: "Requested Price Is Valid", apiName: "price_is_valid", key: "FORMULA",
+              resourceName: "priceIsValid", resultType: "boolean",
+              expression: "requestedPrice > 0",
+              inputs: { requestedPrice: { path: "record.requestedPrice" } } },
+            { id: "validate_price", label: "Validate Requested Price", apiName: "validate_price", key: "CONDITION",
+              outcomes: [{ id: "valid", label: "Valid Price", condition: { match: "all", conditions: [{ field: "variables.priceIsValid", operator: "equals", value: true }] },
+                branch: ["approved_price","approved_reason"] }],
+              defaultLabel: "Invalid Price", defaultBranch: ["invalid_price"] },
+            { id: "approved_price", label: "Set Approved Price", apiName: "approved_price", key: "ASSIGNMENT",
+              variableName: "approvedPrice", variableType: "currency", operator: "set", value: { path: "record.requestedPrice" } },
+            { id: "approved_reason", label: "Set Override Reason", apiName: "approved_reason", key: "ASSIGNMENT",
+              variableName: "approvedReason", variableType: "text", operator: "set", value: { path: "record.reason" } },
+            { id: "invalid_price", label: "Reject Invalid Price", apiName: "invalid_price", key: "CUSTOM_ERROR",
+              errorMessage: "Price override must be greater than zero", errorLocation: "record" },
+          ],
+        },
+        {
+          name: "OneTill - Record Petty Cash",
+          apiName: "ONETILL_RECORD_PETTY_CASH",
+          actions: [
+            { id: "amount_is_valid", label: "Petty Cash Amount Is Valid", apiName: "amount_is_valid", key: "FORMULA",
+              resourceName: "amountIsValid", resultType: "boolean", expression: "amount > 0",
+              inputs: { amount: { path: "record.amount" } } },
+            { id: "validate_amount", label: "Validate Petty Cash", apiName: "validate_amount", key: "CONDITION",
+              outcomes: [{ id: "valid", label: "Valid Amount", condition: { match: "all", conditions: [{ field: "variables.amountIsValid", operator: "equals", value: true }] },
+                branch: ["create_cash_ledger"] }],
+              defaultLabel: "Invalid Amount", defaultBranch: ["invalid_amount"] },
+            { id: "create_cash_ledger", label: "Create Cash Ledger Entry", apiName: "create_cash_ledger", key: "CREATE_RECORD",
+              objectKey: "cash_ledger",
+              fieldValues: {
+                till_session_id: { path: "record.tillSessionId" },
+                user_id: { path: "record.userId" },
+                type: "cash_out",
+                amount: { path: "record.amount" },
+                reason: { path: "record.reason" }
+              } },
+            { id: "invalid_amount", label: "Reject Invalid Amount", apiName: "invalid_amount", key: "CUSTOM_ERROR",
+              errorMessage: "Petty cash amount must be greater than zero", errorLocation: "record" },
+          ],
+        },
+        {
+          name: "OneTill - Receipt QR",
+          apiName: "ONETILL_RECEIPT_QR",
+          actions: [
+            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "CALL_FUNCTION",
+              functionKey: "temporary.receipt.download.create",
+              inputs: {
+                saleId: { path: "record.id" },
+                expiryMinutes: { path: "record.expiryMinutes" },
+                baseUrl: { path: "record.baseUrl" }
+              } },
+          ],
+        },
+        {
+          name: "OneTill - Receipt QR Policy",
+          apiName: "ONETILL_RECEIPT_QR_POLICY",
+          actions: [
+            { id: "policy_allowed", label: "Evaluate Receipt QR Policy", apiName: "policy_allowed", key: "FORMULA",
+              resourceName: "allowed", resultType: "boolean",
+              expression: "(event == \"AUTO\" && (mode == \"ALWAYS\" || (mode == \"ONLY_WHEN_PRINTER_UNAVAILABLE\" && !printerAvailable))) || (event == \"MANUAL\" && allowManual) || (event == \"REGENERATE\" && allowRegenerate)",
+              inputs: {
+                event: { path: "record.event" },
+                mode: { path: "record.mode" },
+                printerAvailable: { path: "record.printerAvailable" },
+                allowManual: { path: "record.allowManual" },
+                allowRegenerate: { path: "record.allowRegenerate" }
+              } },
+          ],
+        },
+      ];
+
+      const tillWorkflowIds = new Map();
+      for (const flow of tillWorkflowDefinitions) {
+        const action = {
+          type: "workflow",
+          apiName: flow.apiName,
+          flowType: "AUTOLAUNCHED",
+          builder2: true,
+          description: flow.name,
+          actions: flow.actions,
+        };
+        const existing = await pool.query(
+          "SELECT id,user_modified FROM platform_rules WHERE object_id=$1 AND company_id IS NULL AND name=$2 LIMIT 1",
+          [saleObjectId, flow.name]
+        );
+        let id = existing.rows[0]?.id || null;
+        if (!id) {
+          const created = await pool.query(
+            `INSERT INTO platform_rules
+               (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,company_id,managed,package_required,user_modified)
+             VALUES ($1,$2,'manual','[]'::jsonb,$3::jsonb,TRUE,'ACTIVE',1,1,NULL,TRUE,FALSE,FALSE)
+             RETURNING id`,
+            [saleObjectId, flow.name, JSON.stringify(action)]
+          );
+          id = created.rows[0]?.id || null;
+        } else if (existing.rows[0]?.user_modified !== true) {
+          await pool.query(
+            "UPDATE platform_rules SET action=$1::jsonb,active=TRUE,lifecycle_status='ACTIVE',updated_at=NOW() WHERE id=$2 AND company_id IS NULL AND COALESCE(user_modified,FALSE)=FALSE",
+            [JSON.stringify(action), id]
+          );
+        }
+        if (id) tillWorkflowIds.set(flow.apiName, String(id));
+      }
+
       const tillButtons = [
         ["till_session","Till","till.session","till_action_header","till.open","till_session","badge-pound-sterling",10],
         ["till_customer","Customer","till.customer","till_action_header","customer.view","customer","user-round",20],
@@ -2040,6 +2151,62 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
              config=CASE WHEN platform_buttons.user_modified THEN platform_buttons.config ELSE EXCLUDED.config END,
              active=TRUE,managed=TRUE,updated_at=NOW()`,
           [saleObjectId, buttonKey, label, icon, actionKey, placement === "till_payment" ? "primary" : "secondary", placement, permission, JSON.stringify({ uiAction, order })]
+        );
+      }
+
+      const targetUpdates = [
+        ["till_session","modal","till", { modal: "till" }],
+        ["till_customer","modal","customer", { modal: "customer" }],
+        ["till_hold","crud","held_sale", { operation: "create", uiHandler: "hold_sale" }],
+        ["till_resume","crud","held_sale", { operation: "list_resume", uiHandler: "resume_sale" }],
+        ["till_returns","navigation","returns", { route: "returns" }],
+        ["till_exchange","navigation","exchange", { route: "exchange" }],
+        ["till_layaway","navigation","layaway", { route: "layaway" }],
+        ["till_customer_action","modal","customer", { modal: "customer" }],
+        ["till_discount","modal","discount", { modal: "discount" }],
+        ["till_void","command","clear_sale", { command: "clear_sale" }],
+        ["till_misc_item","modal","misc", { modal: "misc" }],
+        ["till_petty_cash","modal","petty", { modal: "petty", submitButtonKey: "till_petty_cash_submit" }],
+        ["till_print","command","print_receipt", { command: "print_receipt", recordContext: "last_sale" }],
+        ["till_receipt_qr","workflow", tillWorkflowIds.get("ONETILL_RECEIPT_QR"), { recordContext: "last_sale", policyButtonKey: "till_receipt_qr_policy", policyEvent: "MANUAL" }],
+        ["till_customer_display","command","customer_display", { command: "customer_display" }],
+        ["till_open_drawer","command","open_drawer", { command: "open_drawer" }],
+        ["till_pay_cash","command","checkout", { command: "checkout", paymentMethod: "cash" }],
+        ["till_pay_card","command","checkout", { command: "checkout", paymentMethod: "card" }],
+        ["till_pay_more","modal","payment", { modal: "payment" }],
+        ["till_price_override","modal","price_override", { modal: "price_override", submitButtonKey: "till_price_override_apply" }],
+        ["till_open_session","crud","till_session", { operation: "create", modal: "till" }],
+        ["till_close_session","crud","till_session", { operation: "update", modal: "till" }],
+        ["till_cash_in","crud","cash_ledger", { operation: "create", modal: "till" }],
+        ["till_cash_out","crud","cash_ledger", { operation: "create", modal: "till" }],
+      ];
+      for (const [buttonKey,targetType,targetKey,config] of targetUpdates) {
+        if (!targetKey) continue;
+        await pool.query(
+          `UPDATE platform_buttons
+              SET target_type=$1,target_key=$2,config=COALESCE(config,'{}'::jsonb)||$3::jsonb,updated_at=NOW()
+            WHERE button_key=$4 AND company_id IS NULL AND COALESCE(user_modified,FALSE)=FALSE`,
+          [targetType, String(targetKey), JSON.stringify(config), buttonKey]
+        );
+      }
+
+      const internalWorkflowButtons = [
+        ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
+        ["till_petty_cash_submit","Record Petty Cash",tillWorkflowIds.get("ONETILL_RECORD_PETTY_CASH"),"cash.payout"],
+        ["till_receipt_qr_policy","Receipt QR Policy",tillWorkflowIds.get("ONETILL_RECEIPT_QR_POLICY"),"sale.view"],
+      ];
+      for (const [buttonKey,label,workflowId,permission] of internalWorkflowButtons) {
+        if (!workflowId) continue;
+        await pool.query(
+          `INSERT INTO platform_buttons
+             (company_id,object_id,button_key,label,action_key,target_type,target_key,variant,placement,required_permission,visibility_rule,input_mappings,config,active,managed,user_modified)
+           VALUES (NULL,$1,$2,$3,$2,'workflow',$4,'secondary','till_internal',$5,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,TRUE,TRUE,FALSE)
+           ON CONFLICT (button_key) WHERE company_id IS NULL DO UPDATE SET
+             target_type=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_type ELSE 'workflow' END,
+             target_key=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_key ELSE EXCLUDED.target_key END,
+             required_permission=CASE WHEN platform_buttons.user_modified THEN platform_buttons.required_permission ELSE EXCLUDED.required_permission END,
+             active=TRUE,managed=TRUE,updated_at=NOW()`,
+          [saleObjectId, buttonKey, label, String(workflowId), permission]
         );
       }
     }
