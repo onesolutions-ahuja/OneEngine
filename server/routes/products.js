@@ -515,51 +515,7 @@ router.get("/products/catalogue", authenticate, authorize("product.view"), async
     }
   });
 
-  router.put("/products/:id/kiosk-metadata", authenticate, authorize("product.edit"), async (req, res) => {
-    const metadata = req.body?.metadata;
-    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-      return res.status(400).json({ success: false, message: "OneKiosk metadata must be an object" });
-    }
-    const encoded = JSON.stringify(metadata);
-    if (Buffer.byteLength(encoded, "utf8") > 128 * 1024) {
-      return res.status(400).json({ success: false, message: "OneKiosk product metadata is too large" });
-    }
-    try {
-      const recommendations = metadata.recommendations && typeof metadata.recommendations === "object"
-        ? metadata.recommendations
-        : {};
-      const referenced = [];
-      for (const value of Object.values(recommendations)) {
-        if (Array.isArray(value)) referenced.push(...value.filter(Boolean).map(String));
-      }
-      const uniqueReferenced = [...new Set(referenced)];
-      if (uniqueReferenced.length) {
-        const owned = await db(
-          "SELECT id FROM products WHERE company_id=$1 AND id=ANY($2::uuid[]) AND active=TRUE",
-          [req.user.companyId, uniqueReferenced]
-        );
-        if (owned.rows.length !== uniqueReferenced.length) {
-          return res.status(400).json({ success: false, message: "Every recommended OneKiosk product must belong to this company" });
-        }
-      }
-      const result = await db(
-        `UPDATE products SET kiosk_metadata=$1::jsonb,updated_at=NOW()
-          WHERE id=$2 AND company_id=$3
-          RETURNING id,kiosk_metadata`,
-        [encoded, req.params.id, req.user.companyId]
-      );
-      if (!result.rows.length) return res.status(404).json({ success: false, message: "Product not found" });
-      await writeAudit?.(req.user.companyId, req.user.id, "product.kiosk_metadata.updated", "product", req.params.id, {
-        specificationCount: Object.keys(metadata.specifications || {}).length,
-        allergenCount: Array.isArray(metadata.allergens) ? metadata.allergens.length : 0,
-        recommendationCount: uniqueReferenced.length,
-      });
-      res.json({ success: true, data: result.rows[0] });
-    } catch (error) {
-      console.error("Save product kiosk metadata error:", error);
-      res.status(500).json({ success: false, message: "Unable to save OneKiosk product data" });
-    }
-  });
+
 
   /*
    * GET /api/products/:id
