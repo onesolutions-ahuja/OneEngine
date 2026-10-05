@@ -9,7 +9,7 @@ import CustomReportsAdmin from '../reports/CustomReportsAdmin.jsx'
 import WorkflowAdmin, { FLOW_TYPE_OPTIONS } from './Platform/WorkflowAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import CustomPageBuilder from './Platform/CustomPageBuilder.jsx'
-import Builder2Page from '../developer/Builder2Page.jsx'
+import GPTBuilderPage from '../developer/gptbuilder/GPTBuilderPage.jsx'
 
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
@@ -518,28 +518,13 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     return (
       <div className="onebuilder-workflow-workspace" role="dialog" aria-modal="true" aria-label="Workflow Builder workspace">
         <div className="onebuilder-workflow-window">
-          <Builder2Page
+          <GPTBuilderPage
             initialWorkflowId={selectedSavedId}
-            initialFlowType={workflowDraft?.actionMetadata?.flowType || ''}
-            initialObjectKey={workflowDraft?.objectKey || workflowDraft?.object || ''}
-            onClose={() => {
-              setMode('list')
-              setWorkflowDraft(null)
-              setSelectedSavedId('')
-              setSelectedNodeId('')
-              setSideTab('components')
-              setError('')
-              onWorkflowClose?.()
-              void loadSavedDefinitions('workflow')
-            }}
-            onSaved={(savedWorkflow) => {
-              setMessage('Saved.')
-              if (savedWorkflow?.id) {
-                const id = String(savedWorkflow.id)
-                setSelectedSavedId(id)
-                onWorkflowOpen?.(id)
+            onWorkflowOpen={(id) => {
+              if (id) {
+                setSelectedSavedId(String(id))
+                onWorkflowOpen?.(String(id))
               }
-              void loadSavedDefinitions('workflow')
             }}
           />
         </div>
