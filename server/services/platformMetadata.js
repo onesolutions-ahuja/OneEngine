@@ -1811,6 +1811,26 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       );
     }
 
+    const cashLedgerValidationObject = await pool.query(
+      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
+    );
+    if (cashLedgerValidationObject.rows[0]?.id) {
+      await pool.query(
+        `INSERT INTO platform_rules
+           (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,company_id,managed,package_required,user_modified)
+         SELECT $1,'Cash amount must be greater than zero','before_save',
+                '[{"field":"amount","operator":"less_than","value":0.01}]'::jsonb,
+                '{"type":"validation","match":"all","message":"Cash amount must be greater than zero"}'::jsonb,
+                TRUE,'ACTIVE',1,1,NULL,TRUE,FALSE,FALSE
+          WHERE NOT EXISTS (
+            SELECT 1 FROM platform_rules
+             WHERE object_id=$1 AND company_id IS NULL
+               AND name='Cash amount must be greater than zero'
+          )`,
+        [cashLedgerValidationObject.rows[0].id]
+      );
+    }
+
     const tillSessionObjectForOptions = await pool.query(
       "SELECT id FROM platform_objects WHERE object_key='till_session' AND company_id IS NULL AND active=true LIMIT 1"
     );
