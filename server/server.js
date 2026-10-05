@@ -2138,29 +2138,6 @@ app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPo
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
-/*
-|--------------------------------------------------------------------------
-| STAFF ATTENDANCE (CLOCK IN / CLOCK OUT)
-|--------------------------------------------------------------------------
-|
-| Attendance sessions are recorded against the EXISTING users / companies /
-| stores (no separate employee identity). Clock in/out times and worked
-| duration are always set server-side (NOW() + timestamp arithmetic) — the
-| client never supplies them. Management visibility is permission-driven;
-| records are company-scoped and store-restricted through the canonical
-| canViewCompanyCustomers / canAccessStore helpers.
-*/
-app.use(
-  "/api",
-  createAttendanceRouter({
-    authenticate,
-    db,
-    canViewCompanyCustomers,
-    canAccessStore,
-    writeAudit,
-  })
-);
-
 /* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
 app.use(
   "/api",
