@@ -117,11 +117,11 @@ test("Till payment Flow debug covers cash, card, credit and gift-card requiremen
 });
 
 const priceOverrideActions = [
-  { id:"get_product", label:"Get Product", apiName:"get_product", key:"GET_RECORDS", objectKey:"product", filters:[{ field:"id", operator:"equals", value:{ path:"record.productId" } }], limit:1, store:"first" },
-  { id:"price_is_valid", label:"Requested Price Is Valid", apiName:"price_is_valid", key:"FORMULA", resourceName:"priceIsValid", resultType:"boolean", expression:"requestedPrice > 0", inputs:{ requestedPrice:{ path:"record.requestedPrice" } } },
+  { id:"get_product", label:"Get Product", apiName:"get_product", key:"GET_RECORDS", objectKey:"product", filters:[{ field:"id", operator:"equals", value:{ path:"$record.productId" } }], limit:1, store:"first" },
+  { id:"price_is_valid", label:"Requested Price Is Valid", apiName:"price_is_valid", key:"FORMULA", resourceName:"priceIsValid", resultType:"boolean", expression:"requestedPrice > 0", inputs:{ requestedPrice:{ path:"$record.requestedPrice" } } },
   { id:"validate_price", label:"Validate Requested Price", apiName:"validate_price", key:"CONDITION", outcomes:[{ id:"valid", label:"Valid Price", condition:{ match:"all", conditions:[{ field:"variables.priceIsValid", operator:"equals", value:true }] }, branch:["approved_price","approved_reason"] }], defaultLabel:"Invalid Price", defaultBranch:["invalid_price"] },
-  { id:"approved_price", label:"Set Approved Price", apiName:"approved_price", key:"ASSIGNMENT", variableName:"approvedPrice", variableType:"currency", operator:"set", value:{ path:"record.requestedPrice" } },
-  { id:"approved_reason", label:"Set Override Reason", apiName:"approved_reason", key:"ASSIGNMENT", variableName:"approvedReason", variableType:"text", operator:"set", value:{ path:"record.reason" } },
+  { id:"approved_price", label:"Set Approved Price", apiName:"approved_price", key:"ASSIGNMENT", variableName:"approvedPrice", variableType:"currency", operator:"set", value:{ path:"$record.requestedPrice" } },
+  { id:"approved_reason", label:"Set Override Reason", apiName:"approved_reason", key:"ASSIGNMENT", variableName:"approvedReason", variableType:"text", operator:"set", value:{ path:"$record.reason" } },
   { id:"invalid_price", label:"Reject Invalid Price", apiName:"invalid_price", key:"CUSTOM_ERROR", errorMessage:"Price override must be greater than zero", errorLocation:"record" },
 ];
 
@@ -140,9 +140,9 @@ test("Price Override Flow debug validates object lookup and both decision paths"
 });
 
 const pettyActions = [
-  { id:"amount_is_valid", label:"Petty Cash Amount Is Valid", apiName:"amount_is_valid", key:"FORMULA", resourceName:"amountIsValid", resultType:"boolean", expression:"amount > 0", inputs:{ amount:{ path:"record.amount" } } },
+  { id:"amount_is_valid", label:"Petty Cash Amount Is Valid", apiName:"amount_is_valid", key:"FORMULA", resourceName:"amountIsValid", resultType:"boolean", expression:"amount > 0", inputs:{ amount:{ path:"$record.amount" } } },
   { id:"validate_amount", label:"Validate Petty Cash", apiName:"validate_amount", key:"CONDITION", outcomes:[{ id:"valid", label:"Valid Amount", condition:{ match:"all", conditions:[{ field:"variables.amountIsValid", operator:"equals", value:true }] }, branch:["create_cash_ledger"] }], defaultLabel:"Invalid Amount", defaultBranch:["invalid_amount"] },
-  { id:"create_cash_ledger", label:"Create Cash Ledger Entry", apiName:"create_cash_ledger", key:"CREATE_RECORD", objectKey:"cash_ledger", fieldValues:{ till_session_id:{ path:"record.tillSessionId" }, user_id:{ path:"record.userId" }, type:"cash_out", amount:{ path:"record.amount" }, reason:{ path:"record.reason" } } },
+  { id:"create_cash_ledger", label:"Create Cash Ledger Entry", apiName:"create_cash_ledger", key:"CREATE_RECORD", objectKey:"cash_ledger", fieldValues:{ till_session_id:{ path:"$record.tillSessionId" }, user_id:{ path:"$record.userId" }, type:"cash_out", amount:{ path:"$record.amount" }, reason:{ path:"$record.reason" } } },
   { id:"invalid_amount", label:"Reject Invalid Amount", apiName:"invalid_amount", key:"CUSTOM_ERROR", errorMessage:"Petty cash amount must be greater than zero", errorLocation:"record" },
 ];
 
@@ -166,8 +166,8 @@ test("Receipt QR policy Flow formula debug covers AUTO, MANUAL, REGENERATE and N
     resourceName:"allowed", resultType:"boolean",
     expression:'(event == "AUTO" && (mode == "ALWAYS" || (mode == "ONLY_WHEN_PRINTER_UNAVAILABLE" && !printerAvailable))) || (event == "MANUAL" && allowManual) || (event == "REGENERATE" && allowRegenerate) || (event == "NEW_SALE" && autoClose)',
     inputs:{
-      event:{ path:"record.event" }, mode:{ path:"record.mode" }, printerAvailable:{ path:"record.printerAvailable" },
-      allowManual:{ path:"record.allowManual" }, allowRegenerate:{ path:"record.allowRegenerate" }, autoClose:{ path:"record.autoClose" },
+      event:{ path:"$record.event" }, mode:{ path:"$record.mode" }, printerAvailable:{ path:"$record.printerAvailable" },
+      allowManual:{ path:"$record.allowManual" }, allowRegenerate:{ path:"$record.allowRegenerate" }, autoClose:{ path:"$record.autoClose" },
     },
   };
   const run = async (record) => {
