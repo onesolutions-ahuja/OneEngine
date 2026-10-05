@@ -1980,9 +1980,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { field: "trial_eligible", operator: "equals", value: true }
           ] },
           actions: [
-            { id: "trial_started_at", label: "Trial Start", apiName: "trial_started_at", key: "FORMULA", resourceName: "trialStartedAt", resultType: "datetime", expression: "NOW()", inputs: {} },
-            { id: "trial_expires_at", label: "Trial Expiry", apiName: "trial_expires_at", key: "FORMULA", resourceName: "trialExpiresAt", resultType: "datetime", expression: "ADDDAYS(NOW(),7)", inputs: {} },
-            { id: "grant_trial", label: "Grant Tenant Trial Licence", apiName: "grant_trial", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "TRIAL", trial_started_at: { path: "variables.trialStartedAt" }, trial_expires_at: { path: "variables.trialExpiresAt" } } },
+            { id: "activate_trial_runtime", label: "1. Create Tenant Trial Entitlement", apiName: "activate_trial_runtime", key: "PACKAGE_LIFECYCLE", operation: "TRIAL" },
+            { id: "trial_started_at", label: "2. Set Trial Start", apiName: "trial_started_at", key: "FORMULA", resourceName: "trialStartedAt", resultType: "datetime", expression: "NOW()", inputs: {} },
+            { id: "trial_expires_at", label: "3. Set Trial Expiry", apiName: "trial_expires_at", key: "FORMULA", resourceName: "trialExpiresAt", resultType: "datetime", expression: "ADDDAYS(NOW(),7)", inputs: {} },
+            { id: "grant_trial", label: "4. Update Tenant App Licence", apiName: "grant_trial", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "TRIAL", trial_started_at: { path: "variables.trialStartedAt" }, trial_expires_at: { path: "variables.trialExpiresAt" } } },
           ],
         },
         {
