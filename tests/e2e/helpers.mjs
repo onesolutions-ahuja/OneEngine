@@ -4,6 +4,7 @@ import path from "node:path";
 
 const SESSION_CACHE_FILE = path.resolve("test-results/.auth/browser-session.json");
 let cachedBrowserSession = null;
+let cachedBrowserSessionValidated = false;
 
 async function loadBrowserSession() {
   if (cachedBrowserSession) return cachedBrowserSession;
@@ -33,28 +34,32 @@ async function restoreBrowserSession(page) {
   }, state);
   await page.goto("./");
   const apiBaseUrl = String(process.env.ONEPOS_API_URL || "https://oneengine.onrender.com").replace(/\/$/, "");
-  const validation = await page.evaluate(async ({ apiBaseUrl }) => {
-    const token = sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token");
-    if (!token) return { valid: false, status: 0 };
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+  if (!cachedBrowserSessionValidated) {
+    const validation = await page.evaluate(async ({ apiBaseUrl }) => {
+      const token = sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token");
+      if (!token) return { valid: false, status: 0 };
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        return { valid: response.ok, status: response.status };
+      } catch {
+        return { valid: false, status: 0 };
+      }
+    }, { apiBaseUrl });
+    if (!validation.valid) {
+      cachedBrowserSession = null;
+      cachedBrowserSessionValidated = false;
+      await fs.rm(SESSION_CACHE_FILE, { force: true }).catch(() => {});
+      await page.evaluate(() => {
+        sessionStorage.removeItem("onepos_token");
+        sessionStorage.removeItem("onepos_user");
+        localStorage.removeItem("onepos_token");
+        localStorage.removeItem("onepos_user");
       });
-      return { valid: response.ok, status: response.status };
-    } catch {
-      return { valid: false, status: 0 };
+      return false;
     }
-  }, { apiBaseUrl });
-  if (!validation.valid) {
-    cachedBrowserSession = null;
-    await fs.rm(SESSION_CACHE_FILE, { force: true }).catch(() => {});
-    await page.evaluate(() => {
-      sessionStorage.removeItem("onepos_token");
-      sessionStorage.removeItem("onepos_user");
-      localStorage.removeItem("onepos_token");
-      localStorage.removeItem("onepos_user");
-    });
-    return false;
+    cachedBrowserSessionValidated = true;
   }
   await expect(page.getByPlaceholder("Email or username")).toBeHidden({ timeout: 15_000 });
   return true;
@@ -99,6 +104,7 @@ export async function loginIfConfigured(page) {
 
     await expect(usernameField).toBeHidden({ timeout: 15_000 });
     await captureBrowserSession(page);
+    cachedBrowserSessionValidated = true;
   }
   return true;
 }
