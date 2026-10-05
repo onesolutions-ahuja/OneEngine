@@ -3734,8 +3734,11 @@
 .efb-dock-icon-wrap{position:relative;display:flex;justify-content:center;width:100%}
 .efb-dock-image{display:block;width:100%;height:auto;max-width:100%;user-select:none;pointer-events:none}
 .efb-dock-image--scaled{transform:scale(1.25)}
-.efb-dock-image--app-art{border-radius:22%;clip-path:inset(0 round 22%)}
-.efb-mobile-dock-image--app-art{border-radius:22%;clip-path:inset(0 round 22%)}
+/* Normalise full-bleed app artwork to the same perceived size as the native-style
+   dock icons. Keep the slot/magnification unchanged and do not affect Jarvis. */
+.efb-dock-image--developer,
+.efb-dock-image--app-art{padding:4px;box-sizing:border-box;border-radius:22%;clip-path:inset(4px round 22%);-webkit-clip-path:inset(4px round 22%)}
+.efb-mobile-dock-image--app-art{padding:4px;box-sizing:border-box;border-radius:22%;clip-path:inset(4px round 22%);-webkit-clip-path:inset(4px round 22%)}
 .efb-dock-separator{width:1px;height:36px;margin-inline:4px;background:rgba(0,0,0,.28);flex:0 0 auto}
 .efb-dock-fixed-zone{display:flex;align-items:flex-end;gap:10px;height:60px;flex:0 0 auto;transform:none!important}
 .efb-dock-fixed-zone,.efb-dock-fixed-zone *{transition-property:none!important}
@@ -3836,8 +3839,4 @@
 
 /* OneDeveloper artwork is a traced square SVG; clip the rendered asset itself so
    its source-canvas corners can never show during dock magnification. */
-.efb-dock-image--developer {
-  border-radius: 22%;
-  clip-path: inset(0 round 22%);
-  -webkit-clip-path: inset(0 round 22%);
-}
+
