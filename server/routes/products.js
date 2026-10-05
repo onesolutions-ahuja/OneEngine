@@ -251,33 +251,35 @@ export default function createProductsRouter({ authenticate, authorize, db: doma
     try {
       const companyId = req.user.companyId;
       const storeId = req.user.storeId || null;
-      const result = await db(
-        `SELECT p.id,p.name,p.sku,p.barcode,p.price,p.vat_rate,p.vat_applicable,
-                p.age_restricted,p.image_url,p.low_stock_level,p.track_stock,
-                p.category_id,p.active,c.name AS category_name,
-                COALESCE(ps.quantity,p.stock_quantity) AS stock,p.updated_at AS catalogue_updated_at
-           FROM products p
-           LEFT JOIN categories c ON c.id=p.category_id AND c.company_id=p.company_id
-           LEFT JOIN product_store_stock ps ON ps.product_id=p.id AND ps.company_id=p.company_id AND ps.store_id=$2
-          WHERE p.company_id=$1 AND p.active=TRUE AND p.sku IS DISTINCT FROM 'MISC'
-          ORDER BY p.name`,
-        [companyId, storeId]
-      );
-      const categories = await db(
-        `SELECT DISTINCT c.id,c.name,c.display_order,c.active,c.created_at
-           FROM categories c JOIN products p ON p.category_id=c.id AND p.company_id=c.company_id
-          WHERE c.company_id=$1 AND p.active=TRUE AND p.sku IS DISTINCT FROM 'MISC'
-          ORDER BY c.display_order,c.name`,
-        [companyId]
-      );
-      const versionResult = await db(
-        `SELECT GREATEST(
-           COALESCE((SELECT MAX(updated_at) FROM products WHERE company_id=$1),'epoch'::timestamptz),
-           COALESCE((SELECT MAX(created_at) FROM categories WHERE company_id=$1),'epoch'::timestamptz),
-           COALESCE((SELECT MAX(updated_at) FROM product_store_stock WHERE company_id=$1 AND store_id=$2),'epoch'::timestamptz)
-         ) AS version`,
-        [companyId, storeId]
-      );
+      const [result, categories, versionResult] = await Promise.all([
+        db(
+          `SELECT p.id,p.name,p.sku,p.barcode,p.price,p.vat_rate,p.vat_applicable,
+                  p.age_restricted,p.image_url,p.low_stock_level,p.track_stock,
+                  p.category_id,p.active,c.name AS category_name,
+                  COALESCE(ps.quantity,p.stock_quantity) AS stock,p.updated_at AS catalogue_updated_at
+             FROM products p
+             LEFT JOIN categories c ON c.id=p.category_id AND c.company_id=p.company_id
+             LEFT JOIN product_store_stock ps ON ps.product_id=p.id AND ps.company_id=p.company_id AND ps.store_id=$2
+            WHERE p.company_id=$1 AND p.active=TRUE AND p.sku IS DISTINCT FROM 'MISC'
+            ORDER BY p.name`,
+          [companyId, storeId]
+        ),
+        db(
+          `SELECT DISTINCT c.id,c.name,c.display_order,c.active,c.created_at
+             FROM categories c JOIN products p ON p.category_id=c.id AND p.company_id=c.company_id
+            WHERE c.company_id=$1 AND p.active=TRUE AND p.sku IS DISTINCT FROM 'MISC'
+            ORDER BY c.display_order,c.name`,
+          [companyId]
+        ),
+        db(
+          `SELECT GREATEST(
+             COALESCE((SELECT MAX(updated_at) FROM products WHERE company_id=$1),'epoch'::timestamptz),
+             COALESCE((SELECT MAX(created_at) FROM categories WHERE company_id=$1),'epoch'::timestamptz),
+             COALESCE((SELECT MAX(updated_at) FROM product_store_stock WHERE company_id=$1 AND store_id=$2),'epoch'::timestamptz)
+           ) AS version`,
+          [companyId, storeId]
+        ),
+      ]);
       res.json({ success:true, data:{ version:versionResult.rows[0]?.version || null, full:true, products:result.rows, categories:categories.rows } });
     } catch (error) {
       console.error("Catalogue load error:", error);
