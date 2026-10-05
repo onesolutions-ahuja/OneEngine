@@ -95,6 +95,36 @@ test('GPT Builder toolbar uses current Salesforce Run Debug View Tests and Activ
   assert.match(page, /Warnings <span>\{warningCount\}<\/span>/)
 })
 
+test('GPT Builder lifecycle keeps active runtime separate from draft authoring and supports deactivation', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  const automation = await readFile(new URL('../server/services/platformAutomation.js', import.meta.url), 'utf8')
+  assert.match(page, /setFlowActivation/)
+  assert.match(page, /\{ active: false \}/)
+  assert.match(page, /activeStatus \? 'Deactivate' : 'Activate'/)
+  assert.match(platform, /runtime_active: row\.active === true/)
+  assert.match(platform, /draft_definition/)
+  assert.match(platform, /active_version/)
+  assert.match(platform, /draft_version/)
+  assert.match(platform, /requestedLifecycle\.lifecycle === "DRAFT" && rule\.active === true/)
+  assert.match(platform, /requestedLifecycle\.lifecycle === "ACTIVE"/)
+  assert.match(platform, /SET active=false,lifecycle_status='INACTIVE'/)
+  assert.match(automation, /workflowVersion: Number\(rule\.active_version \|\| rule\.version \|\| 1\)/)
+})
+
+test('GPT Builder Run Debug Test and version restore use the intended saved definitions', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  assert.match(page, /\/api\/platform\/rules\/\$\{encodeURIComponent\(workflowId\)\}\/run/)
+  assert.match(page, /\/api\/platform\/rules\/\$\{encodeURIComponent\(workflowId\)\}\/debug/)
+  assert.match(page, /\/tests\/\$\{encodeURIComponent\(selectedTestId\)\}\/run/)
+  assert.match(platform, /runWorkflowDebugRequest\(req, res, req\.params\.ruleId\)/)
+  assert.match(platform, /runSavedWorkflowRequest\(req, res, req\.params\.ruleId\)/)
+  assert.match(platform, /platform_workflow_tests/)
+  assert.match(platform, /\/platform\/rules\/:ruleId\/versions\/:version\/restore/)
+  assert.match(platform, /lifecycle_status: "DRAFT"/)
+})
+
 test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection and reopen persistence', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /Ctrl\/Cmd \+ Alt\/Option \+ \+ \/ − or Ctrl\/Cmd \+ mouse wheel/)
