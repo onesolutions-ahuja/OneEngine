@@ -8,7 +8,6 @@ import {
   getWorkflowActionRegistry,
   getWorkflowBuilderActionRegistry,
 } from "../server/services/platformWorkflow.js";
-import { executeSystemWorkflow } from "../server/services/systemWorkflowRuntime.js";
 import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
 
 const REMOVED_PROVIDER_TEST_ADAPTERS = [
