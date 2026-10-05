@@ -3,8 +3,8 @@ import { clearLazyCache } from './dataCache'
 import { isPrivilegedMutation, resolveTrustedCapability, trustedRuntimeHeaders, validateTrustedRuntime } from './trustedRuntime'
 export const TRUSTED_RUNTIME_STATE = validateTrustedRuntime()
 
-const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://oneengine.onrender.com').replace(/\/$/, '')
-const CANONICAL_PRODUCTION_API_HOST = 'oneengine.onrender.com'
+const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://oneengine-6gas.onrender.com').replace(/\/$/, '')
+const CANONICAL_PRODUCTION_API_HOST = 'oneengine-6gas.onrender.com'
 export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
 export const ACTING_COMPANY_STORAGE_KEY = 'onepos_developer_target_company_id'
 export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
