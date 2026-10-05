@@ -844,7 +844,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         online,
         userId: getStoredUser()?.id || getStoredUser()?.userId || null,
         customerId: selectedCustomer?.id || null,
-        online,
         subtotal,
         vat,
         discount: discountAmount,
