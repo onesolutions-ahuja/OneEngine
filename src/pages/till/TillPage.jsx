@@ -509,7 +509,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       ...(item.priceOverride ? { priceOverride: item.priceOverride, priceOverrideReason: item.priceOverrideReason || null } : {}),
     })),
     customerId: selectedCustomer?.id || null,
-    miscLines: miscLines.map((line) => ({ description: line.description, price: line.price, quantity: line.quantity, vatRate: line.vatRate })),
+    workflowLines: miscLines.map((line) => ({ buttonKey: line.buttonKey, input: line.input })),
     vatEnabled,
     vatRate: defaultVatRate,
     paymentMethod,
@@ -1103,13 +1103,17 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
             vatRate: Number(line.vatRate),
           })
           const data = response?.data || {}
-          const approvedPrice = Number(deepFind(data, 'approvedPrice') || 0)
-          const approvedQuantity = Number(deepFind(data, 'approvedQuantity') || 0)
-          const approvedDescription = String(deepFind(data, 'approvedDescription') || line.description)
-          const approvedVatRate = Number(deepFind(data, 'approvedVatRate') || 0)
-          const miscProductId = deepFind(data, 'miscProductId') || null
-          if (!miscProductId || approvedPrice <= 0 || approvedQuantity <= 0) throw new Error('Misc Item Flow did not return an approved line.')
-          setMiscLines((rows) => [...rows, { description: approvedDescription, price: approvedPrice, quantity: approvedQuantity, vatRate: approvedVatRate, miscProductId }])
+          const approvedPrice = Number(deepFind(data, 'unitPrice') || 0)
+          const approvedQuantity = Number(deepFind(data, 'quantity') || 0)
+          const approvedDescription = String(deepFind(data, 'description') || line.description)
+          const approvedVatRate = Number(deepFind(data, 'vatRate') || 0)
+          const productId = deepFind(data, 'productId') || null
+          if (!productId || approvedPrice <= 0 || approvedQuantity <= 0) throw new Error('Configured Flow did not return an approved sale line.')
+          setMiscLines((rows) => [...rows, {
+            description: approvedDescription, price: approvedPrice, quantity: approvedQuantity, vatRate: approvedVatRate,
+            buttonKey: button.button_key,
+            input: { description: line.description, price: Number(line.price), quantity: Number(line.quantity), vatRate: Number(line.vatRate) },
+          }])
           setModal(null)
         } catch (err) { setError(err?.message || 'Unable to add Misc Item') }
       }}/></Modal> : null}
