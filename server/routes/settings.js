@@ -583,14 +583,9 @@ export default function createSettingsRouter({
       return JSON.stringify(value);
     },
     dockQuickAccess: (value) => {
-      if (!Array.isArray(value)) return SETTINGS_PATCH_INVALID;
-      const knownPages = new Set([
-        "Dashboard", "Sales", "Returns", "Supplier Returns", "Order Prep", "Payments", "Open Till",
-        "Products", "Global Products", "Categories", "Purchases", "Suppliers", "Inventory", "Replenishment",
-        "Customers", "Employees", "Stores", "Reports", "Integrations", "Accounting", "Settings",
-      ]);
-      if (value.length > 8 || new Set(value).size !== value.length || value.some((p) => !knownPages.has(p))) return SETTINGS_PATCH_INVALID;
-      return JSON.stringify(value);
+      if (!Array.isArray(value) || value.length > 8 || new Set(value).size !== value.length) return SETTINGS_PATCH_INVALID;
+      if (value.some((item) => typeof item !== "string" || !item.trim() || item.length > 120)) return SETTINGS_PATCH_INVALID;
+      return JSON.stringify(value.map((item) => item.trim()));
     },
     invoicePrefix: (value) => {
       if (typeof value !== "string" || !/^[A-Za-z0-9]{1,10}$/.test(value.trim())) return SETTINGS_PATCH_INVALID;
