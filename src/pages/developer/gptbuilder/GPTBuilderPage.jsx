@@ -890,6 +890,17 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [groupDeleteTarget, setGroupDeleteTarget] = useState(null)
 
   useEffect(() => {
+    if (!dirty) return undefined
+    const protectUnsavedFlow = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+      return ''
+    }
+    window.addEventListener('beforeunload', protectUnsavedFlow)
+    return () => window.removeEventListener('beforeunload', protectUnsavedFlow)
+  }, [dirty])
+
+  useEffect(() => {
     const snapshot = JSON.parse(JSON.stringify({ layout, startConfig, elements, resources, goToConnections }))
     const serialized = JSON.stringify(snapshot)
     if (!currentSnapshotRef.current) {
