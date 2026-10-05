@@ -136,6 +136,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const [lastSale, setLastSale] = useState(null)
   const [ageVerified, setAgeVerified] = useState(false)
   const [pendingPayment, setPendingPayment] = useState(null)
+  const [pendingCheckout, setPendingCheckout] = useState(null)
   const [receiptQr, setReceiptQr] = useState(null)
   const [priceTarget, setPriceTarget] = useState(null)
   const [modifierPicker, setModifierPicker] = useState(null)
@@ -507,10 +508,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     setModal('receipt_qr')
   }
 
-  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null, skipStockWarning = false } = {}) => {
+  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null } = {}) => {
     if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
     if (hasAgeRestricted && !ageVerified && !verifiedOverride) {
       setPendingPayment(paymentMethod)
+      setPendingCheckout({ paymentMethod, options: { verifiedOverride: true, payments, giftCardCode, cashReceivedOverride } })
       setModal('age')
       return
     }
@@ -742,7 +744,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         || button?.config?.requires_persisted_record === true
 
       const scopedRecordId = recordIdOverride || lastSale?.id || null
-      if (wantsLastSale && !scopedRecordId) throw new Error('Complete a sale before using this action.')
+      const useRecordScope = Boolean(recordIdOverride) || wantsLastSale
+      if (useRecordScope && !scopedRecordId) throw new Error('Complete a sale before using this action.')
 
       const context = {
         storeId: till?.store_id || settings?.store?.id || getStoredUser()?.storeId || null,
@@ -772,13 +775,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         ...contextOverride,
       }
 
-      const endpoint = wantsLastSale && scopedRecordId
+      const endpoint = useRecordScope && scopedRecordId
         ? `/api/platform/objects/sale/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
         : `/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`
 
       const response = await apiRequest(endpoint, {
         method: 'POST',
-        body: JSON.stringify(wantsLastSale && scopedRecordId ? { inputs: context } : { context }),
+        body: JSON.stringify(useRecordScope && scopedRecordId ? { inputs: context } : { context }),
       })
       if (response?.success === false) throw new Error(response?.message || 'Unable to run Till action')
       return response
@@ -964,7 +967,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
       {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError}/></Modal> : null}
-      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const paymentMethod = pendingPayment; setAgeVerified(true); setPendingPayment(null); setModal(null); if (paymentMethod) window.setTimeout(() => completeSale(paymentMethod, { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
+      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingCheckout(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingCheckout || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingCheckout(null); setModal(null); if (pending?.paymentMethod) window.setTimeout(() => completeSale(pending.paymentMethod, pending.options || { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
       {modal === 'payment' ? <Modal title="Payment" onClose={() => setModal(null)} wide><PaymentSheet total={total} methods={paymentMethods} online={online} customer={selectedCustomer} credit={liveCredit || selectedCustomer?.credit || null} onPay={async (method, options) => { await completeSale(method, options || {}); setModal(null) }}/></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={async (price, reason) => {
         const button = buttons.find((row) => row.button_key === 'till_price_override_apply')
@@ -1001,7 +1004,7 @@ function PaymentSheet({ total, methods, online, customer, credit, onPay }) {
   const [giftCardCode, setGiftCardCode] = useState('')
   const [split, setSplit] = useState(() => Object.fromEntries(activeMethods.map((item) => [item.code, ''])))
   const selected = activeMethods.find((item) => item.code === method)
-  const splitEligible = activeMethods.filter((item) => !['customer_credit','gift_card'].includes(item.code))
+  const splitEligible = activeMethods
   const splitLines = splitEligible.map((item) => ({ paymentMethod: item.code, amount: Math.round((Number(split[item.code]) || 0) * 100) / 100 })).filter((line) => line.amount > 0)
   const splitTotal = splitLines.reduce((sum, line) => sum + line.amount, 0)
   const remaining = Math.round((total - splitTotal) * 100) / 100
