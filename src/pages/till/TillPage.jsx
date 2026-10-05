@@ -596,10 +596,20 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const holdSale = async () => {
     if (!basket.length && !miscLines.length) return setError('Add an item before holding the sale.')
+    const user = getStoredUser() || {}
     setBusy(true)
     try {
-      const response = await apiRequest('/api/held-sales', { method: 'POST', body: JSON.stringify({ items: basket, miscLines, customerId: selectedCustomer?.id || null, discountType: discount.type, discountValue: discount.value }) })
-      if (!response?.success) throw new Error(response?.message || 'Unable to hold sale')
+      const response = await apiRequest('/api/platform/objects/held_sale/records', {
+        method: 'POST',
+        body: JSON.stringify({ data: {
+          user_id: user.id || user.userId || null,
+          customer_id: selectedCustomer?.id || null,
+          items: { items: basket, miscLines },
+          discount_type: discount.type,
+          discount_value: Number(discount.value || 0),
+        } }),
+      })
+      if (response?.success === false) throw new Error(response?.message || 'Unable to hold sale')
       clearSale()
       setMessage('Sale held successfully.')
     } catch (err) { setError(err?.message || 'Unable to hold sale') } finally { setBusy(false) }
@@ -607,19 +617,27 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const openHeld = async () => {
     try {
-      const response = await apiRequest('/api/held-sales')
-      setHeldSales(response?.data || [])
+      const response = await apiRequest('/api/platform/objects/held_sale/records?page=1&pageSize=100')
+      const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+      setHeldSales(rows)
       setModal('held')
     } catch (err) { setError(err?.message || 'Unable to load held sales') }
   }
 
   const resumeHeld = async (id) => {
     try {
-      const response = await apiRequest(`/api/held-sales/${encodeURIComponent(id)}/resume`, { method: 'POST', body: JSON.stringify({}) })
-      if (!response?.success) throw new Error(response?.message || 'Unable to resume sale')
-      const held = response.data || {}
-      if (Array.isArray(held.items)) { setBasket(held.items); setMiscLines([]) } else { setBasket(held.items?.items || []); setMiscLines(held.items?.miscLines || []) }
+      const response = await apiRequest(`/api/platform/objects/held_sale/records/${encodeURIComponent(id)}`)
+      const held = response?.record || response?.data || response || {}
+      const heldItems = held.items || {}
+      if (Array.isArray(heldItems)) {
+        setBasket(heldItems)
+        setMiscLines([])
+      } else {
+        setBasket(Array.isArray(heldItems.items) ? heldItems.items : [])
+        setMiscLines(Array.isArray(heldItems.miscLines) ? heldItems.miscLines : [])
+      }
       setDiscount({ type: held.discount_type || null, value: Number(held.discount_value || 0) })
+      await apiRequest(`/api/platform/objects/held_sale/records/${encodeURIComponent(id)}`, { method: 'DELETE' })
       setModal(null)
       setMessage('Held sale resumed.')
     } catch (err) { setError(err?.message || 'Unable to resume sale') }
