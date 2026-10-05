@@ -9666,8 +9666,169 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
 });
 
 
+  router.get("/platform/objects/:objectKey/records/sync", authenticate, async (req, res) => {
+    try {
+      const metadata = await db("SELECT * FROM platform_objects WHERE object_key=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [req.params.objectKey, req.user.companyId]);
+      const object = metadata.rows[0];
+      if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) return res.status(404).json({ success: false, message: "Object records are not available" });
+      if (!(await hasPlatformObjectPermission(db, req, object.id, "view"))) return res.status(403).json({ success: false, message: "You do not have permission to view records for this object" });
+
+      const sinceRaw = String(req.query.since || "").trim();
+      const since = new Date(sinceRaw);
+      if (!sinceRaw || Number.isNaN(since.getTime())) return res.status(400).json({ success: false, message: "A valid sync cursor is required" });
+      const untilRaw = String(req.query.until || "").trim();
+      const untilDate = untilRaw ? new Date(untilRaw) : new Date();
+      if (Number.isNaN(untilDate.getTime())) return res.status(400).json({ success: false, message: "Invalid sync upper cursor" });
+      const until = untilDate.toISOString();
+      const limit = boundedInteger(req.query.limit, 250, 500);
+      const offset = Math.max(0, Number.parseInt(String(req.query.offset || "0"), 10) || 0);
+
+      const changes = await db(
+        `SELECT record_id::text AS record_id, MAX(created_at) AS changed_at
+           FROM platform_record_history
+          WHERE company_id=$1
+            AND object_id=$2
+            AND created_at > $3::timestamptz
+            AND created_at <= $4::timestamptz
+          GROUP BY record_id
+          ORDER BY MAX(created_at), record_id
+          LIMIT $5 OFFSET $6`,
+        [req.user.companyId, object.id, since.toISOString(), until, limit, offset]
+      );
+      const countResult = await db(
+        `SELECT COUNT(DISTINCT record_id)::int AS total
+           FROM platform_record_history
+          WHERE company_id=$1
+            AND object_id=$2
+            AND created_at > $3::timestamptz
+            AND created_at <= $4::timestamptz`,
+        [req.user.companyId, object.id, since.toISOString(), until]
+      );
+      const total = Number(countResult.rows[0]?.total || 0);
+      const changedIds = changes.rows.map((row) => String(row.record_id));
+      if (!changedIds.length) {
+        return res.json({ success: true, data: { records: [], changedIds: [], removedIds: [], offset, nextOffset: offset, total, hasMore: false, syncCursor: until } });
+      }
+
+      const metadataFields = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order", [object.id, req.user.companyId]);
+      if (systemObject(object)) object.company_scoped = true;
+      const safeFields = safeSystemFields(object, metadataFields.rows);
+      const fields = await applyFieldSecurity(db, safeFields, req);
+      const readableFields = fields.filter((field) => field.readable !== false && field.field_type !== "formula" && field.field_type !== "rollup" && isSafeIdentifier(field.api_name) && Boolean(platformFieldSql(field, object)));
+      const columns = readableFields.map((field) => `${platformFieldSql(field, object)} AS "${field.api_name}"`);
+      const fieldByApiName = new Map(readableFields.map((field) => [field.api_name, field]));
+
+      const listView = req.query.listViewId ? (await db(
+        `SELECT * FROM platform_list_views
+          WHERE id=$1 AND object_id=$2 AND active=true
+            AND (company_id IS NULL OR company_id=$3)
+            AND (visibility_scope='company' OR owner_user_id=$4 OR (visibility_scope='roles' AND shared_role_ids ? $5))`,
+        [req.query.listViewId, object.id, req.user.companyId, req.user.id, req.user.roleId ? String(req.user.roleId) : ""]
+      )).rows[0] || null : null;
+
+      const clauses = [];
+      const params = [];
+      params.push(changedIds);
+      clauses.push(`CAST(id AS TEXT)=ANY($${params.length}::text[])`);
+
+      if (object.company_scoped) {
+        params.push(req.user.companyId);
+        clauses.push(`company_id=$${params.length}`);
+      }
+      if (object.store_scoped) {
+        if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
+        params.push(req.user.storeId);
+        clauses.push(`store_id=$${params.length}`);
+      }
+      const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "read", paramsOffset: params.length });
+      if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
+
+      if (listView && listView.filters && typeof listView.filters === "object" && !Array.isArray(listView.filters)) {
+        for (const [apiName, value] of Object.entries(listView.filters)) {
+          const field = fieldByApiName.get(apiName);
+          if (!field) continue;
+          const values = Array.isArray(value) ? value : [value];
+          if (!values.length) continue;
+          const placeholders = values.map((item) => {
+            params.push(item);
+            return `$${params.length}`;
+          });
+          clauses.push(values.length === 1 ? `${platformFieldSql(field, object)}=${placeholders[0]}` : `${platformFieldSql(field, object)} IN (${placeholders.join(",")})`);
+        }
+      }
+
+      const filterModel = listView?.filter_model && typeof listView.filter_model === "object" && !Array.isArray(listView.filter_model) ? listView.filter_model : {};
+      for (const [apiName, config] of Object.entries(filterModel)) {
+        const field = fieldByApiName.get(apiName);
+        if (!field || !config || typeof config !== "object" || Array.isArray(config)) continue;
+        const columnSql = platformFieldSql(field, object);
+        const selectedValues = Array.isArray(config.values) ? config.values.map(decodeFilterValue) : [];
+        if (selectedValues.length) {
+          const placeholders = selectedValues.map((item) => {
+            params.push(item);
+            return `$${params.length}`;
+          });
+          clauses.push(`${columnSql} IN (${placeholders.join(",")})`);
+        }
+        const operator = String(config.operator || "");
+        if (operator === "is_blank") clauses.push(`(${columnSql} IS NULL OR CAST(${columnSql} AS TEXT)='')`);
+        else if (operator === "is_not_blank") clauses.push(`(${columnSql} IS NOT NULL AND CAST(${columnSql} AS TEXT)<>'')`);
+        else if (["equals","not_equals","contains","not_contains","starts_with","greater_than","less_than","greater_or_equal","less_or_equal"].includes(operator)) {
+          const rawValue = decodeFilterValue(config.value);
+          if (rawValue === undefined || rawValue === null || rawValue === "") continue;
+          params.push(operator === "contains" || operator === "not_contains"
+            ? `%${String(rawValue)}%`
+            : operator === "starts_with" ? `${String(rawValue)}%` : rawValue);
+          const placeholder = `$${params.length}`;
+          if (operator === "equals") clauses.push(`${columnSql}=${placeholder}`);
+          else if (operator === "not_equals") clauses.push(`(${columnSql}<>${placeholder} OR ${columnSql} IS NULL)`);
+          else if (operator === "contains") clauses.push(`CAST(${columnSql} AS TEXT) ILIKE ${placeholder}`);
+          else if (operator === "not_contains") clauses.push(`(CAST(${columnSql} AS TEXT) NOT ILIKE ${placeholder} OR ${columnSql} IS NULL)`);
+          else if (operator === "starts_with") clauses.push(`CAST(${columnSql} AS TEXT) ILIKE ${placeholder}`);
+          else if (operator === "greater_than") clauses.push(`${columnSql}>${placeholder}`);
+          else if (operator === "less_than") clauses.push(`${columnSql}<${placeholder}`);
+          else if (operator === "greater_or_equal") clauses.push(`${columnSql}>=${placeholder}`);
+          else if (operator === "less_or_equal") clauses.push(`${columnSql}<=${placeholder}`);
+        }
+      }
+
+      appendSystemReadScope(object, req, clauses, params);
+      const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+      const result = await db(`SELECT ${["id", ...columns].join(", ")} FROM "${object.source_table}"${where}`, params);
+      const associations = await loadRecordTypeAssociations(object, result.rows.map((record) => record.id), req);
+      const typeByRecord = new Map(associations.rows.map((row) => [String(row.record_id), row.record_type_id]));
+      const extended = await hydrateExtensions(db, object, fields, result.rows, req);
+      const formulaRecords = await calculateFormulaRecords(db, object, safeFields, extended, req);
+      const hydrated = await populateRollups(db, object, fields, formulaRecords, req);
+      const records = hydrated.map((record) => ({ ...publicFormulaRecord(fields, record), recordTypeId: typeByRecord.get(String(record.id)) ?? null }));
+      const present = new Set(records.map((record) => String(record.id)));
+      const removedIds = changedIds.filter((id) => !present.has(id));
+      const nextOffset = offset + changedIds.length;
+      res.json({
+        success: true,
+        data: {
+          records,
+          changedIds,
+          removedIds,
+          offset,
+          nextOffset,
+          total,
+          hasMore: nextOffset < total,
+          syncCursor: until,
+        },
+      });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ success: false, message: error.message });
+      if (error instanceof FormulaError) return res.status(422).json({ success: false, code: error.code, message: error.message });
+      console.error("Platform records sync error:", error);
+      res.status(500).json({ success: false, message: "Unable to synchronise object records" });
+    }
+  });
+
+
   router.get("/platform/objects/:objectKey/records", authenticate, async (req, res) => {
     try {
+      const syncCursor = new Date().toISOString();
       const metadata = await db("SELECT * FROM platform_objects WHERE object_key=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [req.params.objectKey, req.user.companyId]);
       const object = metadata.rows[0];
       if (!object || !object.source_table || !isSafeIdentifier(object.source_table)) return res.status(404).json({ success: false, message: "Object records are not available" });
@@ -9813,7 +9974,7 @@ router.get("/platform/objects/:objectKey/records/:recordId/related/:relationship
       const formulaRecords = await calculateFormulaRecords(db, object, safeFields, extended, req);
       const hydrated = await populateRollups(db, object, fields, formulaRecords, req);
       result.rows = hydrated.map((record) => ({ ...publicFormulaRecord(fields, record), recordTypeId: typeByRecord.get(String(record.id)) ?? null }));
-      res.json({ success: true, data: result.rows, records: result.rows, page, pageSize, total, pages });
+      res.json({ success: true, data: result.rows, records: result.rows, page, pageSize, total, pages, syncCursor });
     } catch (error) {
       if (error.status) return res.status(error.status).json({ success: false, message: error.message });
       if (error instanceof FormulaError) return res.status(422).json({ success: false, code: error.code, message: error.message });
