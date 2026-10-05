@@ -5134,7 +5134,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
        (company_id,object_id,button_key,label,action_key,placement,visibility_rule,config,active,target_type,target_key,variant,required_permission,input_mappings,
         source_package_id,source_package_version,managed,package_required)
        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,true,$9,$10,$11,$12,$13::jsonb,$14,$15,true,$16)
-       ON CONFLICT (company_id,button_key) WHERE company_id IS NOT NULL
+       ON CONFLICT (button_key) WHERE company_id IS NULL
        DO UPDATE SET
          object_id=CASE WHEN platform_buttons.user_modified THEN platform_buttons.object_id ELSE EXCLUDED.object_id END,
          label=CASE WHEN platform_buttons.user_modified THEN platform_buttons.label ELSE EXCLUDED.label END,
