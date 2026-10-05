@@ -2373,11 +2373,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
               SET config=COALESCE(config,'{}'::jsonb) || $2::jsonb
             WHERE id=$1`,
           [expiryStatusField.rows[0].id, JSON.stringify({
-            expression: "expiry_date",
-            resultType: "date",
-            policy: "FEFO",
-            allocationOrder: "ASC",
-            nulls: "LAST",
+            statusFormula: 'IF(ISBLANK(expiryDate),"none",IF(expiryDate < TODAY(),"expired",IF(expiryDate <= ADDDAYS(TODAY(),warningDays),"expiring","valid")))',
+            warningDays: 7,
+            allocationSort: [{ field: "expiry_date", direction: "ASC", nulls: "LAST" }],
           })]
         );
       }
