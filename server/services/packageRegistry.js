@@ -2381,7 +2381,7 @@ export function packageDefinition(entry) {
           { parentObjectKey:"sale",childObjectKey:"payment",relationshipKey:"payments",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
           { parentObjectKey:"payment",childObjectKey:"sale",relationshipKey:"sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
         ],
-        validationRules: [
+        rules: [
           { objectKey:"sale",name:"Sale total cannot be negative",triggerKey:"before_save",conditions:[{field:"total",operator:"less_than",value:0}],action:{type:"validation",message:"Sale total cannot be negative"} },
           { objectKey:"sale_item",name:"Sale item quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Sale item quantity must be greater than zero"} },
           { objectKey:"payment",name:"Payment amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Payment amount must be greater than zero"} },
