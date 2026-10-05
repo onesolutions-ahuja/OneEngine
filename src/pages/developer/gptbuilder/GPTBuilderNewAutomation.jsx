@@ -26,16 +26,18 @@ export default function GPTBuilderNewAutomation({ flowTypes, onCreate, onClose }
   const [showAll, setShowAll] = useState(false)
   const [templates, setTemplates] = useState([])
   const [templateLoading, setTemplateLoading] = useState(false)
+  const [templateLoadError, setTemplateLoadError] = useState('')
 
   useEffect(() => {
     let live = true
     setTemplateLoading(true)
+    setTemplateLoadError('')
     apiRequest('/api/platform/rules')
       .then((response) => {
         if (!live) return
         setTemplates((Array.isArray(response?.data) ? response.data : []).filter((item) => item?.action?.type === 'workflow' && item?.action?.isTemplate === true))
       })
-      .catch(() => { if (live) setTemplates([]) })
+      .catch(() => { if (live) { setTemplates([]); setTemplateLoadError('Templates are unavailable right now.') } })
       .finally(() => { if (live) setTemplateLoading(false) })
     return () => { live = false }
   }, [])
@@ -133,7 +135,7 @@ export default function GPTBuilderNewAutomation({ flowTypes, onCreate, onClose }
           </section>
         </div> : null}
 
-        {templateLoading ? <div className="gptb-empty-template"><Copy size={24}/><strong>Loading templates…</strong></div>
+        {templateLoading && !frequentTypes.length && !visibleTypes.length ? <div className="gptb-empty-template"><Copy size={24}/><strong>Loading templates…</strong></div>
           : templateRows.length ? <section className="gptb-type-sections">
             <section>
               <header><h3>Templates</h3></header>
@@ -149,7 +151,7 @@ export default function GPTBuilderNewAutomation({ flowTypes, onCreate, onClose }
                 </button>)}
               </div>
             </section>
-          </section> : null}
+          </section> : templateLoadError && !frequentTypes.length && !visibleTypes.length ? <div className="gptb-no-results">{templateLoadError}</div> : null}
 
         {(showAll || category || needle) && !visibleTypes.length && !templateLoading && !templateRows.length
           ? <div className="gptb-no-results">No automations match your search.</div>
