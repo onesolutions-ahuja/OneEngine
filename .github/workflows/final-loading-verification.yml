@@ -1,13 +1,8 @@
 name: Final OneEngine Loading Verification
 
 on:
-  pull_request:
+  push:
     branches: ["main"]
-    paths:
-      - "server/**"
-      - "src/**"
-      - "tests/e2e/final-loading-verification.spec.mjs"
-      - ".github/workflows/final-loading-verification.yml"
 
 concurrency:
   group: oneengine-final-loading-verification
