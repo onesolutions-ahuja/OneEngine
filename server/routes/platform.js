@@ -6514,8 +6514,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (run?.id) {
         await db(
           `UPDATE platform_workflow_runs
-              SET status=$1,
-                  completed_at=CASE WHEN $1='WAITING' THEN NULL ELSE NOW() END,
+              SET status=$1::varchar,
+                  completed_at=CASE WHEN $1::varchar='WAITING' THEN NULL ELSE NOW() END,
                   metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,
                   updated_at=NOW()
             WHERE id=$3 AND company_id=$4`,
