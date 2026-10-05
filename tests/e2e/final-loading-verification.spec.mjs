@@ -33,7 +33,7 @@ test("final loading performance verification", async ({ page, baseURL }) => {
     }
   });
 
-  await loginIfConfigured(page);
+  await loginIfConfigured(page, { forceFresh: true });
 
   expect(loginServerTotal, "server-reported login duration").not.toBeNull();
   expect(loginServerTotal, "login server duration must stay <= 1500ms").toBeLessThanOrEqual(1500);
