@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Box, ChevronLeft, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { executeObjectButton } from '../../actions/metadata/executeObjectButton.js'
 import { cachedGet } from '../../services/cachedApi'
 import { readLazyCache, writeLazyCache } from '../../services/dataCache'
 import RecordListView from '../../components/RecordListView'
@@ -606,11 +607,14 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     setActionBusy(button.button_key)
     setError('')
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/buttons/${encodeURIComponent(button.button_key)}/execute?formFactor=${encodeURIComponent(formFactor)}${appKey ? `&appKey=${encodeURIComponent(appKey)}` : ''}`, {
-        method: 'POST',
-        body: JSON.stringify({}),
+      await executeObjectButton({
+        request: apiRequest,
+        objectKey: objectKey(selectedObject),
+        recordId: selectedId,
+        button,
+        formFactor,
+        appKey,
       })
-      if (response?.success === false) throw new Error(response.message || 'Action failed')
       await loadObject(selectedObject, true)
     } catch (err) {
       setError(err?.message || 'Unable to execute action')

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Search, Settings2, ShieldCheck } from 'lucide-react'
 import { apiRequest, getDeviceKey, getStoredUser, setDeviceServerAddress } from '../../services/api'
+import { executeObjectButton } from '../../actions/metadata/executeObjectButton.js'
 
 const SETTINGS_CATALOG_CACHE_KEY = 'onepos.settings.catalog.v1'
 
@@ -246,11 +247,12 @@ function GenericObjectSettings({ object }) {
     setActionBusy(button.button_key)
     setError('')
     try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records/${encodeURIComponent(selected.id)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
-        method: 'POST',
-        body: JSON.stringify({}),
+      await executeObjectButton({
+        request: apiRequest,
+        objectKey: key,
+        recordId: selected.id,
+        button,
       })
-      if (response?.success === false) throw new Error(response.message || 'Unable to execute action')
       await load()
     } catch (err) {
       setError(err?.message || 'Unable to execute action')

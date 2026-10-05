@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../../../services/api.js";
+import { executeObjectButton, executeObjectButtonForRecords } from "../../../actions/metadata/executeObjectButton.js";
 import ObjectSearch from "./ObjectSearch.jsx";
 import FormRenderer from "./FormRenderer.jsx";
 import RecordModal from "../../../components/RecordModal.jsx";
@@ -850,9 +851,13 @@ export default function ObjectPage({
     if (!recordKey || !button?.button_key) return setError("A record and registered button are required.");
     setExecutingAction(button.button_key);
     try {
-      await apiRequest(`/api/platform/objects/${encodeURIComponent(getObjectKey(objectMetadata))}/records/${encodeURIComponent(recordKey)}/buttons/${encodeURIComponent(button.button_key)}/execute?${runtimeExecutionQuery()}`, {
-        method: "POST",
-        body: JSON.stringify({}),
+      await executeObjectButton({
+        request: apiRequest,
+        objectKey: getObjectKey(objectMetadata),
+        recordId: recordKey,
+        button,
+        formFactor,
+        appKey,
       });
       setError("");
       await loadRecords();
@@ -1020,12 +1025,13 @@ export default function ObjectPage({
     if (!button?.button_key || !ids?.length) return;
     setExecutingAction(`bulk:${button.button_key}`);
     try {
-      for (const id of ids) {
-        await apiRequest(
-          `/api/platform/objects/${encodeURIComponent(resolvedObjectKey)}/records/${encodeURIComponent(id)}/buttons/${encodeURIComponent(button.button_key)}/execute?${runtimeExecutionQuery()}`,
-          { method: "POST", body: JSON.stringify({}) }
-        );
-      }
+      await executeObjectButtonForRecords({
+        request: apiRequest,
+        objectKey: resolvedObjectKey,
+        button,
+        formFactor,
+        appKey,
+      }, ids);
       setSelectedRowIds([]);
       await loadRecords();
       setError("");
