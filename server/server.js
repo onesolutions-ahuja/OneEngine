@@ -73,7 +73,6 @@ import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
 import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
-import createReplenishmentRouter from "./routes/replenishment.js";
 import createOnlineRouter from "./routes/online.js";
 import createCustomerAuthRouter from "./routes/customerAuth.js";
 import createAccountingExportRouter from "./routes/accountingExport.js"; // T10V - accounting integration export
@@ -2164,9 +2163,6 @@ app.use(
     canAccessStore,
   })
 );
-
-/* T10H: read-only replenishment suggestions (planning layer, no writes). */
-app.use("/api", createReplenishmentRouter({ authenticate, authorize, db }));
 
 /*
 |--------------------------------------------------------------------------

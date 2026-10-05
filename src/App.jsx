@@ -117,7 +117,6 @@ const ProductsPage = lazyWithRecovery(() => import('./pages/products/ProductsPag
 const CategoriesPage = lazyWithRecovery(() => import('./pages/products/CategoriesPage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
 const InventoryPage = lazyWithRecovery(() => import('./pages/inventory/InventoryPage'))
-const ReplenishmentPage = lazyWithRecovery(() => import('./pages/inventory/ReplenishmentPage'))
 const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
 const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
 const CustomersPage = lazyWithRecovery(() => import('./pages/customers/CustomersPage'))
@@ -2199,7 +2198,7 @@ function Desktop({ onLock, onSignOut }) {
       'integrations','google-connect','accounting','online-orders','order-prep','own-delivery',
       'assistant','kiosk','kiosk-display','kiosk-devices','returns','exchange','layaway','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
-      'gift-cards','suppliers','purchases','inventory','replenishment','categories',
+      'gift-cards','suppliers','purchases','inventory','categories',
       'global-products','products','sales','workspace','till',
     ])
 
@@ -2466,9 +2465,7 @@ function Desktop({ onLock, onSignOut }) {
             }}
           />
         ) : activeApp === 'inventory' ? (
-          <InventoryPage onOpenReplenishment={() => openItem('replenishment')} />
-        ) : activeApp === 'replenishment' ? (
-          <ReplenishmentPage onBack={() => openItem('inventory')} />
+          <InventoryPage />
         ) : activeApp === 'purchases' ? (
           <PurchasesPage />
         ) : activeApp === 'suppliers' ? (

@@ -92,3 +92,12 @@ test("purchasing business receipt logic is package-owned, not a reusable core se
   assert.match(capability, /async function receivePurchase/);
   assert.equal(capability.includes("../../services/purchaseReceiving.js"), false);
 });
+
+
+test("replenishment is metadata-owned and has no standalone business route or page", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.equal(server.includes("createReplenishmentRouter"), false);
+  assert.equal(app.includes("ReplenishmentPage"), false);
+  assert.equal(app.includes("openItem('replenishment')"), false);
+});
