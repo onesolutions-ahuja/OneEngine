@@ -1316,3 +1316,12 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 14 AI assistance requires confirmation', async () => {
+ const ai=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAIAssistant.jsx',import.meta.url),'utf8')
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ for(const token of ['Draft','Evolve','Summarize','Formula','Test Scenario','Troubleshoot','Integration','Short','Standard','Long','Review before applying','Apply Changes']) assert.ok(ai.includes(token),token)
+ assert.ok(ai.includes('/api/jarvis'))
+ assert.ok(page.includes('GPTBuilderAIAssistant'))
+})
