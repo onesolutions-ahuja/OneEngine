@@ -173,3 +173,18 @@ test("pricing promotions and combos keep runtime pricing but remove legacy admin
   assert.match(metadata, /key: "price_list"/);
   assert.match(pricingEngine, /export function resolvePrice/);
 });
+
+
+test("sales products and categories use metadata workspace while legacy return apps are removed", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const productsRoute = await readFile(new URL("../server/routes/products.js", import.meta.url), "utf8");
+  assert.match(app, /SalesPage initialObjectKey="sale" appKey="sales"/);
+  assert.match(app, /ProductsPage initialObjectKey="product" appKey="products"/);
+  assert.match(app, /CategoriesPage initialObjectKey="category" appKey="categories"/);
+  assert.equal(app.includes("ReturnsPage"), false);
+  assert.equal(app.includes("ExchangePage"), false);
+  assert.match(metadata, /key: "stock_return"/);
+  assert.match(productsRoute, /\/products\/catalogue/);
+  assert.match(productsRoute, /\/products\/misc-line/);
+});

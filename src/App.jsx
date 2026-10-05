@@ -108,12 +108,10 @@ const WorkspacePage = lazyWithRecovery(() => import('./pages/workspace/Workspace
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./pages/platform/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const SalesPage = lazyWithRecovery(() => import('./pages/sales/SalesPage'))
-const ReturnsPage = lazyWithRecovery(() => import('./pages/returns/ReturnsPage'))
-const ExchangePage = lazyWithRecovery(() => import('./pages/returns/ExchangePage'))
+const SalesPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
 const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
-const ProductsPage = lazyWithRecovery(() => import('./pages/products/ProductsPage'))
-const CategoriesPage = lazyWithRecovery(() => import('./pages/products/CategoriesPage'))
+const ProductsPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
+const CategoriesPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
 const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
 const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
@@ -2194,7 +2192,7 @@ function Desktop({ onLock, onSignOut }) {
 
     const routeMap = new Set([
       'integrations','google-connect','accounting','online-orders','order-prep','own-delivery',
-      'assistant','kiosk','kiosk-display','kiosk-devices','returns','exchange','supplier-returns','audit-log','licensing',
+      'assistant','kiosk','kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','categories',
       'global-products','products','sales','workspace','till',
@@ -2435,23 +2433,13 @@ function Desktop({ onLock, onSignOut }) {
             onNavigate={openItem}
           />
         ) : activeApp === 'sales' ? (
-          <SalesPage
-            onOpenReturns={() => openItem('returns')}
-            onOpenSupplierReturns={() => openItem('supplier-returns')}
-          />
-        ) : activeApp === 'returns' ? (
-          <ReturnsPage />
-        ) : activeApp === 'exchange' ? (
-          <ExchangePage />
+          <SalesPage initialObjectKey="sale" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
           <SupplierReturnsPage />
         ) : activeApp === 'products' ? (
-          <ProductsPage
-            onOpenCategories={() => openItem('categories')}
-            onOpenGlobalProducts={() => openItem('global-products')}
-          />
+          <ProductsPage initialObjectKey="product" appKey="products" />
         ) : activeApp === 'categories' ? (
-          <CategoriesPage onBack={() => openItem('products')} />
+          <CategoriesPage initialObjectKey="category" appKey="categories" />
         ) : activeApp === 'global-products' ? (
           <GlobalProductLookupPage
             onBack={() => openItem('products')}
