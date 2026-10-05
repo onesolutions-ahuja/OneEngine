@@ -1276,3 +1276,23 @@ test('Decision branch lifecycle preserves path order and removes orphaned member
   assert.match(runtime, /const providerResourceReferenced = JSON\.stringify\(actions\)\.includes\("variables\.Provider_"\)/)
   assert.match(runtime, /const selectedActions = selectedIds\s*\.map\(\(id\) => actionById\.get\(String\(id\)\)\)\s*\.filter\(Boolean\);/)
 })
+
+
+test('GPT Builder protects unsaved work from browser refresh/navigation', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /beforeunload/)
+  assert.match(page, /event\.returnValue = ''/)
+})
+
+test('GPT Builder mobile toolbox does not overlay the canvas at phone width', async () => {
+  const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
+  assert.match(css, /@media\(max-width:520px\)/)
+  assert.match(css, /gptb-workspace\.has-toolbox\{grid-template-columns:minmax\(0,1fr\);grid-template-rows:/)
+  assert.match(css, /gptb-workspace\.has-toolbox \.gptb-toolbox\{position:relative/)
+})
+
+test('saved workflow Run casts status parameter consistently for PostgreSQL', async () => {
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  assert.match(platform, /SET status=\$1::varchar/)
+  assert.match(platform, /CASE WHEN \$1::varchar='WAITING'/)
+})
