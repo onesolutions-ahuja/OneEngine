@@ -33,6 +33,8 @@ import GPTBuilderSubflow, { subflowRuntimeAction } from './GPTBuilderSubflow'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
+import GPTBuilderAnalyticsPanel from './GPTBuilderAnalyticsPanel'
+import GPTBuilderAIAssistant from './GPTBuilderAIAssistant'
 import {
   GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
 } from './GPTBuilderSaveHistory'
@@ -888,6 +890,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [saveAsOpen, setSaveAsOpen] = useState(false)
   const [saveAsFlowOpen, setSaveAsFlowOpen] = useState(false)
   const [editHistoryOpen, setEditHistoryOpen] = useState(false)
+  const [analyticsOpen,setAnalyticsOpen]=useState(false)
+  const [aiAssistantOpen,setAiAssistantOpen]=useState(false)
   const [editHistoryPending, setEditHistoryPending] = useState(false)
   const [editHistoryEntries, setEditHistoryEntries] = useState([])
   const [editHistoryLoading, setEditHistoryLoading] = useState(false)
@@ -1760,6 +1764,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={handleSaveRequest}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
         {editHistorySupported ? <button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button> : null}
+        <button className="gptb-text-tool" disabled={!workflowId} onClick={()=>setAnalyticsOpen(true)}>Analytics</button><button className="gptb-text-tool" onClick={()=>setAiAssistantOpen(true)}>Flow Assistant</button>
         <button className="gptb-text-tool is-brand" disabled={saving || !workflowId || dirty || issues.some((issue) => issue.level === 'error')} onClick={() => void activateFlow()}>Activate</button>
       </div>
     </header>
@@ -1844,6 +1849,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (target) openElement(target)
       }}/> : null}
       {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={availableResources} elements={elements} onClose={() => setExecutionMode(null)}/> : null}
+      {analyticsOpen ? <GPTBuilderAnalyticsPanel workflowId={workflowId} elements={elements} onClose={()=>setAnalyticsOpen(false)}/> : null}
+      {aiAssistantOpen ? <GPTBuilderAIAssistant flow={{...flow,start:startConfig}} elements={elements} resources={availableResources} elementKeys={Object.keys(ELEMENT_EDITOR_MAP)} onClose={()=>setAiAssistantOpen(false)} onApply={(proposal)=>{setUndoStack?.((current)=>[...current,{elements:structuredClone(elements),resources:structuredClone(resources),start:structuredClone(startConfig)}].slice(-50));if(Array.isArray(proposal.resources))setResources(proposal.resources);if(Array.isArray(proposal.elements))setElements(proposal.elements);if(proposal.start)setStartDraft((current)=>({...current,...proposal.start}));setAiAssistantOpen(false)}}/> : null}
       {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
