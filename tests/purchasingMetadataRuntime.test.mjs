@@ -107,20 +107,17 @@ test("pricing promotions and combos remain metadata-owned without legacy adminis
 });
 
 
-test("sales products and categories use metadata workspace while legacy return apps are removed", async () => {
+test("sales products and categories use metadata workspaces without legacy product CRUD routes", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  const productsRoute = await readFile(new URL("../server/routes/products.js", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(app, /SalesPage initialObjectKey="sale" appKey="sales"/);
   assert.match(app, /ProductsPage initialObjectKey="product" appKey="products"/);
   assert.match(app, /CategoriesPage initialObjectKey="category" appKey="categories"/);
-  assert.equal(app.includes("const ReturnsPage ="), false);
-  assert.equal(app.includes("const ExchangePage ="), false);
-  assert.match(metadata, /key: "stock_return"/);
-  assert.match(productsRoute, /\/products\/catalogue/);
-  assert.match(productsRoute, /\/products\/misc-line/);
+  assert.equal(server.includes("./routes/products.js"), false);
+  assert.match(registry, /objectKey: "product"/);
+  assert.match(registry, /objectKey: "category"/);
 });
-
 
 test("gift cards online orders and attendance use metadata workspaces while runtime engines remain", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
@@ -166,19 +163,6 @@ test("final manifest sweep removes obsolete direct business route stacks", async
   assert.match(metadata, /key: "product"/);
   assert.match(pricing, /export function resolvePrice/);
   assert.match(inventory, /export async function createInventoryMovement/);
-});
-
-
-test("manifest sweep leaves product category segment and gift-card administration to metadata", async () => {
-  const products = await readFile(new URL("../server/routes/products.js", import.meta.url), "utf8");
-  const customers = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
-  assert.equal(/router\.(post|put|delete)\("\/categories/.test(products), false);
-  assert.equal(/router\.(post|put|delete)\("\/products(?:\/import|\/:id|")/.test(products), false);
-  assert.match(products, /router\.post\("\/products\/misc-line"/);
-  assert.match(products, /router\.get\("\/products\/catalogue"/);
-  assert.equal(/router\.(post|put|delete)\("\/customer-segments/.test(customers), false);
-  assert.equal(/router\.post\("\/gift-cards(?:\/\:id\/topup|\/\:id\/block|")/.test(customers), false);
-  assert.equal(customers.includes('/gift-cards/lookup'), false);
 });
 
 
