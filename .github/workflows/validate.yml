@@ -6,8 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Keep one repository validation run at a time. Per-branch concurrency
+# allowed stale PR validations to pile up waiting for hosted runners.
+# New validation supersedes older queued/in-progress validation.
 concurrency:
-  group: oneengine-validate-${{ github.ref }}
+  group: oneengine-validate
   cancel-in-progress: true
 
 jobs:
