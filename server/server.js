@@ -87,7 +87,7 @@ import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
 import createDataProtectionRouter from "./routes/dataProtection.js";
-import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, resolveAccessPolicy, writeLoginHistory } from "./services/identitySecurity.js";
+import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadLoginSecurityContext, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
@@ -1293,20 +1293,20 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const loginDb = (sql, params = []) => loginPool.query(sql, params);
     const requestIp = clientIp(req);
     const requestUserAgent = req.get("user-agent") || null;
-    const [securitySettings, state, googleRuntime, accessPolicy, companyTimezoneResult] = await Promise.all([
-      user.company_id ? loadSecuritySettings(loginDb, user.company_id) : Promise.resolve(null),
-      loginState(loginDb, user.id),
+    const preflightStartedAt = Date.now();
+    const [securityContext, googleRuntime] = await Promise.all([
+      user.company_id
+        ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
+        : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null }),
       user.company_id
         ? getGoogleConnectRuntime((query, params = []) => loginPool.query(query, params), user.company_id)
         : Promise.resolve(null),
-      user.company_id
-        ? resolveAccessPolicy(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
-        : Promise.resolve(null),
-      user.company_id
-        ? loginDb("SELECT timezone FROM companies WHERE id=$1", [user.company_id])
-        : Promise.resolve({ rows: [] }),
     ]);
-    const companyTimezone = companyTimezoneResult?.rows?.[0]?.timezone || null;
+    const securitySettings = securityContext.settings;
+    const state = securityContext.state;
+    const accessPolicy = securityContext.policy;
+    const companyTimezone = securityContext.companyTimezone;
+    markLoginTiming("security_preflight_ms", preflightStartedAt);
     if (state?.locked_indefinitely === true || (state?.locked_until && new Date(state.locked_until).getTime() > Date.now())) {
       await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: "ACCOUNT_LOCKED", ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({
@@ -1443,20 +1443,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       }
     }
 
-    stepStartedAt = Date.now();
-    await Promise.all([
-      clearFailedLogin(loginDb, user),
-      loginPool.query(
-        `
-        UPDATE users
-        SET last_login_at = NOW()
-        WHERE id = $1
-        `,
-        [user.id]
-      ),
-    ]);
-    markLoginTiming("last_login_update_ms", stepStartedAt);
-
     // Login always keeps the authenticated company binding. OneDeveloper
     // selects a target company separately, and only through oneengine.manage.
     const actingCompanyId = null;
@@ -1497,20 +1483,28 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    const sessionId = await createTrackedSession(loginDb, {
+    const finalizationStartedAt = Date.now();
+    const sessionPromise = createTrackedSession(loginDb, {
       user,
       ip: requestIp,
       userAgent: requestUserAgent,
       authMethod: "PASSWORD",
       settings: securitySettings,
       originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null,
+      assuranceLevel: effectiveAssurance.passwordAssurance,
     });
+    const housekeepingPromise = Promise.all([
+      clearFailedLogin(loginDb, user),
+      loginPool.query(
+        `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
+        [user.id]
+      ),
+    ]);
+    const [sessionId] = await Promise.all([sessionPromise, housekeepingPromise]);
     user.session_id = sessionId;
     const token = createToken(user);
-    await Promise.all([
-      loginDb("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW() WHERE id=$1", [sessionId, effectiveAssurance.passwordAssurance]),
-      writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req }),
-    ]);
+    await writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req });
+    markLoginTiming("finalization_ms", finalizationStartedAt);
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
       ...loginTimings,

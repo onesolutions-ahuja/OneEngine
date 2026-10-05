@@ -69,11 +69,11 @@ test('login reuses one preloaded security context instead of re-querying setting
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
   const assurance = await read('../server/services/identityAssurance.js')
-  assert.match(server, /resolveAccessPolicy\(loginDb/)
+  assert.match(server, /loadLoginSecurityContext\(loginDb/)
   assert.match(server, /settingsOverride: securitySettings/)
   assert.match(server, /policyOverride: accessPolicy/)
   assert.match(server, /\{ settings: securitySettings, policy: accessPolicy \}/)
-  assert.match(security, /settingsOverride !== undefined/)
+  assert.match(security, /export async function loadLoginSecurityContext/)
   assert.match(assurance, /settingsOverride !== undefined/)
 })
 
@@ -86,4 +86,24 @@ test('Google Connect login readiness uses one parallel read bundle', async () =>
 test('login timing accumulator remains declared after identity parallelization', async () => {
   const source = await read('../server/server.js')
   assert.match(source, /let stepStartedAt = Date\.now\(\);\n\s*const validPassword/)
+})
+
+
+test('login security preflight is bundled into one database read', async () => {
+  const server = await read('../server/server.js')
+  const security = await read('../server/services/identitySecurity.js')
+  assert.match(server, /loadLoginSecurityContext\(loginDb/)
+  assert.match(server, /security_preflight_ms/)
+  assert.match(security, /export async function loadLoginSecurityContext/)
+})
+
+test('successful login finalization avoids a second session assurance update', async () => {
+  const server = await read('../server/server.js')
+  const security = await read('../server/services/identitySecurity.js')
+  assert.match(server, /assuranceLevel: effectiveAssurance\.passwordAssurance/)
+  const loginStart = server.indexOf('app.post("/api/auth/login"')
+  const loginEnd = server.indexOf('| CURRENT USER', loginStart)
+  const loginSource = server.slice(loginStart, loginEnd > loginStart ? loginEnd : undefined)
+  assert.equal(loginSource.includes('UPDATE identity_sessions SET assurance_level=$2'), false)
+  assert.match(security, /INSERT INTO identity_sessions\(id,company_id,user_id,expires_at,ip_address,user_agent,auth_method,origin_host,assurance_level,assurance_verified_at\)/)
 })
