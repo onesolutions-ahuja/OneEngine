@@ -122,7 +122,7 @@ export async function ipMatchesRanges(db, { companyId, policyId = null, type, ip
   return { matches: result.rows[0]?.matches === true, count: Number(result.rows[0]?.range_count || 0) };
 }
 
-export async function accessDecision(db, { companyId, userId, roleId, ip, now = new Date() }) {
+export async function accessDecision(db, { companyId, userId, roleId, ip, now = new Date(), includeTrustedNetwork = true }) {
   if (!companyId) return { allowed: true, settings: null, policy: null, trustedNetwork: false };
   const [settings, policy, company] = await Promise.all([
     loadSecuritySettings(db, companyId),
@@ -141,6 +141,9 @@ export async function accessDecision(db, { companyId, userId, roleId, ip, now = 
     if (!range.matches) {
       return { allowed: false, code: "LOGIN_IP_RESTRICTED", reason: "Login from this IP address is not permitted", settings, policy };
     }
+  }
+  if (!includeTrustedNetwork) {
+    return { allowed: true, settings, policy, trustedNetwork: false };
   }
   const trusted = await ipMatchesRanges(db, { companyId, policyId: null, type: "TRUSTED", ip });
   return { allowed: true, settings, policy, trustedNetwork: trusted.matches };
@@ -309,7 +312,7 @@ export async function enforceTrackedSession(db, req) {
     : effectiveCompanyId;
   const ip = clientIp(req);
   const decision = effectiveCompanyId
-    ? await accessDecision(db, { companyId: effectiveCompanyId, userId: user.id, roleId: user.roleId, ip })
+    ? await accessDecision(db, { companyId: effectiveCompanyId, userId: user.id, roleId: user.roleId, ip, includeTrustedNetwork: false })
     : { allowed: true, settings: null, policy: null };
   if (!decision.allowed) return decision;
 
@@ -320,15 +323,17 @@ export async function enforceTrackedSession(db, req) {
   }
 
   if (!user.sid) return { allowed: true, legacySession: true, decision };
-  const sessionResult = await db(
-    `SELECT * FROM identity_sessions WHERE id=$1 AND user_id=$2 AND company_id IS NOT DISTINCT FROM $3 LIMIT 1`,
-    [user.sid, user.id, authenticatedCompanyId]
-  );
+  const [sessionResult, state] = await Promise.all([
+    db(
+      `SELECT * FROM identity_sessions WHERE id=$1 AND user_id=$2 AND company_id IS NOT DISTINCT FROM $3 LIMIT 1`,
+      [user.sid, user.id, authenticatedCompanyId]
+    ),
+    loginState(db, user.id),
+  ]);
   const session = sessionResult.rows[0];
   if (!session || session.revoked_at) return { allowed: false, code: "SESSION_REVOKED", reason: "Session has been revoked" };
   if (new Date(session.expires_at).getTime() <= Date.now()) return { allowed: false, code: "SESSION_EXPIRED", reason: "Session has expired" };
 
-  const state = await loginState(db, user.id);
   if (state?.sessions_revoked_at && new Date(state.sessions_revoked_at).getTime() >= new Date(session.issued_at).getTime()) {
     return { allowed: false, code: "SESSION_REVOKED", reason: "Session has been revoked" };
   }

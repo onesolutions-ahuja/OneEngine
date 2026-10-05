@@ -743,8 +743,10 @@ function authorize(...permissionCodes) {
     }
 
     try {
-      const codes = await getRolePermissionCodes(req.user.roleId, req);
-      const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
+      const [codes, permissionSets] = await Promise.all([
+        getRolePermissionCodes(req.user.roleId, req),
+        loadEffectivePermissionSets(db, req.user, req),
+      ]);
       for (const code of permissionCodes) {
         if (permissionSetAllowsSystemPermission(permissionSets, code) && !codes.includes(code)) {
           codes.push(code);
@@ -771,8 +773,10 @@ function authorize(...permissionCodes) {
 }
 
 async function hasPermission(req, code) {
-  const codes = await getRolePermissionCodes(req.user?.roleId, req);
-  const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
+  const [codes, permissionSets] = await Promise.all([
+    getRolePermissionCodes(req.user?.roleId, req),
+    loadEffectivePermissionSets(db, req.user, req),
+  ]);
   return codes.includes(code) || permissionSetAllowsSystemPermission(permissionSets, code);
 }
 
@@ -1257,21 +1261,25 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
      * tenant company binding. Tenant/domain resolution must never shadow those
      * global accounts with a tenant-local user row.
      */
-    let stepStartedAt = Date.now();
-    const centralIdentity = await pool.query(identitySql, [email]);
-    markLoginTiming("central_identity_ms", stepStartedAt);
+    const identityStartedAt = Date.now();
+    const requestTenantPool = req.tenantPool || tenantPoolManager.getPoolForRequest(req) || pool;
+    const centralIdentityPromise = pool.query(identitySql, [email]);
+    const tenantIdentityPromise = requestTenantPool === pool
+      ? centralIdentityPromise
+      : requestTenantPool.query(identitySql, [email]);
+
+    const [centralIdentity, tenantIdentity] = await Promise.all([
+      centralIdentityPromise,
+      tenantIdentityPromise,
+    ]);
+    markLoginTiming("identity_bundle_ms", identityStartedAt);
     const centralUser = centralIdentity.rows[0] || null;
     const isPlatformIdentity = Boolean(centralUser && centralUser.company_id == null);
 
-    const loginPool = isPlatformIdentity
-      ? pool
-      : (req.tenantPool || tenantPoolManager.getPoolForRequest(req) || pool);
-
-    stepStartedAt = Date.now();
-    const result = isPlatformIdentity || loginPool === pool
-      ? centralIdentity
-      : await loginPool.query(identitySql, [email]);
-    markLoginTiming("tenant_identity_ms", stepStartedAt);
+    const loginPool = isPlatformIdentity ? pool : requestTenantPool;
+    const result = isPlatformIdentity || loginPool === pool ? centralIdentity : tenantIdentity;
+    loginTimings.central_identity_ms = loginTimings.identity_bundle_ms;
+    loginTimings.tenant_identity_ms = loginPool === pool ? 0 : loginTimings.identity_bundle_ms;
 
     if (!result.rows.length) {
       return res.status(401).json({
@@ -1666,51 +1674,54 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
 
 app.get("/api/auth/bootstrap", authenticate, async (req, res) => {
   try {
-    const result = await db(
-      `
-      SELECT
-        u.id,
-        u.username,
-        u.full_name,
-        u.company_id,
-        u.store_id,
-        u.must_change_password,
-        r.name AS role_name,
-        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page,
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'id', s.id,
-                'code', s.code,
-                'name', s.name,
-                'active', s.active,
-                'is_primary', true
+    const [result, rolePermissions, permissionSets] = await Promise.all([
+      db(
+        `
+        SELECT
+          u.id,
+          u.username,
+          u.full_name,
+          u.company_id,
+          u.store_id,
+          u.must_change_password,
+          r.name AS role_name,
+          COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page,
+          COALESCE(
+            (
+              SELECT jsonb_agg(
+                jsonb_build_object(
+                  'id', s.id,
+                  'code', s.code,
+                  'name', s.name,
+                  'active', s.active,
+                  'is_primary', true
+                )
+                ORDER BY s.name
               )
-              ORDER BY s.name
-            )
-            FROM stores s
-            WHERE s.id=u.store_id
-              AND s.company_id=u.company_id
-              AND s.active=true
-          ),
-          '[]'::jsonb
-        ) AS stores
-      FROM users u
-      LEFT JOIN roles r ON r.id=u.role_id
-      WHERE u.id=$1
-      LIMIT 1
-      `,
-      [req.user.id]
-    );
+              FROM stores s
+              WHERE s.id=u.store_id
+                AND s.company_id=u.company_id
+                AND s.active=true
+            ),
+            '[]'::jsonb
+          ) AS stores
+        FROM users u
+        LEFT JOIN roles r ON r.id=u.role_id
+        WHERE u.id=$1
+        LIMIT 1
+        `,
+        [req.user.id]
+      ),
+      req.user.roleId ? getRolePermissionCodes(req.user.roleId, req) : Promise.resolve([]),
+      loadEffectivePermissionSets(db, req.user, req),
+    ]);
 
     if (!result.rows.length) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
     const user = result.rows[0];
-    let permissions = req.user.roleId ? await getRolePermissionCodes(req.user.roleId, req) : [];
-    const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
+    let permissions = rolePermissions;
     permissions = [...new Set([
       ...permissions,
       ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),

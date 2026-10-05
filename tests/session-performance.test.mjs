@@ -31,3 +31,35 @@ test('settings navigation uses its scoped session cache', async () => {
   assert.match(source, /const cachedContext = !force \? readSettingsContextCache\(\) : null/)
   assert.match(source, /if \(cachedContext\) return cachedContext/)
 })
+
+
+test('shared API client deduplicates concurrent GET loaders by session context', async () => {
+  const source = await read('../src/services/api.js')
+  assert.match(source, /const apiRequestInFlight = new Map\(\)/)
+  assert.match(source, /method === 'GET'.*options\.dedupe !== false/)
+  assert.match(source, /apiRequestInFlight\.get\(key\)/)
+})
+
+test('login resolves central and tenant identity reads in parallel', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /const \[centralIdentity, tenantIdentity\] = await Promise\.all/)
+  assert.equal(source.includes('const centralIdentity = await pool.query(identitySql'), false)
+})
+
+test('session bootstrap resolves identity and RBAC reads in parallel', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /const \[result, rolePermissions, permissionSets\] = await Promise\.all/)
+})
+
+
+test('per-request session security skips unused trusted-network lookup and parallelizes session state reads', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  assert.match(source, /includeTrustedNetwork = true/)
+  assert.match(source, /includeTrustedNetwork: false/)
+  assert.match(source, /const \[sessionResult, state\] = await Promise\.all/)
+})
+
+test('RBAC role and permission-set reads run in parallel', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /const \[codes, permissionSets\] = await Promise\.all/)
+})
