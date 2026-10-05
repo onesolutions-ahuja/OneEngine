@@ -1,74 +1,27 @@
-// Business tables keep their existing write engines. Match by table as well as
-// key so a renamed object cannot turn a protected business record into CRUD.
-const definitions = [
-  ["product", "products", "product.view", "/app/products"],
-  ["customer", "customers", "customer.view", "/app/customers"],
-  ["category", "categories", "product.view", "/app/products"],
-  ["price_list", "price_lists", "customer.view", "/app/customers"],
-  ["employee", "users", "user.view", "/app/employees"],
-  ["attendance", "attendance_records", "attendance.view", "/app/employees"],
-  ["store", "stores", "store.view", "/app/stores"],
-  ["sale", "sales", "sale.view", "/app/reports"],
-  ["payment", "payments", "reports.payments.view", "/app/reports"],
-  ["financial_ledger", "financial_ledger_entries", "reports.payments.view", "/app/reports"],
-  ["inventory_movement", "inventory_movements", "inventory.view", "/app/objects/inventory_movement?appKey=inventory"],
-  ["inventory_batch", "inventory_batches", "inventory.view", "/app/objects/inventory_batch?appKey=batch_expiry"],
-  ["customer_credit_account", "customers", "customer.credit.view", "/app/customers"],
-  ["customer_credit_ledger", "customer_credit_ledger", "customer.credit.view", "/app/customers"],
-  ["gift_card", "gift_cards", "customer.view", "/app/gift-cards"],
-  ["inventory", "product_store_stock", "inventory.view", "/app/objects/inventory?appKey=inventory"],
-  ["purchase", "purchases", "purchase.view", "/app/purchases"],
-  ["purchase_line", "purchase_items", "purchase.view", "/app/purchases", { companyScoped: false }],
-  ["purchase_receipt", "purchase_receipts", "purchase.view", "/app/purchases"],
-  ["purchase_receipt_line", "purchase_receipt_items", "purchase.view", "/app/purchases", { companyScoped: false }],
-  ["supplier_invoice", "supplier_invoices", "purchase.view", "/app/suppliers"],
-  ["online_order", "online_orders", "online_orders.view", "/app/online-orders"],
-  ["system_settings", "company_settings", "settings.manage", "/app/settings"],
-  ["role", "roles", "role.manage", "/app/settings/roles-permissions"],
-  ["permission", "permissions", "role.manage", "/app/settings/roles-permissions", { companyScoped: false }],
-  ["role_permission", "role_permissions", "role.manage", "/app/settings/roles-permissions"],
-  ["payment_terminal", "payment_terminals", "payment.manage", "/app/settings/payment-terminals"],
-  ["hardware_configuration", "hardware_configurations", "settings.manage", "/app/settings/hardware"],
-  ["integration", "integrations", "integration.manage", "/app/settings/connections"],
-  ["message_template", "platform_message_templates", "settings.manage", "/app/settings/message-templates"],
-];
+// Generic metadata-driven platform object helpers.
+// Business object/table/route/permission knowledge belongs to package/object metadata.
 
-export const SYSTEM_OBJECTS = Object.freeze(definitions.map(([key, table, permission, route, options = {}]) =>
-  Object.freeze({ key, table, permission, route, companyScoped: options.companyScoped !== false })));
+export const SYSTEM_OBJECTS = Object.freeze([]);
 
 export function systemObject(object) {
-  const exact = SYSTEM_OBJECTS.find(entry => entry.table === object?.source_table || entry.key === object?.object_key);
-  if (exact) return exact;
-  const family = /^(customer|supplier|inventory|purchase|sale|online_order|payment|refund|return|exchange)(?:_|s$)/.exec(object?.source_table || "")?.[1];
-  if (!family) return null;
-  const key = ({ payment: "sale", refund: "sale", return: "sale", exchange: "sale", inventory: "inventory_movement" })[family] || family;
-  return SYSTEM_OBJECTS.find(entry => entry.key === key) || null;
+  if (!object || typeof object !== "object") return null;
+  const config = object.config && typeof object.config === "object" ? object.config : {};
+  const permission = config.rbacPermission || object.rbac_permission || null;
+  const route = config.route || object.route || null;
+  const companyScoped = config.companyScoped !== false;
+  return permission || route ? { key: object.object_key, table: object.source_table, permission, route, companyScoped } : null;
 }
 
-const SYSTEM_OBJECT_RBAC = Object.freeze({
-  employee: Object.freeze({ view: "user.view", create: "user.create", edit: "user.edit", delete: "user.delete" }),
-  attendance: Object.freeze({ view: "attendance.view" }),
-  store: Object.freeze({ view: "store.view", create: "store.create", edit: "store.edit", delete: "store.delete" }),
-  system_settings: Object.freeze({ view: "settings.manage", edit: "settings.manage" }),
-  role: Object.freeze({ view: "role.manage", create: "role.manage", edit: "role.manage", delete: "role.manage" }),
-  permission: Object.freeze({ view: "role.manage" }),
-  role_permission: Object.freeze({ view: "role.manage", create: "role.manage", edit: "role.manage", delete: "role.manage" }),
-  payment_terminal: Object.freeze({ view: "payment.manage", create: "payment.manage", edit: "payment.manage", delete: "payment.manage" }),
-  hardware_configuration: Object.freeze({ view: "settings.manage", create: "settings.manage", edit: "settings.manage", delete: "settings.manage" }),
-  integration: Object.freeze({ view: "integration.manage", create: "integration.manage", edit: "integration.manage", delete: "integration.manage" }),
-  message_template: Object.freeze({ view: "settings.manage", create: "settings.manage", edit: "settings.manage", delete: "settings.manage" }),
-});
-
 export function systemObjectRbacPermission(object, action) {
-  const definition = systemObject(object);
-  return definition ? SYSTEM_OBJECT_RBAC[definition.key]?.[action] || null : null;
+  const config = object?.config && typeof object.config === "object" ? object.config : {};
+  const permissions = config.rbac && typeof config.rbac === "object" ? config.rbac : {};
+  return permissions[action] || null;
 }
 
 export function safeSystemFields(object, fields) {
-  if (!["users", "stores"].includes(object?.source_table)) return fields;
-  const profile = new Set(object.source_table === "users"
-    ? ["full_name", "username", "email", "active", "store_id", "role_id", "jarves_enabled", "created_at", "updated_at"]
-    : ["name", "code", "address_line1", "address_line2", "city", "postcode", "phone", "active", "created_at", "updated_at"]);
+  const allow = object?.config?.readableFields;
+  if (!Array.isArray(allow) || !allow.length) return fields;
+  const profile = new Set(allow);
   return fields.filter(field => !field.source_column || profile.has(field.source_column));
 }
 
@@ -101,14 +54,9 @@ export function platformFieldSql(field, object) {
 }
 
 export function appendSystemReadScope(object, req, clauses, params) {
-  if (["product_store_stock", "inventory_movements", "inventory_batches", "purchases", "purchase_receipts", "online_orders", "sales", "customer_credit_ledger"].includes(object?.source_table) && !object.store_scoped) {
+  if (object?.store_scoped === true) {
     if (!req.user.storeId) throw Object.assign(new Error("A store session is required"), { status: 403 });
     params.push(req.user.storeId);
     clauses.push(`store_id=$${params.length}`);
-  }
-  if (object?.source_table === "customers" && !req.platformCompanyCustomers) {
-    if (!req.user.storeId) throw Object.assign(new Error("A store session is required"), { status: 403 });
-    params.push(req.user.storeId, req.user.companyId);
-    clauses.push(`EXISTS (SELECT 1 FROM customer_stores cs WHERE cs.customer_id="customers".id AND cs.store_id=$${params.length - 1} AND cs.company_id=$${params.length} AND cs.active=true)`);
   }
 }
