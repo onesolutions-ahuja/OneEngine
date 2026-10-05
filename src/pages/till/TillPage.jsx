@@ -566,6 +566,21 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     if (!online && paymentMethod !== 'cash' && selectedMethod?.allowOffline !== true) return setError('This payment method requires an online connection.')
     const received = paymentMethod === 'cash' ? Number((cashReceivedOverride ?? cashReceived) || 0) : null
 
+    if (paymentMethod === 'split') {
+      const splitButton = buttons.find((row) => row.button_key === 'till_split_payment_validate')
+      if (!splitButton) return setError('Split Payment Flow is not configured.')
+      try {
+        const splitResponse = await executeMetadataButton(splitButton, { payments: payments || [], total })
+        const allowed = deepFind(splitResponse?.data, 'allowed') === true
+        if (!allowed) {
+          const remaining = Number(deepFind(splitResponse?.data, 'remaining') || 0)
+          return setError(`Split payment does not match the sale total. Remaining: ${money(remaining, currency)}`)
+        }
+      } catch (err) {
+        return setError(err?.message || 'Split payment validation failed.')
+      }
+    }
+
     setBusy(true)
     setError('')
     const payload = buildSalePayload(paymentMethod, verifiedOverride, { payments, giftCardCode, cashReceived: received })
@@ -1085,16 +1100,13 @@ function PaymentSheet({ total, methods, online, customer, credit, onPay }) {
   const [split, setSplit] = useState(() => Object.fromEntries(activeMethods.map((item) => [item.code, ''])))
   const selected = activeMethods.find((item) => item.code === method)
   const splitEligible = activeMethods
-  const splitLines = splitEligible.map((item) => ({ paymentMethod: item.code, amount: Math.round((Number(split[item.code]) || 0) * 100) / 100 })).filter((line) => line.amount > 0)
-  const splitTotal = splitLines.reduce((sum, line) => sum + line.amount, 0)
-  const remaining = Math.round((total - splitTotal) * 100) / 100
+  const splitLines = splitEligible.map((item) => ({ paymentMethod: item.code, amount: Number(split[item.code]) || 0 })).filter((line) => line.amount > 0)
   const unavailable = !online && selected?.allowOffline !== true
 
   if (mode === 'split') return <div className="till-form">
     <p>Split the total across configured payment methods. The amounts must equal the sale total.</p>
     {splitEligible.map((item) => <label key={item.code}>{item.label}<input type="number" min="0" step="0.01" value={split[item.code] || ''} onChange={(e) => setSplit((current) => ({ ...current, [item.code]: e.target.value }))}/></label>)}
-    <div className="till-payment-remaining"><span>Remaining</span><strong>{money(remaining)}</strong></div>
-    <div className="till-form-actions"><button type="button" onClick={() => setMode('single')}>Back</button><button type="button" className="till-primary" disabled={!splitLines.length || remaining !== 0} onClick={() => onPay('split', { payments: splitLines })}>Complete Split Payment</button></div>
+    <div className="till-form-actions"><button type="button" onClick={() => setMode('single')}>Back</button><button type="button" className="till-primary" disabled={!splitLines.length} onClick={() => onPay('split', { payments: splitLines })}>Validate & Complete Split Payment</button></div>
   </div>
 
   return <div className="till-form">
