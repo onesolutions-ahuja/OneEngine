@@ -525,6 +525,91 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
     ],
   }),
   tillFlow({
+    key: "till.split.payment.validate",
+    name: "Validate Split Payment",
+    inputs: [
+      creditInput("payments", "collection", { required: true, defaultValue: [] }),
+      creditInput("total", "number", { required: true }),
+      creditInput("allowedMethodsText", "text", { required: true }),
+    ],
+    outputs: [
+      { name: "paidTotal", label: "Paid Total", type: "number", source: "variables.paidTotal" },
+      { name: "remaining", label: "Remaining", type: "number", source: "variables.remaining" },
+      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+    ],
+    actions: [
+      assignment("split_start_paid", "1. Start Paid Total", "paidTotal", "number", 0),
+      assignment("split_start_methods", "2. Start Used Methods", "usedMethods", "text", ""),
+      assignment("split_start_valid", "3. Start Validation", "allLinesValid", "boolean", true),
+      {
+        id: "split_loop",
+        label: "4. Loop Through Payment Lines",
+        apiName: "split_loop",
+        key: "LOOP",
+        collection: "variables.payments",
+        itemVariable: "paymentLine",
+        bodyBranch: [
+          "split_round_amount",
+          "split_method_token",
+          "split_amount_valid",
+          "split_method_allowed",
+          "split_method_duplicate",
+          "split_line_valid",
+          "split_update_valid",
+          "split_add_paid",
+          "split_add_method",
+        ],
+      },
+      creditFormula("split_round_amount", "paymentAmount", "number", "ROUND(MAX(0, amount), 2)", {
+        amount: { path: "variables.paymentLine.amount" },
+      }),
+      creditFormula("split_method_token", "methodToken", "text", 'CONCAT("|", paymentMethod, "|")', {
+        paymentMethod: { path: "variables.paymentLine.paymentMethod" },
+      }),
+      creditFormula("split_amount_valid", "amountValid", "boolean", "paymentAmount > 0", {
+        paymentAmount: { path: "variables.paymentAmount" },
+      }),
+      creditFormula("split_method_allowed", "methodAllowed", "boolean", "CONTAINS(allowedMethodsText, methodToken)", {
+        allowedMethodsText: { path: "variables.allowedMethodsText" },
+        methodToken: { path: "variables.methodToken" },
+      }),
+      creditFormula("split_method_duplicate", "methodDuplicate", "boolean", "CONTAINS(usedMethods, methodToken)", {
+        usedMethods: { path: "variables.usedMethods" },
+        methodToken: { path: "variables.methodToken" },
+      }),
+      creditFormula("split_line_valid", "lineValid", "boolean", "amountValid && methodAllowed && !methodDuplicate", {
+        amountValid: { path: "variables.amountValid" },
+        methodAllowed: { path: "variables.methodAllowed" },
+        methodDuplicate: { path: "variables.methodDuplicate" },
+      }),
+      creditFormula("split_update_valid", "nextAllLinesValid", "boolean", "allLinesValid && lineValid", {
+        allLinesValid: { path: "variables.allLinesValid" },
+        lineValid: { path: "variables.lineValid" },
+      }),
+      assignment("split_set_valid", "Set Line Validation Result", "allLinesValid", "boolean", { path: "variables.nextAllLinesValid" }),
+      {
+        ...assignment("split_add_paid", "5. Add Payment To Paid Total", "paidTotal", "number", { path: "variables.paymentAmount" }),
+        operator: "add",
+      },
+      assignment("split_add_method", "6. Remember Used Method", "usedMethods", "text", {
+        formula: 'CONCAT(usedMethods, methodToken)',
+        inputs: {
+          usedMethods: { path: "variables.usedMethods" },
+          methodToken: { path: "variables.methodToken" },
+        },
+      }),
+      creditFormula("split_remaining", "remaining", "number", "ROUND(total - paidTotal, 2)", {
+        total: { path: "variables.total" },
+        paidTotal: { path: "variables.paidTotal" },
+      }),
+      creditFormula("split_allowed", "allowed", "boolean", "allLinesValid && paidTotal > 0 && ABS(remaining) < 0.005", {
+        allLinesValid: { path: "variables.allLinesValid" },
+        paidTotal: { path: "variables.paidTotal" },
+        remaining: { path: "variables.remaining" },
+      }),
+    ],
+  }),
+  tillFlow({
     key: "till.receipt.qr",
     name: "Create Receipt QR",
     inputs: [
