@@ -225,3 +225,16 @@ test("cleanup leaves no stale deleted UI imports or duplicate canvas component",
   assert.equal(lookup.includes("./ProductsPage"), false);
   assert.equal((canvas.match(/export default function ReactFlowCanvasUXTest/g) || []).length, 1);
 });
+
+
+test("final manifest sweep removes obsolete direct business route stacks", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const pricing = await readFile(new URL("../server/services/pricingEngine.js", import.meta.url), "utf8");
+  const inventory = await readFile(new URL("../server/services/inventory.js", import.meta.url), "utf8");
+  assert.equal(server.includes("createReturnsRouter"), false);
+  assert.match(metadata, /key: "stock_return"/);
+  assert.match(metadata, /key: "product"/);
+  assert.match(pricing, /export function resolvePrice/);
+  assert.match(inventory, /export async function createInventoryMovement/);
+});
