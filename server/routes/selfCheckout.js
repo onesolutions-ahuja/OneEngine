@@ -286,7 +286,7 @@ export default createSelfCheckoutRouter;
 const SCO_ALLOWED = [
   { prefix: "/api/platform/runtime/objects/sale", methods: ["GET", "POST"] }, // metadata-driven Sale actions
   { prefix: "/api/platform/objects/sale", methods: ["GET", "POST"] },         // Sale records + record actions
-  { prefix: "/api/products", methods: ["GET"] },               // product search only — no create/edit/delete
+  { prefix: "/api/platform/objects/product", methods: ["GET"] }, // metadata-driven product records
   { prefix: "/api/settings", methods: ["GET"] },               // VAT/store context only — no configuration writes
   { prefix: "/api/self-checkout", methods: ["DELETE", "POST"] }, // auditable exit + customer lookup
 ];
