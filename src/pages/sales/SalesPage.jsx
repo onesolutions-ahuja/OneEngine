@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Mail, MessageCircle, RefreshCw, Smartphone, X } from 'lucide-react'
+import { useState } from 'react'
+import { Mail, MessageCircle, Smartphone, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
-import { cachedGet } from '../../services/cachedApi'
-import RecordListView from '../../components/RecordListView'
+import WorkspacePage from '../workspace/WorkspacePage.jsx'
 
 function money(value, currency = 'GBP') {
   const n = Number(value || 0)
@@ -13,84 +12,14 @@ function money(value, currency = 'GBP') {
   }
 }
 
-const columnsFor = (currency) => [
-  { key: 'receipt_number', label: 'Sale', render: (row) => row.receipt_number || row.id?.slice(0, 8) || '' },
-  { key: 'created_at', label: 'Date/time', render: (row) => row.created_at ? new Date(row.created_at).toLocaleString() : '—' },
-  { key: 'store_name', label: 'Store', render: (row) => row.store_name || '—' },
-  { key: 'customer_name', label: 'Customer', render: (row) => row.customer_name || 'Walk-in Customer' },
-  { key: 'item_count', label: 'Items', render: (row) => row.item_count ?? '—' },
-  { key: 'total', label: 'Total', render: (row) => money(row.total, currency) },
-  { key: 'payment_method', label: 'Payment', render: (row) => row.payment_method || '—' },
-  { key: 'status', label: 'Status', render: (row) => row.status || '—' },
-  { key: 'cashier', label: 'Cashier', render: (row) => row.cashier || '—' },
-]
-
 export default function SalesPage({ onOpenReturns, onOpenSupplierReturns }) {
-  const [sales, setSales] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [detail, setDetail] = useState(null)
-  const [currency, setCurrency] = useState('GBP')
-
-  const load = async (forceRefresh = false) => {
-    try {
-      setLoading(true)
-      setError('')
-      const [salesResponse, settingsResponse] = await Promise.all([
-        cachedGet('/api/sales', { forceRefresh, onFresh: fresh => fresh?.success && setSales(Array.isArray(fresh.data) ? fresh.data : []) }),
-        cachedGet('/api/settings', { cacheKey: 'settings:company', forceRefresh, onFresh: fresh => fresh?.data?.company?.currency && setCurrency(fresh.data.company.currency) }).catch(() => null),
-      ])
-      if (!salesResponse?.success) throw new Error(salesResponse?.message || 'Unable to load sales')
-      setSales(Array.isArray(salesResponse.data) ? salesResponse.data : [])
-      setCurrency(settingsResponse?.data?.company?.currency || 'GBP')
-    } catch (err) {
-      setError(err?.message || 'Unable to load sales')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { void load() }, [])
-
-  const open = async (sale) => {
-    try {
-      setError('')
-      const response = await apiRequest(`/api/sales/${encodeURIComponent(sale.id)}`)
-      if (!response?.success) throw new Error(response?.message || 'Unable to load sale')
-      setDetail(response.data)
-    } catch (err) {
-      setError(err?.message || 'Unable to load sale')
-    }
-  }
-
-  const columns = useMemo(() => columnsFor(currency), [currency])
-
-  return <section className="module-page sales-page">
-    <header className="module-page-header">
-      <div><span>Transactions</span><h1>Sales</h1><p>Completed and recorded till transactions.</p></div>
-      <div className="module-header-actions">
-        {onOpenReturns ? <button type="button" onClick={onOpenReturns}>Customer Returns</button> : null}
-        {onOpenSupplierReturns ? <button type="button" onClick={onOpenSupplierReturns}>Supplier Returns</button> : null}
-        <button type="button" onClick={()=>load(true)}><RefreshCw size={14}/> Refresh</button>
-      </div>
-    </header>
-
-    <div className="module-page-card">
-      <RecordListView
-        title="Sales"
-        subtitle={`${sales.length} transactions`}
-        rows={sales}
-        columns={columns}
-        searchKeys={['receipt_number','customer_name','id','store_name','cashier','payment_method','status']}
-        loading={loading}
-        error={error}
-        onRowSelect={open}
-        selectedRowId={detail?.id || ''}
-      />
-    </div>
-
-    {detail ? <SaleDetail sale={detail} currency={currency} onClose={() => setDetail(null)} /> : null}
-  </section>
+  return <div className="sales-workspace-runtime">
+    {onOpenReturns || onOpenSupplierReturns ? <div className="module-header-actions sales-runtime-shortcuts">
+      {onOpenReturns ? <button type="button" onClick={onOpenReturns}>Customer Returns</button> : null}
+      {onOpenSupplierReturns ? <button type="button" onClick={onOpenSupplierReturns}>Supplier Returns</button> : null}
+    </div> : null}
+    <WorkspacePage initialObjectKey="sale" appKey="sales" />
+  </div>
 }
 
 export function SaleDetail({ sale, currency, onClose }) {
@@ -179,3 +108,4 @@ export function SaleDetail({ sale, currency, onClose }) {
     </section>
   </div>
 }
+
