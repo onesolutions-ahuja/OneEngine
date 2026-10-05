@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-import { internalAppCatalog } from "./internalAppCatalog.js";
-import { packageDefinition } from "./packageRegistry.js";
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -14,21 +12,43 @@ export function hashPackageManifest(manifest) {
   return createHash("sha256").update(JSON.stringify(canonical(manifest || {}))).digest("hex");
 }
 
-const entries = internalAppCatalog.map((entry) => {
-  const definition = packageDefinition(entry);
+let entries = Object.freeze([]);
+export let TRUSTED_PACKAGE_MANIFESTS = entries;
+export let TRUSTED_PACKAGE_MAP = Object.freeze({});
+
+function normalizeRegistryRow(row = {}) {
+  const packageKey = String(row.package_key || row.packageKey || row.manifest?.packageKey || "").trim();
+  const version = String(row.version || row.manifest?.version || "").trim();
+  const manifest = row.manifest && typeof row.manifest === "object" ? row.manifest : {};
+  if (!packageKey || !version) return null;
+  if (manifest.packageKey && String(manifest.packageKey) !== packageKey) {
+    throw new Error(`Package registry key mismatch: ${packageKey}`);
+  }
+  if (manifest.version && String(manifest.version) !== version) {
+    throw new Error(`Package registry version mismatch: ${packageKey}@${version}`);
+  }
   return Object.freeze({
-    packageKey: definition.packageKey,
-    version: definition.version,
-    manifestHash: hashPackageManifest(definition.manifest),
-    capabilities: Object.freeze([...(definition.manifest?.capabilities || [])]),
+    packageKey,
+    version,
+    manifestHash: hashPackageManifest(manifest),
+    capabilities: Object.freeze([...(manifest.capabilities || [])]),
   });
-});
+}
 
-const duplicateKeys = entries.map((entry) => entry.packageKey).filter((key, index, all) => all.indexOf(key) !== index);
-if (duplicateKeys.length) throw new Error(`Duplicate trusted package keys: ${[...new Set(duplicateKeys)].join(", ")}`);
-
-export const TRUSTED_PACKAGE_MANIFESTS = Object.freeze(entries);
-export const TRUSTED_PACKAGE_MAP = Object.freeze(Object.fromEntries(entries.map((entry) => [entry.packageKey, entry])));
+/**
+ * Build the trusted package catalogue from the authoritative package_registry
+ * rows after database bootstrap. Business packages remain metadata-owned; the
+ * runtime trust gate snapshots exactly what the protected registry exposes.
+ */
+export function registerTrustedPackageCatalogue(rows = []) {
+  const next = rows.map(normalizeRegistryRow).filter(Boolean);
+  const duplicateKeys = next.map((entry) => entry.packageKey).filter((key, index, all) => all.indexOf(key) !== index);
+  if (duplicateKeys.length) throw new Error(`Duplicate trusted package keys: ${[...new Set(duplicateKeys)].join(", ")}`);
+  entries = Object.freeze(next);
+  TRUSTED_PACKAGE_MANIFESTS = entries;
+  TRUSTED_PACKAGE_MAP = Object.freeze(Object.fromEntries(entries.map((entry) => [entry.packageKey, entry])));
+  return validateTrustedPackageCatalogue();
+}
 
 export function assertTrustedPackageManifest(packageKey, manifest, version = null) {
   const key = String(packageKey || "").trim();
