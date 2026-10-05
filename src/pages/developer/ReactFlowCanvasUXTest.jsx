@@ -82,25 +82,26 @@ function WorkflowNode({ id, data, selected }) {
     <div className={`rfux-node rfux-node--${data.tone || 'blue'} ${selected ? 'is-selected' : ''}`}>
       <Handle type="target" position={Position.Top} className="rfux-handle" />
 
-      <div className="rfux-node-icon"><Icon size={16} /></div>
+      <div className={`rfux-node-icon ${data.icon === 'branch' ? 'rfux-node-icon--decision' : ''}`}><Icon size={16} /></div>
       <div className="rfux-node-copy">
         <strong>{data.title}</strong>
         <span>{data.subtitle}</span>
       </div>
 
-      <button
-        type="button"
-        className="rfux-node-remove nodrag"
-        aria-label={removable ? 'Remove node' : 'Node cannot be removed'}
-        title={data.isRoot ? 'Start node cannot be removed' : removable ? 'Remove node' : 'Remove child nodes first'}
-        disabled={!removable}
-        onClick={(event) => {
-          event.stopPropagation()
-          data.onRemoveNode?.(id)
-        }}
-      >
-        <Minus size={14} />
-      </button>
+      {removable ? (
+        <button
+          type="button"
+          className="rfux-node-remove nodrag"
+          aria-label="Remove node"
+          title="Remove node"
+          onClick={(event) => {
+            event.stopPropagation()
+            data.onRemoveNode?.(id)
+          }}
+        >
+          <Minus size={14} />
+        </button>
+      ) : null}
 
       <button
         type="button"
