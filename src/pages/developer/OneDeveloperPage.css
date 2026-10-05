@@ -187,15 +187,11 @@
 
 /* Keep OneDeveloper inside the visible app workspace and scroll each pane independently. */
 .onedeveloper-page {
-  height: 100%;
-  max-height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
 .onedeveloper-page > .settings-sidebar {
-  height: 100%;
-  max-height: 100%;
   min-height: 0;
   overflow: hidden;
   display: flex;
@@ -212,19 +208,14 @@
 }
 
 .onedeveloper-page > .settings-content {
-  height: 100%;
-  max-height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
 .onedeveloper-page > .settings-content > .settings-content-body {
-  height: 100%;
-  max-height: 100%;
   min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  height: 100%;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
