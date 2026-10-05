@@ -341,43 +341,6 @@ export default function createCustomersRouter({
     }
   });
 
-  router.post("/customer-segments", authenticate, authorize("customer.edit"), async (req, res) => {
-    const name = String(req.body.name || "").trim();
-    if (!name) return res.status(400).json({ success: false, message: "Segment name is required" });
-    try {
-      const result = await db(
-        `INSERT INTO customer_segments (company_id, name, description, active)
-         VALUES ($1, $2, $3, true)
-         RETURNING id, company_id, name, description, active`,
-        [req.user.companyId, name, req.body.description || null]
-      );
-      res.status(201).json({ success: true, data: result.rows[0] });
-    } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "Segment already exists" });
-      console.error("Create customer segment error:", error);
-      res.status(500).json({ success: false, message: "Unable to create customer segment" });
-    }
-  });
-
-  router.put("/customer-segments/:id", authenticate, authorize("customer.edit"), async (req, res) => {
-    try {
-      const result = await db(
-        `UPDATE customer_segments SET
-          name = COALESCE($1, name), description = COALESCE($2, description),
-          active = COALESCE($3, active), updated_at = CURRENT_TIMESTAMP
-         WHERE id = $4 AND company_id = $5
-         RETURNING id, company_id, name, description, active`,
-        [req.body.name == null ? null : String(req.body.name).trim(), req.body.description, req.body.active, req.params.id, req.user.companyId]
-      );
-      if (!result.rows.length) return res.status(404).json({ success: false, message: "Segment not found" });
-      res.json({ success: true, data: result.rows[0] });
-    } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "Segment already exists" });
-      console.error("Update customer segment error:", error);
-      res.status(500).json({ success: false, message: "Unable to update customer segment" });
-    }
-  });
-
   router.get("/customer-segments/:id/members", authenticate, authorize("customer.view"), async (req, res) => {
     const result = await db(
       `SELECT c.id, c.name, c.phone, c.email, c.active, m.created_at AS member_since
@@ -388,53 +351,6 @@ export default function createCustomersRouter({
       [req.params.id, req.user.companyId]
     );
     res.json({ success: true, data: { members: result.rows } });
-  });
-
-  router.post("/customer-segments/:id/members", authenticate, authorize("customer.edit"), async (req, res) => {
-    const customerIds = Array.isArray(req.body.customerIds) ? req.body.customerIds : [req.body.customerId];
-    const result = await db(
-      `INSERT INTO customer_segment_members (company_id, segment_id, customer_id)
-       SELECT $1, $2, c.id FROM customers c
-       WHERE c.company_id = $1 AND c.id = ANY($3::uuid[])
-       ON CONFLICT (segment_id, customer_id) DO NOTHING
-       RETURNING customer_id`,
-      [req.user.companyId, req.params.id, customerIds.filter(Boolean)]
-    );
-    res.json({ success: true, assigned: result.rows.length });
-  });
-
-  router.delete("/customer-segments/:id/members/:customerId", authenticate, authorize("customer.edit"), async (req, res) => {
-    const result = await db(
-      `DELETE FROM customer_segment_members
-       WHERE segment_id = $1 AND customer_id = $2 AND company_id = $3`,
-      [req.params.id, req.params.customerId, req.user.companyId]
-    );
-    res.json({ success: true, removed: result.rowCount || 0 });
-  });
-
-  router.post("/gift-cards", authenticate, authorize("customer.edit"), async (req, res) => {
-    const value = validateIssueValue(req.body.value);
-    if (!value.ok) return res.status(400).json({ success: false, message: value.reason });
-    const code = normaliseGiftCardCode(req.body.code);
-    if (!code) return res.status(400).json({ success: false, message: "Gift card code is required" });
-    try {
-      const card = await db(
-        `INSERT INTO gift_cards (company_id, code, reference_number, customer_id, status, initial_value, expires_at, issued_by)
-         VALUES ($1, $2, $3, $4, 'active', $5, $7, $6)
-         RETURNING id, code`,
-        [req.user.companyId, code, req.body.referenceNumber || null, req.body.customerId || null, req.body.value, req.user.id, req.body.expiresAt || null]
-      );
-      await db(
-        `INSERT INTO gift_card_transactions (company_id, gift_card_id, transaction_type, amount, balance_after, reference_type, description, store_id, created_by)
-         VALUES ($1, $2, 'issue', $3, $3, 'issue', 'Gift card issued', $4, $5)`,
-        [req.user.companyId, card.rows[0].id, req.body.value, req.user.storeId, req.user.id]
-      );
-      res.status(201).json({ success: true, data: { ...card.rows[0], balance: Number(req.body.value) } });
-    } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "Gift card code already exists" });
-      console.error("Issue gift card error:", error);
-      res.status(500).json({ success: false, message: "Unable to issue gift card" });
-    }
   });
 
   router.get("/gift-cards", authenticate, authorize("customer.view"), async (req, res) => {
@@ -472,27 +388,6 @@ export default function createCustomersRouter({
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.post("/gift-cards/:id/topup", authenticate, authorize("customer.edit"), async (req, res) => {
-    const value = validateTopUp(req.body.amount);
-    if (!value.ok) return res.status(400).json({ success: false, message: value.reason });
-    const card = await db(`SELECT id, code, status, expires_at FROM gift_cards WHERE id = $1 AND company_id = $2`, [req.params.id, req.user.companyId]);
-    if (!card.rows.length) return res.status(404).json({ success: false, message: "Gift card not found" });
-    if (card.rows[0].status !== "active") return res.status(409).json({ success: false, message: "Gift card is not active" });
-    await db(`INSERT INTO gift_card_transactions (company_id, gift_card_id, transaction_type, amount, balance_after, reference_type, description, store_id, created_by) VALUES ($1, $2, 'topup', $3, $3, 'topup', 'Gift card top up', $4, $5)`, [req.user.companyId, req.params.id, req.body.amount, req.user.storeId, req.user.id]);
-    const txs = await db(`SELECT * FROM gift_card_transactions WHERE gift_card_id = $1 AND company_id = $2 ORDER BY created_at ASC`, [req.params.id, req.user.companyId]);
-    const balance = txs.rows.reduce((total, tx) => total + (tx.transaction_type === "redeem" ? -Number(tx.amount) : Number(tx.amount)), 0);
-    res.json({ success: true, data: { balance } });
-  });
-
-  router.post("/gift-cards/:id/block", authenticate, authorize("customer.edit"), async (req, res) => {
-    const result = await db(
-      `UPDATE gift_cards SET status = CASE WHEN $1 THEN 'blocked' ELSE 'active' END
-       WHERE id = $2 AND company_id = $3 RETURNING id, code, status`,
-      [req.body.blocked !== false, req.params.id, req.user.companyId]
-    );
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "Gift card not found" });
-    res.json({ success: true, data: result.rows[0] });
-  });
-
+  
   return router;
 }

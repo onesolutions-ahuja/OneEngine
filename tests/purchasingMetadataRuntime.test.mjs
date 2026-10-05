@@ -238,3 +238,16 @@ test("final manifest sweep removes obsolete direct business route stacks", async
   assert.match(pricing, /export function resolvePrice/);
   assert.match(inventory, /export async function createInventoryMovement/);
 });
+
+
+test("manifest sweep leaves product category segment and gift-card administration to metadata", async () => {
+  const products = await readFile(new URL("../server/routes/products.js", import.meta.url), "utf8");
+  const customers = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
+  assert.equal(/router\.(post|put|delete)\("\/categories/.test(products), false);
+  assert.equal(/router\.(post|put|delete)\("\/products(?:\/import|\/:id|")/.test(products), false);
+  assert.match(products, /router\.post\("\/products\/misc-line"/);
+  assert.match(products, /router\.get\("\/products\/catalogue"/);
+  assert.equal(/router\.(post|put|delete)\("\/customer-segments/.test(customers), false);
+  assert.equal(/router\.post\("\/gift-cards(?:\/\:id\/topup|\/\:id\/block|")/.test(customers), false);
+  assert.match(customers, /router\.post\("\/gift-cards\/lookup"/);
+});
