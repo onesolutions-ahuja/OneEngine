@@ -311,17 +311,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       ])
       const meta = workspaceRes?.data || {}
       const listViewId = meta?.defaultListView?.id || ''
-      const cachedRecords = await readLazyCache(`workspace:records:${key}:${listViewId || 'default'}`)
-      const cachedRows = Array.isArray(cachedRecords?.value?.rows) ? cachedRecords.value.rows : []
-      fallbackRows = cachedRows
-      if (cachedRows.length) setRows(cachedRows)
-
-      const recordState = await syncWorkspaceRecordCache(key, listViewId)
       const nextFields = Array.isArray(meta.fields) ? meta.fields : []
-      const nextRows = recordState.rows
-      setFields(nextFields)
-      setRows(nextRows)
-      setRuntimeMeta({
+      const nextRuntimeMeta = {
         listViews: meta.listViews || [],
         defaultListView: meta.defaultListView || null,
         recordTypes: meta.recordTypes || [],
@@ -330,16 +321,44 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         defaultDetailLayout: meta.defaultDetailLayout || null,
         defaultCreateLayout: meta.defaultCreateLayout || null,
         buttons: meta.buttons || [],
-      })
+      }
+
+      // Render metadata and any cached rows immediately. Record synchronization
+      // must not keep Products/Customers/Sales/Purchases/etc. behind a loader
+      // when this device already has a usable list snapshot.
+      setFields(nextFields)
+      setRuntimeMeta(nextRuntimeMeta)
       setPermissions(permissionRes?.data || null)
-      const first = nextRows[0]?.id || ''
-      setSelectedId((current) => {
-        if (forceRefresh && current && nextRows.some((row) => String(row.id) === String(current))) return current
-        if (initialRecordId && key === initialObjectKey && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
-        if (formFactor === 'mobile') return ''
-        if (current && nextRows.some((row) => String(row.id) === String(current))) return current
-        return first
-      })
+
+      const cacheKey = `workspace:records:${key}:${listViewId || 'default'}`
+      const cachedRecords = await readLazyCache(cacheKey)
+      const hasCachedSnapshot = Boolean(cachedRecords?.value && Array.isArray(cachedRecords.value.rows))
+      const cachedRows = hasCachedSnapshot ? cachedRecords.value.rows : []
+      fallbackRows = cachedRows
+
+      const applyRows = (nextRows) => {
+        setRows(nextRows)
+        const first = nextRows[0]?.id || ''
+        setSelectedId((current) => {
+          if (forceRefresh && current && nextRows.some((row) => String(row.id) === String(current))) return current
+          if (initialRecordId && key === initialObjectKey && nextRows.some((row) => String(row.id) === String(initialRecordId))) return initialRecordId
+          if (formFactor === 'mobile') return ''
+          if (current && nextRows.some((row) => String(row.id) === String(current))) return current
+          return first
+        })
+      }
+
+      if (hasCachedSnapshot && !forceRefresh) {
+        applyRows(cachedRows)
+        setLoadingRows(false)
+        void syncWorkspaceRecordCache(key, listViewId)
+          .then((recordState) => applyRows(recordState.rows))
+          .catch(() => {})
+        return
+      }
+
+      const recordState = await syncWorkspaceRecordCache(key, listViewId, { forceInitial: forceRefresh })
+      applyRows(recordState.rows)
     } catch (err) {
       if (fallbackRows.length) {
         setRows(fallbackRows)
@@ -435,7 +454,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   }, [selectedId, selectedKey, formFactor])
 
   useEffect(() => {
-    if (!selectedObject || !selectedId) {
+    if (!selectedObject || !selectedId || detailTab !== 'history') {
       setHistoryState({ loading: false, rows: [], error: '' })
       return
     }
@@ -449,7 +468,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         if (live) setHistoryState({ loading: false, rows: [], error: err?.message || 'Unable to load record history' })
       })
     return () => { live = false }
-  }, [selectedId, selectedKey])
+  }, [selectedId, selectedKey, detailTab])
 
   const filteredObjects = useMemo(() => {
     const q = query.trim().toLowerCase()
