@@ -108,31 +108,33 @@
 }
 
 .rfux-canvas-shell .react-flow__edge.rfux-child-running-edge .react-flow__edge-path {
-  stroke: var(--rfux-edge-color, #7c3aed) !important;
-  stroke-width: 2.3;
-  stroke-dasharray: 3 11;
+  stroke: var(--rfux-edge-color, #16a34a) !important;
+  stroke-width: 2.5;
+  stroke-dasharray: 2 12;
   stroke-linecap: round;
-  animation: rfux-child-flow .5s linear infinite;
+  animation: rfux-child-flow .42s linear infinite !important;
+  animation-play-state: running !important;
 }
 
+.rfux-canvas-shell .react-flow__edge.rfux-child-red .react-flow__edge-path { --rfux-edge-color: #dc2626; }
 .rfux-canvas-shell .react-flow__edge.rfux-child-green .react-flow__edge-path { --rfux-edge-color: #16a34a; }
-.rfux-canvas-shell .react-flow__edge.rfux-child-orange .react-flow__edge-path { --rfux-edge-color: #ea580c; }
+.rfux-canvas-shell .react-flow__edge.rfux-child-orange .react-flow__edge-path { --rfux-edge-color: #f97316; }
 .rfux-canvas-shell .react-flow__edge.rfux-child-blue .react-flow__edge-path { --rfux-edge-color: #2563eb; }
-.rfux-canvas-shell .react-flow__edge.rfux-child-pink .react-flow__edge-path { --rfux-edge-color: #db2777; }
+.rfux-canvas-shell .react-flow__edge.rfux-child-yellow .react-flow__edge-path { --rfux-edge-color: #ca8a04; }
 .rfux-canvas-shell .react-flow__edge.rfux-child-cyan .react-flow__edge-path { --rfux-edge-color: #0891b2; }
-.rfux-canvas-shell .react-flow__edge.rfux-child-violet .react-flow__edge-path { --rfux-edge-color: #7c3aed; }
+.rfux-canvas-shell .react-flow__edge.rfux-child-magenta .react-flow__edge-path { --rfux-edge-color: #c026d3; }
 
 @keyframes rfux-child-flow {
   from { stroke-dashoffset: 0; }
-  to { stroke-dashoffset: -28; }
+  to { stroke-dashoffset: -42; }
 }
 
 .rfux-floating-toolbar {
   position: absolute;
   z-index: 20;
   top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 14px;
+  transform: none;
   display: flex;
   align-items: center;
   gap: 5px;
