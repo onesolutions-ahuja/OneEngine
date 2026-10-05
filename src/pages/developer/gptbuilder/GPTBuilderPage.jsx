@@ -51,6 +51,13 @@ const FLOW_TYPES = [
   { key: 'autolaunched', category: 'autolaunched', featured: true, label: 'Autolaunched Flow (No Trigger)', description: 'Runs in the background when another process invokes it.', icon: Workflow, tone: 'green', startNeedsConfiguration: false },
   { key: 'schedule', category: 'triggered', featured: false, label: 'Schedule-Triggered Flow', description: 'Runs in the background at a specified time and frequency.', icon: Play, tone: 'orange', startNeedsConfiguration: true },
   { key: 'platform_event', category: 'triggered', featured: false, label: 'Platform Event-Triggered Flow', description: 'Runs when a platform event message is received.', icon: Sparkles, tone: 'cyan', startNeedsConfiguration: true },
+  { key: 'external_system', category: 'triggered', featured: false, label: 'External System Change-Triggered Flow', description: 'Runs when a configured external connection reports a matching change.', icon: Zap, tone: 'blue', startNeedsConfiguration: true },
+  { key: 'approval_autolaunched', category: 'autolaunched', featured: false, label: 'Autolaunched Flow Approval Process', description: 'Runs an approval process when invoked by another automation.', icon: CheckCircle2, tone: 'green', startNeedsConfiguration: false },
+  { key: 'approval_record', category: 'triggered', featured: false, label: 'Record-Triggered Flow Approval Process', description: 'Starts an approval process when a record change meets its start criteria.', icon: CheckCircle2, tone: 'purple', startNeedsConfiguration: true },
+  { key: 'approval_external', category: 'triggered', featured: false, label: 'External System Change-Triggered Flow Approval Process', description: 'Starts an approval process from an external-system change.', icon: CheckCircle2, tone: 'blue', startNeedsConfiguration: true },
+  { key: 'orchestration_autolaunched', category: 'autolaunched', featured: false, label: 'Autolaunched Orchestration', description: 'Runs a multi-stage orchestration when invoked.', icon: Workflow, tone: 'green', startNeedsConfiguration: false },
+  { key: 'orchestration_record', category: 'triggered', featured: false, label: 'Record-Triggered Orchestration', description: 'Starts a multi-stage orchestration from a record change.', icon: Workflow, tone: 'purple', startNeedsConfiguration: true },
+  { key: 'orchestration_external', category: 'triggered', featured: false, label: 'External System Change-Triggered Orchestration', description: 'Starts a multi-stage orchestration from an external-system change.', icon: Workflow, tone: 'blue', startNeedsConfiguration: true },
 ]
 
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
@@ -105,12 +112,16 @@ function initialStart(flowType) {
   if (flowType === 'record') return { objectKey: '', trigger: 'created_or_updated', conditionMode: 'none', conditions: [], formula: '', updateMode: 'every_time', optimize: 'actions', asyncPath: false, scheduledPaths: [] }
   if (flowType === 'schedule') return { startDate: '', startTime: '', frequency: 'Daily', batchSize: 200, objectKey: '', conditionMode: 'none', conditions: [], formula: '' }
   if (flowType === 'platform_event') return { eventKey: '' }
+  if (['external_system','approval_external','orchestration_external'].includes(flowType)) return { providerKey: '', connectionKey: '', eventKey: '', pollMinutes: 5, conditionMode: 'none', conditions: [] }
+  if (['approval_record','orchestration_record'].includes(flowType)) return { objectKey: '', trigger: 'created_or_updated', conditionMode: 'none', conditions: [], formula: '', updateMode: 'every_time', optimize: 'actions', asyncPath: false, scheduledPaths: [] }
   return {}
 }
 
 function flowTriggerKey(flowType, start) {
   if (flowType === 'schedule') return 'scheduled'
   if (flowType === 'platform_event') return start.eventKey || 'manual'
+  if (['external_system','approval_external','orchestration_external'].includes(flowType)) return start.eventKey ? `external:${start.providerKey}:${start.eventKey}` : 'external'
+  if (['approval_record','orchestration_record'].includes(flowType)) flowType = 'record'
   if (flowType !== 'record') return 'manual'
   if (start.trigger === 'deleted') return 'before_delete'
   const fast = start.optimize === 'fast'
@@ -129,6 +140,8 @@ function startSummary(flowType, start, objects) {
   }
   if (flowType === 'schedule') return start.startDate && start.startTime ? `${start.frequency} · ${start.startDate} ${start.startTime}` : 'Set Schedule'
   if (flowType === 'platform_event') return start.eventKey || 'Select Platform Event'
+  if (['external_system','approval_external','orchestration_external'].includes(flowType)) return start.eventKey ? `${start.providerKey || 'External System'} · ${start.eventKey}` : 'Configure External System'
+  if (['approval_record','orchestration_record'].includes(flowType)) return startSummary('record', start, objects)
   return flowType === 'screen' ? 'Screen Flow' : 'No Trigger'
 }
 
@@ -258,13 +271,23 @@ function startConfigurationErrors(flowType, value) {
     }
   }
   if (flowType === 'platform_event' && !value.eventKey) errors.push('Select a platform event.')
+  if (['approval_record','orchestration_record'].includes(flowType)) return startConfigurationErrors('record', value)
+  if (['external_system','approval_external','orchestration_external'].includes(flowType)) {
+    if (!value.providerKey) errors.push('Select an external system.')
+    if (!value.connectionKey) errors.push('Select a connection.')
+    if (!value.eventKey) errors.push('Select a trigger.')
+    const pollMinutes = Number(value.pollMinutes || 0)
+    if (!Number.isFinite(pollMinutes) || pollMinutes < 1) errors.push('Polling interval must be at least 1 minute.')
+  }
   return errors
 }
 
-function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, onCancel }) {
+function StartPanel({ flowType, value, onChange, objects, eventTypes, externalProviders = [], onDone, onCancel }) {
   const [attemptedDone, setAttemptedDone] = useState(false)
   const selectedObject = objects.find((item) => objectKey(item) === value.objectKey)
-  const showUpdateMode = flowType === 'record' && ['updated', 'created_or_updated'].includes(value.trigger) && value.conditionMode !== 'none'
+  const recordStartType = ['record','approval_record','orchestration_record'].includes(flowType)
+  const externalStartType = ['external_system','approval_external','orchestration_external'].includes(flowType)
+  const showUpdateMode = recordStartType && ['updated', 'created_or_updated'].includes(value.trigger) && value.conditionMode !== 'none'
   const errors = startConfigurationErrors(flowType, value)
   const finish = () => {
     setAttemptedDone(true)
@@ -273,7 +296,7 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
   return <aside className="gptb-config-panel" aria-label="Configure Start">
     <header><div><strong>{flowType === 'schedule' ? 'Set a Schedule' : flowType === 'platform_event' ? 'Configure Start' : 'Configure Start'}</strong><small>{FLOW_TYPES.find((item) => item.key === flowType)?.label}</small></div><button className="gptb-icon-button" aria-label="Close Start configuration" onClick={onCancel}><X size={16}/></button></header>
     <div className="gptb-config-body">
-      {flowType === 'record' ? <>
+      {recordStartType ? <>
         <section><h3>Select Object</h3><label>Object<select value={value.objectKey || ''} onChange={(event) => onChange({ ...value, objectKey: event.target.value, conditions: [], formula: '', customConditionLogic: '' })}><option value="">Select an object</option>{objects.map((item) => <option key={item.id || objectKey(item)} value={objectKey(item)}>{objectLabel(item)}</option>)}</select></label></section>
         <section><h3>Configure Trigger</h3><label>Trigger the Flow When<select value={value.trigger || 'created_or_updated'} onChange={(event) => {
           const trigger = event.target.value
@@ -298,6 +321,13 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
         <section><h3>Choose Object <small>(Optional)</small></h3><label>Object<select value={value.objectKey || ''} onChange={(event) => onChange({ ...value, objectKey: event.target.value, conditions: [], customConditionLogic: '' })}><option value="">None</option>{objects.map((item) => <option key={item.id || objectKey(item)} value={objectKey(item)}>{objectLabel(item)}</option>)}</select></label>{value.objectKey ? <><label>Condition Requirements<select value={value.conditionMode || 'none'} onChange={(event) => onChange({ ...value, conditionMode: event.target.value })}><option value="none">None</option><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option></select></label>{value.conditionMode !== 'none' ? <ConditionsEditor object={selectedObject} value={value.conditions} customLogic={value.customConditionLogic || ''} onCustomLogicChange={value.conditionMode === 'custom' ? (customConditionLogic) => onChange({ ...value, customConditionLogic }) : null} onChange={(conditions) => onChange({ ...value, conditions })}/> : null}</> : null}</section>
       </> : null}
       {flowType === 'platform_event' ? <section><h3>Select Platform Event</h3><label>Platform Event<select value={value.eventKey || ''} onChange={(event) => onChange({ ...value, eventKey: event.target.value })}><option value="">Select an event</option>{eventTypes.map((item) => <option key={item.event_type} value={item.event_type}>{item.event_type}</option>)}</select></label>{value.eventKey ? <p className="gptb-help-text">{eventTypes.find((item) => item.event_type === value.eventKey)?.description || 'The flow runs when this event message is received.'}</p> : null}</section> : null}
+      {externalStartType ? <section><h3>Configure External System Trigger</h3>
+        <label>External System<select value={value.providerKey || ''} onChange={(event) => onChange({ ...value, providerKey: event.target.value, connectionKey: '', eventKey: '' })}><option value="">Select an external system</option>{externalProviders.map((provider) => <option key={provider.providerKey || provider.id} value={provider.providerKey || provider.id}>{provider.name || provider.label || provider.providerKey}</option>)}</select></label>
+        <label>Connection<input value={value.connectionKey || ''} onChange={(event) => onChange({ ...value, connectionKey: event.target.value })} placeholder="Connection or credential key"/></label>
+        <label>Trigger / Event<input value={value.eventKey || ''} onChange={(event) => onChange({ ...value, eventKey: event.target.value })} placeholder="External change trigger"/></label>
+        <label>Polling Interval (Minutes)<input type="number" min="1" value={value.pollMinutes ?? 5} onChange={(event) => onChange({ ...value, pollMinutes: Number(event.target.value) })}/></label>
+        <p className="gptb-help-text">External trigger outputs are available to the flow through the event context resource.</p>
+      </section> : null}
     </div>
     {attemptedDone && errors.length ? <div className="gptb-start-errors" role="alert"><AlertTriangle size={14}/><span>{errors.map((error) => <small key={error}>{error}</small>)}</span></div> : null}
     <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" onClick={finish}>Done</button></footer>
@@ -838,6 +868,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [layoutSwitchError, setLayoutSwitchError] = useState('')
   const [objects, setObjects] = useState([])
   const [eventTypes, setEventTypes] = useState([])
+  const [externalProviders, setExternalProviders] = useState([])
   const [availableFlows, setAvailableFlows] = useState([])
   const [startConfig, setStartConfig] = useState(() => templateAction.start ? structuredClone(templateAction.start) : initialStart(flow.key))
   const [startDraft, setStartDraft] = useState(() => templateAction.start ? structuredClone(templateAction.start) : initialStart(flow.key))
@@ -969,6 +1000,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       if (!live) return
       setObjects(objectResponse?.data?.objects || objectResponse?.data || [])
       setEventTypes(Array.isArray(eventResponse?.data) ? eventResponse.data : [])
+      setExternalProviders(Array.isArray(providerResponse?.data) ? providerResponse.data : [])
       setAvailableFlows((Array.isArray(rulesResponse?.data) ? rulesResponse.data : []).filter((item) => item?.action?.type === 'workflow'))
       const providers = Array.isArray(providerResponse?.data) ? providerResponse.data : []
       setProviderResources(providers.flatMap((provider) => (provider.fields || []).map((field) => ({
@@ -1837,7 +1869,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(25, value - 10))} disabled={zoom <= 25}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button><button className="gptb-fit-view" aria-label="Zoom to fit" onClick={zoomToFit}>Fit</button></div>
         <div className="gptb-canvas-help" tabIndex="-1"><CircleHelp size={14}/><span>{layout === 'auto' ? 'Auto-Layout keeps the flow arranged and connected automatically.' : 'Free-Form lets you position and connect elements manually.'}</span></div>
       </main>
-      {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
+      {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} externalProviders={externalProviders} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
       {diagnosticsOpen ? <DiagnosticsPanel issues={issues} onClose={() => setDiagnosticsOpen(false)} onIssueClick={(issue) => {
         if (issue.targetId === 'start') { openStart(); return }
         const target = elements.find((element) => element.id === issue.targetId)
