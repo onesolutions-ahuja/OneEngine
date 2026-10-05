@@ -48,6 +48,7 @@ export function updateRecordsConfigErrors(config = {}) {
 }
 
 const configuredValue = (row) => row.valueMode === 'resource' ? { path: row.value } : row.value
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 
 export function updateRecordsRuntimeAction(instance) {
   const c = normalizeUpdateRecordsConfig(instance?.config)
@@ -77,7 +78,7 @@ function ResourceSelect({ resources, value, onChange, collection = false, flowTy
     <option value="">{collection ? 'Select a record collection variable' : 'Select a record variable'}</option>
     {!collection && flowType === 'record' && startConfig?.objectKey ? <option value="$record">Current Record ($Record)</option> : null}
     {!collection && flowType === 'schedule' && startConfig?.objectKey ? <option value="$record">Current Scheduled Record ($Record)</option> : null}
-    {rows.map((resource) => <option key={resource.id || resource.apiName} value={`variables.${resource.apiName}`}>{resource.label || resource.apiName}</option>)}
+    {rows.map((resource) => <option key={resource.id || resource.apiName} value={resourcePath(resource)}>{resource.label || resource.apiName}</option>)}
   </select>
 }
 
