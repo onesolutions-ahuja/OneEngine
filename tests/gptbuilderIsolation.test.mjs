@@ -1316,3 +1316,23 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 4 exposes generic Salesforce-parity flow types and metadata-driven starts', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  for (const label of [
+    'External System Change-Triggered Flow',
+    'Autolaunched Flow Approval Process',
+    'Record-Triggered Flow Approval Process',
+    'External System Change-Triggered Flow Approval Process',
+    'Autolaunched Orchestration',
+    'Record-Triggered Orchestration',
+    'External System Change-Triggered Orchestration',
+  ]) assert.ok(page.includes(label), label)
+  assert.match(page, /const externalStartType = \['external_system','approval_external','orchestration_external'\]\.includes\(flowType\)/)
+  assert.match(page, /Configure External System Trigger/)
+  assert.match(page, /externalProviders\.map/)
+  assert.match(page, /Polling Interval \(Minutes\)/)
+  assert.match(page, /external:\$\{start\.providerKey\}:\$\{start\.eventKey\}/)
+  assert.match(page, /externalProviders=\{externalProviders\}/)
+})
