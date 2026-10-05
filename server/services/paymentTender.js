@@ -20,7 +20,5 @@ export function validateTenderLines({ payments = [], total = 0, allowedMethods =
   }
   const expected = cents(total);
   if (sumCents !== expected) throw new Error(`Payments total ${(sumCents/100).toFixed(2)} does not match the sale total ${(expected/100).toFixed(2)}`);
-  if (seen.has('customer_credit') && seen.size > 1) throw new Error('Customer credit cannot be combined with other payment methods');
-  if (seen.has('gift_card') && seen.size > 1) throw new Error('Gift card cannot be combined with other payment methods');
   return lines;
 }
