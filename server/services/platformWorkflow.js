@@ -2753,6 +2753,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         fieldValues: { type: "object" },
         recordResource: {},
         recordCollectionResource: {},
+        commonFieldValues: { type: "object" },
         updateExisting: { type: "boolean" },
         matchField: { type: "string" },
         checkMatchingRecords: { type: "boolean" },
@@ -2811,6 +2812,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         sourceVariableName = String(action.recordResource?.path || "").replace(/^variables\./, "");
       } else {
         payloads = [resolveFieldValueMap(action.fieldValues || {}, context)];
+      }
+
+      if (action.commonFieldValues && typeof action.commonFieldValues === "object" && !Array.isArray(action.commonFieldValues)) {
+        const commonFields = resolveFieldValueMap(action.commonFieldValues, context);
+        payloads = payloads.map((payload) => ({ ...(payload || {}), ...commonFields }));
       }
 
       const findExisting = async (payload) => {
