@@ -2,12 +2,7 @@
  * Preview-only match of canonical feed rows against the company's products.
  * EAN first, then supplierCode-as-SKU. Never creates anything.
  *
- * Each match: { row, status, productId, productName, resolvedVia,
- *   productPreview, purchaseLine }. productPreview pre-populates the
- * EXISTING product form (name/barcode only - never pricing/stock/VAT).
- * purchaseLine ({ productId, quantity, unitCost }) fits the EXISTING
- * POST /api/purchases validator; present only for matched rows with a
- * positive quantity and non-negative supplier price.
+ * Each match returns only neutral match/proposal data. Follow-through is selected by metadata/workflows, never by this adapter.
  */
 import { gtinIdentity } from "./supplierFeedAdapter.js";
 
@@ -70,7 +65,7 @@ export function matchSupplierFeed(canonicalRows, { products, companyId } = {}) {
       matches.push({
         row: rowNo, status: "ambiguous", productId: null,
         productName: feedRow.name, resolvedVia: null,
-        productPreview: toProductPreview(feedRow), purchaseLine: null,
+        productPreview: toProductPreview(feedRow),
       });
       errors.push({ row: rowNo, errors: [`Ambiguous match: feed row matches ${candidates.length} products.`] });
       continue;
@@ -80,14 +75,14 @@ export function matchSupplierFeed(canonicalRows, { products, companyId } = {}) {
       matches.push({
         row: rowNo, status: "matched", productId: product.id ?? null,
         productName: product.name ?? feedRow.name, resolvedVia: via,
-        productPreview: null, purchaseLine: toPurchaseLine(feedRow, product),
+        productPreview: null,
       });
       continue;
     }
     matches.push({
       row: rowNo, status: "no_match", productId: null,
       productName: feedRow.name, resolvedVia: null,
-      productPreview: toProductPreview(feedRow), purchaseLine: null,
+      productPreview: toProductPreview(feedRow),
     });
   }
   return { matches, errors };
@@ -101,12 +96,5 @@ function toProductPreview(feedRow) {
   };
 }
 
-function toPurchaseLine(feedRow, product) {
-  const quantity = feedRow.availableQty;
-  const unitCost = feedRow.supplierPrice;
-  if (!Number.isFinite(quantity) || quantity <= 0) return null;
-  if (!Number.isFinite(unitCost) || unitCost < 0) return null;
-  return { productId: product.id ?? null, quantity, unitCost };
-}
 
 export default { matchSupplierFeed, gtinIdentity };

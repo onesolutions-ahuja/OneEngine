@@ -1030,9 +1030,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
    * GTIN rules come from the Global Product Master validator and matching
    * reads the CURRENT company's products only.
    *
-   * Writes nothing: no products, no suppliers, no purchases, no stock
-   * movements. Callers still use POST /api/products (product.create) and
-   * POST /api/purchases (purchase.create) for any follow-through.
+   * Writes nothing: no products, suppliers, purchases, or stock movements. Any follow-through is selected by metadata/workflows outside this preview boundary.
    */
   router.post(
     "/integrations/supplier-feed/preview",

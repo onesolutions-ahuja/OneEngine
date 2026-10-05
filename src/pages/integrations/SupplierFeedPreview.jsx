@@ -2,7 +2,7 @@
  * T10Q - Supplier feed preview panel (read-only integration boundary).
  * Pastes a small JSON array of generic supplier rows, POSTs to
  * /api/integrations/supplier-feed/preview and renders validation plus
- * matches. Follow-through stays on EXISTING screens (Products, Purchases).
+ * matches. Follow-through is intentionally left to metadata-selected actions/workflows.
  */
 import { useState } from "react";
 import { apiRequest } from "../../services/api.js";
@@ -105,7 +105,7 @@ export default function SupplierFeedPreview() {
                         : <span className="text-slate-500">{m.status === "ambiguous" ? "Needs review" : "New"}</span>}
                     </td>
                     <td className="px-3 py-2 text-slate-500">
-                      {m.status === "matched" ? "Add via Purchases" : "Create via Products"}
+                      {m.status === "matched" ? "Use configured action" : "Use configured action"}
                     </td>
                   </tr>
                 ))}

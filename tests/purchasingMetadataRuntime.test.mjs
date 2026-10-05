@@ -51,3 +51,17 @@ test("purchase create capability preserves optional initial receipt and metadata
   assert.match(source, /referenceNumber:inputs\.receivingReference\|\|null/);
   assert.match(source, /const platformInput=req\?\.body\?\.platform \|\| null/);
 });
+
+
+test("supplier feed preview stays neutral and does not prescribe business endpoints or screens", async () => {
+  const matcher = await readFile(new URL("../server/services/supplierFeedMatch.js", import.meta.url), "utf8");
+  const route = await readFile(new URL("../server/routes/integrations.js", import.meta.url), "utf8");
+  const ui = await readFile(new URL("../src/pages/integrations/SupplierFeedPreview.jsx", import.meta.url), "utf8");
+  for (const source of [matcher, route, ui]) {
+    assert.equal(source.includes("POST /api/products"), false);
+    assert.equal(source.includes("POST /api/purchases"), false);
+    assert.equal(source.includes("Add via Purchases"), false);
+    assert.equal(source.includes("Create via Products"), false);
+  }
+  assert.equal(matcher.includes("purchaseLine"), false);
+});
