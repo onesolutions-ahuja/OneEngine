@@ -11,23 +11,25 @@ const errors = []
 const assert = (condition, message) => { if (!condition) errors.push(message) }
 
 const app = read('src/App.jsx')
+const shell = read('src/components/shell/DesktopShell.jsx')
 const store = read('src/pages/oneStore/OneStorePopover.jsx')
 const shared = read('src/utils/appMarketplace.js')
 
-for (const [file, source] of [['src/App.jsx', app], ['src/pages/oneStore/OneStorePopover.jsx', store]]) {
+for (const [file, source] of [['src/components/shell/DesktopShell.jsx', shell], ['src/pages/oneStore/OneStorePopover.jsx', store]]) {
   assert(source.includes("from './utils/appMarketplace'") || source.includes("from '../../utils/appMarketplace'"),
     `${file}: must use shared appMarketplace utilities`)
 }
 
 for (const forbidden of ['MARKETPLACE_BRAND_MATCHES', 'MARKETPLACE_ICON_ALIASES', 'function marketplaceIcon(', 'function appIcon(', 'DEDICATED_OPEN_ROUTES=']) {
+  assert(!shell.includes(forbidden), `src/components/shell/DesktopShell.jsx: duplicate marketplace logic remains: ${forbidden}`)
   assert(!app.includes(forbidden), `src/App.jsx: duplicate marketplace logic remains: ${forbidden}`)
   assert(!store.includes(forbidden), `OneStorePopover.jsx: duplicate marketplace logic remains: ${forbidden}`)
 }
 
-assert(app.includes('appIconUrl(item)'), 'Search/Launcher must use shared appIconUrl')
-assert(app.includes('resolveAppOpenRoute(item)'), 'Search/Launcher must use shared resolveAppOpenRoute')
-assert(app.includes('readMarketplaceCache()'), 'Search/Launcher must recover from shared marketplace cache')
-assert(app.includes('storeAppsError'), 'Search/Launcher must expose catalogue fetch failures')
+assert(shell.includes('appIconUrl(item)'), 'Search/Launcher must use shared appIconUrl')
+assert(shell.includes('resolveAppOpenRoute(item)'), 'Search/Launcher must use shared resolveAppOpenRoute')
+assert(shell.includes('readMarketplaceCache()'), 'Search/Launcher must recover from shared marketplace cache')
+assert(shell.includes('storeAppsError'), 'Search/Launcher must expose catalogue fetch failures')
 assert(store.includes('appIconUrl(item)'), 'oneStore must use shared appIconUrl')
 assert(store.includes('resolveAppOpenRoute(selected)'), 'oneStore must use shared resolveAppOpenRoute')
 assert(store.includes('readMarketplaceCache()'), 'oneStore must recover from shared marketplace cache')
@@ -45,7 +47,7 @@ if (aliasMatch) {
   }
 }
 
-const supportedRoutes = new Set([...app.matchAll(/activeApp\s*===\s*'([^']+)'/g)].map((m) => m[1]))
+const supportedRoutes = new Set([...shell.matchAll(/activeApp\s*===\s*'([^']+)'/g)].map((m) => m[1]))
 supportedRoutes.add('settings')
 supportedRoutes.add('developer')
 supportedRoutes.add('integrations')
