@@ -34,7 +34,6 @@ import {
 } from "../services/secureInvoiceLinks.js";
 import { sendWhatsAppTestInvoice, resendWhatsAppInvoice, sendWhatsAppTextMessage } from "../services/whatsappDelivery.js";
 import { getCompanyEntitlements, hasEntitlement } from "../services/licensing.js";
-import { createWorkflowRun, executeWorkflowActions } from "../services/platformWorkflow.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "../services/communicationCore.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 
@@ -1156,100 +1155,16 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
             },
           });
 
-          if (!assistantLicensed) {
-            console.info("WhatsApp Assistant legacy handler skipped; event workflows remain eligible", {
-              companyId,
-              phoneNumberId,
-            });
-            continue;
-          }
-
-          // Business intent interpretation is Flow-owned. The transport only emits the generic inbound record.
-          const assistantMode = String(configuration.assistant_mode || "RULES").toUpperCase();
-          const aiResult = null;
-
-          const workflowsResult = await db(
-            `SELECT id,name,object_id,action
-               FROM platform_rules
-              WHERE company_id=$1
-                AND active=true
-                AND trigger_key='whatsapp_message_received'
-                AND action->>'type'='workflow'
-                AND action->>'scope'='whatsapp_assistant'
-              ORDER BY created_at,id`,
-            [companyId]
-          );
-
-          const minimalCustomer = customer
-            ? { id: customer.id, name: customer.name, phone: customer.phone }
-            : null;
-          const workflowRecord = {
-            id: storedMessage.id,
-            conversation_id: conversation.id,
-            message_id: storedMessage.id,
-            provider_message_id: message.id,
-            message_type: storedMessage.message_type,
-            body: storedMessage.body,
-            sender_phone: `+${sender}`,
-            customer_id: customer?.id || null,
-            customer: minimalCustomer,
-            assistant: {
-              mode: assistantMode === "AI" ? "AI" : "RULES",
-              ai_provider: aiResult?.provider || configuration.ai_provider || null,
-              ai_model: aiResult?.model || null,
-              intent: aiResult?.intent || null,
-              confidence: aiResult?.confidence ?? null,
-              ai_reply: aiResult?.reply || null,
-              allowed_intents: configuration.allowed_intents || "",
-              privacy_scope: configuration.privacy_scope || "MINIMUM_REQUIRED",
-              human_handoff_enabled: configuration.human_handoff_enabled !== false,
-            },
-          };
-
-          for (const workflow of workflowsResult.rows || []) {
-            const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
-            const run = await createWorkflowRun({
-              db,
-              companyId,
-              workflowId: workflow.id,
-              workflowName: workflow.name,
-              objectId: workflow.object_id || null,
-              recordId: storedMessage.id,
-              triggerKey: "whatsapp_message_received",
-              status: "RUNNING",
-              metadata: { conversationId: conversation.id, whatsappMessageId: storedMessage.id },
-            });
-            try {
-              await executeWorkflowActions({
-                actions,
-                db,
-                pool,
-                req: { user: { companyId, id: null, storeId: null, roleId: null } },
-                companyId,
-                userId: null,
-                record: workflowRecord,
-                recordId: storedMessage.id,
-                runId: run?.id || null,
-                trigger: "whatsapp_message_received",
-                writeAudit,
-              });
-              if (run?.id) {
-                await db(
-                  "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
-                  [run.id, companyId]
-                );
-              }
-            } catch (workflowError) {
-              console.error("WhatsApp Assistant workflow error:", workflowError.message);
-            }
-          }
+          // recordCommunicationEvent publishes the provider-neutral communication event.
+          // The automation engine discovers all active subscribed Flows from metadata;
+          // transport code must not select a Flow by trigger/name/scope.
 
           await writeAudit?.(companyId, null, "whatsapp_assistant_message_received", "whatsapp_conversation", conversation.id, {
             channel: "WHATSAPP",
             customerId: customer?.id || null,
             messageId: storedMessage.id,
             messageType: storedMessage.message_type,
-            workflowCount: workflowsResult.rows?.length || 0,
+            workflowDispatch: "metadata_event",
           });
         }
       }
