@@ -111,7 +111,6 @@ const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage')
 const SalesPage = lazyWithRecovery(() => import('./pages/sales/SalesPage'))
 const ReturnsPage = lazyWithRecovery(() => import('./pages/returns/ReturnsPage'))
 const ExchangePage = lazyWithRecovery(() => import('./pages/returns/ExchangePage'))
-const LayawayPage = lazyWithRecovery(() => import('./pages/sales/LayawayPage'))
 const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
 const ProductsPage = lazyWithRecovery(() => import('./pages/products/ProductsPage'))
 const CategoriesPage = lazyWithRecovery(() => import('./pages/products/CategoriesPage'))
@@ -2195,7 +2194,7 @@ function Desktop({ onLock, onSignOut }) {
 
     const routeMap = new Set([
       'integrations','google-connect','accounting','online-orders','order-prep','own-delivery',
-      'assistant','kiosk','kiosk-display','kiosk-devices','returns','exchange','layaway','supplier-returns','audit-log','licensing',
+      'assistant','kiosk','kiosk-display','kiosk-devices','returns','exchange','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','categories',
       'global-products','products','sales','workspace','till',
@@ -2444,8 +2443,6 @@ function Desktop({ onLock, onSignOut }) {
           <ReturnsPage />
         ) : activeApp === 'exchange' ? (
           <ExchangePage />
-        ) : activeApp === 'layaway' ? (
-          <LayawayPage />
         ) : activeApp === 'supplier-returns' ? (
           <SupplierReturnsPage />
         ) : activeApp === 'products' ? (

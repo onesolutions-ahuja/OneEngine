@@ -150,3 +150,15 @@ test("customer credit and loyalty administration has no legacy route-local write
   assert.match(registry, /objectKey: "loyalty_activity"/);
   assert.match(workflows, /customer\.credit\.limit\.check/);
 });
+
+
+test("layaway uses metadata ownership", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  assert.equal(app.includes("LayawayPage"), false);
+  assert.equal(server.includes("createLayawaysRouter"), false);
+  assert.match(metadata, /key: "layaway"/);
+  assert.match(metadata, /key: "layaway_line"/);
+  assert.match(metadata, /key: "layaway_payment"/);
+});
