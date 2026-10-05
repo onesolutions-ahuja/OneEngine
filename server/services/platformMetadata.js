@@ -2484,38 +2484,40 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       }
 
       const inventoryMovement = byKey.get("inventory_movement");
-      const movementTypeField = await pool.query(
-        "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='movement_type' AND company_id IS NULL LIMIT 1",
-        [inventoryMovement?.id]
-      );
-      const movementTypeSet = await pool.query(
-        "SELECT id FROM platform_value_sets WHERE value_set_key='inventory_movement_type' AND company_id IS NULL LIMIT 1"
-      );
-      if (movementTypeField.rows[0]?.id && movementTypeSet.rows[0]?.id) {
-        await pool.query(
-          `UPDATE platform_fields SET config=jsonb_set(COALESCE(config,'{}'::jsonb),'{"value_set_key"}',$2::jsonb,true), options=$3::jsonb WHERE id=$1`,
-          [movementTypeField.rows[0].id, JSON.stringify("inventory_movement_type"), JSON.stringify([
-            "OPENING", "PURCHASE", "SALE", "CUSTOMER_RETURN", "SUPPLIER_RETURN", "ADJUSTMENT_IN",
-            "ADJUSTMENT_OUT", "RETURN_IN", "RETURN_OUT", "ONLINE_RESERVE", "ONLINE_RELEASE",
-            "TRANSFER_IN", "TRANSFER_OUT", "WASTAGE", "SHRINKAGE",
-          ])]
+      if (inventoryMovement?.id) {
+        const movementTypeField = await pool.query(
+          "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='movement_type' AND company_id IS NULL LIMIT 1",
+          [inventoryMovement?.id]
         );
-      }
-      for (const [recordTypeKey, label] of [
-        ["SALE", "Sale"], ["RETURN", "Return"], ["RECEIPT", "Receipt"],
-        ["ADJUSTMENT_IN", "Adjustment In"], ["ADJUSTMENT_OUT", "Adjustment Out"],
-        ["TRANSFER_IN", "Transfer In"], ["TRANSFER_OUT", "Transfer Out"],
-        ["WASTAGE", "Wastage"], ["OPENING", "Opening Stock"],
-      ]) {
-        await pool.query(
-          `INSERT INTO platform_record_types
-            (object_id,record_type_key,label,description,company_id,default_values,is_default,active)
-           VALUES ($1,$2,$3,$4,NULL,$5::jsonb,$6,true)
-           ON CONFLICT (object_id,record_type_key) WHERE company_id IS NULL DO UPDATE
-             SET label=EXCLUDED.label,default_values=EXCLUDED.default_values,active=true`,
-          [inventoryMovement?.id, recordTypeKey.toLowerCase(), label, `${label} inventory movement`, JSON.stringify({ movement_type: recordTypeKey }), recordTypeKey === "ADJUSTMENT_IN"]
+        const movementTypeSet = await pool.query(
+          "SELECT id FROM platform_value_sets WHERE value_set_key='inventory_movement_type' AND company_id IS NULL LIMIT 1"
         );
-      }
+        if (movementTypeField.rows[0]?.id && movementTypeSet.rows[0]?.id) {
+          await pool.query(
+            `UPDATE platform_fields SET config=jsonb_set(COALESCE(config,'{}'::jsonb),'{"value_set_key"}',$2::jsonb,true), options=$3::jsonb WHERE id=$1`,
+            [movementTypeField.rows[0].id, JSON.stringify("inventory_movement_type"), JSON.stringify([
+              "OPENING", "PURCHASE", "SALE", "CUSTOMER_RETURN", "SUPPLIER_RETURN", "ADJUSTMENT_IN",
+              "ADJUSTMENT_OUT", "RETURN_IN", "RETURN_OUT", "ONLINE_RESERVE", "ONLINE_RELEASE",
+              "TRANSFER_IN", "TRANSFER_OUT", "WASTAGE", "SHRINKAGE",
+            ])]
+          );
+        }
+        for (const [recordTypeKey, label] of [
+          ["SALE", "Sale"], ["RETURN", "Return"], ["RECEIPT", "Receipt"],
+          ["ADJUSTMENT_IN", "Adjustment In"], ["ADJUSTMENT_OUT", "Adjustment Out"],
+          ["TRANSFER_IN", "Transfer In"], ["TRANSFER_OUT", "Transfer Out"],
+          ["WASTAGE", "Wastage"], ["OPENING", "Opening Stock"],
+        ]) {
+          await pool.query(
+            `INSERT INTO platform_record_types
+              (object_id,record_type_key,label,description,company_id,default_values,is_default,active)
+             VALUES ($1,$2,$3,$4,NULL,$5::jsonb,$6,true)
+             ON CONFLICT (object_id,record_type_key) WHERE company_id IS NULL DO UPDATE
+               SET label=EXCLUDED.label,default_values=EXCLUDED.default_values,active=true`,
+            [inventoryMovement?.id, recordTypeKey.toLowerCase(), label, `${label} inventory movement`, JSON.stringify({ movement_type: recordTypeKey }), recordTypeKey === "ADJUSTMENT_IN"]
+          );
+        }
+        }
       const expiryStatusField = await pool.query(
         "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='expiry_status' AND company_id IS NULL LIMIT 1",
         [byKey.get("inventory_batch")?.id]
