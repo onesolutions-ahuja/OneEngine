@@ -14,8 +14,8 @@ on:
       - ".github/workflows/playwright-e2e.yml"
 
 concurrency:
-  group: oneengine-playwright-e2e
-  cancel-in-progress: true
+  group: oneengine-live-e2e
+  cancel-in-progress: false
 
 jobs:
   e2e:
