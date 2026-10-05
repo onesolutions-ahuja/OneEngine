@@ -81,7 +81,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
       .catch(err=>{if(live){setRecordActions([]);setError(err?.message||'Unable to load app actions')}})
       .finally(()=>{if(live)setActionsLoading(false)})
     return()=>{live=false}
-  },[selected?.tenant_app_record_id,selected?.tenant_app_status,selected?.tenant_app_licence_status,selected?.tenant_app_update_status])
+  },[selected?.tenant_app_record_id,selected?.is_installed,selected?.launchable,selected?.storefront_state,selected?.update_display_status])
 
   const run=async(item,button)=>{
     if(!item?.tenant_app_record_id||!button?.button_key||!canManage)return
