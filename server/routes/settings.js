@@ -175,11 +175,13 @@ export default function createSettingsRouter({
    */
   router.get("/settings/jarves", authenticate, authorize("settings.manage", "user.view"), async (req, res) => {
     try {
-      const state = await getJarvesLicenceState(db, req.user.companyId);
-      const enabledForMe = await isJarvesEnabledForUser(db, {
-        userId: req.user.id,
-        companyId: req.user.companyId,
-      });
+      const [state, enabledForMe] = await Promise.all([
+        getJarvesLicenceState(db, req.user.companyId),
+        isJarvesEnabledForUser(db, {
+          userId: req.user.id,
+          companyId: req.user.companyId,
+        }),
+      ]);
       res.json({ success: true, data: { ...state, enabledForMe } });
     } catch (error) {
       console.error("JARVES licence state error:", error?.message || error);
