@@ -3,7 +3,7 @@ import { AlertCircle, Plus, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 
 const uid = (prefix = 'tf') => globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 const resourceName = (path) => String(path || '').replace(/^variables\./, '')
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
 const objectLabel = (value) => value?.label || value?.name || objectKey(value)
