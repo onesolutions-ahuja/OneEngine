@@ -1,5 +1,5 @@
+import { readdir, stat } from "node:fs/promises";
 import { createInventoryMovement } from "./inventory.js";
-import { receivePurchase } from "./purchaseReceiving.js";
 import { executeSupplierPayment } from "./supplierPaymentExecution.js";
 import { createGenericOrder, transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
@@ -14,27 +14,8 @@ import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveRecei
 // Only capabilities with a confirmed runtime caller remain here. Business
 // capabilities are migrated to visible metadata/Flow and removed from this
 // registry as their callers are converted to generic primitives.
-export const PLATFORM_FUNCTIONS = Object.freeze([
-  {
-    key: "purchase.receive",
-    category: "PURCHASING",
-    description: "Compatibility capability while purchase receiving is migrated to Flow.",
-    inputs: { type: "object", required: ["purchaseId"] },
-    outputs: { type: "object" },
-    permissions: ["purchases.receive"],
-    handler: async ({ inputs = {}, client, companyId, userId, req }) =>
-      receivePurchase({
-        client,
-        purchaseId: inputs.purchaseId,
-        companyId: companyId || req?.user?.companyId,
-        userId: userId || req?.user?.id,
-        storeId: inputs.storeId || req?.user?.storeId,
-        requestedItems: inputs.requestedItems || null,
-        receiptMeta: inputs.receiptMeta || {},
-        createInventoryMovement,
-      }),
-  },
-  {
+const CORE_PLATFORM_FUNCTIONS = Object.freeze([
+{
     key: "supplier.payment.execute",
     category: "SUPPLIER_ACCOUNTING",
     description: "Compatibility capability while supplier payment is migrated to Flow.",
@@ -281,6 +262,21 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
       }),
   },
 ]);
+
+const PACKAGE_ROOT = new URL("../packages/", import.meta.url);
+const packageFunctions = [];
+for (const directory of await readdir(PACKAGE_ROOT, { withFileTypes: true })) {
+  if (!directory.isDirectory()) continue;
+  const functionsUrl = new URL(`../packages/${directory.name}/functions.js`, import.meta.url);
+  try { await stat(functionsUrl); } catch { continue; }
+  const module = await import(functionsUrl.href);
+  const declared = Array.isArray(module.packageFunctions) ? module.packageFunctions : Array.isArray(module.default) ? module.default : [];
+  for (const definition of declared) {
+    if (definition?.key && typeof definition.handler === "function") packageFunctions.push(definition);
+  }
+}
+
+export const PLATFORM_FUNCTIONS = Object.freeze([...CORE_PLATFORM_FUNCTIONS, ...packageFunctions]);
 
 const duplicates = PLATFORM_FUNCTIONS
   .map((item) => item.key)

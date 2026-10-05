@@ -7735,6 +7735,44 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     } catch (error) { next(error); }
   });
 
+  async function assertWorkflowActionPermissions(req, actions) {
+    for (const workflowAction of actions || []) {
+      validateWorkflowAction(workflowAction);
+      const actionType = workflowAction.type || workflowAction.key;
+      if (String(actionType || "").toUpperCase() === "CALL_FUNCTION") {
+        const functionKey = workflowAction.functionKey || workflowAction.function_key;
+        const functionDefinition = getRegisteredFunction(functionKey);
+        if (!functionDefinition) {
+          const error = new Error(`Function "${functionKey}" is not registered`);
+          error.status = 422;
+          throw error;
+        }
+        for (const permission of Array.isArray(functionDefinition.permissions) ? functionDefinition.permissions : []) {
+          if (!(await hasExecutionPermission(req, permission))) {
+            const error = new Error("You do not have permission to execute this function");
+            error.status = 403;
+            throw error;
+          }
+        }
+        const any = Array.isArray(functionDefinition.permissionsAny) ? functionDefinition.permissionsAny : [];
+        if (any.length && !(await Promise.all(any.map((permission) => hasExecutionPermission(req, permission)))).some(Boolean)) {
+          const error = new Error("You do not have permission to execute this function");
+          error.status = 403;
+          throw error;
+        }
+        continue;
+      }
+      const definition = getWorkflowActionDefinition(actionType);
+      for (const requiredPermission of definition?.requiredPermissions || []) {
+        if (!(await hasExecutionPermission(req, requiredPermission))) {
+          const error = new Error(`You do not have permission to execute ${actionType}`);
+          error.status = 403;
+          throw error;
+        }
+      }
+    }
+  }
+
   router.get("/platform/runtime/objects/:objectKey/buttons", authenticate, async (req, res, next) => {
     try {
       const { object } = await getRecordMetadata(req.params.objectKey, req);
@@ -7755,6 +7793,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const visible = [];
       for (const button of result.rows || []) {
         if (button.required_permission && !(await hasExecutionPermission(req, button.required_permission))) continue;
+        const requiredAny = Array.isArray(button.config?.requiredPermissionsAny) ? button.config.requiredPermissionsAny : [];
+        if (requiredAny.length && !(await Promise.all(requiredAny.map((permission) => hasExecutionPermission(req, permission)))).some(Boolean)) continue;
         visible.push(button);
       }
       res.json({ success: true, data: visible });
@@ -7776,6 +7816,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const button = buttonResult.rows[0];
       if (!button) return res.status(404).json({ success: false, message: "Registered button not found" });
       if (button.required_permission && !(await hasExecutionPermission(req, button.required_permission))) {
+        return res.status(403).json({ success: false, message: "You do not have permission to execute this button" });
+      }
+      const requiredAny = Array.isArray(button.config?.requiredPermissionsAny) ? button.config.requiredPermissionsAny : [];
+      if (requiredAny.length && !(await Promise.all(requiredAny.map((permission) => hasExecutionPermission(req, permission)))).some(Boolean)) {
         return res.status(403).json({ success: false, message: "You do not have permission to execute this button" });
       }
 
@@ -7804,13 +7848,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         discount: Number(context.discount || 0),
         total: Number(context.total || 0),
         basket: Array.isArray(context.basket) ? context.basket.slice(0, 500) : [],
-        source: "TILL_RUNTIME",
+        source: context.source || "METADATA_RUNTIME",
       };
 
       if (button.target_type === "workflow") {
-        if (!(await hasExecutionPermission(req, "workflow.execute"))) {
-          return res.status(403).json({ success: false, message: "You do not have permission to execute workflows" });
-        }
         const workflowResult = await db(
           `SELECT * FROM platform_rules
             WHERE object_id=$1 AND active=true
@@ -7825,15 +7866,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
         if (!actions.length) return res.status(422).json({ success: false, message: "Configured workflow contains no executable actions" });
 
-        for (const workflowAction of actions) {
-          validateWorkflowAction(workflowAction);
-          const definition = getWorkflowActionDefinition(workflowAction.type || workflowAction.key);
-          for (const requiredPermission of definition?.requiredPermissions || []) {
-            if (!(await hasExecutionPermission(req, requiredPermission))) {
-              return res.status(403).json({ success: false, message: `You do not have permission to execute ${workflowAction.type || workflowAction.key}` });
-            }
-          }
-        }
+        await assertWorkflowActionPermissions(req, actions);
 
         const run = await createWorkflowRun({
           db,
@@ -8038,6 +8071,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (!workflow) return res.status(404).json({ success: false, message: "Configured workflow not found" });
         const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
         if (!actions.length) return res.status(422).json({ success: false, message: "Configured workflow contains no executable actions" });
+        await assertWorkflowActionPermissions(req, actions);
         const run = await createWorkflowRun({
           db,
           companyId: req.user.companyId,

@@ -4904,16 +4904,28 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
   }
 
   for (const button of Array.isArray(manifest.buttons) ? manifest.buttons : []) {
-    const objectId = objectIds.get(button.objectKey || button.object_key) || objectIds.values().next().value || null;
-    const actionKey = button.actionKey || button.action_key;
-    if (!objectId || !safeMetadataKey(button.buttonKey || button.button_key) || typeof button.label !== "string" || !button.label.trim() || !actionKey) {
-      throw new Error("Package buttons require a declared object, safe key, label and action target");
+    const objectKey = button.objectKey || button.object_key;
+    let objectId = objectIds.get(objectKey);
+    if (!objectId && objectKey) {
+      const external = await db(
+        "SELECT id FROM platform_objects WHERE object_key=$1 AND (company_id IS NULL OR company_id=$2) LIMIT 1",
+        [objectKey, companyId]
+      );
+      objectId = external.rows[0]?.id || null;
+    }
+    const buttonKey = button.buttonKey || button.button_key;
+    const targetType = String(button.targetType || button.target_type || "action").toLowerCase();
+    const actionKey = button.actionKey || button.action_key || null;
+    const targetKey = button.targetKey || button.target_key || actionKey;
+    if (!objectId || !safeMetadataKey(buttonKey) || typeof button.label !== "string" || !button.label.trim() ||
+        !["action", "workflow"].includes(targetType) || !targetKey) {
+      throw new Error("Package buttons require an available object, safe key, label and action/workflow target");
     }
     const registered = await db(
       `INSERT INTO platform_buttons
        (company_id,object_id,button_key,label,action_key,placement,visibility_rule,config,active,target_type,target_key,variant,required_permission,input_mappings,
         source_package_id,source_package_version,managed,package_required)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,true,'action',$5,$9,$10,'{}'::jsonb,$11,$12,true,$13)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,true,$9,$10,$11,$12,$13::jsonb,$14,$15,true,$16)
        ON CONFLICT (company_id,button_key) WHERE company_id IS NOT NULL
        DO UPDATE SET
          object_id=CASE WHEN platform_buttons.user_modified THEN platform_buttons.object_id ELSE EXCLUDED.object_id END,
@@ -4923,23 +4935,25 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
          visibility_rule=CASE WHEN platform_buttons.user_modified THEN platform_buttons.visibility_rule ELSE EXCLUDED.visibility_rule END,
          config=CASE WHEN platform_buttons.user_modified THEN platform_buttons.config ELSE COALESCE(platform_buttons.config,'{}'::jsonb) || EXCLUDED.config END,
          active=CASE WHEN platform_buttons.user_modified THEN platform_buttons.active ELSE true END,
-         target_type=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_type ELSE 'action' END,
+         target_type=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_type ELSE EXCLUDED.target_type END,
          target_key=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_key ELSE EXCLUDED.target_key END,
          variant=CASE WHEN platform_buttons.user_modified THEN platform_buttons.variant ELSE EXCLUDED.variant END,
          required_permission=CASE WHEN platform_buttons.user_modified THEN platform_buttons.required_permission ELSE EXCLUDED.required_permission END,
+         input_mappings=CASE WHEN platform_buttons.user_modified THEN platform_buttons.input_mappings ELSE EXCLUDED.input_mappings END,
          source_package_version=EXCLUDED.source_package_version,managed=true,
          package_required=EXCLUDED.package_required,updated_at=NOW()
        WHERE platform_buttons.config->>'packageOwned'='true'
          AND platform_buttons.config->>'packageId'=EXCLUDED.config->>'packageId'
        RETURNING id`,
-      [companyId || null, objectId, button.buttonKey || button.button_key,
-        button.label.trim(), actionKey, button.placement || "record",
-        JSON.stringify(button.visibilityRule || button.visibility_rule || {}),
+      [companyId || null, objectId, buttonKey, button.label.trim(), actionKey || targetKey,
+        button.placement || "record", JSON.stringify(button.visibilityRule || button.visibility_rule || {}),
         JSON.stringify({ packageOwned: true, packageId, ...(button.config || {}) }),
-        button.variant || "primary", button.requiredPermission || button.required_permission || null,
+        targetType, targetKey, button.variant || "primary",
+        button.requiredPermission || button.required_permission || null,
+        JSON.stringify(button.inputMappings || button.input_mappings || {}),
         packageId, packageVersion, button.required === true]
     );
-    if (!registered.rows.length) throw new Error(`Package button key is owned by another declaration: ${button.buttonKey || button.button_key}`);
+    if (!registered.rows.length) throw new Error(`Package button key is owned by another declaration: ${buttonKey}`);
   }
 
   const packageRules = [
