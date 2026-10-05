@@ -15,7 +15,7 @@ import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs, enqueuePlatformJob } from "./services/platformJobs.js";
 import { processApprovalDueJob } from "./services/platformApprovals.js";
 import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
-import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
+import { registerTrustedPackageCatalogue, validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
 import { claimDueReportSubscriptions } from "./services/reportSubscriptionScheduler.js";
@@ -2360,7 +2360,14 @@ async function startServer() {
       ].filter(Boolean).join(" ");
       throw new Error(`Package catalogue startup verification failed${details ? `: ${details}` : ""}`);
     }
-    console.log(`onePOS: package catalogue ready (${startupRegistryHealth.actualCount}/${startupRegistryHealth.expectedCount} public packages verified)`);
+    const trustedRegistryRows = await db(
+      `SELECT package_key,version,manifest
+         FROM package_registry
+        WHERE active=true
+        ORDER BY package_key`
+    );
+    const trustedPackageState = registerTrustedPackageCatalogue(trustedRegistryRows.rows);
+    console.log(`onePOS: package catalogue ready (${startupRegistryHealth.actualCount}/${startupRegistryHealth.expectedCount} public packages verified; ${trustedPackageState.count} trusted registry packages)`);
 
     // Operator-only one-time package activation hook. This is driven entirely
     // by the private service environment and is idempotent, so it can be used
