@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ignored = new Set(["node_modules", ".git", "dist", "build", "coverage"]);
@@ -34,6 +35,23 @@ const patterns = [
   /import\s*\(\s*["']([^"']+)["']\s*\)/g,
 ];
 
+const syntaxFailures = [];
+for (const file of sourceFiles) {
+  const result = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
+  if (result.status !== 0) {
+    syntaxFailures.push({
+      file: path.relative(root, file).replaceAll(path.sep, "/"),
+      error: String(result.stderr || result.stdout || "Syntax check failed").trim(),
+    });
+  }
+}
+
+if (syntaxFailures.length) {
+  console.error("Runtime JavaScript syntax failures:");
+  for (const item of syntaxFailures) console.error(` - ${item.file}: ${item.error}`);
+  process.exit(1);
+}
+
 const missing = [];
 for (const file of sourceFiles) {
   const content = fs.readFileSync(file, "utf8");
@@ -59,4 +77,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`Runtime import check passed (${sourceFiles.length} source files scanned).`);
+console.log(`Runtime syntax/import check passed (${sourceFiles.length} source files scanned).`);
