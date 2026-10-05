@@ -2050,19 +2050,19 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           actions: [
             { id: "get_product", label: "Get Product", apiName: "get_product", key: "GET_RECORDS", objectKey: "product",
-              filters: [{ field: "id", operator: "equals", value: { path: "record.productId" } }], limit: 1, store: "first" },
+              filters: [{ field: "id", operator: "equals", value: { path: "$record.productId" } }], limit: 1, store: "first" },
             { id: "price_is_valid", label: "Requested Price Is Valid", apiName: "price_is_valid", key: "FORMULA",
               resourceName: "priceIsValid", resultType: "boolean",
               expression: "requestedPrice > 0",
-              inputs: { requestedPrice: { path: "record.requestedPrice" } } },
+              inputs: { requestedPrice: { path: "$record.requestedPrice" } } },
             { id: "validate_price", label: "Validate Requested Price", apiName: "validate_price", key: "CONDITION",
               outcomes: [{ id: "valid", label: "Valid Price", condition: { match: "all", conditions: [{ field: "variables.priceIsValid", operator: "equals", value: true }] },
                 branch: ["approved_price","approved_reason"] }],
               defaultLabel: "Invalid Price", defaultBranch: ["invalid_price"] },
             { id: "approved_price", label: "Set Approved Price", apiName: "approved_price", key: "ASSIGNMENT",
-              variableName: "approvedPrice", variableType: "currency", operator: "set", value: { path: "record.requestedPrice" } },
+              variableName: "approvedPrice", variableType: "currency", operator: "set", value: { path: "$record.requestedPrice" } },
             { id: "approved_reason", label: "Set Override Reason", apiName: "approved_reason", key: "ASSIGNMENT",
-              variableName: "approvedReason", variableType: "text", operator: "set", value: { path: "record.reason" } },
+              variableName: "approvedReason", variableType: "text", operator: "set", value: { path: "$record.reason" } },
             { id: "invalid_price", label: "Reject Invalid Price", apiName: "invalid_price", key: "CUSTOM_ERROR",
               errorMessage: "Price override must be greater than zero", errorLocation: "record" },
           ],
@@ -2080,7 +2080,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           actions: [
             { id: "amount_is_valid", label: "Petty Cash Amount Is Valid", apiName: "amount_is_valid", key: "FORMULA",
               resourceName: "amountIsValid", resultType: "boolean", expression: "amount > 0",
-              inputs: { amount: { path: "record.amount" } } },
+              inputs: { amount: { path: "$record.amount" } } },
             { id: "validate_amount", label: "Validate Petty Cash", apiName: "validate_amount", key: "CONDITION",
               outcomes: [{ id: "valid", label: "Valid Amount", condition: { match: "all", conditions: [{ field: "variables.amountIsValid", operator: "equals", value: true }] },
                 branch: ["create_cash_ledger"] }],
@@ -2088,11 +2088,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { id: "create_cash_ledger", label: "Create Cash Ledger Entry", apiName: "create_cash_ledger", key: "CREATE_RECORD",
               objectKey: "cash_ledger",
               fieldValues: {
-                till_session_id: { path: "record.tillSessionId" },
-                user_id: { path: "record.userId" },
+                till_session_id: { path: "$record.tillSessionId" },
+                user_id: { path: "$record.userId" },
                 type: "cash_out",
-                amount: { path: "record.amount" },
-                reason: { path: "record.reason" }
+                amount: { path: "$record.amount" },
+                reason: { path: "$record.reason" }
               } },
             { id: "invalid_amount", label: "Reject Invalid Amount", apiName: "invalid_amount", key: "CUSTOM_ERROR",
               errorMessage: "Petty cash amount must be greater than zero", errorLocation: "record" },
@@ -2110,9 +2110,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "CALL_FUNCTION",
               functionKey: "temporary.receipt.download.create",
               inputs: {
-                saleId: { path: "record.id" },
-                expiryMinutes: { path: "record.expiryMinutes" },
-                baseUrl: { path: "record.baseUrl" }
+                saleId: { path: "$record.id" },
+                expiryMinutes: { path: "$record.expiryMinutes" },
+                baseUrl: { path: "$record.baseUrl" }
               } },
           ],
         },
@@ -2135,12 +2135,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
               resourceName: "allowed", resultType: "boolean",
               expression: "(event == \"AUTO\" && (mode == \"ALWAYS\" || (mode == \"ONLY_WHEN_PRINTER_UNAVAILABLE\" && !printerAvailable))) || (event == \"MANUAL\" && allowManual) || (event == \"REGENERATE\" && allowRegenerate) || (event == \"NEW_SALE\" && autoClose)",
               inputs: {
-                event: { path: "record.event" },
-                mode: { path: "record.mode" },
-                printerAvailable: { path: "record.printerAvailable" },
-                allowManual: { path: "record.allowManual" },
-                allowRegenerate: { path: "record.allowRegenerate" },
-                autoClose: { path: "record.autoClose" }
+                event: { path: "$record.event" },
+                mode: { path: "$record.mode" },
+                printerAvailable: { path: "$record.printerAvailable" },
+                allowManual: { path: "$record.allowManual" },
+                allowRegenerate: { path: "$record.allowRegenerate" },
+                autoClose: { path: "$record.autoClose" }
               } },
           ],
         },
@@ -2152,7 +2152,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           actions: [
             { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "CALL_FUNCTION",
               functionKey: "temporary.receipt.download.revoke_for_sale",
-              inputs: { saleId: { path: "record.id" } } },
+              inputs: { saleId: { path: "$record.id" } } },
           ],
         },
       ];
