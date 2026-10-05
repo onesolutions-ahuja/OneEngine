@@ -1348,9 +1348,29 @@ const operationalObjects = [
 ];
 
 export async function initializePlatformMetadata(pool, { includeOperationalObjects = false } = {}) {
-  await pool.query(platformSchema);
+  const bootstrapQuery = async (label, sql, params = []) => {
+    const startedAt = Date.now();
+    console.log(`onePOS: platform bootstrap step start: ${label}`);
+    try {
+      const result = await pool.query({
+        text: sql,
+        values: params,
+        query_timeout: 30000,
+      });
+      console.log(`onePOS: platform bootstrap step ready: ${label} (${Date.now() - startedAt}ms)`);
+      return result;
+    } catch (error) {
+      console.error(`onePOS: platform bootstrap step failed: ${label}`, error);
+      throw error;
+    }
+  };
+  await bootstrapQuery("schema", platformSchema);
+  console.log("onePOS: platform bootstrap step start: internal app catalog");
   await seedInternalAppCatalog(pool);
+  console.log("onePOS: platform bootstrap step ready: internal app catalog");
+  console.log("onePOS: platform bootstrap step start: package registry");
   await seedPackageRegistry(pool);
+  console.log("onePOS: platform bootstrap step ready: package registry");
 
   /*
    * Sale is the single exposed transaction Object. Physical sale_items rows
