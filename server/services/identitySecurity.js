@@ -350,7 +350,7 @@ export async function createTrackedSession(db, { user, ip, userAgent, authMethod
   const id = randomUUID();
   await db(
     `INSERT INTO identity_sessions(id,company_id,user_id,expires_at,ip_address,user_agent,auth_method,origin_host,assurance_level,assurance_verified_at)
-     VALUES($1,$2,$3,NOW()+($4::text||' hours')::interval,$5::inet,$6,$7,$8,$9,CASE WHEN $9 IS NULL THEN NULL ELSE NOW() END)`,
+     VALUES($1,$2,$3,NOW()+($4::text||' hours')::interval,$5::inet,$6,$7,$8,$9::text,CASE WHEN $9::text IS NULL THEN NULL ELSE NOW() END)`,
     [id, user.company_id || null, user.id, hours, ip, userAgent, authMethod, originHost, assuranceLevel]
   );
   return id;
