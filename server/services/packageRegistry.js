@@ -3447,7 +3447,7 @@ export function packageDefinition(entry) {
             objectKey: "purchase", label: "Purchase", pluralLabel: "Purchases",
             description: "Protected supplier purchase header.", sourceTable: "purchases",
             metadataScope: "global", storeScoped: true, required: true,
-            adoptFromPackageKeys: ["retail_pos"], config: { protectedWrites: true, trackHistory: true },
+            adoptFromPackageKeys: ["retail_pos"], config: { flowWritesOnly: true, trackHistory: true },
             fields: [
               { apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false },
               { apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:true },
@@ -3470,7 +3470,7 @@ export function packageDefinition(entry) {
             objectKey: "purchase_line", label: "Purchase Line", pluralLabel: "Purchase Lines",
             description: "Protected purchase product lines.", sourceTable: "purchase_items",
             metadataScope: "global", required: true, adoptFromPackageKeys: ["retail_pos"],
-            config: { protectedWrites: true },
+            config: { flowWritesOnly: true },
             fields: [
               { apiName:"purchase_id",label:"Purchase",fieldType:"lookup",sourceColumn:"purchase_id",writable:true },
               { apiName:"product_id",label:"Product",fieldType:"lookup",sourceColumn:"product_id",writable:true,config:{relatedObjectKey:"product"} },
@@ -3513,7 +3513,10 @@ export function packageDefinition(entry) {
           {objectKey:"purchase_receipt",viewKey:"receipts",label:"Purchase Receipts",columns:["purchase_id","reference_number","received_at","received_by","notes"],sort:{field:"received_at",direction:"desc"},isDefault:true},
         ],
         workflows: [
-          {objectKey:"purchase",name:"Purchase Create",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[{id:"purchase_create",label:"Purchase Create",key:"RUN_SUBFLOW",subflowApiName:"PURCHASE_CREATE",inputAssignments:{supplierId:{path:"record.supplierId"},supplierName:{path:"record.supplierName"},referenceNumber:{path:"record.referenceNumber"},purchaseDate:{path:"record.purchaseDate"},notes:{path:"record.notes"},items:{path:"record.items"}}}]},
+          {objectKey:"purchase",name:"Purchase Create",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",inputContract:[{name:"purchase",type:"record",required:true},{name:"items",type:"record_collection",required:true}],outputContract:[{name:"purchase",type:"record",source:"variables.purchase"}],actions:[
+            {id:"create_purchase",label:"Create Purchase",key:"CREATE_RECORD",objectKey:"purchase",recordResource:{path:"variables.purchase"}},
+            {id:"create_purchase_lines",label:"Create Purchase Lines",key:"CREATE_RECORD",objectKey:"purchase_line",recordCollectionResource:{path:"variables.items"},commonFieldValues:{purchase_id:{path:"variables.purchase.id"}}}
+          ],variables:[{value:"variables.purchase",apiName:"purchase",label:"Purchase",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:true,objectKey:"purchase"},{value:"variables.items",apiName:"items",label:"Purchase Lines",type:"Variable",dataType:"Record",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"purchase_line"}]},
           {objectKey:"purchase",name:"Purchase Receive",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[{id:"purchase_receive",label:"Purchase Receive",key:"RUN_SUBFLOW",subflowApiName:"PURCHASE_RECEIVE",inputAssignments:{purchaseId:{path:"record.id"},receivingReference:{path:"record.receivingReference"},receivingNotes:{path:"record.receivingNotes"},now:{path:"record.now"},userId:{path:"record.userId"}}}]},
           {objectKey:"purchase_line",name:"Supplier Return Execute",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[{id:"supplier_return",label:"Return Stock",key:"RUN_SUBFLOW",subflowApiName:"SUPPLIER_RETURN_EXECUTE",inputAssignments:{purchaseItemId:{path:"record.id"},purchaseId:{path:"record.purchase_id"},productId:{path:"record.product_id"},quantity:{path:"record.quantityToReturn"},reason:{path:"record.reason"},returnNumber:{path:"record.returnNumber"},supplierId:{path:"record.supplierId"},unitCost:{path:"record.unit_cost"},userId:{path:"record.userId"}}}]},
         ],
