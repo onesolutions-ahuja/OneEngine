@@ -212,7 +212,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       setLoading(false)
     }
     try {
-      const cachedVersion = usableCached?.catalogue?.data?.version || usableCached?.catalogue?.version || ''
       const catalogueQuery = new URLSearchParams()
       catalogueQuery.set('active', 'true')
       const cataloguePath = `/api/platform/objects/product/records${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
