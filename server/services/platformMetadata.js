@@ -2152,6 +2152,52 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
+          name: "OneTill - Checkout Session Preflight",
+          apiName: "ONETILL_SESSION_PREFLIGHT",
+          inputContract: [
+            { name: "tillSessionId", label: "Till Session", type: "text", required: false },
+            { name: "online", label: "Online", type: "boolean", required: true },
+          ],
+          outputContract: [
+            { name: "requiresSession", label: "Requires Open Till Session", type: "boolean", source: "variables.requiresSession" },
+            { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+          ],
+          actions: [
+            { id:"session_required",label:"1. Decide If Till Session Is Required",apiName:"session_required",key:"ASSIGNMENT",variableName:"requiresSession",variableType:"boolean",operator:"set",value:{path:"$record.online"} },
+            { id:"session_exists",label:"2. Check Open Till Session Record",apiName:"session_exists",key:"FORMULA",resourceName:"hasTillSession",resultType:"boolean",expression:'COALESCE(tillSessionId,"") != ""',inputs:{tillSessionId:{path:"$record.tillSessionId"}} },
+            { id:"session_allowed",label:"3. Decide If Checkout Can Continue",apiName:"session_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"!requiresSession || hasTillSession",inputs:{requiresSession:{path:"variables.requiresSession"},hasTillSession:{path:"variables.hasTillSession"}} },
+          ],
+        },
+        {
+          name: "OneTill - Select Payment Mode",
+          apiName: "ONETILL_PAYMENT_MODE",
+          inputContract: [
+            { name: "paymentMode", label: "Payment Mode", type: "text", required: true },
+            { name: "paymentKind", label: "Payment Kind", type: "text", required: true },
+            { name: "allowOffline", label: "Allow Offline", type: "boolean", required: true },
+            { name: "online", label: "Online", type: "boolean", required: true },
+            { name: "customerSelected", label: "Customer Selected", type: "boolean", required: true },
+            { name: "hasGiftCardCode", label: "Gift Card Code Supplied", type: "boolean", required: true },
+            { name: "cashReceived", label: "Cash Received", type: "currency", required: true },
+            { name: "total", label: "Sale Total", type: "currency", required: true },
+            { name: "requiresConnector", label: "Requires Connector", type: "boolean", required: true },
+          ],
+          outputContract: [
+            { name: "selectedPaymentMode", label: "Selected Payment Mode", type: "text", source: "variables.selectedPaymentMode" },
+            { name: "connectorRequired", label: "Connector Required", type: "boolean", source: "variables.connectorRequired" },
+            { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+          ],
+          actions: [
+            { id:"payment_set_mode",label:"1. Set Selected Payment Mode",apiName:"payment_set_mode",key:"ASSIGNMENT",variableName:"selectedPaymentMode",variableType:"text",operator:"set",value:{path:"$record.paymentMode"} },
+            { id:"payment_connection",label:"2. Check Online/Offline Eligibility",apiName:"payment_connection",key:"FORMULA",resourceName:"connectionAllowed",resultType:"boolean",expression:"online || allowOffline",inputs:{online:{path:"$record.online"},allowOffline:{path:"$record.allowOffline"}} },
+            { id:"payment_customer",label:"3. Check Customer Requirement",apiName:"payment_customer",key:"FORMULA",resourceName:"customerAllowed",resultType:"boolean",expression:'paymentKind != "CREDIT" || customerSelected',inputs:{paymentKind:{path:"$record.paymentKind"},customerSelected:{path:"$record.customerSelected"}} },
+            { id:"payment_gift",label:"4. Check Gift Card Requirement",apiName:"payment_gift",key:"FORMULA",resourceName:"giftAllowed",resultType:"boolean",expression:'paymentKind != "GIFT_CARD" || hasGiftCardCode',inputs:{paymentKind:{path:"$record.paymentKind"},hasGiftCardCode:{path:"$record.hasGiftCardCode"}} },
+            { id:"payment_cash",label:"5. Check Cash Received",apiName:"payment_cash",key:"FORMULA",resourceName:"cashAllowed",resultType:"boolean",expression:'paymentKind != "CASH" || cashReceived >= total',inputs:{paymentKind:{path:"$record.paymentKind"},cashReceived:{path:"$record.cashReceived"},total:{path:"$record.total"}} },
+            { id:"payment_connector",label:"6. Read Connector Requirement",apiName:"payment_connector",key:"ASSIGNMENT",variableName:"connectorRequired",variableType:"boolean",operator:"set",value:{path:"$record.requiresConnector"} },
+            { id:"payment_allowed",label:"7. Final Payment Mode Decision",apiName:"payment_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"connectionAllowed && customerAllowed && giftAllowed && cashAllowed",inputs:{connectionAllowed:{path:"variables.connectionAllowed"},customerAllowed:{path:"variables.customerAllowed"},giftAllowed:{path:"variables.giftAllowed"},cashAllowed:{path:"variables.cashAllowed"}} },
+          ],
+        },
+        {
           name: "OneTill - Calculate Sale Pricing",
           apiName: "ONETILL_CALCULATE_SALE_PRICING",
           inputContract: [
@@ -2433,8 +2479,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_receipt_qr","workflow", tillWorkflowIds.get("ONETILL_RECEIPT_QR"), { recordContext: "last_sale", policyButtonKey: "till_receipt_qr_policy", policyEvent: "MANUAL" }],
         ["till_customer_display","command","customer_display", { command: "customer_display" }],
         ["till_open_drawer","command","open_drawer", { command: "open_drawer" }],
-        ["till_pay_cash","command","checkout", { command: "checkout", paymentMethod: "cash" }],
-        ["till_pay_card","command","checkout", { command: "checkout", paymentMethod: "card" }],
+        ["till_pay_cash","workflow",tillWorkflowIds.get("ONETILL_PAYMENT_MODE"), { checkoutFlow: true, paymentMode: "cash" }],
+        ["till_pay_card","workflow",tillWorkflowIds.get("ONETILL_PAYMENT_MODE"), { checkoutFlow: true, paymentMode: "card" }],
         ["till_pay_more","modal","payment", { modal: "payment" }],
         ["till_price_override","modal","price_override", { modal: "price_override", submitButtonKey: "till_price_override_apply" }],
         ["till_open_session","crud","till_session", { operation: "create", modal: "till" }],
@@ -2455,6 +2501,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       const internalWorkflowButtons = [
         ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
         ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("ONETILL_CHECKOUT_AGE_PREFLIGHT"),"sale.create"],
+        ["till_session_preflight","Checkout Session Preflight",tillWorkflowIds.get("ONETILL_SESSION_PREFLIGHT"),"sale.create"],
+        ["till_payment_process","Select Payment Mode",tillWorkflowIds.get("ONETILL_PAYMENT_MODE"),"sale.create"],
         ["till_pricing_calculate","Calculate Sale Pricing",tillWorkflowIds.get("ONETILL_CALCULATE_SALE_PRICING"),"sale.create"],
         ["till_split_payment_validate","Validate Split Payment",tillWorkflowIds.get("ONETILL_VALIDATE_SPLIT_PAYMENT"),"sale.create"],
         ["till_misc_line_build","Build Misc Sale Line",tillWorkflowIds.get("ONETILL_BUILD_MISC_LINE"),"sale.create"],
@@ -2482,6 +2530,15 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
                 config=COALESCE(config,'{}'::jsonb)||'{"modalOnFalse":"age"}'::jsonb,
                 updated_at=NOW()
           WHERE button_key='till_age_preflight'
+            AND company_id IS NULL
+            AND COALESCE(user_modified,FALSE)=FALSE`
+      ).catch(() => {});
+      await pool.query(
+        `UPDATE platform_buttons
+            SET placement='till_checkout_preflight',
+                config=COALESCE(config,'{}'::jsonb)||'{"modalOnFalse":"till"}'::jsonb,
+                updated_at=NOW()
+          WHERE button_key='till_session_preflight'
             AND company_id IS NULL
             AND COALESCE(user_modified,FALSE)=FALSE`
       ).catch(() => {});
