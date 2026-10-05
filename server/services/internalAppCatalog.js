@@ -146,7 +146,8 @@ const CATALOG = [
     visibility: "HIDDEN",
     systemOnly: true,
     installable: true,
-    dependencies: ["suppliers"],
+    dependencies: ["supplier_core"],
+    bootstrapFoundation: true,
     capabilities: ["supplier_accounting", "financial_ledger"],
   },
   {

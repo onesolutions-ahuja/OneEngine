@@ -26,9 +26,13 @@ function passesFilter(row, filter) {
   return left === right;
 }
 
-async function fetchOptions(source) {
-  if (!source?.objectKey) return [];
-  const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(source.objectKey)}/records?page=1&pageSize=200`);
+async function fetchOptions(source, { parentObjectKey = "", parentRecordId = "" } = {}) {
+  let response;
+  if (source?.relationshipKey && parentObjectKey && parentRecordId) {
+    response = await apiRequest(`/api/platform/objects/${encodeURIComponent(parentObjectKey)}/records/${encodeURIComponent(parentRecordId)}/related/${encodeURIComponent(source.relationshipKey)}?pageSize=100`);
+  } else if (source?.objectKey) {
+    response = await apiRequest(`/api/platform/objects/${encodeURIComponent(source.objectKey)}/records?page=1&pageSize=200`);
+  } else return [];
   const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [];
   return rows.filter((row) => passesFilter(row, source.filter)).map((row) => ({
     value: row?.[source.valueField || "id"],
@@ -64,7 +68,9 @@ export default function MetadataActionButtons({ objectKey, recordId = null, butt
   const collectOptions = async (fields, prefix = "", output = {}) => {
     for (const field of fields || []) {
       const key = prefix ? `${prefix}.${field.name}` : field.name;
-      if (field.type === "related_select" && field.optionsSource?.objectKey) output[key] = await fetchOptions(field.optionsSource);
+      if (field.type === "related_select" && (field.optionsSource?.objectKey || field.optionsSource?.relationshipKey)) {
+        output[key] = await fetchOptions(field.optionsSource, { parentObjectKey: objectKey, parentRecordId: recordId });
+      }
       if (field.type === "collection") await collectOptions(field.fields || [], `${key}[]`, output);
     }
     return output;

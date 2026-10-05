@@ -3386,6 +3386,12 @@ export function packageDefinition(entry) {
               { apiName: "subject", label: "Subject", fieldType: "text", sourceColumn: "subject", writable: true },
               { apiName: "body", label: "Body", fieldType: "text", sourceColumn: "body", required: true, writable: true, config: { multiline: true } },
               { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true },
+              { apiName: "total_invoiced", label: "Total Invoiced", fieldType: "rollup", writable: false, config: { operation: "SUM", relationshipKey: "invoices", field: "total", resultType: "currency" } },
+              { apiName: "total_paid", label: "Total Paid", fieldType: "rollup", writable: false, config: { operation: "SUM", relationshipKey: "payments", field: "amount", condition: { match: "all", conditions: [{ field: "status", operator: "equals", value: "COMPLETED" }] }, resultType: "currency" } },
+              { apiName: "total_credits", label: "Credits", fieldType: "rollup", writable: false, config: { operation: "SUM", relationshipKey: "ledger_entries", field: "amount", condition: { match: "all", conditions: [{ field: "debit", operator: "equals", value: false }] }, resultType: "currency" } },
+              { apiName: "total_debits", label: "Debits", fieldType: "rollup", writable: false, config: { operation: "SUM", relationshipKey: "ledger_entries", field: "amount", condition: { match: "all", conditions: [{ field: "debit", operator: "equals", value: true }] }, resultType: "currency" } },
+              { apiName: "outstanding_balance", label: "Outstanding", fieldType: "formula", writable: false, config: { expression: "MAX(total_invoiced - total_paid, 0)", resultType: "currency" } },
+              { apiName: "account_balance", label: "Account Balance", fieldType: "formula", writable: false, config: { expression: "total_debits - total_credits", resultType: "currency" } },
               { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false },
               { apiName: "updated_at", label: "Updated", fieldType: "datetime", sourceColumn: "updated_at", writable: false }
             ],
@@ -3553,6 +3559,7 @@ export function packageDefinition(entry) {
             description: "Canonical supplier identity and contact details.",
             sourceTable: "suppliers",
             metadataScope: "global",
+            adoptFromPackageKeys: ["retail_pos"],
             fields: [
               { apiName: "company_id", label: "Company", fieldType: "lookup", sourceColumn: "company_id", required: true, writable: false },
               { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
@@ -3573,6 +3580,7 @@ export function packageDefinition(entry) {
             description: "Supplier-specific product references, costs and effective dates.",
             sourceTable: "supplier_products",
             metadataScope: "global",
+            adoptFromPackageKeys: ["retail_pos"],
             fields: [
               { apiName: "company_id", label: "Company", fieldType: "lookup", sourceColumn: "company_id", required: true, writable: false },
               { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", sourceColumn: "supplier_id", required: true, writable: true, config: { relationshipKey: "supplier", relatedObjectKey: "supplier" } },
@@ -3597,7 +3605,7 @@ export function packageDefinition(entry) {
           { parentObjectKey: "supplier", childObjectKey: "purchase", relationshipKey: "purchases", relationshipType: "one_to_many", childFieldApiName: "supplier_id" },
         ],
         listViews: [
-          { objectKey: "supplier", viewKey: "all", label: "All Suppliers", columns: ["name", "contact_name", "phone", "email", "active", "updated_at"], isDefault: true },
+          { objectKey: "supplier", viewKey: "all", label: "All Suppliers", columns: ["name", "contact_name", "phone", "email", "outstanding_balance", "account_balance", "active", "updated_at"], isDefault: true },
           { objectKey: "supplier_product", viewKey: "sourcing", label: "Supplier Product Sourcing", columns: ["supplier_id", "product_id", "supplier_sku", "cost_price", "effective_from", "effective_to", "preferred", "active"], isDefault: true },
         ],
         permissionDeclarations: [
@@ -3769,20 +3777,24 @@ export function packageDefinition(entry) {
             description: "Authoritative supplier invoice records.",
             sourceTable: "supplier_invoices",
             required: true,
+            adoptFromPackageKeys: ["retail_pos"],
+            config: { protectedWrites: true },
             fields: [
-              { apiName: "company_id", label: "Company", fieldType: "lookup", required: true, writable: false },
-              { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", required: true, writable: false },
-              { apiName: "store_id", label: "Store", fieldType: "lookup", writable: false },
-              { apiName: "purchase_id", label: "Purchase Order", fieldType: "lookup", writable: false },
-              { apiName: "invoice_number", label: "Invoice Number", fieldType: "text", required: true, writable: false },
-              { apiName: "invoice_date", label: "Invoice Date", fieldType: "date", required: true, writable: false },
-              { apiName: "due_date", label: "Due Date", fieldType: "date", writable: false },
-              { apiName: "subtotal", label: "Subtotal", fieldType: "currency", required: true, writable: false },
-              { apiName: "tax", label: "VAT / Tax", fieldType: "currency", required: true, writable: false },
-              { apiName: "total", label: "Total", fieldType: "currency", required: true, writable: false },
-              { apiName: "status", label: "Status", fieldType: "picklist", required: true, writable: false, options: ["OPEN", "PARTIALLY_PAID", "PAID", "VOID"] },
-              { apiName: "created_at", label: "Created", fieldType: "datetime", writable: false },
-              { apiName: "updated_at", label: "Updated", fieldType: "datetime", writable: false },
+              { apiName: "company_id", label: "Company", fieldType: "lookup", sourceColumn: "company_id", required: true, writable: false },
+              { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", sourceColumn: "supplier_id", required: true, writable: false },
+              { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", writable: false },
+              { apiName: "purchase_id", label: "Purchase Order", fieldType: "lookup", sourceColumn: "purchase_id", writable: false },
+              { apiName: "invoice_number", label: "Invoice Number", fieldType: "text", sourceColumn: "invoice_number", required: true, writable: false },
+              { apiName: "invoice_date", label: "Invoice Date", fieldType: "date", sourceColumn: "invoice_date", required: true, writable: false },
+              { apiName: "due_date", label: "Due Date", fieldType: "date", sourceColumn: "due_date", writable: false },
+              { apiName: "subtotal", label: "Subtotal", fieldType: "currency", sourceColumn: "subtotal", required: true, writable: false },
+              { apiName: "tax", label: "VAT / Tax", fieldType: "currency", sourceColumn: "tax", required: true, writable: false },
+              { apiName: "total", label: "Total", fieldType: "currency", sourceColumn: "total", required: true, writable: false },
+              { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", required: true, writable: false, options: ["OPEN", "PARTIALLY_PAID", "PAID", "VOID"] },
+              { apiName: "paid_amount", label: "Paid", fieldType: "rollup", writable: false, config: { operation: "SUM", relationshipKey: "allocations", field: "amount", resultType: "currency" } },
+              { apiName: "outstanding_amount", label: "Outstanding", fieldType: "formula", writable: false, config: { expression: "MAX(total - paid_amount, 0)", resultType: "currency" } },
+              { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false },
+              { apiName: "updated_at", label: "Updated", fieldType: "datetime", sourceColumn: "updated_at", writable: false },
             ],
           },
           {
@@ -3793,16 +3805,18 @@ export function packageDefinition(entry) {
             description: "Authoritative supplier-account payment records.",
             sourceTable: "supplier_payments",
             required: true,
+            adoptFromPackageKeys: ["retail_pos"],
+            config: { protectedWrites: true },
             fields: [
-              { apiName: "company_id", label: "Company", fieldType: "lookup", required: true, writable: false },
-              { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", required: true, writable: false },
-              { apiName: "store_id", label: "Store", fieldType: "lookup", writable: false },
-              { apiName: "amount", label: "Amount", fieldType: "currency", required: true, writable: false },
-              { apiName: "payment_date", label: "Payment Date", fieldType: "date", required: true, writable: false },
-              { apiName: "payment_method", label: "Payment Method", fieldType: "text", writable: false },
-              { apiName: "reference", label: "Reference", fieldType: "text", writable: false },
-              { apiName: "status", label: "Status", fieldType: "picklist", required: true, writable: false, options: ["PENDING", "COMPLETED", "CANCELLED"] },
-              { apiName: "created_at", label: "Created", fieldType: "datetime", writable: false },
+              { apiName: "company_id", label: "Company", fieldType: "lookup", sourceColumn: "company_id", required: true, writable: false },
+              { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", sourceColumn: "supplier_id", required: true, writable: false },
+              { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", writable: false },
+              { apiName: "amount", label: "Amount", fieldType: "currency", sourceColumn: "amount", required: true, writable: false },
+              { apiName: "payment_date", label: "Payment Date", fieldType: "date", sourceColumn: "payment_date", required: true, writable: false },
+              { apiName: "payment_method", label: "Payment Method", fieldType: "text", sourceColumn: "payment_method", writable: false },
+              { apiName: "reference", label: "Reference", fieldType: "text", sourceColumn: "reference", writable: false },
+              { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", required: true, writable: false, options: ["PENDING", "COMPLETED", "CANCELLED"] },
+              { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false },
             ],
           },
           {
@@ -3813,10 +3827,12 @@ export function packageDefinition(entry) {
             description: "Authoritative junction between supplier payments and invoices.",
             sourceTable: "supplier_payment_allocations",
             required: true,
+            adoptFromPackageKeys: ["retail_pos"],
+            config: { protectedWrites: true },
             fields: [
-              { apiName: "payment_id", label: "Supplier Payment", fieldType: "lookup", required: true, writable: false },
-              { apiName: "invoice_id", label: "Supplier Invoice", fieldType: "lookup", required: true, writable: false },
-              { apiName: "amount", label: "Allocated Amount", fieldType: "currency", required: true, writable: false },
+              { apiName: "payment_id", label: "Supplier Payment", fieldType: "lookup", sourceColumn: "payment_id", required: true, writable: false },
+              { apiName: "invoice_id", label: "Supplier Invoice", fieldType: "lookup", sourceColumn: "invoice_id", required: true, writable: false },
+              { apiName: "amount", label: "Allocated Amount", fieldType: "currency", sourceColumn: "amount", required: true, writable: false },
             ],
           },
           {
@@ -3827,17 +3843,19 @@ export function packageDefinition(entry) {
             description: "Authoritative supplier-account ledger entries.",
             sourceTable: "supplier_ledger_entries",
             required: true,
+            adoptFromPackageKeys: ["retail_pos"],
+            config: { protectedWrites: true },
             fields: [
-              { apiName: "company_id", label: "Company", fieldType: "lookup", required: true, writable: false },
-              { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", required: true, writable: false },
-              { apiName: "store_id", label: "Store", fieldType: "lookup", writable: false },
-              { apiName: "entry_type", label: "Entry Type", fieldType: "picklist", required: true, writable: false, options: ["INVOICE", "PAYMENT", "RETURN_CREDIT", "OPENING"] },
-              { apiName: "reference_type", label: "Reference Type", fieldType: "text", writable: false },
-              { apiName: "reference_id", label: "Source Reference", fieldType: "lookup", writable: false },
-              { apiName: "reference", label: "Reference", fieldType: "text", writable: false },
-              { apiName: "amount", label: "Amount", fieldType: "currency", required: true, writable: false },
-              { apiName: "debit", label: "Debit", fieldType: "boolean", required: true, writable: false },
-              { apiName: "created_at", label: "Created", fieldType: "datetime", writable: false },
+              { apiName: "company_id", label: "Company", fieldType: "lookup", sourceColumn: "company_id", required: true, writable: false },
+              { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", sourceColumn: "supplier_id", required: true, writable: false },
+              { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", writable: false },
+              { apiName: "entry_type", label: "Entry Type", fieldType: "picklist", sourceColumn: "entry_type", required: true, writable: false, options: ["INVOICE", "PAYMENT", "RETURN_CREDIT", "OPENING"] },
+              { apiName: "reference_type", label: "Reference Type", fieldType: "text", sourceColumn: "reference_type", writable: false },
+              { apiName: "reference_id", label: "Source Reference", fieldType: "lookup", sourceColumn: "reference_id", writable: false },
+              { apiName: "reference", label: "Reference", fieldType: "text", sourceColumn: "reference", writable: false },
+              { apiName: "amount", label: "Amount", fieldType: "currency", sourceColumn: "amount", required: true, writable: false },
+              { apiName: "debit", label: "Debit", fieldType: "boolean", sourceColumn: "debit", required: true, writable: false },
+              { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false },
             ],
           },
           {
@@ -3848,28 +3866,31 @@ export function packageDefinition(entry) {
             description: "Shared financial ledger contract backed by existing entries.",
             sourceTable: "financial_ledger_entries",
             required: true,
+            adoptFromPackageKeys: ["retail_pos"],
+            config: { protectedWrites: true },
             fields: [
-              { apiName: "company_id", label: "Company", fieldType: "lookup", required: true, writable: false },
-              { apiName: "transaction_id", label: "Transaction", fieldType: "lookup", writable: false },
-              { apiName: "payment_id", label: "Payment", fieldType: "lookup", writable: false },
-              { apiName: "customer_id", label: "Customer", fieldType: "lookup", writable: false },
-              { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", writable: false },
-              { apiName: "supplier_invoice_id", label: "Supplier Invoice", fieldType: "lookup", writable: false },
-              { apiName: "transaction_type", label: "Transaction Type", fieldType: "text", required: true, writable: false },
-              { apiName: "debit", label: "Debit", fieldType: "currency", writable: false },
-              { apiName: "credit", label: "Credit", fieldType: "currency", writable: false },
-              { apiName: "amount", label: "Amount", fieldType: "currency", required: true, writable: false },
-              { apiName: "net_amount", label: "Net Amount", fieldType: "currency", writable: false },
-              { apiName: "vat_amount", label: "VAT / Tax", fieldType: "currency", writable: false },
-              { apiName: "reference", label: "Reference", fieldType: "text", writable: false },
-              { apiName: "status", label: "Status", fieldType: "text", writable: false },
-              { apiName: "created_at", label: "Created", fieldType: "datetime", writable: false },
+              { apiName: "company_id", label: "Company", fieldType: "lookup", sourceColumn: "company_id", required: true, writable: false },
+              { apiName: "transaction_id", label: "Transaction", fieldType: "lookup", sourceColumn: "transaction_id", writable: false },
+              { apiName: "payment_id", label: "Payment", fieldType: "lookup", sourceColumn: "payment_id", writable: false },
+              { apiName: "customer_id", label: "Customer", fieldType: "lookup", sourceColumn: "customer_id", writable: false },
+              { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", sourceColumn: "supplier_id", writable: false },
+              { apiName: "supplier_invoice_id", label: "Supplier Invoice", fieldType: "lookup", sourceColumn: "supplier_invoice_id", writable: false },
+              { apiName: "transaction_type", label: "Transaction Type", fieldType: "text", sourceColumn: "transaction_type", required: true, writable: false },
+              { apiName: "debit", label: "Debit", fieldType: "currency", sourceColumn: "debit", writable: false },
+              { apiName: "credit", label: "Credit", fieldType: "currency", sourceColumn: "credit", writable: false },
+              { apiName: "amount", label: "Amount", fieldType: "currency", sourceColumn: "amount", required: true, writable: false },
+              { apiName: "net_amount", label: "Net Amount", fieldType: "currency", sourceColumn: "net_amount", writable: false },
+              { apiName: "vat_amount", label: "VAT / Tax", fieldType: "currency", sourceColumn: "vat_amount", writable: false },
+              { apiName: "reference", label: "Reference", fieldType: "text", sourceColumn: "reference", writable: false },
+              { apiName: "status", label: "Status", fieldType: "text", sourceColumn: "status", writable: false },
+              { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false },
             ],
           },
         ],
         relationships: [
           { parentObjectKey: "supplier", childObjectKey: "supplier_invoice", relationshipKey: "invoices", relationshipType: "one_to_many", childFieldApiName: "supplier_id", required: true },
           { parentObjectKey: "supplier_invoice", childObjectKey: "supplier", relationshipKey: "supplier", relationshipType: "lookup", parentFieldApiName: "supplier_id", required: true },
+          { parentObjectKey: "supplier_invoice", childObjectKey: "supplier_payment_allocation", relationshipKey: "allocations", relationshipType: "one_to_many", childFieldApiName: "invoice_id", required: true },
           { parentObjectKey: "supplier", childObjectKey: "supplier_payment", relationshipKey: "payments", relationshipType: "one_to_many", childFieldApiName: "supplier_id", required: true },
           { parentObjectKey: "supplier_payment", childObjectKey: "supplier", relationshipKey: "supplier", relationshipType: "lookup", parentFieldApiName: "supplier_id", required: true },
           { parentObjectKey: "supplier_payment", childObjectKey: "supplier_payment_allocation", relationshipKey: "allocations", relationshipType: "one_to_many", childFieldApiName: "payment_id", required: true },
@@ -3880,15 +3901,75 @@ export function packageDefinition(entry) {
           { parentObjectKey: "financial_ledger", childObjectKey: "supplier", relationshipKey: "supplier", relationshipType: "lookup", parentFieldApiName: "supplier_id" },
         ],
         listViews: [
-          { objectKey: "supplier_invoice", viewKey: "supplier_invoices", label: "Supplier Invoices", columns: ["invoice_number", "supplier_id", "invoice_date", "due_date", "total", "status"] },
-          { objectKey: "supplier_payment", viewKey: "supplier_payments", label: "Supplier Payments", columns: ["supplier_id", "payment_date", "amount", "payment_method", "reference", "status"] },
-          { objectKey: "supplier_ledger", viewKey: "supplier_ledger", label: "Supplier Ledger", columns: ["supplier_id", "entry_type", "amount", "debit", "reference", "created_at"] },
+          { objectKey: "supplier_invoice", viewKey: "supplier_invoices", label: "Supplier Invoices", columns: ["invoice_number", "invoice_date", "due_date", "total", "paid_amount", "outstanding_amount", "status"], isDefault: true },
+          { objectKey: "supplier_payment", viewKey: "supplier_payments", label: "Supplier Payments", columns: ["payment_date", "amount", "payment_method", "reference", "status"], isDefault: true },
+          { objectKey: "supplier_ledger", viewKey: "supplier_ledger", label: "Supplier Statement", columns: ["created_at", "entry_type", "reference", "description", "amount", "debit"], sort: { field: "created_at", direction: "asc" }, isDefault: true },
           { objectKey: "financial_ledger", viewKey: "financial_ledger", label: "Financial Ledger", columns: ["transaction_type", "supplier_id", "amount", "debit", "credit", "reference", "created_at"] },
         ],
-        actions: [
-          { actionKey: "supplier_invoice.manage", label: "Manage Supplier Invoices", handlerKey: "SUPPLIER_INVOICE_MANAGE", requiredPermission: "purchase.edit" },
-          { actionKey: "supplier_payment.manage", label: "Manage Supplier Payments", handlerKey: "SUPPLIER_PAYMENT_MANAGE", requiredPermission: "purchase.edit" },
-          { actionKey: "supplier_ledger.view", label: "View Supplier Ledger", handlerKey: "SUPPLIER_LEDGER_VIEW", requiredPermission: "purchase.view" },
+        workflows: [
+          { objectKey: "supplier", name: "Supplier Invoice Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
+            { id: "supplier_invoice_create", label: "Add Invoice", key: "CALL_FUNCTION", functionKey: "supplier.invoice.create", inputs: {
+              supplierId: { path: "record.id" }, invoiceNumber: { path: "record.invoiceNumber" }, invoiceDate: { path: "record.invoiceDate" },
+              dueDate: { path: "record.dueDate" }, subtotal: { path: "record.subtotal" }, tax: { path: "record.tax" },
+              total: { path: "record.total" }, notes: { path: "record.notes" }
+            } }
+          ] },
+          { objectKey: "supplier", name: "Supplier Payment Execute", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
+            { id: "supplier_payment_execute", label: "Record Payment", key: "CALL_FUNCTION", functionKey: "supplier.payment.execute", inputs: {
+              supplierId: { path: "record.id" }, amount: { path: "record.amount" }, paymentMethod: { path: "record.paymentMethod" },
+              reference: { path: "record.reference" }, invoiceId: { path: "record.invoiceId" }, idempotencyKey: { path: "record.idempotencyKey" }
+            } }
+          ] },
+          { objectKey: "supplier", name: "Supplier Credit Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
+            { id: "supplier_credit_create", label: "Add Credit", key: "CALL_FUNCTION", functionKey: "supplier.ledger.adjust", inputs: {
+              supplierId: { path: "record.id" }, entryType: "RETURN_CREDIT", debit: false, amount: { path: "record.amount" },
+              reference: { path: "record.reference" }, description: { path: "record.description" }, idempotencyKey: { path: "record.idempotencyKey" }
+            } }
+          ] },
+          { objectKey: "supplier", name: "Supplier Debit Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
+            { id: "supplier_debit_create", label: "Add Debit", key: "CALL_FUNCTION", functionKey: "supplier.ledger.adjust", inputs: {
+              supplierId: { path: "record.id" }, entryType: "OPENING", debit: true, amount: { path: "record.amount" },
+              reference: { path: "record.reference" }, description: { path: "record.description" }, idempotencyKey: { path: "record.idempotencyKey" }
+            } }
+          ] },
+          { objectKey: "supplier", name: "Supplier Credit Note Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
+            { id: "supplier_credit_note_create", label: "Credit Note", key: "CALL_FUNCTION", functionKey: "supplier.ledger.adjust", inputs: {
+              supplierId: { path: "record.id" }, entryType: "RETURN_CREDIT", debit: false, referenceType: "SUPPLIER_CREDIT_NOTE",
+              amount: { path: "record.amount" }, reference: { path: "record.reference" }, description: { path: "record.description" },
+              idempotencyKey: { path: "record.idempotencyKey" }
+            } }
+          ] },
+        ],
+        buttons: [
+          { objectKey: "supplier", buttonKey: "supplier_add_invoice", label: "Add Invoice", targetType: "workflow", targetKey: "Supplier Invoice Create", placement: "record", variant: "primary",
+            config: { order: 20, requiredPermissionsAny: ["purchase.edit","inventory.adjust"], form: { submitLabel: "Add Invoice", fields: [
+              { name: "invoiceNumber", label: "Invoice number", type: "text", required: true }, { name: "invoiceDate", label: "Invoice date", type: "date", defaultValue: "today" },
+              { name: "dueDate", label: "Due date", type: "date" }, { name: "subtotal", label: "Subtotal", type: "number", min: 0, step: 0.01 },
+              { name: "tax", label: "Tax", type: "number", min: 0, step: 0.01, defaultValue: 0 }, { name: "total", label: "Total", type: "number", min: 0, step: 0.01, required: true },
+              { name: "notes", label: "Notes", type: "textarea" }
+            ] } } },
+          { objectKey: "supplier", buttonKey: "supplier_record_payment", label: "Record Payment", targetType: "workflow", targetKey: "Supplier Payment Execute", placement: "record", variant: "primary",
+            config: { order: 30, requiredPermissionsAny: ["payment.manage","purchase.edit","inventory.adjust"], form: { submitLabel: "Record Payment", fields: [
+              { name: "amount", label: "Amount", type: "number", min: 0.01, step: 0.01, required: true },
+              { name: "paymentMethod", label: "Method", type: "select", defaultValue: "BANK", options: [{value:"BANK",label:"Bank"},{value:"CASH",label:"Cash"},{value:"CARD",label:"Card"},{value:"OTHER",label:"Other"}] },
+              { name: "invoiceId", label: "Allocate to invoice", type: "related_select", optionsSource: { relationshipKey: "invoices", valueField: "id", labelFields: ["invoice_number","outstanding_amount"], filter: { field: "outstanding_amount", operator: "greater_than", value: 0 } } },
+              { name: "reference", label: "Reference", type: "text" }, { name: "idempotencyKey", type: "uuid" }
+            ] } } },
+          { objectKey: "supplier", buttonKey: "supplier_add_credit", label: "Add Credit", targetType: "workflow", targetKey: "Supplier Credit Create", placement: "record", variant: "secondary",
+            config: { order: 40, requiredPermissionsAny: ["purchase.edit","inventory.adjust"], form: { submitLabel: "Add Credit", fields: [
+              { name: "amount", label: "Amount", type: "number", min: 0.01, step: 0.01, required: true }, { name: "reference", label: "Reference", type: "text" },
+              { name: "description", label: "Reason / notes", type: "textarea" }, { name: "idempotencyKey", type: "uuid" }
+            ] } } },
+          { objectKey: "supplier", buttonKey: "supplier_add_debit", label: "Add Debit", targetType: "workflow", targetKey: "Supplier Debit Create", placement: "record", variant: "secondary",
+            config: { order: 50, requiredPermissionsAny: ["purchase.edit","inventory.adjust"], form: { submitLabel: "Add Debit", fields: [
+              { name: "amount", label: "Amount", type: "number", min: 0.01, step: 0.01, required: true }, { name: "reference", label: "Reference", type: "text" },
+              { name: "description", label: "Reason / notes", type: "textarea" }, { name: "idempotencyKey", type: "uuid" }
+            ] } } },
+          { objectKey: "supplier", buttonKey: "supplier_add_credit_note", label: "Credit Note", targetType: "workflow", targetKey: "Supplier Credit Note Create", placement: "record", variant: "secondary",
+            config: { order: 60, requiredPermissionsAny: ["purchase.edit","inventory.adjust"], form: { submitLabel: "Add Credit Note", fields: [
+              { name: "amount", label: "Amount", type: "number", min: 0.01, step: 0.01, required: true }, { name: "reference", label: "Credit note number", type: "text", required: true },
+              { name: "description", label: "Reason / notes", type: "textarea" }, { name: "idempotencyKey", type: "uuid" }
+            ] } } },
         ],
         permissionDeclarations: [
           { permission: "purchase.view", label: "View supplier accounting" },

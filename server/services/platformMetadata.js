@@ -1509,7 +1509,25 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       WHERE active=true
         AND COALESCE((manifest->>'bootstrapFoundation')::boolean,false)=true`
   );
-  for (const foundation of bootstrapFoundations.rows || []) {
+  const foundationByKey = new Map((bootstrapFoundations.rows || []).map((foundation) => [foundation.manifest?.packageKey, foundation]));
+  const orderedFoundations = [];
+  const visitingFoundations = new Set();
+  const visitedFoundations = new Set();
+  const visitFoundation = (foundation) => {
+    const key = foundation?.manifest?.packageKey;
+    if (!key || visitedFoundations.has(key)) return;
+    if (visitingFoundations.has(key)) throw new Error(`Bootstrap foundation dependency cycle at ${key}`);
+    visitingFoundations.add(key);
+    for (const dependency of foundation.manifest?.dependencies || []) {
+      const dependencyKey = typeof dependency === "string" ? dependency : dependency?.packageKey || dependency?.package_key;
+      if (foundationByKey.has(dependencyKey)) visitFoundation(foundationByKey.get(dependencyKey));
+    }
+    visitingFoundations.delete(key);
+    visitedFoundations.add(key);
+    orderedFoundations.push(foundation);
+  };
+  for (const foundation of bootstrapFoundations.rows || []) visitFoundation(foundation);
+  for (const foundation of orderedFoundations) {
     if (!foundation.id || !foundation.module_id) continue;
     await provisionPackageMetadata(pool.query.bind(pool), {
       packageId: foundation.id,

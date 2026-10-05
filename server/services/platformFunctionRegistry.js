@@ -1,6 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
 import { createInventoryMovement } from "./inventory.js";
-import { executeSupplierPayment } from "./supplierPaymentExecution.js";
 import { createGenericOrder, transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { dispatchIntegrationEvent } from "./integrationDispatcher.js";
@@ -16,22 +15,6 @@ import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveRecei
 // registry as their callers are converted to generic primitives.
 const CORE_PLATFORM_FUNCTIONS = Object.freeze([
 {
-    key: "supplier.payment.execute",
-    category: "SUPPLIER_ACCOUNTING",
-    description: "Compatibility capability while supplier payment is migrated to Flow.",
-    inputs: { type: "object", required: ["supplierId", "amount"] },
-    outputs: { type: "object" },
-    permissions: ["payment.manage"],
-    handler: async ({ inputs = {}, client, companyId, userId, req }) =>
-      executeSupplierPayment({
-        client,
-        companyId: companyId || req?.user?.companyId,
-        userId: userId || req?.user?.id,
-        defaultStoreId: req?.user?.storeId,
-        input: inputs,
-      }),
-  },
-  {
     key: "online_order.create",
     category: "ONLINE_ORDER",
     description: "Compatibility capability while online-order creation is migrated to Flow.",
