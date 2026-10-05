@@ -1936,7 +1936,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             ],
           },
           actions: [
-            { id: "install_app", label: "Install App", apiName: "install_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INSTALLED", installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
+            { id: "deploy_package", label: "1. Install Package Runtime", apiName: "deploy_package", key: "PACKAGE_LIFECYCLE", operation: "INSTALL" },
+            { id: "install_app", label: "2. Update Tenant App Status", apiName: "install_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INSTALLED", installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
           ],
         },
         {
@@ -1945,7 +1946,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           label: "Activate",
           visibility: { match: "any", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }, { field: "status", operator: "equals", value: "INACTIVE" }] },
           actions: [
-            { id: "activate_app", label: "Activate App", apiName: "activate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "ACTIVE" } },
+            { id: "activate_package", label: "1. Activate Package Runtime", apiName: "activate_package", key: "PACKAGE_LIFECYCLE", operation: "ACTIVATE" },
+            { id: "activate_app", label: "2. Update Tenant App Status", apiName: "activate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "ACTIVE" } },
           ],
         },
         {
@@ -1954,7 +1956,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           label: "Deactivate",
           visibility: { match: "all", conditions: [{ field: "status", operator: "equals", value: "ACTIVE" }] },
           actions: [
-            { id: "deactivate_app", label: "Deactivate App", apiName: "deactivate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INACTIVE" } },
+            { id: "deactivate_package", label: "1. Deactivate Package Runtime", apiName: "deactivate_package", key: "PACKAGE_LIFECYCLE", operation: "DEACTIVATE" },
+            { id: "deactivate_app", label: "2. Update Tenant App Status", apiName: "deactivate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INACTIVE" } },
           ],
         },
         {
@@ -1963,7 +1966,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           label: "Uninstall",
           visibility: { match: "any", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }, { field: "status", operator: "equals", value: "ACTIVE" }, { field: "status", operator: "equals", value: "INACTIVE" }] },
           actions: [
-            { id: "uninstall_app", label: "Uninstall App", apiName: "uninstall_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "AVAILABLE", installed_version: null, activated_at: null, update_status: "CURRENT" } },
+            { id: "uninstall_package", label: "1. Uninstall Package Runtime", apiName: "uninstall_package", key: "PACKAGE_LIFECYCLE", operation: "UNINSTALL" },
+            { id: "uninstall_app", label: "2. Update Tenant App Status", apiName: "uninstall_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "AVAILABLE", installed_version: null, activated_at: null, update_status: "CURRENT" } },
           ],
         },
         {
@@ -1999,7 +2003,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           label: "Upgrade",
           visibility: { match: "all", conditions: [{ field: "update_status", operator: "equals", value: "UPDATE_AVAILABLE" }] },
           actions: [
-            { id: "upgrade_app", label: "Upgrade App", apiName: "upgrade_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
+            { id: "upgrade_package", label: "1. Upgrade Package Runtime", apiName: "upgrade_package", key: "PACKAGE_LIFECYCLE", operation: "UPGRADE" },
+            { id: "upgrade_app", label: "2. Update Tenant App Version", apiName: "upgrade_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
           ],
         },
       ];
