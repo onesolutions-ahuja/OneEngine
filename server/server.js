@@ -1333,7 +1333,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    stepStartedAt = Date.now();
+    let stepStartedAt = Date.now();
     const validPassword = await bcrypt.compare(
       password,
       user.password_hash
