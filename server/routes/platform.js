@@ -5701,16 +5701,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           if (requestedRecordId) {
             if (!recordIdIsValid(requestedRecordId)) return res.status(400).json({ success: false, message: "Choose a valid record for Debug" });
             params.push(requestedRecordId);
-            clauses.push(`id=${params.length}`);
+            clauses.push(`id=$${params.length}`);
           }
           if (object.company_scoped !== false) {
             params.push(req.user.companyId);
-            clauses.push(`company_id=${params.length}`);
+            clauses.push(`company_id=$${params.length}`);
           }
           if (object.store_scoped) {
             if (!req.user.storeId) return res.status(409).json({ success: false, message: "Select a store before debugging this store-scoped workflow" });
             params.push(req.user.storeId);
-            clauses.push(`store_id=${params.length}`);
+            clauses.push(`store_id=$${params.length}`);
           }
           const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
           const hasCreatedAt = await db(
@@ -6444,12 +6444,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           const clauses = ["id=$1"];
           if (object.company_scoped !== false) {
             params.push(req.user.companyId);
-            clauses.push(`company_id=${params.length}`);
+            clauses.push(`company_id=$${params.length}`);
           }
           if (object.store_scoped) {
             if (!req.user.storeId) return res.status(409).json({ success: false, message: "Select a store before running this store-scoped flow" });
             params.push(req.user.storeId);
-            clauses.push(`store_id=${params.length}`);
+            clauses.push(`store_id=$${params.length}`);
           }
           const recordResult = await db(`SELECT * FROM "${object.source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`, params);
           record = recordResult.rows[0] || null;
@@ -7597,7 +7597,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const params = [req.user.companyId];
     if (requestedId) {
       params.push(requestedId);
-      clauses.push(`id=${params.length}`);
+      clauses.push(`id=$${params.length}`);
     } else {
       params.push(requestedKey);
       clauses.push(`app_key=${params.length}`);
