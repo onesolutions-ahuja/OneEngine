@@ -4,7 +4,7 @@ import { apiRequest } from '../../../services/api'
 import GPTBuilderRelatedRecords, { relatedRuntimeConfig, relatedSelectionErrors } from './GPTBuilderRelatedRecords'
 
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
-const resourcePath = (resource) => resource?.path || (resource?.apiName ? resourcePath(resource) : '')
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 const objectLabel = (value) => value?.label || value?.name || objectKey(value)
 const fieldKey = (value) => String(value?.api_name || value?.apiName || value?.field_key || value?.key || value?.id || '')
 const fieldLabel = (value) => value?.label || value?.name || fieldKey(value)
