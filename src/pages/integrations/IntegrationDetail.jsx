@@ -26,9 +26,6 @@ export default function IntegrationDetail({ integration, onBack }) {
   const [testEndpoint, setTestEndpoint] = useState(null);
   const [connTest, setConnTest] = useState(null);
   const [testingConn, setTestingConn] = useState(false);
-  const [shopifyAction, setShopifyAction] = useState("");
-  const [retryType, setRetryType] = useState("products");
-  const [retryOrderId, setRetryOrderId] = useState("");
 
   const loadEndpoints = useCallback(async () => {
     setLoading(true);
@@ -63,17 +60,8 @@ export default function IntegrationDetail({ integration, onBack }) {
     setTestingConn(true);
     setConnTest(null);
     try {
-      if (String(integration.providerName || "").toLowerCase() === "shopify") {
-        const response = await apiRequest(`/api/integrations/${integration.id}/shopify/action`, {
-          method: "POST",
-          body: JSON.stringify({ type: "CONNECTOR_TEST_CONNECTION" }),
-        });
-        const result = response?.data || {};
-        setConnTest({ ok: result.success === true, error: result.success ? null : result.message || "Shopify connection failed", shopName: result.shopName, shopDomain: result.shopDomain });
-      } else {
-        const data = await apiRequest(`/api/integrations/${integration.id}/test-connection`, { method: "POST" });
-        setConnTest(data?.data || null);
-      }
+      const data = await apiRequest(`/api/integrations/${integration.id}/test-connection`, { method: "POST" });
+      setConnTest(data?.data || null);
       loadDispatchStatus();
     } catch (err) {
       setConnTest({ ok: false, error: err.message });
@@ -98,7 +86,7 @@ export default function IntegrationDetail({ integration, onBack }) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          <button onClick={runConnectionTest} disabled={testingConn || Boolean(shopifyAction)} className="h-9 px-4 bg-white border border-slate-200 rounded-lg text-sm flex items-center gap-2 hover:bg-slate-50 disabled:opacity-50">
+          <button onClick={runConnectionTest} disabled={testingConn} className="h-9 px-4 bg-white border border-slate-200 rounded-lg text-sm flex items-center gap-2 hover:bg-slate-50 disabled:opacity-50">
             <PlugZap size={15} /> {testingConn ? "Testing…" : "Test Connection"}
           </button>
         </div>
@@ -110,7 +98,6 @@ export default function IntegrationDetail({ integration, onBack }) {
           {connTest.status ? ` — HTTP ${connTest.status}` : ""}
           {connTest.durationMs != null ? ` · ${connTest.durationMs}ms` : ""}
           {connTest.error ? ` · ${connTest.error}` : ""}
-          {connTest.shopName ? ` · ${connTest.shopName} (${connTest.shopDomain})` : ""}
           <span className="block text-xs mt-0.5 opacity-80">Logged (correlation ID {connTest.correlationId}). Credentials are never displayed.</span>
         </div>
       )}
