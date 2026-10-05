@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Box, ChevronLeft, ChevronRight, History, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
+import { readLazyCache, writeLazyCache } from '../../services/dataCache'
 import RecordListView from '../../components/RecordListView'
 import { evaluatePlatformCondition } from '../../utils/platformConditions.js'
 
@@ -119,6 +120,62 @@ function makeColumns(fields, listView = null) {
     label: field.label || field.api_name,
     render: (row) => readableValue(row?.[field.api_name]),
   }))
+}
+
+async function syncWorkspaceRecordCache(objectKeyValue, listViewId = '', { forceInitial = false } = {}) {
+  const cacheKey = `workspace:records:${objectKeyValue}:${listViewId || 'default'}`
+  const cached = await readLazyCache(cacheKey)
+  let rows = Array.isArray(cached?.value?.rows) ? cached.value.rows : []
+  let cursor = String(cached?.value?.cursor || '')
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { rows, cursor, fromCache: true, offline: true }
+  }
+
+  if (!cursor || forceInitial) {
+    const path = `/api/platform/objects/${encodeURIComponent(objectKeyValue)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
+    const response = await apiRequest(path)
+    rows = Array.isArray(response?.records)
+      ? response.records
+      : Array.isArray(response?.data)
+        ? response.data
+        : []
+    cursor = String(response?.syncCursor || new Date().toISOString())
+    await writeLazyCache(cacheKey, { rows, cursor })
+    return { rows, cursor, fromCache: false, offline: false }
+  }
+
+  const byId = new Map(rows.map((row) => [String(row.id), row]))
+  let offset = 0
+  let until = ''
+  let hasMore = true
+  let nextCursor = cursor
+  let guard = 0
+
+  while (hasMore && guard < 20) {
+    const params = new URLSearchParams({
+      since: cursor,
+      offset: String(offset),
+      limit: '500',
+    })
+    if (until) params.set('until', until)
+    if (listViewId) params.set('listViewId', listViewId)
+    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKeyValue)}/records/sync?${params.toString()}`)
+    const delta = response?.data || {}
+    if (!until) until = String(delta.syncCursor || '')
+    for (const id of Array.isArray(delta.changedIds) ? delta.changedIds : []) byId.delete(String(id))
+    for (const row of Array.isArray(delta.records) ? delta.records : []) byId.set(String(row.id), row)
+    for (const id of Array.isArray(delta.removedIds) ? delta.removedIds : []) byId.delete(String(id))
+    offset = Number(delta.nextOffset || offset)
+    hasMore = delta.hasMore === true
+    nextCursor = String(delta.syncCursor || nextCursor)
+    guard += 1
+  }
+
+  rows = [...byId.values()]
+  cursor = nextCursor || cursor
+  await writeLazyCache(cacheKey, { rows, cursor })
+  return { rows, cursor, fromCache: false, offline: false }
 }
 
 export default function WorkspacePage({ initialObjectKey = '', initialRecordId = '', appKey = '', onRouteChange = null }) {
@@ -247,22 +304,18 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     setError('')
     try {
       const [workspaceRes, permissionRes] = await Promise.all([
-        cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`, { cacheKey: `workspace:meta:${key}`, forceRefresh }),
-        apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`),
+        cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`, { cacheKey: `workspace:meta:${key}`, forceRefresh: false }),
+        cachedGet(`/api/platform/objects/${encodeURIComponent(object.id)}/effective-permissions`, { cacheKey: `workspace:permissions:${object.id}`, forceRefresh: false }),
       ])
       const meta = workspaceRes?.data || {}
       const listViewId = meta?.defaultListView?.id || ''
-      const recordPath = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
-      // Record lists are operational data and must always come from the API.
-      // Caching an empty list made newly-arrived communication events invisible
-      // until the lazy-cache TTL expired.
-      const recordRes = await apiRequest(recordPath)
+      const cachedRecords = await readLazyCache(`workspace:records:${key}:${listViewId || 'default'}`)
+      const cachedRows = Array.isArray(cachedRecords?.value?.rows) ? cachedRecords.value.rows : []
+      if (cachedRows.length) setRows(cachedRows)
+
+      const recordState = await syncWorkspaceRecordCache(key, listViewId)
       const nextFields = Array.isArray(meta.fields) ? meta.fields : []
-      const nextRows = Array.isArray(recordRes?.records)
-        ? recordRes.records
-        : Array.isArray(recordRes?.data)
-          ? recordRes.data
-          : []
+      const nextRows = recordState.rows
       setFields(nextFields)
       setRows(nextRows)
       setRuntimeMeta({
@@ -285,13 +338,20 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         return first
       })
     } catch (err) {
-      setFields([])
-      setRows([])
-      setPermissions(null)
-      setRuntimeMeta({ listViews: [], defaultListView: null, recordTypes: [], relationships: [], layouts: [], buttons: [] })
-      setSelectedId('')
-      setDetail(null)
-      setError(err?.message || 'Unable to load records')
+      const cachedRecords = await readLazyCache(`workspace:records:${key}:default`)
+      const cachedRows = Array.isArray(cachedRecords?.value?.rows) ? cachedRecords.value.rows : []
+      if (cachedRows.length) {
+        setRows(cachedRows)
+        setError('Offline — showing locally cached records.')
+      } else {
+        setFields([])
+        setRows([])
+        setPermissions(null)
+        setRuntimeMeta({ listViews: [], defaultListView: null, recordTypes: [], relationships: [], layouts: [], buttons: [] })
+        setSelectedId('')
+        setDetail(null)
+        setError(err?.message || 'Unable to load records')
+      }
     } finally {
       setLoadingRows(false)
     }
@@ -320,14 +380,9 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       try {
         const key = objectKey(selectedObject)
         const listViewId = runtimeMeta?.defaultListView?.id || ''
-        const path = `/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${listViewId ? `&listViewId=${encodeURIComponent(listViewId)}` : ''}`
-        const response = await apiRequest(path)
+        const state = await syncWorkspaceRecordCache(key, listViewId)
         if (cancelled) return
-        const nextRows = Array.isArray(response?.records)
-          ? response.records
-          : Array.isArray(response?.data)
-            ? response.data
-            : []
+        const nextRows = state.rows
         setRows(nextRows)
         setSelectedId((current) => {
           if (current && nextRows.some((row) => String(row.id) === String(current))) return current
@@ -335,9 +390,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
           return nextRows[0]?.id || ''
         })
       } catch {
-        // Background refresh must not blank a working Workspace view. The next
-        // poll/focus refresh retries automatically; foreground loads still show
-        // real errors through loadObject().
+        // Cached rows remain visible if incremental sync is unavailable.
       } finally {
         inFlight = false
       }
