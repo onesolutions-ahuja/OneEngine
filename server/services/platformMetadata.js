@@ -2286,7 +2286,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
               outcomes:[{id:"execute",label:"Execute Connector",condition:{match:"all",conditions:[
                 {field:"variables.precheckAllowed",operator:"equals",value:true},
                 {field:"variables.connectorRequired",operator:"equals",value:true},
-                {field:"$record.executeConnector",operator:"equals",value:true}
+                {field:"executeConnector",operator:"equals",value:true}
               ]},branch:["call_payment_connector","connector_status","set_connector_result"]}],
               defaultLabel:"No Connector Call",defaultBranch:["skip_connector"] },
             { id:"call_payment_connector",label:"11. Call Payment Connector",apiName:"call_payment_connector",key:"CALL_CONNECTOR_CAPABILITY",
