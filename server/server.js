@@ -113,7 +113,7 @@ import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegis
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { reconcileCompanyPackageEntitlements } from "./services/packageEntitlements.js";
 import { requireEntitlement } from "./services/licensing.js";
-import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, resolveGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
+import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
 import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
 import { createCanonicalRelatedTransaction, syncCanonicalSaleTransaction } from "./services/canonicalTransactions.js";
@@ -1298,22 +1298,45 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       return valid;
     })();
     const preflightStartedAt = Date.now();
-    const securityContext = user.company_id
-      ? await loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id, ip: requestIp })
-      : { settings: null, state: null, policy: null, companyTimezone: null, googlePackage: null, googleConnection: null };
-    const googleRuntime = user.company_id
-      ? await resolveGoogleConnectPasswordLoginRuntime(
-          (query, params = []) => loginPool.query(query, params),
-          user.company_id,
-          securityContext.googlePackage,
-          securityContext.googleConnection
-        )
-      : null;
+    let permissionDurationMs = 0;
+    const permissionsPromise = (async () => {
+      const startedAt = Date.now();
+      const [roleRows, permissionSets] = await Promise.all([
+        user.role_id
+          ? loginDb(
+              `SELECT p.code
+                 FROM role_permissions rp
+                 JOIN permissions p ON p.id=rp.permission_id
+                WHERE rp.role_id=$1`,
+              [user.role_id]
+            )
+          : Promise.resolve({ rows: [] }),
+        user.company_id
+          ? loadEffectivePermissionSets(loginDb, { id: user.id, companyId: user.company_id })
+          : Promise.resolve([]),
+      ]);
+      permissionDurationMs = Date.now() - startedAt;
+      return {
+        roleCodes: roleRows.rows.map((row) => row.code),
+        permissionSets,
+      };
+    })();
+
+    const [securityContext, googleRuntime, permissionBundle] = await Promise.all([
+      user.company_id
+        ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id, ip: requestIp })
+        : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null, trustedNetwork: false, loginAllowedMatches: false, loginAllowedCount: 0 }),
+      user.company_id
+        ? getGoogleConnectPasswordLoginRuntime(loginDb, user.company_id)
+        : Promise.resolve(null),
+      permissionsPromise,
+    ]);
     const securitySettings = securityContext.settings;
     const state = securityContext.state;
     const accessPolicy = securityContext.policy;
     const companyTimezone = securityContext.companyTimezone;
     markLoginTiming("security_preflight_ms", preflightStartedAt);
+    loginTimings.permissions_ms = permissionDurationMs;
     if (state?.locked_indefinitely === true || (state?.locked_until && new Date(state.locked_until).getTime() > Date.now())) {
       await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: "ACCOUNT_LOCKED", ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({
@@ -1415,16 +1438,16 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         : Promise.resolve(null),
     ]);
     loginTimings.authorization_bundle_ms = Date.now() - authorizationStartedAt;
-    loginTimings.permissions_ms = loginTimings.authorization_bundle_ms;
 
     if (!access.allowed) {
       await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: access.code, ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({ success: false, code: access.code, message: access.reason });
     }
 
-    const effectivePermissions = [...new Set(
-      Array.isArray(securityContext.permissionCodes) ? securityContext.permissionCodes : []
-    )];
+    const effectivePermissions = [...new Set([
+      ...(permissionBundle?.roleCodes || []),
+      ...(permissionBundle?.permissionSets || []).flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+    ])];
 
     let passwordExpired = false;
     if (securitySettings && Number(securitySettings.password_expiry_days || 0) > 0) {
