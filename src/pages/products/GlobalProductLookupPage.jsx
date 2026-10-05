@@ -28,10 +28,10 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const loadSettings=async()=>{
     try{
       setSettingsLoading(true);setError('')
-      const [p,c]=await Promise.all([apiRequest('/api/global-products/providers'),apiRequest('/api/categories')])
+      const [p,c]=await Promise.all([apiRequest('/api/global-products/providers'),apiRequest('/api/platform/objects/category/records?active=true')])
       if(!p?.success)throw new Error(p?.message||'Unable to load providers')
       setProviders(Array.isArray(p.data)?p.data:[])
-      setCategories(Array.isArray(c?.data)?c.data:[])
+      setCategories(Array.isArray(c?.data?.records)?c.data.records:Array.isArray(c?.records)?c.records:Array.isArray(c?.data)?c.data:[])
     }catch(err){setError(err?.message||'Unable to load Product Lookup settings')}
     finally{setSettingsLoading(false)}
   }
