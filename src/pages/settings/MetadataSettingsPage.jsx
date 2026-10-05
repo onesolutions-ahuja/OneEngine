@@ -367,12 +367,20 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   const loadSectionedRows = async (object) => {
     if (!object?.id) return
     const key = objectKey(object)
-    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=10`)
-    const records = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
-    setSectionedData((current) => ({
-      ...current,
-      [object.id]: { ...(current[object.id] || {}), rows: records },
-    }))
+    try {
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=10`)
+      const records = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+      setSectionedData((current) => ({
+        ...current,
+        [object.id]: { ...(current[object.id] || {}), rows: records, rowsLoaded: true },
+      }))
+    } catch (error) {
+      setSectionedData((current) => ({
+        ...current,
+        [object.id]: { ...(current[object.id] || {}), rows: [], rowsLoaded: true },
+      }))
+      setError(error?.message || 'Unable to load Settings values')
+    }
   }
 
   useEffect(() => {
@@ -395,24 +403,9 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
         ...(current[object.id] || {}),
         fields: Array.isArray(object.fields) ? object.fields : [],
         rows: current[object.id]?.rows || [],
+        rowsLoaded: current[object.id]?.rowsLoaded === true,
       }])))
 
-      const sectionedPairs = await Promise.all(sectioned.map(async (object) => {
-        try {
-          const recordRes = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(object))}/records?page=1&pageSize=10`)
-          return [object.id, {
-            fields: Array.isArray(object.fields) ? object.fields : [],
-            rows: Array.isArray(recordRes?.records) ? recordRes.records : Array.isArray(recordRes?.data) ? recordRes.data : [],
-          }]
-        } catch {
-          return [object.id, {
-            fields: Array.isArray(object.fields) ? object.fields : [],
-            rows: [],
-          }]
-        }
-      }))
-      if (!live) return
-      setSectionedData(Object.fromEntries(sectionedPairs))
     }).catch((err) => live && setError(err?.message || 'Unable to refresh Settings metadata')).finally(() => live && setLoading(false))
     return () => { live = false }
   }, [])
@@ -455,6 +448,12 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
   useEffect(() => {
     if (!active && current) setActive(current.key)
   }, [current?.key, active])
+
+  useEffect(() => {
+    if (!current || current.type !== 'system' || !current.object?.id) return
+    if (sectionedData[current.object.id]?.rowsLoaded === true) return
+    void loadSectionedRows(current.object)
+  }, [current?.key, current?.object?.id])
 
   const groups = useMemo(() => {
     const result = new Map()

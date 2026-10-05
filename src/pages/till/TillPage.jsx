@@ -217,6 +217,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       if (cachedVersion) catalogueQuery.set('since', cachedVersion)
       if (cachedScope) catalogueQuery.set('scope', cachedScope)
       const cataloguePath = `/api/products/catalogue${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
+      const tillPromise = loadTill()
       const [catalogueDelta, settingsResponse, buttonResponse, paymentResponse, permissionResponse] = await Promise.all([
         apiRequest(cataloguePath),
         apiRequest('/api/settings'),
@@ -230,7 +231,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
       setPermissions(permissionResponse?.permissions || [])
       setOnline(true)
-      await loadTill()
+      await tillPromise
     } catch (err) {
       if (usableCached) {
         applyBootstrap(usableCached.catalogue, usableCached.settingsResponse, usableCached.buttons, usableCached.paymentMethods || [])

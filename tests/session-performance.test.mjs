@@ -347,3 +347,31 @@ test('final loading verification waits for backend readiness before live login',
   assert.match(source, /diagnostics\.buildCommit/)
   assert.match(source, /COMMIT.*GITHUB_SHA/s)
 })
+
+
+test('workspace app routes use cached metadata instead of forcing a blocking refresh', async () => {
+  const source = await read('../src/pages/workspace/WorkspacePage.jsx')
+  const start = source.indexOf("cachedGet('/api/platform/objects'")
+  const end = source.indexOf('.then((objectResponse)', start)
+  const block = source.slice(start, end)
+  assert.match(block, /forceRefresh:\s*false/)
+  assert.equal(block.includes('forceRefresh: true'), false)
+})
+
+test('Till starts till-session lookup alongside its bootstrap requests', async () => {
+  const source = await read('../src/pages/till/TillPage.jsx')
+  const start = source.indexOf('const tillPromise = loadTill()')
+  const end = source.indexOf('await tillPromise', start)
+  const block = source.slice(start, end)
+  assert.notEqual(start, -1)
+  assert.notEqual(end, -1)
+  assert.match(block, /Promise\.all\(\[/)
+})
+
+test('Settings loads values only for the active metadata section', async () => {
+  const source = await read('../src/pages/settings/MetadataSettingsPage.jsx')
+  assert.equal(source.includes('const sectionedPairs = await Promise.all(sectioned.map'), false)
+  assert.match(source, /current\.type !== 'system'/)
+  assert.match(source, /rowsLoaded === true/)
+  assert.match(source, /void loadSectionedRows\(current\.object\)/)
+})
