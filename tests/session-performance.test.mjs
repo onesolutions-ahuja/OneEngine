@@ -138,3 +138,18 @@ test('deployment smoke waits for the exact GitHub Pages commit instead of assumi
   assert.match(source, /for attempt in \{1\.\.18\}/)
   assert.match(source, /if \[ "\$DEPLOYED_SHA" = "\$GITHUB_SHA" \]/)
 })
+
+
+test('automatic CI does not run competing live E2E suites against production', async () => {
+  const playwright = await read('../.github/workflows/playwright-e2e.yml')
+  const workflowBuilder = await read('../.github/workflows/workflow-builder-e2e.yml')
+  const cypress = await read('../.github/workflows/cypress-deep-e2e.yml')
+  const appointment = await read('../.github/workflows/appointment-debug.yml')
+  const validate = await read('../.github/workflows/validate.yml')
+  for (const source of [playwright, workflowBuilder, cypress, appointment]) {
+    assert.match(source, /group: oneengine-live-e2e/)
+    assert.match(source, /cancel-in-progress: false/)
+  }
+  assert.match(validate, /playwright-smoke:\n\s+if: github\.event_name == 'workflow_dispatch'/)
+  assert.match(validate, /workflow-visual:\n\s+if: github\.event_name == 'workflow_dispatch'/)
+})
