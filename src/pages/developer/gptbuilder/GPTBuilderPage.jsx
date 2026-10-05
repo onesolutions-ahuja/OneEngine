@@ -30,6 +30,7 @@ import GPTBuilderAction, { actionRuntimeAction } from './GPTBuilderAction'
 import GPTBuilderRunAgent, { runAgentRuntimeAction } from './GPTBuilderRunAgent'
 import GPTBuilderScreen, { screenRuntimeAction } from './GPTBuilderScreen'
 import GPTBuilderSubflow, { subflowRuntimeAction } from './GPTBuilderSubflow'
+import GPTBuilderApprovalElement, { approvalRuntimeElement } from './GPTBuilderApprovalElement'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
@@ -1070,6 +1071,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (element.key === 'run_agent') return runAgentRuntimeAction(element)
         if (element.key === 'screen') return screenRuntimeAction(element)
         if (element.key === 'subflow') return subflowRuntimeAction(element)
+        if (['approval_stage','approval_step','approval_background_step'].includes(element.key)) return approvalRuntimeElement(element)
         return null
       }).filter(Boolean),
     },
