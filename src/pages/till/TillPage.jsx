@@ -549,8 +549,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     setModal('receipt_qr')
   }
 
-  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null } = {}) => {
-    if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
+  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null, paymentFlowValidated = false } = {}) => {
     const preflightButtons = buttons.filter((button) => button.placement === 'till_checkout_preflight')
     for (const preflight of preflightButtons) {
       try {
@@ -559,23 +558,33 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         })
         const allowed = deepFind(preflightResponse?.data, 'allowed')
         if (allowed === false) {
-          setPendingPayment(paymentMethod)
-          setPendingCheckout({ paymentMethod, options: { verifiedOverride: true, payments, giftCardCode, cashReceivedOverride } })
           const modalKey = preflight?.config?.modalOnFalse || preflight?.config?.modal_on_false || null
+          if (modalKey === 'age') {
+            setPendingPayment(paymentMethod)
+            setPendingCheckout({ paymentMethod, options: { verifiedOverride: true, payments, giftCardCode, cashReceivedOverride } })
+          }
           if (modalKey) setModal(modalKey)
+          const configuredMessage = preflight?.config?.messageOnFalse || preflight?.config?.message_on_false
+          if (configuredMessage) setError(String(configuredMessage))
           return
         }
       } catch (err) {
         return setError(err?.message || 'Checkout preflight failed.')
       }
     }
-    if (!till && online) {
-      setModal('till')
-      return setError('Open a till session before completing a sale.')
-    }
     const selectedMethod = paymentMethods.find((method) => method.code === paymentMethod)
-    if (!online && paymentMethod !== 'cash' && selectedMethod?.allowOffline !== true) return setError('This payment method requires an online connection.')
-    const received = paymentMethod === 'cash' ? Number((cashReceivedOverride ?? cashReceived) || 0) : null
+    const received = String(selectedMethod?.kind || '').toUpperCase() === 'CASH'
+      ? Number((cashReceivedOverride ?? cashReceived) || total || 0)
+      : null
+
+    if (paymentMethod !== 'split' && !paymentFlowValidated) {
+      try {
+        const selected = await runPaymentModeFlow(paymentMethod, { giftCardCode, cashReceivedOverride })
+        paymentMethod = selected.paymentMode
+      } catch (err) {
+        return setError(err?.message || 'Payment method validation failed.')
+      }
+    }
 
     if (paymentMethod === 'split') {
       const splitButton = buttons.find((row) => row.button_key === 'till_split_payment_validate')
@@ -832,6 +841,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         tillSessionId: till?.id || null,
         userId: getStoredUser()?.id || getStoredUser()?.userId || null,
         customerId: selectedCustomer?.id || null,
+        online,
         subtotal,
         vat,
         discount: discountAmount,
@@ -867,6 +877,35 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       return response
     } finally {
       setBusy(false)
+    }
+  }
+
+  const paymentFlowInputs = (paymentMode, options = {}) => {
+    const method = paymentMethods.find((row) => row.code === paymentMode) || {}
+    const received = Number((options.cashReceivedOverride ?? cashReceived) || total || 0)
+    return {
+      paymentMode,
+      paymentKind: String(method.kind || '').toUpperCase(),
+      allowOffline: method.allowOffline === true,
+      online,
+      customerSelected: Boolean(selectedCustomer?.id),
+      hasGiftCardCode: Boolean(String(options.giftCardCode || '').trim()),
+      cashReceived: received,
+      total,
+      requiresConnector: method.requiresConnector === true,
+    }
+  }
+
+  const runPaymentModeFlow = async (paymentMode, options = {}, buttonOverride = null) => {
+    const button = buttonOverride || buttons.find((row) => row.button_key === 'till_payment_process')
+    if (!button) throw new Error('Payment Mode Flow is not configured.')
+    const response = await executeMetadataButton(button, paymentFlowInputs(paymentMode, options))
+    const allowed = deepFind(response?.data, 'allowed')
+    const selectedPaymentMode = String(deepFind(response?.data, 'selectedPaymentMode') || paymentMode)
+    if (allowed !== true) throw new Error('Selected payment method is not available for this sale.')
+    return {
+      paymentMode: selectedPaymentMode,
+      connectorRequired: deepFind(response?.data, 'connectorRequired') === true,
     }
   }
 
@@ -912,6 +951,16 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       return
     }
     if (type === 'workflow') {
+      if (config.checkoutFlow === true) {
+        const paymentMode = String(config.paymentMode || '')
+        try {
+          const selected = await runPaymentModeFlow(paymentMode, {}, button)
+          return completeSale(selected.paymentMode, { paymentFlowValidated: true })
+        } catch (err) {
+          setError(err?.message || 'Payment method validation failed.')
+          return
+        }
+      }
       if (config.policyEvent) {
         const allowed = await runReceiptPolicy(config.policyEvent)
         if (!allowed) return
@@ -942,7 +991,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       if (command === 'print_receipt') return printReceipt(button)
       if (command === 'open_drawer') return openDrawer()
       if (command === 'customer_display') return openCustomerDisplay()
-      if (command === 'checkout') return completeSale(config.paymentMethod || 'cash')
     }
   }
 
@@ -1032,7 +1080,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
               <div className="is-total"><span>Total</span><strong>{money(total, currency)}</strong></div>
               <label className="till-cash-input"><Banknote size={15}/><input value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Cash received"/></label>
               <div className="till-pay-grid">
-                {paymentButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={(_, item, button) => executeTillTarget(button, item)} disabled={busy || (!basket.length && !miscLines.length) || (!online && button?.config?.paymentMethod === 'card')} className={button?.config?.paymentMethod === 'cash' ? 'till-pay-cash' : 'till-pay-card'}/>)}
+                {paymentButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={(_, item, button) => executeTillTarget(button, item)} disabled={busy || (!basket.length && !miscLines.length)} className={button?.config?.paymentMode === 'cash' ? 'till-pay-cash' : 'till-pay-card'}/>)}
               </div>
             </div>
           </aside>
@@ -1124,7 +1172,6 @@ function PaymentSheet({ total, methods, online, customer, credit, onPay }) {
   const selected = activeMethods.find((item) => item.code === method)
   const splitEligible = activeMethods
   const splitLines = splitEligible.map((item) => ({ paymentMethod: item.code, amount: Number(split[item.code]) || 0 })).filter((line) => line.amount > 0)
-  const unavailable = !online && selected?.allowOffline !== true
 
   if (mode === 'split') return <div className="till-form">
     <p>Split the total across configured payment methods. The amounts must equal the sale total.</p>
@@ -1134,13 +1181,13 @@ function PaymentSheet({ total, methods, online, customer, credit, onPay }) {
 
   return <div className="till-form">
     <label>Payment method<select value={method} onChange={(e) => setMethod(e.target.value)}>{activeMethods.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
-    {!online ? <p>Offline mode only allows payment methods marked for offline use.</p> : null}
-    {method === 'customer_credit' && customer ? <p>{customer.name || 'Customer'}</p> : null}
-    {method === 'gift_card' ? <label>Gift card code<input value={giftCardCode} onChange={(e) => setGiftCardCode(e.target.value)} placeholder="Scan or enter gift card code"/></label> : null}
-    {method === 'cash' ? <label>Cash received<input type="number" min="0" step="0.01" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} placeholder={money(total)}/></label> : null}
+    {!online ? <p>Offline availability is controlled by payment-method metadata.</p> : null}
+    {String(selected?.kind || '').toUpperCase() === 'CREDIT' && customer ? <p>{customer.name || 'Customer'}</p> : null}
+    {String(selected?.kind || '').toUpperCase() === 'GIFT_CARD' ? <label>Gift card code<input value={giftCardCode} onChange={(e) => setGiftCardCode(e.target.value)} placeholder="Scan or enter gift card code"/></label> : null}
+    {String(selected?.kind || '').toUpperCase() === 'CASH' ? <label>Cash received<input type="number" min="0" step="0.01" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} placeholder={money(total)}/></label> : null}
     <div className="till-form-actions">
-      <button type="button" disabled={!online} onClick={() => setMode('split')}><Layers size={14}/> Split Payment</button>
-      <button type="button" className="till-primary" disabled={unavailable} onClick={() => onPay(method, { cashReceivedOverride: method === 'cash' ? Number(cashReceived || total) : null, giftCardCode })}>Pay {selected?.label || method}</button>
+      <button type="button" onClick={() => setMode('split')}><Layers size={14}/> Split Payment</button>
+      <button type="button" className="till-primary" onClick={() => onPay(method, { cashReceivedOverride: String(selected?.kind || '').toUpperCase() === 'CASH' ? Number(cashReceived || total) : null, giftCardCode })}>Pay {selected?.label || method}</button>
     </div>
   </div>
 }
