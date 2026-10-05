@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BadgeCheck, Building2, ChevronRight, CreditCard, HardDrive, Mail, MessageSquare, Rocket, Search, Settings2, ShieldCheck, ShoppingCart, Smartphone, Store, Users } from 'lucide-react'
-import { apiRequest, loadSessionPermissions, getActingCompanyId, setActingCompanyId } from '../../services/api'
+import { apiRequest, getStoredSessionPermissions, loadSessionPermissions, getActingCompanyId, setActingCompanyId } from '../../services/api'
 import { clearSettingsContextCache, createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole, updateUser } from '../../services/settings'
 import StoreTillSettingsPage from '../settings/StoreTillSettingsPage'
 import ClientWebShopSettings from '../settings/ClientWebShopSettings'
@@ -62,7 +62,7 @@ function UsersRoles({companyId}){
 
 export default function OneEngineManager(){
   const [clients,setClients]=useState([]),[selected,setSelected]=useState(()=>getActingCompanyId()||''),[active,setActive]=useState('company'),[query,setQuery]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState('')
-  const loadClients=async()=>{try{setLoading(true);setError('');const permissions=await loadSessionPermissions();if(!permissions?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required');const r=await apiRequest('/api/platform/developer/companies');const rows=Array.isArray(r?.data)?r.data:[];setClients(rows);const valid=rows.some(x=>String(x.id)===String(selected));if(!valid&&rows[0])await chooseClient(rows[0].id)}catch(e){setError(e?.message||'Unable to load clients')}finally{setLoading(false)}}
+  const loadClients=async()=>{try{setLoading(true);setError('');const cached=getStoredSessionPermissions();if(cached&&!cached?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required');const [permissions,r]=await Promise.all([cached?Promise.resolve(cached):loadSessionPermissions(),apiRequest('/api/platform/developer/companies')]);if(!permissions?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required');const rows=Array.isArray(r?.data)?r.data:[];setClients(rows);const valid=rows.some(x=>String(x.id)===String(selected));if(!valid&&rows[0])await chooseClient(rows[0].id)}catch(e){setError(e?.message||'Unable to load clients')}finally{setLoading(false)}}
   useEffect(()=>{void loadClients()},[])
   const chooseClient=async(id)=>{if(!id)return;try{setError('');await apiRequest('/api/platform/developer/acting-company',{method:'PUT',body:JSON.stringify({actingCompanyId:id})});setActingCompanyId(id);clearSettingsContextCache();setSelected(id)}catch(e){setError(e?.message||'Unable to select client')}}
   const selectedClient=clients.find(x=>String(x.id)===String(selected))

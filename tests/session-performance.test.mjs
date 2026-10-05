@@ -224,3 +224,39 @@ test('manual Playwright workflow does not perform a duplicate pre-suite login', 
   assert.equal(source.includes('/api/auth/login'), false)
   assert.match(source, /\/api\/health/)
 })
+
+
+test('page components never perform their own session bootstrap or store-context discovery', async () => {
+  const { readdir } = await import('node:fs/promises')
+  const { join } = await import('node:path')
+  const { fileURLToPath } = await import('node:url')
+  const root = fileURLToPath(new URL('../src/pages/', import.meta.url))
+  async function collect(dir) {
+    const entries = await readdir(dir, { withFileTypes: true })
+    const files = []
+    for (const entry of entries) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) files.push(...await collect(full))
+      else if (/\.(jsx?|tsx?)$/.test(entry.name)) files.push(full)
+    }
+    return files
+  }
+  for (const file of await collect(root)) {
+    const source = await readFile(file, 'utf8')
+    assert.equal(source.includes('/api/auth/bootstrap'), false, file)
+    assert.equal(source.includes('/api/auth/me/stores'), false, file)
+    assert.equal(source.includes('ensureActingCompanyContext('), false, file)
+  }
+})
+
+test('Developer does not write acting-company context for the authenticated tenant on initial load', async () => {
+  const source = await read('../src/pages/developer/OneDeveloperPage.jsx')
+  assert.match(source, /isOwnAuthenticatedCompany/)
+  assert.match(source, /if \(!isOwnAuthenticatedCompany && preferredId !== String\(current \|\| ''\)\)/)
+})
+
+test('OneEngine Manager resolves permission and client discovery concurrently', async () => {
+  const source = await read('../src/pages/developer/OneEngineManager.jsx')
+  assert.match(source, /const \[permissions,r\]=await Promise\.all/)
+  assert.match(source, /getStoredSessionPermissions\(\)/)
+})
