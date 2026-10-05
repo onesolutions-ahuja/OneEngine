@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, loadSessionPermissions, login, logout, setActiveStoreId, startGoogleLogin, verifyPin } from './services/api'
+import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, hasSessionContext, loadSessionPermissions, login, logout, setActiveStoreId, startGoogleLogin, verifyPin } from './services/api'
 import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/routes'
 import { MenuBarClock, useClock } from './components/shell/ShellClock'
 import RdvnReferenceDock, { dockItems } from './components/shell/RdvnReferenceDock'
@@ -1924,7 +1924,7 @@ function Desktop({ onLock, onSignOut }) {
   })
   const canManageOneEngine = desktopPermissions.includes('oneengine.manage')
   const requiresEnginePermission = ['developer', 'licensing', 'app-releases'].includes(activeApp)
-  const [enginePermissionStatus, setEnginePermissionStatus] = useState('loading')
+  const [enginePermissionStatus, setEnginePermissionStatus] = useState(() => getStoredSessionPermissions() ? 'ready' : 'loading')
   const [permissionRetry, setPermissionRetry] = useState(0)
   const enginePermissionNotice = <div className="module-state" role="status">
     {enginePermissionStatus === 'loading' ? 'Checking OneEngine permissions…'
@@ -2006,8 +2006,15 @@ function Desktop({ onLock, onSignOut }) {
 
   useEffect(() => {
     let live = true
+    const cached = getStoredSessionPermissions()
+    if (cached && permissionRetry === 0) {
+      setDesktopPermissions(Array.isArray(cached?.permissions) ? cached.permissions : [])
+      setEnginePermissionStatus('ready')
+      return () => { live = false }
+    }
+
     setEnginePermissionStatus('loading')
-    loadSessionPermissions({ force: requiresEnginePermission, includeEntitlements: false })
+    loadSessionPermissions({ force: permissionRetry > 0, includeEntitlements: false })
       .then((permissions) => {
         if (!live) return
         setDesktopPermissions(Array.isArray(permissions?.permissions) ? permissions.permissions : [])
@@ -2015,11 +2022,11 @@ function Desktop({ onLock, onSignOut }) {
       })
       .catch(() => {
         if (!live) return
-        if (requiresEnginePermission || !getStoredSessionPermissions()) setDesktopPermissions([])
+        if (!getStoredSessionPermissions()) setDesktopPermissions([])
         setEnginePermissionStatus('error')
       })
     return () => { live = false }
-  }, [requiresEnginePermission, permissionRetry])
+  }, [permissionRetry])
 
   useEffect(() => {
     let live = true
@@ -2557,36 +2564,31 @@ export default function App() {
   // an explicit workstation lock. PIN is only required after the user chooses
   // Lock during the current session.
   const [locked, setLocked] = useState(() => !hasSession())
-  const [sessionContextReady, setSessionContextReady] = useState(() => !hasSession())
+  const [sessionContextReady, setSessionContextReady] = useState(() => !hasSession() || hasSessionContext())
   const [pendingUnlock, setPendingUnlock] = useState(false)
 
   const [transitioning, setTransitioning] = useState(false)
 
   useEffect(() => {
-    // Existing sessions (browser refresh / OAuth callback) need one bootstrap
-    // before Desktop renders. Fresh password login already receives the resolved
-    // company context from /api/auth/login, so do not repeat those requests.
     if (!hasSession()) {
       setSessionContextReady(true)
       return
     }
+
     let live = true
-    setSessionContextReady(false)
-    const bootstrapTimeout = window.setTimeout(() => {
-      // Never leave the workstation trapped behind the company-context loader.
-      // API calls have their own timeout, but this is a final UI recovery guard.
-      if (live) setSessionContextReady(true)
-    }, 15000)
+    const alreadyReady = hasSessionContext()
+    if (!alreadyReady) setSessionContextReady(false)
+
+    // Cached authenticated context renders immediately. A server bootstrap is
+    // only blocking when this browser genuinely has no usable session context
+    // (for example after an OAuth callback in a fresh tab).
     ensureActingCompanyContext()
       .catch(() => '')
       .finally(() => {
-        window.clearTimeout(bootstrapTimeout)
         if (live) setSessionContextReady(true)
       })
-    return () => {
-      live = false
-      window.clearTimeout(bootstrapTimeout)
-    }
+
+    return () => { live = false }
   }, [])
 
   const unlock = () => {
