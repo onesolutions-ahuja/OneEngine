@@ -139,8 +139,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const [receiptQr, setReceiptQr] = useState(null)
   const [priceTarget, setPriceTarget] = useState(null)
   const [modifierPicker, setModifierPicker] = useState(null)
-  const [negativeStockNotice, setNegativeStockNotice] = useState(null)
-  const [pendingSaleRequest, setPendingSaleRequest] = useState(null)
   const [offlineCount, setOfflineCount] = useState(0)
   const [offlineEntries, setOfflineEntries] = useState([])
   const [offlineStats, setOfflineStats] = useState({ syncedTotal: 0, lastSyncedAt: null, lastError: null })
@@ -443,18 +441,16 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
   }, [online, permissions])
 
-  const changeQty = (id, delta) => setBasket((current) => current.map((item) => {
-    if (item.id !== id) return item
-    const next = item.quantity + delta
-    if (delta > 0 && !allowNegativeBilling && item.trackStock !== false && next > Number(item.stock || 0)) {
-      setError(`Only ${Number(item.stock || 0)} left in stock for ${item.name}.`)
-      return item
-    }
-    return { ...item, quantity: next }
-  }).filter((item) => item.quantity > 0))
+  const changeQty = (id, delta) => setBasket((current) => current
+    .map((item) => item.id === id ? { ...item, quantity: item.quantity + delta } : item)
+    .filter((item) => item.quantity > 0))
 
   const clearSale = () => {
-    if (receiptQr?.saleId && settings?.receiptQr?.autoCloseOnNewSale !== false) void revokeReceiptQr(receiptQr.saleId)
+    if (receiptQr?.saleId) {
+      void runReceiptPolicy('NEW_SALE').then((allowed) => {
+        if (allowed) void revokeReceiptQr(receiptQr.saleId)
+      }).catch(() => {})
+    }
     setBasket([])
     setMiscLines([])
     setSelectedCustomer(null)
@@ -515,7 +511,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
     if (hasAgeRestricted && !ageVerified && !verifiedOverride) {
       setPendingPayment(paymentMethod)
-      setPendingSaleRequest({ paymentMethod, options: { verifiedOverride: true, payments, giftCardCode, cashReceivedOverride } })
       setModal('age')
       return
     }
@@ -655,24 +650,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const revokeReceiptQr = async (saleId = receiptQr?.saleId || lastSale?.id) => {
     if (saleId) {
-      try { await apiRequest(`/api/sales/${encodeURIComponent(saleId)}/receipt-qr`, { method: 'DELETE' }) } catch {}
+      const button = buttons.find((row) => row.button_key === 'till_receipt_qr_revoke')
+      if (button) {
+        try { await executeMetadataButton(button, {}, saleId) } catch {}
+      }
     }
     emitReceiptQr({ active: false, cleared: true, saleId: saleId || null })
     setReceiptQr(null)
-  }
-
-  const generateReceiptQr = async (saleId = lastSale?.id) => {
-    if (!saleId) return setError('A synced completed sale is required for Receipt QR.')
-    try {
-      if (receiptQr?.saleId && receiptQr.saleId !== saleId) await revokeReceiptQr(receiptQr.saleId)
-      const expiryMinutes = Number(settings?.receiptQr?.expiryMinutes || 5)
-      const response = await apiRequest(`/api/sales/${encodeURIComponent(saleId)}/receipt-qr`, { method: 'POST', body: JSON.stringify({ expiryMinutes }) })
-      if (!response?.success || !response?.data?.qrcodeUrl) throw new Error(response?.message || 'Unable to create Receipt QR')
-      const next = { ...response.data, saleId: response.data.saleId || saleId }
-      setReceiptQr(next)
-      emitReceiptQr({ active: true, ...next })
-      setModal('receipt_qr')
-    } catch (err) { setError(err?.message || 'Unable to create Receipt QR') }
   }
 
   const executeRecordButton = async (button, recordId) => {
@@ -819,6 +803,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       printerAvailable,
       allowManual: settings?.receiptQr?.allowManualQr !== false,
       allowRegenerate: settings?.receiptQr?.allowRegenerate !== false,
+      autoClose: settings?.receiptQr?.autoCloseOnNewSale !== false,
     })
     return deepFind(response?.data, 'allowed') === true || deepFind(response?.data, 'value') === true
   }
@@ -881,8 +866,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const headerButtons = buttons.filter((button) => button.placement === 'till_action_header')
   const actionButtons = buttons.filter((button) => {
     if (button.placement !== 'till_action_bar') return false
-    const action = button?.config?.uiAction || button?.config?.ui_action
-    if (action === 'customer_display' && !customerDisplayEnabled) return false
+    if (button?.config?.requiresCustomerDisplay === true && !customerDisplayEnabled) return false
     return true
   })
   const paymentButtons = buttons.filter((button) => button.placement === 'till_payment')
@@ -905,7 +889,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         </header>
 
         <div className="till-action-bar">
-          {actionButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={(_, item, button) => executeTillTarget(button, item)} disabled={busy || (button.config?.uiAction === 'print' && !lastSale?.id)}/>)}
+          {actionButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={(_, item, button) => executeTillTarget(button, item)} disabled={busy || (button.target_type === 'command' && button.target_key === 'print_receipt' && !lastSale?.id)}/>)}
         </div>
 
         <div className="till-main-grid">
@@ -973,14 +957,14 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       </div>
 
       {modifierPicker ? <ModifierPicker product={modifierPicker.product} groups={modifierPicker.groups} onClose={() => setModifierPicker(null)} onConfirm={(modifiers) => { addLine(modifierPicker.product, modifiers); setModifierPicker(null) }}/> : null}
-      {modal === 'negative_stock' && negativeStockNotice ? <Modal title="Stock warning" onClose={() => { setNegativeStockNotice(null); setPendingSaleRequest(null); setModal(null) }}><div className="till-form"><p>The following items exceed recorded stock. Continue only if this sale is intentional.</p>{negativeStockNotice.map((line) => <div key={line.name} className="till-stock-warning-row"><strong>{line.name}</strong><span>{line.recordedStock} recorded · {line.requestedQuantity} requested</span></div>)}<button type="button" className="till-primary" onClick={() => { const pending = pendingSaleRequest; setNegativeStockNotice(null); setPendingSaleRequest(null); setModal(null); if (pending) void completeSale(pending.paymentMethod, pending.options) }}>Continue Sale</button></div></Modal> : null}
+
       {modal === 'discount' ? <Modal title={meta.discount?.label || 'Discount'} onClose={() => setModal(null)}><DiscountForm value={discount} onApply={(next) => { setDiscount(next); setModal(null) }}/></Modal> : null}
       {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={(line) => { setMiscLines((rows) => [...rows, line]); setModal(null) }}/></Modal> : null}
       {modal === 'petty' ? <Modal title={meta.petty?.label || 'Petty Cash'} onClose={() => setModal(null)}><PettyForm onSubmit={recordPettyCash}/></Modal> : null}
       {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
       {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError}/></Modal> : null}
-      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingSaleRequest(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingSaleRequest || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingSaleRequest(null); setModal(null); window.setTimeout(() => completeSale(pending.paymentMethod, pending.options), 0) }}>Age verified</button></div></Modal> : null}
+      {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const paymentMethod = pendingPayment; setAgeVerified(true); setPendingPayment(null); setModal(null); if (paymentMethod) window.setTimeout(() => completeSale(paymentMethod, { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
       {modal === 'payment' ? <Modal title="Payment" onClose={() => setModal(null)} wide><PaymentSheet total={total} methods={paymentMethods} online={online} customer={selectedCustomer} credit={liveCredit || selectedCustomer?.credit || null} onPay={async (method, options) => { await completeSale(method, options || {}); setModal(null) }}/></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={async (price, reason) => {
         const button = buttons.find((row) => row.button_key === 'till_price_override_apply')
