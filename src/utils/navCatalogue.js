@@ -1,57 +1,25 @@
-import {
-  BarChart3, CreditCard, Database, FileText, Grid3X3, Home, KeyRound,
-  Package, Plug, Receipt, RefreshCw, Settings, ShoppingBag, Store, Tag, Users
-} from "lucide-react";
+// Navigation entries are supplied by the authenticated runtime app catalogue.
+// This module only normalizes permission state and catalog entries; it contains no business page/RBAC map.
 
 export const EMPTY_PERMISSION_STATE = Object.freeze({ permissions: [] });
 
 export function normalizePermissionState(state) {
-  const source=state&&typeof state==="object"?state:{};
+  const source = state && typeof state === "object" ? state : {};
   return {
-    permissions:Array.isArray(source.permissions)
-      ? source.permissions.filter((code)=>typeof code==="string")
+    permissions: Array.isArray(source.permissions)
+      ? source.permissions.filter((code) => typeof code === "string")
       : [],
+    navigation: Array.isArray(source.navigation) ? source.navigation : [],
   };
 }
 
-const has=(state, code)=>state.permissions.includes(code);
-
-const NAV_CATALOGUE = [
-  ["Dashboard", Home, (s)=>has(s,"dashboard.view")],
-  ["Sales", FileText, (s)=>has(s,"sale.view")||has(s,"sale.create")||has(s,"sale.refund")],
-  ["Returns", RefreshCw, (s)=>has(s,"returns.view")||has(s,"returns.create")],
-  ["Supplier Returns", RefreshCw, (s)=>has(s,"returns.create")],
-  ["Products", Package, (s)=>has(s,"product.view")||has(s,"product.create")||has(s,"product.edit")],
-  ["Global Products", Database, (s)=>has(s,"global_product.view")||has(s,"global_product.create")||has(s,"global_product.edit")],
-  ["Categories", Tag, (s)=>has(s,"category.view")||has(s,"category.create")||has(s,"category.edit")],
-  ["Purchases", Receipt, (s)=>has(s,"purchase.view")||has(s,"reports.purchases.view")||has(s,"inventory.view")],
-  ["Suppliers", Users, (s)=>has(s,"inventory.view")],
-  ["Inventory", Grid3X3, (s)=>has(s,"inventory.view")],
-  ["Replenishment", Grid3X3, (s)=>has(s,"inventory.replenishment.view")||has(s,"inventory.view")||has(s,"reports.low_stock.view")],
-  ["Customers", Users, (s)=>has(s,"customer.view")||has(s,"customer.create")||has(s,"customer.edit")],
-  ["Gift Cards", CreditCard, (s)=>has(s,"customer.view")||has(s,"customer.edit")],
-  ["Employees", Users, (s)=>has(s,"user.view")||has(s,"attendance.view")||has(s,"attendance.use")],
-  ["Stores", Store, (s)=>has(s,"store.view")||has(s,"store.edit")||has(s,"store.create")],
-  ["Reports", BarChart3, (s)=>s.permissions.some((code)=>code.startsWith("reports."))],
-  ["My Reports", BarChart3, (s)=>has(s,"reports.custom.view")],
-  ["Integrations", Plug, (s)=>has(s,"integration.manage")],
-  ["Accounting", Receipt, (s)=>has(s,"integration.manage")],
-  ["Online Orders", ShoppingBag, (s)=>has(s,"online_orders.view")],
-  ["Order Prep", ShoppingBag, (s)=>has(s,"online_orders.view")],
-  ["Own Delivery", ShoppingBag, (s)=>has(s,"online_orders.view")],
-  ["Audit Log", FileText, (s)=>has(s,"audit.view")],
-  ["Settings", Settings, (s)=>has(s,"settings.manage")||has(s,"oneengine.manage")],
-  ["App Releases", Package, (s)=>has(s,"oneengine.manage")],
-  ["Licensing", KeyRound, (s)=>has(s,"oneengine.manage")],
-];
-
 export function permittedNavItems(state) {
-  const normalized=normalizePermissionState(state);
-  return NAV_CATALOGUE
-    .filter(([, , gate])=>!gate||gate(normalized))
-    .map(([page,Icon])=>[page,Icon]);
+  const normalized = normalizePermissionState(state);
+  return normalized.navigation
+    .filter((entry) => entry && entry.label)
+    .map((entry) => [entry.label, entry.Icon || null]);
 }
 
 export function permittedNavNames(state) {
-  return new Set(permittedNavItems(state).map(([page])=>page));
+  return new Set(permittedNavItems(state).map(([page]) => page));
 }
