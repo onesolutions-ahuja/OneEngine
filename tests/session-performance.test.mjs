@@ -386,8 +386,8 @@ test('Express route modules that instantiate Router import express explicitly', 
     if (!entry.isFile() || !entry.name.endsWith('.js')) continue
     const file = join(routesDir, entry.name)
     const source = await readFile(file, 'utf8')
-    if (!/\\bexpress\\.Router\\s*\\(/.test(source)) continue
-    assert.match(source, /import\\s+express\\s+from\\s+["']express["']/, entry.name)
+    if (!/\bexpress\.Router\s*\(/.test(source)) continue
+    assert.match(source, /import\s+express\s+from\s+["']express["']/, entry.name)
   }
 })
 
