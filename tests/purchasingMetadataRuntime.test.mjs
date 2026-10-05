@@ -101,3 +101,17 @@ test("replenishment is metadata-owned and has no standalone business route or pa
   assert.equal(app.includes("ReplenishmentPage"), false);
   assert.equal(app.includes("openItem('replenishment')"), false);
 });
+
+
+test("inventory business UI and routes are removed while core stock primitives remain", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const primitive = await readFile(new URL("../server/services/inventory.js", import.meta.url), "utf8");
+  const platform = await readFile(new URL("../server/services/inventoryPlatform.js", import.meta.url), "utf8");
+  assert.equal(server.includes("createInventoryRouter"), false);
+  assert.equal(server.includes("createInventoryBatchesRouter"), false);
+  assert.equal(app.includes("InventoryPage"), false);
+  assert.equal(primitive.includes("export async function createInventoryMovement"), true);
+  assert.equal(primitive.includes("export async function allocateBatchConsumption"), true);
+  assert.equal(platform.includes("executeInventoryPlatformAction"), true);
+});

@@ -44,8 +44,6 @@ import createEanLookupRouter from "./routes/eanLookup.js";
 import createSuppliersRouter from "./routes/suppliers.js";
 import createPurchasesRouter from "./routes/purchases.js";
 import createSupplierAccountsRouter from "./routes/supplierAccounts.js";
-import createInventoryRouter from "./routes/inventory.js";
-import createInventoryBatchesRouter from "./routes/inventoryBatches.js";
 
 import createSalesRouter from "./routes/sales.js";
 import createLayawaysRouter from "./routes/layaways.js";
@@ -2119,49 +2117,6 @@ app.use(
 app.use(
   "/api",
   createPricingRouter({ authenticate, authorize, db, pool })
-);
-
-/*
-|--------------------------------------------------------------------------
-| INVENTORY - MOVEMENTS / ADJUSTMENTS / RECONCILIATION
-|--------------------------------------------------------------------------
-|
-| Inventory routes are registered via routes/inventory.js, receiving the
-| existing authenticate, authorize, db, pool, createInventoryMovement
-| and inventoryMovementTypes so behaviour is unchanged.
-|
-| Route ordering preserved:
-|   GET  /api/inventory/movements       (inventory.view)
-|   POST /api/inventory/adjustments     (inventory.adjust)
-|   GET  /api/inventory/reconciliation  (inventory.view)
-*/
-app.use(
-  "/api",
-  createInventoryRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    createInventoryMovement,
-    inventoryMovementTypes,
-    canAccessStore,
-    canViewCompanyCustomers,
-  })
-);
-
-/*
- * BATCH / EXPIRY TRACKING — store-level batch API (same access model,
- * same movement primitive; batches never bypass the authoritative stock).
- */
-app.use(
-  "/api",
-  createInventoryBatchesRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    canAccessStore,
-  })
 );
 
 /*
