@@ -1358,7 +1358,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         console.log("onePOS: refreshed " + (rows.rowCount || 0) + " booking routers with generic slot Flow");
       },
-    }
+    },
     {
       key: "0051_unify_send_communication",
       version: "51",
