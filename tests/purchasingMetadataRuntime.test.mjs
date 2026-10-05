@@ -290,3 +290,17 @@ test("own delivery package uses metadata workspace instead of hardcoded business
   assert.equal(server.includes("createOwnDeliveryRouter"), false);
   assert.match(catalogue, /key: "own_delivery"/);
 });
+
+
+test("kiosk administration is metadata-driven while customer runtime remains package-owned", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const route = await readFile(new URL("../server/routes/kiosk.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  assert.equal(app.includes("OneKioskDevicesPage"), false);
+  assert.match(app, /initialObjectKey="kiosk_device" appKey="one_kiosk"/);
+  assert.match(metadata, /key: "kiosk_device"[\s\S]*table: "kiosk_devices"/);
+  for (const legacy of ["/kiosk/devices/:id/settings", "/kiosk/devices/:id/age-approve", "/kiosk/devices/:id/assistance-clear", "/kiosk/orders/search", "/kiosk/printer-connectors", "/kiosk/payment-connectors"]) assert.equal(route.includes(legacy), false, legacy);
+  assert.match(route, /\/kiosk\/catalogue/);
+  assert.match(route, /\/kiosk\/devices\/register/);
+  assert.match(route, /\/kiosk\/devices\/\:id\/heartbeat/);
+});

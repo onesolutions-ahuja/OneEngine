@@ -137,7 +137,6 @@ const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/D
 const OneAssistantPage = lazyWithRecovery(() => import('./pages/assistant/OneAssistantPage'))
 const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
-const OneKioskDevicesPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDevicesPage'))
 const PublicAppointmentBookingPage = lazyWithRecovery(() => import('./pages/assistant/PublicAppointmentBookingPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
@@ -2471,7 +2470,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'kiosk-display' ? (
           <OneKioskDisplayPage />
         ) : activeApp === 'kiosk-devices' ? (
-          <OneKioskDevicesPage />
+          <WorkspacePage initialObjectKey="kiosk_device" appKey="one_kiosk" />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
