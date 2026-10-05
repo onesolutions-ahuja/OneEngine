@@ -10,7 +10,6 @@ import { resolvePrice } from "../services/pricingEngine.js";
 import { getRequestPool } from "../services/tenantDatabase.js";
 import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes } from "../services/paymentMethods.js";
-import { validateTenderLines } from "../services/paymentTender.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 export const PAYMENT_METHODS = DEFAULT_PAYMENT_METHODS.map((method) => method.code);
@@ -1098,12 +1097,37 @@ export default function createSalesRouter({
         total = roundCurrency(engine.total);
 
         if (paymentLines) {
-          try {
-            paymentLines = validateTenderLines({ payments: paymentLines, total, allowedMethods: allowedPaymentMethods, maxLines: 8 });
-          } catch (error) {
+          const splitValidation = await executeSystemWorkflow({
+            db,
+            companyId: req.user.companyId,
+            userId: req.user.id || null,
+            systemKey: "flow:till.split.payment.validate",
+            req,
+            input: {
+              payments: paymentLines.map((line) => ({
+                paymentMethod: String(line?.paymentMethod || line?.method || "").trim(),
+                amount: Number(line?.amount || 0),
+              })),
+              total,
+              allowedMethodsText: `|${allowedPaymentMethods.join("|")}|`,
+            },
+            storeId: req.user.storeId || null,
+            tillId: session.rows[0].terminal_id || null,
+            source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "till.split.payment.validate" },
+          });
+          if (splitValidation?.result?.allowed !== true) {
             await client.query("ROLLBACK");
-            return res.status(400).json({ success: false, message: error.message });
+            return res.status(400).json({
+              success: false,
+              code: "SPLIT_PAYMENT_VALIDATION_FAILED",
+              message: "Split payment lines must use allowed methods, be unique and positive, and exactly match the sale total.",
+              remaining: Number(splitValidation?.result?.remaining || 0),
+            });
           }
+          paymentLines = paymentLines.map((line) => ({
+            method: String(line?.paymentMethod || line?.method || "").trim(),
+            amount: roundCurrency(Number(line?.amount || 0)),
+          }));
         }
 
         const receivedAmount = paymentMethod === "cash"
