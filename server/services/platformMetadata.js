@@ -1085,6 +1085,7 @@ const retailObjects = [
       ["tax", "VAT / Tax", "currency", "tax", false],
       ["discount", "Discount", "currency", "discount", false],
       ["total", "Gross / Total", "currency", "total", false],
+      ["cash_received", "Cash Received", "currency", "cash_received", false],
       ["created_at", "Created", "datetime", "created_at", false],
       ["completed_at", "Completed", "datetime", "completed_at", false],
     ],
@@ -1577,6 +1578,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
   export async function initializeStandardObjectEcosystem(pool) {
     await pool.query(`
+      ALTER TABLE sales ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2);
       ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
       ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
       UPDATE cash_movements cm
@@ -1745,6 +1747,21 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
                 required=FALSE,
                 config=COALESCE(config,'{}'::jsonb) || '{"expression":"ROUND(COALESCE(total,0)-COALESCE(tax,0),2)","resultType":"currency"}'::jsonb
           WHERE object_id=$1 AND api_name='subtotal' AND company_id IS NULL`,
+        [saleObjectForFormula.rows[0].id]
+      );
+      await pool.query(
+        `INSERT INTO platform_fields
+           (object_id,api_name,label,field_type,source_column,required,writable,display_order,config,active)
+         VALUES
+           ($1,'change_due','Change','formula',NULL,FALSE,FALSE,95,'{"expression":"MAX(0,ROUND(COALESCE(cash_received,0)-COALESCE(total,0),2))","resultType":"currency"}'::jsonb,TRUE)
+         ON CONFLICT (object_id,api_name) WHERE company_id IS NULL
+         DO UPDATE SET
+           label=EXCLUDED.label,
+           field_type='formula',
+           source_column=NULL,
+           writable=FALSE,
+           config=EXCLUDED.config,
+           active=TRUE`,
         [saleObjectForFormula.rows[0].id]
       );
     }
