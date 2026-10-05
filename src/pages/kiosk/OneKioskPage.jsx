@@ -979,7 +979,7 @@ export default function OneKioskPage({ publicMode = false }) {
           inputs: { sale: saleInput, items: itemInputs, payments: paymentInputs },
         }),
       });
-      const saleId = saleResponse?.data?.results?.find?.((step) => step?.stepId === "set_sale_id")?.result?.value || saleResponse?.data?.saleId || null;
+      const saleId = saleResponse?.data?.results?.find?.((step) => step?.stepId === "create_sale")?.result?.created?.id || null;
       if (!saleResponse?.success || !saleId) {
         throw new Error(saleResponse?.message || "Card payment could not be completed");
       }
