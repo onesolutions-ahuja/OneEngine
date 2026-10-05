@@ -121,7 +121,6 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
     name: "Validate Stock",
     inputs: [
       creditInput("hasShortfall", "boolean", { required: true }),
-      creditInput("allowNegativeStock", "boolean", { required: true }),
     ],
     outputs: [
       { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
@@ -131,10 +130,9 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
         "stock_allowed",
         "allowed",
         "boolean",
-        "!hasShortfall || allowNegativeStock",
+        "!hasShortfall",
         {
           hasShortfall: { path: "variables.hasShortfall" },
-          allowNegativeStock: { path: "variables.allowNegativeStock" },
         }
       ),
     ],
