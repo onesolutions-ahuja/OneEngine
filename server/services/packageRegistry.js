@@ -2386,6 +2386,9 @@ export function packageDefinition(entry) {
           { objectKey:"sale_item",name:"Sale item quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Sale item quantity must be greater than zero"} },
           { objectKey:"payment",name:"Payment amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Payment amount must be greater than zero"} },
         ],
+        buttons: [
+          { objectKey:"sale",buttonKey:"till_complete_sale",label:"Complete Sale",targetType:"workflow",targetKey:"Complete Sale",placement:"till_checkout",requiredPermission:"workflow.execute",inputMappings:{} }
+        ],
         workflows: [
           {
             objectKey:"sale",name:"Complete Sale",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
