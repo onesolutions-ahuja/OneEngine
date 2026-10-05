@@ -200,3 +200,27 @@ test('live browser E2E workflows are manual-only to protect Render bandwidth quo
   assert.match(cypress, /on:\n\s+workflow_dispatch:/)
   assert.equal(cypress.includes('\n  workflow_run:'), false)
 })
+
+
+test('Playwright validates a cached browser session at most once per worker', async () => {
+  const source = await read('../tests/e2e/helpers.mjs')
+  assert.match(source, /let cachedBrowserSessionValidated = false/)
+  assert.match(source, /if \(!cachedBrowserSessionValidated\)/)
+  assert.match(source, /cachedBrowserSessionValidated = true/)
+})
+
+test('Cypress cached session does not boot the app solely for validation', async () => {
+  const source = await read('../cypress/e2e/deep-oneengine.cy.mjs')
+  const start = source.indexOf('cy.session(["oneengine-e2e", username]')
+  const end = source.indexOf('function assertNoHorizontalOverflow', start)
+  const sessionBlock = source.slice(start, end)
+  assert.equal(sessionBlock.includes('validate()'), false)
+  assert.match(sessionBlock, /cacheAcrossSpecs: true/)
+})
+
+test('manual Playwright workflow does not perform a duplicate pre-suite login', async () => {
+  const source = await read('../.github/workflows/playwright-e2e.yml')
+  assert.equal(source.includes('PAYLOAD="$(jq -n'), false)
+  assert.equal(source.includes('/api/auth/login'), false)
+  assert.match(source, /\/api\/health/)
+})
