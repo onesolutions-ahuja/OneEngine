@@ -7,7 +7,6 @@ import { enqueuePlatformJob } from "./platformJobs.js";
 import { executeRegisteredAction } from "./platformActions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
-import { domainAllowed, issueAccountToken, normalizeEmail } from "./accountPolicy.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { effectiveManifest, resolvePersistedConnectorCapability } from "./connectorRuntime.js";
 import { createInventoryMovement } from "./inventory.js";
@@ -1392,103 +1391,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["global_product.view"],
     executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
-  },
-  {
-    key: "SEND_PASSWORD_RESET_EMAIL",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Send Password Reset Email",
-    description: "Issue a tenant-scoped expiring password-reset token and queue the configured reset email for the selected User/Employee record.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["user.manage"],
-    executor: async ({ db, req, companyId, record, recordId, stepRunId }) => {
-      const company = companyId || req?.user?.companyId;
-      const userId = record?.id || recordId;
-      if (!company || !userId) throw new Error("Password reset requires a company and user record");
-      const result = await db(
-        `SELECT u.id,u.email,u.active,cs.password_reset_email_enabled,cs.password_reset_expiry_minutes
-           FROM users u
-           JOIN company_settings cs ON cs.company_id=u.company_id
-          WHERE u.id=$1 AND u.company_id=$2 LIMIT 1`,
-        [userId, company]
-      );
-      const user = result.rows[0];
-      if (!user) throw new Error("User not found");
-      if (!user.active) throw new Error("Password reset cannot be sent to an inactive user");
-      if (!user.password_reset_email_enabled) throw new Error("Password reset email is disabled in Settings");
-      const recipient = normalizeEmail(user.email);
-      if (!recipient) throw new Error("User has no email address");
-      const token = await issueAccountToken(db, {
-        companyId: company, userId: user.id, purpose: "PASSWORD_RESET",
-        expiresMinutes: user.password_reset_expiry_minutes || 60,
-      });
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
-      if (!provider.configured) throw new Error(provider.error || "Email provider is not configured");
-      const job = await enqueuePlatformJob({
-        db, companyId: company, kind: "SEND_EMAIL", runAt: new Date(),
-        payload: { recipient, to: recipient, templateKey: "PASSWORD_RESET", variables: { token, userId: user.id, expiresMinutes: user.password_reset_expiry_minutes || 60 }, _roleId: req?.user?.roleId, _stepRunId: stepRunId },
-        idempotencyKey: `${company}:password-reset:${user.id}:${stepRunId || Date.now()}`,
-      });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null, expiresMinutes: user.password_reset_expiry_minutes || 60 };
-    },
-  },
-  {
-    key: "SEND_USER_INVITATION",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Send User Invitation",
-    description: "Issue a tenant-scoped registration token and queue the configured invitation email for the selected User/Employee record.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["user.manage"],
-    executor: async ({ db, req, companyId, record, recordId, stepRunId }) => {
-      const company = companyId || req?.user?.companyId;
-      const userId = record?.id || recordId;
-      if (!company || !userId) throw new Error("User invitation requires a company and user record");
-      const result = await db(
-        `SELECT u.id,u.email,u.active,c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.registration_link_expiry_minutes
-           FROM users u
-           JOIN companies c ON c.id=u.company_id
-           JOIN company_settings cs ON cs.company_id=u.company_id
-          WHERE u.id=$1 AND u.company_id=$2 LIMIT 1`,
-        [userId, company]
-      );
-      const user = result.rows[0];
-      if (!user) throw new Error("User not found");
-      if (!user.email_registration_enabled) throw new Error("Email registration is disabled in Settings");
-      const recipient = normalizeEmail(user.email);
-      if (!recipient) throw new Error("User has no email address");
-      if (!domainAllowed(recipient, user.user_email_domain, user.domain_users_only)) {
-        throw new Error("User email is outside the allowed company domain");
-      }
-      const token = await issueAccountToken(db, {
-        companyId: company,
-        userId: user.id,
-        purpose: "REGISTRATION",
-        expiresMinutes: user.registration_link_expiry_minutes || 1440,
-      });
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
-      if (!provider.configured) throw new Error(provider.error || "Email provider is not configured");
-      const job = await enqueuePlatformJob({
-        db,
-        companyId: company,
-        kind: "SEND_EMAIL",
-        runAt: new Date(),
-        payload: {
-          recipient,
-          to: recipient,
-          templateKey: "USER_INVITATION",
-          variables: { token, userId: user.id, expiresMinutes: user.registration_link_expiry_minutes || 1440 },
-          _roleId: req?.user?.roleId,
-          _stepRunId: stepRunId,
-        },
-        idempotencyKey: `${company}:user-invite:${user.id}:${stepRunId || Date.now()}`,
-      });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null, expiresMinutes: user.registration_link_expiry_minutes || 1440 };
-    },
   },
   {
     key: "CALL_CONNECTOR_CAPABILITY",
