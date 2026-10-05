@@ -3524,25 +3524,9 @@ export function packageDefinition(entry) {
         workflows: [
           { objectKey: "supplier", name: "Supplier Invoice Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [{ id:"supplier_invoice_create", label:"Create Invoice", key:"RUN_SUBFLOW", subflowApiName:"SUPPLIER_INVOICE_CREATE", inputAssignments:{ supplierId:{path:"record.id"}, invoiceNumber:{path:"record.invoiceNumber"}, invoiceDate:{path:"record.invoiceDate"}, dueDate:{path:"record.dueDate"}, subtotal:{path:"record.subtotal"}, tax:{path:"record.tax"}, total:{path:"record.total"}, purchaseId:{path:"record.purchaseId"} } }] },
           { objectKey: "supplier", name: "Supplier Payment Execute", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [{ id:"supplier_payment_execute", label:"Record Payment", key:"RUN_SUBFLOW", subflowApiName:"SUPPLIER_PAYMENT_CREATE", inputAssignments:{ supplierId:{path:"record.id"}, amount:{path:"record.amount"}, paymentDate:{path:"record.paymentDate"}, paymentMethod:{path:"record.paymentMethod"}, reference:{path:"record.reference"}, invoiceId:{path:"record.invoiceId"} } }] },
-          { objectKey: "supplier", name: "Supplier Credit Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
-            { id: "supplier_credit_create", label: "Add Credit", key: "CALL_FUNCTION", functionKey: "supplier.ledger.adjust", inputs: {
-              supplierId: { path: "record.id" }, entryType: "RETURN_CREDIT", debit: false, amount: { path: "record.amount" },
-              reference: { path: "record.reference" }, description: { path: "record.description" }, idempotencyKey: { path: "record.idempotencyKey" }
-            } }
-          ] },
-          { objectKey: "supplier", name: "Supplier Debit Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
-            { id: "supplier_debit_create", label: "Add Debit", key: "CALL_FUNCTION", functionKey: "supplier.ledger.adjust", inputs: {
-              supplierId: { path: "record.id" }, entryType: "OPENING", debit: true, amount: { path: "record.amount" },
-              reference: { path: "record.reference" }, description: { path: "record.description" }, idempotencyKey: { path: "record.idempotencyKey" }
-            } }
-          ] },
-          { objectKey: "supplier", name: "Supplier Credit Note Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
-            { id: "supplier_credit_note_create", label: "Credit Note", key: "CALL_FUNCTION", functionKey: "supplier.ledger.adjust", inputs: {
-              supplierId: { path: "record.id" }, entryType: "RETURN_CREDIT", debit: false, referenceType: "SUPPLIER_CREDIT_NOTE",
-              amount: { path: "record.amount" }, reference: { path: "record.reference" }, description: { path: "record.description" },
-              idempotencyKey: { path: "record.idempotencyKey" }
-            } }
-          ] },
+          { objectKey: "supplier", name: "Supplier Credit Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [{ id:"supplier_credit_create", label:"Supplier Credit Create", key:"RUN_SUBFLOW", subflowApiName:"SUPPLIER_LEDGER_ADJUST", inputAssignments:{ supplierId:{path:"record.id"}, entryType:"RETURN_CREDIT", debit:false, amount:{path:"record.amount"}, reference:{path:"record.reference"}, description:{path:"record.description"} } }] },
+          { objectKey: "supplier", name: "Supplier Debit Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [{ id:"supplier_debit_create", label:"Supplier Debit Create", key:"RUN_SUBFLOW", subflowApiName:"SUPPLIER_LEDGER_ADJUST", inputAssignments:{ supplierId:{path:"record.id"}, entryType:"OPENING", debit:true, amount:{path:"record.amount"}, reference:{path:"record.reference"}, description:{path:"record.description"} } }] },
+          { objectKey: "supplier", name: "Supplier Credit Note Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [{ id:"supplier_credit_note_create", label:"Supplier Credit Note Create", key:"RUN_SUBFLOW", subflowApiName:"SUPPLIER_LEDGER_ADJUST", inputAssignments:{ supplierId:{path:"record.id"}, entryType:"RETURN_CREDIT", debit:false, amount:{path:"record.amount"}, reference:{path:"record.reference"}, description:{path:"record.description"} } }] },
         ],
         buttons: [
           { objectKey: "supplier", buttonKey: "supplier_add_invoice", label: "Add Invoice", targetType: "workflow", targetKey: "Supplier Invoice Create", placement: "record", variant: "primary",
