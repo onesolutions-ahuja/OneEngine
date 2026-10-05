@@ -91,10 +91,10 @@ test("Till system Flows are present and validate", () => {
   }
 });
 
-test("Till stock Flow debug covers block and allow paths", async () => {
-  let run = await debugSystem("flow:till.stock.validate", { hasShortfall:true, allowNegativeStock:false });
+test("Till stock Flow debug blocks shortfalls and allows available stock", async () => {
+  let run = await debugSystem("flow:till.stock.validate", { hasShortfall:true });
   assert.equal(run.workflowVariables.variables.allowed, false);
-  run = await debugSystem("flow:till.stock.validate", { hasShortfall:true, allowNegativeStock:true });
+  run = await debugSystem("flow:till.stock.validate", { hasShortfall:false });
   assert.equal(run.workflowVariables.variables.allowed, true);
 });
 
