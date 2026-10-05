@@ -1,5 +1,5 @@
 import { oneAssistantManifest } from "../packages/oneAssistantManifest.js";
-import { internalAppCatalog } from "./internalAppCatalog.js";
+import { packageManifestCatalog } from "../packages/packageManifestCatalog.js";
 
 const uberEatsWorkflowDefinitions = () => [
   {
@@ -4162,7 +4162,7 @@ export function packageDefinition(entry) {
   };
 }
 
-export function packageDefinitions(catalog = internalAppCatalog) {
+export function packageDefinitions(catalog = packageManifestCatalog) {
   return catalog.map(packageDefinition);
 }
 
