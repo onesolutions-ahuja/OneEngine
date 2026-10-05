@@ -2391,7 +2391,7 @@ export function packageDefinition(entry) {
           {
             objectKey:"sale",name:"Complete Sale",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
             action:{
-              type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"COMPLETE_SALE",
+              type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"COMPLETE_SALE",capabilityType:"workflow",capabilityKey:"sale.complete",systemGenerated:true,systemKey:"flow:sale.complete",
               inputContract:[
                 {name:"sale",type:"record",required:true},
                 {name:"items",type:"collection",required:true},
