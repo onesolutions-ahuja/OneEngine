@@ -219,7 +219,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     // object's own RBAC again when the object is opened.
     cachedGet('/api/platform/objects', {
       cacheKey: 'workspace:object-metadata',
-      forceRefresh: true,
+      forceRefresh: false,
     })
       .then((objectResponse) => {
         if (!live) return
