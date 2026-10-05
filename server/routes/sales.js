@@ -596,21 +596,6 @@ export default function createSalesRouter({
          * Make sure all products belong to this company.
          */
         let basketHasAgeRestricted = false; // T10C
-        /*
-         * T10U: negative-inventory billing safety. The stock check below is
-         * THE existing validation mechanism — it is not replaced. When the
-         * company has explicitly enabled negative-inventory billing, an
-         * insufficient-stock line is recorded (with authoritative stock
-         * levels) and the sale is allowed to proceed into the normal
-         * checkout/inventory path instead of being rejected; the resulting
-         * negative balance flows through the existing inventory ledger and
-         * is audited fire-and-forget after commit. When the setting is OFF
-         * (the default) behaviour is exactly as before.
-         */
-        const negativeBillingAllowed = await client.query(
-          "SELECT allow_negative_inventory_billing FROM company_settings WHERE company_id = $1",
-          [req.user.companyId]
-        ).then((r) => r.rows.length > 0 && r.rows[0].allow_negative_inventory_billing === true);
         const insufficientStockLines = [];
         for (const item of items) {
           if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
