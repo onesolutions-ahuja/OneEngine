@@ -10,8 +10,8 @@ on:
 # allowed stale PR validations to pile up waiting for hosted runners.
 # New validation supersedes older queued/in-progress validation.
 concurrency:
-  group: oneengine-validate
-  cancel-in-progress: true
+  group: oneengine-validate-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-and-audit:
