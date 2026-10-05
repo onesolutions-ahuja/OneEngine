@@ -61,12 +61,20 @@ export const packageFunctions = [
           `INSERT INTO purchase_items(purchase_id,product_id,quantity,unit_cost,line_total,batch_number,manufacturing_date,expiry_date)
            VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
           [purchase.id,line.productId,line.quantity,line.unitCost,line.lineTotal,line.batchNumber,line.manufacturingDate,line.expiryDate]);
-        if(inputs.recordTypeId || (inputs.customFields&&typeof inputs.customFields==="object")){
-          const domainReq={...req,body:{...(req?.body||{}),platform:{recordTypeId:inputs.recordTypeId||null,customFields:inputs.customFields||{}}}};
+        const platformInput=req?.body?.platform || null;
+        if(platformInput || inputs.recordTypeId || (inputs.customFields&&typeof inputs.customFields==="object")){
+          const domainReq=platformInput
+            ? req
+            : {...req,body:{...(req?.body||{}),platform:{recordTypeId:inputs.recordTypeId||null,customFields:inputs.customFields||{}}}};
           await saveDomainConfiguration({db:tx.query.bind(tx),key:"purchase",req:domainReq,record:purchase});
         }
         let received=null;
-        if(inputs.receiveNow!==false) received=await receivePurchase({client:tx,purchaseId:purchase.id,companyId:tenantId,userId:actorId,storeId,requestedItems:null,receiptMeta:{},createInventoryMovement});
+        if(inputs.receiveNow!==false) received=await receivePurchase({
+          client:tx,purchaseId:purchase.id,companyId:tenantId,userId:actorId,storeId,
+          requestedItems:Array.isArray(inputs.receiveItems)?inputs.receiveItems:null,
+          receiptMeta:{referenceNumber:inputs.receivingReference||null,notes:inputs.receivingNotes||null},
+          createInventoryMovement,
+        });
         if(owns) await tx.query("COMMIT");
         if(typeof db==="function"){
           dispatchIntegrationEvent({event:"PURCHASE_CREATED",deps:{db},context:{companyId:tenantId,storeId},entityId:purchase.id}).catch(()=>{});

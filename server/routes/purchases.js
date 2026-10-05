@@ -6,63 +6,8 @@ export default function createPurchasesRouter({
   authorize,
   db,
   pool,
-  createInventoryMovement,
-  savePlatformRecord = null,
 }) {
   const router = express.Router();
-
-  function validatePurchaseItems(items) {
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new Error("At least one purchase product is required");
-    }
-
-    return items.map((item) => {
-      const quantity = Number(item.quantity);
-      const unitCost = Number(item.unitCost);
-
-      if (!item.productId || !Number.isFinite(quantity) || quantity <= 0) {
-        throw new Error("Each purchase line needs a valid product and quantity");
-      }
-
-      if (!Number.isFinite(unitCost) || unitCost < 0) {
-        throw new Error("Each purchase line needs a valid unit cost");
-      }
-
-      return {
-        productId: item.productId,
-        quantity,
-        unitCost,
-        lineTotal: quantity * unitCost,
-        batchNumber: item.batchNumber || null,
-        manufacturingDate: item.manufacturingDate || null,
-        expiryDate: item.expiryDate || null,
-      };
-    });
-  }
-
-  async function insertPurchaseLines(client, purchaseId, items) {
-    for (const item of items) {
-      await client.query(
-        `
-        INSERT INTO purchase_items (
-          purchase_id, product_id, quantity, unit_cost, line_total,
-          batch_number, manufacturing_date, expiry_date
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-        `,
-        [
-          purchaseId,
-          item.productId,
-          item.quantity,
-          item.unitCost,
-          item.lineTotal,
-          item.batchNumber ? String(item.batchNumber).trim().slice(0, 100) : null,
-          item.manufacturingDate && /^\d{4}-\d{2}-\d{2}$/.test(String(item.manufacturingDate)) ? String(item.manufacturingDate) : null,
-          item.expiryDate && /^\d{4}-\d{2}-\d{2}$/.test(String(item.expiryDate)) ? String(item.expiryDate) : null,
-        ]
-      );
-    }
-  }
 
   async function receivePurchase(req, client, purchaseId, companyId, userId, storeId, requestedItems = null, receiptMeta = {}) {
     const execution = await executeSystemWorkflow({
@@ -203,194 +148,31 @@ export default function createPurchasesRouter({
     authenticate,
     authorize("purchase.create", "inventory.adjust"),
     async (req, res) => {
-      if (!pool) {
-        return res
-          .status(500)
-          .json({ success: false, message: "DATABASE_URL is not configured" });
-      }
-
-      const {
-        supplierId = null,
-        supplierName = null,
-        storeId = null,
-        referenceNumber = null,
-        purchaseDate = null,
-        notes = null,
-        items,
-        receiveNow = false,
-        receiveItems = null,
-        receivingReference = null,
-        receivingNotes = null,
-      } = req.body;
-
-      let purchaseItems;
       try {
-        purchaseItems = validatePurchaseItems(items);
-      } catch (error) {
-        return res.status(400).json({ success: false, message: error.message });
-      }
-
-      const total = purchaseItems.reduce((sum, item) => sum + item.lineTotal, 0);
-      const client = await pool.connect();
-
-      try {
-        await client.query("BEGIN");
-
-        let resolvedSupplierId = supplierId;
-        let trimmedSupplierName = supplierName && String(supplierName).trim()
-          ? String(supplierName).trim()
-          : null;
-
-        if (resolvedSupplierId) {
-          const existingSupplier = await client.query(
-            `
-          SELECT id, name
-          FROM suppliers
-          WHERE id = $1 AND company_id = $2 AND active = true
-          `,
-            [resolvedSupplierId, req.user.companyId]
-          );
-
-          if (!existingSupplier.rows.length) {
-            throw new Error("Supplier not found or inactive");
-          }
-
-          resolvedSupplierId = existingSupplier.rows[0].id;
-          trimmedSupplierName = existingSupplier.rows[0].name;
-        } else if (trimmedSupplierName) {
-          const existingSupplier = await client.query(
-            `
-          SELECT id
-          FROM suppliers
-          WHERE company_id = $1 AND LOWER(name) = LOWER($2)
-          LIMIT 1
-          `,
-            [req.user.companyId, trimmedSupplierName]
-          );
-
-          if (existingSupplier.rows.length) {
-            resolvedSupplierId = existingSupplier.rows[0].id;
-          } else {
-            const newSupplier = await client.query(
-              `
-          INSERT INTO suppliers (company_id, name)
-          VALUES ($1, $2)
-          RETURNING id
-          `,
-              [req.user.companyId, trimmedSupplierName]
-            );
-            resolvedSupplierId = newSupplier.rows[0].id;
-          }
-        }
-
-        const purchaseResult = await client.query(
-          `
-          INSERT INTO purchases (
-            company_id, store_id, supplier_id, supplier_name, reference_number, purchase_date,
-            notes, status, subtotal, total, created_by
-          )
-          VALUES ($1,$2,$3,$4,$5,COALESCE($6::date, CURRENT_DATE),$7,$8,$9,$9,$10)
-          RETURNING id
-          `,
-          [
-            req.user.companyId,
-            storeId || req.user.storeId,
-            resolvedSupplierId,
-            trimmedSupplierName,
-            referenceNumber && String(referenceNumber).trim() ? String(referenceNumber).trim() : null,
-            purchaseDate || null,
-            notes && String(notes).trim() ? String(notes).trim() : null,
-            "DRAFT",
-            total,
-            req.user.id,
-          ]
-        );
-
-        const purchaseId = purchaseResult.rows[0].id;
-        if (savePlatformRecord) {
-          await savePlatformRecord({
-            db: client.query.bind(client),
-            key: "purchase",
-            req,
-            record: {
-              id: purchaseId,
-              company_id: req.user.companyId,
-              store_id: storeId || req.user.storeId,
-              supplier_id: resolvedSupplierId,
-              supplier_name: trimmedSupplierName,
-              reference_number: referenceNumber && String(referenceNumber).trim() ? String(referenceNumber).trim() : null,
-              purchase_date: purchaseDate,
-              notes: notes && String(notes).trim() ? String(notes).trim() : null,
-              status: "DRAFT",
-              total,
-            },
-          });
-        }
-        await insertPurchaseLines(client, purchaseId, purchaseItems);
-
-        if (receiveNow) {
-          await receivePurchase(
-          req,
-          client,
-            purchaseId,
-            req.user.companyId,
-            req.user.id,
-            req.user.storeId,
-            receiveItems,
-            { referenceNumber: receivingReference, notes: receivingNotes }
-          );
-        }
-
-        await client.query("COMMIT");
-
-        /*
-         * T9G: fire-and-forget integration dispatch (never blocks/throws).
-         * A create-and-receive fires both events, matching the lifecycle.
-         */
-        executeSystemWorkflow({
+        const receiveNow = req.body?.receiveNow === true;
+        const storeId = req.body?.storeId || req.user.storeId || null;
+        const execution = await executeSystemWorkflow({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
-          systemKey: "function:integration.event.dispatch",
+          systemKey: "function:purchase.create",
           req,
-          input: { event: "PURCHASE_CREATED", entityId: purchaseId, storeId: storeId || req.user.storeId },
-          storeId: storeId || req.user.storeId,
-          source: { type: "domain_event", method: req.method, path: req.originalUrl || req.path, capability: "integration.event.dispatch" },
-        }).catch(() => {});
-        if (receiveNow) {
-          executeSystemWorkflow({
-            db,
-            companyId: req.user.companyId,
-            userId: req.user.id || null,
-            systemKey: "function:integration.event.dispatch",
-            req,
-            input: { event: "PURCHASE_RECEIVED", entityId: purchaseId, storeId: storeId || req.user.storeId },
-            storeId: storeId || req.user.storeId,
-            source: { type: "domain_event", method: req.method, path: req.originalUrl || req.path, capability: "integration.event.dispatch" },
-          }).catch(() => {});
-        }
-
-        res
-          .status(201)
-          .json({
-            success: true,
-            message: receiveNow ? "Stock received" : "Purchase created",
-            data: { id: purchaseId },
-          });
+          input: { ...req.body, receiveNow, storeId },
+          storeId,
+          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "purchase.create" },
+          extraContext: { pool },
+        });
+        const purchaseId = execution.result?.id;
+        res.status(201).json({
+          success: true,
+          message: receiveNow ? "Stock received" : "Purchase created",
+          data: { id: purchaseId },
+        });
       } catch (error) {
-        await client.query("ROLLBACK");
         console.error("Create purchase error:", error);
         res
-          .status(error.code === "23505" ? 409 : 400)
-          .json({
-            success: false,
-            message:
-              error.code === "23505"
-                ? "A purchase with this reference already exists"
-                : error.message,
-          });
-      } finally {
-        client.release();
+          .status(error.code === "DUPLICATE_PURCHASE" || error.code === "23505" ? 409 : 400)
+          .json({ success: false, message: error.message });
       }
     }
   );

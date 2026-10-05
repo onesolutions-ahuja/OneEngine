@@ -30,3 +30,24 @@ test("purchase line system metadata does not invent company scope", async () => 
   const source = await readFile(new URL("../server/services/platformSystemObjects.js", import.meta.url), "utf8");
   assert.match(source, /"purchase_line", "purchase_items".*companyScoped: false/);
 });
+
+
+test("purchase create API delegates business behavior to the protected system workflow", async () => {
+  const source = await readFile(new URL("../server/routes/purchases.js", import.meta.url), "utf8");
+  assert.match(source, /systemKey: "function:purchase\.create"/);
+  assert.match(source, /extraContext: \{ pool \}/);
+  for (const forbidden of [
+    "INSERT INTO purchases",
+    "INSERT INTO purchase_items",
+    "INSERT INTO suppliers",
+    "validatePurchaseItems",
+    "insertPurchaseLines",
+  ]) assert.equal(source.includes(forbidden), false, forbidden);
+});
+
+test("purchase create capability preserves optional initial receipt and metadata inputs", async () => {
+  const source = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
+  assert.match(source, /Array\.isArray\(inputs\.receiveItems\)\?inputs\.receiveItems:null/);
+  assert.match(source, /referenceNumber:inputs\.receivingReference\|\|null/);
+  assert.match(source, /const platformInput=req\?\.body\?\.platform \|\| null/);
+});
