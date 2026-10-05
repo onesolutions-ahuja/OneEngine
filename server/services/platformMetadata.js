@@ -1163,6 +1163,17 @@ const operationalObjects = [
     ["closed_at","Closed At","datetime","closed_at",false],
     ["closed_by","Closed By","lookup","closed_by",false],
   ] },
+  { key: "held_sale", label: "Held Sale", plural: "Held Sales", table: "held_sales", fields: [
+    ["company_id","Company","lookup","company_id",true],
+    ["store_id","Store","lookup","store_id",true],
+    ["user_id","Held By","lookup","user_id",true],
+    ["customer_id","Customer","lookup","customer_id",false],
+    ["items","Held Basket","json","items",true],
+    ["discount_type","Discount Type","text","discount_type",false],
+    ["discount_value","Discount Value","currency","discount_value",false],
+    ["notes","Notes","text","notes",false],
+    ["created_at","Held At","datetime","created_at",false],
+  ] },
   { key: "cash_ledger", label: "Cash Ledger", plural: "Cash Ledger", table: "cash_movements", fields: [
     ["company_id","Company","lookup","company_id",true],
     ["store_id","Store","lookup","store_id",true],
@@ -1693,7 +1704,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       if (object.key === "onestore_app") {
         await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
       }
-      if (object.key === "till_session" || object.key === "cash_ledger") {
+      if (object.key === "till_session" || object.key === "cash_ledger" || object.key === "held_sale") {
         await pool.query("UPDATE platform_objects SET company_scoped=true,store_scoped=true WHERE id=$1", [result.rows[0].id]);
       }
       for (let index = 0; index < object.fields.length; index += 1) {
