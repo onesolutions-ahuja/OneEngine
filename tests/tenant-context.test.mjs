@@ -89,7 +89,7 @@ test('login and refresh use company binding and permitted stores', async () => {
   assert.equal(api.getStoredUser().companyId, 'home')
   stores = [{ id: 'a', is_primary: true }, { id: 'b' }]
   localStorage.setItem(api.ACTIVE_STORE_STORAGE_KEY, 'b')
-  await api.ensureActiveStoreContext()
+  await api.ensureActiveStoreContext({ force: true })
   assert.equal(api.getActiveStoreId(), 'b')
   localStorage.setItem(api.ACTIVE_STORE_STORAGE_KEY, 'foreign')
   await api.ensureActiveStoreContext()
