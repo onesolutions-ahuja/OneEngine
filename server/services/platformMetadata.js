@@ -1170,6 +1170,16 @@ const operationalObjects = [
     ["closed_at","Closed At","datetime","closed_at",false],
     ["closed_by","Closed By","lookup","closed_by",false],
   ] },
+  { key: "payment_method", label: "Payment Method", plural: "Payment Methods", table: "payment_methods", fields: [
+    ["company_id","Company","lookup","company_id",true],
+    ["code","Code","text","code",true],
+    ["label","Label","text","label",true],
+    ["kind","Kind","text","kind",true],
+    ["active","Active","boolean","active",false],
+    ["allow_offline","Allow Offline","boolean","allow_offline",false],
+    ["sort_order","Sort Order","number","sort_order",false],
+    ["config","Configuration","json","config",false],
+  ] },
   { key: "product_modifier_group", label: "Product Modifier Group", plural: "Product Modifier Groups", table: "product_modifier_groups", fields: [
     ["company_id","Company","lookup","company_id",true],
     ["product_id","Product","lookup","product_id",true],
@@ -1740,7 +1750,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       if (object.key === "onestore_app") {
         await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
       }
-      if (object.key === "till_session" || object.key === "cash_ledger" || object.key === "held_sale" || object.key === "product_modifier_group") {
+      if (object.key === "till_session" || object.key === "cash_ledger" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
         await pool.query("UPDATE platform_objects SET company_scoped=true,store_scoped=true WHERE id=$1", [result.rows[0].id]);
       }
       for (let index = 0; index < object.fields.length; index += 1) {
@@ -1929,6 +1939,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     await grantObjectPermissionFromCodes("cash_ledger", ["cash.adjustment","cash.payout"], { view: true, create: true });
     await grantObjectPermissionFromCodes("product_modifier_group", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("product_modifier_option", ["sale.create"], { view: true });
+    await grantObjectPermissionFromCodes("payment_method", ["sale.create"], { view: true });
 
     await pool.query(
       `INSERT INTO role_permissions (role_id,permission_id)
@@ -2237,34 +2248,62 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Select Payment Mode",
+          name: "OneTill - Process Payment",
           apiName: "ONETILL_PAYMENT_MODE",
           inputContract: [
             { name: "paymentMode", label: "Payment Mode", type: "text", required: true },
-            { name: "allowOffline", label: "Allow Offline", type: "boolean", required: true },
             { name: "online", label: "Online", type: "boolean", required: true },
             { name: "customerSelected", label: "Customer Selected", type: "boolean", required: true },
-            { name: "hasGiftCardCode", label: "Gift Card Code Supplied", type: "boolean", required: true },
-            { name: "cashReceived", label: "Cash Received", type: "currency", required: true },
+            { name: "hasGiftCardCode", label: "Additional Code Supplied", type: "boolean", required: true },
+            { name: "cashReceived", label: "Received Amount", type: "currency", required: true },
             { name: "total", label: "Sale Total", type: "currency", required: true },
-            { name: "requiresConnector", label: "Requires Connector", type: "boolean", required: true },
-            { name: "requiresCustomer", label: "Requires Customer", type: "boolean", required: true },
-            { name: "requiresGiftCardCode", label: "Requires Gift Card Code", type: "boolean", required: true },
-            { name: "requiresCashReceived", label: "Requires Cash Received", type: "boolean", required: true },
+            { name: "executeConnector", label: "Execute Connector", type: "boolean", required: true },
+            { name: "currency", label: "Currency", type: "text", required: true },
+            { name: "clientRequestId", label: "Client Request ID", type: "text", required: false },
+            { name: "terminalId", label: "Terminal", type: "text", required: false },
+            { name: "selfCheckout", label: "Self Checkout", type: "boolean", required: true },
           ],
           outputContract: [
             { name: "selectedPaymentMode", label: "Selected Payment Mode", type: "text", source: "variables.selectedPaymentMode" },
             { name: "connectorRequired", label: "Connector Required", type: "boolean", source: "variables.connectorRequired" },
+            { name: "connectorApproved", label: "Connector Approved", type: "boolean", source: "variables.connectorApproved" },
             { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
           ],
           actions: [
-            { id:"payment_set_mode",label:"1. Set Selected Payment Mode",apiName:"payment_set_mode",key:"ASSIGNMENT",variableName:"selectedPaymentMode",variableType:"text",operator:"set",value:{path:"$record.paymentMode"} },
-            { id:"payment_connection",label:"2. Check Online/Offline Eligibility",apiName:"payment_connection",key:"FORMULA",resourceName:"connectionAllowed",resultType:"boolean",expression:"online || allowOffline",inputs:{online:{path:"$record.online"},allowOffline:{path:"$record.allowOffline"}} },
-            { id:"payment_customer",label:"3. Check Customer Requirement",apiName:"payment_customer",key:"FORMULA",resourceName:"customerAllowed",resultType:"boolean",expression:"!requiresCustomer || customerSelected",inputs:{requiresCustomer:{path:"$record.requiresCustomer"},customerSelected:{path:"$record.customerSelected"}} },
-            { id:"payment_gift",label:"4. Check Additional Code Requirement",apiName:"payment_gift",key:"FORMULA",resourceName:"giftAllowed",resultType:"boolean",expression:"!requiresGiftCardCode || hasGiftCardCode",inputs:{requiresGiftCardCode:{path:"$record.requiresGiftCardCode"},hasGiftCardCode:{path:"$record.hasGiftCardCode"}} },
-            { id:"payment_cash",label:"5. Check Received Amount Requirement",apiName:"payment_cash",key:"FORMULA",resourceName:"cashAllowed",resultType:"boolean",expression:"!requiresCashReceived || cashReceived >= total",inputs:{requiresCashReceived:{path:"$record.requiresCashReceived"},cashReceived:{path:"$record.cashReceived"},total:{path:"$record.total"}} },
-            { id:"payment_connector",label:"6. Read Connector Requirement",apiName:"payment_connector",key:"ASSIGNMENT",variableName:"connectorRequired",variableType:"boolean",operator:"set",value:{path:"$record.requiresConnector"} },
-            { id:"payment_allowed",label:"7. Final Payment Mode Decision",apiName:"payment_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"connectionAllowed && customerAllowed && giftAllowed && cashAllowed",inputs:{connectionAllowed:{path:"variables.connectionAllowed"},customerAllowed:{path:"variables.customerAllowed"},giftAllowed:{path:"variables.giftAllowed"},cashAllowed:{path:"variables.cashAllowed"}} },
+            { id:"get_payment_method",label:"1. Get Payment Method",apiName:"get_payment_method",key:"GET_RECORDS",objectKey:"payment_method",filters:[
+              {field:"code",operator:"equals",value:{path:"$record.paymentMode"}},
+              {field:"active",operator:"equals",value:true}
+            ],limit:1,store:"first" },
+            { id:"set_payment_mode",label:"2. Set Selected Payment Mode",apiName:"set_payment_mode",key:"ASSIGNMENT",variableName:"selectedPaymentMode",variableType:"text",operator:"set",value:{path:"$record.paymentMode"} },
+            { id:"method_found",label:"3. Confirm Payment Method Exists",apiName:"method_found",key:"FORMULA",resourceName:"methodFound",resultType:"boolean",expression:'COALESCE(methodCode,"") != ""',inputs:{methodCode:{path:"steps.get_payment_method.record.code"}} },
+            { id:"offline_allowed",label:"4. Check Online / Offline Eligibility",apiName:"offline_allowed",key:"FORMULA",resourceName:"connectionAllowed",resultType:"boolean",expression:"online || allowOffline",inputs:{online:{path:"$record.online"},allowOffline:{path:"steps.get_payment_method.record.allow_offline"}} },
+            { id:"customer_allowed",label:"5. Check Customer Requirement",apiName:"customer_allowed",key:"FORMULA",resourceName:"customerAllowed",resultType:"boolean",expression:"!requiresCustomer || customerSelected",inputs:{requiresCustomer:{path:"steps.get_payment_method.record.config.requiresCustomer"},customerSelected:{path:"$record.customerSelected"}} },
+            { id:"code_allowed",label:"6. Check Additional Code Requirement",apiName:"code_allowed",key:"FORMULA",resourceName:"codeAllowed",resultType:"boolean",expression:"!requiresCode || hasCode",inputs:{requiresCode:{path:"steps.get_payment_method.record.config.requiresGiftCardCode"},hasCode:{path:"$record.hasGiftCardCode"}} },
+            { id:"amount_allowed",label:"7. Check Received Amount Requirement",apiName:"amount_allowed",key:"FORMULA",resourceName:"amountAllowed",resultType:"boolean",expression:"!requiresAmount || received >= total",inputs:{requiresAmount:{path:"steps.get_payment_method.record.config.requiresCashReceived"},received:{path:"$record.cashReceived"},total:{path:"$record.total"}} },
+            { id:"connector_required",label:"8. Read Connector Requirement",apiName:"connector_required",key:"FORMULA",resourceName:"connectorRequired",resultType:"boolean",expression:'requiresConnector == true || COALESCE(connectorPackageKey,"") != ""',inputs:{requiresConnector:{path:"steps.get_payment_method.record.config.requiresConnector"},connectorPackageKey:{path:"steps.get_payment_method.record.config.connectorPackageKey"}} },
+            { id:"precheck_allowed",label:"9. Validate Payment Method",apiName:"precheck_allowed",key:"FORMULA",resourceName:"precheckAllowed",resultType:"boolean",expression:"methodFound && connectionAllowed && customerAllowed && codeAllowed && amountAllowed",inputs:{methodFound:{path:"variables.methodFound"},connectionAllowed:{path:"variables.connectionAllowed"},customerAllowed:{path:"variables.customerAllowed"},codeAllowed:{path:"variables.codeAllowed"},amountAllowed:{path:"variables.amountAllowed"}} },
+            { id:"connector_decision",label:"10. Does This Payment Need A Connector?",apiName:"connector_decision",key:"CONDITION",
+              outcomes:[{id:"execute",label:"Execute Connector",condition:{match:"all",conditions:[
+                {field:"variables.precheckAllowed",operator:"equals",value:true},
+                {field:"variables.connectorRequired",operator:"equals",value:true},
+                {field:"$record.executeConnector",operator:"equals",value:true}
+              ]},branch:["call_payment_connector","connector_status","set_connector_result"]}],
+              defaultLabel:"No Connector Call",defaultBranch:["skip_connector"] },
+            { id:"call_payment_connector",label:"11. Call Payment Connector",apiName:"call_payment_connector",key:"CALL_CONNECTOR_CAPABILITY",
+              packageKey:{path:"steps.get_payment_method.record.config.connectorPackageKey"},capability:"payment.sale",
+              input:{
+                amount:{path:"$record.total"},
+                currency:{path:"$record.currency"},
+                idempotencyKey:{path:"$record.clientRequestId"},
+                reference:{path:"$record.clientRequestId"},
+                terminalId:{path:"$record.terminalId"},
+                paymentMode:{path:"$record.paymentMode"},
+                selfCheckout:{path:"$record.selfCheckout"}
+              } },
+            { id:"connector_status",label:"12. Check Connector Approval",apiName:"connector_status",key:"FORMULA",resourceName:"connectorWasApproved",resultType:"boolean",expression:'available == true && status == "APPROVED"',inputs:{available:{path:"steps.call_payment_connector.available"},status:{path:"steps.call_payment_connector.result.status"}} },
+            { id:"set_connector_result",label:"13. Save Connector Approval",apiName:"set_connector_result",key:"ASSIGNMENT",variableName:"connectorApproved",variableType:"boolean",operator:"set",value:{path:"variables.connectorWasApproved"} },
+            { id:"skip_connector",label:"11A. Connector Call Not Required Yet",apiName:"skip_connector",key:"ASSIGNMENT",variableName:"connectorApproved",variableType:"boolean",operator:"set",value:true },
+            { id:"final_payment_allowed",label:"14. Final Payment Decision",apiName:"final_payment_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"precheckAllowed && connectorApproved",inputs:{precheckAllowed:{path:"variables.precheckAllowed"},connectorApproved:{path:"variables.connectorApproved"}} },
           ],
         },
         {
@@ -2577,7 +2616,6 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       const internalWorkflowButtons = [
         ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
         ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("ONETILL_CHECKOUT_AGE_PREFLIGHT"),"sale.create"],
-        ["till_session_preflight","Checkout Session Preflight",tillWorkflowIds.get("ONETILL_SESSION_PREFLIGHT"),"sale.create"],
         ["till_payment_process","Select Payment Mode",tillWorkflowIds.get("ONETILL_PAYMENT_MODE"),"sale.create"],
         ["till_pricing_calculate","Calculate Sale Pricing",tillWorkflowIds.get("ONETILL_CALCULATE_SALE_PRICING"),"sale.create"],
         ["till_split_payment_validate","Validate Split Payment",tillWorkflowIds.get("ONETILL_VALIDATE_SPLIT_PAYMENT"),"sale.create"],
@@ -2609,15 +2647,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             AND company_id IS NULL
             AND COALESCE(user_modified,FALSE)=FALSE`
       ).catch(() => {});
-      await pool.query(
-        `UPDATE platform_buttons
-            SET placement='till_checkout_preflight',
-                config=COALESCE(config,'{}'::jsonb)||'{"modalOnFalse":"till","messageOnFalse":"Open a till session before completing a sale."}'::jsonb,
-                updated_at=NOW()
-          WHERE button_key='till_session_preflight'
-            AND company_id IS NULL
-            AND COALESCE(user_modified,FALSE)=FALSE`
-      ).catch(() => {});
+;
     }
   
 
