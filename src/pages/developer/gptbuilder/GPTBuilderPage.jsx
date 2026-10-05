@@ -478,6 +478,7 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
   const [tab, setTab] = useState(layout === 'free' ? 'elements' : 'manager')
   const [newResourceOpen, setNewResourceOpen] = useState(false)
   const effectiveTab = layout === 'auto' ? 'manager' : tab
+  const availableResources = Array.isArray(resources) ? resources : []
   return <aside className="gptb-toolbox" aria-label="Toolbox">
     <div className="gptb-toolbox-tabs">{layout === 'free' ? <button className={effectiveTab === 'elements' ? 'is-active' : ''} onClick={() => setTab('elements')}>Elements</button> : null}<button className={effectiveTab === 'manager' ? 'is-active' : ''} onClick={() => setTab('manager')}>Manager</button><button className="gptb-toolbox-close" aria-label="Close toolbox" onClick={onClose}><X size={15}/></button></div>
     {effectiveTab === 'elements'
