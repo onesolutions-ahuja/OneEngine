@@ -83,19 +83,31 @@ function onOffline() {
   notify()
 }
 
-export function startConnectivityMonitoring({ intervalMs = 30000 } = {}) {
+function onVisibilityChange() {
+  // Hidden tabs must not keep a sleeping/free database active. When the user
+  // returns, perform one immediate check instead of polling in the background.
+  if (document.visibilityState === 'visible') void checkConnectivity()
+}
+
+export function startConnectivityMonitoring({ intervalMs = 120000 } = {}) {
   if (typeof window === 'undefined') return () => {}
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   if (timer) window.clearInterval(timer)
-  if (intervalMs > 0) timer = window.setInterval(() => void checkConnectivity(), intervalMs)
-  void checkConnectivity()
+  if (intervalMs > 0) {
+    timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void checkConnectivity()
+    }, intervalMs)
+  }
+  if (document.visibilityState === 'visible') void checkConnectivity()
   return stopConnectivityMonitoring
 }
 export function stopConnectivityMonitoring() {
   if (typeof window === 'undefined') return
   window.removeEventListener('online', onOnline)
   window.removeEventListener('offline', onOffline)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (timer) window.clearInterval(timer)
   timer = null
 }
