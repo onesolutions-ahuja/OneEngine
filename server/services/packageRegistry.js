@@ -3522,19 +3522,8 @@ export function packageDefinition(entry) {
           { objectKey: "financial_ledger", viewKey: "financial_ledger", label: "Financial Ledger", columns: ["transaction_type", "supplier_id", "amount", "debit", "credit", "reference", "created_at"] },
         ],
         workflows: [
-          { objectKey: "supplier", name: "Supplier Invoice Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
-            { id: "supplier_invoice_create", label: "Add Invoice", key: "CALL_FUNCTION", functionKey: "supplier.invoice.create", inputs: {
-              supplierId: { path: "record.id" }, invoiceNumber: { path: "record.invoiceNumber" }, invoiceDate: { path: "record.invoiceDate" },
-              dueDate: { path: "record.dueDate" }, subtotal: { path: "record.subtotal" }, tax: { path: "record.tax" },
-              total: { path: "record.total" }, notes: { path: "record.notes" }
-            } }
-          ] },
-          { objectKey: "supplier", name: "Supplier Payment Execute", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
-            { id: "supplier_payment_execute", label: "Record Payment", key: "CALL_FUNCTION", functionKey: "supplier.payment.execute", inputs: {
-              supplierId: { path: "record.id" }, amount: { path: "record.amount" }, paymentMethod: { path: "record.paymentMethod" },
-              reference: { path: "record.reference" }, invoiceId: { path: "record.invoiceId" }, idempotencyKey: { path: "record.idempotencyKey" }
-            } }
-          ] },
+          { objectKey: "supplier", name: "Supplier Invoice Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [{ id:"supplier_invoice_create", label:"Create Invoice", key:"RUN_SUBFLOW", subflowApiName:"SUPPLIER_INVOICE_CREATE", inputAssignments:{ supplierId:{path:"record.id"}, invoiceNumber:{path:"record.invoiceNumber"}, invoiceDate:{path:"record.invoiceDate"}, dueDate:{path:"record.dueDate"}, subtotal:{path:"record.subtotal"}, tax:{path:"record.tax"}, total:{path:"record.total"}, purchaseId:{path:"record.purchaseId"} } }] },
+          { objectKey: "supplier", name: "Supplier Payment Execute", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [{ id:"supplier_payment_execute", label:"Record Payment", key:"RUN_SUBFLOW", subflowApiName:"SUPPLIER_PAYMENT_CREATE", inputAssignments:{ supplierId:{path:"record.id"}, amount:{path:"record.amount"}, paymentDate:{path:"record.paymentDate"}, paymentMethod:{path:"record.paymentMethod"}, reference:{path:"record.reference"}, invoiceId:{path:"record.invoiceId"} } }] },
           { objectKey: "supplier", name: "Supplier Credit Create", triggerKey: "manual", active: true, lifecycleStatus: "ACTIVE", actions: [
             { id: "supplier_credit_create", label: "Add Credit", key: "CALL_FUNCTION", functionKey: "supplier.ledger.adjust", inputs: {
               supplierId: { path: "record.id" }, entryType: "RETURN_CREDIT", debit: false, amount: { path: "record.amount" },
