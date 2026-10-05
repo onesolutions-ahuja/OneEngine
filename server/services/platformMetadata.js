@@ -1248,51 +1248,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 }
 
 
-  const STANDARD_RELATIONSHIPS = [
-    ["category", "product", "products", "one_to_many", "category_id"],
-    ["customer", "price_list", "price_list", "lookup", "price_list_id"],
-    ["supplier", "product", "products", "many_to_many", null],
-    ["product", "product_availability", "availability", "one_to_many", "product_id"],
-    ["store", "product_availability", "product_availability", "one_to_many", "store_id"],
-    ["price_list", "product_availability", "product_availability", "one_to_many", "price_list_id"],
-    ["product", "inventory_batch", "batches", "one_to_many", "product_id"],
-    ["store", "inventory_batch", "batches", "one_to_many", "store_id"],
-    ["sale", "payment", "payments", "one_to_many", "transaction_id"],
-    ["sale", "financial_ledger", "ledger_entries", "one_to_many", "transaction_id"],
-    ["payment", "financial_ledger", "ledger_entries", "one_to_many", "payment_id"],
-    ["customer", "sale", "transactions", "one_to_many", "customer_id"],
-    ["supplier", "payment", "payments", "one_to_many", "supplier_id"],
-    ["customer", "payment", "payments", "one_to_many", "customer_id"],
-    ["sale", "sale", "original_transactions", "one_to_many", "original_transaction_id"],
-    ["product", "inventory", "stock_positions", "one_to_many", "product_id"],
-    ["store", "inventory", "stock_positions", "one_to_many", "store_id"],
-    ["product", "inventory_movement", "inventory_movements", "one_to_many", "product_id"],
-    ["store", "inventory_movement", "inventory_movements", "one_to_many", "store_id"],
-    ["inventory_batch", "inventory_movement", "movements", "one_to_many", "batch_id"],
-    ["sale", "inventory_movement", "inventory_movements", "one_to_many", "transaction_id"],
-    ["purchase", "purchase_line", "lines", "one_to_many", "purchase_id"],
-    ["purchase_line", "product", "product", "lookup", "product_id"],
-    ["purchase", "purchase_receipt", "receipts", "one_to_many", "purchase_id"],
-    ["purchase_receipt", "purchase_receipt_line", "lines", "one_to_many", "receipt_id"],
-    ["supplier", "supplier_payment", "payments", "one_to_many", "supplier_id"],
-    ["supplier", "supplier_ledger", "ledger_entries", "one_to_many", "supplier_id"],
-    ["customer", "layaway", "layaways", "one_to_many", "customer_id"],
-    ["layaway", "layaway_line", "lines", "one_to_many", "layaway_id"],
-    ["layaway", "layaway_payment", "payments", "one_to_many", "layaway_id"],
-    ["layaway_line", "product", "product", "lookup", "product_id"],
-    ["customer", "loyalty_account", "loyalty_account", "one_to_many", "customer_id"],
-    ["customer", "loyalty_transaction", "loyalty_transactions", "one_to_many", "customer_id"],
-    ["product", "promotion", "promotions", "one_to_many", "product_id"],
-    ["stock_transfer", "stock_transfer_line", "lines", "one_to_many", "transfer_id"],
-    ["stock_transfer_line", "product", "product", "lookup", "product_id"],
-    ["stock_return", "stock_return_line", "lines", "one_to_many", "return_id"],
-    ["stock_return_line", "product", "product", "lookup", "product_id"],
-    ["hospitality_floor", "hospitality_table", "tables", "one_to_many", "floor_id"],
-    ["hospitality_table", "reservation", "reservations", "one_to_many", "table_id"],
-    ["customer", "reservation", "reservations", "one_to_many", "customer_id"],
-    ["hospitality_table", "kds_ticket", "kds_tickets", "one_to_many", "table_id"],
-    ["sale", "kds_ticket", "kds_tickets", "one_to_many", "sale_id"],
-  ];
+  const STANDARD_RELATIONSHIPS = [];
 
   const additionalStandardObjects = [];
 
