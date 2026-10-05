@@ -108,28 +108,23 @@
 }
 
 .rfux-canvas-shell .react-flow__edge.rfux-child-running-edge .react-flow__edge-path {
-  stroke: #7c3aed;
-  stroke-width: 1.8;
-  stroke-dasharray: 8 6;
-  animation: rfux-child-flow .75s linear infinite;
+  stroke-width: 2.2;
+  stroke-dasharray: 5 11;
+  stroke-linecap: round;
+  animation: rfux-child-flow .58s linear infinite;
 }
+
+.rfux-canvas-shell .react-flow__edge.rfux-child-green .react-flow__edge-path { stroke: #16a34a; }
+.rfux-canvas-shell .react-flow__edge.rfux-child-orange .react-flow__edge-path { stroke: #ea580c; }
+.rfux-canvas-shell .react-flow__edge.rfux-child-blue .react-flow__edge-path { stroke: #2563eb; }
+.rfux-canvas-shell .react-flow__edge.rfux-child-pink .react-flow__edge-path { stroke: #db2777; }
+.rfux-canvas-shell .react-flow__edge.rfux-child-cyan .react-flow__edge-path { stroke: #0891b2; }
+.rfux-canvas-shell .react-flow__edge.rfux-child-violet .react-flow__edge-path { stroke: #7c3aed; }
 
 @keyframes rfux-child-flow {
-  to { stroke-dashoffset: -28; }
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -32; }
 }
-
-.rfux-canvas-shell .react-flow__edge.rfux-workflow-running-edge .react-flow__edge-path {
-  stroke-width: 2.1;
-  stroke-dasharray: 8 6;
-  animation: rfux-child-flow .75s linear infinite;
-}
-
-.rfux-canvas-shell .react-flow__edge.rfux-run-violet .react-flow__edge-path { stroke: #7c3aed; }
-.rfux-canvas-shell .react-flow__edge.rfux-run-blue .react-flow__edge-path { stroke: #2563eb; }
-.rfux-canvas-shell .react-flow__edge.rfux-run-green .react-flow__edge-path { stroke: #16a34a; }
-.rfux-canvas-shell .react-flow__edge.rfux-run-amber .react-flow__edge-path { stroke: #d97706; }
-.rfux-canvas-shell .react-flow__edge.rfux-run-pink .react-flow__edge-path { stroke: #db2777; }
-.rfux-canvas-shell .react-flow__edge.rfux-run-cyan .react-flow__edge-path { stroke: #0891b2; }
 
 .rfux-floating-toolbar {
   position: absolute;
@@ -153,17 +148,6 @@
   min-height: 32px;
   padding: 0;
   border-color: transparent;
-}
-
-.rfux-floating-toolbar button.is-active {
-  color: #6d28d9;
-  background: #f3e8ff;
-}
-
-.rfux-floating-toolbar button.is-running {
-  color: #fff;
-  background: #7c3aed;
-  border-color: #7c3aed;
 }
 
 .rfux-floating-toolbar > span {
@@ -197,17 +181,6 @@
   border-color: #8b5cf6;
   box-shadow: 0 0 0 2px rgba(139,92,246,.14), 0 7px 20px rgba(24,24,27,.08);
 }
-
-.rfux-node.is-running {
-  box-shadow: 0 0 0 3px rgba(24,24,27,.06), 0 8px 20px rgba(24,24,27,.09);
-}
-
-.rfux-node.is-running.rfux-run-violet { border-color: #7c3aed; }
-.rfux-node.is-running.rfux-run-blue { border-color: #2563eb; }
-.rfux-node.is-running.rfux-run-green { border-color: #16a34a; }
-.rfux-node.is-running.rfux-run-amber { border-color: #d97706; }
-.rfux-node.is-running.rfux-run-pink { border-color: #db2777; }
-.rfux-node.is-running.rfux-run-cyan { border-color: #0891b2; }
 
 .rfux-node-icon {
   width: 32px;
@@ -245,67 +218,55 @@
   font-size: 10.5px;
 }
 
-.rfux-more {
-  width: 26px;
-  height: 26px;
-  border: 0;
+.rfux-node-remove {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #e4e4e7;
   border-radius: 7px;
   display: grid;
   place-items: center;
   color: #71717a;
-  background: transparent;
-  cursor: pointer;
-}
-
-.rfux-more:hover { background: #f4f4f5; }
-
-.rfux-node-actions {
-  position: absolute;
-  left: 50%;
-  bottom: -39px;
-  transform: translateX(-50%);
-  z-index: 7;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.rfux-node-action {
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
   background: #fff;
-  box-shadow: 0 2px 7px rgba(24,24,27,.08);
   cursor: pointer;
+  transition: color .15s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
 }
 
-.rfux-node-action--add {
-  border: 1px solid #ddd6fe;
-  color: #6d28d9;
-}
-
-.rfux-node-action--add:hover {
-  color: #fff;
-  background: #7c3aed;
-  border-color: #7c3aed;
-}
-
-.rfux-node-action--remove {
-  border: 1px solid #e4e4e7;
-  color: #71717a;
-}
-
-.rfux-node-action--remove:hover:not(:disabled) {
+.rfux-node-remove:hover:not(:disabled) {
   color: #b91c1c;
   background: #fff1f2;
   border-color: #fecdd3;
 }
 
-.rfux-node-action:disabled {
-  opacity: .32;
-  cursor: default;
+.rfux-node-remove:disabled {
+  opacity: .28;
+  cursor: not-allowed;
+}
+
+.rfux-node-add {
+  position: absolute;
+  left: 50%;
+  bottom: -39px;
+  transform: translateX(-50%);
+  z-index: 7;
+  width: 27px;
+  height: 27px;
+  border: 1px solid #ddd6fe;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #6d28d9;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(24,24,27,.08);
+  cursor: pointer;
+}
+
+.rfux-node-add:hover {
+  color: #fff;
+  background: #7c3aed;
+  border-color: #7c3aed;
 }
 
 .rfux-handle {
@@ -361,8 +322,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rfux-canvas-shell .react-flow__edge.rfux-child-running-edge .react-flow__edge-path,
-  .rfux-canvas-shell .react-flow__edge.rfux-workflow-running-edge .react-flow__edge-path {
+  .rfux-canvas-shell .react-flow__edge.rfux-child-running-edge .react-flow__edge-path {
     animation: none;
   }
 }
