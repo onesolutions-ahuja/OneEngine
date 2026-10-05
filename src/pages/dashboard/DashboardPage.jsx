@@ -252,17 +252,18 @@ export default function DashboardPage({ onOpenBuilder }) {
         value = fallback.data
       }
 
-      if (value?.id) {
-        const state = await apiRequest(`/api/dashboards/${encodeURIComponent(value.id)}/state`).catch(() => null)
-        if (state?.success && Object.keys(filterValues || {}).length === 0) {
-          filterValues = state.data?.filter_values || {}
-          setGlobalFilterValues(filterValues)
-        }
-      }
+      const statePromise = value?.id
+        ? apiRequest(`/api/dashboards/${encodeURIComponent(value.id)}/state`).catch(() => null)
+        : Promise.resolve(null)
 
       setDefinition(value)
       const stores = dashboardStores.length ? dashboardStores : getAvailableStores()
       const scopedStoreIds = dashboardStoreId ? [dashboardStoreId] : stores.map((store) => String(store.id)).filter(Boolean)
+      const state = await statePromise
+      if (state?.success && Object.keys(filterValues || {}).length === 0) {
+        filterValues = state.data?.filter_values || {}
+        setGlobalFilterValues(filterValues)
+      }
       const filters = [
         ...(value.filters || []).filter((filter) => filter?.field !== 'date' && filter?.field !== 'store'),
         ...(range ? [{ field: 'date', operator: range }] : (value.filters || []).filter((filter) => filter?.field === 'date')),
