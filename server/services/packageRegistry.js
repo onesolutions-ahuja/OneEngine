@@ -5089,7 +5089,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
        (company_id,object_id,action_key,label,description,handler_key,required_permission,config,active,
         source_package_id,source_package_version,managed,package_required)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,true,$9,$10,true,$11)
-       ON CONFLICT (company_id,action_key) WHERE company_id IS NOT NULL
+       ON CONFLICT (action_key) WHERE company_id IS NULL
        DO UPDATE SET
          object_id=CASE WHEN platform_registered_actions.user_modified THEN platform_registered_actions.object_id ELSE EXCLUDED.object_id END,
          label=CASE WHEN platform_registered_actions.user_modified THEN platform_registered_actions.label ELSE EXCLUDED.label END,
