@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { apiRequest, loadSessionPermissions } from "../../services/api.js";
 import CustomPageRenderer from "../../components/platform/CustomPageRenderer.jsx";
-import { normalizeCustomPageTree } from "../settings/Platform/customPageTree.js";
-import FormRenderer from "../settings/Platform/FormRenderer.jsx";
+import { normalizeCustomPageTree } from "../../pages/settings/Platform/customPageTree.js";
+import FormRenderer from "../../pages/settings/Platform/FormRenderer.jsx";
 import { buildNavigationContext, resolveNavigationTarget } from "../../utils/navigationTargets.js";
 
 function FormLayoutModal({ action, onClose, onSaved }) {

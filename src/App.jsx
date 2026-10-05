@@ -1,99 +1,20 @@
-import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { LazyLoadBoundary, lazyWithRecovery } from './app/bootstrap/lazyWithRecovery.jsx'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, hasSessionContext, loadSessionPermissions, login, logout, setActiveStoreId, startGoogleLogin, verifyPin } from './services/api'
 import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/routes'
-import { MenuBarClock, useClock } from './components/shell/ShellClock'
-import RdvnReferenceDock, { dockItems } from './components/shell/RdvnReferenceDock'
-import { CompanyContextLoading, LockScreen } from './components/shell/LoginShell'
+import { MenuBarClock, useClock } from './shell/clock/ShellClock'
+import RdvnReferenceDock, { dockItems } from './shell/dock/RdvnReferenceDock'
+import { CompanyContextLoading, LockScreen } from './shell/auth/LoginShell'
 import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
 import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import { appIconUrl, applyDefaultAppIcon, localAppIcon, marketplaceSearchText, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from './utils/appMarketplace'
-import JarvisOrb, { ORB_STATES } from './components/jarvis/JarvisOrb'
-import JarvisPanel from './components/jarvis/JarvisPanel'
+import JarvisOrb, { ORB_STATES } from './shell/jarvis/JarvisOrb'
+import JarvisPanel from './shell/jarvis/JarvisPanel'
 import IdentityAssuranceSettings from './pages/settings/IdentityAssuranceSettings'
-const CHUNK_RETRY_PARAM = '_oe_chunk_retry'
-const CHUNK_LOAD_RE = /failed to fetch dynamically imported module|importing a module script failed|loading chunk .* failed|error loading dynamically imported module|module script/i
-
-function isChunkLoadFailure(error) {
-  return CHUNK_LOAD_RE.test(String(error?.message || error || ''))
-}
-
-function clearChunkRetryMarker() {
-  try {
-    const url = new URL(window.location.href)
-    if (!url.searchParams.has(CHUNK_RETRY_PARAM)) return
-    url.searchParams.delete(CHUNK_RETRY_PARAM)
-    window.history.replaceState(window.history.state, '', url.toString())
-  } catch {}
-}
-
-function lazyWithRecovery(loader) {
-  return lazy(async () => {
-    try {
-      const module = await loader()
-      clearChunkRetryMarker()
-      return module
-    } catch (error) {
-      if (isChunkLoadFailure(error)) {
-        try {
-          const url = new URL(window.location.href)
-          if (!url.searchParams.has(CHUNK_RETRY_PARAM)) {
-            url.searchParams.set(CHUNK_RETRY_PARAM, Date.now().toString())
-            window.location.replace(url.toString())
-            return new Promise(() => {})
-          }
-        } catch {}
-      }
-      throw error
-    }
-  })
-}
-
-class LazyLoadBoundary extends Component {
-  state = { error: null }
-
-  static getDerivedStateFromError(error) {
-    return { error }
-  }
-
-  componentDidCatch(error) {
-    console.error('Route render failed', error)
-  }
-
-  componentDidUpdate(prevProps) {
-    if (this.state.error && prevProps.resetKey !== this.props.resetKey) {
-      this.setState({ error: null })
-    }
-  }
-
-  retry = () => {
-    try {
-      const url = new URL(window.location.href)
-      url.searchParams.delete(CHUNK_RETRY_PARAM)
-      url.searchParams.set('_refresh', Date.now().toString())
-      window.location.replace(url.toString())
-    } catch {
-      window.location.reload()
-    }
-  }
-
-  render() {
-    if (!this.state.error) return this.props.children
-    const chunkFailure = isChunkLoadFailure(this.state.error)
-    const code = chunkFailure ? 'OEFL101' : 'OEFR101'
-    const message = chunkFailure ? 'Unable to load this page.' : 'This screen could not be displayed.'
-    return (
-      <div className="route-loading" role="alert">
-        <span>{message} <strong>Error {code}</strong></span>
-        <button type="button" onClick={this.retry}>Retry</button>
-      </div>
-    )
-  }
-}
-
-const RecordListView = lazyWithRecovery(() => import('./components/RecordListView'))
-const MetadataRecordFormModal = lazyWithRecovery(() => import('./components/MetadataRecordFormModal'))
+const RecordListView = lazyWithRecovery(() => import('./platform/records/RecordListView'))
+const MetadataRecordFormModal = lazyWithRecovery(() => import('./platform/forms/MetadataRecordFormModal'))
 const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
@@ -104,18 +25,18 @@ const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAs
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
 const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
 const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
-const WorkspacePage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
-const CustomPageRuntimePage = lazyWithRecovery(() => import('./pages/platform/CustomPageRuntimePage'))
+const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
+const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const SalesPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
+const SalesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
-const ProductsPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
-const CategoriesPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
+const ProductsPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
+const CategoriesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
 const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
 const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
-const CustomersPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
+const CustomersPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))

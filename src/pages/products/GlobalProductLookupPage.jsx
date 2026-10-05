@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Barcode, Check, ChevronRight, Globe2, KeyRound, LoaderCircle, PackageSearch, Plus, Search, Settings2, Wifi, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
-import MetadataRecordFormModal from '../../components/MetadataRecordFormModal'
+import MetadataRecordFormModal from '../../platform/forms/MetadataRecordFormModal'
 
 const DEFAULT_PROVIDER={enabled:true,priority:100,timeoutMs:5000,fallbackEnabled:true,cacheTtlSeconds:5}
 

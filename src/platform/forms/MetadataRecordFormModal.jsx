@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
-import { apiRequest } from '../services/api'
+import { apiRequest } from '../../services/api'
 
 function fieldKey(field){
   return field?.api_name||field?.apiName||field?.field_key||field?.fieldKey||''

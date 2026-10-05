@@ -5,7 +5,7 @@ import FormRenderer from "./FormRenderer.jsx";
 import RecordModal from "../../../components/RecordModal.jsx";
 import ObjectHistory from "./ObjectHistory.jsx";
 import ObjectRecordDetail from "./ObjectRecordDetail.jsx";
-import RecordListView from "../../../components/RecordListView.jsx";
+import RecordListView from "../../../platform/records/RecordListView.jsx";
 import { formatRecordDisplayValue, isTechnicalRecordField } from "../../../utils/recordDisplay.js";
 import { evaluatePlatformCondition } from "../../../utils/platformConditions.js";
 

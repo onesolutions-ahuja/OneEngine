@@ -3,7 +3,7 @@ import { Box, ChevronLeft, ChevronRight, History, Pencil, Plus, Save, Search, Tr
 import { apiRequest } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
 import { readLazyCache, writeLazyCache } from '../../services/dataCache'
-import RecordListView from '../../components/RecordListView'
+import RecordListView from '../records/RecordListView'
 import MetadataActionButtons from '../../components/platform/MetadataActionButtons.jsx'
 import { evaluatePlatformCondition } from '../../utils/platformConditions.js'
 

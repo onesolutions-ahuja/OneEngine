@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, FileDown, FileUp, Filter, GripVertical, Pencil, Plus, Search, Save, Trash2, X } from 'lucide-react'
-import DataLoaderWindow from './DataLoaderWindow'
+import DataLoaderWindow from '../../components/DataLoaderWindow'
 
 const valueFor = (column, row) => {
   if (column.filterValue) return column.filterValue(row)

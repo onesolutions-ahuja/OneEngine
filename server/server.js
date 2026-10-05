@@ -3,6 +3,7 @@ import "dotenv/config";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import express from "express";
+import { installAsyncSafeExpressRouter } from "./bootstrap/asyncRouter.js";
 import cors from "cors";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -118,36 +119,7 @@ const { Pool } = pg;
 
 const PASSWORD_BCRYPT_ROUNDS = Math.max(10, Math.min(12, Number.parseInt(process.env.ONEPOS_BCRYPT_ROUNDS || "10", 10) || 10));
 
-/*
- * Express 4 does not forward rejected promises from async route handlers to
- * error middleware. All onePOS routers are created after this patch, so wrap
- * async handlers once at Router creation time instead of duplicating
- * try/catch boilerplate across every route module.
- */
-const originalExpressRouter = express.Router;
-express.Router = function onePosAsyncSafeRouter(...args) {
-  const router = originalExpressRouter(...args);
-  for (const method of ["get", "post", "put", "patch", "delete", "use"]) {
-    const register = router[method].bind(router);
-    router[method] = (...registrationArgs) => {
-      const wrap = (handler) => {
-        if (Array.isArray(handler)) return handler.map(wrap);
-        if (typeof handler !== "function" || handler.length === 4 || handler.constructor?.name !== "AsyncFunction") return handler;
-        return function onePosAsyncRouteHandler(req, res, next) {
-          return Promise.resolve(handler(req, res, next)).catch(next);
-        };
-      };
-      if (!registrationArgs.length) return register();
-      const [first, ...rest] = registrationArgs;
-      if (typeof first === "function" || Array.isArray(first)) {
-        return register(wrap(first), ...rest.map(wrap));
-      }
-      return register(first, ...rest.map(wrap));
-    };
-  }
-  return router;
-};
-Object.assign(express.Router, originalExpressRouter);
+installAsyncSafeExpressRouter(express);
 
 const app = express();
 // Render terminates TLS in front of Node. Trust exactly one proxy hop so req.ip is the authoritative client IP.
