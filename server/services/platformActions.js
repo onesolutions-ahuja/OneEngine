@@ -138,24 +138,13 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
   }
 
   if (!entitled && type === "SEND_WHATSAPP") {
-    const connectorLicensed = hasEntitlement(entitlements, "package:whatsapp_connector");
     const configuredWhatsApp = await db(
-      `SELECT 1
-         FROM integrations
-        WHERE company_id=$1
-          AND lower(provider) IN ('whatsapp','whatsapp_business')
-          AND active=TRUE
-          AND NULLIF(configuration->>'phone_number_id','') IS NOT NULL
-          AND NULLIF(configuration->>'access_token','') IS NOT NULL
+      `SELECT 1 FROM integration_connections
+        WHERE company_id=$1 AND enabled=TRUE AND lower(provider_name)='whatsapp'
         LIMIT 1`,
       [companyId]
     );
-    // Existing tenants may have the canonical WhatsApp integration configured
-    // before the connector package catalogue existed. The active provider row
-    // is the same tenant-scoped runtime used by sendWhatsAppTextMessage, so it
-    // is a valid transport capability. New installs also expose
-    // package:whatsapp_connector through normal package entitlements.
-    entitled = connectorLicensed || configuredWhatsApp.rows.length > 0;
+    entitled = configuredWhatsApp.rows.length > 0;
   }
 
   if (!entitled) {
