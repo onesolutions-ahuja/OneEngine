@@ -1,9 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
   ReactFlow,
-  Background,
   Controls,
-  MiniMap,
   Handle,
   Position,
   addEdge,
@@ -14,7 +12,6 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {
-  Bot,
   Database,
   GitBranch,
   MessageSquare,
@@ -47,7 +44,6 @@ const icons = {
   branch: GitBranch,
   message: MessageSquare,
   database: Database,
-  bot: Bot,
 }
 
 const CHILD_COLORS = [
@@ -172,7 +168,6 @@ export default function ReactFlowCanvasUXTest() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedId, setSelectedId] = useState('3')
-  const [message, setMessage] = useState('Select a node: only its outgoing child connectors animate, each in a different colour.')
   const [flowInstance, setFlowInstance] = useState(null)
 
   const addChild = useCallback((sourceId) => {
@@ -205,7 +200,6 @@ export default function ReactFlowCanvasUXTest() {
       markerEnd: { type: MarkerType.ArrowClosed },
     }, current))
     setSelectedId(sourceId)
-    setMessage('Child added. The selected parent now shows each child path in a different moving colour.')
   }, [nodes, edges, setNodes, setEdges])
 
   const removeNode = useCallback((nodeId) => {
@@ -213,14 +207,12 @@ export default function ReactFlowCanvasUXTest() {
     const isRoot = !edges.some((edge) => edge.target === nodeId)
 
     if (hasChildren || isRoot) {
-      setMessage(isRoot ? 'The start/root node cannot be removed.' : 'This node has children. Remove its children first.')
       return
     }
 
     setNodes((current) => current.filter((node) => node.id !== nodeId))
     setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId))
     if (selectedId === nodeId) setSelectedId('')
-    setMessage('Leaf node removed. No free-floating node was left behind.')
   }, [edges, selectedId, setNodes, setEdges])
 
   const nodeTypes = useMemo(() => ({ workflow: WorkflowNode }), [])
@@ -286,19 +278,10 @@ export default function ReactFlowCanvasUXTest() {
       markerEnd: { type: MarkerType.ArrowClosed },
     }, current))
 
-    setMessage('Additional parent connected. A child can have two, three, or more parents.')
   }, [edges, setEdges])
 
   return (
     <div className="rfux-page">
-      <div className="rfux-header">
-        <div>
-          <span className="rfux-kicker">Canvas UX prototype</span>
-          <h2>React Flow workflow editor test</h2>
-          <p>Isolated visual prototype only — no OneEngine workflow data or runtime actions.</p>
-        </div>
-      </div>
-
       <div className="rfux-canvas-shell">
         <div className="rfux-floating-toolbar" aria-label="Workflow canvas toolbar">
           <button
@@ -311,7 +294,6 @@ export default function ReactFlowCanvasUXTest() {
                   flowInstance?.fitView({ padding: 0.24, duration: 350, minZoom: 0.25, maxZoom: 1.5 })
                 })
               })
-              setMessage('Auto layout applied and canvas refitted.')
             }}
           >
             <WandSparkles size={15} />
@@ -339,15 +321,9 @@ export default function ReactFlowCanvasUXTest() {
           defaultEdgeOptions={{ type: 'smoothstep' }}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={22} size={1} />
-          <MiniMap pannable zoomable className="rfux-minimap" />
           <Controls position="bottom-left" showInteractive={false} />
         </ReactFlow>
 
-        <div className="rfux-status">
-          <Bot size={15} />
-          <span>{message}</span>
-        </div>
       </div>
     </div>
   )
