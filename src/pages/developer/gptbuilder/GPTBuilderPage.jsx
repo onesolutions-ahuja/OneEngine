@@ -371,26 +371,28 @@ const MANAGER_RESOURCE_TYPES = [
   ['Stage', 'stage'],
 ]
 
-function ManagerNewResource({ resources, onCreate, onClose }) {
-  const [resourceType, setResourceType] = useState('variable')
-  const [apiName, setApiName] = useState('')
-  const [description, setDescription] = useState('')
-  const [dataType, setDataType] = useState('text')
-  const [value, setValue] = useState('')
-  const [formula, setFormula] = useState('')
-  const [isCollection, setIsCollection] = useState(false)
-  const [availableForInput, setAvailableForInput] = useState(false)
-  const [availableForOutput, setAvailableForOutput] = useState(false)
-  const duplicate = resources.some((resource) => String(resource.apiName || '').toLowerCase() === apiName.trim().toLowerCase())
+function ManagerResourceDialog({ resources, resource = null, onSave, onClose }) {
+  const editing = Boolean(resource)
+  const [resourceType, setResourceType] = useState(resource?.resourceType || resource?.source || 'variable')
+  const [apiName, setApiName] = useState(resource?.apiName || '')
+  const [description, setDescription] = useState(resource?.description || '')
+  const [dataType, setDataType] = useState(resource?.dataType || 'text')
+  const [value, setValue] = useState(resource?.value ?? resource?.text ?? '')
+  const [formula, setFormula] = useState(resource?.formula || '')
+  const [isCollection, setIsCollection] = useState(resource?.isCollection === true)
+  const [availableForInput, setAvailableForInput] = useState(resource?.availableForInput === true)
+  const [availableForOutput, setAvailableForOutput] = useState(resource?.availableForOutput === true)
+  const duplicate = resources.some((row) => row !== resource && String(row.apiName || '').toLowerCase() === apiName.trim().toLowerCase())
   const validName = /^[A-Za-z][A-Za-z0-9_]*$/.test(apiName) && !apiName.endsWith('_') && !apiName.includes('__') && !duplicate
   const supportsDataType = ['variable','constant','formula'].includes(resourceType)
-  const create = () => {
+  const save = () => {
     if (!validName) return
-    onCreate({
-      id: globalThis.crypto?.randomUUID?.() || `resource-${Date.now()}`,
+    onSave({
+      ...(resource || {}),
+      id: resource?.id || globalThis.crypto?.randomUUID?.() || `resource-${Date.now()}`,
       resourceType,
       apiName: apiName.trim(),
-      label: apiName.trim(),
+      label: resource?.label && resource.label !== resource?.apiName ? resource.label : apiName.trim(),
       description: description.trim(),
       dataType: supportsDataType ? dataType : resourceType === 'text_template' ? 'text' : 'choice',
       value: resourceType === 'constant' ? value : undefined,
@@ -402,13 +404,13 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       source: 'manager',
     })
   }
-  return <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-manager-resource-dialog" role="dialog" aria-modal="true" aria-label="New Resource">
-    <header><strong>New Resource</strong><button className="gptb-icon-button" aria-label="Close New Resource" onClick={onClose}><X size={16}/></button></header>
+  return <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-manager-resource-dialog" role="dialog" aria-modal="true" aria-label={editing ? 'Edit Resource' : 'New Resource'}>
+    <header><strong>{editing ? 'Edit Resource' : 'New Resource'}</strong><button className="gptb-icon-button" aria-label="Close Resource" onClick={onClose}><X size={16}/></button></header>
     <div className="gptb-properties-body">
       <label><span>Resource Type</span><select value={resourceType} onChange={(event) => setResourceType(event.target.value)}>{MANAGER_RESOURCE_TYPES.map(([label,key]) => <option key={key} value={key}>{label}</option>)}</select></label>
       <label><span>API Name <b>*</b></span><input autoFocus value={apiName} onChange={(event) => setApiName(event.target.value)}/>{duplicate ? <small className="gptb-manager-error">API Name must be unique in the flow.</small> : null}</label>
       <label><span>Description</span><textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)}/></label>
-      {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option><option value="apex">Apex-Defined</option></select></label> : null}
+      {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option></select></label> : null}
       {resourceType === 'constant' ? <label><span>Value</span><input value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
       {resourceType === 'formula' ? <label><span>Formula</span><textarea rows={5} value={formula} onChange={(event) => setFormula(event.target.value)}/></label> : null}
       {resourceType === 'text_template' ? <label><span>Body</span><textarea rows={7} value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
@@ -418,16 +420,15 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
         <label className="gptb-properties-check"><input type="checkbox" checked={availableForOutput} onChange={(event) => setAvailableForOutput(event.target.checked)}/><span>Available for output</span></label>
       </> : null}
     </div>
-    <footer><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!validName} onClick={create}>Done</button></footer>
+    <footer><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!validName} onClick={save}>Done</button></footer>
   </section></div>
 }
 
-function ManagerPanel({ elements, resources, goToConnections, onNewResource, onOpenElement }) {
+function ManagerPanel({ elements, resources, goToConnections, onNewResource, onEditResource, onDeleteResource, onOpenElement }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(null)
+  const [unusedOnly, setUnusedOnly] = useState(false)
   const needle = query.trim().toLowerCase()
-  const elementRows = elements.filter((element) => !needle || `${element.label} ${element.apiName} ${element.key}`.toLowerCase().includes(needle))
-  const resourceRows = resources.filter((resource) => !needle || `${resource.label || ''} ${resource.apiName || ''} ${resource.resourceType || resource.source || ''}`.toLowerCase().includes(needle))
   const typeLabel = (resource) => {
     const key = resource.resourceType || resource.source || 'variable'
     return MANAGER_RESOURCE_TYPES.find(([,value]) => value === key)?.[0] || (resource.isCollection ? 'Collection' : 'Resource')
@@ -436,26 +437,26 @@ function ManagerPanel({ elements, resources, goToConnections, onNewResource, onO
     const api = String(resource.apiName || '')
     if (!api) return []
     const needles = [`variables.${api}`, `{!${api}}`, api]
-    return elements.filter((element) => {
-      const serialized = JSON.stringify(element.config || {})
-      return needles.some((needle) => serialized.includes(needle))
-    }).map((element) => element.label || element.apiName || element.key)
+    return elements.filter((element) => needles.some((value) => JSON.stringify(element.config || {}).includes(value)))
+      .map((element) => element.label || element.apiName || element.key)
   }
-  const incomingForElement = (element) => (goToConnections || [])
-    .filter((edge) => String(edge.targetId) === String(element.id))
+  const elementRows = elements.filter((element) => !needle || `${element.label} ${element.apiName} ${element.key}`.toLowerCase().includes(needle))
+  const resourceRows = resources.filter((resource) => {
+    if (unusedOnly && usageForResource(resource).length) return false
+    return !needle || `${resource.label || ''} ${resource.apiName || ''} ${resource.resourceType || resource.source || ''}`.toLowerCase().includes(needle)
+  })
+  const groupedResources = MANAGER_RESOURCE_TYPES.map(([label,key]) => ({
+    label, key, rows: resourceRows.filter((resource) => (resource.resourceType || resource.source || 'variable') === key),
+  })).filter((group) => group.rows.length)
+  const incomingForElement = (element) => (goToConnections || []).filter((edge) => String(edge.targetId) === String(element.id))
     .map((edge) => edge.sourceId === 'start' ? 'Start' : (elements.find((item) => item.id === edge.sourceId)?.label || edge.sourceId))
-  const outputsForElement = (element) => {
-    if (element.key === 'get_records') {
-      const first = element.config?.recordLimit === 'first'
-      return [first ? `${element.apiName}.record` : `${element.apiName}.records`]
-    }
-    return Array.isArray(element.config?.outputs)
-      ? element.config.outputs.map((output) => output?.name || output?.apiName || String(output)).filter(Boolean)
-      : []
-  }
+  const outputsForElement = (element) => element.key === 'get_records'
+    ? [element.config?.recordLimit === 'first' ? `${element.apiName}.record` : `${element.apiName}.records`]
+    : (Array.isArray(element.config?.outputs) ? element.config.outputs.map((output) => output?.name || output?.apiName || String(output)).filter(Boolean) : [])
   return <div className="gptb-manager">
     <div className="gptb-manager-actions"><button className="gptb-button is-brand" onClick={onNewResource}><Plus size={13}/> New Resource</button></div>
     <label className="gptb-manager-search"><Search size={13}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this flow…"/></label>
+    <label className="gptb-manager-unused"><input type="checkbox" checked={unusedOnly} onChange={(event) => { setUnusedOnly(event.target.checked); setSelected(null) }}/><span>Unused Resources</span></label>
     {selected ? <div className="gptb-manager-detail">
       <button className="gptb-manager-back" onClick={() => setSelected(null)}><ChevronLeft size={13}/> Back</button>
       <h3>{selected.kind === 'element' ? selected.row.label : (selected.row.label || selected.row.apiName)}</h3>
@@ -466,28 +467,35 @@ function ManagerPanel({ elements, resources, goToConnections, onNewResource, onO
         <div><dt>Description</dt><dd>{selected.row.description || '—'}</dd></div>
         {selected.kind === 'element' ? <><div><dt>Outputs</dt><dd>{outputsForElement(selected.row).length ? outputsForElement(selected.row).join(', ') : 'None'}</dd></div><div><dt>Incoming Go To Connections</dt><dd>{incomingForElement(selected.row).length ? incomingForElement(selected.row).join(', ') : 'None'}</dd></div></> : null}
       </dl>
-      {selected.kind === 'element' ? <button className="gptb-inline-action" onClick={() => onOpenElement(selected.row)}>Open Element</button> : null}
+      {selected.kind === 'element' ? <button className="gptb-inline-action" onClick={() => onOpenElement(selected.row)}>Open Element</button> : <div className="gptb-manager-detail-actions"><button className="gptb-inline-action" onClick={() => onEditResource(selected.row)}>Edit</button><button className="gptb-inline-action is-danger" onClick={() => { onDeleteResource(selected.row); setSelected(null) }}>Delete</button></div>}
     </div> : <>
       <section className="gptb-manager-section"><h3>Elements <span>{elementRows.length}</span></h3>{elementRows.length ? elementRows.map((element) => <button className="gptb-manager-row" key={element.id} onClick={() => setSelected({ kind:'element', row:element })}><span><strong>{element.label}</strong><small>{elementByKey(element.key)?.label || element.key}</small></span><ChevronRight size={14}/></button>) : <p>No elements found.</p>}</section>
-      <section className="gptb-manager-section"><h3>Resources <span>{resourceRows.length}</span></h3>{resourceRows.length ? resourceRows.map((resource) => <button className="gptb-manager-row" key={resource.id || resource.apiName} onClick={() => setSelected({ kind:'resource', row:resource })}><span><strong>{resource.label || resource.apiName}</strong><small>{typeLabel(resource)}</small></span><ChevronRight size={14}/></button>) : <p>No resources found.</p>}</section>
+      <section className="gptb-manager-section"><h3>Resources <span>{resourceRows.length}</span></h3>{groupedResources.length ? groupedResources.map((group) => <div className="gptb-manager-resource-group" key={group.key}><h4>{group.label} <span>{group.rows.length}</span></h4>{group.rows.map((resource) => { const usage = usageForResource(resource); return <button className="gptb-manager-row" key={resource.id || resource.apiName} onClick={() => setSelected({ kind:'resource', row:resource })}><span><strong>{resource.label || resource.apiName}</strong><small>{resource.apiName}{usage.length ? ` · Used in ${usage.length}` : ' · Not used'}</small></span><ChevronRight size={14}/></button> })}</div>) : <p>{unusedOnly ? 'No unused resources found.' : 'No resources found.'}</p>}</section>
     </>}
   </div>
 }
 
 function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, goToConnections, onResourcesChange, onOpenElement }) {
   const [tab, setTab] = useState(layout === 'free' ? 'elements' : 'manager')
-  const [newResourceOpen, setNewResourceOpen] = useState(false)
+  const [resourceDialog, setResourceDialog] = useState(null)
   const effectiveTab = layout === 'auto' ? 'manager' : tab
   const availableResources = Array.isArray(resources) ? resources : []
+  const saveResource = (next) => {
+    const current = resourceDialog?.resource
+    onResourcesChange(current
+      ? availableResources.map((row) => (row.id || row.apiName) === (current.id || current.apiName) ? next : row)
+      : [...availableResources, next])
+    setResourceDialog(null)
+  }
+  const deleteResource = (resource) => onResourcesChange(availableResources.filter((row) => (row.id || row.apiName) !== (resource.id || resource.apiName)))
   return <aside className="gptb-toolbox" aria-label="Toolbox">
     <div className="gptb-toolbox-tabs">{layout === 'free' ? <button className={effectiveTab === 'elements' ? 'is-active' : ''} onClick={() => setTab('elements')}>Elements</button> : null}<button className={effectiveTab === 'manager' ? 'is-active' : ''} onClick={() => setTab('manager')}>Manager</button><button className="gptb-toolbox-close" aria-label="Close toolbox" onClick={onClose}><X size={15}/></button></div>
     {effectiveTab === 'elements'
       ? <FreeFormElements flowType={flowType} startConfig={startConfig}/>
-      : <ManagerPanel elements={elements} resources={availableResources} goToConnections={goToConnections} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement}/>}
-    {newResourceOpen ? <ManagerNewResource resources={availableResources} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
+      : <ManagerPanel elements={elements} resources={availableResources} goToConnections={goToConnections} onNewResource={() => setResourceDialog({ resource:null })} onEditResource={(resource) => setResourceDialog({ resource })} onDeleteResource={deleteResource} onOpenElement={onOpenElement}/>}
+    {resourceDialog ? <ManagerResourceDialog resources={availableResources} resource={resourceDialog.resource} onClose={() => setResourceDialog(null)} onSave={saveResource}/> : null}
   </aside>
 }
-
 
 function AutoDecisionCard({ decision, elements, onOpenDecision, onOpenMember, onAddElement, selecting, selectedIds, onSelectToggle, flowType, startConfig, copiedCount }) {
   const [openPath, setOpenPath] = useState('')
