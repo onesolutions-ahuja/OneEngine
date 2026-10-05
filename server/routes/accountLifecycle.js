@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { consumeAccountToken, hashAccountToken, issueAccountOtp, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeCapabilityWorkflow } from "../services/systemWorkflowRuntime.js";
 import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
 
 export default function createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit = null }) {
@@ -58,7 +58,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     const u=r.rows[0]; if(!u)return res.status(404).json({success:false,message:"User not found"});
     if(!u.email_registration_enabled)return res.status(409).json({success:false,message:"Email registration is disabled"});
     if(!domainAllowed(u.email,u.user_email_domain,u.domain_users_only))return res.status(400).json({success:false,message:"User email is outside the allowed company domain"});
-    const tokenExecution=await executeSystemWorkflow({
+    const tokenExecution=await executeCapabilityWorkflow({
       db,
       companyId:u.company_id,
       userId:req.user.id||null,
@@ -85,7 +85,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     await writeAudit?.(u.company_id,u.id,"password_reset_otp_requested","user",u.id,{channel:"EMAIL",expiresMinutes:10});
     const otp=await issueAccountOtp(db,{companyId:u.company_id,userId:u.id,purpose:"PASSWORD_RESET",expiresMinutes:10});
     try {
-      await executeSystemWorkflow({
+      await executeCapabilityWorkflow({
         db,
         companyId:u.company_id,
         userId:null,
