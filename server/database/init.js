@@ -86,7 +86,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
 
   await runMigrations(pool, [
     {
-      key: "0001_legacy_domain_schema",
+      key: "0001_core_schema",
       version: "1",
       name: "Legacy authoritative domain schema",
       up: client => client.query(coreSchema),
