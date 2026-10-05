@@ -268,9 +268,6 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId, 
        row_to_json(us.*) AS state,
        row_to_json(p.*) AS policy,
        c.timezone AS company_timezone,
-       row_to_json(gp.*) AS google_package,
-       row_to_json(gc.*) AS google_connection,
-       COALESCE(authz.permission_codes, '[]'::jsonb) AS permission_codes,
        COALESCE(ipr.trusted_network, FALSE) AS trusted_network,
        COALESCE(ipr.login_allowed_matches, FALSE) AS login_allowed_matches,
        COALESCE(ipr.login_allowed_count, 0) AS login_allowed_count
@@ -290,64 +287,6 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId, 
                 ap.priority ASC, ap.updated_at DESC
        LIMIT 1
      ) p ON TRUE
-     LEFT JOIN LATERAL (
-       SELECT
-         p0.*,
-         i.status AS installation_status,
-         i.suspended_by_entitlement,
-         i.deactivated_by_user
-       FROM package_registry p0
-       LEFT JOIN company_package_installations i
-         ON i.package_id=p0.id AND i.company_id=$1
-       WHERE p0.package_key='one_connect_google' AND p0.active=TRUE
-       LIMIT 1
-     ) gp ON TRUE
-     LEFT JOIN LATERAL (
-       SELECT *
-       FROM integration_connections ic
-       WHERE ic.company_id=$1
-         AND ic.connector_package_key='one_connect_google'
-       ORDER BY ic.updated_at DESC
-       LIMIT 1
-     ) gc ON TRUE
-     LEFT JOIN LATERAL (
-       SELECT COALESCE(jsonb_agg(DISTINCT codes.code) FILTER (WHERE codes.code IS NOT NULL), '[]'::jsonb) AS permission_codes
-       FROM (
-         SELECT perm.code
-           FROM role_permissions rp
-           JOIN permissions perm ON perm.id=rp.permission_id
-          WHERE rp.role_id=$3
-         UNION ALL
-         SELECT jsonb_array_elements_text(COALESCE(ps.system_permissions, '[]'::jsonb)) AS code
-           FROM platform_permission_sets ps
-          WHERE ps.company_id=$1 AND ps.active=true
-            AND (ps.package_required=false OR EXISTS (
-              SELECT 1 FROM company_package_installations i
-               WHERE i.company_id=$1 AND i.package_id=ps.source_package_id
-                 AND i.status='active' AND i.suspended_by_entitlement=false AND i.deactivated_by_user=false
-            ))
-            AND (
-              EXISTS (
-                SELECT 1 FROM platform_permission_set_assignments a
-                 WHERE a.permission_set_id=ps.id AND a.user_id=$2 AND a.company_id=$1
-                   AND a.active=true
-                   AND (a.effective_from IS NULL OR a.effective_from <= NOW())
-                   AND (a.effective_until IS NULL OR a.effective_until > NOW())
-              )
-              OR EXISTS (
-                SELECT 1
-                  FROM platform_permission_set_group_members m
-                  JOIN platform_permission_set_groups g
-                    ON g.id=m.group_id AND g.company_id=$1 AND g.active=true
-                  JOIN platform_permission_set_group_assignments a
-                    ON a.group_id=g.id AND a.company_id=$1 AND a.user_id=$2 AND a.active=true
-                 WHERE m.permission_set_id=ps.id AND m.company_id=$1
-                   AND (a.effective_from IS NULL OR a.effective_from <= NOW())
-                   AND (a.effective_until IS NULL OR a.effective_until > NOW())
-              )
-            )
-       ) codes
-     ) authz ON TRUE
      LEFT JOIN LATERAL (
        SELECT
          EXISTS(
@@ -384,9 +323,6 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId, 
     state: row.state || null,
     policy: row.policy || null,
     companyTimezone: row.company_timezone || null,
-    googlePackage: row.google_package || null,
-    googleConnection: row.google_connection || null,
-    permissionCodes: Array.isArray(row.permission_codes) ? row.permission_codes : [],
     trustedNetwork: row.trusted_network === true,
     loginAllowedMatches: row.login_allowed_matches === true,
     loginAllowedCount: Number(row.login_allowed_count || 0),
