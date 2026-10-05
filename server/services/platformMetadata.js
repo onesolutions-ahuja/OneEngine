@@ -1407,22 +1407,6 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       packageVersion: platformFoundation.rows[0].version || "1.0.0",
     });
   }
-  const bootstrapFoundations = await pool.query(
-    `SELECT id,module_id,version,manifest
-       FROM package_registry
-      WHERE active=true
-        AND COALESCE((manifest->>'bootstrapFoundation')::boolean,false)=true`
-  );
-  for (const foundation of bootstrapFoundations.rows || []) {
-    if (!foundation.id || !foundation.module_id) continue;
-    await provisionPackageMetadata(pool.query.bind(pool), {
-      packageId: foundation.id,
-      moduleId: foundation.module_id,
-      companyId: null,
-      manifest: foundation.manifest || {},
-      packageVersion: foundation.version || "1.0.0",
-    });
-  }
   await pool.query(
     `UPDATE platform_objects employee
         SET module_id=staff.module_id,package_id=staff.id,source_package_version=staff.version,managed=true
@@ -1519,6 +1503,23 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       "effective_from", "effective_to", "preferred", "created_at", "updated_at",
     ]]
   );
+  const bootstrapFoundations = await pool.query(
+    `SELECT id,module_id,version,manifest
+       FROM package_registry
+      WHERE active=true
+        AND COALESCE((manifest->>'bootstrapFoundation')::boolean,false)=true`
+  );
+  for (const foundation of bootstrapFoundations.rows || []) {
+    if (!foundation.id || !foundation.module_id) continue;
+    await provisionPackageMetadata(pool.query.bind(pool), {
+      packageId: foundation.id,
+      moduleId: foundation.module_id,
+      companyId: null,
+      manifest: foundation.manifest || {},
+      packageVersion: foundation.version || "1.0.0",
+    });
+  }
+
 }
 
 
