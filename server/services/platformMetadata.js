@@ -1805,6 +1805,47 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     );
     const byKey = new Map(objects.rows.map((row) => [row.object_key, row]));
 
+    const grantObjectPermissionFromCodes = async (objectKey, permissionCodes, grants) => {
+      const target = byKey.get(objectKey);
+      if (!target?.id) return;
+      await pool.query(
+        `INSERT INTO platform_object_permissions
+           (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete)
+         SELECT $1,r.id,r.company_id,$3,$4,$5,$6
+           FROM roles r
+          WHERE r.company_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+                FROM role_permissions rp
+                JOIN permissions p ON p.id=rp.permission_id
+               WHERE rp.role_id=r.id AND p.code=ANY($2::text[])
+            )
+         ON CONFLICT (object_id,role_id,company_id) DO UPDATE SET
+           can_view=platform_object_permissions.can_view OR EXCLUDED.can_view,
+           can_create=platform_object_permissions.can_create OR EXCLUDED.can_create,
+           can_edit=platform_object_permissions.can_edit OR EXCLUDED.can_edit,
+           can_delete=platform_object_permissions.can_delete OR EXCLUDED.can_delete`,
+        [target.id, permissionCodes, grants.view === true, grants.create === true, grants.edit === true, grants.delete === true]
+      ).catch(() => {});
+    };
+
+    await grantObjectPermissionFromCodes("held_sale", ["sale.hold"], { view: true, create: true, delete: true });
+    await grantObjectPermissionFromCodes("till_session", ["till.open","till.close"], { view: true, create: true, edit: true });
+    await grantObjectPermissionFromCodes("cash_ledger", ["cash.adjustment","cash.payout"], { view: true, create: true });
+
+    await pool.query(
+      `INSERT INTO role_permissions (role_id,permission_id)
+       SELECT DISTINCT r.id,wf.id
+         FROM roles r
+         JOIN role_permissions rp ON rp.role_id=r.id
+         JOIN permissions p ON p.id=rp.permission_id
+         JOIN permissions wf ON wf.code='workflow.execute'
+        WHERE r.company_id IS NOT NULL
+          AND p.code=ANY($1::text[])
+       ON CONFLICT DO NOTHING`,
+      [["sale.create","sale.hold","sale.price_change","cash.payout","cash.adjustment","sale.view"]]
+    ).catch(() => {});
+
     const oneStoreObject = byKey.get("onestore_app");
     const tenantAppObject = byKey.get("tenant_app");
     if (oneStoreObject?.id && tenantAppObject?.id) {
