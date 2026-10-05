@@ -2282,51 +2282,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
   
 
-    // Standard operational controls are metadata too: pages render these buttons,
-    // while registered actions own the executable behaviour.
-    const employeeObject = byKey.get("employee");
-    if (employeeObject?.id) {
-      await pool.query(
-        `INSERT INTO platform_registered_actions (company_id,object_id,action_key,label,description,handler_key,required_permission,config,active)
-         VALUES (NULL,$1,'employee.send_password_reset','Send Password Reset Email',
-                 'Send a secure, expiring password-reset email without allowing an administrator to set or view the password.',
-                 'SEND_PASSWORD_RESET_EMAIL','user.manage','{}'::jsonb,true)
-         ON CONFLICT (action_key) WHERE company_id IS NULL DO UPDATE
-           SET object_id=EXCLUDED.object_id,label=EXCLUDED.label,description=EXCLUDED.description,handler_key=EXCLUDED.handler_key,
-               required_permission=EXCLUDED.required_permission,active=true,updated_at=NOW()`,
-        [employeeObject.id]
-      );
-      await pool.query(
-        `INSERT INTO platform_buttons (company_id,object_id,button_key,label,icon,action_key,placement,visibility_rule,config,active,target_type,target_key,variant,required_permission,input_mappings)
-         VALUES (NULL,$1,'send_password_reset','Send Password Reset','key-round','employee.send_password_reset','record','{}'::jsonb,'{}'::jsonb,true,
-                 'action','employee.send_password_reset','secondary','user.manage','{}'::jsonb)
-         ON CONFLICT (button_key) WHERE company_id IS NULL DO UPDATE
-           SET object_id=EXCLUDED.object_id,label=EXCLUDED.label,icon=EXCLUDED.icon,action_key=EXCLUDED.action_key,placement=EXCLUDED.placement,
-               target_type=EXCLUDED.target_type,target_key=EXCLUDED.target_key,variant=EXCLUDED.variant,required_permission=EXCLUDED.required_permission,
-               active=true,updated_at=NOW()`,
-        [employeeObject.id]
-      );
-      await pool.query(
-        `INSERT INTO platform_registered_actions (company_id,object_id,action_key,label,description,handler_key,required_permission,config,active)
-         VALUES (NULL,$1,'employee.send_invitation','Send Invitation',
-                 'Issue a secure registration token and send the configured user invitation email.',
-                 'SEND_USER_INVITATION','user.manage','{}'::jsonb,true)
-         ON CONFLICT (action_key) WHERE company_id IS NULL DO UPDATE
-           SET object_id=EXCLUDED.object_id,label=EXCLUDED.label,description=EXCLUDED.description,handler_key=EXCLUDED.handler_key,
-               required_permission=EXCLUDED.required_permission,active=true,updated_at=NOW()`,
-        [employeeObject.id]
-      );
-      await pool.query(
-        `INSERT INTO platform_buttons (company_id,object_id,button_key,label,icon,action_key,placement,visibility_rule,config,active,target_type,target_key,variant,required_permission,input_mappings)
-         VALUES (NULL,$1,'send_invitation','Send Invitation','mail-plus','employee.send_invitation','record','{}'::jsonb,'{}'::jsonb,true,
-                 'action','employee.send_invitation','secondary','user.manage','{}'::jsonb)
-         ON CONFLICT (button_key) WHERE company_id IS NULL DO UPDATE
-           SET object_id=EXCLUDED.object_id,label=EXCLUDED.label,icon=EXCLUDED.icon,action_key=EXCLUDED.action_key,placement=EXCLUDED.placement,
-               target_type=EXCLUDED.target_type,target_key=EXCLUDED.target_key,variant=EXCLUDED.variant,required_permission=EXCLUDED.required_permission,
-               active=true,updated_at=NOW()`,
-        [employeeObject.id]
-      );
-    }
+    // Staff lifecycle actions and buttons are package-owned metadata in Staff Core.
 
     const valueSets = [
       ["transaction_type", "Transaction Type", [["SALE", "Sale"], ["RETURN", "Return"], ["EXCHANGE", "Exchange"]]],
