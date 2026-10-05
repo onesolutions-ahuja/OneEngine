@@ -768,20 +768,11 @@ export default function createSettingsRouter({
       return res.status(400).json({ success: false, message: "Default expiry days must be between 0 and 3650" });
     }
 
-    // Validate dock quick-access list (T10W): array of known admin page
-    // names, no duplicates, max 8 (dock stays touch-sized on 15").
+    // Dock contents are metadata-owned. Settings only enforces the generic storage contract.
     if (dockQuickAccess !== undefined && dockQuickAccess !== null) {
-      if (!Array.isArray(dockQuickAccess)) {
-        return res.status(400).json({ success: false, message: "Dock quick access must be an array of page names" });
-      }
-      const knownPages = new Set([
-        "Dashboard", "Sales", "Returns", "Supplier Returns", "Order Prep", "Payments", "Open Till",
-        "Products", "Global Products", "Categories", "Purchases", "Suppliers", "Inventory", "Replenishment",
-        "Customers", "Employees", "Stores", "Reports", "Integrations", "Accounting", "Settings",
-      ]);
-      if (dockQuickAccess.length > 8 || new Set(dockQuickAccess).size !== dockQuickAccess.length ||
-          dockQuickAccess.some((p) => !knownPages.has(p))) {
-        return res.status(400).json({ success: false, message: "Dock quick access must be up to 8 unique known page names" });
+      if (!Array.isArray(dockQuickAccess) || dockQuickAccess.length > 8 || new Set(dockQuickAccess).size !== dockQuickAccess.length ||
+          dockQuickAccess.some((item) => typeof item !== "string" || !item.trim() || item.length > 120)) {
+        return res.status(400).json({ success: false, message: "Dock quick access must contain up to 8 unique metadata keys" });
       }
     }
 
