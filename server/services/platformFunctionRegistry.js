@@ -1,6 +1,7 @@
 import { packageFunctions } from "../packages/functionsIndex.js";
 import { dispatchIntegrationEvent } from "./integrationDispatcher.js";
 import { issueAccountToken } from "./accountPolicy.js";
+import { createInventoryMovement } from "./inventory.js";
 import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveReceiptQrSettings, revokeTemporaryReceiptDownloadsForSale } from "./receiptQr.js";
 
 // Temporary compatibility registry.
@@ -9,6 +10,29 @@ import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveRecei
 // capabilities are migrated to visible metadata/Flow and removed from this
 // registry as their callers are converted to generic primitives.
 const CORE_PLATFORM_FUNCTIONS = Object.freeze([
+  {
+    key: "inventory.movement.create",
+    category: "INVENTORY_RUNTIME",
+    description: "Atomically post an inventory movement. Flow owns the business decision and supplies the movement inputs.",
+    inputs: { type: "object", required: ["productId", "movementType", "quantityChange"] },
+    outputs: { type: "object" },
+    permissions: ["inventory.adjust", "sale.create"],
+    handler: async ({ inputs = {}, db, companyId, req }) =>
+      createInventoryMovement({ query: (sql, params = []) => db(sql, params) }, {
+        companyId: companyId || req?.user?.companyId,
+        productId: inputs.productId,
+        storeId: inputs.storeId || req?.user?.storeId || null,
+        movementType: inputs.movementType,
+        quantityChange: inputs.quantityChange,
+        referenceType: inputs.referenceType || null,
+        referenceId: inputs.referenceId || null,
+        batchId: inputs.batchId || null,
+        transactionId: inputs.transactionId || null,
+        reason: inputs.reason || null,
+        notes: inputs.notes || null,
+        createdBy: inputs.createdBy || req?.user?.id || null,
+      }),
+  },
   {
     key: "integration.event.dispatch",
     category: "INTEGRATIONS",
