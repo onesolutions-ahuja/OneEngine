@@ -531,9 +531,9 @@ function SettingsPage({ onOpenProfile }) {
       currentRows.map((item) => item.id === row.id ? { ...item, active: nextActive } : item),
     )
     try {
-      const response = await apiRequest(`/api/platform/objects/employee/records/${encodeURIComponent(row.id)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ data: { active: nextActive } }),
+      const response = await apiRequest(`/api/platform/objects/employee/records/${encodeURIComponent(row.id)}/buttons/set_active_status/execute`, {
+        method: 'POST',
+        body: JSON.stringify({ inputs: { active: nextActive } }),
       })
       if (response?.success === false) throw new Error(response?.message || 'Unable to update user status')
     } catch (err) {
