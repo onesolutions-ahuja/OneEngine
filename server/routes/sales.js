@@ -120,6 +120,38 @@ export default function createSalesRouter({
     };
   }
 
+  async function runConfiguredSaleLineFlow(client, req, request) {
+    const buttonKey = String(request?.buttonKey || "").trim();
+    if (!buttonKey) throw Object.assign(new Error("Sale line Flow button is required"), { status: 400 });
+    const result = await client.query(
+      `SELECT r.action,o.id AS object_id,o.object_key,o.source_table,o.label
+         FROM platform_buttons b JOIN platform_objects o ON o.id=b.object_id
+         JOIN platform_rules r ON r.id::text=b.target_key
+        WHERE b.button_key=$1 AND b.active=TRUE AND b.target_type='workflow'
+          AND r.active=TRUE AND r.lifecycle_status='ACTIVE'
+          AND (b.company_id IS NULL OR b.company_id=$2) AND (r.company_id IS NULL OR r.company_id=$2)
+        ORDER BY CASE WHEN b.company_id=$2 THEN 0 ELSE 1 END LIMIT 1`,
+      [buttonKey, req.user.companyId]
+    );
+    const row = result.rows[0], actions = Array.isArray(row?.action?.actions) ? row.action.actions : [];
+    if (!row || !actions.length) throw Object.assign(new Error("Configured sale line Flow is unavailable"), { status: 409 });
+    const workflowVariables = { variables: {}, steps: {} };
+    await executeWorkflowActions({
+      actions, allActions: actions, db: (sql, params = []) => client.query(sql, params), req,
+      companyId: req.user.companyId, object: { id: row.object_id, object_key: row.object_key, source_table: row.source_table, label: row.label },
+      record: request?.input && typeof request.input === "object" ? request.input : {},
+      storeId: req.user.storeId || null, connectorDrivers, writeAudit, actorUserId: req.user.id || null, workflowVariables,
+    });
+    const line = workflowVariables.variables;
+    const productId = line.productId || null, unitPrice = Number(line.unitPrice), quantity = Number(line.quantity), vatRate = Number(line.vatRate || 0);
+    const description = String(line.description || "").trim().slice(0, 255);
+    if (!productId || !description || !Number.isFinite(unitPrice) || unitPrice <= 0 || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(vatRate) || vatRate < 0 || vatRate > 1)
+      throw Object.assign(new Error("Configured sale line Flow returned an invalid line"), { status: 400 });
+    const product = await client.query("SELECT id,track_stock FROM products WHERE id=$1 AND company_id=$2 LIMIT 1", [productId, req.user.companyId]);
+    if (!product.rows[0] || product.rows[0].track_stock === true) throw Object.assign(new Error("Configured extension sale line must reference a non-stock product"), { status: 400 });
+    return { productId, description, unitPrice: roundCurrency(unitPrice), quantity, vatRate };
+  }
+
   function reportDateFilters(query, params, alias = "s") {
     const filters = [];
     if (query.dateFrom) {
@@ -394,7 +426,7 @@ export default function createSalesRouter({
         }
 
         const saleLineCount = (Array.isArray(req.body?.items) ? req.body.items.length : 0)
-          + (Array.isArray(req.body?.miscLines) ? req.body.miscLines.length : 0);
+          + (Array.isArray(req.body?.workflowLines) ? req.body.workflowLines.length : 0);
         const saleValidationMeta = await client.query(
           `SELECT o.id AS object_id
              FROM platform_objects o
@@ -557,87 +589,9 @@ export default function createSalesRouter({
           );
         }
 
-        /*
-         * Till Misc Item (manual-price sale line). Lines the cashier typed by
-         * hand — description + price + VAT rate — arrive in `miscLines`. Each
-         * is validated HERE (server-side, never trusting the client math),
-         * then merged into the authoritative line loop below as
-         * item_type='MISC' rows referencing the company's shared invisible
-         * MISC placeholder product. No stock movement is made for them (the
-         * placeholder has track_stock=false and there is no catalogue SKU to
-         * decrement), but they are real sale lines: receipt, sales totals,
-         * VAT and reports include them like any other line.
-         */
-        const miscLines = Array.isArray(req.body.miscLines) ? req.body.miscLines : [];
-        const miscPlaceholderRows = [];
-        if (miscLines.length) {
-          const maxMiscLines = 50;
-          if (miscLines.length > maxMiscLines) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "Too many misc item lines",
-            });
-          }
-
-          const placeholder = await client.query(
-            `
-            INSERT INTO products (
-              company_id,
-              name,
-              sku,
-              price,
-              cost_price,
-              vat_rate,
-              vat_applicable,
-              track_stock,
-              stock_quantity,
-              active
-            )
-            VALUES ($1, 'Misc Item', 'MISC', 0, 0, 20, false, false, 0, false)
-            ON CONFLICT (company_id) WHERE sku = 'MISC' AND active = false
-            DO UPDATE SET updated_at = NOW()
-            RETURNING id
-            `,
-            [req.user.companyId]
-          );
-          miscPlaceholderRows.push(placeholder.rows[0].id);
-        }
-        for (const [miscIndex, line] of miscLines.entries()) {
-          const desc = typeof line?.description === "string" ? line.description.trim().slice(0, 255) : "";
-          const price = Math.round((Number(line?.price) || 0) * 100) / 100;
-          const quantity = Number(line?.quantity);
-          const vatRate = Math.round((Number(line?.vatRate) || 0) * 100) / 100;
-
-          if (!desc) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "Misc item description is required",
-            });
-          }
-          if (!Number.isFinite(price) || price <= 0) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "Misc item price must be greater than zero",
-            });
-          }
-          if (!Number.isFinite(quantity) || quantity <= 0) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "Misc item quantity must be greater than zero",
-            });
-          }
-          if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 1) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "Misc item VAT rate must be a fraction between 0 and 1 (e.g. 0.2 for 20%)",
-            });
-          }
-        }
+        const workflowLineRequests = Array.isArray(req.body.workflowLines) ? req.body.workflowLines : [];
+        const extensionLines = [];
+        for (const request of workflowLineRequests) extensionLines.push(await runConfiguredSaleLineFlow(client, req, request));
 
         /*
          * Make sure all products belong to this company.
@@ -912,15 +866,13 @@ export default function createSalesRouter({
             calculateModifierTotal(features.modifiers) / Math.max(Number(item.quantity) || 1, 1);
         });
 
-        // Misc lines participate in the same authoritative totals engine as
-        // catalogue products. Their API VAT rate is a fraction (0.2 = 20%),
-        // while the shared totals helper accepts a percentage rate per line.
-        for (const line of miscLines) {
+        // Metadata-Flow extension lines participate in the authoritative totals engine.
+        for (const line of extensionLines) {
           basketForTotals.push({
-            price: roundCurrency(Number(line.price) || 0),
-            quantity: Number(line.quantity) || 0,
-            vatApplicable: Number(line.vatRate) > 0,
-            vatRate: roundCurrency((Number(line.vatRate) || 0) * 100),
+            price: line.unitPrice,
+            quantity: line.quantity,
+            vatApplicable: line.vatRate > 0,
+            vatRate: roundCurrency(line.vatRate * 100),
             discountType: null,
             discountValue: 0,
           });
@@ -1242,47 +1194,17 @@ export default function createSalesRouter({
           }
         }
 
-        /*
-         * Misc lines: same sale_items table, real money values (the client's
-         * maths is never trusted — price/tax are recomputed from the
-         * validated description/quantity/vatRate), flagged item_type='MISC',
-         * referencing the shared placeholder. No stock movement.
-         */
-        for (const line of miscLines) {
-          const desc = typeof line.description === "string" ? line.description.trim().slice(0, 255) : "";
-          const price = Math.round((Number(line.price) || 0) * 100) / 100;
-          const quantity = Number(line.quantity);
-          const vatRate = Math.round((Number(line.vatRate) || 0) * 100) / 100;
-          const gross = Math.round(price * quantity * 100) / 100;
-          const lineTax = vatEnabled === false ? 0 : Math.round(gross * vatRate * 100) / 100;
-          const lineTotal = Math.round((gross + lineTax) * 100) / 100;
-
-          await client.query(
-            `
-          INSERT INTO sale_items (
-            sale_id,
-            product_id,
-            product_name,
-            quantity,
-            unit_price,
-            discount,
-            tax,
-            total,
-            item_type
-          )
-          VALUES ($1,$2,$3,$4,$5,0,$6,$7,'MISC')
-          `,
-            [
-              saleId,
-              miscPlaceholderRows[0],
-              desc,
-              quantity,
-              price,
-              lineTax,
-              lineTotal,
-            ]
-           );
-         }
+        for (const line of extensionLines) {
+          const gross = roundCurrency(line.unitPrice * line.quantity);
+          const lineTax = vatEnabled === false ? 0 : roundCurrency(gross * line.vatRate);
+          const lineTotal = roundCurrency(gross + lineTax);
+          const inserted = await client.query(
+            `INSERT INTO sale_items (sale_id,product_id,product_name,quantity,unit_price,discount,tax,total,item_type)
+             VALUES ($1,$2,$3,$4,$5,0,$6,$7,'PRODUCT') RETURNING id`,
+            [saleId,line.productId,line.description,line.quantity,line.unitPrice,lineTax,lineTotal]
+          );
+          saleItemIds.push(inserted.rows[0]?.id || null);
+        }
 
          /*
           * T10-DISCOUNT: audit trail for every discount applied to this sale.
