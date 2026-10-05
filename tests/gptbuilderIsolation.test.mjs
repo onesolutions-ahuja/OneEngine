@@ -1316,3 +1316,15 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 2 navigates rendered Auto-Layout branches and connects from focused elements', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /const autoNavigationEdges = \(\) =>/)
+  assert.match(page, /decision\.config\?\.faultBranch/)
+  assert.match(page, /kind = 'layout'/)
+  assert.match(page, /scrollIntoView\?\.\(\{ block: 'nearest', inline: 'nearest' \}\)/)
+  assert.match(page, /const connectSourceRef = useRef\('start'\)/)
+  assert.match(page, /connectSourceRef\.current = selectedId \|\| focusedId/)
+  assert.match(page, /const sourceId = connectSourceRef\.current \|\| 'start'/)
+})
