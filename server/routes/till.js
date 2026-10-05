@@ -445,7 +445,7 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
         }
 
         const required = type === "cash_in" ? "cash.adjustment" : "cash.payout";
-        const codes = await getRolePermissionCodes(req.user.roleId);
+        const codes = await getRolePermissionCodes(req.user.roleId, req);
         const isAdmin = await canViewCompanyCustomers(req.user);
         if (!isAdmin && !codes.includes(required)) {
           await client.query("ROLLBACK");
