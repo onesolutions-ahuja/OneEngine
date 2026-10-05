@@ -32,8 +32,6 @@ const INTERNAL = [
   "GLOBAL_PRODUCT_LOOKUP_BARCODE",
   "GO_UPC_LOOKUP_PRODUCT",
   "ONLINE_ORDER_TRANSITION",
-  "SEND_PASSWORD_RESET_EMAIL",
-  "SEND_USER_INVITATION",
   "SHOPIFY_SYNC_PRODUCTS",
   "SHOPIFY_EXPORT_REFUND",
 ];
@@ -64,6 +62,19 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
     assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
     assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
   }
+});
+
+test("staff lifecycle orchestration stays in editable Flow metadata", () => {
+  const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
+  for (const key of ["SEND_PASSWORD_RESET_EMAIL", "SEND_USER_INVITATION"]) {
+    assert.equal(all.has(key), false, key + " must remain removed from hidden runtime actions");
+    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as a hidden executor");
+  }
+  const packages = readFileSync(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.match(packages, /apiName:\s*"STAFF_SEND_PASSWORD_RESET"/);
+  assert.match(packages, /apiName:\s*"STAFF_SEND_INVITATION"/);
+  assert.match(packages, /functionKey:\s*"account\.lifecycle\.token\.issue"/);
+  assert.match(packages, /handlerKey:\s*"RUN_SUBFLOW"/);
 });
 
 test("provider-specific adapters stay removed in favor of metadata workflows", () => {
