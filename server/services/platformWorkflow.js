@@ -14,6 +14,7 @@ import { transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createInventoryMovement } from "./inventory.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { publishPlatformEvent } from "./platformEvents.js";
+import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
 import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
@@ -1415,7 +1416,28 @@ async function loadRelatedGetRecordsCollections({ db, relatedRecords, targetObje
   return collections;
 }
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
-  ...GENERIC_CONNECTOR_ACTIONS,  {
+  ...GENERIC_CONNECTOR_ACTIONS,
+  {
+    key: "PACKAGE_LIFECYCLE",
+    displayName: "Package - Apply Lifecycle",
+    description: "Apply the technical install, activate, deactivate, uninstall or upgrade operation for the current Tenant App record.",
+    validation: (action) => {
+      const operation = String(action?.operation || "").toUpperCase();
+      if (!["INSTALL","ACTIVATE","DEACTIVATE","UNINSTALL","UPGRADE"].includes(operation)) {
+        throw new Error("Package lifecycle action requires a supported operation");
+      }
+    },
+    async: true,
+    requiredPermissions: ["package.install"],
+    executor: async ({ action, db, req, companyId, userId, record, recordId }) =>
+      applyPackageLifecycle({
+        db,
+        companyId: companyId || req?.user?.companyId,
+        userId: userId || req?.user?.id || null,
+        tenantAppId: record?.id || recordId,
+        operation: action.operation,
+      }),
+  },  {
     key: "LICENCE_REQUEST_PACKAGE",
     displayName: "Licence - Request Package",
     description: "Create a pending package licence request and run its configured workflow.",
