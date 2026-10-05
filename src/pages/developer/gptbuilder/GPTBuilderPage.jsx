@@ -36,6 +36,7 @@ import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
 import {
   GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
 } from './GPTBuilderSaveHistory'
+import GPTBuilderMonitoringPanel from './GPTBuilderMonitoringPanel'
 import './GPTBuilderPage.css'
 
 const FLOW_CATEGORIES = [
@@ -888,6 +889,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [saveAsOpen, setSaveAsOpen] = useState(false)
   const [saveAsFlowOpen, setSaveAsFlowOpen] = useState(false)
   const [editHistoryOpen, setEditHistoryOpen] = useState(false)
+  const [monitoringOpen, setMonitoringOpen] = useState(false)
   const [editHistoryPending, setEditHistoryPending] = useState(false)
   const [editHistoryEntries, setEditHistoryEntries] = useState([])
   const [editHistoryLoading, setEditHistoryLoading] = useState(false)
@@ -1760,6 +1762,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={handleSaveRequest}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
         {editHistorySupported ? <button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button> : null}
+        <button className="gptb-text-tool" disabled={!workflowId} onClick={()=>setMonitoringOpen(true)}>Monitoring</button>
         <button className="gptb-text-tool is-brand" disabled={saving || !workflowId || dirty || issues.some((issue) => issue.level === 'error')} onClick={() => void activateFlow()}>Activate</button>
       </div>
     </header>
@@ -1767,6 +1770,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
     {layoutSwitchError ? <div className="gptb-toast is-error" role="alert">{layoutSwitchError}<button aria-label="Dismiss layout error" onClick={() => setLayoutSwitchError('')}><X size={13}/></button></div> : null}
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''} ${editHistoryOpen ? 'is-history-mode' : ''}`}>
+      {monitoringOpen ? <GPTBuilderMonitoringPanel workflowId={workflowId} elements={elements} onClose={()=>setMonitoringOpen(false)} onNavigateElement={(elementId)=>{setMonitoringOpen(false);const target=elements.find((element)=>String(element.id)===String(elementId));if(target)openElement(target)}}/> : null}
       {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={availableResources} goToConnections={goToConnections} onResourcesChange={applyResourceChanges} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
       <main
         ref={canvasRef}
