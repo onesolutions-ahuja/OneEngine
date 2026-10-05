@@ -9,7 +9,7 @@ import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { domainAllowed, issueAccountToken, normalizeEmail } from "./accountPolicy.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
-import { effectiveManifest } from "./connectorRuntime.js";
+import { effectiveManifest, resolvePersistedConnectorCapability } from "./connectorRuntime.js";
 import { transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
 import { createInventoryMovement } from "./inventory.js";
 import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
@@ -1592,6 +1592,58 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         idempotencyKey: `${company}:user-invite:${user.id}:${stepRunId || Date.now()}`,
       });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null, expiresMinutes: user.registration_link_expiry_minutes || 1440 };
+    },
+  },
+  {
+    key: "CALL_CONNECTOR_CAPABILITY",
+    displayName: "Call Connector Capability",
+    description: "Resolve an enabled tenant/store/till connector by package and capability, then execute it without provider-specific workflow code.",
+    schema: {
+      type: "object",
+      properties: {
+        packageKey: { type: ["string","object"] },
+        capability: { type: ["string","object"] },
+        input: { type: "object" },
+      },
+      required: ["capability"],
+    },
+    validation: (action) => {
+      if (action?.packageKey != null && typeof action.packageKey !== "string" && typeof action.packageKey !== "object") {
+        throw new Error("Call Connector Capability packageKey must be text or a resource binding");
+      }
+      if (typeof action?.capability !== "string" && typeof action?.capability !== "object") {
+        throw new Error("Call Connector Capability requires a capability key or resource binding");
+      }
+      if (action.input !== undefined && (!action.input || typeof action.input !== "object" || Array.isArray(action.input))) {
+        throw new Error("Call Connector Capability input must be an object");
+      }
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, db, companyId, req, storeId, tillId, connectorDrivers, writeAudit, workflowVariables, record, object, actorUserId }) => {
+      const context = { workflowVariables, record, object, req };
+      const packageKeyRaw = action.packageKey == null ? null : resolveConfiguredResource(action.packageKey, context, { preserveMissing: false });
+      const capabilityRaw = resolveConfiguredResource(action.capability, context, { preserveMissing: false });
+      const input = resolveFieldValueMap(action.input || {}, context) || {};
+      const packageKey = packageKeyRaw == null || packageKeyRaw === "" ? null : String(packageKeyRaw);
+      const capabilityKey = String(capabilityRaw || "").trim();
+      if (!capabilityKey || !/^[a-zA-Z0-9_.-]{1,100}$/.test(capabilityKey)) {
+        throw new Error("Call Connector Capability resolved an invalid capability key");
+      }
+      const result = await resolvePersistedConnectorCapability({
+        db,
+        drivers: connectorDrivers,
+        companyId: companyId || req?.user?.companyId,
+        storeId: storeId || req?.user?.storeId || null,
+        tillId: tillId || req?.user?.tillId || null,
+        capabilityKey,
+        packageKey,
+        selfCheckout: input.selfCheckout === true,
+        payload: input,
+        writeAudit,
+        actorUserId: actorUserId || req?.user?.id || null,
+      });
+      return { status: "completed", ...result };
     },
   },
   {
