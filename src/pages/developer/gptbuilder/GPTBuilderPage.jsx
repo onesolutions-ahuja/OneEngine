@@ -857,7 +857,12 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
   const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
   const [providerResources, setProviderResources] = useState([])
-  const availableResources = useMemo(() => [...resources, ...providerResources], [resources, providerResources])
+  // Keep the resource list safe during the first render of every flow type. Provider
+  // metadata arrives asynchronously and must never make Builder creation depend on it.
+  const availableResources = useMemo(
+    () => [...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])],
+    [resources, providerResources],
+  )
   const applyResourceChanges = (next) => {
     setResources((Array.isArray(next) ? next : []).filter((resource) => resource?.providerResource !== true))
     setDirty(true)
