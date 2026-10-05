@@ -2327,6 +2327,7 @@ export function packageDefinition(entry) {
               { apiName:"tax",label:"Tax",fieldType:"currency",sourceColumn:"tax",writable:true },
               { apiName:"discount",label:"Discount",fieldType:"currency",sourceColumn:"discount",writable:true },
               { apiName:"total",label:"Total",fieldType:"currency",sourceColumn:"total",writable:true },
+              { apiName:"line_count",label:"Line Count",fieldType:"number",sourceColumn:"line_count",writable:true },
               { apiName:"status",label:"Status",fieldType:"picklist",sourceColumn:"status",writable:true },
               { apiName:"offline_created",label:"Offline Created",fieldType:"boolean",sourceColumn:"offline_created",writable:true },
               { apiName:"sync_status",label:"Sync Status",fieldType:"text",sourceColumn:"sync_status",writable:true },
@@ -2383,6 +2384,7 @@ export function packageDefinition(entry) {
         ],
         rules: [
           { objectKey:"sale",name:"Sale total cannot be negative",triggerKey:"before_save",conditions:[{field:"total",operator:"less_than",value:0}],action:{type:"validation",message:"Sale total cannot be negative"} },
+          { objectKey:"sale",name:"Sale must contain at least one line",triggerKey:"before_save",conditions:[{field:"line_count",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"A sale must contain at least one line"} },
           { objectKey:"sale_item",name:"Sale item quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Sale item quantity must be greater than zero"} },
           { objectKey:"payment",name:"Payment amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Payment amount must be greater than zero"} },
         ],
