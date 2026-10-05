@@ -31,23 +31,27 @@ export default function ProfilePage({ onBack }) {
   useEffect(() => {
     let live = true
     setLoading(true)
-    Promise.all([
-      apiRequest('/api/platform/runtime/my-record'),
-      apiRequest('/api/security/mfa/methods').catch(()=>({data:[]})),
-      apiRequest('/api/security/trusted-devices').catch(()=>({data:[]})),
-      apiRequest('/api/auth/mfa/passkey/policy').catch(()=>({data:{}})),
-    ])
-      .then(([response,methods,devices,passkey]) => {
+    apiRequest('/api/platform/runtime/my-record')
+      .then((response) => {
         if (!live) return
         setRuntime(response?.data || null)
-        setMfaMethods(methods?.data||[])
-        setTrustedDevices(devices?.data||[])
-        setPasskeyPolicy({
-          allowPasskeyLogin:passkey?.data?.allowPasskeyLogin===true,
-          allowPlatformPasskeys:passkey?.data?.allowPlatformPasskeys===true,
-          allowSecurityKeys:passkey?.data?.allowSecurityKeys===true,
-        })
         setError('')
+        // Security details do not block the profile record. Populate them in
+        // parallel after the primary profile is usable.
+        void Promise.all([
+          apiRequest('/api/security/mfa/methods').catch(()=>({data:[]})),
+          apiRequest('/api/security/trusted-devices').catch(()=>({data:[]})),
+          apiRequest('/api/auth/mfa/passkey/policy').catch(()=>({data:{}})),
+        ]).then(([methods,devices,passkey]) => {
+          if (!live) return
+          setMfaMethods(methods?.data||[])
+          setTrustedDevices(devices?.data||[])
+          setPasskeyPolicy({
+            allowPasskeyLogin:passkey?.data?.allowPasskeyLogin===true,
+            allowPlatformPasskeys:passkey?.data?.allowPlatformPasskeys===true,
+            allowSecurityKeys:passkey?.data?.allowSecurityKeys===true,
+          })
+        })
       })
       .catch((err) => {
         if (!live) return
