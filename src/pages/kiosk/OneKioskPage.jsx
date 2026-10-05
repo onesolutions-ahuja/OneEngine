@@ -1118,9 +1118,9 @@ export default function OneKioskPage({ publicMode = false }) {
     const saleId = confirmation?.saleId || confirmation?.order?.platform_data?.saleId || confirmation?.order?.platform_data?.sale_id;
     if (!saleId) return setError("Receipt QR is not available for this order.");
     try {
-      const response = await apiRequest(`/api/sales/${encodeURIComponent(saleId)}/receipt-qr`, {
+      const response = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}/buttons/till_receipt_qr/execute`, {
         method: "POST",
-        body: JSON.stringify({ expiryMinutes: Number(confirmationScreen.qrExpiryMinutes || 5) }),
+        body: JSON.stringify({ inputs: { expiryMinutes: Number(confirmationScreen.qrExpiryMinutes || 5), baseUrl: window.location.origin } }),
       });
       if (!response?.success || !response?.data?.qrcodeUrl) throw new Error(response?.message || "Unable to create receipt QR");
       setReceiptQr(response.data);
