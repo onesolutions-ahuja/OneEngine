@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { ExternalLink, Search } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 
-const resourcePath=(resource)=>resource?`variables.${resource.apiName}`:''
+const resourcePath=(resource)=>resource?.path||(resource?.apiName?`variables.${resource.apiName}`:'')
+const contractType=(contract)=>String(contract?.type||contract?.dataType||'').toLowerCase()
+const resourceType=(resource)=>String(resource?.dataType||resource?.type||'').toLowerCase()
+const compatible=(contract,resource)=>{const expected=contractType(contract);const actual=resourceType(resource);if(!expected||!actual)return true;if(Boolean(contract?.isCollection)!==Boolean(resource?.isCollection))return false;return expected===actual||(expected==='number'&&['integer','decimal','currency'].includes(actual))}
 export const SUBFLOW_DEFAULTS=Object.freeze({workflowId:'',workflowApiName:'',flowLabel:'',inputMappings:{},inputModes:{},outputMappings:{}})
 export function normalizeSubflowConfig(config={}){return{...SUBFLOW_DEFAULTS,...config,inputMappings:config.inputMappings||{},inputModes:config.inputModes||{},outputMappings:config.outputMappings||{}}}
 export function subflowConfigErrors(config={},flows=[],resources=[]){
@@ -13,7 +16,7 @@ export function subflowConfigErrors(config={},flows=[],resources=[]){
   inputs.filter((input)=>input.required===true).forEach((input)=>{
     const value=c.inputMappings[input.name]
     if(c.inputModes[input.name]==='resource'){
-      if(!resources.some((resource)=>resourcePath(resource)===value))errors.push(`${input.label||input.name}: select a resource.`)
+      if(!resources.some((resource)=>resourcePath(resource)===value&&compatible(input,resource)))errors.push(`${input.label||input.name}: select a compatible resource.`)
     }else if(value===''||value==null)errors.push(`${input.label||input.name}: enter a value.`)
   })
   return errors
@@ -40,7 +43,7 @@ export default function GPTBuilderSubflow({draft,updateConfig,resources=[],curre
   const errors=useMemo(()=>subflowConfigErrors(config,selectable,resources),[JSON.stringify(config),JSON.stringify(selectable),JSON.stringify(resources)])
   useEffect(()=>{onConfiguredChange?.(errors.length===0,errors)},[JSON.stringify(errors)])
   const patch=(changes)=>updateConfig({...config,...changes})
-  const scalar=resources.filter((resource)=>resource?.isCollection!==true)
+  const scalar=resources.filter((resource)=>resource?.isCollection!==true&&resource?.writable!==false)
   const matches=selectable.filter((flow)=>!query.trim()||`${flow.name||''} ${flow.action?.apiName||''}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,40)
 
   return <div className="gptb-gr gptb-subflow-editor">
@@ -49,8 +52,8 @@ export default function GPTBuilderSubflow({draft,updateConfig,resources=[],curre
       <label><span>Referenced Flow <b>*</b></span><select value={config.workflowId} disabled={loading} onChange={(event)=>{const flow=selectable.find((item)=>String(item.id)===event.target.value);patch({workflowId:event.target.value,workflowApiName:flow?.action?.apiName||'',flowLabel:flow?.name||'',inputMappings:{},inputModes:{},outputMappings:{}})}}><option value="">{loading?'Loading flows...':'Select a flow'}</option>{matches.map((flow)=><option key={flow.id} value={flow.id}>{flow.name} · {flow.action?.apiName||'Workflow'}</option>)}</select>{selected?<small>{selected.active||selected.runtime_active?'Active version':'Latest version'} · {selected.action?.flowType||'Flow'}</small>:null}</label>
       {selected?<button type="button" className="gptb-inline-action" onClick={()=>window.open(`/developer/gptbuilder?workflowId=${encodeURIComponent(selected.id)}`,'_blank','noopener,noreferrer')}><ExternalLink size={12}/> Open Referenced Flow</button>:null}
     </section>
-    {selected?.action?.inputContract?.length?<section><h3>Select Input Values</h3>{selected.action.inputContract.map((input)=><div className="gptb-subflow-contract-row" key={input.name}><label><span>{input.label||input.name}{input.required?' *':''}</span><select value={config.inputModes[input.name]||'value'} onChange={(event)=>patch({inputModes:{...config.inputModes,[input.name]:event.target.value},inputMappings:{...config.inputMappings,[input.name]:''}})}><option value="value">Value</option><option value="resource">Resource</option></select></label>{(config.inputModes[input.name]||'value')==='resource'?<select value={config.inputMappings[input.name]||''} onChange={(event)=>patch({inputMappings:{...config.inputMappings,[input.name]:event.target.value}})}><option value="">Select a resource</option>{resources.map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resource.label||resource.apiName}</option>)}</select>:<input value={config.inputMappings[input.name]??''} onChange={(event)=>patch({inputMappings:{...config.inputMappings,[input.name]:event.target.value}})}/>}<small>{input.description||input.type||'Input'}</small></div>)}</section>:selected?<section><h3>Select Input Values</h3><small>The referenced flow has no exposed inputs.</small></section>:null}
-    {selected?.action?.outputContract?.length?<section><h3>Store Output Values</h3>{selected.action.outputContract.map((output)=><div className="gptb-subflow-output-row" key={output.name}><span><b>{output.label||output.name}</b><small>{output.description||output.type||'Output'}</small></span><select value={config.outputMappings[output.name]||''} onChange={(event)=>patch({outputMappings:{...config.outputMappings,[output.name]:event.target.value}})}><option value="">Don't store</option>{scalar.map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resource.label||resource.apiName}</option>)}</select></div>)}</section>:null}
+    {selected?.action?.inputContract?.length?<section><h3>Select Input Values</h3>{selected.action.inputContract.map((input)=><div className="gptb-subflow-contract-row" key={input.name}><label><span>{input.label||input.name}{input.required?' *':''}</span><select value={config.inputModes[input.name]||'value'} onChange={(event)=>patch({inputModes:{...config.inputModes,[input.name]:event.target.value},inputMappings:{...config.inputMappings,[input.name]:''}})}><option value="value">Value</option><option value="resource">Resource</option></select></label>{(config.inputModes[input.name]||'value')==='resource'?<select value={config.inputMappings[input.name]||''} onChange={(event)=>patch({inputMappings:{...config.inputMappings,[input.name]:event.target.value}})}><option value="">Select a resource</option>{resources.filter((resource)=>compatible(input,resource)).map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resource.label||resource.apiName}</option>)}</select>:<input value={config.inputMappings[input.name]??''} onChange={(event)=>patch({inputMappings:{...config.inputMappings,[input.name]:event.target.value}})}/>}<small>{input.description||input.type||'Input'}</small></div>)}</section>:selected?<section><h3>Select Input Values</h3><small>The referenced flow has no exposed inputs.</small></section>:null}
+    {selected?.action?.outputContract?.length?<section><h3>Store Output Values</h3>{selected.action.outputContract.map((output)=><div className="gptb-subflow-output-row" key={output.name}><span><b>{output.label||output.name}</b><small>{output.description||output.type||'Output'}</small></span><select value={config.outputMappings[output.name]||''} onChange={(event)=>patch({outputMappings:{...config.outputMappings,[output.name]:event.target.value}})}><option value="">Don't store</option>{scalar.filter((resource)=>compatible(output,resource)).map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resource.label||resource.apiName}</option>)}</select></div>)}</section>:null}
     {errors.length?<div className="gptb-gr-errors"><b>Complete this Subflow element</b>{errors.map((error)=><span key={error}>{error}</span>)}</div>:null}
   </div>
 }
