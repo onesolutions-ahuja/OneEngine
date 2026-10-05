@@ -1232,7 +1232,38 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setElementPickerOpen(false)
     setEditingElement(null)
   }
-  const finishStart = () => { setStartConfig(startDraft); setStartOpen(false); setDirty(true); setMessage('') }
+  const finishStart = () => {
+    const committedStart = structuredClone(startDraft)
+    setStartConfig(committedStart)
+    setStartDraft(committedStart)
+    setStartOpen(false)
+    setDiagnosticsOpen(false)
+    setDirty(true)
+    setMessage('')
+  }
+  const handleSaveRequest = () => {
+    // Save must never validate a stale committed Start while the user is editing a
+    // valid draft. Commit the current draft first, then open first-save properties.
+    if (startOpen && flow.startNeedsConfiguration) {
+      const errors = startConfigurationErrors(flow.key, startDraft)
+      if (errors.length) {
+        setDiagnosticsOpen(false)
+        return
+      }
+      const committedStart = structuredClone(startDraft)
+      setStartConfig(committedStart)
+      setStartDraft(committedStart)
+      setStartOpen(false)
+      setDiagnosticsOpen(false)
+      setDirty(true)
+    }
+    if (workflowId) {
+      // Existing flows save on the next render so a just-committed Start is included.
+      queueMicrotask(() => void save(flowProps))
+    } else {
+      setPropertiesOpen(true)
+    }
+  }
   const updateElement = (next) => {
     setElements((current) => {
       const previous = current.find((item) => item.id === next.id)
@@ -1718,7 +1749,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={switchToAutoLayout}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={switchToFreeForm}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
         <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'Run the most recent saved version.' : 'Save the flow before running it.'} onClick={() => setExecutionMode('run')}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'View and run tests for the most recent saved version.' : 'Save the flow before testing it.'} onClick={() => setExecutionMode('test')}><Eye size={14}/> View Tests</button> : <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'Debug the most recent saved version.' : 'Save the flow before debugging it.'} onClick={() => setExecutionMode('debug')}><Eye size={14}/> Debug</button>}
-        <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={() => workflowId ? void save(flowProps) : setPropertiesOpen(true)}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
+        <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={handleSaveRequest}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
         {editHistorySupported ? <button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button> : null}
         <button className="gptb-text-tool is-brand" disabled={saving || !workflowId || dirty || issues.some((issue) => issue.level === 'error')} onClick={() => void activateFlow()}>Activate</button>
