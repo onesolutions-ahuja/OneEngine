@@ -2,7 +2,7 @@
 // Consumers must resolve methods here instead of maintaining local tender lists.
 export const DEFAULT_PAYMENT_METHODS = Object.freeze([
   { code: "cash", label: "Cash", kind: "CASH", allowOffline: true, requiresConnector: false, sortOrder: 10,
-    config: { requiresCashReceived: true, inputFields: [{ key: "cashReceivedOverride", label: "Cash received", type: "currency", required: true }] } },
+    config: { requiresCashReceived: true, offlineQueue: true, showChange: true, inputFields: [{ key: "cashReceivedOverride", label: "Cash received", type: "currency", required: true }] } },
   { code: "card", label: "Card", kind: "CARD", allowOffline: false, requiresConnector: true, sortOrder: 20,
     config: { requiresConnector: true, inputFields: [] } },
   { code: "customer_credit", label: "Customer Credit", kind: "CREDIT", allowOffline: false, sortOrder: 30,
