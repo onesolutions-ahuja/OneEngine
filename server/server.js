@@ -39,9 +39,7 @@ import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
-import createSuppliersRouter from "./routes/suppliers.js";
 import createPurchasesRouter from "./routes/purchases.js";
-import createSupplierAccountsRouter from "./routes/supplierAccounts.js";
 
 import createSalesRouter from "./routes/sales.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
@@ -2121,34 +2119,6 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| SUPPLIERS
-|--------------------------------------------------------------------------
-|
-| Supplier routes are registered via routes/suppliers.js, receiving the
-| existing authenticate, authorize and db functions so behaviour is
-| unchanged.
-|
-| Route ordering preserved:
-|   GET  /api/suppliers              (inventory.view)
-|   GET  /api/suppliers/:id          (inventory.view)
-|   POST /api/suppliers              (inventory.adjust)
-|   PUT  /api/suppliers/:id          (inventory.adjust)
-|   PATCH /api/suppliers/:id/status  (inventory.adjust)
-*/
-
-app.use(
-  "/api",
-  createSuppliersRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    savePlatformRecord: saveDomainConfiguration,
-  })
-);
-
-/*
-|--------------------------------------------------------------------------
 | PURCHASES / GOODS RECEIVED
 |--------------------------------------------------------------------------
 |
@@ -2172,10 +2142,6 @@ app.use(
     createInventoryMovement,
     savePlatformRecord: saveDomainConfiguration,
   })
-);
-app.use(
-  "/api",
-  createSupplierAccountsRouter({ authenticate, authorize, db, pool })
 );
 
 app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, createInventoryMovement, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
