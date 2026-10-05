@@ -1388,7 +1388,7 @@ const PACKAGE_CATALOG = [
 
 
 export const packageManifestCatalog = Object.freeze(
-  CATALOG.map((entry) => Object.freeze({
+  PACKAGE_CATALOG.map((entry) => Object.freeze({
     ...entry,
     route: entry.route || "/app/integrations",
     permissions: Object.freeze([...entry.permissions]),
