@@ -57,7 +57,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   const hasPending=packages.some(item=>['QUEUED','UPDATING'].includes(String(item.company_installation?.update_status||'').toUpperCase()))
   useEffect(()=>{
     if(!hasPending)return undefined
-    const timer=setInterval(()=>{void load()},5000)
+    const timer=setInterval(()=>{if(!document.hidden)void load()},15000)
     return()=>clearInterval(timer)
   },[hasPending])
 
