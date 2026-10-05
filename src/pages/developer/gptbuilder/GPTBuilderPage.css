@@ -341,3 +341,15 @@
   .gptb-modal-backdrop,.gptb-element-editor-modal-backdrop{padding:0}
   .gptb-properties-modal,.gptb-element-dialog{width:100vw;max-height:100vh;height:100%;border:0;border-radius:0}
 }
+
+
+/* Phase 19: Salesforce Flow Builder Cosmos-density and interaction parity */
+.gptb-root{--gptb-text:#181818;--gptb-muted:#5c5c5c;--gptb-border:#c9c9c9;--gptb-canvas:#f3f3f3;--gptb-brand:#0b5cab;--gptb-link:#0b5cab;--gptb-focus:#1b96ff;font-family:"Salesforce Sans",Arial,"Helvetica Neue",sans-serif;font-size:12px}
+.gptb-buttonbar{height:48px;flex-basis:48px;gap:10px}.gptb-toolbar>button,.gptb-layout-button{height:28px;min-width:28px}.gptb-workspace.has-toolbox{grid-template-columns:256px minmax(0,1fr)}
+.gptb-canvas-stage{padding:42px 72px 96px}.gptb-start-card{width:224px;min-height:52px}.gptb-connector{height:28px}.gptb-add-node{width:24px;height:24px}.gptb-end-node{width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:#fff;border:1px solid var(--gptb-border);box-shadow:0 1px 2px rgba(0,0,0,.08)}.gptb-end-node span{font-size:7px;color:#706e6b}.gptb-end-node strong{display:none}
+.gptb-root button:focus-visible,.gptb-root [tabindex]:focus-visible,.gptb-root input:focus-visible,.gptb-root select:focus-visible,.gptb-root textarea:focus-visible{outline:2px solid var(--gptb-focus);outline-offset:2px}
+.gptb-root button:disabled{opacity:.5}.gptb-toolbox-tabs>button:not(.gptb-toolbox-close):focus-visible{outline-offset:-3px}.gptb-layout-menu button:focus-visible,.gptb-element-picker button:focus-visible{outline-offset:-2px}
+.gptb-config-panel,.gptb-diagnostics{width:352px}.gptb-config-panel>header,.gptb-diagnostics>header{min-height:50px}.gptb-config-body section{padding:14px 0}.gptb-properties-modal{border-radius:6px}
+.gptb-canvas{scrollbar-gutter:stable}.gptb-toolbox,.gptb-config-body,.gptb-properties-body{scrollbar-gutter:stable}.gptb-layout-menu,.gptb-element-picker{box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.gptb-start-card[aria-disabled="true"],.gptb-free-start[aria-disabled="true"]{cursor:default}
+@media(max-width:760px){.gptb-buttonbar{height:48px;flex-basis:48px}.gptb-toolbox{top:48px}.gptb-canvas-stage{padding:32px 36px 86px}.gptb-config-panel,.gptb-diagnostics{width:min(352px,92vw)}}
