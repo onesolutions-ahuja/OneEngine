@@ -172,6 +172,7 @@ export default function ReactFlowCanvasUXTest() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedId, setSelectedId] = useState('3')
   const [message, setMessage] = useState('Select a node: only its outgoing child connectors animate, each in a different colour.')
+  const [flowInstance, setFlowInstance] = useState(null)
 
   const addChild = useCallback((sourceId) => {
     const source = nodes.find((node) => node.id === sourceId)
@@ -304,7 +305,12 @@ export default function ReactFlowCanvasUXTest() {
             title="Auto layout"
             onClick={() => {
               setNodes((current) => computeLayout(current, edges))
-              setMessage('Auto layout applied.')
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  flowInstance?.fitView({ padding: 0.24, duration: 350, minZoom: 0.25, maxZoom: 1.5 })
+                })
+              })
+              setMessage('Auto layout applied and canvas refitted.')
             }}
           >
             <WandSparkles size={15} />
@@ -314,6 +320,7 @@ export default function ReactFlowCanvasUXTest() {
         <ReactFlow
           nodes={nodesWithActions}
           edges={edgesWithState}
+          onInit={setFlowInstance}
           nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
