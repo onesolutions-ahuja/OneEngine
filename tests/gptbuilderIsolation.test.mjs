@@ -1316,3 +1316,20 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 17 closes Test Debug and lifecycle gaps', async () => {
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ const history=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderSaveHistory.jsx',import.meta.url),'utf8')
+ const platform=await readFile(new URL('../server/routes/platform.js',import.meta.url),'utf8')
+ const workflow=await readFile(new URL('../server/services/platformWorkflow.js',import.meta.url),'utf8')
+ assert.match(page,/Enter one collection value per line/)
+ assert.match(platform,/mockOutputs/)
+ assert.match(platform,/__testMockOutput/)
+ assert.match(workflow,/mocked: true/)
+ assert.match(workflow,/applyWorkflowActionOutputs/)
+ for(const token of ['Compare Versions','Table','Visual','Show Only Changed Items','Property changes'])assert.ok(history.includes(token),token)
+ assert.match(history,/resources/)
+ assert.match(history,/Transform/)
+ assert.match(platform,/ROLLBACK/)
+})
