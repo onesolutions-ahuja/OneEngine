@@ -217,6 +217,15 @@ export default function ReactFlowCanvasUXTest() {
 
   const nodeTypes = useMemo(() => ({ workflow: WorkflowNode }), [])
 
+  const canvasSize = useMemo(() => {
+    const maxX = nodes.reduce((value, node) => Math.max(value, Number(node.position?.x || 0) + 420), 0)
+    const maxY = nodes.reduce((value, node) => Math.max(value, Number(node.position?.y || 0) + 260), 0)
+    return {
+      width: Math.max(1500, Math.ceil(maxX)),
+      height: Math.max(1100, Math.ceil(maxY)),
+    }
+  }, [nodes])
+
   const nodesWithActions = useMemo(
     () => nodes.map((node) => ({
       ...node,
@@ -300,29 +309,37 @@ export default function ReactFlowCanvasUXTest() {
           </button>
         </div>
 
-        <ReactFlow
-          nodes={nodesWithActions}
-          edges={edgesWithState}
-          onInit={setFlowInstance}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={(_, node) => setSelectedId(node.id)}
-          onPaneClick={() => setSelectedId('')}
-          fitView
-          fitViewOptions={{ padding: 0.24 }}
-          minZoom={0.25}
-          maxZoom={2}
-          connectionMode={ConnectionMode.Loose}
-          nodesDeletable={false}
-          edgesDeletable={false}
-          deleteKeyCode={null}
-          defaultEdgeOptions={{ type: 'smoothstep' }}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Controls position="bottom-left" showInteractive={false} />
-        </ReactFlow>
+        <div className="rfux-scroll-surface">
+          <div
+            className="rfux-canvas-stage"
+            style={{ width: canvasSize.width, height: canvasSize.height }}
+          >
+            <ReactFlow
+              nodes={nodesWithActions}
+              edges={edgesWithState}
+              onInit={setFlowInstance}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={(_, node) => setSelectedId(node.id)}
+              onPaneClick={() => setSelectedId('')}
+              fitView
+              fitViewOptions={{ padding: 0.24 }}
+              minZoom={0.25}
+              maxZoom={2}
+              connectionMode={ConnectionMode.Loose}
+              nodesDeletable={false}
+              edgesDeletable={false}
+              deleteKeyCode={null}
+              preventScrolling={false}
+              defaultEdgeOptions={{ type: 'smoothstep' }}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Controls position="bottom-left" showInteractive={false} />
+            </ReactFlow>
+          </div>
+        </div>
 
       </div>
     </div>
