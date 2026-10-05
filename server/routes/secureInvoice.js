@@ -29,7 +29,7 @@ import {
   buildReceiptPdfBytes,
   loadPublicReceiptData,
 } from "../services/receiptQr.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeCapabilityWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const GENERIC_404 = { success: false, message: "This link is invalid, has expired, or has been revoked." };
 
@@ -284,11 +284,11 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
     async (req, res) => {
       try {
         const expiryMinutes = Number.isFinite(Number(req.body?.expiryMinutes)) ? Number(req.body.expiryMinutes) : 5;
-        const execution = await executeSystemWorkflow({
+        const execution = await executeCapabilityWorkflow({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
-          systemKey: "flow:till.receipt.qr",
+          capabilityType: "action", capabilityKey: "TILL_RECEIPT_QR",
           req,
           input: {
             saleId: req.params.saleId,
