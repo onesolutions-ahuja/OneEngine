@@ -2179,8 +2179,8 @@ function Desktop({ onLock, onSignOut }) {
     setTopPanel('')
 
     const routeMap = new Set([
-      'integrations','google-connect','accounting','online-orders','order-prep','own-delivery',
-      'assistant','kiosk','kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
+      'integrations','google-connect','accounting','online-orders','own-delivery',
+      'kiosk','kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','categories',
       'global-products','products','sales','workspace','till',
