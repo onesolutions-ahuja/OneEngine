@@ -7584,6 +7584,41 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     });
   }
 
+  router.get("/platform/runtime/settings-hosts", authenticate, async (req, res, next) => {
+    try {
+      const hostedObjectsResult = await db(
+        `SELECT id,object_key,label,plural_label,config,company_id
+           FROM platform_objects
+          WHERE active=TRUE
+            AND (company_id IS NULL OR company_id=$1)
+            AND COALESCE((config->>'settingsHost')::boolean,FALSE)=TRUE
+          ORDER BY COALESCE((config->>'settingsOrder')::integer,999), label`,
+        [req.user.companyId]
+      );
+      const hosts = [];
+      for (const object of hostedObjectsResult.rows || []) {
+        const canView = await hasPlatformObjectPermission(db, req, object.id, "view");
+        if (!canView && !(await hasExecutionPermission(req, "oneengine.manage"))) continue;
+        const fieldsResult = await db(
+          `SELECT * FROM platform_fields
+            WHERE object_id=$1 AND active=TRUE
+              AND (company_id IS NULL OR company_id=$2)
+            ORDER BY display_order,label`,
+          [object.id, req.user.companyId]
+        );
+        const fields = await enrichFields(db, fieldsResult.rows || [], req);
+        const permissions = {
+          can_view: true,
+          can_create: await hasPlatformObjectPermission(db, req, object.id, "create"),
+          can_edit: await hasPlatformObjectPermission(db, req, object.id, "edit"),
+          can_delete: await hasPlatformObjectPermission(db, req, object.id, "delete"),
+        };
+        hosts.push({ ...object, fields, permissions });
+      }
+      res.json({ success: true, data: hosts });
+    } catch (error) { next(error); }
+  });
+
   router.get("/platform/runtime/settings-catalog", authenticate, async (req, res, next) => {
     try {
       /*
