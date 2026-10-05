@@ -7855,6 +7855,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           },
         });
 
+        const workflowVariables = {
+          variables: req.body?.inputs && typeof req.body.inputs === "object" && !Array.isArray(req.body.inputs)
+            ? { ...req.body.inputs }
+            : {},
+          steps: {},
+        };
         const results = await executeWorkflowActions({
           actions,
           db,
@@ -7867,6 +7873,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           runId: run?.id || null,
           workflowVersion: Number(workflow.active_version || workflow.version || 1),
           trigger: "till_button",
+          workflowVariables,
         });
         const waiting = workflowResultsContainStatus(results, "waiting");
         if (run?.id) {
