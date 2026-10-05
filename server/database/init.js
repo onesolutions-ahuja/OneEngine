@@ -17,6 +17,42 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
   const coreSchema = readFileSync(new URL("./schema.sql", import.meta.url), "utf8");
   const platformFoundation = readFileSync(new URL("./baseFoundation.sql", import.meta.url), "utf8");
 
+  // Recover safely from partial restores/schema drift where schema_migrations says
+  // the core migration ran but canonical core tables are physically missing.
+  // schema.sql is idempotent (CREATE/ALTER ... IF [NOT] EXISTS), so replaying it
+  // restores only missing structure and preserves existing tenant data.
+  const coreTableHealth = await pool.query(
+    `SELECT
+       to_regclass('public.companies') AS companies,
+       to_regclass('public.users') AS users,
+       to_regclass('public.stores') AS stores,
+       to_regclass('public.products') AS products,
+       to_regclass('public.sales') AS sales,
+       to_regclass('public.till_sessions') AS till_sessions,
+       to_regclass('public.purchases') AS purchases,
+       to_regclass('public.payment_terminals') AS payment_terminals`
+  );
+  const missingCoreTables = Object.entries(coreTableHealth.rows[0] || {})
+    .filter(([, value]) => !value)
+    .map(([table]) => table);
+  if (missingCoreTables.length) {
+    console.warn(`onePOS: core schema drift detected; repairing missing tables: ${missingCoreTables.join(", ")}`);
+    const repairClient = await pool.connect();
+    try {
+      await repairClient.query("BEGIN");
+      await repairClient.query("SELECT pg_advisory_xact_lock(1936683890, 0)");
+      await repairClient.query(coreSchema);
+      await repairClient.query("COMMIT");
+      console.log("onePOS: core schema drift repair complete");
+    } catch (error) {
+      await repairClient.query("ROLLBACK").catch(() => {});
+      console.error("onePOS: core schema drift repair failed", error);
+      throw error;
+    } finally {
+      repairClient.release();
+    }
+  }
+
   await runMigrations(pool, [
     {
       key: "0001_core_schema",
