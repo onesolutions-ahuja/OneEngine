@@ -33,7 +33,7 @@ jobs:
       - name: Build
         env:
           VITE_BASE_PATH: /OneEngine/
-          VITE_API_BASE: https://oneengine.onrender.com
+          VITE_API_BASE: https://oneengine-6gas.onrender.com
         run: npm run build
 
       # Fixed route documents must return 200, not the SPA fallback's 404.
