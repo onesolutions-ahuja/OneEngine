@@ -2408,12 +2408,12 @@ export function packageDefinition(entry) {
                 {id:"create_sale",label:"1. Create Sale",apiName:"create_sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"variables.sale"},store:"record"},
                 {id:"set_sale_id",label:"2. Store Sale ID",apiName:"set_sale_id",key:"ASSIGNMENT",variableName:"saleId",variableType:"text",operator:"set",value:{path:"steps.create_sale.created.id"}},
                 {id:"create_items",label:"3. Create Sale Items",apiName:"create_items",key:"CREATE_RECORD",objectKey:"sale_item",recordCollectionResource:{path:"variables.items"},commonFieldValues:{sale_id:{path:"variables.saleId"}}},
-                {id:"create_payments",label:"4. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"},commonFieldValues:{sale_id:{path:"variables.saleId"}}}}
+                {id:"create_payments",label:"4. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"},commonFieldValues:{sale_id:{path:"variables.saleId"}}}
               ]
             }
           }
         ],
-      } : {}),      } : {}),
+      } : {}),
       ...(entry.key === "products" ? {
         packageKey: "products",
         packageType: "FOUNDATION",
