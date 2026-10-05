@@ -1316,3 +1316,9 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 10 Test Mode mocks', async () => {
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ for(const token of ['Mock Outputs','Scenario Output','mockOutputs','View Element','onNavigateElement','Run Scenario','Expected Results','Saved Test']) assert.ok(page.includes(token),token)
+})
