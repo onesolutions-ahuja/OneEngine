@@ -960,8 +960,19 @@ async function executeOnlineOrderTransition({ db, pool, action, req, record, rec
   return transition;
 }
 
-async function executeLicenceRequestPackageAction({ db, action, req, companyId, userId, pool, writeAudit }) {
-  const packageKey = String(action?.packageKey || action?.package_key || "").trim();
+async function executeLicenceRequestPackageAction({ db, action, req, companyId, userId, pool, writeAudit, record = null, recordId = null }) {
+  let packageKey = String(action?.packageKey || action?.package_key || "").trim();
+  if (!packageKey && (record?.id || recordId)) {
+    const tenantApp = await db(
+      `SELECT osa.app_key
+         FROM tenant_apps ta
+         JOIN onestore_apps osa ON osa.id=ta.onestore_app_id
+        WHERE ta.id=$1 AND ta.company_id=$2
+        LIMIT 1`,
+      [record?.id || recordId, companyId || req?.user?.companyId]
+    );
+    packageKey = String(tenantApp.rows[0]?.app_key || "").trim();
+  }
   const tenantId = companyId || req?.user?.companyId;
   const actorId = userId || req?.user?.id || null;
   if (!db || !tenantId || !packageKey) throw new Error("Licence request requires a package key and company context");
@@ -1441,7 +1452,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     key: "LICENCE_REQUEST_PACKAGE",
     displayName: "Licence - Request Package",
     description: "Create a pending package licence request and run its configured workflow.",
-    validation: (action) => { if (!action?.packageKey && !action?.package_key) throw new Error("Licence request requires a package key"); },
+    validation: () => undefined,
     async: true,
     requiredPermissions: ["package.manage"],
     executor: (context) => executeLicenceRequestPackageAction(context),
