@@ -4142,7 +4142,19 @@ async function startServer() {
     if (workerTimer?.unref) workerTimer.unref();
     const shutdown = () => {
       if (workerTimer) clearInterval(workerTimer);
-      httpServer?.close(() => process.exit(0));
+      const forceExit = setTimeout(() => process.exit(0), 5_000);
+      forceExit.unref?.();
+      try { httpServer?.closeIdleConnections?.(); } catch {}
+      httpServer?.close(() => {
+        clearTimeout(forceExit);
+        process.exit(0);
+      });
+      // Render zero-downtime deploys must not wait indefinitely for stale
+      // keep-alive sockets. Give in-flight requests a short grace period, then
+      // close any remaining connections so the replacement instance can go live.
+      setTimeout(() => {
+        try { httpServer?.closeAllConnections?.(); } catch {}
+      }, 2_000).unref?.();
     };
     process.once("SIGTERM", shutdown);
     process.once("SIGINT", shutdown);
