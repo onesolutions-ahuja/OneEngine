@@ -173,6 +173,8 @@ app.set("trust proxy", 1);
 
 const PORT = process.env.PORT || 10000;
 let httpServer = null;
+let startupRetryTimer = null;
+let startupAttempt = 0;
 let runtimeReadiness = {
   state: "starting",
   oeCode: "OESB01",
@@ -373,6 +375,9 @@ const pool = primaryDatabaseUrl
        *     rather than waiting forever
        */
       connectionTimeoutMillis: 15000,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+      max: Math.max(2, Math.min(10, Number.parseInt(process.env.PG_POOL_MAX || "5", 10) || 5)),
     })
   : null;
 
@@ -2425,6 +2430,11 @@ async function markPlatformBootstrapCurrent(fingerprint) {
 }
 
 async function startServer() {
+  if (startupRetryTimer) {
+    clearTimeout(startupRetryTimer);
+    startupRetryTimer = null;
+  }
+  startupAttempt += 1;
   try {
     // Bind before database/bootstrap work so startup dependency failures remain
     // diagnosable from the UI instead of appearing as an unreachable server.
@@ -2703,6 +2713,7 @@ async function startServer() {
       technicalMessage: null,
       updatedAt: new Date().toISOString(),
     };
+    startupAttempt = 0;
 
     // Reconcile the canonical company-bound Superadmin immediately after the
     // core schema and listener are ready. This is intentionally before the
@@ -4071,6 +4082,22 @@ async function startServer() {
     // to preserve, so fail normally. Dependency/bootstrap failures stay online
     // in degraded mode and expose their OE code through /api/health.
     if (!httpServer?.listening) process.exit(1);
+
+    // PostgreSQL poolers and TLS endpoints can briefly reset sockets during
+    // deploys, maintenance, cold starts, or network rebalancing. Previously a
+    // single ECONNRESET left OneEngine permanently degraded until the next
+    // Render deploy. Retry the complete idempotent bootstrap with bounded
+    // exponential backoff while keeping the diagnostic HTTP surface online.
+    const transientCodes = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EPIPE", "ENETUNREACH", "EHOSTUNREACH"]);
+    const transientDatabaseFailure =
+      transientCodes.has(String(error?.code || "").toUpperCase()) ||
+      /before secure TLS connection|connection terminated unexpectedly|timeout expired|server closed the connection/i.test(String(error?.message || ""));
+    if (transientDatabaseFailure) {
+      const retryDelayMs = Math.min(60_000, Math.max(3_000, 3_000 * (2 ** Math.min(startupAttempt - 1, 4))));
+      console.warn(`onePOS: transient database startup failure; retrying in ${retryDelayMs}ms (attempt ${startupAttempt})`);
+      startupRetryTimer = setTimeout(() => void startServer(), retryDelayMs);
+      startupRetryTimer.unref?.();
+    }
   }
 }
 
