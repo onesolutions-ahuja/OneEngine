@@ -2,16 +2,6 @@ name: OneEngine Playwright E2E
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
-    paths:
-      - "src/**"
-      - "server/**"
-      - "tests/e2e/**"
-      - "playwright.config.mjs"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/playwright-e2e.yml"
 
 concurrency:
   group: oneengine-live-e2e
