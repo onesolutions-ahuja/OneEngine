@@ -1332,13 +1332,27 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       };
     })();
 
+    const securityContextStartedAt = Date.now();
+    const securityContextPromise = user.company_id
+      ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id, ip: requestIp })
+          .then((value) => {
+            loginTimings.security_context_ms = Date.now() - securityContextStartedAt;
+            return value;
+          })
+      : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null, trustedNetwork: false, loginAllowedMatches: false, loginAllowedCount: 0 });
+
+    const googleRuntimeStartedAt = Date.now();
+    const googleRuntimePromise = user.company_id
+      ? getGoogleConnectPasswordLoginRuntime(loginDb, user.company_id)
+          .then((value) => {
+            loginTimings.google_runtime_ms = Date.now() - googleRuntimeStartedAt;
+            return value;
+          })
+      : Promise.resolve(null);
+
     const [securityContext, googleRuntime, permissionBundle] = await Promise.all([
-      user.company_id
-        ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id, ip: requestIp })
-        : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null, trustedNetwork: false, loginAllowedMatches: false, loginAllowedCount: 0 }),
-      user.company_id
-        ? getGoogleConnectPasswordLoginRuntime(loginDb, user.company_id)
-        : Promise.resolve(null),
+      securityContextPromise,
+      googleRuntimePromise,
       permissionsPromise,
     ]);
     const securitySettings = securityContext.settings;
