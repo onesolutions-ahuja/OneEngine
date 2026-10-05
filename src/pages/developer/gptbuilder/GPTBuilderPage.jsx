@@ -369,6 +369,8 @@ const MANAGER_RESOURCE_TYPES = [
   ['Record Choice Set', 'record_choice_set'],
   ['Picklist Choice Set', 'picklist_choice_set'],
   ['Stage', 'stage'],
+  ['Value Map', 'value_map'],
+  ['Collection Filter Criteria', 'collection_filter_criteria'],
 ]
 
 function ManagerNewResource({ resources, onCreate, onClose }) {
@@ -424,23 +426,22 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
 
 function ManagerPanel({ elements, resources, goToConnections, onNewResource, onOpenElement }) {
   const [query, setQuery] = useState('')
+  const [showUnusedOnly, setShowUnusedOnly] = useState(false)
   const [selected, setSelected] = useState(null)
   const needle = query.trim().toLowerCase()
   const elementRows = elements.filter((element) => !needle || `${element.label} ${element.apiName} ${element.key}`.toLowerCase().includes(needle))
-  const resourceRows = resources.filter((resource) => !needle || `${resource.label || ''} ${resource.apiName || ''} ${resource.resourceType || resource.source || ''}`.toLowerCase().includes(needle))
+  const resourceUsage = (resource) => {
+    const api = String(resource.apiName || '')
+    if (!api) return []
+    const needles = [`variables.${api}`, `{!${api}}`, api]
+    return elements.filter((element) => needles.some((value) => JSON.stringify(element.config || {}).includes(value))).map((element) => element.label || element.apiName || element.key)
+  }
+  const resourceRows = resources.filter((resource) => (!needle || `${resource.label || ''} ${resource.apiName || ''} ${resource.resourceType || resource.source || ''}`.toLowerCase().includes(needle)) && (!showUnusedOnly || resourceUsage(resource).length === 0))
   const typeLabel = (resource) => {
     const key = resource.resourceType || resource.source || 'variable'
     return MANAGER_RESOURCE_TYPES.find(([,value]) => value === key)?.[0] || (resource.isCollection ? 'Collection' : 'Resource')
   }
-  const usageForResource = (resource) => {
-    const api = String(resource.apiName || '')
-    if (!api) return []
-    const needles = [`variables.${api}`, `{!${api}}`, api]
-    return elements.filter((element) => {
-      const serialized = JSON.stringify(element.config || {})
-      return needles.some((needle) => serialized.includes(needle))
-    }).map((element) => element.label || element.apiName || element.key)
-  }
+  const usageForResource = resourceUsage
   const incomingForElement = (element) => (goToConnections || [])
     .filter((edge) => String(edge.targetId) === String(element.id))
     .map((edge) => edge.sourceId === 'start' ? 'Start' : (elements.find((item) => item.id === edge.sourceId)?.label || edge.sourceId))
@@ -455,7 +456,7 @@ function ManagerPanel({ elements, resources, goToConnections, onNewResource, onO
   }
   return <div className="gptb-manager">
     <div className="gptb-manager-actions"><button className="gptb-button is-brand" onClick={onNewResource}><Plus size={13}/> New Resource</button></div>
-    <label className="gptb-manager-search"><Search size={13}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this flow…"/></label>
+    <label className="gptb-manager-search"><Search size={13}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this flow…"/></label><label className="gptb-properties-check"><input type="checkbox" checked={showUnusedOnly} onChange={(event)=>setShowUnusedOnly(event.target.checked)}/><span>Unused Resources Only</span></label>
     {selected ? <div className="gptb-manager-detail">
       <button className="gptb-manager-back" onClick={() => setSelected(null)}><ChevronLeft size={13}/> Back</button>
       <h3>{selected.kind === 'element' ? selected.row.label : (selected.row.label || selected.row.apiName)}</h3>
