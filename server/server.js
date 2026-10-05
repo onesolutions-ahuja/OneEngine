@@ -36,7 +36,6 @@ import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 import createTillRouter from "./routes/till.js";
-import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
@@ -1877,20 +1876,6 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 |--------------------------------------------------------------------------
 */
 
-app.use(
-  "/api",
-  createCustomersRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    canViewCompanyCustomers,
-    hasCompanyAdminAccess,
-    associateCustomerWithStore,
-    savePlatformRecord: saveDomainConfiguration,
-    requireLoyaltyEntitlement: requireEntitlement(db, "loyalty"),
-  })
-);
 
 /*
 
