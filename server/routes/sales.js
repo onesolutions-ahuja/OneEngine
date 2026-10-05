@@ -869,108 +869,18 @@ export default function createSalesRouter({
           */
         const vatRateFromBody = Number(req.body.vatRate ?? 0) || 0;
 
-        /*
-         * Resolve the store's metadata-driven Business Division once and use
-         * Product Availability related records as the authoritative catalogue
-         * scope. A product with no availability rows remains globally sellable
-         * for backwards compatibility; once availability rows exist, at least
-         * one active row must match this store/division/channel.
-         */
-        const salesChannel = "till";
-        const divisionScope = await client.query(
-          `SELECT association.custom_values->>division_field.api_name AS business_division_id,
-                  division_object.id AS business_division_object_id
-             FROM platform_objects store_object
-             JOIN platform_record_associations association
-               ON association.object_id=store_object.id
-              AND association.record_id=$2
-              AND association.company_id=$1
-             JOIN platform_fields division_field
-               ON division_field.object_id=store_object.id
-              AND division_field.api_name='business_division_id'
-              AND division_field.active=TRUE
-              AND (division_field.company_id IS NULL OR division_field.company_id=$1)
-             LEFT JOIN platform_objects division_object
-               ON division_object.object_key=division_field.config->>'relatedObjectKey'
-              AND division_object.active=TRUE
-              AND (division_object.company_id IS NULL OR division_object.company_id=$1)
-            WHERE store_object.object_key='store'
-              AND store_object.active=TRUE
-              AND (store_object.company_id IS NULL OR store_object.company_id=$1)
-            ORDER BY (division_field.company_id IS NOT NULL) DESC,
-                     (store_object.company_id IS NOT NULL) DESC
-            LIMIT 1`,
-          [req.user.companyId, req.user.storeId]
-        );
-        let businessDivisionId = divisionScope.rows[0]?.business_division_id || null;
-        let businessDivisionObjectId = divisionScope.rows[0]?.business_division_object_id || null;
-        if (!businessDivisionObjectId) businessDivisionId = null;
-
         const requestedProductIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
         const productPriceMap = {};
         const priceRows = await client.query(
-          `
-          SELECT p.id, p.price, p.vat_rate, p.vat_applicable, p.category_id,
-                 context_price.price AS context_price
-          FROM products p
-          LEFT JOIN LATERAL (
-            SELECT plp.price
-              FROM product_availability pa
-              JOIN price_list_prices plp
-                ON plp.price_list_id=pa.price_list_id
-               AND plp.product_id=pa.product_id
-             WHERE pa.company_id=p.company_id
-               AND pa.product_id=p.id
-               AND pa.active=TRUE
-               AND (pa.store_id IS NULL OR pa.store_id=$3)
-               AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$4)
-               AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$5)
-               AND pa.channel IN ($6,'all')
-             ORDER BY (pa.store_id IS NOT NULL) DESC, pa.priority DESC, pa.updated_at DESC
-             LIMIT 1
-          ) context_price ON TRUE
-          WHERE p.company_id = $1
-            AND p.id = ANY($2::uuid[])
-            AND p.active = true
-            AND (
-              NOT EXISTS (
-                SELECT 1
-                  FROM product_availability pa_any
-                 WHERE pa_any.company_id=p.company_id
-                   AND pa_any.product_id=p.id
-              )
-              OR EXISTS (
-                SELECT 1
-                  FROM product_availability pa
-                 WHERE pa.company_id=p.company_id
-                   AND pa.product_id=p.id
-                   AND pa.active=TRUE
-                   AND (pa.store_id IS NULL OR pa.store_id=$3)
-                   AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$4)
-                   AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$5)
-                   AND pa.channel IN ($6,'all')
-              )
-            )
-          `,
-          [
-            req.user.companyId,
-            requestedProductIds,
-            req.user.storeId,
-            businessDivisionObjectId,
-            businessDivisionId,
-            salesChannel,
-          ]
+          `SELECT p.id,p.price,p.vat_rate,p.vat_applicable,p.category_id
+             FROM products p
+            WHERE p.company_id=$1 AND p.id=ANY($2::uuid[]) AND p.active=TRUE`,
+          [req.user.companyId, requestedProductIds]
         );
-        for (const row of priceRows.rows) {
-          productPriceMap[row.id] = row;
-        }
+        for (const row of priceRows.rows) productPriceMap[row.id] = row;
         if (priceRows.rows.length !== requestedProductIds.length) {
           await client.query("ROLLBACK");
-          return res.status(400).json({
-            success: false,
-            code: "PRODUCT_NOT_AVAILABLE",
-            message: "One or more products are not available in this till context.",
-          });
+          return res.status(400).json({ success:false, code:"PRODUCT_NOT_FOUND", message:"One or more products are unavailable." });
         }
         const customerPricing = req.body.customerId
           ? await client.query(
@@ -988,8 +898,7 @@ export default function createSalesRouter({
         for (const item of items) {
           const p = productPriceMap[item.productId];
           const masterPrice = Number(p?.price) || 0;
-          const contextPrice = p?.context_price == null ? null : Number(p.context_price);
-          const cataloguePrice = contextPrice ?? masterPrice;
+          const cataloguePrice = masterPrice;
           const qty = Number(item.quantity) || 1;
           const features = lineFeatures.get(String(item.productId)) || { modifiers: [] };
           const modifierTotal = calculateModifierTotal(features.modifiers);
@@ -1026,7 +935,7 @@ export default function createSalesRouter({
             basePrice: masterPrice + modifierTotal / qty,
             customerPrice: pricing.customer_price == null ? null : Number(pricing.customer_price),
             groupPrice: pricing.group_price == null ? null : Number(pricing.group_price),
-            priceListPrice: contextPrice == null ? null : contextPrice + modifierTotal / qty,
+            priceListPrice: null,
             scheduledPrices: pricing.scheduled_prices || [],
             promotions: pricing.promotions || [],
             quantity: qty,
@@ -1085,7 +994,7 @@ export default function createSalesRouter({
         const catalogueLinePrice = items.map((item, idx) => {
           const p = productPriceMap[item.productId];
           const features = lineFeatures.get(String(item.productId)) || { modifiers: [] };
-          return (p?.context_price == null ? Number(p?.price) || 0 : Number(p.context_price)) +
+          return (Number(p?.price) || 0) +
             calculateModifierTotal(features.modifiers) / Math.max(Number(item.quantity) || 1, 1);
         });
 
