@@ -18,36 +18,17 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
   // Recover safely from partial restores/schema drift where schema_migrations says
   // a migration ran but canonical tables or compatibility columns are missing.
   // The canonical schema is idempotent, so reconciliation preserves existing data.
+  // Core drift checks cover platform identity/tenant infrastructure only.
+  // Business tables are package/domain-owned and must never trigger a monolithic
+  // schema replay from generic startup.
   const coreHealth = await pool.query(`
     SELECT
       to_regclass('public.companies') AS companies,
       to_regclass('public.users') AS users,
+      to_regclass('public.roles') AS roles,
+      to_regclass('public.permissions') AS permissions,
       to_regclass('public.stores') AS stores,
-      to_regclass('public.products') AS products,
-      to_regclass('public.sales') AS sales,
-      to_regclass('public.till_sessions') AS till_sessions,
-      to_regclass('public.purchases') AS purchases,
-      to_regclass('public.payment_terminals') AS payment_terminals,
-      EXISTS (
-        SELECT 1 FROM information_schema.columns
-         WHERE table_schema='public' AND table_name='payment_terminals' AND column_name='device_key'
-      ) AS payment_terminals_device_key,
-      EXISTS (
-        SELECT 1 FROM information_schema.columns
-         WHERE table_schema='public' AND table_name='hardware_configurations' AND column_name='device_key'
-      ) AS hardware_device_key,
-      EXISTS (
-        SELECT 1 FROM information_schema.columns
-         WHERE table_schema='public' AND table_name='company_settings' AND column_name='loyalty_min_sale_total'
-      ) AS loyalty_min_sale_total,
-      EXISTS (
-        SELECT 1 FROM information_schema.columns
-         WHERE table_schema='public' AND table_name='company_settings' AND column_name='loyalty_redeem_value_per_point'
-      ) AS loyalty_redeem_value_per_point,
-      EXISTS (
-        SELECT 1 FROM information_schema.columns
-         WHERE table_schema='public' AND table_name='company_settings' AND column_name='loyalty_min_points_redeem'
-      ) AS loyalty_min_points_redeem
+      to_regclass('public.schema_migrations') AS schema_migrations
   `);
   const unhealthyCore = Object.entries(coreHealth.rows[0] || {})
     .filter(([, value]) => value === null || value === false)
@@ -105,9 +86,9 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
 
   await runMigrations(pool, [
     {
-      key: "0001_core_schema",
+      key: "0001_legacy_domain_schema",
       version: "1",
-      name: "Core database schema",
+      name: "Legacy authoritative domain schema",
       up: client => client.query(coreSchema),
     },
     {
