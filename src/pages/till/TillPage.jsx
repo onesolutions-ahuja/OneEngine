@@ -498,7 +498,9 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     vatEnabled,
     vatRate: defaultVatRate,
     paymentMethod,
-    cashReceived: paymentMethod === 'cash' ? Number(options.cashReceived ?? cashReceived || 0) : null,
+    cashReceived: paymentMethod === 'cash'
+      ? ((options.cashReceived ?? cashReceived) === '' || (options.cashReceived ?? cashReceived) == null ? null : Number(options.cashReceived ?? cashReceived))
+      : null,
     ...(Array.isArray(options.payments) && options.payments.length ? { payments: options.payments } : {}),
     ...(options.giftCardCode ? { giftCardCode: options.giftCardCode } : {}),
     discountType: discount.type,
