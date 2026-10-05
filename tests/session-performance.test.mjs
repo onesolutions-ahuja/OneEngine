@@ -337,3 +337,42 @@ test('login timing keeps permission and authorization phases separate', async ()
   assert.match(source, /loginTimings\.authorization_bundle_ms = Date\.now\(\) - authorizationStartedAt/)
   assert.equal(source.includes('loginTimings.permissions_ms = loginTimings.authorization_bundle_ms'), false)
 })
+
+
+test('password login identity lookup is split into indexed email and username branches', async () => {
+  const source = await read('../server/server.js')
+  const start = source.indexOf('const identitySql =')
+  const end = source.indexOf('const identityStartedAt', start)
+  const loginIdentity = source.slice(start, end)
+  assert.match(loginIdentity, /WITH login_user AS/)
+  assert.match(loginIdentity, /LOWER\(BTRIM\(u\.email\)\)/)
+  assert.match(loginIdentity, /u\.email IS NULL/)
+  assert.equal(loginIdentity.includes(' OR '), false)
+})
+
+test('login security policy lookup avoids OR predicates across policy scopes', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  const start = source.indexOf('export async function loadLoginSecurityContext')
+  const end = source.indexOf('export async function registerFailedLogin', start)
+  const preflight = source.slice(start, end)
+  assert.match(preflight, /UNION ALL/)
+  assert.match(preflight, /scope_type='USER'/)
+  assert.match(preflight, /scope_type='ROLE'/)
+  assert.match(preflight, /scope_type='COMPANY'/)
+  assert.equal(/scope_type='USER'.*\sOR\s/s.test(preflight), false)
+})
+
+test('password login Google readiness uses one initial database lookup', async () => {
+  const source = await read('../server/services/googleConnect.js')
+  const start = source.indexOf('export async function getGoogleConnectPasswordLoginRuntime')
+  const end = source.indexOf('export async function getGoogleConnectRuntimeForEmail', start)
+  const fastPath = source.slice(start, end)
+  assert.match(fastPath, /const lookup = await db\(/)
+  assert.equal(fastPath.includes('Promise.all(['), false)
+})
+
+test('login critical path records security and Google sub-timings', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /loginTimings\.security_context_ms/)
+  assert.match(source, /loginTimings\.google_runtime_ms/)
+})
