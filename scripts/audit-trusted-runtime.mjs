@@ -80,8 +80,11 @@ for (const required of ['PLATFORM_FUNCTIONS', 'PLATFORM_ACTION_REGISTRY', 'TRUST
 if (!serverJobs.includes('assertTrustedJobKind(kind)')) {
   findings.push({ severity: 'ERROR', rule: 'JOB_ENQUEUE_GATE_MISSING', file: path.relative(ROOT, SERVER_JOBS) })
 }
-for (const required of ['internalAppCatalog', 'packageDefinition', 'hashPackageManifest', 'assertTrustedPackageManifest', 'validateTrustedPackageCatalogue', 'Object.freeze(Object.fromEntries']) {
+for (const required of ['hashPackageManifest', 'assertTrustedPackageManifest', 'validateTrustedPackageCatalogue', 'authority: "package_registry"', 'TRUSTED_PACKAGE_MANIFESTS = Object.freeze([])']) {
   if (!serverPackages.includes(required)) findings.push({ severity: 'ERROR', rule: 'TRUSTED_PACKAGE_CATALOGUE_INVALID', file: path.relative(ROOT, SERVER_PACKAGES), detail: required })
+}
+for (const forbidden of ['internalAppCatalog', 'packageDefinition(entry)']) {
+  if (serverPackages.includes(forbidden)) findings.push({ severity: 'ERROR', rule: 'SOURCE_DEFINED_PACKAGE_AUTHORITY', file: path.relative(ROOT, SERVER_PACKAGES), detail: forbidden })
 }
 const hasPlanPackageAssertion = packageRoutes.includes('assertTrustedPackageManifest(item.packageKey, item.manifest, item.version)')
 const hasLifecyclePackageAssertion = packageRoutes.includes('assertTrustedPackageManifest(trustedPackage.package_key, trustedPackage.manifest || {}, trustedPackage.version)')
