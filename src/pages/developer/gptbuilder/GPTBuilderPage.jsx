@@ -1120,23 +1120,24 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     }
   }
 
-  const activateFlow = async () => {
-    if (!workflowId || dirty || issues.some((issue) => issue.level === 'error')) return
+  const setFlowActivation = async (shouldActivate) => {
+    if (!workflowId || dirty || (shouldActivate && issues.some((issue) => issue.level === 'error'))) return
     setSaving(true); setSaveError(''); setMessage('')
     try {
-      const payload = { ...buildPayload(flowProps), active: true, lifecycleStatus: 'ACTIVE' }
       const response = await apiRequest(`/api/platform/rules/${encodeURIComponent(workflowId)}`, {
         method: 'PUT',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(shouldActivate
+          ? { ...buildPayload(flowProps), active: true, lifecycleStatus: 'ACTIVE' }
+          : { active: false }),
       })
-      const activated = response?.data || {}
-      setActiveStatus(activated.runtime_active === true || activated.active === true || activated.lifecycle_status === 'ACTIVE')
+      const updated = response?.data || {}
+      setActiveStatus(updated.runtime_active === true || updated.active === true || updated.lifecycle_status === 'ACTIVE')
       setLastSavedAt(new Date().toISOString())
       setDirty(false)
-      setMessage('Flow activated.')
-      if (activated.id) onWorkflowSaved?.(String(activated.id))
+      setMessage(shouldActivate ? 'Flow activated.' : 'Flow deactivated.')
+      if (updated.id) onWorkflowSaved?.(String(updated.id))
     } catch (error) {
-      setSaveError(error?.message || 'Unable to activate flow')
+      setSaveError(error?.message || (shouldActivate ? 'Unable to activate flow' : 'Unable to deactivate flow'))
     } finally {
       setSaving(false)
     }
@@ -1760,7 +1761,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={handleSaveRequest}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
         {editHistorySupported ? <button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button> : null}
-        <button className="gptb-text-tool is-brand" disabled={saving || !workflowId || dirty || issues.some((issue) => issue.level === 'error')} onClick={() => void activateFlow()}>Activate</button>
+        <button className="gptb-text-tool is-brand" disabled={saving || !workflowId || dirty || (!activeStatus && issues.some((issue) => issue.level === 'error'))} onClick={() => void setFlowActivation(!activeStatus)}>{activeStatus ? 'Deactivate' : 'Activate'}</button>
       </div>
     </header>
     {message ? <div className="gptb-toast is-success">{message}<button aria-label="Dismiss message" onClick={() => setMessage('')}><X size={13}/></button></div> : null}
