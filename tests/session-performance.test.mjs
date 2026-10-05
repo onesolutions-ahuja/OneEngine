@@ -153,3 +153,15 @@ test('automatic CI does not run competing live E2E suites against production', a
   assert.match(validate, /playwright-smoke:\n\s+if: github\.event_name == 'workflow_dispatch'/)
   assert.match(validate, /workflow-visual:\n\s+if: github\.event_name == 'workflow_dispatch'/)
 })
+
+
+test('successful password login finalizes session, security state, last-login and history in one database round trip', async () => {
+  const server = await read('../server/server.js')
+  const security = await read('../server/services/identitySecurity.js')
+  assert.match(server, /const sessionId = await finalizeSuccessfulLogin\(loginDb/)
+  assert.match(security, /export async function finalizeSuccessfulLogin/)
+  assert.match(security, /WITH new_session AS \(/)
+  assert.match(security, /security_reset AS \(/)
+  assert.match(security, /user_touch AS \(/)
+  assert.match(security, /INSERT INTO identity_login_history/)
+})
