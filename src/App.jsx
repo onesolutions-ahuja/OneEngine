@@ -18,7 +18,7 @@ const MetadataRecordFormModal = lazyWithRecovery(() => import('./platform/forms/
 const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
-const ClientWebShopSettings = lazyWithRecovery(() => import('./pages/settings/ClientWebShopSettings'))
+const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
 const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/PaymentTerminalSettings'))
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
@@ -1126,9 +1126,12 @@ function SettingsPage({ onOpenProfile }) {
                   </section>
                 </div>
               ) : current?.key === 'store-till' ? (
-                <StoreTillSettingsPage settings={settings} onSettingsChanged={load} />
+                <>
+                  <MetadataSettingsSection section="Store & Till" />
+                  <StoreTillSettingsPage />
+                </>
               ) : current?.key === 'client-web-shop' ? (
-                <ClientWebShopSettings />
+                <MetadataSettingsSection section="Client Web Shop" />
               ) : current?.key === 'tax-vat' ? (
                 <>
                   <div className="settings-row">
