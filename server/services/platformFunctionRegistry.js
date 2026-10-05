@@ -1,4 +1,4 @@
-import { readdir, stat } from "node:fs/promises";
+import { packageFunctions } from "../packages/functionsIndex.js";
 import { createInventoryMovement } from "./inventory.js";
 import { executeSupplierPayment } from "./supplierPaymentExecution.js";
 import { createGenericOrder, transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
@@ -262,19 +262,6 @@ const CORE_PLATFORM_FUNCTIONS = Object.freeze([
       }),
   },
 ]);
-
-const PACKAGE_ROOT = new URL("../packages/", import.meta.url);
-const packageFunctions = [];
-for (const directory of await readdir(PACKAGE_ROOT, { withFileTypes: true })) {
-  if (!directory.isDirectory()) continue;
-  const functionsUrl = new URL(`../packages/${directory.name}/functions.js`, import.meta.url);
-  try { await stat(functionsUrl); } catch { continue; }
-  const module = await import(functionsUrl.href);
-  const declared = Array.isArray(module.packageFunctions) ? module.packageFunctions : Array.isArray(module.default) ? module.default : [];
-  for (const definition of declared) {
-    if (definition?.key && typeof definition.handler === "function") packageFunctions.push(definition);
-  }
-}
 
 export const PLATFORM_FUNCTIONS = Object.freeze([...CORE_PLATFORM_FUNCTIONS, ...packageFunctions]);
 
