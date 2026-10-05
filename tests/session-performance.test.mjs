@@ -288,3 +288,17 @@ test('all production-facing live E2E workflows are manual-only', async () => {
     assert.equal(source.includes('\n  workflow_run:'), false, path)
   }
 })
+
+
+test('core package function registry has no top-level-await discovery loop', async () => {
+  const source = await read('../server/services/platformFunctionRegistry.js')
+  assert.match(source, /packages\/functionsIndex\.js/)
+  assert.equal(source.includes('for (const directory of await readdir'), false)
+})
+
+test('Render shutdown is bounded against stale keep-alive connections', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /closeIdleConnections/)
+  assert.match(source, /closeAllConnections/)
+  assert.match(source, /setTimeout\(\(\) => process\.exit\(0\), 5_000\)/)
+})

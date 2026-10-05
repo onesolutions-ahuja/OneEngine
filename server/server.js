@@ -4142,7 +4142,16 @@ async function startServer() {
     if (workerTimer?.unref) workerTimer.unref();
     const shutdown = () => {
       if (workerTimer) clearInterval(workerTimer);
-      httpServer?.close(() => process.exit(0));
+      const forceExit = setTimeout(() => process.exit(0), 5_000);
+      forceExit.unref?.();
+      try { httpServer?.closeIdleConnections?.(); } catch {}
+      httpServer?.close(() => {
+        clearTimeout(forceExit);
+        process.exit(0);
+      });
+      setTimeout(() => {
+        try { httpServer?.closeAllConnections?.(); } catch {}
+      }, 2_000).unref?.();
     };
     process.once("SIGTERM", shutdown);
     process.once("SIGINT", shutdown);

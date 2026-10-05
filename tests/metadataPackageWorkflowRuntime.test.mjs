@@ -3,10 +3,13 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.js";
 
-test("package functions are auto-discovered and purchase receive is package-owned", async () => {
+test("package functions are package-owned and loaded through the generic package index", async () => {
   const registry = await readFile(new URL("../server/services/platformFunctionRegistry.js", import.meta.url), "utf8");
-  assert.match(registry, /functions\.js/);
+  const index = await readFile(new URL("../server/packages/functionsIndex.js", import.meta.url), "utf8");
+  assert.match(registry, /packages\/functionsIndex\.js/);
   assert.equal(registry.includes('key: "purchase.receive"'), false);
+  assert.equal(registry.includes("await readdir"), false);
+  assert.match(index, /export const packageFunctions/);
   assert.ok(PLATFORM_FUNCTIONS.some((item) => item.key === "purchase.receive"));
 });
 
