@@ -1,7 +1,7 @@
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
 import { getCompanyEntitlements, hasEntitlement } from "./licensing.js";
 import { sendEmailViaProvider, sendSmsViaProvider, sendSmsViaTwilio } from "./invoiceDelivery.js";
-import { sendWhatsAppTextMessage } from "./whatsappDelivery.js";
+import { oneHttpRequest } from "./oneCoreFunctions.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationCore.js";
 import { decryptCredentials } from "./integrationCredentials.js";
 import { createSmsGateDriver } from "./smsGateConnector.js";
@@ -181,13 +181,23 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
   const results = [];
   if (type === "SEND_WHATSAPP") {
     for (const recipient of recipients.filter(Boolean)) {
-      results.push(await sendWhatsAppTextMessage({
+      const providerResult = await oneHttpRequest({
         db,
         companyId,
-        to: recipient,
-        body,
-        conversationId: action.conversationId || action.templateContext?.conversation_id || null,
-      }));
+        storeId: action.storeId || null,
+        providerKey: "whatsapp",
+        method: "POST",
+        endpoint: "/{{phoneNumberId}}/messages",
+        variables: { phoneNumberId: action.phoneNumberId || action.templateContext?.phone_number_id || "" },
+        body: {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: recipient,
+          type: "text",
+          text: { preview_url: false, body },
+        },
+      });
+      results.push({ ok: providerResult?.ok === true, httpStatus: providerResult?.status || 0, reference: providerResult?.data?.messages?.[0]?.id || null });
     }
   } else {
     const runtime = await provider(db, companyId, definition.provider);
