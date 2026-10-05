@@ -43,10 +43,10 @@ export function getAvailableElements({ flowType, startConfig = {}, layout = 'aut
   const fastRecord = flowType === 'record' && startConfig.optimize === 'fast'
   return ELEMENTS.filter((element) => {
     if (element.key === 'screen') return flowType === 'screen'
-    if (element.key === 'custom_error') return flowType === 'record'
+    if (element.key === 'custom_error') return flowType === 'record' && !fastRecord && startConfig?.asyncPath !== true
     if (element.key === 'group') return layout === 'auto'
     if (element.key === 'transform') return ['record', 'screen', 'autolaunched'].includes(flowType)
-    if (['wait_duration', 'wait_conditions', 'wait_until_date'].includes(element.key)) return ['autolaunched', 'schedule'].includes(flowType)
+    if (['wait_duration', 'wait_conditions', 'wait_until_date'].includes(element.key)) return flowType === 'autolaunched'
 
     if (element.key === 'run_agent' && fastRecord) return false
 
