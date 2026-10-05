@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { loginIfConfigured } from "./helpers.mjs";
 
-const API = String(process.env.ONEPOS_API_URL || "https://oneengine.onrender.com").replace(/\/$/, "");
+const API = String(process.env.ONEPOS_API_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "");
 const OBSOLETE = [
   "APPOINTMENT_SESSION_CONTEXT",
   "PROCESS_APPOINTMENT_DATE_RESPONSE",
