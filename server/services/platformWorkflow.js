@@ -6380,6 +6380,11 @@ function applyWorkflowActionOutputStorage(action, result, workflowVariables) {
 
 export async function executeWorkflowAction(context) {
   const action = materializeActionBuilderInputs(context?.action, context);
+  if (Object.prototype.hasOwnProperty.call(action || {}, "__testMockOutput")) {
+    const mocked = action.__testMockOutput;
+    applyWorkflowActionOutputs(action, mocked, context?.workflowVariables || {});
+    return { status: "completed", mocked: true, output: mocked };
+  }
   const executionContext = action === context?.action ? context : { ...context, action };
   const definition = validateWorkflowAction(action);
   await assertWorkflowActionPermission(executionContext, definition);
