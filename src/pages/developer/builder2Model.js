@@ -24,7 +24,7 @@ const ALL_FLOW_TYPES = Object.keys(FLOW_TYPES)
 export const ELEMENT_RULES = {
   GET_RECORDS: { types: ALL_FLOW_TYPES },
   CREATE_RECORDS: { types: ALL_FLOW_TYPES, disallowBeforeSave: true },
-  UPDATE_RECORDS: { types: ALL_FLOW_TYPES, disallowBeforeSave: true },
+  UPDATE_RECORDS: { types: ALL_FLOW_TYPES },
   DELETE_RECORDS: { types: ALL_FLOW_TYPES, disallowBeforeSave: true },
   ASSIGNMENT: { types: ALL_FLOW_TYPES },
   DECISION: { types: ALL_FLOW_TYPES },
@@ -145,7 +145,7 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='COLLECTION_SORT'&&!n.config?.collection) add('error','SORT_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
     if (n.type==='COLLECTION_FILTER'&&!n.config?.collection) add('error','FILTER_COLLECTION_REQUIRED',`${n.label}: Select a collection.`,n.id)
     if (n.type==='COLLECTION_FILTER'&&n.config?.filterMode==='formula'&&!String(n.config?.filterFormula||'').trim()) add('error','FILTER_FORMULA_REQUIRED',`${n.label}: Enter a filter formula.`,n.id)
-    if (n.type==='TRANSFORM'&&(!n.config?.source||!n.config?.target)) add('error','TRANSFORM_MAPPING_REQUIRED',`${n.label}: Select source and target data.`,n.id)
+    if (n.type==='TRANSFORM'&&!((n.config?.sources||[n.config?.source]).some(Boolean))) add('error','TRANSFORM_SOURCE_REQUIRED',`${n.label}: Select at least one source resource.`,n.id)\n    if (n.type==='TRANSFORM'&&((n.config?.targetType||'resource')==='resource'?!n.config?.target:!String(n.config?.targetDefinition||'').trim())) add('error','TRANSFORM_TARGET_REQUIRED',`${n.label}: Configure target data.`,n.id)
     if (n.type==='CUSTOM_ERROR'&&!String(n.config?.message||'').trim()) add('error','CUSTOM_ERROR_MESSAGE_REQUIRED',`${n.label}: Enter an error message.`,n.id)
     if (['GET_RECORDS','CREATE_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(n.type)&&!n.config?.objectKey) add('error','OBJECT_REQUIRED',`${n.label}: Select an object.`,n.id)
     if (['GET_RECORDS','UPDATE_RECORDS','DELETE_RECORDS'].includes(n.type) && !['none','formula'].includes(n.config?.conditionLogic||'all') && !(n.config?.conditions||[]).some(x=>x?.resource)) add('error','CONDITION_REQUIRED',`${n.label}: Configure at least one field condition or choose an unfiltered mode.`,n.id)
@@ -159,9 +159,9 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     if (n.type==='UPDATE_RECORDS' && n.config?.updateMode==='record' && !n.config?.sourceRecord) add('error','UPDATE_RECORD_REQUIRED',`${n.label}: Select a record or record collection.`,n.id)
     if (n.type==='DELETE_RECORDS' && n.config?.deleteMode==='record' && !n.config?.sourceRecord) add('error','DELETE_RECORD_REQUIRED',`${n.label}: Select a record or record collection.`,n.id)
     if (n.type==='DECISION' && !(n.config?.outcomes||[]).length) add('error','DECISION_OUTCOME_REQUIRED',`${n.label}: Add at least one outcome.`,n.id)
-    if (n.type==='DECISION') (n.config?.outcomes||[]).forEach((o,i)=>{if(!String(o?.label||'').trim()) add('error','DECISION_OUTCOME_LABEL',`${n.label}: Outcome ${i+1} needs a label.`,n.id);if(!(o?.conditions||[]).some(x=>x?.resource)) add('error','DECISION_OUTCOME_CONDITION',`${n.label}: ${o?.label||`Outcome ${i+1}`} needs conditions.`,n.id)})
+    if (n.type==='DECISION') {\n      if (['date','field'].includes(n.config?.decisionType)&&!n.config?.splitResource) add('error','DECISION_SPLIT_RESOURCE',`${n.label}: Select the resource used to split paths.`,n.id)\n      ;(n.config?.outcomes||[]).forEach((o,i)=>{if(!String(o?.label||'').trim()) add('error','DECISION_OUTCOME_LABEL',`${n.label}: Outcome ${i+1} needs a label.`,n.id);if(['date','field'].includes(n.config?.decisionType)){if(!String(o?.splitValue||'').trim()) add('error','DECISION_SPLIT_VALUE',`${n.label}: ${o?.label||`Outcome ${i+1}`} needs a split value.`,n.id)}else if(!(o?.conditions||[]).some(x=>x?.resource)) add('error','DECISION_OUTCOME_CONDITION',`${n.label}: ${o?.label||`Outcome ${i+1}`} needs conditions.`,n.id)})\n    }
     if (n.type==='WAIT' && (n.config?.waitType||'duration')==='duration' && !(Number(n.config?.amount)>0)) add('error','WAIT_DURATION_REQUIRED',`${n.label}: Enter a wait duration.`,n.id)
-    if (n.type==='WAIT' && n.config?.waitType==='date' && !n.config?.dateResource) add('error','WAIT_DATE_REQUIRED',`${n.label}: Select a date/time resource.`,n.id)
+    if (n.type==='WAIT' && n.config?.waitType==='date' && (n.config?.dateMode||'resource')==='resource' && !n.config?.dateResource) add('error','WAIT_DATE_REQUIRED',`${n.label}: Select a date/time resource.`,n.id)\n    if (n.type==='WAIT' && n.config?.waitType==='date' && n.config?.dateMode==='calendar' && !n.config?.resumeDate) add('error','WAIT_CALENDAR_DATE_REQUIRED',`${n.label}: Enter a resume date.`,n.id)\n    if (n.type==='WAIT' && n.config?.waitType==='date' && n.config?.dateMode==='record' && (!n.config?.waitObjectKey||!n.config?.waitField||!n.config?.waitRecordId)) add('error','WAIT_RECORD_DATE_REQUIRED',`${n.label}: Configure object, date/time field, and record ID.`,n.id)
     if (n.type==='WAIT' && n.config?.waitType==='event' && !String(n.config?.eventKey||'').trim()) add('error','WAIT_EVENT_REQUIRED',`${n.label}: Enter an event API name.`,n.id)
     if (n.type==='SCREEN'&&!(n.config?.components||[]).length) add('warning','EMPTY_SCREEN',`${n.label}: Screen has no components.`,n.id)
   }
