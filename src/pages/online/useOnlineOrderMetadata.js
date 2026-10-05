@@ -23,10 +23,7 @@ function matchesRule(rule, record) {
 export function actionKeyForButton(button) {
   const configured = String(button?.config?.uiAction || "").trim();
   if (configured) return configured;
-  const actionKey = String(button?.action_key || button?.target_key || "").trim();
-  const suffix = actionKey.startsWith("online_order.") ? actionKey.slice("online_order.".length) : actionKey;
-  if (suffix === "mark_ready") return "ready";
-  return suffix;
+  return String(button?.action_key || button?.target_key || "").trim();
 }
 
 export function buttonStyle(button) {
@@ -38,14 +35,7 @@ export function buttonStyle(button) {
 }
 
 export function busyLabel(button) {
-  const action = actionKeyForButton(button);
-  return {
-    accept: "Accepting...",
-    reject: "Rejecting...",
-    ready: "Marking ready...",
-    complete: "Completing...",
-    cancel: "Cancelling...",
-  }[action] || "Processing...";
+  return button?.config?.busyLabel || button?.config?.busy_label || "Processing...";
 }
 
 export default function useOnlineOrderMetadata() {
@@ -75,23 +65,9 @@ export default function useOnlineOrderMetadata() {
     loading,
     error,
     actionsFor(order, { prepOnly = false } = {}) {
-      if (order?.platform === "one_kiosk") {
-        if (order.status === "PREPARING") {
-          return [
-            { button_key: "one_kiosk_ready", label: "Mark Ready", variant: "secondary", config: { uiAction: "ready" } },
-          ];
-        }
-        if (order.status === "READY" || order.status === "READY_FOR_PICKUP") {
-          return [
-            { button_key: "one_kiosk_collect", label: "Collected", variant: "primary", config: { uiAction: "complete" } },
-          ];
-        }
-        return [];
-      }
       return buttons.filter((button) => {
         if (!matchesRule(button.visibility_rule || button.visibilityRule, order)) return false;
-        const action = actionKeyForButton(button);
-        if (prepOnly && ["accept", "reject"].includes(action)) return false;
+        if (prepOnly && button?.config?.prepVisible === false) return false;
         return true;
       });
     },
