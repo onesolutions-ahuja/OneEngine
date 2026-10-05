@@ -251,6 +251,47 @@ export async function loginState(db, userId) {
   return result.rows[0] || null;
 }
 
+export async function loadLoginSecurityContext(db, { companyId, userId, roleId }) {
+  if (!companyId || !userId) {
+    return { settings: null, state: null, policy: null, companyTimezone: null };
+  }
+  const result = await db(
+    `SELECT
+       row_to_json(s.*) AS settings,
+       row_to_json(us.*) AS state,
+       row_to_json(p.*) AS policy,
+       c.timezone AS company_timezone
+     FROM companies c
+     LEFT JOIN identity_security_settings s ON s.company_id=c.id
+     LEFT JOIN identity_user_security_state us ON us.user_id=$2
+     LEFT JOIN LATERAL (
+       SELECT *
+       FROM identity_access_policies ap
+       WHERE ap.company_id=$1 AND ap.active=TRUE
+         AND (
+           (ap.scope_type='USER' AND ap.scope_id=$2)
+           OR (ap.scope_type='ROLE' AND ap.scope_id=$3)
+           OR (ap.scope_type='COMPANY' AND ap.scope_id IS NULL)
+         )
+       ORDER BY CASE ap.scope_type WHEN 'USER' THEN 3 WHEN 'ROLE' THEN 2 ELSE 1 END DESC,
+                ap.priority ASC, ap.updated_at DESC
+       LIMIT 1
+     ) p ON TRUE
+     WHERE c.id=$1
+     LIMIT 1`,
+    [companyId, userId, roleId || null]
+  );
+  const row = result.rows[0] || {};
+  let settings = row.settings || null;
+  if (!settings) settings = await loadSecuritySettings(db, companyId);
+  return {
+    settings,
+    state: row.state || null,
+    policy: row.policy || null,
+    companyTimezone: row.company_timezone || null,
+  };
+}
+
 export async function registerFailedLogin(db, { user, settings }) {
   const max = Number(settings?.maximum_invalid_login_attempts || 0);
   const lockoutMinutes = Number(settings?.lockout_minutes || 0);
