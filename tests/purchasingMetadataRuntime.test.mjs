@@ -194,7 +194,7 @@ test("gift cards online orders and attendance use metadata workspaces while runt
   const attendance = await readFile(new URL("../server/routes/attendance.js", import.meta.url), "utf8");
   const online = await readFile(new URL("../server/routes/online.js", import.meta.url), "utf8");
   assert.match(app, /initialObjectKey="gift_card" appKey="gift-cards"/);
-  assert.match(app, /initialObjectKey="attendance" appKey="employees"/);
+  assert.match(app, /initialObjectKey="employee" appKey="employees"/);
   assert.match(app, /initialObjectKey="online_order" appKey="online-orders"/);
   assert.equal(app.includes("OnlineOrdersPrep"), false);
   assert.match(metadata, /key: "gift_card"/);
@@ -320,4 +320,16 @@ test("store and till administration use metadata while operational till runtime 
   assert.equal(admin.includes('router.put("/admin/tills/:id"'), false);
   assert.equal(settingsPage.includes("/api/admin/tills/"), false);
   assert.match(till, /\/till\/sessions\/current/);
+});
+
+
+test("staff app is metadata-driven while identity and RBAC administration remain platform-core", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const admin = await readFile(new URL("../server/routes/admin.js", import.meta.url), "utf8");
+  assert.match(app, /initialObjectKey="employee" appKey="employees"/);
+  assert.match(metadata, /key: "employee"[\s\S]*table: "users"/);
+  assert.match(admin, /\/admin\/roles\/\:roleId\/permissions/);
+  assert.match(admin, /\/admin\/users\/\:id\/reset-password/);
+  assert.match(admin, /\/admin\/users\/\:id\/stores/);
 });

@@ -2447,7 +2447,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'gift-cards' ? (
           <WorkspacePage initialObjectKey="gift_card" appKey="gift-cards" />
         ) : activeApp === 'employees' ? (
-          <WorkspacePage initialObjectKey="attendance" appKey="employees" />
+          <WorkspacePage initialObjectKey="employee" appKey="employees" />
         ) : activeApp === 'stores' ? (
           <WorkspacePage initialObjectKey="store" appKey="stores" />
         ) : activeApp === 'reports' ? (
