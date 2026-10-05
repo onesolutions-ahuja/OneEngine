@@ -563,19 +563,8 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
   router.post("/packages/:packageKey/request-licence", authenticate, authorize("package.manage", "settings.manage"), async (req, res) => {
     try {
-      const execution = await executeSystemWorkflow({
-        db,
-        companyId: req.user.companyId,
-        userId: req.user.id || null,
-        systemKey: "action:LICENCE_REQUEST_PACKAGE",
-        req,
-        input: { packageKey: req.params.packageKey },
-        writeAudit,
-        source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "LICENCE_REQUEST_PACKAGE" },
-        extraContext: { pool },
-      });
-      const result = execution.result;
-      res.status(result?.duplicate ? 200 : 201).json({ success: true, data: result });
+      const data = await runTenantAppLifecycleFlow(req, req.params.packageKey, "onestore_request_licence");
+      res.status(201).json({ success: true, data });
     } catch (error) {
       res.status(error.status || 400).json({ success: false, message: error.message || "Unable to request licence" });
     }
