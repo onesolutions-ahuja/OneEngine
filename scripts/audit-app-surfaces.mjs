@@ -49,6 +49,10 @@ const supportedRoutes = new Set([...app.matchAll(/activeApp\s*===\s*'([^']+)'/g)
 supportedRoutes.add('settings')
 supportedRoutes.add('developer')
 supportedRoutes.add('integrations')
+// Generic metadata-owned app surfaces are resolved by openRoutePath/readRoute
+// into WorkspacePage rather than a business-specific activeApp branch.
+supportedRoutes.add('objects')
+supportedRoutes.add('workspace')
 
 const publicApps = internalAppCatalog.filter((entry) =>
   entry.visibility !== 'HIDDEN' &&
