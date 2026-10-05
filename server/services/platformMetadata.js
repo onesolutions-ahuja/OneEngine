@@ -2119,6 +2119,26 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
+          name: "OneTill - Checkout Age Preflight",
+          apiName: "ONETILL_CHECKOUT_AGE_PREFLIGHT",
+          inputContract: [
+            { name: "basket", label: "Basket Lines", type: "collection", required: true },
+            { name: "ageVerified", label: "Age Verified", type: "boolean", required: true },
+          ],
+          outputContract: [
+            { name: "requiresAgeVerification", label: "Requires Age Verification", type: "boolean", source: "variables.requiresAgeVerification" },
+            { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+          ],
+          actions: [
+            { id:"age_start",label:"1. Start Age Check",apiName:"age_start",key:"ASSIGNMENT",variableName:"requiresAgeVerification",variableType:"boolean",operator:"set",value:false },
+            { id:"age_loop",label:"2. Loop Through Basket Lines",apiName:"age_loop",key:"LOOP",collection:"$record.basket",itemVariable:"ageLine",bodyBranch:["age_line_requires","age_next_required","age_set_required"] },
+            { id:"age_line_requires",label:"3. Check Line Age Restriction",apiName:"age_line_requires",key:"FORMULA",resourceName:"lineRequiresAge",resultType:"boolean",expression:"ageRestricted == true",inputs:{ageRestricted:{path:"variables.ageLine.ageRestricted"}} },
+            { id:"age_next_required",label:"4. Keep Any Age Restriction",apiName:"age_next_required",key:"FORMULA",resourceName:"nextRequiresAge",resultType:"boolean",expression:"requiresAgeVerification || lineRequiresAge",inputs:{requiresAgeVerification:{path:"variables.requiresAgeVerification"},lineRequiresAge:{path:"variables.lineRequiresAge"}} },
+            { id:"age_set_required",label:"5. Save Age Requirement",apiName:"age_set_required",key:"ASSIGNMENT",variableName:"requiresAgeVerification",variableType:"boolean",operator:"set",value:{path:"variables.nextRequiresAge"} },
+            { id:"age_allowed",label:"6. Decide Whether Checkout Can Continue",apiName:"age_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"!requiresAgeVerification || ageVerified",inputs:{requiresAgeVerification:{path:"variables.requiresAgeVerification"},ageVerified:{path:"$record.ageVerified"}} },
+          ],
+        },
+        {
           name: "OneTill - Calculate Sale Pricing",
           apiName: "ONETILL_CALCULATE_SALE_PRICING",
           inputContract: [
@@ -2421,6 +2441,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
       const internalWorkflowButtons = [
         ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
+        ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("ONETILL_CHECKOUT_AGE_PREFLIGHT"),"sale.create"],
         ["till_pricing_calculate","Calculate Sale Pricing",tillWorkflowIds.get("ONETILL_CALCULATE_SALE_PRICING"),"sale.create"],
         ["till_split_payment_validate","Validate Split Payment",tillWorkflowIds.get("ONETILL_VALIDATE_SPLIT_PAYMENT"),"sale.create"],
         ["till_misc_line_build","Build Misc Sale Line",tillWorkflowIds.get("ONETILL_BUILD_MISC_LINE"),"sale.create"],
@@ -2442,6 +2463,15 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           [saleObjectId, buttonKey, label, String(workflowId), permission]
         );
       }
+      await pool.query(
+        `UPDATE platform_buttons
+            SET placement='till_checkout_preflight',
+                config=COALESCE(config,'{}'::jsonb)||'{"modalOnFalse":"age"}'::jsonb,
+                updated_at=NOW()
+          WHERE button_key='till_age_preflight'
+            AND company_id IS NULL
+            AND COALESCE(user_modified,FALSE)=FALSE`
+      ).catch(() => {});
     }
   
 
