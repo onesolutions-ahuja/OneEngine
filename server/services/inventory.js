@@ -1,3 +1,5 @@
+import { evaluateWorkflowFormula } from "./platformFormula.js";
+
 // Lightweight inventory helpers built on the existing product table and
 // inventory_movement architecture. This is not a second stock system.
 
@@ -356,38 +358,54 @@ function round3(value) {
   return Math.round((Number(value) + Number.EPSILON) * 1000) / 1000;
 }
 
-/*
- * FEFO ordering: First Expired, First Out. NULL expiry (undated stock)
- * sorts after any dated batch. Pure function — exported for reuse and so
- * a future automatic FEFO allocator and the UI agree on one ordering.
- */
-export function fefoCompare(a, b) {
-  const aExp = a.expiry_date ? String(a.expiry_date).slice(0, 10) : null;
-  const bExp = b.expiry_date ? String(b.expiry_date).slice(0, 10) : null;
-  if (aExp === null && bExp === null) return 0;
-  if (aExp === null) return 1;
-  if (bExp === null) return -1;
-  if (aExp < bExp) return -1;
-  if (aExp > bExp) return 1;
-  return 0;
+async function loadBatchPolicy(client) {
+  const result = await client.query(
+    `SELECT f.config
+       FROM platform_fields f
+       INNER JOIN platform_objects o ON o.id=f.object_id
+      WHERE o.object_key='inventory_batch'
+        AND f.api_name='expiry_status'
+        AND o.company_id IS NULL
+        AND f.company_id IS NULL
+        AND o.active=TRUE
+        AND f.active=TRUE
+      LIMIT 1`
+  );
+  const config = result.rows?.[0]?.config;
+  return config && typeof config === "object" && !Array.isArray(config) ? config : {};
 }
 
-/*
- * Expiry status per the business rules: expired / expiring / valid.
- * `expiringSoonDays` is the company-wide window (default 7). Pure function.
- */
-export function expiryStatus(expiryDate, { now = new Date(), expiringSoonDays = 7 } = {}) {
-  if (!expiryDate) return "none";
-  const dateOnly = String(expiryDate).slice(0, 10);
-  const expiry = new Date(`${dateOnly}T00:00:00Z`);
-  if (Number.isNaN(expiry.getTime())) return "none";
-  const today = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
-  const days = Math.round((expiry.getTime() - today.getTime()) / 86_400_000);
-  if (days < 0) return "expired";
-  if (days <= expiringSoonDays) return "expiring";
-  return "valid";
+function sortRowsByMetadata(rows, sortSpec = []) {
+  const rules = Array.isArray(sortSpec) ? sortSpec : [];
+  if (!rules.length) return [...rows];
+  return [...rows].sort((left, right) => {
+    for (const rule of rules) {
+      const field = String(rule?.field || "");
+      if (!["expiry_date", "manufacturing_date", "batch_number", "created_at"].includes(field)) continue;
+      const direction = String(rule?.direction || "ASC").toUpperCase() === "DESC" ? -1 : 1;
+      const nullsLast = String(rule?.nulls || "LAST").toUpperCase() !== "FIRST";
+      const a = left?.[field] == null ? null : String(left[field]).slice(0, 30);
+      const b = right?.[field] == null ? null : String(right[field]).slice(0, 30);
+      if (a === b) continue;
+      if (a == null) return nullsLast ? 1 : -1;
+      if (b == null) return nullsLast ? -1 : 1;
+      return a < b ? -direction : direction;
+    }
+    return 0;
+  });
+}
+
+function expiryStatusFromMetadata(expiryDate, policy = {}) {
+  const expression = String(policy.statusFormula || "");
+  if (!expression) return "none";
+  try {
+    return String(evaluateWorkflowFormula(expression, {
+      expiryDate: expiryDate ? String(expiryDate).slice(0, 10) : null,
+      warningDays: Number(policy.warningDays) || 0,
+    }) || "none");
+  } catch {
+    return "none";
+  }
 }
 
 /*
@@ -543,13 +561,14 @@ export async function allocateBatchConsumption(client, {
   );
 
   const remaining = { current: qty };
+  const batchPolicy = await loadBatchPolicy(client);
   let batches;
   if (mode === "explicit") {
     const chosen = candidates.rows.filter((row) => row.id === batchId);
     if (!chosen.length) throw new Error("Batch not found for this store");
     batches = chosen;
   } else {
-    batches = [...candidates.rows].sort(fefoCompare);
+    batches = sortRowsByMetadata(candidates.rows, batchPolicy.allocationSort);
   }
 
   const consumed = [];
@@ -597,7 +616,7 @@ export async function allocateBatchConsumption(client, {
 
   return {
     consumed,
-    expiryStatuses: consumed.map((c) => expiryStatus(c.expiryDate, { now })),
+    expiryStatuses: consumed.map((c) => expiryStatusFromMetadata(c.expiryDate, batchPolicy)),
   };
 }
 
