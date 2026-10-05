@@ -344,6 +344,87 @@ export async function writeLoginHistory(db, { user = null, identifier = null, st
   }
 }
 
+export async function finalizeSuccessfulLogin(db, {
+  user,
+  identifier = null,
+  ip = null,
+  userAgent = null,
+  authMethod = "PASSWORD",
+  settings = null,
+  originHost = null,
+  assuranceLevel = null,
+  reason = null,
+  req = null,
+  application = "OneEngine",
+}) {
+  const config = settings || (user?.company_id ? await loadSecuritySettings(db, user.company_id) : null);
+  const hours = Math.max(1, Number(config?.maximum_session_hours || 12));
+  const sessionId = randomUUID();
+  const forwardedFor = req ? String(req.headers?.["x-forwarded-for"] || "").trim() || null : null;
+  const loginUrl = req ? String(req.originalUrl || req.url || "").slice(0, 500) || null : null;
+  const protocol = req ? String(req.headers?.["x-forwarded-proto"] || req.protocol || "").slice(0, 40) || null : null;
+  const platform = userAgent ? (/Windows/i.test(userAgent) ? "Windows" : /Android/i.test(userAgent) ? "Android" : /iPhone|iPad|iOS/i.test(userAgent) ? "iOS" : /Mac OS|Macintosh/i.test(userAgent) ? "macOS" : /Linux/i.test(userAgent) ? "Linux" : "Unknown") : null;
+  const browser = userAgent ? (/Edg\//i.test(userAgent) ? "Edge" : /Chrome\//i.test(userAgent) ? "Chrome" : /Firefox\//i.test(userAgent) ? "Firefox" : /Safari\//i.test(userAgent) ? "Safari" : "Other") : null;
+
+  await db(
+    `WITH new_session AS (
+       INSERT INTO identity_sessions(
+         id,company_id,user_id,expires_at,ip_address,user_agent,auth_method,origin_host,assurance_level,assurance_verified_at
+       )
+       VALUES(
+         $1,$2,$3,NOW()+($4::text||' hours')::interval,$5::inet,$6,$7,$8,$9::text,
+         CASE WHEN $9::text IS NULL THEN NULL ELSE NOW() END
+       )
+       RETURNING id
+     ),
+     security_reset AS (
+       INSERT INTO identity_user_security_state(
+         user_id,company_id,failed_login_attempts,locked_until,locked_indefinitely,updated_at
+       )
+       VALUES($3,$2,0,NULL,FALSE,NOW())
+       ON CONFLICT(user_id) DO UPDATE SET
+         company_id=EXCLUDED.company_id,
+         failed_login_attempts=0,
+         locked_until=NULL,
+         locked_indefinitely=FALSE,
+         updated_at=NOW()
+       RETURNING user_id
+     ),
+     user_touch AS (
+       UPDATE users SET last_login_at=NOW() WHERE id=$3 RETURNING id
+     )
+     INSERT INTO identity_login_history(
+       company_id,user_id,login_identifier,status,reason,ip_address,user_agent,auth_method,session_id,
+       forwarded_for,login_type,application,login_url,tls_protocol,platform,browser
+     )
+     SELECT
+       $2,$3,$10,'SUCCESS',$11,$5::inet,$6,$7,new_session.id,
+       $12,$7,$13,$14,$15,$16,$17
+     FROM new_session`,
+    [
+      sessionId,
+      user?.company_id || null,
+      user?.id || null,
+      hours,
+      ip,
+      userAgent,
+      authMethod,
+      originHost,
+      assuranceLevel,
+      identifier || user?.username || null,
+      reason,
+      forwardedFor,
+      application,
+      loginUrl,
+      protocol,
+      platform,
+      browser,
+    ]
+  );
+
+  return sessionId;
+}
+
 export async function createTrackedSession(db, { user, ip, userAgent, authMethod = "PASSWORD", settings = null, originHost = null, assuranceLevel = null }) {
   const config = settings || (user.company_id ? await loadSecuritySettings(db, user.company_id) : null);
   const hours = Math.max(1, Number(config?.maximum_session_hours || 12));
