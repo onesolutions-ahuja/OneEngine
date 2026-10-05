@@ -4806,18 +4806,16 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
           );
           if (!priorOwner.rows.length) {
             // Older platform bootstrap builds created canonical physical fields
-            // (for example Product.name) before package ownership metadata
-            // existed. They are safe to adopt only when they are untouched,
-            // unmanaged legacy metadata pointing at the exact same physical
-            // source column/type declared by the package. Custom fields,
-            // modified fields, formulas, and mismatched mappings remain blocked.
-            const declaredType = field.fieldType || field.field_type || "text";
+            // before package ownership metadata existed. Untouched, unmanaged
+            // fields that map the same API name to the same physical column are
+            // legacy canonical metadata and may be adopted even when the package
+            // has since tightened the metadata type (for example text -> picklist).
+            // User-modified/custom mappings remain protected.
             const safeLegacyAdoption =
               existing.user_modified === false &&
               existing.managed === false &&
               Boolean(sourceColumn) &&
-              existing.source_column === sourceColumn &&
-              existing.field_type === declaredType;
+              existing.source_column === sourceColumn;
             if (!safeLegacyAdoption) {
               throw new Error(`Package cannot take ownership of existing custom Platform field: ${objectKey}.${apiName}`);
             }
