@@ -34,7 +34,6 @@ export default function createSalesRouter({
   authorize,
   db,
   pool,
-  createInventoryMovement,
   associateCustomerWithStore,
   writeAudit = null,
   selfCheckoutMode = null,
