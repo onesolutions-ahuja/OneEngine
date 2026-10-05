@@ -1,10 +1,4 @@
 import express from "express";
-import {
-  validateIssueValue,
-  validateTopUp,
-  normaliseGiftCardCode,
-  codeLookupClause,
-} from "../services/giftCards.js";
 
 export default function createCustomersRouter({
   authenticate,
@@ -353,40 +347,6 @@ export default function createCustomersRouter({
     res.json({ success: true, data: { members: result.rows } });
   });
 
-  router.get("/gift-cards", authenticate, authorize("customer.view"), async (req, res) => {
-    const result = await db(
-      `SELECT g.id, g.code, g.reference_number, g.customer_id, c.name AS customer_name,
-        g.status, g.initial_value, g.expires_at, COALESCE(SUM(CASE WHEN t.transaction_type = 'redeem' THEN -t.amount ELSE t.amount END), 0) AS balance
-       FROM gift_cards g LEFT JOIN customers c ON c.id = g.customer_id
-       LEFT JOIN gift_card_transactions t ON t.gift_card_id = g.id
-       WHERE g.company_id = $1 GROUP BY g.id, c.name ORDER BY g.issued_at DESC`,
-      [req.user.companyId]
-    );
-    res.json({ success: true, data: result.rows });
-  });
-
-  router.get("/gift-cards/:id", authenticate, authorize("customer.view"), async (req, res) => {
-    const result = await db(
-      `SELECT g.id, g.code, g.status, g.expires_at,
-        COALESCE(SUM(CASE WHEN t.transaction_type = 'redeem' THEN -t.amount ELSE t.amount END), 0) AS balance
-       FROM gift_cards g LEFT JOIN gift_card_transactions t ON t.gift_card_id = g.id
-       WHERE g.id = $1 AND g.company_id = $2 GROUP BY g.id`,
-      [req.params.id, req.user.companyId]
-    );
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "Gift card not found" });
-    const transactions = await db(
-      `SELECT * FROM gift_card_transactions WHERE gift_card_id = $1 AND company_id = $2 ORDER BY created_at ASC`,
-      [req.params.id, req.user.companyId]
-    );
-    res.json({ success: true, data: { ...result.rows[0], transactions: transactions.rows } });
-  });
-
-  router.post("/gift-cards/lookup", authenticate, authorize("customer.view"), async (req, res) => {
-    const lookup = codeLookupClause(req.body.code, 2);
-    const result = await db(lookup.sql, [...lookup.params, req.user.companyId]);
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "Gift card not found" });
-    res.json({ success: true, data: result.rows[0] });
-  });
 
   
   return router;
