@@ -4,9 +4,7 @@
   height: 100%;
   max-height: 100%;
   padding: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow: hidden;
   box-sizing: border-box;
   color: #18181b;
   background: #fff;
@@ -96,9 +94,9 @@
 .rfux-scroll-surface {
   position: absolute;
   inset: 0;
-  overflow: scroll;
+  overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable both-edges;
+  scrollbar-gutter: stable;
   scrollbar-width: auto;
 }
 
@@ -123,8 +121,8 @@
 
 .rfux-canvas-stage {
   position: relative;
-  min-width: 1500px;
-  min-height: 1100px;
+  min-width: 100%;
+  min-height: 100%;
 }
 
 .rfux-canvas-stage .react-flow {
