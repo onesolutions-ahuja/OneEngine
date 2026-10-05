@@ -1,18 +1,22 @@
 // Canonical payment-method registry backed by company metadata records.
 // Consumers must resolve methods here instead of maintaining local tender lists.
 export const DEFAULT_PAYMENT_METHODS = Object.freeze([
-  { code: "cash", label: "Cash", kind: "CASH", allowOffline: true, requiresConnector: false, sortOrder: 10 },
-  { code: "card", label: "Card", kind: "CARD", allowOffline: false, requiresConnector: true, sortOrder: 20 },
-  { code: "customer_credit", label: "Customer Credit", kind: "CREDIT", allowOffline: false, sortOrder: 30 },
-  { code: "gift_card", label: "Gift Card", kind: "GIFT_CARD", allowOffline: false, sortOrder: 40 },
-  { code: "voucher", label: "Voucher", kind: "VOUCHER", allowOffline: false, sortOrder: 50 },
-  { code: "cheque", label: "Cheque", kind: "CHEQUE", allowOffline: false, sortOrder: 60 },
-  { code: "bank_transfer", label: "Bank Transfer", kind: "BANK_TRANSFER", allowOffline: false, sortOrder: 70 },
-  { code: "online", label: "Online", kind: "ONLINE", allowOffline: false, sortOrder: 80 },
+  { code: "cash", label: "Cash", kind: "CASH", allowOffline: true, requiresConnector: false, sortOrder: 10,
+    config: { requiresCashReceived: true, inputFields: [{ key: "cashReceivedOverride", label: "Cash received", type: "currency", required: true }] } },
+  { code: "card", label: "Card", kind: "CARD", allowOffline: false, requiresConnector: true, sortOrder: 20,
+    config: { requiresConnector: true, inputFields: [] } },
+  { code: "customer_credit", label: "Customer Credit", kind: "CREDIT", allowOffline: false, sortOrder: 30,
+    config: { requiresCustomer: true, inputFields: [] } },
+  { code: "gift_card", label: "Gift Card", kind: "GIFT_CARD", allowOffline: false, sortOrder: 40,
+    config: { requiresGiftCardCode: true, inputFields: [{ key: "giftCardCode", label: "Gift card code", type: "text", required: true }] } },
+  { code: "voucher", label: "Voucher", kind: "VOUCHER", allowOffline: false, sortOrder: 50, config: { inputFields: [] } },
+  { code: "cheque", label: "Cheque", kind: "CHEQUE", allowOffline: false, sortOrder: 60, config: { inputFields: [] } },
+  { code: "bank_transfer", label: "Bank Transfer", kind: "BANK_TRANSFER", allowOffline: false, sortOrder: 70, config: { inputFields: [] } },
+  { code: "online", label: "Online", kind: "ONLINE", allowOffline: false, sortOrder: 80, config: { inputFields: [] } },
 ]);
 
 export async function listPaymentMethods(db, companyId, { activeOnly = true } = {}) {
-  if (!db || !companyId) return DEFAULT_PAYMENT_METHODS.map((item) => ({ ...item, active: true, system: true }));
+  if (!db || !companyId) return DEFAULT_PAYMENT_METHODS.map((item) => ({ ...item, config: { ...(item.config || {}) }, active: true, system: true }));
   try {
     const result = await db(
       `SELECT id, code, label, kind, active, allow_offline, sort_order, config
@@ -36,7 +40,7 @@ export async function listPaymentMethods(db, companyId, { activeOnly = true } = 
     // Backward-compatible during rolling deployments before the migration runs.
     if (error?.code !== "42P01") throw error;
   }
-  return DEFAULT_PAYMENT_METHODS.map((item) => ({ ...item, active: true, system: true, requiresConnector: item.requiresConnector === true }));
+  return DEFAULT_PAYMENT_METHODS.map((item) => ({ ...item, config: { ...(item.config || {}) }, active: true, system: true, requiresConnector: item.requiresConnector === true }));
 }
 
 export async function getAllowedPaymentMethodCodes(db, companyId, scope = {}) {
@@ -80,10 +84,16 @@ export async function ensureDefaultPaymentMethods(db, companyId) {
   if (!db || !companyId) return;
   for (const method of DEFAULT_PAYMENT_METHODS) {
     await db(
-      `INSERT INTO payment_methods (company_id,code,label,kind,active,allow_offline,sort_order)
-       VALUES ($1,$2,$3,$4,true,$5,$6)
-       ON CONFLICT (company_id,code) DO NOTHING`,
-      [companyId, method.code, method.label, method.kind, method.allowOffline, method.sortOrder]
+      `INSERT INTO payment_methods (company_id,code,label,kind,active,allow_offline,sort_order,config)
+       VALUES ($1,$2,$3,$4,true,$5,$6,$7::jsonb)
+       ON CONFLICT (company_id,code) DO UPDATE SET
+         label=EXCLUDED.label,
+         kind=EXCLUDED.kind,
+         allow_offline=EXCLUDED.allow_offline,
+         sort_order=EXCLUDED.sort_order,
+         config=CASE WHEN payment_methods.config='{}'::jsonb THEN EXCLUDED.config ELSE payment_methods.config END,
+         updated_at=NOW()`,
+      [companyId, method.code, method.label, method.kind, method.allowOffline, method.sortOrder, JSON.stringify(method.config || {})]
     );
   }
 }
