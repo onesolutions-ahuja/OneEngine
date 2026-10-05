@@ -51,5 +51,21 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"get_order",label:"Get Online Order",key:"GET_RECORDS",objectKey:"online_order",filters:[{field:"id",operator:"equals",value:{path:"$record.orderId"}}],limit:1,store:"first"},
   {id:"update_order",label:"Update Order Status",key:"UPDATE_RECORD",objectKey:"online_order",recordId:{path:"steps.get_order.record.id"},fieldValues:{status:{path:"$record.toStatus"},updated_at:{path:"$record.now"}}},
   {id:"set_order_id",label:"Return Order",key:"ASSIGNMENT",variableName:"orderId",variableType:"text",operator:"set",value:{path:"steps.get_order.record.id"}}
+ ]),
+ flow("flow:supplier.invoice.create","Supplier · Create Invoice",[input("supplierId"),input("invoiceNumber"),input("invoiceDate","text"),input("dueDate","text",false),input("subtotal","number"),input("tax","number"),input("total","number"),input("purchaseId","text",false),input("notes","text",false)],[output("invoiceId")],[
+  {id:"create_invoice",label:"Create Supplier Invoice",key:"CREATE_RECORD",objectKey:"supplier_invoice",fieldValues:{supplier_id:{path:"$record.supplierId"},purchase_id:{path:"$record.purchaseId"},invoice_number:{path:"$record.invoiceNumber"},invoice_date:{path:"$record.invoiceDate"},due_date:{path:"$record.dueDate"},subtotal:{path:"$record.subtotal"},tax:{path:"$record.tax"},total:{path:"$record.total"},status:"OPEN"}},
+  {id:"set_invoice_id",label:"Store Invoice Id",key:"ASSIGNMENT",variableName:"invoiceId",variableType:"text",operator:"set",value:{path:"steps.create_invoice.record.id"}},
+  {id:"create_ledger",label:"Post Invoice Ledger Entry",key:"CREATE_RECORD",objectKey:"supplier_ledger",fieldValues:{supplier_id:{path:"$record.supplierId"},entry_type:"INVOICE",reference_type:"SUPPLIER_INVOICE",reference_id:{path:"variables.invoiceId"},amount:{path:"$record.total"},debit:true,reference:{path:"$record.invoiceNumber"}}}
+ ]),
+ flow("flow:supplier.payment.create","Supplier · Record Payment",[input("supplierId"),input("amount","number"),input("paymentDate","text"),input("paymentMethod","text",false),input("reference","text",false),input("invoiceId","text",false)],[output("paymentId")],[
+  {id:"create_payment",label:"Create Supplier Payment",key:"CREATE_RECORD",objectKey:"supplier_payment",fieldValues:{supplier_id:{path:"$record.supplierId"},amount:{path:"$record.amount"},payment_date:{path:"$record.paymentDate"},payment_method:{path:"$record.paymentMethod"},reference:{path:"$record.reference"},status:"COMPLETED"}},
+  {id:"set_payment_id",label:"Store Payment Id",key:"ASSIGNMENT",variableName:"paymentId",variableType:"text",operator:"set",value:{path:"steps.create_payment.record.id"}},
+  {id:"has_invoice",label:"Allocate To Invoice?",key:"CONDITION",outcomes:[{id:"yes",label:"Allocate",condition:{match:"all",conditions:[{field:"$record.invoiceId",operator:"is_not_blank"}]},branch:["create_allocation"]}],defaultLabel:"Unallocated",defaultBranch:[]},
+  {id:"create_allocation",label:"Create Payment Allocation",key:"CREATE_RECORD",objectKey:"supplier_payment_allocation",fieldValues:{payment_id:{path:"variables.paymentId"},invoice_id:{path:"$record.invoiceId"},amount:{path:"$record.amount"}}},
+  {id:"create_ledger",label:"Post Payment Ledger Entry",key:"CREATE_RECORD",objectKey:"supplier_ledger",fieldValues:{supplier_id:{path:"$record.supplierId"},entry_type:"PAYMENT",reference_type:"SUPPLIER_PAYMENT",reference_id:{path:"variables.paymentId"},amount:{path:"$record.amount"},debit:false,reference:{path:"$record.reference"}}}
+ ]),
+ flow("flow:supplier.ledger.adjust","Supplier · Ledger Adjustment",[input("supplierId"),input("entryType"),input("amount","number"),input("debit","boolean"),input("reference","text",false),input("description","text",false)],[output("ledgerId")],[
+  {id:"create_ledger",label:"Create Ledger Adjustment",key:"CREATE_RECORD",objectKey:"supplier_ledger",fieldValues:{supplier_id:{path:"$record.supplierId"},entry_type:{path:"$record.entryType"},reference_type:"SUPPLIER_ADJUSTMENT",reference:{path:"$record.reference"},amount:{path:"$record.amount"},debit:{path:"$record.debit"}}},
+  {id:"set_ledger_id",label:"Return Ledger Entry",key:"ASSIGNMENT",variableName:"ledgerId",variableType:"text",operator:"set",value:{path:"steps.create_ledger.record.id"}}
  ])
 ];
