@@ -109,6 +109,11 @@ const creditFlow = ({ key, name, inputs, outputs, actions }) => {
 
 const CUSTOMER_CREDIT_SYSTEM_WORKFLOWS = [];
 
+const tillFlow = (spec) => {
+  const flow = creditFlow(spec);
+  return { ...flow, name: `OneTill - ${spec.name}` };
+};
+
 const TILL_SYSTEM_WORKFLOWS = Object.freeze([
   tillFlow({
     key: "till.stock.validate",
