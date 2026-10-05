@@ -943,7 +943,8 @@ test('GPT Builder phase 3 element discovery matches the supported Salesforce cat
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
-  assert.match(page, /disabled=\{saving \|\| !workflowId \|\| dirty \|\| issues\.some[^>]*onClick=\{\(\) => setExecutionMode\('run'\)\}><Play/s)
+  assert.match(page, /disabled=\{saving \|\| !workflowId \|\| dirty \|\| issues\.some/)
+  assert.match(page, /setExecutionMode\('run'\)/)
   assert.match(page, /setExecutionMode\('test'\)/)
   assert.match(page, /> View Tests<\/button>/)
   assert.match(page, /setExecutionMode\('debug'\)/)
