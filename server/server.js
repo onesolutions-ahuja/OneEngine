@@ -87,7 +87,7 @@ import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
 import createDataProtectionRouter from "./routes/dataProtection.js";
-import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadLoginSecurityContext, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
+import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, finalizeSuccessfulLogin, loadLoginSecurityContext, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
@@ -1487,26 +1487,20 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     }
 
     const finalizationStartedAt = Date.now();
-    const sessionPromise = createTrackedSession(loginDb, {
+    const sessionId = await finalizeSuccessfulLogin(loginDb, {
       user,
+      identifier: email,
       ip: requestIp,
       userAgent: requestUserAgent,
       authMethod: "PASSWORD",
       settings: securitySettings,
       originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null,
       assuranceLevel: effectiveAssurance.passwordAssurance,
+      reason: passwordExpired ? "PASSWORD_EXPIRED" : null,
+      req,
     });
-    const housekeepingPromise = Promise.all([
-      clearFailedLogin(loginDb, user),
-      loginPool.query(
-        `UPDATE users SET last_login_at = NOW() WHERE id = $1`,
-        [user.id]
-      ),
-    ]);
-    const [sessionId] = await Promise.all([sessionPromise, housekeepingPromise]);
     user.session_id = sessionId;
     const token = createToken(user);
-    await writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req });
     markLoginTiming("finalization_ms", finalizationStartedAt);
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
