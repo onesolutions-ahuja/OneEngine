@@ -374,25 +374,33 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const selectProduct = async (product) => {
-    let rows = []
+    let groups = []
     try {
       if (online) {
-        const response = await apiRequest(`/api/products/${encodeURIComponent(product.id)}/modifiers`)
-        rows = response?.success && Array.isArray(response.data) ? response.data : []
-        cacheProductModifiers(product.id, rows)
+        const groupResponse = await apiRequest(`/api/platform/objects/product_modifier_group/records?page=1&pageSize=100&product_id=${encodeURIComponent(product.id)}`)
+        const groupRows = Array.isArray(groupResponse?.records) ? groupResponse.records : Array.isArray(groupResponse?.data) ? groupResponse.data : []
+        const activeGroups = groupRows.filter((row) => row.active !== false && String(row.product_id) === String(product.id))
+        const optionResponses = await Promise.all(activeGroups.map((group) =>
+          apiRequest(`/api/platform/objects/product_modifier_option/records?page=1&pageSize=100&group_id=${encodeURIComponent(group.id)}`).catch(() => ({ records: [] }))
+        ))
+        groups = activeGroups
+          .sort((a,b) => Number(a.display_order || 0) - Number(b.display_order || 0))
+          .map((group, index) => ({
+            id: group.id,
+            name: group.name,
+            required: group.required === true,
+            maxSelections: Number(group.max_selections) || 1,
+            options: (Array.isArray(optionResponses[index]?.records) ? optionResponses[index].records : Array.isArray(optionResponses[index]?.data) ? optionResponses[index].data : [])
+              .filter((option) => option.active !== false && String(option.group_id) === String(group.id))
+              .sort((a,b) => Number(a.display_order || 0) - Number(b.display_order || 0)),
+          }))
+        cacheProductModifiers(product.id, groups)
       } else {
-        rows = loadProductModifiers(product.id) || []
+        groups = loadProductModifiers(product.id) || []
       }
     } catch {
-      rows = loadProductModifiers(product.id) || []
+      groups = loadProductModifiers(product.id) || []
     }
-    const groups = [...new Map(rows.map((row) => [row.group_id, row])).values()].map((row) => ({
-      id: row.group_id,
-      name: row.group_name,
-      required: row.required === true,
-      maxSelections: Number(row.max_selections) || 1,
-      options: rows.filter((option) => option.group_id === row.group_id && option.id),
-    }))
     if (groups.length) setModifierPicker({ product, groups })
     else addLine(product)
   }
@@ -996,7 +1004,27 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       {modifierPicker ? <ModifierPicker product={modifierPicker.product} groups={modifierPicker.groups} onClose={() => setModifierPicker(null)} onConfirm={(modifiers) => { addLine(modifierPicker.product, modifiers); setModifierPicker(null) }}/> : null}
 
       {modal === 'discount' ? <Modal title={meta.discount?.label || 'Discount'} onClose={() => setModal(null)}><DiscountForm value={discount} onApply={(next) => { setDiscount(next); setModal(null) }}/></Modal> : null}
-      {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={(line) => { setMiscLines((rows) => [...rows, line]); setModal(null) }}/></Modal> : null}
+      {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={async (line) => {
+        const button = buttons.find((row) => row.button_key === 'till_misc_line_build')
+        if (!button) return setError('Misc Item Flow is not configured.')
+        try {
+          const response = await executeMetadataButton(button, {
+            description: line.description,
+            price: Number(line.price),
+            quantity: Number(line.quantity),
+            vatRate: Number(line.vatRate),
+          })
+          const data = response?.data || {}
+          const approvedPrice = Number(deepFind(data, 'approvedPrice') || 0)
+          const approvedQuantity = Number(deepFind(data, 'approvedQuantity') || 0)
+          const approvedDescription = String(deepFind(data, 'approvedDescription') || line.description)
+          const approvedVatRate = Number(deepFind(data, 'approvedVatRate') || 0)
+          const miscProductId = deepFind(data, 'miscProductId') || null
+          if (!miscProductId || approvedPrice <= 0 || approvedQuantity <= 0) throw new Error('Misc Item Flow did not return an approved line.')
+          setMiscLines((rows) => [...rows, { description: approvedDescription, price: approvedPrice, quantity: approvedQuantity, vatRate: approvedVatRate, miscProductId }])
+          setModal(null)
+        } catch (err) { setError(err?.message || 'Unable to add Misc Item') }
+      }}/></Modal> : null}
       {modal === 'petty' ? <Modal title={meta.petty?.label || 'Petty Cash'} onClose={() => setModal(null)}><PettyForm onSubmit={recordPettyCash}/></Modal> : null}
       {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
