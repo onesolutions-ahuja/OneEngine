@@ -1316,3 +1316,14 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 9 orchestration elements', async () => {
+ const elements=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx',import.meta.url),'utf8')
+ const editor=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderOrchestrationElement.jsx',import.meta.url),'utf8')
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ for(const token of ['Interactive Step','orchestration_stage','orchestration_background_step','orchestration_autolaunched']) assert.ok(elements.includes(token),token)
+ for(const token of ['Sequential','Concurrent','Evaluation Flow','Group / Queue','Screen Flow','Due In (Hours)','Resume orchestration when work item completes','Go To Stage','Follow Fault Path','Persist and resume this step']) assert.ok(editor.includes(token),token)
+ assert.ok(page.includes('orchestrationRuntimeElement'))
+ assert.ok(page.includes('GPTBuilderOrchestrationElement'))
+})
