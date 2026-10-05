@@ -1573,6 +1573,19 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log("onePOS: workflow step identifiers widened for nested Flow execution");
       },
     },
+    {
+      key: "0064_oneassistant_event_trigger_registration",
+      version: "64",
+      name: "Register provider-neutral inbound communication event trigger",
+      up: async client => {
+        await client.query(`
+          INSERT INTO platform_event_types(event_type,description,active)
+          VALUES ('communication_message_received','Provider-neutral inbound communication received',TRUE)
+          ON CONFLICT(event_type) DO UPDATE SET active=TRUE,description=EXCLUDED.description
+        `);
+        console.log("onePOS: OneAssistant communication event trigger registered");
+      },
+    },
     ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
