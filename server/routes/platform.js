@@ -8050,13 +8050,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           status: "RUNNING",
           metadata: { buttonKey: button.button_key, actorUserId: req.user.id || null, storeId: req.user.storeId || null },
         });
+        const workflowRecord = {
+          ...record,
+          ...(req.body?.inputs && typeof req.body.inputs === "object" && !Array.isArray(req.body.inputs) ? req.body.inputs : {}),
+        };
         const results = await executeWorkflowActions({
           actions,
           db,
           pool,
           req,
           object,
-          record,
+          record: workflowRecord,
           recordId: req.params.recordId,
           companyId: req.user.companyId,
           runId: run?.id || null,
