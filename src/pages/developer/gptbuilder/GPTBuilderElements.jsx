@@ -166,22 +166,3 @@ export function PendingElementCard({ elementKey, instance = null, free = false, 
   </button>
 }
 
-export function PendingElementEditor({ elementKey, onCancel }) {
-  const element = elementByKey(elementKey)
-  if (!element) return null
-  const Icon = element.icon
-  if (element.key === 'screen') {
-    return <div className="gptb-element-editor-modal-backdrop">
-      <section className="gptb-screen-editor-shell" role="dialog" aria-modal="true" aria-label="New Screen">
-        <header><div><span className="gptb-element-icon is-interaction"><Icon size={16}/></span><span><strong>New Screen</strong><small>Screen</small></span></div><button className="gptb-icon-button" aria-label="Close New Screen" onClick={onCancel}><X size={16}/></button></header>
-        <div className="gptb-element-editor-notice">Screen configuration opens in this separate window. Its complete components and properties are implemented in the Screen phase.</div>
-        <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled>Done</button></footer>
-      </section>
-    </div>
-  }
-  return <aside className="gptb-element-editor-shell" aria-label={`New ${element.label}`}>
-    <header><div><span className={`gptb-element-icon is-${element.category}`}><Icon size={16}/></span><span><strong>{`New ${element.label}`}</strong><small>{element.category === 'data' ? 'Data' : element.category === 'logic' ? 'Logic' : 'Interaction'}</small></span></div><button className="gptb-icon-button" aria-label={`Close New ${element.label}`} onClick={onCancel}><X size={16}/></button></header>
-    <div className="gptb-element-editor-notice">Element selection is complete. The full Salesforce property editor for this element is implemented in the next properties phase.</div>
-    <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled>Done</button></footer>
-  </aside>
-}
