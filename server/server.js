@@ -743,8 +743,10 @@ function authorize(...permissionCodes) {
     }
 
     try {
-      const codes = await getRolePermissionCodes(req.user.roleId, req);
-      const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
+      const [codes, permissionSets] = await Promise.all([
+        getRolePermissionCodes(req.user.roleId, req),
+        loadEffectivePermissionSets(db, req.user, req),
+      ]);
       for (const code of permissionCodes) {
         if (permissionSetAllowsSystemPermission(permissionSets, code) && !codes.includes(code)) {
           codes.push(code);
@@ -771,8 +773,10 @@ function authorize(...permissionCodes) {
 }
 
 async function hasPermission(req, code) {
-  const codes = await getRolePermissionCodes(req.user?.roleId, req);
-  const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
+  const [codes, permissionSets] = await Promise.all([
+    getRolePermissionCodes(req.user?.roleId, req),
+    loadEffectivePermissionSets(db, req.user, req),
+  ]);
   return codes.includes(code) || permissionSetAllowsSystemPermission(permissionSets, code);
 }
 
