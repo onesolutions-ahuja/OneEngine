@@ -533,8 +533,22 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   const [skipStartConditions, setSkipStartConditions] = useState(false)
   const [debugWaitBehavior, setDebugWaitBehavior] = useState(false)
   const [debugWaitPaths, setDebugWaitPaths] = useState({})
+  const [debugRuns, setDebugRuns] = useState([])
+  const [runAsUserId, setRunAsUserId] = useState('')
+  const [debugUsers, setDebugUsers] = useState([])
   const waitElements = elements.filter((element) => ['wait_duration','wait_conditions','wait_until_date'].includes(element.key))
   const executionStorageKey = `gptbuilder.execution.${workflowId || 'new'}.${mode}`
+
+  useEffect(() => {
+    let live = true
+    if (mode === 'debug' && workflowId) {
+      Promise.all([
+        apiRequest(`/api/platform/workflow-runs?workflowId=${encodeURIComponent(workflowId)}&mode=DEBUG&limit=10`).catch(()=>({data:[]})),
+        apiRequest('/api/platform/approval-users').catch(()=>({data:[]})),
+      ]).then(([runs,users])=>{if(live){setDebugRuns(Array.isArray(runs?.data)?runs.data:[]);setDebugUsers(Array.isArray(users?.data)?users.data:[])}})
+    }
+    return () => { live = false }
+  }, [mode, workflowId])
 
   useEffect(() => {
     let live = true
@@ -679,7 +693,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         body: JSON.stringify({
           ...(recordId ? { recordId } : {}),
           inputs,
-          ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
+          ...(mode === 'debug' ? { mode: 'debug', rollback, ...(runAsUserId ? { runAsUserId } : {}) } : {}),
           ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false, debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {}, assertions: automationEnabled ? assertions.map(serializeAssertion) : [] } : {}),
         }),
       })
@@ -783,6 +797,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           {invalidAssertions ? <p className="gptb-execution-error" role="alert">Complete every assertion before saving or running the scenario.</p> : null}
         </> : null}
       </section> : null}
+      {mode === 'debug' ? <section><h3>Debug Context</h3><label><span>Run As</span><select value={runAsUserId} onChange={(event)=>setRunAsUserId(event.target.value)}><option value="">Current User</option>{debugUsers.map((user)=><option key={user.id} value={user.id}>{user.name||user.email||user.id}</option>)}</select><small>Debug respects the selected user's OneEngine RBAC and record access.</small></label>{debugRuns.length?<><h4>Recent Debug Runs</h4>{debugRuns.map((run)=><button type="button" className="gptb-inline-action" key={run.id} onClick={()=>setResult(run)}>{run.status||'Debug'} · {run.created_at||run.createdAt||run.id}</button>)}</>:null}</section> : null}
       {mode !== 'run' ? <section><h3>Select Run Options</h3>
         {mode === 'test' && flowType === 'record' ? <label className="gptb-properties-check"><input type="checkbox" checked={skipStartConditions} onChange={(event) => setSkipStartConditions(event.target.checked)}/><span>Skip start condition requirements</span></label> : null}
         {mode === 'test' && flowType === 'autolaunched' && waitElements.length ? <>
@@ -799,7 +814,8 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         {mode === 'test' && automationEnabled && flowType !== 'record' ? <p className="gptb-help-text">Rollback is required when Scenario Testing Automation and assertions are enabled.</p> : null}
       </section> : null}
       {error ? <div className="gptb-execution-error" role="alert">{error}</div> : null}
-      {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
+      {result ? <section className="gptb-execution-result"><h3>Details</h3>{mode === 'debug' && result.rolledBack ? <p className="gptb-help-text"><b>Rollback complete.</b> Database changes from this debug run were not committed.</p> : null}<dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}{mode === 'debug' && result ? <section className="gptb-debug-trace"><h3>Execution Details</h3>{(result.steps||result.results||[]).map((step,index)=><details key={step.id||step.step_identifier||index} open={step.status==='FAILED'}><summary><span>{step.status||'Completed'}</span><b>{step.label||step.step_identifier||step.stepId||`Element ${index+1}`}</b><button type="button" className="gptb-inline-action" onClick={()=>onNavigateElement?.(String(step.step_identifier||step.stepId||'').split('@')[0])}>View Element</button></summary><dl><div><dt>Type</dt><dd>{step.action_type||step.type||'Flow Element'}</dd></div><div><dt>Duration</dt><dd>{step.duration_ms!=null?`${step.duration_ms} ms`:'—'}</dd></div><div><dt>Inputs</dt><dd><pre>{JSON.stringify(step.inputs||step.metadata?.inputs||{},null,2)}</pre></dd></div><div><dt>Outputs</dt><dd><pre>{JSON.stringify(step.outputs||step.metadata?.result||{},null,2)}</pre></dd></div>{step.error_text?<div><dt>Error</dt><dd>{step.error_text}</dd></div>:null}</dl></details>)}{result.resourceHistory?.length?<><h4>Resource Values</h4>{result.resourceHistory.map((entry,index)=><details key={index}><summary>{entry.stepId||`Step ${index+1}`}</summary><pre>{JSON.stringify(entry,null,2)}</pre></details>)}</>:null}</section> : null}
+      </section> : null}
     </div>
     <footer><button className="gptb-button" onClick={onClose}>Close</button>{mode !== 'run' ? <button className="gptb-button" onClick={resetExecutionSettings}>Reset Settings</button> : null}<button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId) || invalidAssertions} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
   </aside>
