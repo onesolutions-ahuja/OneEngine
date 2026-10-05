@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? resourcePath(resource) : '')
 const objectLabel = (value) => value?.label || value?.name || objectKey(value)
 const fieldKey = (value) => String(value?.api_name || value?.apiName || value?.field_key || value?.key || value?.id || '')
 const fieldLabel = (value) => value?.label || value?.name || fieldKey(value)
@@ -87,7 +88,7 @@ function ResourceSelect({ resources, value, onChange, objectKey: targetObject, c
   )
   return <select value={value || ''} onChange={(event) => onChange(event.target.value)}>
     <option value="">Select a {collection ? 'record collection' : 'record'} variable</option>
-    {rows.map((resource) => <option key={resource.id || resource.apiName} value={`variables.${resource.apiName}`}>{resource.label || resource.apiName}</option>)}
+    {rows.map((resource) => <option key={resource.id || resource.apiName} value={resourcePath(resource)}>{resource.label || resource.apiName}</option>)}
   </select>
 }
 
