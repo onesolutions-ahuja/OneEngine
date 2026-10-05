@@ -2536,7 +2536,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       await pool.query(
         `UPDATE platform_buttons
             SET placement='till_checkout_preflight',
-                config=COALESCE(config,'{}'::jsonb)||'{"modalOnFalse":"till"}'::jsonb,
+                config=COALESCE(config,'{}'::jsonb)||'{"modalOnFalse":"till","messageOnFalse":"Open a till session before completing a sale."}'::jsonb,
                 updated_at=NOW()
           WHERE button_key='till_session_preflight'
             AND company_id IS NULL
