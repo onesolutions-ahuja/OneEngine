@@ -155,7 +155,7 @@ test('deployment smoke accepts ready health state', async () => {
 test('deployment smoke waits for the exact GitHub Pages commit instead of assuming fixed deploy time', async () => {
   const source = await read('../.github/workflows/deployment-smoke.yml')
   assert.match(source, /for attempt in \{1\.\.18\}/)
-  assert.match(source, /if \\[ "\\$DEPLOYED_SHA" = "\\$DEPLOY_SHA" \\]/)
+  assert.match(source, /if \[ "\$DEPLOYED_SHA" = "\$DEPLOY_SHA" \]/)
 })
 
 
