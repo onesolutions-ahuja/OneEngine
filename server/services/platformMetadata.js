@@ -2200,7 +2200,6 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           apiName: "ONETILL_PAYMENT_MODE",
           inputContract: [
             { name: "paymentMode", label: "Payment Mode", type: "text", required: true },
-            { name: "paymentKind", label: "Payment Kind", type: "text", required: true },
             { name: "allowOffline", label: "Allow Offline", type: "boolean", required: true },
             { name: "online", label: "Online", type: "boolean", required: true },
             { name: "customerSelected", label: "Customer Selected", type: "boolean", required: true },
@@ -2208,6 +2207,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { name: "cashReceived", label: "Cash Received", type: "currency", required: true },
             { name: "total", label: "Sale Total", type: "currency", required: true },
             { name: "requiresConnector", label: "Requires Connector", type: "boolean", required: true },
+            { name: "requiresCustomer", label: "Requires Customer", type: "boolean", required: true },
+            { name: "requiresGiftCardCode", label: "Requires Gift Card Code", type: "boolean", required: true },
+            { name: "requiresCashReceived", label: "Requires Cash Received", type: "boolean", required: true },
           ],
           outputContract: [
             { name: "selectedPaymentMode", label: "Selected Payment Mode", type: "text", source: "variables.selectedPaymentMode" },
@@ -2217,9 +2219,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           actions: [
             { id:"payment_set_mode",label:"1. Set Selected Payment Mode",apiName:"payment_set_mode",key:"ASSIGNMENT",variableName:"selectedPaymentMode",variableType:"text",operator:"set",value:{path:"$record.paymentMode"} },
             { id:"payment_connection",label:"2. Check Online/Offline Eligibility",apiName:"payment_connection",key:"FORMULA",resourceName:"connectionAllowed",resultType:"boolean",expression:"online || allowOffline",inputs:{online:{path:"$record.online"},allowOffline:{path:"$record.allowOffline"}} },
-            { id:"payment_customer",label:"3. Check Customer Requirement",apiName:"payment_customer",key:"FORMULA",resourceName:"customerAllowed",resultType:"boolean",expression:'paymentKind != "CREDIT" || customerSelected',inputs:{paymentKind:{path:"$record.paymentKind"},customerSelected:{path:"$record.customerSelected"}} },
-            { id:"payment_gift",label:"4. Check Gift Card Requirement",apiName:"payment_gift",key:"FORMULA",resourceName:"giftAllowed",resultType:"boolean",expression:'paymentKind != "GIFT_CARD" || hasGiftCardCode',inputs:{paymentKind:{path:"$record.paymentKind"},hasGiftCardCode:{path:"$record.hasGiftCardCode"}} },
-            { id:"payment_cash",label:"5. Check Cash Received",apiName:"payment_cash",key:"FORMULA",resourceName:"cashAllowed",resultType:"boolean",expression:'paymentKind != "CASH" || cashReceived >= total',inputs:{paymentKind:{path:"$record.paymentKind"},cashReceived:{path:"$record.cashReceived"},total:{path:"$record.total"}} },
+            { id:"payment_customer",label:"3. Check Customer Requirement",apiName:"payment_customer",key:"FORMULA",resourceName:"customerAllowed",resultType:"boolean",expression:"!requiresCustomer || customerSelected",inputs:{requiresCustomer:{path:"$record.requiresCustomer"},customerSelected:{path:"$record.customerSelected"}} },
+            { id:"payment_gift",label:"4. Check Additional Code Requirement",apiName:"payment_gift",key:"FORMULA",resourceName:"giftAllowed",resultType:"boolean",expression:"!requiresGiftCardCode || hasGiftCardCode",inputs:{requiresGiftCardCode:{path:"$record.requiresGiftCardCode"},hasGiftCardCode:{path:"$record.hasGiftCardCode"}} },
+            { id:"payment_cash",label:"5. Check Received Amount Requirement",apiName:"payment_cash",key:"FORMULA",resourceName:"cashAllowed",resultType:"boolean",expression:"!requiresCashReceived || cashReceived >= total",inputs:{requiresCashReceived:{path:"$record.requiresCashReceived"},cashReceived:{path:"$record.cashReceived"},total:{path:"$record.total"}} },
             { id:"payment_connector",label:"6. Read Connector Requirement",apiName:"payment_connector",key:"ASSIGNMENT",variableName:"connectorRequired",variableType:"boolean",operator:"set",value:{path:"$record.requiresConnector"} },
             { id:"payment_allowed",label:"7. Final Payment Mode Decision",apiName:"payment_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"connectionAllowed && customerAllowed && giftAllowed && cashAllowed",inputs:{connectionAllowed:{path:"variables.connectionAllowed"},customerAllowed:{path:"variables.customerAllowed"},giftAllowed:{path:"variables.giftAllowed"},cashAllowed:{path:"variables.cashAllowed"}} },
           ],
