@@ -522,6 +522,8 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   const [recordId, setRecordId] = useState('')
   const [inputs, setInputs] = useState({})
   const [rollback, setRollback] = useState(mode === 'test')
+  const [runAsUser, setRunAsUser] = useState('')
+  const [resultSearch, setResultSearch] = useState('')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
@@ -574,6 +576,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       setRecordId(saved.recordId || '')
       setInputs(saved.inputs && typeof saved.inputs === 'object' ? saved.inputs : {})
       setRollback(mode === 'test' && flowType === 'record' ? true : saved.rollback ?? (mode === 'test'))
+      setRunAsUser(saved.runAsUser || '')
       setSelectedTestId(saved.selectedTestId || '')
       setAutomationEnabled(saved.automationEnabled === true)
       setAssertions(Array.isArray(saved.assertions) ? saved.assertions : [])
@@ -586,15 +589,17 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   useEffect(() => {
     if (!workflowId) return
     try {
-      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions, skipStartConditions, debugWaitBehavior, debugWaitPaths }))
+      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, runAsUser, selectedTestId, automationEnabled, assertions, skipStartConditions, debugWaitBehavior, debugWaitPaths }))
     } catch {}
-  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions, debugWaitBehavior, JSON.stringify(debugWaitPaths)])
+  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, runAsUser, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions, debugWaitBehavior, JSON.stringify(debugWaitPaths)])
 
   const resetExecutionSettings = () => {
     setRecordId('')
     setRecordSearch('')
     setInputs({})
     setRollback(mode === 'test')
+    setRunAsUser('')
+    setResultSearch('')
     setSelectedTestId('')
     setAutomationEnabled(false)
     setAssertions([])
@@ -680,7 +685,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         body: JSON.stringify({
           ...(recordId ? { recordId } : {}),
           inputs,
-          ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
+          ...(mode === 'debug' ? { mode: 'debug', rollback, ...(runAsUser ? { runAsUser } : {}), debugWaitElementBehavior: debugWaitBehavior, debugWaitPaths: debugWaitBehavior ? debugWaitPaths : {} } : {}),
           ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false, debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {}, assertions: automationEnabled ? assertions.map(serializeAssertion) : [] } : {}),
         }),
       })
@@ -784,9 +789,9 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           {invalidAssertions ? <p className="gptb-execution-error" role="alert">Complete every assertion before saving or running the scenario.</p> : null}
         </> : null}
       </section> : null}
-      {mode !== 'run' ? <section><h3>Select Run Options</h3>
+      {mode !== 'run' ? <section><h3>Select Run Options</h3>{mode === 'debug'?<label><span>Run as another user</span><input value={runAsUser} onChange={(event)=>setRunAsUser(event.target.value)} placeholder="User ID or username"/></label>:null}
         {mode === 'test' && flowType === 'record' ? <label className="gptb-properties-check"><input type="checkbox" checked={skipStartConditions} onChange={(event) => setSkipStartConditions(event.target.checked)}/><span>Skip start condition requirements</span></label> : null}
-        {mode === 'test' && flowType === 'autolaunched' && waitElements.length ? <>
+        {(mode === 'test' || mode === 'debug') && flowType === 'autolaunched' && waitElements.length ? <>
           <label className="gptb-properties-check"><input type="checkbox" checked={debugWaitBehavior} onChange={(event) => setDebugWaitBehavior(event.target.checked)}/><span>Debug wait element behavior</span></label>
           {debugWaitBehavior ? <div className="gptb-debug-wait-paths">{waitElements.map((element) => {
             const options = element.key === 'wait_conditions'
@@ -800,7 +805,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         {mode === 'test' && automationEnabled && flowType !== 'record' ? <p className="gptb-help-text">Rollback is required when Scenario Testing Automation and assertions are enabled.</p> : null}
       </section> : null}
       {error ? <div className="gptb-execution-error" role="alert">{error}</div> : null}
-      {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
+      {result ? <section className="gptb-execution-result"><h3>Details</h3><label><span>Search debug output</span><span className="gptb-execution-search"><Search size={13}/><input value={resultSearch} onChange={(event)=>setResultSearch(event.target.value)} placeholder="Search output…"/></span></label><div className="gptb-debug-result-actions"><button type="button" className="gptb-inline-action" onClick={()=>navigator.clipboard?.writeText(JSON.stringify(result,null,2))}>Copy Log</button>{mode==='debug'?<><button type="button" className="gptb-inline-action" disabled={running} onClick={()=>void execute()}>Debug Again</button><button type="button" className="gptb-inline-action" onClick={()=>{setSelectedTestId('');setScenarioName(`Debug ${new Date().toLocaleString()}`);setAutomationEnabled(true)}}>Convert to Test</button></>:null}</div><pre className="gptb-debug-output">{JSON.stringify(result,null,2).split('\n').filter((line)=>!resultSearch.trim()||line.toLowerCase().includes(resultSearch.trim().toLowerCase())).join('\n')}</pre><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
     </div>
     <footer><button className="gptb-button" onClick={onClose}>Close</button>{mode !== 'run' ? <button className="gptb-button" onClick={resetExecutionSettings}>Reset Settings</button> : null}<button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId) || invalidAssertions} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
   </aside>
