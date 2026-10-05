@@ -300,7 +300,7 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
       {flowType === 'platform_event' ? <section><h3>Select Platform Event</h3><label>Platform Event<select value={value.eventKey || ''} onChange={(event) => onChange({ ...value, eventKey: event.target.value })}><option value="">Select an event</option>{eventTypes.map((item) => <option key={item.event_type} value={item.event_type}>{item.event_type}</option>)}</select></label>{value.eventKey ? <p className="gptb-help-text">{eventTypes.find((item) => item.event_type === value.eventKey)?.description || 'The flow runs when this event message is received.'}</p> : null}</section> : null}
     </div>
     {attemptedDone && errors.length ? <div className="gptb-start-errors" role="alert"><AlertTriangle size={14}/><span>{errors.map((error) => <small key={error}>{error}</small>)}</span></div> : null}
-    <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" onClick={finish}>Done</button></footer>
+    <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled={errors.length > 0} aria-disabled={errors.length > 0} onClick={finish}>Done</button></footer>
   </aside>
 }
 
@@ -1004,7 +1004,14 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     ]).then(([objectResponse, eventResponse, rulesResponse, providerResponse]) => {
       if (!live) return
       setObjects(objectResponse?.data?.objects || objectResponse?.data || [])
-      setEventTypes(Array.isArray(eventResponse?.data) ? eventResponse.data : [])
+      setEventTypes((() => {
+        const payload = eventResponse?.data
+        if (Array.isArray(payload)) return payload
+        if (Array.isArray(payload?.eventTypes)) return payload.eventTypes
+        if (Array.isArray(payload?.events)) return payload.events
+        if (Array.isArray(payload?.data)) return payload.data
+        return []
+      })())
       setAvailableFlows((Array.isArray(rulesResponse?.data) ? rulesResponse.data : []).filter((item) => item?.action?.type === 'workflow'))
       const providers = Array.isArray(providerResponse?.data) ? providerResponse.data : []
       setProviderResources(providers.flatMap((provider) => (provider.fields || []).map((field) => ({
