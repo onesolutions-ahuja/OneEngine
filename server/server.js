@@ -1293,6 +1293,13 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const loginDb = (sql, params = []) => loginPool.query(sql, params);
     const requestIp = clientIp(req);
     const requestUserAgent = req.get("user-agent") || null;
+    let bcryptDurationMs = 0;
+    const passwordCheckPromise = (async () => {
+      const bcryptStartedAt = Date.now();
+      const valid = await bcrypt.compare(password, user.password_hash);
+      bcryptDurationMs = Date.now() - bcryptStartedAt;
+      return valid;
+    })();
     const preflightStartedAt = Date.now();
     const [securityContext, googleRuntime] = await Promise.all([
       user.company_id
@@ -1333,12 +1340,8 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    let stepStartedAt = Date.now();
-    const validPassword = await bcrypt.compare(
-      password,
-      user.password_hash
-    );
-    markLoginTiming("bcrypt_ms", stepStartedAt);
+    const validPassword = await passwordCheckPromise;
+    loginTimings.bcrypt_ms = bcryptDurationMs;
 
     if (validPassword) {
       try {

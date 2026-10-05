@@ -83,9 +83,12 @@ test('Google Connect login readiness uses one parallel read bundle', async () =>
 })
 
 
-test('login timing accumulator remains declared after identity parallelization', async () => {
+test('password verification runs alongside login preflight and records its own duration', async () => {
   const source = await read('../server/server.js')
-  assert.match(source, /let stepStartedAt = Date\.now\(\);\n\s*const validPassword/)
+  assert.match(source, /const passwordCheckPromise = \(async \(\) =>/)
+  assert.match(source, /const \[securityContext, googleRuntime\] = await Promise\.all/)
+  assert.match(source, /const validPassword = await passwordCheckPromise/)
+  assert.match(source, /loginTimings\.bcrypt_ms = bcryptDurationMs/)
 })
 
 
@@ -127,4 +130,11 @@ test('company entitlement sources are queried in parallel', async () => {
 test('deployment smoke accepts ready health state', async () => {
   const source = await read('../.github/workflows/deployment-smoke.yml')
   assert.match(source, /status.*online\|ready/)
+})
+
+
+test('deployment smoke waits for the exact GitHub Pages commit instead of assuming fixed deploy time', async () => {
+  const source = await read('../.github/workflows/deployment-smoke.yml')
+  assert.match(source, /for attempt in \{1\.\.18\}/)
+  assert.match(source, /if \[ "\$DEPLOYED_SHA" = "\$GITHUB_SHA" \]/)
 })
