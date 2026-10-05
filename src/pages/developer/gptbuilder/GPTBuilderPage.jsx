@@ -742,7 +742,10 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           return <option key={id} value={id}>{String(label)}{String(label) !== id ? ` — ${id}` : ''}</option>
         })}</select></label>
       </section> : null}
-      {inputContract.length ? <section><h3>Define Input Values</h3>{inputContract.map((input) => <label key={input.name}><span>{input.label || input.name}{input.required ? ' *' : ''}</span><input value={inputs[input.name] ?? input.defaultValue ?? ''} onChange={(event) => setInputs((current) => ({ ...current, [input.name]: event.target.value }))}/></label>)}</section> : null}
+      {inputContract.length ? <section><h3>Define Input Values</h3>{inputContract.map((input) => {
+        const collection = input.isCollection === true || String(input.type || '').toLowerCase() === 'collection'
+        return <label key={input.name}><span>{input.label || input.name}{input.required ? ' *' : ''}</span>{collection ? <textarea rows={3} value={Array.isArray(inputs[input.name]) ? inputs[input.name].join('\n') : inputs[input.name] ?? ''} onChange={(event) => setInputs((current) => ({ ...current, [input.name]: event.target.value.split(/\r?\n|,/).map((value)=>value.trim()).filter(Boolean) }))} placeholder="Enter one collection value per line"/> : <input value={inputs[input.name] ?? input.defaultValue ?? ''} onChange={(event) => setInputs((current) => ({ ...current, [input.name]: event.target.value }))}/>}</label>
+      })}</section> : null}
       {mode === 'test' ? <section><h3>Expected Results</h3>
         <label className="gptb-properties-check"><input type="checkbox" checked={automationEnabled} onChange={(event) => setAutomationEnabled(event.target.checked)}/><span>Scenario Testing Automation</span></label>
         {automationEnabled ? <>
