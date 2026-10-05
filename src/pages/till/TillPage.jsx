@@ -299,7 +299,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const total = Number(pricing.total || 0)
   const vatEnabled = settings?.tax?.vatEnabled !== false
   const defaultVatRate = Number(settings?.tax?.defaultVatRate ?? 0)
-  const hasAgeRestricted = basket.some((item) => item.ageRestricted)
 
   useEffect(() => {
     const button = buttons.find((row) => row.button_key === 'till_pricing_calculate')
@@ -522,7 +521,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     ...(options.giftCardCode ? { giftCardCode: options.giftCardCode } : {}),
     discountType: discount.type,
     discountValue: discount.value,
-    ageVerified: hasAgeRestricted ? (ageVerified || verifiedOverride) : false,
+    ageVerified: ageVerified || verifiedOverride,
   })
 
   const maybeShowReceiptQr = async (sale) => {
@@ -552,11 +551,23 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null } = {}) => {
     if (!basket.length && !miscLines.length) return setError('Sale contains no items.')
-    if (hasAgeRestricted && !ageVerified && !verifiedOverride) {
-      setPendingPayment(paymentMethod)
-      setPendingCheckout({ paymentMethod, options: { verifiedOverride: true, payments, giftCardCode, cashReceivedOverride } })
-      setModal('age')
-      return
+    const preflightButtons = buttons.filter((button) => button.placement === 'till_checkout_preflight')
+    for (const preflight of preflightButtons) {
+      try {
+        const preflightResponse = await executeMetadataButton(preflight, {
+          ageVerified: ageVerified || verifiedOverride,
+        })
+        const allowed = deepFind(preflightResponse?.data, 'allowed')
+        if (allowed === false) {
+          setPendingPayment(paymentMethod)
+          setPendingCheckout({ paymentMethod, options: { verifiedOverride: true, payments, giftCardCode, cashReceivedOverride } })
+          const modalKey = preflight?.config?.modalOnFalse || preflight?.config?.modal_on_false || null
+          if (modalKey) setModal(modalKey)
+          return
+        }
+      } catch (err) {
+        return setError(err?.message || 'Checkout preflight failed.')
+      }
     }
     if (!till && online) {
       setModal('till')
@@ -832,6 +843,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
             quantity: item.quantity,
             unitPrice: item.price,
             modifiers: item.modifiers || [],
+            ageRestricted: item.ageRestricted === true,
           })),
           ...miscLines.map((line) => ({
             itemType: 'MISC',
