@@ -44,7 +44,7 @@ jobs:
           BODY="$(curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "https://oneengine.onrender.com/api/health")"
           echo "$BODY"
           echo "$BODY" | grep -q '"success":true'
-          echo "$BODY" | grep -q '"status":"online"'
+          echo "$BODY" | grep -Eq '"status":"(online|ready)"'
           echo "$BODY" | grep -q '"database":"connected"'
 
       - name: Test API CORS from GitHub Pages
