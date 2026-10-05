@@ -926,3 +926,14 @@
     width:min(520px,calc(100vw - 620px));
   }
 }
+
+
+/* Builder2 parity batch 1: issue severity summary and keyboard help. */
+.b2-issue-summary{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 10px;border-bottom:1px solid #e5e5e5;background:#fafafa}
+.b2-issue-summary span{display:flex;align-items:center;gap:4px;font-size:11px;color:#5c6570}
+.b2-issue-summary b{font-size:12px;color:#181818}
+.b2-shortcuts{width:min(620px,92vw)}
+.b2-shortcut-grid{display:grid;grid-template-columns:minmax(190px,1fr) auto;gap:10px 18px;padding:18px;align-items:center}
+.b2-shortcut-grid span{font-size:12px;color:#3e3e3c}
+.b2-shortcut-grid kbd{justify-self:end;border:1px solid #c9c9c9;border-bottom-width:2px;border-radius:5px;background:#f7f7f7;padding:4px 7px;font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:#181818}
+[data-b2-panel]:focus{outline:2px solid #0176d3;outline-offset:-2px}
