@@ -86,16 +86,14 @@ const creditFlow = ({ key, name, inputs, outputs, actions }) => {
     }
   }
   return {
-    systemKey: `flow:${key}`,
     name: `COPILOT- ${name}`,
     triggerKey: "manual",
     action: {
       type: "workflow",
       systemGenerated: true,
-      systemKey: `flow:${key}`,
       scope: "system",
-      capabilityType: "workflow",
-      capabilityKey: key,
+      capabilityType: "action",
+      capabilityKey: key.replaceAll(".", "_").toUpperCase(),
       apiName: key.replaceAll(".", "_"),
       flowType: "AUTOLAUNCHED",
       inputs,
@@ -489,12 +487,10 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
 
 const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
   {
-    systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
     name: "GPT - Open Food Facts - Lookup Product",
     triggerKey: "manual",
     action: {
-      type: "workflow", systemGenerated: true, systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
-      scope: "system", capabilityType: "workflow", capabilityKey: "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+      type: "workflow", systemGenerated: true, scope: "system", capabilityType: "workflow", capabilityKey: "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
       apiName: "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT", flowType: "AUTOLAUNCHED",
       inputs: [{ name: "barcode", type: "text", required: true }],
       outputs: ["found","barcode","productName","brand","imageUrl","ingredients"],
@@ -525,12 +521,10 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
     }
   },
   {
-    systemKey: "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
     name: "GPT - Open Food Facts - Test Connection",
     triggerKey: "manual",
     action: {
-      type: "workflow", systemGenerated: true, systemKey: "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
-      scope: "system", capabilityType: "workflow", capabilityKey: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
+      type: "workflow", systemGenerated: true, scope: "system", capabilityType: "workflow", capabilityKey: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
       apiName: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION", flowType: "AUTOLAUNCHED",
       outputs: ["connected","message","statusCode"],
       resources: [
@@ -554,12 +548,10 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
     }
   },
   {
-    systemKey: "flow:GPT_QUICKBOOKS_SYNC_VENDORS",
     name: "GPT - QuickBooks - Sync Vendors",
     triggerKey: "manual",
     action: {
-      type: "workflow", systemGenerated: true, systemKey: "flow:GPT_QUICKBOOKS_SYNC_VENDORS",
-      scope: "system", capabilityType: "workflow", capabilityKey: "GPT_QUICKBOOKS_SYNC_VENDORS",
+      type: "workflow", systemGenerated: true, scope: "system", capabilityType: "workflow", capabilityKey: "GPT_QUICKBOOKS_SYNC_VENDORS",
       apiName: "GPT_QUICKBOOKS_SYNC_VENDORS", flowType: "AUTOLAUNCHED",
       inputs: [{ name: "supplierId", type: "text", required: true }, { name: "integrationId", type: "text", required: true }],
       outputs: ["externalId","syncToken","mappingId"],
@@ -595,12 +587,10 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
     }
   },
   {
-    systemKey: "flow:GPT_QUICKBOOKS_SYNC_PURCHASES",
     name: "GPT - QuickBooks - Sync Purchases",
     triggerKey: "manual",
     action: {
-      type:"workflow", systemGenerated:true, systemKey:"flow:GPT_QUICKBOOKS_SYNC_PURCHASES",
-      scope:"system", capabilityType:"workflow", capabilityKey:"GPT_QUICKBOOKS_SYNC_PURCHASES",
+      type:"workflow", systemGenerated:true, scope:"system", capabilityType:"workflow", capabilityKey:"GPT_QUICKBOOKS_SYNC_PURCHASES",
       apiName:"GPT_QUICKBOOKS_SYNC_PURCHASES", flowType:"AUTOLAUNCHED",
       inputs:[{name:"purchaseId",type:"text",required:true},{name:"integrationId",type:"text",required:true},{name:"expenseAccountId",type:"text",required:true}],
       outputs:["externalId","syncToken","mappingId"],
@@ -634,8 +624,8 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
     }
   },
   {
-    systemKey:"flow:GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS", name:"GPT - QuickBooks - Sync Supplier Payments", triggerKey:"manual",
-    action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",apiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",flowType:"AUTOLAUNCHED",
+    name:"GPT - QuickBooks - Sync Supplier Payments", triggerKey:"manual",
+    action:{type:"workflow",systemGenerated:true,scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",apiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_PAYMENTS",flowType:"AUTOLAUNCHED",
       inputs:[{name:"paymentId",type:"text",required:true},{name:"integrationId",type:"text",required:true},{name:"paymentAccountId",type:"text",required:false}],outputs:["externalId","mappingId"],
       resources:[outputVariable("paymentId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("paymentAccountId","Text",{availableInput:true}),outputVariable("externalId"),outputVariable("mappingId")],
       actions:[
@@ -652,8 +642,8 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
       ]}
   },
   {
-    systemKey:"flow:GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",name:"GPT - QuickBooks - Sync Supplier Credits",triggerKey:"manual",
-    action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",apiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",flowType:"AUTOLAUNCHED",
+    name:"GPT - QuickBooks - Sync Supplier Credits",triggerKey:"manual",
+    action:{type:"workflow",systemGenerated:true,scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",apiName:"GPT_QUICKBOOKS_SYNC_SUPPLIER_CREDITS",flowType:"AUTOLAUNCHED",
       inputs:[{name:"returnId",type:"text",required:true},{name:"integrationId",type:"text",required:true},{name:"expenseAccountId",type:"text",required:true}],outputs:["externalId","mappingId"],
       resources:[outputVariable("returnId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("expenseAccountId","Text",{availableInput:true}),outputVariable("externalId"),outputVariable("mappingId")],
       actions:[
@@ -670,8 +660,8 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
       ]}
   },
   {
-    systemKey:"flow:GPT_QUICKBOOKS_RETRY_FAILED_SYNC",name:"GPT - QuickBooks - Retry Failed Sync",triggerKey:"manual",
-    action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_RETRY_FAILED_SYNC",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_RETRY_FAILED_SYNC",apiName:"GPT_QUICKBOOKS_RETRY_FAILED_SYNC",flowType:"AUTOLAUNCHED",
+    name:"GPT - QuickBooks - Retry Failed Sync",triggerKey:"manual",
+    action:{type:"workflow",systemGenerated:true,scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_RETRY_FAILED_SYNC",apiName:"GPT_QUICKBOOKS_RETRY_FAILED_SYNC",flowType:"AUTOLAUNCHED",
       inputs:[{name:"syncType",type:"text",required:true},{name:"supplierId",type:"text"},{name:"purchaseId",type:"text"},{name:"paymentId",type:"text"},{name:"returnId",type:"text"},{name:"integrationId",type:"text",required:true},{name:"expenseAccountId",type:"text"},{name:"paymentAccountId",type:"text"}],outputs:["retryTarget"],
       resources:[outputVariable("syncType","Text",{availableInput:true}),outputVariable("supplierId","Text",{availableInput:true}),outputVariable("purchaseId","Text",{availableInput:true}),outputVariable("paymentId","Text",{availableInput:true}),outputVariable("returnId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("expenseAccountId","Text",{availableInput:true}),outputVariable("paymentAccountId","Text",{availableInput:true}),outputVariable("retryTarget")],
       actions:[
@@ -690,8 +680,8 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
       ]}
   },
   {
-    systemKey:"flow:GPT_QUICKBOOKS_TEST_CONNECTION",name:"GPT - QuickBooks - Test Connection",triggerKey:"manual",
-    action:{type:"workflow",systemGenerated:true,systemKey:"flow:GPT_QUICKBOOKS_TEST_CONNECTION",scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_TEST_CONNECTION",apiName:"GPT_QUICKBOOKS_TEST_CONNECTION",flowType:"AUTOLAUNCHED",
+    name:"GPT - QuickBooks - Test Connection",triggerKey:"manual",
+    action:{type:"workflow",systemGenerated:true,scope:"system",capabilityType:"workflow",capabilityKey:"GPT_QUICKBOOKS_TEST_CONNECTION",apiName:"GPT_QUICKBOOKS_TEST_CONNECTION",flowType:"AUTOLAUNCHED",
       inputs:[],outputs:["connected","companyName","companyId"],
       resources:[outputVariable("connected","Boolean"),outputVariable("companyName"),outputVariable("companyId")],
       actions:[
@@ -711,16 +701,16 @@ function titleCase(value = "") {
 
 function functionWorkflow(fn) {
   return {
-    systemKey: `function:${fn.key}`,
     name: `System · Function · ${titleCase(fn.key)}`,
     triggerKey: "system_function",
     action: {
       type: "workflow",
       systemGenerated: true,
-      systemKey: `function:${fn.key}`,
       scope: "system",
       capabilityType: "function",
       capabilityKey: fn.key,
+      apiName: `FUNCTION_${fn.key.replaceAll(".", "_").toUpperCase()}`,
+      flowType: "AUTOLAUNCHED",
       actions: [{
         type: "CALL_FUNCTION",
         functionKey: fn.key,
@@ -733,16 +723,16 @@ function functionWorkflow(fn) {
 
 function actionWorkflow(action) {
   return {
-    systemKey: `action:${action.key}`,
     name: `System · Action · ${action.displayName || titleCase(action.key)}`,
     triggerKey: "system_action",
     action: {
       type: "workflow",
       systemGenerated: true,
-      systemKey: `action:${action.key}`,
       scope: "system",
       capabilityType: "action",
       capabilityKey: action.key,
+      apiName: `ACTION_${action.key}`,
+      flowType: "AUTOLAUNCHED",
       // This is the canonical editable wrapper. Phase 3 reroutes callers
       // through these workflow ids and supplies runtime inputs/config.
       actions: [{
@@ -756,16 +746,16 @@ function actionWorkflow(action) {
 
 function jobWorkflow(kind) {
   return {
-    systemKey: `job:${kind}`,
     name: `System · Trigger · ${titleCase(kind)}`,
     triggerKey: "system_job",
     action: {
       type: "workflow",
       systemGenerated: true,
-      systemKey: `job:${kind}`,
       scope: "system",
       capabilityType: "job",
       capabilityKey: kind,
+      apiName: `JOB_${kind}`,
+      flowType: "AUTOLAUNCHED",
       // Job execution is wired to these entries in Phase 3.
       actions: [{
         type: "STOP",
@@ -794,25 +784,25 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
        FROM platform_rules
       WHERE company_id=$1
         AND action->>'systemGenerated'='true'
-        AND action->>'systemKey' IS NOT NULL`,
+        AND action->>'apiName' IS NOT NULL`,
     [companyId]
   );
   const existing = new Map(
-    (existingResult.rows || []).map((row) => [String(row.action?.systemKey || ""), row])
+    (existingResult.rows || []).map((row) => [String(row.action?.apiName || ""), row])
   );
 
   // Remove untouched generated wrappers whose underlying capability no longer exists.
   // Developer-modified wrappers are preserved for explicit migration/review.
-  const validSystemKeys = definitions.map((definition) => definition.systemKey);
+  const validApiNames = definitions.map((definition) => definition.action?.apiName).filter(Boolean);
   const staleResult = await db(
     `DELETE FROM platform_rules
       WHERE company_id=$1
         AND action->>'systemGenerated'='true'
-        AND action->>'systemKey' IS NOT NULL
+        AND action->>'apiName' IS NOT NULL
         AND COALESCE(user_modified,FALSE)=FALSE
-        AND NOT ((action->>'systemKey') = ANY($2::text[]))
-      RETURNING id,action->>'systemKey' AS system_key`,
-    [companyId, validSystemKeys]
+        AND NOT ((action->>'apiName') = ANY($2::text[]))
+      RETURNING id,action->>'apiName' AS api_name`,
+    [companyId, validApiNames]
   );
   const removed = staleResult.rows?.length || 0;
 
@@ -830,7 +820,7 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
 
   let created = 0;
   for (const definition of definitions) {
-    const current = existing.get(definition.systemKey);
+    const current = existing.get(definition.action?.apiName);
     if (current) {
       if (current.user_modified !== true) {
         await db(
@@ -876,7 +866,7 @@ export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null
        FROM platform_rules r
       WHERE r.company_id=$1
         AND r.action->>'systemGenerated'='true'
-        AND r.action->>'systemKey' IS NOT NULL
+        AND r.action->>'apiName' IS NOT NULL
      ON CONFLICT (company_id,workflow_id,version) DO NOTHING`,
     [companyId]
   );
