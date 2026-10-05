@@ -1170,8 +1170,8 @@ export default function createSalesRouter({
         }
 
         const selectedPaymentDefinition = paymentMethodByCode.get(String(paymentMethod || "").trim()) || null;
-        const selectedPaymentKind = String(selectedPaymentDefinition?.kind || "").toUpperCase();
-        const receivedAmount = selectedPaymentKind === "CASH"
+        const selectedPaymentConfig = selectedPaymentDefinition?.config || {};
+        const receivedAmount = selectedPaymentConfig.requiresCashReceived === true
           ? Number(cashReceived == null || cashReceived === "" ? total : cashReceived)
           : total;
         const paymentValidation = await executeSystemWorkflow({
@@ -1182,13 +1182,15 @@ export default function createSalesRouter({
           req,
           input: {
             paymentMode: String(paymentMethod || ""),
-            paymentKind: selectedPaymentKind,
             online: true,
             allowOffline: selectedPaymentDefinition?.allowOffline === true,
             requiresConnector: selectedPaymentDefinition?.requiresConnector === true,
             connectorAvailable: selectedPaymentDefinition?.requiresConnector !== true || Boolean(connectorDrivers),
+            requiresCustomer: selectedPaymentConfig.requiresCustomer === true,
             customerSelected: Boolean(customerId),
+            requiresGiftCardCode: selectedPaymentConfig.requiresGiftCardCode === true,
             hasGiftCardCode: Boolean(normaliseGiftCardCode(giftCardCode)),
+            requiresCashReceived: selectedPaymentConfig.requiresCashReceived === true,
             cashReceived: Number.isFinite(receivedAmount) ? receivedAmount : 0,
             total,
           },
@@ -1202,7 +1204,7 @@ export default function createSalesRouter({
         }
 
         let giftCardTender = null;
-        if (paymentMethod === "gift_card") {
+        if (String(selectedPaymentConfig.handler || "").toLowerCase() === "gift_card") {
           if (paymentLines || !normaliseGiftCardCode(giftCardCode)) {
             await client.query("ROLLBACK");
             return res.status(400).json({ success: false, message: "A gift card code and a single gift card tender are required" });
@@ -1422,7 +1424,7 @@ export default function createSalesRouter({
             clientRequestId,
             clientRequestFingerprint,
             saleStatus,
-            paymentMethod === "cash" ? (Number.isFinite(receivedAmount) ? receivedAmount : Number(total) || 0) : null,
+            selectedPaymentConfig.requiresCashReceived === true ? (Number.isFinite(receivedAmount) ? receivedAmount : Number(total) || 0) : null,
             saleLineCount,
           ]
         );
