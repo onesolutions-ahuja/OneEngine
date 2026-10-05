@@ -669,25 +669,20 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
   }
 
-  const holdSale = async () => {
+  const holdSale = async (button) => {
     if (!basket.length && !miscLines.length) return setError('Add an item before holding the sale.')
     const user = getStoredUser() || {}
-    setBusy(true)
     try {
-      const response = await apiRequest('/api/platform/objects/held_sale/records', {
-        method: 'POST',
-        body: JSON.stringify({ data: {
-          user_id: user.id || user.userId || null,
-          customer_id: selectedCustomer?.id || null,
-          items: { items: basket, miscLines },
-          discount_type: discount.type,
-          discount_value: Number(discount.value || 0),
-        } }),
+      await executeMetadataButton(button, {
+        userId: user.id || user.userId || null,
+        customerId: selectedCustomer?.id || null,
+        items: { items: basket, miscLines },
+        discountType: discount.type,
+        discountValue: Number(discount.value || 0),
       })
-      if (response?.success === false) throw new Error(response?.message || 'Unable to hold sale')
       clearSale()
       setMessage('Sale held successfully.')
-    } catch (err) { setError(err?.message || 'Unable to hold sale') } finally { setBusy(false) }
+    } catch (err) { setError(err?.message || 'Unable to hold sale') }
   }
 
   const openHeld = async () => {
@@ -712,13 +707,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         setMiscLines(Array.isArray(heldItems.miscLines) ? heldItems.miscLines : [])
       }
       setDiscount({ type: held.discount_type || null, value: Number(held.discount_value || 0) })
-      await apiRequest(`/api/platform/objects/held_sale/records/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const consumeButton = buttons.find((row) => row.button_key === 'till_resume_consume')
+      if (!consumeButton) throw new Error('Resume Sale Flow is not configured.')
+      await executeMetadataButton(consumeButton, { heldSaleId: id })
       setModal(null)
       setMessage('Held sale resumed.')
     } catch (err) { setError(err?.message || 'Unable to resume sale') }
   }
-
-
 
   const searchCustomers = async (value) => {
     setCustomerSearch(value)
@@ -950,12 +945,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       return
     }
     if (type === 'crud') {
-      if (config.uiHandler === 'hold_sale') return holdSale()
-      if (config.uiHandler === 'resume_sale') return openHeld()
       if (config.modal) setModal(config.modal)
       return
     }
     if (type === 'workflow') {
+      if (button.button_key === 'till_hold') return holdSale(button)
       if (config.policyEvent) {
         const allowed = await runReceiptPolicy(config.policyEvent)
         if (!allowed) return
