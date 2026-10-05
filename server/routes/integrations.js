@@ -206,6 +206,8 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           storeId,
           store_id,
           enabled,
+          connectorConfiguration,
+          connector_configuration,
         } = req.body || {};
 
         if (!name || typeof name !== "string" || !name.trim()) {
@@ -245,8 +247,8 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
 
         const result = await db(
           `INSERT INTO integration_connections
-             (company_id, store_id, name, provider_name, integration_type, base_url, auth_type, credentials_encrypted, enabled, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             (company_id, store_id, name, provider_name, integration_type, base_url, auth_type, credentials_encrypted, connector_configuration, enabled, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
            RETURNING *`,
           [
             req.user.companyId,
@@ -257,6 +259,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
             url,
             auth,
             encryptCredentials(credentials ?? null),
+            connectorConfiguration ?? connector_configuration ?? {},
             enabled !== false,
             req.user.id,
           ]
@@ -300,6 +303,8 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           storeId,
           store_id,
           enabled,
+          connectorConfiguration,
+          connector_configuration,
         } = req.body || {};
 
         const nextAuthType = authType ?? auth_type ?? existing.auth_type;
@@ -372,6 +377,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           }
           set("store_id", nextStoreId);
         }
+        if (connectorConfiguration !== undefined || connector_configuration !== undefined) set("connector_configuration", connectorConfiguration ?? connector_configuration ?? {});
         if (enabled !== undefined) set("enabled", Boolean(enabled));
 
         if (updates.length === 0) {
