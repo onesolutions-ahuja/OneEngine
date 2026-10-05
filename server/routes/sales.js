@@ -529,18 +529,11 @@ export default function createSalesRouter({
          *
          * `payments` in the request body is an optional array of
          * { paymentMethod, amount } lines (split tender). When absent, the
-         * single `paymentMethod` tender is used exactly as before — cash,
-         * card, customer_credit, loyalty redemption and gift-card flows are
-         * untouched. Validation rules:
-         *   - each line needs a known method and a positive amount;
+         * single `paymentMethod` tender is used when no split is supplied. Validation rules:\n         *   - each line needs a known method and a positive amount;
          *   - methods must not repeat (one row per tender);
          *   - the tender lines must reconcile EXACTLY to the sale total
          *     (pennies) — over/underpayment is rejected. Cash change is a
          *     display concern handled by the till UI, never a split line.
-         *   - customer_credit and loyalty redemption are whole-sale tenders:
-         *     they may not be mixed with other methods (credit exposes the
-         *     full sale amount on the ledger; loyalty redemption already
-         *     pre-commit debits its points against the full total).
          */
         const allowedPaymentMethods = await getAllowedPaymentMethodCodes(db, req.user.companyId, { storeId: req.user.storeId, tillId: req.user.tillId });
         const paymentMethodDefinitions = await listPaymentMethods(db, req.user.companyId, { activeOnly: true });
@@ -1407,13 +1400,7 @@ export default function createSalesRouter({
         /*
           * Payment records — one row per tender.
          *
-         * With a validated split (`payments` array) every line is persisted
-         * with its own method and amount (reconciliation already enforced
-         * above). Without one, the historic single tender is written exactly
-         * as before: loyalty redemption relabels the row "loyalty" (the
-         * redemption debit lives in the loyalty ledger), and credit/other
-         * methods pass through unchanged.
-         */
+         * Each validated tender is persisted generically; business-specific\n         * payment behaviour belongs to the configured payment Flow.\n         */
         const tenderRows = paymentLines
           ? paymentLines.map((line) => [saleId, line.method, line.amount])
           : [[saleId, paymentMethod, Number(total) || 0]];
@@ -1447,185 +1434,6 @@ export default function createSalesRouter({
         }
 
 
-        /*
-         * T10Y — Customer credit sale. Runs INSIDE the sale transaction so
-         * the ledger entry commits or rolls back with the sale itself.
-         * Cash/card/other flows are untouched. `amount` stores the unsigned
-         * magnitude (major units); the direction comes from transaction_type.
-         */
-        if (paymentMethod === "customer_credit") {
-          if (!customerId) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "A customer is required for credit sales",
-            });
-          }
-
-          const creditCustomer = await client.query(
-            `SELECT credit_enabled, credit_limit, maximum_credit_age_days FROM customers WHERE id = $1 AND company_id = $2 FOR UPDATE`,
-            [customerId, req.user.companyId]
-          );
-          if (!creditCustomer.rows.length) {
-            await client.query("ROLLBACK");
-            return res.status(404).json({ success: false, message: "Customer was not found" });
-          }
-          const cc = creditCustomer.rows[0];
-          if (cc.credit_enabled !== true) {
-            await client.query("ROLLBACK");
-            return res.status(409).json({
-              success: false,
-              message: "Customer credit is not enabled for this customer",
-            });
-          }
-
-          const saleTotalCents = Math.round((Number(total) || 0) * 100);
-          const signedSum = await client.query(
-            `
-            SELECT COALESCE(SUM(amount * CASE WHEN transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END), 0) AS outstanding
-            FROM customer_credit_ledger
-            WHERE company_id = $1 AND customer_id = $2
-            `,
-            [req.user.companyId, customerId]
-          );
-          const currentOutstandingCents = Math.round(Number(signedSum.rows[0].outstanding || 0) * 100);
-          const limitCents = Math.round((Number(cc.credit_limit) || 0) * 100);
-          let limitExecution;
-          try {
-            limitExecution = await executeSystemWorkflow({
-              db,
-              companyId: req.user.companyId,
-              userId: req.user.id || null,
-              systemKey: "flow:customer.credit.limit.check",
-              req,
-              storeId: req.user.storeId || null,
-              input: {
-                currentBalanceCents: currentOutstandingCents,
-                saleAmountCents: saleTotalCents,
-                creditLimitCents: cc.credit_limit == null ? null : limitCents,
-              },
-              source: {
-                type: "api",
-                method: req.method,
-                path: req.originalUrl || req.path,
-                capability: "customer.credit.limit.check",
-              },
-            });
-          } catch (error) {
-            if (error?.code !== "CUSTOM_FLOW_ERROR") throw error;
-            await client.query("ROLLBACK");
-            return res.status(409).json({
-              success: false,
-              message: error.message || "Customer credit limit Flow blocked this sale",
-            });
-          }
-          if (limitExecution?.status !== "COMPLETED") {
-            await client.query("ROLLBACK");
-            return res.status(503).json({
-              success: false,
-              message: "Customer credit limit Flow did not complete",
-            });
-          }
-          const limitCheck = limitExecution?.result;
-          const allowed = typeof limitCheck?.allowed === "boolean"
-            ? limitCheck.allowed
-            : limitCheck?.variableName === "allowed" && typeof limitCheck.value === "boolean"
-              ? limitCheck.value
-              : null;
-          if (allowed !== true) {
-            await client.query("ROLLBACK");
-            if (allowed !== false) {
-              return res.status(503).json({
-                success: false,
-                message: "Customer credit limit Flow did not return a valid decision",
-              });
-            }
-            const availableCreditCents = Number.isFinite(Number(limitCheck.availableCreditCents))
-              ? Number(limitCheck.availableCreditCents)
-              : limitCents - currentOutstandingCents;
-            return res.status(409).json({
-              success: false,
-              message: `Credit limit exceeded. Available credit: £${(availableCreditCents / 100).toFixed(2)}`,
-            });
-          }
-
-          const transactionExecution = await executeSystemWorkflow({
-            db,
-            companyId: req.user.companyId,
-            userId: req.user.id || null,
-            systemKey: "flow:customer.credit.transaction.build_sale",
-            req,
-            storeId: req.user.storeId || null,
-            input: {
-              saleId,
-              customerId,
-              companyId: req.user.companyId,
-              storeId: req.user.storeId,
-              amount: Number(total) || 0,
-              totalTax: Number(tax) || 0,
-              netAmount: Number(subtotal) || 0,
-              grossAmount: Number(total) || 0,
-              userId: req.user.id,
-              receiptNumber: sale.rows[0].receipt_number,
-            },
-            source: {
-              type: "api",
-              method: req.method,
-              path: req.originalUrl || req.path,
-              capability: "customer.credit.transaction.build_sale",
-            },
-          });
-          if (transactionExecution?.status !== "COMPLETED") {
-            await client.query("ROLLBACK");
-            return res.status(503).json({
-              success: false,
-              message: "Customer credit sale Flow did not complete",
-            });
-          }
-          const ledgerTx = transactionExecution?.result?.transaction;
-          const expectedAmount = Math.round((Number(total) || 0) * 100);
-          const validLedgerTx = ledgerTx
-            && ledgerTx.transaction_type === "credit_sale"
-            && String(ledgerTx.company_id) === String(req.user.companyId)
-            && String(ledgerTx.customer_id) === String(customerId)
-            && ledgerTx.reference_type === "sale"
-            && String(ledgerTx.reference_id) === String(saleId)
-            && String(ledgerTx.store_id || "") === String(req.user.storeId || "")
-            && String(ledgerTx.created_by || "") === String(req.user.id || "")
-            && Math.round(Number(ledgerTx.amount) * 100) === expectedAmount
-            && Math.round(Number(ledgerTx.net_amount) * 100) === Math.round((Number(subtotal) || 0) * 100)
-            && Math.round(Number(ledgerTx.vat_amount) * 100) === Math.round((Number(tax) || 0) * 100)
-            && Math.round(Number(ledgerTx.gross_amount) * 100) === expectedAmount;
-          if (!validLedgerTx) {
-            await client.query("ROLLBACK");
-            return res.status(503).json({
-              success: false,
-              message: "Customer credit sale Flow did not return a valid ledger transaction",
-            });
-          }
-          await client.query(
-            `
-            INSERT INTO customer_credit_ledger
-              (company_id, store_id, customer_id, transaction_type, amount, reference_type, reference_id, description, net_amount, vat_amount, gross_amount, idempotency_key, created_by)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-            `,
-            [
-              ledgerTx.company_id,
-              ledgerTx.store_id,
-              ledgerTx.customer_id,
-              ledgerTx.transaction_type,
-              ledgerTx.amount,
-              ledgerTx.reference_type,
-              ledgerTx.reference_id,
-              ledgerTx.description,
-              ledgerTx.net_amount,
-              ledgerTx.vat_amount,
-              ledgerTx.gross_amount,
-              clientRequestId ? `credit_sale:${clientRequestId.toLowerCase()}` : null,
-              ledgerTx.created_by,
-            ]
-          );
-        }
 
         if (typeof canonicalTransactionWriter === "function") {
           await canonicalTransactionWriter(client, {
