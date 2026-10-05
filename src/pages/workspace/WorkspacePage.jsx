@@ -302,6 +302,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
     const key = objectKey(object)
     setLoadingRows(true)
     setError('')
+    let fallbackRows = []
     try {
       const [workspaceRes, permissionRes] = await Promise.all([
         cachedGet(`/api/platform/runtime/objects/${encodeURIComponent(key)}/workspace`, { cacheKey: `workspace:meta:${key}`, forceRefresh: false }),
@@ -311,6 +312,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       const listViewId = meta?.defaultListView?.id || ''
       const cachedRecords = await readLazyCache(`workspace:records:${key}:${listViewId || 'default'}`)
       const cachedRows = Array.isArray(cachedRecords?.value?.rows) ? cachedRecords.value.rows : []
+      fallbackRows = cachedRows
       if (cachedRows.length) setRows(cachedRows)
 
       const recordState = await syncWorkspaceRecordCache(key, listViewId)
@@ -338,10 +340,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         return first
       })
     } catch (err) {
-      const cachedRecords = await readLazyCache(`workspace:records:${key}:default`)
-      const cachedRows = Array.isArray(cachedRecords?.value?.rows) ? cachedRecords.value.rows : []
-      if (cachedRows.length) {
-        setRows(cachedRows)
+      if (fallbackRows.length) {
+        setRows(fallbackRows)
         setError('Offline — showing locally cached records.')
       } else {
         setFields([])
