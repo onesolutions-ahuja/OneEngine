@@ -113,3 +113,18 @@ test('tracked session assurance parameter is explicitly typed for PostgreSQL', a
   const source = await read('../server/services/identitySecurity.js')
   assert.match(source, /\$9::text,CASE WHEN \$9::text IS NULL/)
 })
+
+
+test('company entitlement sources are queried in parallel', async () => {
+  const source = await read('../server/services/licensing.js')
+  assert.match(source, /const bundleResultPromise = db\(/)
+  assert.match(source, /const packageResultPromise = db\(/)
+  assert.match(source, /const tierEntitlementsPromise = db\(/)
+  assert.match(source, /const licensedPackageResultPromise = db\(/)
+  assert.match(source, /const packageSourcesPromise = db\(/)
+})
+
+test('deployment smoke accepts ready health state', async () => {
+  const source = await read('../.github/workflows/deployment-smoke.yml')
+  assert.match(source, /status.*online\|ready/)
+})

@@ -27,7 +27,7 @@ export function mergeEntitlements(value = {}) {
 
 export async function getCompanyEntitlements(db, companyId) {
   if (!companyId) return {};
-  const result = await db(
+  const resultPromise = db(
     `SELECT l.active AS licence_active, l.starts_at AS licence_starts_at, l.expires_at AS licence_expires_at,
             COALESCE(a.active, true) AS allocation_active,
             COALESCE(a.starts_at, l.starts_at) AS starts_at,
@@ -42,16 +42,7 @@ export async function getCompanyEntitlements(db, companyId) {
       GROUP BY l.id, a.active, a.starts_at, a.expires_at`,
     [companyId]
   );
-  const row = result.rows[0];
-  const licenceActive = row?.licence_active ?? row?.active;
-  const allocationActive = row?.allocation_active ?? true;
-  const startsAt = row?.starts_at ?? row?.licence_starts_at;
-  const expiresAt = row?.expires_at ?? row?.licence_expires_at;
-  const activeLicence = licenceActive === true && allocationActive === true &&
-    !(startsAt && new Date(startsAt) > new Date()) &&
-    !(expiresAt && new Date(expiresAt) <= new Date());
-  const entitlements = activeLicence ? mergeEntitlements(row.entitlements) : {};
-  const bundleResult = await db(
+  const bundleResultPromise = db(
     `SELECT be.entitlement_key, be.enabled
        FROM company_bundle_assignments a
        JOIN licence_bundles b ON b.id=a.bundle_id AND b.active=true
@@ -62,12 +53,7 @@ export async function getCompanyEntitlements(db, companyId) {
         AND (a.expires_at IS NULL OR a.expires_at>NOW())`,
     [companyId]
   );
-  for (const item of bundleResult.rows) {
-    if (!item.entitlement_key) continue;
-    if (item.enabled === true) entitlements[item.entitlement_key] = true;
-    else if (!(item.entitlement_key in (row?.entitlements || {}))) entitlements[item.entitlement_key] = false;
-  }
-  const packageResult = await db(
+  const packageResultPromise = db(
     `SELECT p.manifest->>'entitlementKey' AS entitlement_key
        FROM company_bundle_assignments a
        JOIN licence_bundles b ON b.id=a.bundle_id AND b.active=true
@@ -83,10 +69,7 @@ export async function getCompanyEntitlements(db, companyId) {
         AND p.manifest->>'entitlementKey' IS NOT NULL`,
     [companyId]
   );
-  for (const item of packageResult.rows) {
-    if (item.entitlement_key) entitlements[item.entitlement_key] = true;
-  }
-  const tierEntitlements = await db(
+  const tierEntitlementsPromise = db(
     `SELECT te.entitlement_key,te.enabled
        FROM company_tier_assignments a
        JOIN licence_tiers t ON t.id=a.tier_id AND t.active=true
@@ -97,12 +80,7 @@ export async function getCompanyEntitlements(db, companyId) {
         AND (a.expires_at IS NULL OR a.expires_at>NOW())`,
     [companyId]
   );
-  for (const item of tierEntitlements.rows) {
-    if (!item.entitlement_key) continue;
-    if (item.enabled === true) entitlements[item.entitlement_key] = true;
-    else if (!(item.entitlement_key in (row?.entitlements || {}))) entitlements[item.entitlement_key] = false;
-  }
-  const licensedPackageResult = await db(
+  const licensedPackageResultPromise = db(
     `SELECT p.manifest->>'entitlementKey' AS entitlement_key
        FROM companies c
       JOIN licences l ON l.id=c.licence_id AND l.active=true
@@ -120,10 +98,7 @@ export async function getCompanyEntitlements(db, companyId) {
         AND p.manifest->>'entitlementKey' IS NOT NULL`,
     [companyId]
   );
-  for (const item of licensedPackageResult.rows) {
-    if (item.entitlement_key) entitlements[item.entitlement_key] = true;
-  }
-  const packageSources = await db(
+  const packageSourcesPromise = db(
     `SELECT p.package_key,p.licence_mode,s.source_type,p.manifest->>'entitlementKey' AS entitlement_key
        FROM company_package_entitlement_sources s
        JOIN package_registry p ON p.id=s.package_id
@@ -134,6 +109,38 @@ export async function getCompanyEntitlements(db, companyId) {
         AND (s.expires_at IS NULL OR s.expires_at>NOW())`,
     [companyId]
   );
+
+  const result = await resultPromise;
+  const row = result.rows[0];
+  const licenceActive = row?.licence_active ?? row?.active;
+  const allocationActive = row?.allocation_active ?? true;
+  const startsAt = row?.starts_at ?? row?.licence_starts_at;
+  const expiresAt = row?.expires_at ?? row?.licence_expires_at;
+  const activeLicence = licenceActive === true && allocationActive === true &&
+    !(startsAt && new Date(startsAt) > new Date()) &&
+    !(expiresAt && new Date(expiresAt) <= new Date());
+  const entitlements = activeLicence ? mergeEntitlements(row.entitlements) : {};
+  const bundleResult = await bundleResultPromise;
+  for (const item of bundleResult.rows) {
+    if (!item.entitlement_key) continue;
+    if (item.enabled === true) entitlements[item.entitlement_key] = true;
+    else if (!(item.entitlement_key in (row?.entitlements || {}))) entitlements[item.entitlement_key] = false;
+  }
+  const packageResult = await packageResultPromise;
+  for (const item of packageResult.rows) {
+    if (item.entitlement_key) entitlements[item.entitlement_key] = true;
+  }
+  const tierEntitlements = await tierEntitlementsPromise;
+  for (const item of tierEntitlements.rows) {
+    if (!item.entitlement_key) continue;
+    if (item.enabled === true) entitlements[item.entitlement_key] = true;
+    else if (!(item.entitlement_key in (row?.entitlements || {}))) entitlements[item.entitlement_key] = false;
+  }
+  const licensedPackageResult = await licensedPackageResultPromise;
+  for (const item of licensedPackageResult.rows) {
+    if (item.entitlement_key) entitlements[item.entitlement_key] = true;
+  }
+  const packageSources = await packageSourcesPromise;
   for (const item of packageSources.rows) {
     if (!item.package_key) continue;
     entitlements[`package:${item.package_key}`] = true;
