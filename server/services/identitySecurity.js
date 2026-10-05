@@ -260,7 +260,9 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId }
        row_to_json(s.*) AS settings,
        row_to_json(us.*) AS state,
        row_to_json(p.*) AS policy,
-       c.timezone AS company_timezone
+       c.timezone AS company_timezone,
+       row_to_json(gp.*) AS google_package,
+       row_to_json(gc.*) AS google_connection
      FROM companies c
      LEFT JOIN identity_security_settings s ON s.company_id=c.id
      LEFT JOIN identity_user_security_state us ON us.user_id=$2
@@ -277,6 +279,26 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId }
                 ap.priority ASC, ap.updated_at DESC
        LIMIT 1
      ) p ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT
+         p0.*,
+         i.status AS installation_status,
+         i.suspended_by_entitlement,
+         i.deactivated_by_user
+       FROM package_registry p0
+       LEFT JOIN company_package_installations i
+         ON i.package_id=p0.id AND i.company_id=$1
+       WHERE p0.package_key='one_connect_google' AND p0.active=TRUE
+       LIMIT 1
+     ) gp ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT *
+       FROM integration_connections ic
+       WHERE ic.company_id=$1
+         AND ic.connector_package_key='one_connect_google'
+       ORDER BY ic.updated_at DESC
+       LIMIT 1
+     ) gc ON TRUE
      WHERE c.id=$1
      LIMIT 1`,
     [companyId, userId, roleId || null]
@@ -289,6 +311,8 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId }
     state: row.state || null,
     policy: row.policy || null,
     companyTimezone: row.company_timezone || null,
+    googlePackage: row.google_package || null,
+    googleConnection: row.google_connection || null,
   };
 }
 
