@@ -1302,7 +1302,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     })();
     const preflightStartedAt = Date.now();
     const securityContext = user.company_id
-      ? await loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
+      ? await loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id, ip: requestIp })
       : { settings: null, state: null, policy: null, companyTimezone: null, googlePackage: null, googleConnection: null };
     const googleRuntime = user.company_id
       ? await resolveGoogleConnectPasswordLoginRuntime(
@@ -1385,12 +1385,8 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    const loginPermissionUser = {
-      id: user.id,
-      companyId: user.company_id || null,
-    };
     const authorizationStartedAt = Date.now();
-    const [access, rolePermissionResult, permissionSets, assurancePolicy, trustedDevice] = await Promise.all([
+    const [access, assurancePolicy, trustedDevice] = await Promise.all([
       accessDecision(loginDb, {
         companyId: user.company_id,
         userId: user.id,
@@ -1399,17 +1395,12 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         settingsOverride: securitySettings,
         policyOverride: accessPolicy,
         companyTimezoneOverride: companyTimezone,
+        trustedNetworkOverride: securityContext.trustedNetwork,
+        loginAllowedOverride: {
+          matches: securityContext.loginAllowedMatches,
+          count: securityContext.loginAllowedCount,
+        },
       }),
-      user.role_id
-        ? loginPool.query(
-            `SELECT p.code
-               FROM role_permissions rp
-               JOIN permissions p ON p.id=rp.permission_id
-              WHERE rp.role_id=$1`,
-            [user.role_id]
-          )
-        : Promise.resolve({ rows: [] }),
-      loadEffectivePermissionSets(loginDb, loginPermissionUser),
       user.company_id
         ? loadEffectiveAssurance(
             loginDb,
@@ -1434,10 +1425,9 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       return res.status(403).json({ success: false, code: access.code, message: access.reason });
     }
 
-    const effectivePermissions = [...new Set([
-      ...rolePermissionResult.rows.map((row) => row.code),
-      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
-    ])];
+    const effectivePermissions = [...new Set(
+      Array.isArray(securityContext.permissionCodes) ? securityContext.permissionCodes : []
+    )];
 
     let passwordExpired = false;
     if (securitySettings && Number(securitySettings.password_expiry_days || 0) > 0) {
