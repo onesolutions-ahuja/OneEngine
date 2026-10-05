@@ -781,7 +781,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const recordPettyCash = async (amount, reason) => {
-    if (!till?.id) return setError('Open a till before recording petty cash.')
     const button = buttons.find((row) => row.button_key === 'till_petty_cash_submit')
     if (!button) return setError('Petty cash Flow is not configured.')
     try {
@@ -1080,7 +1079,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
               <div className="is-total"><span>Total</span><strong>{money(total, currency)}</strong></div>
               <label className="till-cash-input"><Banknote size={15}/><input value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Cash received"/></label>
               <div className="till-pay-grid">
-                {paymentButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={(_, item, button) => executeTillTarget(button, item)} disabled={busy || (!basket.length && !miscLines.length)} className={button?.config?.paymentMode === 'cash' ? 'till-pay-cash' : 'till-pay-card'}/>)}
+                {paymentButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={(_, item, button) => executeTillTarget(button, item)} disabled={busy} className={button?.config?.paymentMode === 'cash' ? 'till-pay-cash' : 'till-pay-card'}/>)}
               </div>
             </div>
           </aside>
@@ -1214,7 +1213,7 @@ function ModifierPicker({ product, groups, onClose, onConfirm }) {
 function DiscountForm({ value, onApply }) {
   const [type, setType] = useState(value.type || 'percent')
   const [amount, setAmount] = useState(value.value || '')
-  return <div className="till-form"><label>Type<select value={type} onChange={(e) => setType(e.target.value)}><option value="percent">Percentage</option><option value="fixed">Fixed amount</option></select></label><label>Value<input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} min="0" step="0.01"/></label><button type="button" className="till-primary" onClick={() => onApply({ type, value: Math.max(0, Number(amount || 0)) })}>Apply Discount</button></div>
+  return <div className="till-form"><label>Type<select value={type} onChange={(e) => setType(e.target.value)}><option value="percent">Percentage</option><option value="fixed">Fixed amount</option></select></label><label>Value<input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} min="0" step="0.01"/></label><button type="button" className="till-primary" onClick={() => onApply({ type, value: Number(amount || 0) })}>Apply Discount</button></div>
 }
 
 function MiscForm({ vatEnabled, defaultVatRate, onAdd }) {
@@ -1222,7 +1221,7 @@ function MiscForm({ vatEnabled, defaultVatRate, onAdd }) {
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [vatRate, setVatRate] = useState(defaultVatRate)
-  return <div className="till-form"><label>Description<input value={description} onChange={(e) => setDescription(e.target.value)}/></label><label>Price<input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}/></label><label>Quantity<input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)}/></label><label>VAT rate<input type="number" step="0.01" disabled={!vatEnabled} value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))}/></label><button type="button" className="till-primary" onClick={() => { if (!description.trim() || Number(price) <= 0 || Number(quantity) <= 0) return; onAdd({ description: description.trim(), price: Number(price), quantity: Number(quantity), vatRate: Number(vatRate) / 100 }) }}>Add to Sale</button></div>
+  return <div className="till-form"><label>Description<input value={description} onChange={(e) => setDescription(e.target.value)}/></label><label>Price<input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}/></label><label>Quantity<input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)}/></label><label>VAT rate<input type="number" step="0.01" disabled={!vatEnabled} value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))}/></label><button type="button" className="till-primary" onClick={() => onAdd({ description: description.trim(), price: Number(price), quantity: Number(quantity), vatRate: Number(vatRate) / 100 })}>Add to Sale</button></div>
 }
 
 function PettyForm({ onSubmit }) {
