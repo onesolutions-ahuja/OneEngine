@@ -394,7 +394,13 @@ const pool = primaryDatabaseUrl
       connectionTimeoutMillis: 15000,
       keepAlive: true,
       keepAliveInitialDelayMillis: 10_000,
-      max: Math.max(2, Math.min(10, Number.parseInt(process.env.PG_POOL_MAX || "5", 10) || 5)),
+      // Retain warm TLS/database sessions across normal idle periods. The
+      // login critical path fans out into identity, security and RBAC reads;
+      // dropping every idle connection forced remote TLS setup back into the
+      // first login after a short pause.
+      min: Math.min(3, Math.max(2, Number.parseInt(process.env.PG_POOL_MIN || "3", 10) || 3)),
+      idleTimeoutMillis: Math.max(60_000, Math.min(300_000, Number.parseInt(process.env.PG_POOL_IDLE_MS || "300000", 10) || 300_000)),
+      max: Math.max(3, Math.min(10, Number.parseInt(process.env.PG_POOL_MAX || "5", 10) || 5)),
     })
   : null;
 
@@ -2517,7 +2523,11 @@ async function startServer() {
     console.log(`onePOS: checking database connection host=${primaryDatabaseTarget?.host || "not-configured"} database=${primaryDatabaseTarget?.database || "not-configured"} sslmode=${primaryDatabaseTarget?.sslmode || "not-configured"}`);
     await db("SELECT NOW()");
     await initializeDatabase(pool, { bootstrapSuperadmin: false });
-    console.log("onePOS: core database ready");
+    const warmConnections = await Promise.all(
+      Array.from({ length: Math.min(3, pool.options?.max || 3) }, () => pool.connect())
+    );
+    warmConnections.forEach((client) => client.release());
+    console.log(`onePOS: core database ready (pool warm=${warmConnections.length})`);
 
     // Canonical development tenant seed: a clean database must become usable
     // without manual SQL or copied production data.
