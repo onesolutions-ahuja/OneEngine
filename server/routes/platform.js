@@ -7793,11 +7793,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
 
       const virtualRecord = {
+        ...context,
         id: null,
         company_id: req.user.companyId || null,
-        store_id: req.user.storeId || context.storeId || null,
-        terminal_id: context.terminalId || null,
-        customer_id: context.customerId || null,
+        store_id: req.user.storeId || context.storeId || context.store_id || null,
+        terminal_id: context.terminalId || context.terminal_id || null,
+        customer_id: context.customerId || context.customer_id || null,
         subtotal: Number(context.subtotal || 0),
         tax: Number(context.tax || context.vat || 0),
         discount: Number(context.discount || 0),
