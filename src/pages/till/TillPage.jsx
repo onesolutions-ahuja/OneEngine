@@ -511,6 +511,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       tax: Number(vat || 0),
       discount: Number(discountAmount || 0),
       total: Number(total || 0),
+      line_count: Number(basket.length + miscLines.length),
       status: 'COMPLETED',
       offline_created: false,
       sync_status: 'SYNCED',
