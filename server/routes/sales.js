@@ -6,7 +6,7 @@ import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } 
 import { getRequestPool } from "../services/tenantDatabase.js";
 import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes, listPaymentMethods } from "../services/paymentMethods.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeCapabilityWorkflow } from "../services/systemWorkflowRuntime.js";
 import { executeWorkflowActions } from "../services/platformWorkflow.js";
 import { evaluateValidationRules } from "../services/platformValidation.js";
 
@@ -674,11 +674,11 @@ export default function createSalesRouter({
           }
         }
 
-        const stockValidation = await executeSystemWorkflow({
+        const stockValidation = await executeCapabilityWorkflow({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
-          systemKey: "flow:till.stock.validate",
+          capabilityType: "action", capabilityKey: "TILL_STOCK_VALIDATE",
           req,
           input: {
             hasShortfall: insufficientStockLines.length > 0,
@@ -699,11 +699,11 @@ export default function createSalesRouter({
         const kioskAgeApproved = kioskContext
           ? Boolean(kioskContext.age_approved_until && new Date(kioskContext.age_approved_until).getTime() > Date.now())
           : false;
-        const ageValidation = await executeSystemWorkflow({
+        const ageValidation = await executeCapabilityWorkflow({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
-          systemKey: "flow:till.age.verify",
+          capabilityType: "action", capabilityKey: "TILL_AGE_VERIFY",
           req,
           input: {
             requiresAgeVerification: basketHasAgeRestricted,
@@ -865,11 +865,11 @@ export default function createSalesRouter({
           });
         }
 
-        const totalsExecution = await executeSystemWorkflow({
+        const totalsExecution = await executeCapabilityWorkflow({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
-          systemKey: "flow:sale.totals.calculate",
+          capabilityType: "action", capabilityKey: "SALE_TOTALS_CALCULATE",
           req,
           input: {
             basket: basketForTotals,
@@ -890,11 +890,11 @@ export default function createSalesRouter({
         total = roundCurrency(engine.total);
 
         if (paymentLines) {
-          const splitValidation = await executeSystemWorkflow({
+          const splitValidation = await executeCapabilityWorkflow({
             db,
             companyId: req.user.companyId,
             userId: req.user.id || null,
-            systemKey: "flow:till.split.payment.validate",
+            capabilityType: "action", capabilityKey: "TILL_SPLIT_PAYMENT_VALIDATE",
             req,
             input: {
               payments: paymentLines.map((line) => ({
@@ -1099,7 +1099,7 @@ export default function createSalesRouter({
             }
           }
           for (const stockLine of stockLines) {
-            const movementExecution = await executeSystemWorkflow({
+            const movementExecution = await executeCapabilityWorkflow({
               db: (sql, params = []) => client.query(sql, params),
               companyId: req.user.companyId,
               userId: req.user.id || null,
