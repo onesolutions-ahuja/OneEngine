@@ -1120,7 +1120,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       {modal === 'petty' ? <Modal title={meta.petty?.label || 'Petty Cash'} onClose={() => setModal(null)}><PettyForm onSubmit={recordPettyCash}/></Modal> : null}
       {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
-      {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError}/></Modal> : null}
+      {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError} onExecute={executeMetadataButton}/></Modal> : null}
       {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingCheckout(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingCheckout || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingCheckout(null); setModal(null); if (pending?.paymentMethod) window.setTimeout(() => completeSale(pending.paymentMethod, pending.options || { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
       {modal === 'payment' ? <Modal title="Payment" onClose={() => { setPaymentModalMethod(''); setModal(null) }} wide><PaymentSheet total={total} methods={paymentMethods} initialMethod={paymentModalMethod} onPay={async (method, paymentInputs) => {
         if (method === 'split') await completeSale(method, { payments: paymentInputs?.payments || [] })
@@ -1267,7 +1267,7 @@ function PriceOverrideForm({ item, onApply }) {
   return <div className="till-form"><label>New price<input type="number" min="0.01" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}/></label><label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)}/></label><button type="button" className="till-primary" onClick={() => Number(price) > 0 && onApply(Number(price), reason.trim())}>Apply Price</button></div>
 }
 
-function TillSessionPanel({ till, buttons, currency, onChanged, onMessage, onError }) {
+function TillSessionPanel({ till, buttons, currency, onChanged, onMessage, onError, onExecute }) {
   const [openingCash, setOpeningCash] = useState('')
   const [countedCash, setCountedCash] = useState('')
   const [cashAmount, setCashAmount] = useState('')
@@ -1277,57 +1277,24 @@ function TillSessionPanel({ till, buttons, currency, onChanged, onMessage, onErr
   const terminalId = sessionUser.tillId || sessionUser.till_id || sessionUser.terminalId || sessionUser.terminal_id || null
   const userId = sessionUser.id || sessionUser.userId || null
 
-  const open = async () => {
+  const runFlow = async (button, inputs, successMessage) => {
+    if (!button) return
     try {
-      if (!terminalId || !userId) throw new Error('A till and user assignment are required.')
-      const response = await apiRequest('/api/platform/objects/till_session/records', {
-        method: 'POST',
-        body: JSON.stringify({ data: {
-          terminal_id: terminalId,
-          user_id: userId,
-          opening_cash: Number(openingCash || 0),
-          status: 'open',
-        } }),
-      })
-      if (response?.success === false) throw new Error(response?.message || 'Unable to open till')
-      await onChanged?.(); onMessage?.('Till opened.')
-    } catch (err) { onError?.(err?.message || 'Unable to open till') }
-  }
-  const movement = async (type) => {
-    if (!till?.id || Number(cashAmount) <= 0 || !userId) return
-    try {
-      const response = await apiRequest('/api/platform/objects/cash_ledger/records', {
-        method: 'POST',
-        body: JSON.stringify({ data: {
-          till_session_id: till.id,
-          user_id: userId,
-          type,
-          amount: Number(cashAmount),
-          reason: reason || null,
-        } }),
-      })
-      if (response?.success === false) throw new Error(response?.message || 'Unable to record cash movement')
-      setCashAmount(''); setReason(''); await onChanged?.(); onMessage?.('Cash movement recorded.')
-    } catch (err) { onError?.(err?.message || 'Unable to record cash movement') }
-  }
-  const close = async () => {
-    try {
-      if (!till?.id) return
-      const response = await apiRequest(`/api/platform/objects/till_session/records/${encodeURIComponent(till.id)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ data: {
-          status: 'closed',
-          closing_cash: Number(countedCash || 0),
-          closed_by: userId || null,
-          closed_at: new Date().toISOString(),
-        } }),
-      })
-      if (response?.success === false) throw new Error(response?.message || 'Unable to close till')
-      await onChanged?.(); onMessage?.('Till closed.')
-    } catch (err) { onError?.(err?.message || 'Unable to close till') }
+      await onExecute?.(button, inputs)
+      setCashAmount('')
+      setReason('')
+      await onChanged?.()
+      onMessage?.(successMessage)
+    } catch (err) {
+      onError?.(err?.message || 'Unable to execute Till Flow')
+    }
   }
 
-  if (!till) return <div className="till-form"><label>Opening cash<input type="number" step="0.01" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)}/></label>{meta.open_till ? <MetaButton button={meta.open_till} onAction={open}/> : null}</div>
+  if (!till) return <div className="till-form"><label>Opening cash<input type="number" step="0.01" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)}/></label>{meta.open_till ? <MetaButton button={meta.open_till} onAction={() => {
+    if (!terminalId || !userId) return onError?.('A till and user assignment are required.')
+    return runFlow(meta.open_till, { terminalId, userId, openingCash: Number(openingCash || 0) }, 'Till opened.')
+  }}/> : null}</div>
 
-  return <div className="till-session-panel"><div className="till-session-stats"><div><span>Opening cash</span><strong>{money(till.opening_cash ?? till.openingCash, currency)}</strong></div><div><span>Cash sales</span><strong>{money(till.cash_sales ?? till.cashSalesTotal, currency)}</strong></div><div><span>Cash in</span><strong>{money(till.cash_in_total ?? till.cashInTotal, currency)}</strong></div><div><span>Cash out</span><strong>{money(till.cash_out_total ?? till.cashOutTotal, currency)}</strong></div></div><div className="till-form is-row"><label>Amount<input type="number" step="0.01" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)}/></label><label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)}/></label>{meta.cash_in ? <MetaButton button={meta.cash_in} onAction={() => movement('cash_in')}/> : null}{meta.cash_out ? <MetaButton button={meta.cash_out} onAction={() => movement('cash_out')}/> : null}</div><div className="till-form is-row"><label>Counted cash<input type="number" step="0.01" value={countedCash} onChange={(e) => setCountedCash(e.target.value)}/></label>{meta.close_till ? <MetaButton button={meta.close_till} onAction={close}/> : null}</div></div>
+  return <div className="till-session-panel"><div className="till-session-stats"><div><span>Opening cash</span><strong>{money(till.opening_cash ?? till.openingCash, currency)}</strong></div><div><span>Cash sales</span><strong>{money(till.cash_sales ?? till.cashSalesTotal, currency)}</strong></div><div><span>Cash in</span><strong>{money(till.cash_in_total ?? till.cashInTotal, currency)}</strong></div><div><span>Cash out</span><strong>{money(till.cash_out_total ?? till.cashOutTotal, currency)}</strong></div></div><div className="till-form is-row"><label>Amount<input type="number" step="0.01" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)}/></label><label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)}/></label>{meta.cash_in ? <MetaButton button={meta.cash_in} onAction={() => Number(cashAmount) > 0 && userId && runFlow(meta.cash_in, { tillSessionId: till.id, userId, amount: Number(cashAmount), reason: reason || null }, 'Cash movement recorded.')}/> : null}{meta.cash_out ? <MetaButton button={meta.cash_out} onAction={() => Number(cashAmount) > 0 && userId && runFlow(meta.cash_out, { tillSessionId: till.id, userId, amount: Number(cashAmount), reason: reason || null }, 'Cash movement recorded.')}/> : null}</div><div className="till-form is-row"><label>Counted cash<input type="number" step="0.01" value={countedCash} onChange={(e) => setCountedCash(e.target.value)}/></label>{meta.close_till ? <MetaButton button={meta.close_till} onAction={() => runFlow(meta.close_till, { tillSessionId: till.id, userId, countedCash: Number(countedCash || 0), closedAt: new Date().toISOString() }, 'Till closed.')}/> : null}</div></div>
 }
+
