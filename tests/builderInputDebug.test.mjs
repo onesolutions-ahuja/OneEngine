@@ -33,6 +33,6 @@ test('failed database action keeps the original error when execution transaction
   };
   const traces = [];
   const traceDb = async (query, params) => { traces.push([query, params]); return { rows: [{ id: 'step-run' }] }; };
-  await assert.rejects(executeWorkflowActions({ actions: [{ id: 'create', key: 'CREATE_RECORD', objectKey: 'product', fieldValues: { name: null } }], db: executionDb, traceDb, runId: 'run', companyId: 'company', req: { user: { companyId: 'company', roleId: 'role' }, _workflowEffectivePermissionSets: [] }, debugMode: true }), /null value in column name/);
+  await assert.rejects(executeWorkflowActions({ actions: [{ id: 'create', key: 'CREATE_RECORD', objectKey: 'product', fieldValues: { name: null } }], db: executionDb, traceDb, runId: 'run', companyId: 'company', req: { user: { companyId: 'company', roleId: 'role', permissions: ['workflow.execute'] }, _workflowEffectivePermissionSets: [] }, debugMode: true }), /null value in column name/);
   assert.ok(traces.some(([query]) => query.includes("status='FAILED'")));
 });
