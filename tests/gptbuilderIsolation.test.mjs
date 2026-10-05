@@ -1316,3 +1316,17 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 3 Manager supports grouped resource lifecycle and unused filtering', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /function ManagerResourceDialog\(/)
+  assert.match(page, /editing \? 'Edit Resource' : 'New Resource'/)
+  assert.match(page, /Unused Resources/)
+  assert.match(page, /const groupedResources = MANAGER_RESOURCE_TYPES/)
+  assert.match(page, /Used in \$\{usage\.length\}/)
+  assert.match(page, /onEditResource/)
+  assert.match(page, /onDeleteResource/)
+  assert.match(page, /No unused resources found\./)
+  assert.doesNotMatch(page.slice(page.indexOf('function ManagerResourceDialog('), page.indexOf('function ManagerPanel(')), /Apex-Defined/)
+})
