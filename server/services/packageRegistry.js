@@ -2525,6 +2525,47 @@ export function packageDefinition(entry) {
             { apiName: "initial_value", label: "Initial Value", fieldType: "currency", sourceColumn: "initial_value", writable: false },
             { apiName: "expires_at", label: "Expires", fieldType: "datetime", sourceColumn: "expires_at", writable: false },
             { apiName: "issued_at", label: "Issued", fieldType: "datetime", sourceColumn: "issued_at", writable: false }
+          ]},
+          { objectKey: "promotion", label: "Promotion", pluralLabel: "Promotions", sourceTable: "promotions", metadataScope: "global", fields: [
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "discount_type", label: "Discount Type", fieldType: "picklist", sourceColumn: "discount_type", writable: true, options: ["percent","fixed"] },
+            { apiName: "discount_value", label: "Discount Value", fieldType: "decimal", sourceColumn: "discount_value", writable: true },
+            { apiName: "starts_at", label: "Starts", fieldType: "datetime", sourceColumn: "starts_at", writable: true },
+            { apiName: "ends_at", label: "Ends", fieldType: "datetime", sourceColumn: "ends_at", writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
+          ]},
+          { objectKey: "price_list", label: "Price List", pluralLabel: "Price Lists", sourceTable: "price_lists", metadataScope: "global", fields: [
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "channel", label: "Channel", fieldType: "text", sourceColumn: "channel", writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
+          ]},
+          { objectKey: "stock_return", label: "Stock Return", pluralLabel: "Stock Returns", sourceTable: "stock_returns", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
+            { apiName: "return_type", label: "Return Type", fieldType: "picklist", sourceColumn: "return_type", writable: false, options: ["CUSTOMER","SUPPLIER"] },
+            { apiName: "return_number", label: "Return Number", fieldType: "text", sourceColumn: "return_number", writable: false },
+            { apiName: "sale_id", label: "Sale", fieldType: "lookup", sourceColumn: "sale_id", writable: false },
+            { apiName: "purchase_id", label: "Purchase", fieldType: "lookup", sourceColumn: "purchase_id", writable: false },
+            { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", sourceColumn: "supplier_id", writable: false },
+            { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: false, options: ["COMPLETED","CANCELLED"] },
+            { apiName: "refund_amount", label: "Refund Amount", fieldType: "currency", sourceColumn: "refund_amount", writable: false },
+            { apiName: "reason", label: "Reason", fieldType: "text", sourceColumn: "reason", writable: false },
+            { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+          ]},
+          { objectKey: "store", label: "Store", pluralLabel: "Stores", sourceTable: "stores", metadataScope: "global", fields: [
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "code", label: "Code", fieldType: "text", sourceColumn: "code", writable: true },
+            { apiName: "address_line1", label: "Address", fieldType: "text", sourceColumn: "address_line1", writable: true },
+            { apiName: "city", label: "City", fieldType: "text", sourceColumn: "city", writable: true },
+            { apiName: "postcode", label: "Postcode", fieldType: "text", sourceColumn: "postcode", writable: true },
+            { apiName: "phone", label: "Phone", fieldType: "phone", sourceColumn: "phone", writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
+          ]},
+          { objectKey: "terminal", label: "Till", pluralLabel: "Tills", sourceTable: "terminals", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: true },
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "terminal_number", label: "Terminal Number", fieldType: "text", sourceColumn: "terminal_number", writable: true },
+            { apiName: "device_identifier", label: "Device", fieldType: "text", sourceColumn: "device_identifier", writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
           ]}
         ],
         relationships: [
