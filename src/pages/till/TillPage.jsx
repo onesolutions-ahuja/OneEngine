@@ -205,8 +205,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
 
     const cached = loadTillBootstrapCache()
-    const cachedScope = cached?.catalogue?.data?.scopeKey || cached?.catalogue?.scopeKey || ''
-    const usableCached = cachedScope ? cached : null
+    const usableCached = cached || null
     if (usableCached) {
       applyBootstrap(usableCached.catalogue, usableCached.settingsResponse, usableCached.buttons, usableCached.paymentMethods || [])
       setLoading(false)
