@@ -131,7 +131,7 @@ export default function GPTBuilderDecision({ draft, updateConfig, resources, flo
 
   return <div className="gptb-gr gptb-decision">
     <section><h3>Decision Mode</h3>
-      <label><span>How to Determine Outcomes</span><select value={config.logicMode || 'manual'} onChange={(event) => patch({logicMode:event.target.value,splitResource:'',outcomes:config.outcomes.map((outcome)=>({...outcome,splitValue:''}))})}><option value="manual">Conditions</option><option value="date">Split by Date</option><option value="field_value">Split by Field Value</option></select></label>
+      <label><span>How to Determine Outcomes</span><select value={config.logicMode || 'manual'} onChange={(event) => patch({logicMode:event.target.value,splitResource:'',outcomes:config.outcomes.map((outcome)=>({...outcome,splitValue:''}))})}><option value="manual">Conditions</option>{flowType !== 'record' ? <><option value="date">Split by Date</option><option value="field_value">Split by Field Value</option></> : null}</select></label>
       {config.logicMode !== 'manual' ? <label><span>{config.logicMode === 'date' ? 'Date / Date-Time Resource' : 'Resource'} <b>*</b></span><ResourcePicker resources={resources} allowedResources={splitCandidates} value={config.splitResource} onChange={(splitResource)=>patch({splitResource})}/></label> : null}
     </section>
     <section><h3>Outcome Order</h3>
