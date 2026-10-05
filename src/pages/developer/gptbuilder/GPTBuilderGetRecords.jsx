@@ -4,6 +4,7 @@ import { apiRequest } from '../../../services/api'
 import GPTBuilderRelatedRecords, { relatedRuntimeConfig, relatedSelectionErrors } from './GPTBuilderRelatedRecords'
 
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? resourcePath(resource) : '')
 const objectLabel = (value) => value?.label || value?.name || objectKey(value)
 const fieldKey = (value) => String(value?.api_name || value?.apiName || value?.field_key || value?.key || value?.id || '')
 const fieldLabel = (value) => value?.label || value?.name || fieldKey(value)
@@ -241,7 +242,7 @@ function ResourcePicker({ value, onChange, resources, flowType, startConfig, obj
     { value: '$user.id', label: 'Current User ID', type: 'Global Variable' },
     { value: '$now', label: 'Current Date/Time', type: 'Global Variable' },
     ...priorRows,
-    ...variableRows.map((resource) => ({ value: `variables.${resource.apiName}`, label: resource.label || resource.apiName, type: resource.isCollection ? `${resource.dataType} Collection` : resource.dataType })),
+    ...variableRows.map((resource) => ({ value: resourcePath(resource), label: resource.label || resource.apiName, type: resource.isCollection ? `${resource.dataType} Collection` : resource.dataType })),
   ]
 
   const rows = trail
@@ -314,10 +315,10 @@ export default function GPTBuilderGetRecords({
 
   const storeResource = (resource) => {
     onResourcesChange?.([...resources, resource])
-    if (newResource?.purpose === 'advancedTarget') patch({ advancedTarget: `variables.${resource.apiName}` })
+    if (newResource?.purpose === 'advancedTarget') patch({ advancedTarget: resourcePath(resource) })
     if (newResource?.purpose?.startsWith('assignment:')) {
       const id = newResource.purpose.split(':')[1]
-      patch({ fieldAssignments: config.fieldAssignments.map((row) => row.id === id ? { ...row, resource: `variables.${resource.apiName}` } : row) })
+      patch({ fieldAssignments: config.fieldAssignments.map((row) => row.id === id ? { ...row, resource: resourcePath(resource) } : row) })
     }
     setNewResource(null)
   }
