@@ -4,7 +4,7 @@ import { apiRequest } from '../../../services/api'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 
 const uid=(prefix='action')=>globalThis.crypto?.randomUUID?.()||`${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 const inputDefault = (schema = {}) => {
   if (schema.type === 'boolean') return false
   if (schema.type === 'number' || schema.type === 'integer') return ''
