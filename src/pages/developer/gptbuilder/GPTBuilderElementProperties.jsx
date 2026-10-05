@@ -196,7 +196,7 @@ export default function GPTBuilderElementProperties({
     <div className="gptb-element-specific-slot">
       {typeof children === 'function'
         ? children({ draft, updateConfig, setConfigured })
-        : children || <div className="gptb-shared-phase-note">Element-specific configuration is added in its dedicated parity phase.</div>}
+        : children || <div className="gptb-element-validation" role="alert"><AlertTriangle size={14}/><span><small>This element has no registered property editor.</small></span></div>}
     </div>
   </>
 
