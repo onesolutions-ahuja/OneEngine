@@ -1,4 +1,5 @@
 import { evaluateCondition } from "./platformConditions.js";
+import { evaluateValidationRules } from "./platformValidation.js";
 import { createWorkflowRun, createWorkflowStepRun, resolveWorkflowActionType } from "../platform/workflow/runtime/runState.js";
 export { createWorkflowRun, createWorkflowStepRun, resolveWorkflowActionType } from "../platform/workflow/runtime/runState.js";
 import { renderMessageTemplate } from "./messageTemplates.js";
@@ -2864,6 +2865,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
       const insertRecord = async (payload) => {
         const entries = Object.entries(payload || {}).filter(([key]) => key !== "id");
+        const ruleResult = await db(
+          "SELECT * FROM platform_rules WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) AND trigger_key IN ('before_create','before_save') AND action->>'type'='validation' ORDER BY id",
+          [targetObject.id, runtimeCompanyId]
+        );
+        if (ruleResult.rows?.length) {
+          const fieldRows = metadataResult.rows || [];
+          const candidate = Object.fromEntries(entries.map(([name, value]) => {
+            const field = fieldRows.find((item) => String(item.api_name) === String(name) || String(item.source_column) === String(name));
+            return [field?.api_name || name, value];
+          }));
+          const validationErrors = evaluateValidationRules(ruleResult.rows, fieldRows, candidate);
+          if (validationErrors.length) {
+            const error = new Error(validationErrors.map((item) => item.message).join("; "));
+            error.status = 422;
+            error.code = "VALIDATION_RULE_FAILED";
+            throw error;
+          }
+        }
         if (!entries.length) throw new Error("Create Record requires at least one field value");
         const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
         const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
