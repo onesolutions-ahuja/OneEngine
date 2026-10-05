@@ -1230,7 +1230,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    const identitySql = `
+    const identitySelect = `
       SELECT
         u.id,
         u.username,
@@ -1248,10 +1248,28 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       FROM users u
       LEFT JOIN roles r ON r.id = u.role_id
       LEFT JOIN stores s ON s.id = u.store_id AND s.company_id = u.company_id AND s.active = true
-      WHERE LOWER(BTRIM(u.email)) = LOWER(BTRIM($1))
-         OR (u.email IS NULL AND LOWER(u.username) = LOWER(BTRIM($1)))
-      LIMIT 1
     `;
+    const normalizedIdentifier = email.toLowerCase();
+    const looksLikeEmail = normalizedIdentifier.includes("@");
+    const loadIdentity = async (targetPool) => {
+      if (!looksLikeEmail) {
+        return targetPool.query(
+          `${identitySelect} WHERE LOWER(u.username)=$1 LIMIT 1`,
+          [normalizedIdentifier]
+        );
+      }
+      const byEmail = await targetPool.query(
+        `${identitySelect} WHERE LOWER(BTRIM(u.email))=$1 LIMIT 1`,
+        [normalizedIdentifier]
+      );
+      if (byEmail.rows.length) return byEmail;
+      // Preserve legacy email-shaped usernames without forcing the common
+      // indexed email lookup through an OR predicate.
+      return targetPool.query(
+        `${identitySelect} WHERE u.email IS NULL AND LOWER(u.username)=$1 LIMIT 1`,
+        [normalizedIdentifier]
+      );
+    };
 
     /*
      * Global platform profiles live in the central identity database with no
@@ -1260,10 +1278,10 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
      */
     const identityStartedAt = Date.now();
     const requestTenantPool = req.tenantPool || tenantPoolManager.getPoolForRequest(req) || pool;
-    const centralIdentityPromise = pool.query(identitySql, [email]);
+    const centralIdentityPromise = loadIdentity(pool);
     const tenantIdentityPromise = requestTenantPool === pool
       ? centralIdentityPromise
-      : requestTenantPool.query(identitySql, [email]);
+      : loadIdentity(requestTenantPool);
 
     const [centralIdentity, tenantIdentity] = await Promise.all([
       centralIdentityPromise,
