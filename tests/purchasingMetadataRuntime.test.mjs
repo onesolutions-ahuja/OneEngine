@@ -26,7 +26,13 @@ test("protected transactional objects cannot use generic CRUD", async () => {
   assert.match(workspace, /protectedWrites/);
 });
 
-test("system object helper contains no business-specific purchase metadata", async () => {\n  const source = await readFile(new URL("../server/services/systemObjects.js", import.meta.url), "utf8");\n  assert.match(source, /SYSTEM_OBJECTS = Object\\.freeze\\(\\[\\]\\)/);\n  assert.equal(source.includes("purchase_line"), false);\n  assert.equal(source.includes("purchase_items"), false);\n});\n
+test("system object helper contains no business-specific purchase metadata", async () => {
+  const source = await readFile(new URL("../server/services/systemObjects.js", import.meta.url), "utf8");
+  assert.match(source, /SYSTEM_OBJECTS = Object\.freeze\(\[\]\)/);
+  assert.equal(source.includes("purchase_line"), false);
+  assert.equal(source.includes("purchase_items"), false);
+});
+
 
 test("purchase create API delegates business behavior to the protected system workflow", async () => {
   const source = await readFile(new URL("../server/routes/purchases.js", import.meta.url), "utf8");
