@@ -188,3 +188,13 @@ test("sales products and categories use metadata workspace while legacy return a
   assert.match(productsRoute, /\/products\/catalogue/);
   assert.match(productsRoute, /\/products\/misc-line/);
 });
+
+
+test("sales route no longer depends on deleted legacy loyalty helpers", async () => {
+  const route = await readFile(new URL("../server/routes/sales.js", import.meta.url), "utf8");
+  assert.equal(route.includes("../src/utils/loyaltyPoints.js"), false);
+  assert.equal(route.includes("validateRedeemConfig"), false);
+  assert.equal(route.includes("validateRedeemablePoints"), false);
+  assert.equal(route.includes("customer_loyalty_transactions"), false);
+  assert.equal(route.includes("customer_loyalty_balances"), false);
+});
