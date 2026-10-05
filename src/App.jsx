@@ -132,10 +132,8 @@ const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
 const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
 const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
-const OneAssistantPage = lazyWithRecovery(() => import('./pages/assistant/OneAssistantPage'))
 const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
-const PublicAppointmentBookingPage = lazyWithRecovery(() => import('./pages/assistant/PublicAppointmentBookingPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   LockKeyhole,
@@ -2461,8 +2459,6 @@ function Desktop({ onLock, onSignOut }) {
           <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
           <WorkspacePage initialObjectKey="online_order" appKey="own-delivery" />
-        ) : activeApp === 'assistant' ? (
-          <OneAssistantPage />
         ) : activeApp === 'kiosk' ? (
           <OneKioskPage />
         ) : activeApp === 'kiosk-display' ? (
@@ -2515,9 +2511,6 @@ export default function App() {
   }
   if (route.app === 'flow-runtime') {
     return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary>
-  }
-  if (route.app === 'public-assistant-booking') {
-    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading booking…</div>}><PublicAppointmentBookingPage token={route.token} /></Suspense></LazyLoadBoundary>
   }
   if (route.app === 'kiosk-runtime') {
     return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading kiosk…</div>}><OneKioskPage publicMode /></Suspense></LazyLoadBoundary>

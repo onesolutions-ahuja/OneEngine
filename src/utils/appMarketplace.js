@@ -188,7 +188,6 @@ const DEDICATED_OPEN_ROUTES = Object.freeze({
   email_connector: '/app/settings/email-delivery',
   sms_connector: '/app/settings/sms-delivery',
   whatsapp_assistant: '/app/settings/whatsapp-assistant',
-  one_assistant: '/app/assistant',
   one_kiosk: '/app/kiosk-devices',
   mobile_scanner_connector: '/app/settings/hardware',
 })

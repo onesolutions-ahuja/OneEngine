@@ -78,8 +78,6 @@ export function readRoute() {
   if (parts[0] === 'online-orders') return { app: 'online-orders', section: null }
   if (parts[0] === 'order-prep') return { app: 'order-prep', section: null }
   if (parts[0] === 'own-delivery') return { app: 'own-delivery', section: null }
-  if (parts[0] === 'assistant' && parts[1] === 'book' && parts[2]) return { app: 'public-assistant-booking', section: null, token: decodeURIComponent(parts[2]) }
-  if (parts[0] === 'assistant') return { app: 'assistant', section: null }
   if (parts[0] === 'kiosk-runtime') return { app: 'kiosk-runtime', section: null }
   if (parts[0] === 'kiosk') return { app: 'kiosk', section: null }
   if (parts[0] === 'kiosk-display') return { app: 'kiosk-display', section: null }

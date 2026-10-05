@@ -1288,7 +1288,7 @@ const CATALOG = [
     packageKey: "one_assistant",
     name: "OneAssistant",
     description: "Workflow-first appointment booking, calendar and conversational booking automation with optional communication and payment connectors.",
-    route: "/app/assistant",
+    route: null,
     permissions: ["appointments.view", "appointments.manage", "appointments.configure", "appointments.payment"],
     storeScoped: false,
     category: "Business",
