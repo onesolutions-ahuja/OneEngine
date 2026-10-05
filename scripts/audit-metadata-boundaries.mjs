@@ -15,7 +15,7 @@ const forbidden = [
   },
   {
     name: "direct runtime object-button execution URL",
-    pattern: /\/api\/platform\/runtime\/objects\/[^"'\s]*\/buttons\//,
+    pattern: /\/api\/platform\/runtime\/objects\/[^"'\s]*\/buttons\/[^"'\s]*\/execute/,
   },
 ];
 

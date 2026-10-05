@@ -319,15 +319,17 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         vatRate: Number(line.vatRate || 0) * 100,
       })),
     ]
-    apiRequest(`/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`, {
-      method: 'POST',
-      body: JSON.stringify({ context: {
+    executeRuntimeObjectButton({
+      request: apiRequest,
+      objectKey: 'sale',
+      button,
+      context: {
         lines,
         discountType: discount.type,
         discountValue: Number(discount.value || 0),
         vatEnabled,
         defaultVatRate,
-      } }),
+      },
     }).then((response) => {
       if (cancelled || response?.success === false) return
       const data = response?.data || {}
