@@ -112,6 +112,13 @@ test('GPT Builder lifecycle keeps active runtime separate from draft authoring a
   assert.match(automation, /workflowVersion: Number\(rule\.active_version \|\| rule\.version \|\| 1\)/)
 })
 
+test('GPT Builder Run and Debug bind scoped record lookup parameters as PostgreSQL placeholders', async () => {
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(platform, /clauses\.push\(\`(?:id|company_id|store_id)=\$\{params\.length\}\`\)/)
+  assert.match(platform, /clauses\.push\(\`company_id=\$\$\{params\.length\}\`\)/)
+  assert.match(platform, /clauses\.push\(\`store_id=\$\$\{params\.length\}\`\)/)
+})
+
 test('GPT Builder Run Debug Test and version restore use the intended saved definitions', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
