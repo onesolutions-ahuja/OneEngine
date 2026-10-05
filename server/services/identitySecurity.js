@@ -275,16 +275,24 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId, 
      LEFT JOIN identity_security_settings s ON s.company_id=c.id
      LEFT JOIN identity_user_security_state us ON us.user_id=$2
      LEFT JOIN LATERAL (
-       SELECT *
-       FROM identity_access_policies ap
-       WHERE ap.company_id=$1 AND ap.active=TRUE
-         AND (
-           (ap.scope_type='USER' AND ap.scope_id=$2)
-           OR (ap.scope_type='ROLE' AND ap.scope_id=$3)
-           OR (ap.scope_type='COMPANY' AND ap.scope_id IS NULL)
-         )
-       ORDER BY CASE ap.scope_type WHEN 'USER' THEN 3 WHEN 'ROLE' THEN 2 ELSE 1 END DESC,
-                ap.priority ASC, ap.updated_at DESC
+       SELECT candidate.*
+       FROM (
+         SELECT ap.*, 3 AS scope_rank
+           FROM identity_access_policies ap
+          WHERE ap.company_id=$1 AND ap.active=TRUE
+            AND ap.scope_type='USER' AND ap.scope_id=$2
+         UNION ALL
+         SELECT ap.*, 2 AS scope_rank
+           FROM identity_access_policies ap
+          WHERE ap.company_id=$1 AND ap.active=TRUE
+            AND ap.scope_type='ROLE' AND ap.scope_id=$3
+         UNION ALL
+         SELECT ap.*, 1 AS scope_rank
+           FROM identity_access_policies ap
+          WHERE ap.company_id=$1 AND ap.active=TRUE
+            AND ap.scope_type='COMPANY' AND ap.scope_id IS NULL
+       ) candidate
+       ORDER BY candidate.scope_rank DESC, candidate.priority ASC, candidate.updated_at DESC
        LIMIT 1
      ) p ON TRUE
      LEFT JOIN LATERAL (
