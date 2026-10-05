@@ -357,3 +357,4 @@ test('final loading verifier always measures a fresh login on retry', async () =
   assert.match(helper, /loginIfConfigured\(page, \{ forceFresh = false \} = \{\}\)/)
   assert.match(verifier, /loginIfConfigured\(page, \{ forceFresh: true \}\)/)
 })
+
