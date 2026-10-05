@@ -302,3 +302,11 @@ test('Render shutdown is bounded against stale keep-alive connections', async ()
   assert.match(source, /closeAllConnections/)
   assert.match(source, /setTimeout\(\(\) => process\.exit\(0\), 5_000\)/)
 })
+
+
+test('trusted runtime accepts package functions protected by permissionsAny', async () => {
+  const source = await read('../server/services/trustedRuntime.js')
+  assert.match(source, /alternativePermissions/)
+  assert.match(source, /fn\?\.permissionsAny/)
+  assert.match(source, /!requiredPermissions\.length && !alternativePermissions\.length/)
+})

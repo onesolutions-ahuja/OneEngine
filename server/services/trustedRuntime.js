@@ -61,7 +61,9 @@ export function isPrivilegedMutation(path, method = "GET") {
 
 export function validateTrustedRuntime() {
   for (const fn of PLATFORM_FUNCTIONS) {
-    if (!fn?.key || typeof fn.handler !== "function" || !Array.isArray(fn.permissions) || !fn.permissions.length) {
+    const requiredPermissions = Array.isArray(fn?.permissions) ? fn.permissions.filter(Boolean) : [];
+    const alternativePermissions = Array.isArray(fn?.permissionsAny) ? fn.permissionsAny.filter(Boolean) : [];
+    if (!fn?.key || typeof fn.handler !== "function" || (!requiredPermissions.length && !alternativePermissions.length)) {
       throw new Error(`Invalid registered platform function: ${fn?.key || "(missing key)"}`);
     }
   }
