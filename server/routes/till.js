@@ -1,4 +1,5 @@
 import express from "express";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 export default function createTillRouter({ authenticate, authorize, db, pool, getRolePermissionCodes, canViewCompanyCustomers }) {
   const router = express.Router();
@@ -6,6 +7,38 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
   function money(value) {
     const n = Number(value);
     return Number.isFinite(n) ? n : NaN;
+  }
+
+  async function calculateCashPosition(req, {
+    openingCash = 0,
+    cashIn = 0,
+    cashOut = 0,
+    cashSales = 0,
+    cashRefunds = 0,
+    countedCash = 0,
+    requestedCashOut = 0,
+    terminalId = null,
+  } = {}) {
+    const execution = await executeSystemWorkflow({
+      db,
+      companyId: req.user.companyId,
+      userId: req.user.id || null,
+      systemKey: "flow:till.cash.position",
+      req,
+      input: {
+        openingCash: Number(openingCash) || 0,
+        cashIn: Number(cashIn) || 0,
+        cashOut: Number(cashOut) || 0,
+        cashSales: Number(cashSales) || 0,
+        cashRefunds: Number(cashRefunds) || 0,
+        countedCash: Number(countedCash) || 0,
+        requestedCashOut: Number(requestedCashOut) || 0,
+      },
+      storeId: req.user.storeId || null,
+      tillId: terminalId || req.user.tillId || null,
+      source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "till.cash.position" },
+    });
+    return execution?.result || {};
   }
 
   /*
@@ -67,16 +100,22 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
         /* T-TILL: the backend is authoritative for the cash position — the
          * current/expected cash is computed HERE, never on the client. */
         const row = result.rows[0];
-        const data = row
-          ? {
-              ...row,
-              cash_refunds: Number(row.cash_refunds) || 0,
-              current_cash: Math.round(
-                ((Number(row.opening_cash) || 0) + (Number(row.cash_in_total) || 0) + (Number(row.cash_sales) || 0) -
-                  (Number(row.cash_out_total) || 0) - (Number(row.cash_refunds) || 0)) * 100
-              ) / 100,
-            }
-          : null;
+        let data = null;
+        if (row) {
+          const cashPosition = await calculateCashPosition(req, {
+            openingCash: row.opening_cash,
+            cashIn: row.cash_in_total,
+            cashOut: row.cash_out_total,
+            cashSales: row.cash_sales,
+            cashRefunds: row.cash_refunds,
+            terminalId: row.terminal_id,
+          });
+          data = {
+            ...row,
+            cash_refunds: Number(row.cash_refunds) || 0,
+            current_cash: Number(cashPosition.currentCash) || 0,
+          };
+        }
         res.json({ success: true, data });
       } catch (error) {
         console.error("Load current till session error:", error);
@@ -276,8 +315,17 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
         const outTotal = Number(cashOut.rows[0].total) || 0;
         const salesTotal = Number(cashSales.rows[0].total) || 0;
         const refundsTotal = Number(cashRefunds.rows[0].total) || 0;
-        const expectedCash = Math.round((opening + inTotal - outTotal + salesTotal - refundsTotal) * 100) / 100;
-        const cashDifference = Math.round((counted - expectedCash) * 100) / 100;
+        const cashPosition = await calculateCashPosition(req, {
+          openingCash: opening,
+          cashIn: inTotal,
+          cashOut: outTotal,
+          cashSales: salesTotal,
+          cashRefunds: refundsTotal,
+          countedCash: counted,
+          terminalId: s.terminal_id,
+        });
+        const expectedCash = Number(cashPosition.currentCash) || 0;
+        const cashDifference = Number(cashPosition.cashDifference) || 0;
 
         const updated = await client.query(
           `UPDATE till_sessions
@@ -432,11 +480,17 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
             [session.rows[0].id]
           );
           const row = position.rows[0];
-          const available = Math.round(
-            ((Number(row.opening_cash) || 0) + (Number(row.cash_in) || 0) + (Number(row.cash_sales) || 0) -
-              (Number(row.cash_out) || 0) - (Number(row.cash_refunds) || 0)) * 100
-          ) / 100;
-          if (value > available + 0.01) {
+          const cashPosition = await calculateCashPosition(req, {
+            openingCash: row.opening_cash,
+            cashIn: row.cash_in,
+            cashOut: row.cash_out,
+            cashSales: row.cash_sales,
+            cashRefunds: row.cash_refunds,
+            requestedCashOut: value,
+            terminalId: session.rows[0].terminal_id,
+          });
+          const available = Number(cashPosition.currentCash) || 0;
+          if (cashPosition.cashOutAllowed !== true) {
             await client.query("ROLLBACK");
             return res.status(400).json({
               success: false,
@@ -534,10 +588,15 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
         );
         if (!result.rows.length) return res.json({ success: true, data: null });
         const row = result.rows[0];
-        const currentCash = Math.round(
-          ((Number(row.opening_cash) || 0) + (Number(row.cash_in_total) || 0) + (Number(row.cash_sales_total) || 0) -
-            (Number(row.cash_out_total) || 0) - (Number(row.cash_refunds_total) || 0)) * 100
-        ) / 100;
+        const cashPosition = await calculateCashPosition(req, {
+          openingCash: row.opening_cash,
+          cashIn: row.cash_in_total,
+          cashOut: row.cash_out_total,
+          cashSales: row.cash_sales_total,
+          cashRefunds: row.cash_refunds_total,
+          terminalId: row.terminal_id,
+        });
+        const currentCash = Number(cashPosition.currentCash) || 0;
         res.json({
           success: true,
           data: {
