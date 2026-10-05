@@ -333,3 +333,16 @@ test("staff app is metadata-driven while identity and RBAC administration remain
   assert.match(admin, /\/admin\/users\/\:id\/reset-password/);
   assert.match(admin, /\/admin\/users\/\:id\/stores/);
 });
+
+
+test("generic settings mutation contract excludes business feature policy", async () => {
+  const settingsRoute = await readFile(new URL("../server/routes/settings.js", import.meta.url), "utf8");
+  for (const key of ["scanGoEnabled", "exchangeMode", "batchInventoryMode", "batchDefaultMfgRule", "batchDefaultExpiryRule", "batchDefaultExpiryDays", "loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"]) {
+    const patchContract = settingsRoute.slice(settingsRoute.indexOf("const SETTINGS_PATCH_COLUMNS"), settingsRoute.indexOf("const SETTINGS_PATCH_INVALID"));
+    assert.equal(patchContract.includes(key), false, key);
+  }
+  assert.equal(settingsRoute.includes('router.put("/settings/batch-policy"'), false);
+  assert.match(settingsRoute, /dateFormat: \{ column: "date_format"/);
+  assert.match(settingsRoute, /productView: \{ column: "product_view"/);
+  assert.match(settingsRoute, /customerDisplayEnabled: \{ column: "customer_display_enabled"/);
+});

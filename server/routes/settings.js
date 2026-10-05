@@ -529,28 +529,6 @@ export default function createSettingsRouter({
    * an endpoint so existing clients keep working; new code should PATCH
    * /api/settings with the batchInventory* fields directly.
    */
-  router.put("/settings/batch-policy", authenticate, authorize("settings.manage"), async (req, res) => {
-    const { batchInventoryMode = "none", batchDefaultMfgRule = "none", batchDefaultExpiryRule = "none", batchDefaultExpiryDays = 365 } = req.body || {};
-    const modes = ["required_dates", "optional_dates", "none"];
-    const rules = ["none", "today", "today_plus_days"];
-    const days = Math.floor(Number(batchDefaultExpiryDays));
-    if (!modes.includes(batchInventoryMode) || !rules.includes(batchDefaultMfgRule) || !rules.includes(batchDefaultExpiryRule) || !Number.isFinite(days) || days < 0 || days > 3650) {
-      return res.status(400).json({ success: false, message: "Invalid batch inventory policy" });
-    }
-    try {
-      await db(
-        `INSERT INTO company_settings (company_id, batch_inventory_mode, batch_default_mfg_rule, batch_default_expiry_rule, batch_default_expiry_days, updated_by, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,NOW())
-         ON CONFLICT (company_id) DO UPDATE SET batch_inventory_mode=$2, batch_default_mfg_rule=$3, batch_default_expiry_rule=$4, batch_default_expiry_days=$5, updated_by=$6, updated_at=NOW()`,
-        [req.user.companyId, batchInventoryMode, batchDefaultMfgRule, batchDefaultExpiryRule, days, req.user.id]
-      );
-      res.json({ success: true, data: { batchInventoryMode, batchDefaultMfgRule, batchDefaultExpiryRule, batchDefaultExpiryDays: days } });
-    } catch (error) {
-      console.error("Update batch policy error:", error);
-      res.status(500).json({ success: false, message: "Unable to update batch inventory policy" });
-    }
-  });
-
   /*
    * CANONICAL SETTINGS UPDATE COMMAND (merge-patch) — Phase 1 C-4.
    *
@@ -569,18 +547,7 @@ export default function createSettingsRouter({
     dateFormat: { column: "date_format", type: "string" },
     vatEnabled: { column: "vat_enabled", type: "boolean" },
     defaultVatRate: { column: "default_vat_rate", type: "vatRate" },
-    loyaltyEnabled: { column: "loyalty_enabled", type: "boolean", entitlement: "loyalty" },
-    loyaltyEarningRate: { column: "loyalty_earning_rate", type: "loyaltyEarningRate", entitlement: "loyalty" },
-    loyaltyMinSaleTotal: { column: "loyalty_min_sale_total", type: "nonNegativeNumber", entitlement: "loyalty" },
-    loyaltyRedeemValuePerPoint: { column: "loyalty_redeem_value_per_point", type: "nonNegativeNumber", entitlement: "loyalty" },
-    loyaltyMinPointsRedeem: { column: "loyalty_min_points_redeem", type: "nonNegativeInteger", entitlement: "loyalty" },
     allowNegativeInventoryBilling: { column: "allow_negative_inventory_billing", type: "negativeBilling" },
-    scanGoEnabled: { column: "scan_go_enabled", type: "boolean" },
-    exchangeMode: { column: "exchange_mode", type: "exchangeMode" },
-    batchInventoryMode: { column: "batch_inventory_mode", type: "batchMode" },
-    batchDefaultMfgRule: { column: "batch_default_mfg_rule", type: "batchRule" },
-    batchDefaultExpiryRule: { column: "batch_default_expiry_rule", type: "batchRule" },
-    batchDefaultExpiryDays: { column: "batch_default_expiry_days", type: "batchDays" },
     productView: { column: "product_view", type: "productView" },
     dockQuickAccess: { column: "dock_quick_access", type: "dockQuickAccess" },
     customerDisplayEnabled: { column: "customer_display_enabled", type: "boolean" },
