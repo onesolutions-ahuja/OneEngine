@@ -77,7 +77,7 @@ async function debugSystem(systemKey, inputs) {
 }
 
 test("Till system Flows are present and validate", () => {
-  for (const key of ["flow:till.stock.validate","flow:till.age.verify","flow:till.payment.validate","flow:till.receipt.qr"]) {
+  for (const key of ["flow:till.stock.validate","flow:till.age.verify","flow:till.payment.validate","flow:till.split.payment.validate","flow:till.receipt.qr"]) {
     const flow = systemFlows.get(key);
     assert.ok(flow, key + " missing");
     for (const action of flow.actions) {
@@ -115,6 +115,41 @@ test("Till payment Flow debug covers cash, card, credit and gift-card requiremen
   run = await debugSystem("flow:till.payment.validate", { ...base, paymentMethod:"gift_card", hasGiftCardCode:false });
   assert.equal(run.workflowVariables.variables.allowed, false);
 });
+
+test("Till split payment Flow debug calculates paid total, remaining, duplicates and allowed methods", async () => {
+  const allowedMethodsText = "|cash|card|gift_card|";
+  let run = await debugSystem("flow:till.split.payment.validate", {
+    payments: [{ paymentMethod:"cash", amount:4 }, { paymentMethod:"card", amount:6 }],
+    total:10,
+    allowedMethodsText,
+  });
+  assert.equal(run.workflowVariables.variables.paidTotal, 10);
+  assert.equal(run.workflowVariables.variables.remaining, 0);
+  assert.equal(run.workflowVariables.variables.allowed, true);
+
+  run = await debugSystem("flow:till.split.payment.validate", {
+    payments: [{ paymentMethod:"cash", amount:4 }, { paymentMethod:"card", amount:5 }],
+    total:10,
+    allowedMethodsText,
+  });
+  assert.equal(run.workflowVariables.variables.remaining, 1);
+  assert.equal(run.workflowVariables.variables.allowed, false);
+
+  run = await debugSystem("flow:till.split.payment.validate", {
+    payments: [{ paymentMethod:"cash", amount:5 }, { paymentMethod:"cash", amount:5 }],
+    total:10,
+    allowedMethodsText,
+  });
+  assert.equal(run.workflowVariables.variables.allowed, false);
+
+  run = await debugSystem("flow:till.split.payment.validate", {
+    payments: [{ paymentMethod:"unknown", amount:10 }],
+    total:10,
+    allowedMethodsText,
+  });
+  assert.equal(run.workflowVariables.variables.allowed, false);
+});
+
 
 const priceOverrideActions = [
   { id:"get_product", label:"Get Product", apiName:"get_product", key:"GET_RECORDS", objectKey:"product", filters:[{ field:"id", operator:"equals", value:{ path:"$record.productId" } }], limit:1, store:"first" },
