@@ -1316,3 +1316,12 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 12 supports Compare Versions lifecycle parity', async () => {
+ const history=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderSaveHistory.jsx',import.meta.url),'utf8')
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ for(const token of ['Compare Versions','Base Version','Target Version','Added','Changed','Deleted','View on Canvas','Save as New Version','Save as New Flow','Restore']) assert.ok(history.includes(token)||page.includes(token),token)
+ assert.ok(history.includes('compareEntries'))
+ assert.ok(page.includes('GPTBuilderCompareVersionsPanel'))
+})
