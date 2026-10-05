@@ -346,3 +346,16 @@ test("generic settings mutation contract excludes business feature policy", asyn
   assert.match(settingsRoute, /productView: \{ column: "product_view"/);
   assert.match(settingsRoute, /customerDisplayEnabled: \{ column: "customer_display_enabled"/);
 });
+
+
+test("accounting uses generic integration framework instead of sale-specific export stack", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const integrations = await readFile(new URL("../server/routes/integrations.js", import.meta.url), "utf8");
+  assert.equal(app.includes("AccountingAdmin"), false);
+  assert.equal(server.includes("createAccountingExportRouter"), false);
+  assert.match(integrations, /integration_connections/);
+  assert.match(integrations, /integration_endpoints/);
+  assert.match(integrations, /integration_field_mappings/);
+  assert.match(integrations, /\/integrations\/\:id\/endpoints/);
+});

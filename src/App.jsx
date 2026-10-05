@@ -119,7 +119,6 @@ const CustomersPage = lazyWithRecovery(() => import('./pages/workspace/Workspace
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
-const AccountingAdmin = lazyWithRecovery(() => import('./pages/integrations/AccountingAdmin'))
 const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
@@ -2457,7 +2456,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'integrations' ? (
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'accounting' ? (
-          <AccountingAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
+          <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'online-orders' ? (
           <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (

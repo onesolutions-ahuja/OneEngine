@@ -68,7 +68,6 @@ import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
 import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
 import createOnlineRouter from "./routes/online.js";
 import createCustomerAuthRouter from "./routes/customerAuth.js";
-import createAccountingExportRouter from "./routes/accountingExport.js"; // T10V - accounting integration export
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
@@ -2289,15 +2288,7 @@ app.use(
 | dispatcher to real sale data over the existing T9A connection system.
 | All routes are accounting.export gated and company-scoped.
 */
-app.use(
-  "/api/accounting",
-  createAccountingExportRouter({
-    authenticate,
-    authorize,
-    db,
-    writeAudit,
-  })
-);
+
 
 
 /*
