@@ -35,7 +35,6 @@ import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 import createTillRouter from "./routes/till.js";
-import createHeldSalesRouter from "./routes/heldSales.js";
 import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
@@ -47,7 +46,6 @@ import createSupplierAccountsRouter from "./routes/supplierAccounts.js";
 import createSalesRouter from "./routes/sales.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
 import createKioskRouter, { createKioskModeGate } from "./routes/kiosk.js";
-import createScanGoRouter from "./routes/scanAndGo.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReportsRouter from "./routes/reports.js";
 import createSecureInvoiceRouter from "./routes/secureInvoice.js";
@@ -83,7 +81,6 @@ import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
 import createDataProtectionRouter from "./routes/dataProtection.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, finalizeSuccessfulLogin, loadLoginSecurityContext, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
-import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
 import createOwnDeliveryRouter from "./routes/ownDelivery.js";
 import createPackagesRouter from "./routes/packages.js";
@@ -1956,7 +1953,7 @@ app.use("/api", createSelfCheckoutRouter({
 
 /* T10P: Scan & Go — customer scan sessions (token-authenticated, store/company
  * resolved server-side from the session; see routes/scanAndGo.js). */
-app.use("/api", createScanGoRouter({ authenticate, db, pool, writeAudit }));
+
 app.use("/api", createMobileScannerRouter({ authenticate, authorize, db, writeAudit }));
 
 app.use("/api", createGlobalProductLookupRouter({
@@ -1997,7 +1994,6 @@ app.use("/api", createIdentityAssuranceRouter({ authenticate, authorize, db, cre
 app.use("/api", createIdentityProviderLoginRouter({ db, createToken, decryptCredentials, encryptCredentials }));
 app.use("/api", createSecurityGovernanceRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeAudit }));
-app.use("/api", createHospitalityRouter({ authenticate, authorize, db, pool, canAccessStore }));
 app.use("/api", createClientWebShopRouter({
   authenticate,
   authorize,
@@ -2322,7 +2318,6 @@ app.use(
 | store-wide listing (?scope=store), payload limits. Same authentication,
 | sale.hold permission gate and company/store/user scoping as before.
 */
-app.use("/api", createHeldSalesRouter({ authenticate, authorize, db }));
 
 /*
 |--------------------------------------------------------------------------

@@ -251,3 +251,13 @@ test("manifest sweep leaves product category segment and gift-card administratio
   assert.equal(/router\.post\("\/gift-cards(?:\/\:id\/topup|\/\:id\/block|")/.test(customers), false);
   assert.match(customers, /router\.post\("\/gift-cards\/lookup"/);
 });
+
+
+test("repo-wide manifest sweep keeps supplier accounts and product features read-only at legacy boundary", async () => {
+  const supplier = await readFile(new URL("../server/routes/supplierAccounts.js", import.meta.url), "utf8");
+  const features = await readFile(new URL("../server/routes/productFeatures.js", import.meta.url), "utf8");
+  assert.equal(/router\.(post|put|patch|delete)\(/.test(supplier), false);
+  assert.equal(/router\.(post|put|patch|delete)\(/.test(features), false);
+  assert.match(supplier, /router\.get\("\/supplier-invoices"/);
+  assert.match(features, /router\.get\("\/products\/\:id\/variants"/);
+});
