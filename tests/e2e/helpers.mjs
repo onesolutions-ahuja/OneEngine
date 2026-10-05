@@ -65,10 +65,22 @@ async function restoreBrowserSession(page) {
   return true;
 }
 
-export async function loginIfConfigured(page) {
+export async function loginIfConfigured(page, { forceFresh = false } = {}) {
   const username = process.env.ONEPOS_E2E_USERNAME || "";
   const password = process.env.ONEPOS_E2E_PASSWORD || "";
   if (!username || !password) return false;
+
+  if (forceFresh) {
+    cachedBrowserSession = null;
+    cachedBrowserSessionValidated = false;
+    await fs.rm(SESSION_CACHE_FILE, { force: true }).catch(() => {});
+    await page.addInitScript(() => {
+      sessionStorage.removeItem("onepos_token");
+      sessionStorage.removeItem("onepos_user");
+      localStorage.removeItem("onepos_token");
+      localStorage.removeItem("onepos_user");
+    });
+  }
 
   // Persist the issued browser session to disk as well as memory. Playwright
   // may replace a worker process after a failed test/retry; an in-memory cache
