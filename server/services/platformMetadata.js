@@ -1853,6 +1853,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     await grantObjectPermissionFromCodes("held_sale", ["sale.hold"], { view: true, create: true, delete: true });
     await grantObjectPermissionFromCodes("till_session", ["till.open","till.close"], { view: true, create: true, edit: true });
     await grantObjectPermissionFromCodes("cash_ledger", ["cash.adjustment","cash.payout"], { view: true, create: true });
+    await grantObjectPermissionFromCodes("product_modifier_group", ["sale.create"], { view: true });
+    await grantObjectPermissionFromCodes("product_modifier_option", ["sale.create"], { view: true });
 
     await pool.query(
       `INSERT INTO role_permissions (role_id,permission_id)
