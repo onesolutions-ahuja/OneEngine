@@ -1849,7 +1849,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         const target = elements.find((element) => element.id === issue.targetId)
         if (target) openElement(target)
       }}/> : null}
-      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={availableResources} elements={elements} onClose={() => setExecutionMode(null)}/> : null}
+      {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={availableResources} elements={elements} onClose={() => setExecutionMode(null)} onNavigateElement={(elementId)=>{const target=elements.find((element)=>element.id===elementId);setExecutionMode(null);if(target)openElement(target)}}/> : null}
       {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
