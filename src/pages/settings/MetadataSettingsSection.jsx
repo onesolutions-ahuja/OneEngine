@@ -40,8 +40,8 @@ export default function MetadataSettingsSection({ section }) {
   const load=async()=>{
     setLoading(true);setError('')
     try{
-      const catalog=await apiRequest('/api/platform/runtime/settings-catalog')
-      const objects=Array.isArray(catalog?.data)?catalog.data:Array.isArray(catalog?.objects)?catalog.objects:[]
+      const catalog=await apiRequest('/api/platform/runtime/settings-hosts')
+      const objects=Array.isArray(catalog?.data)?catalog.data:[]
       const candidate=objects.find(object=>{
         const config=object?.config||{}
         return (config.settingsSectionSource==='field-config'||config.settings_section_source==='field-config')
