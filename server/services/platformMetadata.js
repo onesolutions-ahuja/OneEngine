@@ -2527,6 +2527,15 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         );
       }
 
+      await pool.query(
+        `UPDATE platform_buttons
+            SET active=FALSE,updated_at=NOW()
+          WHERE button_key=ANY($1::text[])
+            AND company_id IS NULL
+            AND COALESCE(user_modified,FALSE)=FALSE`,
+        [["till_pay_cash","till_pay_card","till_pay_more"]]
+      ).catch(() => {});
+
       const internalWorkflowButtons = [
         ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
         ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("ONETILL_CHECKOUT_AGE_PREFLIGHT"),"sale.create"],
