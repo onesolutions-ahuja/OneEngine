@@ -15,19 +15,6 @@ const PROVIDER_ADAPTERS = Object.freeze({
   barcode_nest: createBarcodeNestAdapter,
   go_upc: createGoUpcAdapter,
 });
-const CONFIG_KEYS = Object.freeze({
-  open_food_facts: "global_product_lookup_open_food_facts",
-  upcitemdb: "global_product_lookup_upcitemdb",
-  barcode_nest: "global_product_lookup_barcode_nest",
-  go_upc: "global_product_lookup_go_upc",
-});
-const DEFAULT_CONFIG = Object.freeze({
-  enabled: true,
-  priority: 100,
-  timeoutMs: 5000,
-  fallbackEnabled: true,
-  cacheTtlSeconds: 5,
-});
 const MAX_CACHE_ENTRIES = 500;
 
 function objectValue(value) {
@@ -53,16 +40,23 @@ export async function discoverGlobalProductProviders({ db, companyId }) {
             i.status AS installation_status,i.suspended_by_entitlement,i.deactivated_by_user
        FROM package_registry p
        LEFT JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=$1
-      WHERE p.active=true AND p.package_key=ANY($2::text[])
+      WHERE p.active=true
+        AND p.manifest->'providerConnector'->'globalProductLookup' IS NOT NULL
       ORDER BY p.name`,
-    [companyId, Object.keys(CONFIG_KEYS)]
+    [companyId]
   );
   const entitlements = await getCompanyEntitlements(db, companyId);
-  const configsResult = await db(
-    `SELECT provider,configuration,active FROM integrations
-      WHERE company_id=$1 AND provider=ANY($2::text[])`,
-    [companyId, Object.values(CONFIG_KEYS)]
-  );
+  const connectorRows = (packagesResult.rows || [])
+    .map((row) => objectValue(row.manifest).providerConnector?.globalProductLookup)
+    .filter((connector) => connector && typeof connector === "object" && connector.configKey);
+  const configKeys = [...new Set(connectorRows.map((connector) => String(connector.configKey)))];
+  const configsResult = configKeys.length
+    ? await db(
+        `SELECT provider,configuration,active FROM integrations
+          WHERE company_id=$1 AND provider=ANY($2::text[])`,
+        [companyId, configKeys]
+      )
+    : { rows: [] };
   const configs = new Map((configsResult.rows || []).map((row) => [row.provider, row]));
   const providers = [];
 
@@ -70,7 +64,9 @@ export async function discoverGlobalProductProviders({ db, companyId }) {
     const connector = objectValue(row.manifest).providerConnector?.globalProductLookup;
     const providerKey = String(connector?.providerKey || "");
     const configKey = String(connector?.configKey || "");
-    if (!PROVIDER_ADAPTERS[providerKey] || !configKey || CONFIG_KEYS[providerKey] !== configKey) continue;
+    // Adapter implementation stays trusted code; provider identity, configuration
+    // key, priority, fallback and cache policy come entirely from package metadata.
+    if (!PROVIDER_ADAPTERS[providerKey] || !configKey) continue;
     const installed = row.installation_status === "active" && row.suspended_by_entitlement !== true && row.deactivated_by_user !== true;
     const licensed = isPackageLicensed(entitlements, {
       package_key: row.package_key,
@@ -80,8 +76,10 @@ export async function discoverGlobalProductProviders({ db, companyId }) {
     });
     if (!installed || !licensed) continue;
     const stored = configs.get(configKey);
-    const settings = { ...DEFAULT_CONFIG, ...connector.settings, ...objectValue(stored?.configuration) };
+    const storedSettings = objectValue(stored?.configuration);
+    const settings = { ...connector, ...objectValue(connector.settings), ...storedSettings };
     const active = stored?.active !== false;
+    const metadataTimeout = positiveNumber(connector.timeoutMs, 5000, 30000);
     providers.push({
       providerKey,
       packageKey: row.package_key,
@@ -90,8 +88,9 @@ export async function discoverGlobalProductProviders({ db, companyId }) {
       settings: {
         ...settings,
         enabled: active && settings.enabled !== false,
-        priority: Number.isFinite(Number(settings.priority)) ? Number(settings.priority) : DEFAULT_CONFIG.priority,
-        timeoutMs: positiveNumber(settings.timeoutMs, DEFAULT_CONFIG.timeoutMs, 30000),
+        priority: Number.isFinite(Number(settings.priority)) ? Number(settings.priority) : Number.MAX_SAFE_INTEGER,
+        timeoutMs: positiveNumber(settings.timeoutMs, metadataTimeout, 30000),
+        fallbackEnabled: settings.fallbackEnabled === true,
         cacheTtlSeconds: Math.max(0, Math.min(Number(settings.cacheTtlSeconds) || 0, 86400)),
       },
       metadata: connector,
