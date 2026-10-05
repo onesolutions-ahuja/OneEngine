@@ -1021,7 +1021,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     if (button?.config?.requiresCustomerDisplay === true && !customerDisplayEnabled) return false
     return true
   })
-  const paymentButtons = buttons.filter((button) => button.placement === 'till_payment')
   const lineButtons = buttons.filter((button) => button.placement === 'till_line_action')
   const productView = settings?.till?.productView || 'image'
 
@@ -1099,9 +1098,17 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
               {discountAmount > 0 ? <div><span>Discount</span><strong>-{money(discountAmount, currency)}</strong></div> : null}
               <div><span>VAT</span><strong>{money(vat, currency)}</strong></div>
               <div className="is-total"><span>Total</span><strong>{money(total, currency)}</strong></div>
-              <label className="till-cash-input"><Banknote size={15}/><input value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Cash received"/></label>
               <div className="till-pay-grid">
-                {paymentButtons.map((button) => <MetaButton key={button.id || button.button_key} button={button} onAction={(_, item, button) => executeTillTarget(button, item)} disabled={busy} className={button?.config?.paymentMode === 'cash' ? 'till-pay-cash' : 'till-pay-card'}/>)}
+                {paymentMethods.filter((method) => method.active !== false).map((method) => (
+                  <button
+                    key={method.code}
+                    type="button"
+                    className="module-primary-button"
+                    disabled={busy}
+                    onClick={() => startPaymentMethod(method)}
+                  >{method.label || method.code}</button>
+                ))}
+                <button type="button" disabled={busy} onClick={() => { setPaymentModalMethod(''); setModal('payment') }}><Layers size={14}/> Split / More</button>
               </div>
             </div>
           </aside>
@@ -1137,7 +1144,15 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
       {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError}/></Modal> : null}
       {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingCheckout(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingCheckout || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingCheckout(null); setModal(null); if (pending?.paymentMethod) window.setTimeout(() => completeSale(pending.paymentMethod, pending.options || { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
-      {modal === 'payment' ? <Modal title="Payment" onClose={() => setModal(null)} wide><PaymentSheet total={total} methods={paymentMethods} online={online} customer={selectedCustomer} credit={liveCredit || selectedCustomer?.credit || null} onPay={async (method, options) => { await completeSale(method, options || {}); setModal(null) }}/></Modal> : null}
+      {modal === 'payment' ? <Modal title="Payment" onClose={() => { setPaymentModalMethod(''); setModal(null) }} wide><PaymentSheet total={total} methods={paymentMethods} initialMethod={paymentModalMethod} onPay={async (method, paymentInputs) => {
+        if (method === 'split') await completeSale(method, { payments: paymentInputs?.payments || [] })
+        else {
+          const selected = await runPaymentModeFlow(method, paymentInputs || {})
+          await completeSale(selected.paymentMode, { paymentFlowValidated: true, paymentInputs: paymentInputs || {} })
+        }
+        setPaymentModalMethod('')
+        setModal(null)
+      }}/></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={async (price, reason) => {
         const button = buttons.find((row) => row.button_key === 'till_price_override_apply')
         if (!button) return setError('Price Override Flow is not configured.')
@@ -1183,36 +1198,52 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   )
 }
 
-function PaymentSheet({ total, methods, online, customer, credit, onPay }) {
+function PaymentSheet({ total, methods, initialMethod = '', onPay }) {
   const activeMethods = (methods || []).filter((method) => method.active !== false)
-  const [mode, setMode] = useState('single')
-  const [method, setMethod] = useState(activeMethods[0]?.code || 'cash')
-  const [paymentModalMethod, setPaymentModalMethod] = useState('')
-  const [giftCardCode, setGiftCardCode] = useState('')
+  const [mode, setMode] = useState(initialMethod ? 'single' : 'choose')
+  const [method, setMethod] = useState(initialMethod || activeMethods[0]?.code || '')
+  const [values, setValues] = useState({})
   const [split, setSplit] = useState(() => Object.fromEntries(activeMethods.map((item) => [item.code, ''])))
-  const selected = activeMethods.find((item) => item.code === method)
-  const splitEligible = activeMethods
-  const splitLines = splitEligible.map((item) => ({ paymentMethod: item.code, amount: Number(split[item.code]) || 0 })).filter((line) => line.amount > 0)
+  const selected = activeMethods.find((item) => item.code === method) || null
+  const inputFields = Array.isArray(selected?.config?.inputFields) ? selected.config.inputFields : []
+  const splitLines = activeMethods
+    .map((item) => ({ paymentMethod: item.code, amount: Number(split[item.code]) || 0 }))
+    .filter((line) => line.amount > 0)
+  const requiredMissing = inputFields.some((field) => field?.required === true && String(values[field.key] ?? '').trim() === '')
+
+  const renderField = (field) => {
+    const type = String(field?.type || 'text').toLowerCase()
+    const numeric = ['number','currency','decimal'].includes(type)
+    return <label key={field.key}>{field.label || field.key}<input
+      type={numeric ? 'number' : 'text'}
+      step={type === 'currency' ? '0.01' : numeric ? 'any' : undefined}
+      min={numeric ? '0' : undefined}
+      value={values[field.key] ?? ''}
+      onChange={(e) => setValues((current) => ({ ...current, [field.key]: numeric ? e.target.value : e.target.value }))}
+      placeholder={field.placeholder || (type === 'currency' ? money(total) : '')}
+    /></label>
+  }
 
   if (mode === 'split') return <div className="till-form">
-    <p>Split the total across configured payment methods. The amounts must equal the sale total.</p>
-    {splitEligible.map((item) => <label key={item.code}>{item.label}<input type="number" min="0" step="0.01" value={split[item.code] || ''} onChange={(e) => setSplit((current) => ({ ...current, [item.code]: e.target.value }))}/></label>)}
-    <div className="till-form-actions"><button type="button" onClick={() => setMode('single')}>Back</button><button type="button" className="till-primary" disabled={!splitLines.length} onClick={() => onPay('split', { payments: splitLines })}>Validate & Complete Split Payment</button></div>
+    <p>Split the total across configured payment methods.</p>
+    {activeMethods.map((item) => <label key={item.code}>{item.label}<input type="number" min="0" step="0.01" value={split[item.code] || ''} onChange={(e) => setSplit((current) => ({ ...current, [item.code]: e.target.value }))}/></label>)}
+    <div className="till-form-actions"><button type="button" onClick={() => setMode('choose')}>Back</button><button type="button" className="till-primary" disabled={!splitLines.length} onClick={() => onPay('split', { payments: splitLines })}>Validate & Complete Split Payment</button></div>
+  </div>
+
+  if (mode === 'choose') return <div className="till-form">
+    <label>Payment method<select value={method} onChange={(e) => { setMethod(e.target.value); setValues({}) }}>{activeMethods.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
+    <div className="till-form-actions"><button type="button" onClick={() => setMode('split')}><Layers size={14}/> Split Payment</button><button type="button" className="till-primary" onClick={() => setMode('single')}>Continue</button></div>
   </div>
 
   return <div className="till-form">
-    <label>Payment method<select value={method} onChange={(e) => setMethod(e.target.value)}>{activeMethods.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
-    {!online ? <p>Offline availability is controlled by payment-method metadata.</p> : null}
-    {String(selected?.kind || '').toUpperCase() === 'CREDIT' && customer ? <p>{customer.name || 'Customer'}</p> : null}
-    {String(selected?.kind || '').toUpperCase() === 'GIFT_CARD' ? <label>Gift card code<input value={giftCardCode} onChange={(e) => setGiftCardCode(e.target.value)} placeholder="Scan or enter gift card code"/></label> : null}
-    {String(selected?.kind || '').toUpperCase() === 'CASH' ? <label>Cash received<input type="number" min="0" step="0.01" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} placeholder={money(total)}/></label> : null}
+    <p>{selected?.label || method}</p>
+    {inputFields.map(renderField)}
     <div className="till-form-actions">
-      <button type="button" onClick={() => setMode('split')}><Layers size={14}/> Split Payment</button>
-      <button type="button" className="till-primary" onClick={() => onPay(method, { cashReceivedOverride: String(selected?.kind || '').toUpperCase() === 'CASH' ? Number(cashReceived || total) : null, giftCardCode })}>Pay {selected?.label || method}</button>
+      {!initialMethod ? <button type="button" onClick={() => { setMode('choose'); setValues({}) }}>Back</button> : null}
+      <button type="button" className="till-primary" disabled={requiredMissing} onClick={() => onPay(method, Object.fromEntries(Object.entries(values).map(([key,value]) => [key, value === '' ? null : value])))}>Continue</button>
     </div>
   </div>
 }
-
 function CloudQueueIcon({ count }) {
   return <span className="till-queue-icon"><FileText size={14}/><small>{count}</small></span>
 }
