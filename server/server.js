@@ -1225,6 +1225,22 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     }
 
     const identitySql = `
+      WITH login_user AS (
+        (
+          SELECT u.id, 0 AS precedence
+            FROM users u
+           WHERE LOWER(BTRIM(u.email)) = LOWER(BTRIM($1))
+           LIMIT 1
+        )
+        UNION ALL
+        (
+          SELECT u.id, 1 AS precedence
+            FROM users u
+           WHERE u.email IS NULL
+             AND LOWER(u.username) = LOWER(BTRIM($1))
+           LIMIT 1
+        )
+      )
       SELECT
         u.id,
         u.username,
@@ -1239,11 +1255,11 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page,
         s.code AS store_code,
         s.name AS store_name
-      FROM users u
+      FROM login_user lu
+      JOIN users u ON u.id = lu.id
       LEFT JOIN roles r ON r.id = u.role_id
       LEFT JOIN stores s ON s.id = u.store_id AND s.company_id = u.company_id AND s.active = true
-      WHERE LOWER(BTRIM(u.email)) = LOWER(BTRIM($1))
-         OR (u.email IS NULL AND LOWER(u.username) = LOWER(BTRIM($1)))
+      ORDER BY lu.precedence
       LIMIT 1
     `;
 
