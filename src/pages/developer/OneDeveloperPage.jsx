@@ -40,7 +40,7 @@ const DEVELOPER_ITEMS = [
 
 function normalizeSection(value) {
   const raw = String(value || '').trim().toLowerCase()
-  const migrated = raw === 'builder2' ? 'workflow-builder' : raw
+  const migrated = raw
   return DEVELOPER_ITEMS.some((item) => item.key === migrated) ? migrated : 'objects'
 }
 
