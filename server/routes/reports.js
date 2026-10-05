@@ -205,9 +205,10 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         publicGroups: manage ? publicGroups.rows : [],
         reports: await filterReportsByFolderAccess(req, reports.rows || []),
         reportTypes: await (async () => {
-          const visible = [];
-          for (const row of reportTypes.rows || []) if (await reportTypeIsVisible(req, row)) visible.push(row);
-          return visible;
+          const rows = reportTypes.rows || [];
+          if (rows.every((row) => String(row?.definition?.experience?.status || row?.definition?.status || row?.status || "IN_DEVELOPMENT").toUpperCase() === "DEPLOYED")) return rows;
+          const canManage = await canManageReportTypes(req);
+          return rows.filter((row) => String(row?.definition?.experience?.status || row?.definition?.status || row?.status || "IN_DEVELOPMENT").toUpperCase() === "DEPLOYED" || canManage);
         })(),
         sources: STANDARD_REPORT_SOURCES,
         platformObjects: platformObjects.rows,
