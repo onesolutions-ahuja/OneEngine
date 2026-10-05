@@ -1316,3 +1316,18 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 6 closes standard Screen component authoring gaps', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderScreen.jsx', import.meta.url), 'utf8')
+  const runtime = await readFile(new URL('../src/pages/flow/ScreenFlowRuntimePage.jsx', import.meta.url), 'utf8')
+  for (const label of ['Time','Choice Lookup','Dependent Picklist','Repeater','Custom Component']) assert.ok(editor.includes(label), label)
+  assert.match(editor, /Validation Formula/)
+  assert.match(editor, /validationMessage/)
+  assert.match(editor, /Registry Key/)
+  assert.match(editor, /controllingComponent/)
+  assert.match(editor, /minEntries/)
+  assert.match(runtime, /'TIME'/)
+  assert.match(runtime, /'DEPENDENT_PICKLIST'/)
+  assert.match(runtime, /'CHOICE_LOOKUP'/)
+})
