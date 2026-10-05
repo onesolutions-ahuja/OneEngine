@@ -14,16 +14,16 @@ export default function AiAssistantSettings() {
     try {
       setLoading(true)
       setError('')
-      const [licence, permissionResponse] = await Promise.all([
-        apiRequest('/api/settings/jarves').catch(() => null),
-        loadSessionPermissions().catch(() => null),
-      ])
+      const permissionPromise = loadSessionPermissions().catch(() => null)
+      const licence = await apiRequest('/api/settings/jarves').catch(() => null)
       if (licence?.success) {
         setState(licence.data || null)
         setAllowance(String(licence.data?.allowance ?? 0))
       } else {
         setState(null)
       }
+      setLoading(false)
+      const permissionResponse = await permissionPromise
       setPermissions(permissionResponse?.permissions || [])
     } catch (err) {
       setError(err?.message || 'Unable to load JARVES licence state')
