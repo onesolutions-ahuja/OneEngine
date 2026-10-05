@@ -1,7 +1,6 @@
 import express from "express";
 import { createHash } from "node:crypto";
 import { allocateBatchConsumption } from "../services/inventory.js";
-import { computeBasketTotals, roundCurrency } from "../src/utils/saleTotals.js";
 import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
 import { getRequestPool } from "../services/tenantDatabase.js";
@@ -12,6 +11,11 @@ import { executeWorkflowActions } from "../services/platformWorkflow.js";
 import { evaluateValidationRules } from "../services/platformValidation.js";
 
 export const PAYMENT_METHODS = DEFAULT_PAYMENT_METHODS.map((method) => method.code);
+
+function roundCurrency(value) {
+  const numeric = Number(value) || 0;
+  return Math.round((numeric + Number.EPSILON) * 100) / 100;
+}
 
 function stableRequestValue(value) {
   if (Array.isArray(value)) return value.map(stableRequestValue);
@@ -861,12 +865,24 @@ export default function createSalesRouter({
           });
         }
 
-        const engine = computeBasketTotals(basketForTotals, {
-          vatEnabled: vatEnabled !== false,
-          vatRate: vatRateFromBody,
-          discountType: allowedOrderDiscountType,
-          discountValue: allowedOrderDiscountValue,
+        const totalsExecution = await executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "flow:sale.totals.calculate",
+          req,
+          input: {
+            basket: basketForTotals,
+            vatEnabled: vatEnabled !== false,
+            defaultVatRate: vatRateFromBody,
+            discountType: allowedOrderDiscountType || "",
+            discountValue: allowedOrderDiscountValue,
+          },
+          storeId: req.user.storeId || null,
+          tillId: session.rows[0].terminal_id || null,
+          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "sale.totals.calculate" },
         });
+        const engine = totalsExecution?.result || {};
 
         subtotal = roundCurrency(engine.subtotal);
         tax = roundCurrency(engine.vat || 0);
