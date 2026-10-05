@@ -1316,3 +1316,19 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 7 provides a provider-backed declarative HTTP Callout wizard', async () => {
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAction.jsx', import.meta.url), 'utf8')
+  assert.match(editor, /New HTTP Callout/)
+  assert.match(editor, /Select Connection/)
+  assert.match(editor, /Test Connection/)
+  assert.match(editor, /Configure Request/)
+  assert.match(editor, /Query Parameters \(JSON\)/)
+  assert.match(editor, /Configure Response/)
+  assert.match(editor, /Connect for Schema/)
+  assert.match(editor, /inferJsonSchema/)
+  assert.match(editor, /ONE_HTTP_REQUEST/)
+  assert.match(editor, /responseSchema/)
+  assert.match(editor, /test-connection/)
+})
