@@ -513,11 +513,10 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     vatEnabled,
     vatRate: defaultVatRate,
     paymentMethod,
-    cashReceived: paymentMethod === 'cash'
-      ? ((options.cashReceived ?? cashReceived) === '' || (options.cashReceived ?? cashReceived) == null ? null : Number(options.cashReceived ?? cashReceived))
-      : null,
+    cashReceived: options.cashReceived == null ? null : Number(options.cashReceived),
+    paymentInputs: options.paymentInputs || {},
     ...(Array.isArray(options.payments) && options.payments.length ? { payments: options.payments } : {}),
-    ...(options.giftCardCode ? { giftCardCode: options.giftCardCode } : {}),
+    ...(options.paymentInputs?.giftCardCode ? { giftCardCode: options.paymentInputs.giftCardCode } : {}),
     discountType: discount.type,
     discountValue: discount.value,
     ageVerified: ageVerified || verifiedOverride,
@@ -548,7 +547,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     setModal('receipt_qr')
   }
 
-  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, giftCardCode = '', cashReceivedOverride = null, paymentFlowValidated = false } = {}) => {
+  const completeSale = async (paymentMethod, { verifiedOverride = false, payments = null, paymentInputs = {}, paymentFlowValidated = false } = {}) => {
     const preflightButtons = buttons.filter((button) => button.placement === 'till_checkout_preflight')
     for (const preflight of preflightButtons) {
       try {
@@ -560,7 +559,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
           const modalKey = preflight?.config?.modalOnFalse || preflight?.config?.modal_on_false || null
           if (modalKey === 'age') {
             setPendingPayment(paymentMethod)
-            setPendingCheckout({ paymentMethod, options: { verifiedOverride: true, payments, giftCardCode, cashReceivedOverride } })
+            setPendingCheckout({ paymentMethod, options: { verifiedOverride: true, payments, paymentInputs } })
           }
           if (modalKey) setModal(modalKey)
           const configuredMessage = preflight?.config?.messageOnFalse || preflight?.config?.message_on_false
@@ -571,15 +570,18 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         return setError(err?.message || 'Checkout preflight failed.')
       }
     }
-    const selectedMethod = paymentMethods.find((method) => method.code === paymentMethod)
-    const received = String(selectedMethod?.kind || '').toUpperCase() === 'CASH'
-      ? Number((cashReceivedOverride ?? cashReceived) || total || 0)
+    let selectedMethod = paymentMethods.find((method) => method.code === paymentMethod) || null
+    let methodConfig = selectedMethod?.config || {}
+    const received = methodConfig.requiresCashReceived === true
+      ? Number(paymentInputs.cashReceivedOverride ?? total ?? 0)
       : null
 
     if (paymentMethod !== 'split' && !paymentFlowValidated) {
       try {
-        const selected = await runPaymentModeFlow(paymentMethod, { giftCardCode, cashReceivedOverride })
+        const selected = await runPaymentModeFlow(paymentMethod, paymentInputs)
         paymentMethod = selected.paymentMode
+        selectedMethod = paymentMethods.find((method) => method.code === paymentMethod) || selectedMethod
+        methodConfig = selectedMethod?.config || methodConfig
       } catch (err) {
         return setError(err?.message || 'Payment method validation failed.')
       }
@@ -606,13 +608,15 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
     setBusy(true)
     setError('')
-    const payload = buildSalePayload(paymentMethod, verifiedOverride, { payments, giftCardCode, cashReceived: received })
+    const payload = buildSalePayload(paymentMethod, verifiedOverride, { payments, paymentInputs, cashReceived: received })
     let durableCashEntry = null
+    const offlineQueueEnabled = methodConfig.offlineQueue === true
+    const showChange = methodConfig.showChange === true
     try {
-      if (paymentMethod === 'cash') {
+      if (offlineQueueEnabled) {
         durableCashEntry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
       }
-      if (!online && paymentMethod === 'cash') {
+      if (!online && offlineQueueEnabled) {
         const entry = durableCashEntry
         clearSale()
         setLastSale({ id: null, receipt_number: entry.provisionalReceipt, total, offline: true })
@@ -635,21 +639,21 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
           savedSale = savedResponse?.record || savedResponse?.data || sale
         } catch {}
       }
-      const change = paymentMethod === 'cash' ? Number(savedSale?.change_due || 0) : 0
+      const change = showChange ? Number(savedSale?.change_due || 0) : null
       setSaleCompleteNotice({
         receiptNumber: sale.receipt_number || null,
         total: serverTotal,
-        received: paymentMethod === 'cash' ? received : null,
+        received: methodConfig.requiresCashReceived === true ? received : null,
         change,
         pendingSync: false,
       })
-      setMessage(paymentMethod === 'cash'
+      setMessage(showChange && change != null
         ? `Sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''} · Change ${money(change, currency)}`
         : `${selectedMethod?.label || paymentMethod} sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''}`)
       await maybeShowReceiptQr(sale)
       await load()
     } catch (err) {
-      if (paymentMethod === 'cash' && durableCashEntry && (err instanceof TypeError || err?.status >= 500 || navigator.onLine === false)) {
+      if (offlineQueueEnabled && durableCashEntry && (err instanceof TypeError || err?.status >= 500 || navigator.onLine === false)) {
         clearSale()
         setLastSale({ id: null, receipt_number: durableCashEntry.provisionalReceipt, total, offline: true })
         setOnline(false)
@@ -884,7 +888,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     const received = Number(options.cashReceivedOverride ?? total ?? 0)
     return {
       paymentMode,
-      paymentKind: String(method.kind || '').toUpperCase(),
       allowOffline: method.allowOffline === true,
       online,
       customerSelected: Boolean(selectedCustomer?.id),
@@ -1184,7 +1187,7 @@ function PaymentSheet({ total, methods, online, customer, credit, onPay }) {
   const activeMethods = (methods || []).filter((method) => method.active !== false)
   const [mode, setMode] = useState('single')
   const [method, setMethod] = useState(activeMethods[0]?.code || 'cash')
-  const [cashReceived, setCashReceived] = useState('')
+  const [paymentModalMethod, setPaymentModalMethod] = useState('')
   const [giftCardCode, setGiftCardCode] = useState('')
   const [split, setSplit] = useState(() => Object.fromEntries(activeMethods.map((item) => [item.code, ''])))
   const selected = activeMethods.find((item) => item.code === method)
