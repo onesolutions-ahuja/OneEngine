@@ -10,6 +10,7 @@ concurrency:
 
 jobs:
   verify:
+    if: contains(github.event.head_commit.message, '[perf-verify]')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
