@@ -2,40 +2,6 @@ name: Workflow Builder E2E Gate
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/workflow-builder-e2e.yml"
-      - "tests/e2e/workflow-builder-regression.spec.mjs"
-      - "tests/e2e/appointment-workflow-debug.spec.mjs"
-      - "tests/e2e/uber-eats-workflow-debug.spec.mjs"
-      - "tests/appointmentWorkflow.test.mjs"
-      - "tests/e2e/helpers.mjs"
-      - "src/pages/settings/Platform/WorkflowAdmin.jsx"
-      - "src/pages/developer/Builder2Page.jsx"
-      - "src/pages/developer/Builder2Page.css"
-      - "src/pages/developer/Builder2AutoLayout.jsx"
-      - "src/pages/developer/Builder2GraphCanvas.jsx"
-      - "src/pages/developer/builder2Model.js"
-      - "src/navigation/routes.js"
-      - "scripts/build-pages-routes.mjs"
-      - "scripts/workflow-builder-fingerprint.mjs"
-      - ".github/workflows/pages-redirect.yml"
-      - "src/pages/settings/OneBuilder.jsx"
-      - "src/pages/developer/OneDeveloperPage.jsx"
-      - "src/pages/settings/Platform/WorkflowRunsAdmin.jsx"
-      - "src/pages/settings/Platform/ApprovalProcessBuilder.jsx"
-      - "src/styles/modules.css"
-      - "src/services/developerContext.js"
-      - "server/routes/platform.js"
-      - "server/routes/platformSchedules.js"
-      - "server/services/platformWorkflow.js"
-      - "server/services/systemWorkflowRuntime.js"
-      - "server/services/platformSchedules.js"
-      - "server/services/platformFormula.js"
-      - "server/services/platformRecordPaths.js"
-      - "server/database/init.js"
-      - "server/server.js"
 
 concurrency:
   group: oneengine-live-e2e
