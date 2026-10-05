@@ -3,6 +3,7 @@ import { ChevronLeft, Database, Plus, Search, Trash2, X } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? resourcePath(resource) : '')
 const objectLabel = (value) => value?.label || value?.name || objectKey(value)
 const fieldKey = (value) => String(value?.api_name || value?.apiName || value?.field_key || value?.key || value?.id || '')
 const fieldLabel = (value) => value?.label || value?.name || fieldKey(value)
@@ -98,7 +99,7 @@ function CompactResourcePicker({ value, onChange, resources, elements, collectio
   const options = useMemo(() => {
     const variableRows = (resources || [])
       .filter((resource) => collection ? resource.isCollection === true : true)
-      .map((resource) => ({ value: `variables.${resource.apiName}`, label: resource.label || resource.apiName }))
+      .map((resource) => ({ value: resourcePath(resource), label: resource.label || resource.apiName }))
     const stepRows = (elements || [])
       .filter((element) => element.configured && element.key === 'get_records')
       .map((element) => ({
