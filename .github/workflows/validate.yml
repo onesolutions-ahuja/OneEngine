@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: oneengine-validate-${{ github.ref }}
-  queue: max
+  cancel-in-progress: true
 
 jobs:
   build-and-audit:
