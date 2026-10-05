@@ -85,7 +85,7 @@ test('login and refresh use company binding and permitted stores', async () => {
   assert.equal(JSON.parse(requests.find(r => r.url.endsWith('/login')).options.body).actingCompanyId, undefined)
   api.setActingCompanyId('other')
   sessionStorage.setItem('onepos_user', JSON.stringify({ id: 'u', companyId: 'other' }))
-  assert.equal(await api.ensureActingCompanyContext(), 'home')
+  assert.equal(await api.ensureActingCompanyContext({ force: true }), 'home')
   assert.equal(api.getStoredUser().companyId, 'home')
   stores = [{ id: 'a', is_primary: true }, { id: 'b' }]
   localStorage.setItem(api.ACTIVE_STORE_STORAGE_KEY, 'b')
