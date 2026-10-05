@@ -1,23 +1,17 @@
 // Generic metadata-driven platform object helpers.
 // Business object/table/route/permission knowledge belongs to package/object metadata.
-
 export const SYSTEM_OBJECTS = Object.freeze([]);
-
 export function systemObject(object) {
   if (!object || typeof object !== "object") return null;
   const config = object.config && typeof object.config === "object" ? object.config : {};
   const permission = config.rbacPermission || object.rbac_permission || null;
   const route = config.route || object.route || null;
-  const companyScoped = config.companyScoped !== false;
-  return permission || route ? { key: object.object_key, table: object.source_table, permission, route, companyScoped } : null;
+  return permission || route ? { key: object.object_key, table: object.source_table, permission, route, companyScoped: config.companyScoped !== false } : null;
 }
-
 export function systemObjectRbacPermission(object, action) {
-  const config = object?.config && typeof object.config === "object" ? object.config : {};
-  const permissions = config.rbac && typeof config.rbac === "object" ? config.rbac : {};
+  const permissions = object?.config?.rbac && typeof object.config.rbac === "object" ? object.config.rbac : {};
   return permissions[action] || null;
 }
-
 export function safeSystemFields(object, fields) {
   const allow = object?.config?.readableFields;
   if (!Array.isArray(allow) || !allow.length) return fields;
