@@ -3,7 +3,7 @@ import { apiRequest } from '../../../services/api'
 import { Plus, Trash2 } from 'lucide-react'
 
 const uid = (prefix='agent') => globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 
 export const RUN_AGENT_DEFAULTS = Object.freeze({
   agentMode: 'existing',
