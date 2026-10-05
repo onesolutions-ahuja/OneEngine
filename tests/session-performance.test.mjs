@@ -190,3 +190,13 @@ test('security governance connected-apps query avoids unsupported FULL OUTER JOI
   assert.match(route, /UNION ALL/)
   assert.match(route, /NOT EXISTS/)
 })
+
+
+test('live browser E2E workflows are manual-only to protect Render bandwidth quota', async () => {
+  const playwright = await read('../.github/workflows/playwright-e2e.yml')
+  const cypress = await read('../.github/workflows/cypress-deep-e2e.yml')
+  assert.match(playwright, /on:\n\s+workflow_dispatch:/)
+  assert.equal(playwright.includes('\n  push:'), false)
+  assert.match(cypress, /on:\n\s+workflow_dispatch:/)
+  assert.equal(cypress.includes('\n  workflow_run:'), false)
+})
