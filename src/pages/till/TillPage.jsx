@@ -1201,15 +1201,14 @@ function ModifierPicker({ product, groups, onClose, onConfirm }) {
   const toggle = (group, option) => {
     setSelected((current) => {
       const groupIds = group.options.map((entry) => entry.id)
-      const currentGroup = current.filter((id) => groupIds.includes(id))
-      if (currentGroup.includes(option.id)) return current.filter((id) => id !== option.id)
-      if (group.maxSelections <= 1) return [...current.filter((id) => !groupIds.includes(id)), option.id]
-      if (currentGroup.length >= group.maxSelections) return current
+      if (current.includes(option.id)) return current.filter((id) => id !== option.id)
+      if (String(group?.selection_mode || '').toLowerCase() === 'single' || Number(group.maxSelections || 0) === 1) {
+        return [...current.filter((id) => !groupIds.includes(id)), option.id]
+      }
       return [...current, option.id]
     })
   }
-  const missingRequired = groups.some((group) => group.required && !group.options.some((option) => selected.includes(option.id)))
-  return <Modal title={product.name} onClose={onClose}><div className="till-form"><p>Choose options</p>{groups.map((group) => <section key={group.id} className="till-modifier-group"><strong>{group.name}</strong>{group.options.map((option) => <label key={option.id} className="till-modifier-option"><input type={group.maxSelections > 1 ? 'checkbox' : 'radio'} name={`modifier-${group.id}`} checked={selected.includes(option.id)} onChange={() => toggle(group, option)}/><span>{option.name}</span><small>{Number(option.price || 0) > 0 ? `+${money(option.price)}` : 'Free'}</small></label>)}</section>)}<button type="button" className="till-primary" disabled={missingRequired} onClick={() => onConfirm(selected.map((optionId) => ({ optionId })))}>Add</button></div></Modal>
+  return <Modal title={product.name} onClose={onClose}><div className="till-form"><p>Choose options</p>{groups.map((group) => <section key={group.id} className="till-modifier-group"><strong>{group.name}</strong>{group.options.map((option) => <label key={option.id} className="till-modifier-option"><input type={(String(group?.selection_mode || '').toLowerCase() === 'single' || Number(group.maxSelections || 0) === 1) ? 'radio' : 'checkbox'} name={`modifier-${group.id}`} checked={selected.includes(option.id)} onChange={() => toggle(group, option)}/><span>{option.name}</span><small>{Number(option.price || 0) > 0 ? `+${money(option.price)}` : 'Free'}</small></label>)}</section>)}<button type="button" className="till-primary" onClick={() => onConfirm(selected.map((optionId) => ({ optionId })))}>Add</button></div></Modal>
 }
 
 function DiscountForm({ value, onApply }) {
