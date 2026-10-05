@@ -35,7 +35,6 @@ import {
 import { sendWhatsAppTestInvoice, resendWhatsAppInvoice, sendWhatsAppTextMessage } from "../services/whatsappDelivery.js";
 import { getCompanyEntitlements, hasEntitlement } from "../services/licensing.js";
 import { createWorkflowRun, executeWorkflowActions } from "../services/platformWorkflow.js";
-import { interpretWhatsAppAssistantMessage } from "../services/whatsappAssistantAi.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "../services/communicationCore.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 
@@ -1165,70 +1164,9 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
             continue;
           }
 
-          // Appointment conversations are owned by the shared
-          // communication_message_received workflow. Keep the optional legacy
-          // WhatsApp AI/rules assistant out of that conversation so customers
-          // never receive a second competing reply.
-          const appointmentKeyword = body.trim().toUpperCase() === "APPOINTMENT";
-          const openAppointmentSession = appointmentKeyword ? true : Boolean((await db(
-            `SELECT 1
-               FROM appointment_booking_cases
-              WHERE company_id=$1
-                AND channel='WHATSAPP'
-                AND regexp_replace(COALESCE(sender,''),'[^0-9]','','g')=$2
-                AND status IN ('NEW','SLOT_SELECTED','AWAITING_PAYMENT')
-              LIMIT 1`,
-            [companyId, sender]
-          )).rows[0]);
-          if (openAppointmentSession) {
-            console.info("WhatsApp appointment message delegated to workflow", {
-              companyId,
-              phoneNumberId,
-              messageId: storedMessage.id,
-            });
-            continue;
-          }
-
-          let aiResult = null;
+          // Business intent interpretation is Flow-owned. The transport only emits the generic inbound record.
           const assistantMode = String(configuration.assistant_mode || "RULES").toUpperCase();
-          if (assistantMode === "AI") {
-            aiResult = await interpretWhatsAppAssistantMessage({
-              message: body,
-              allowedIntents: configuration.allowed_intents || "sales_enquiry,appointment",
-              providerName: configuration.ai_provider || process.env.JARVIS_AI_PROVIDER || "gemini",
-              contactName,
-            });
-
-            if ((aiResult?.handoff === true || aiResult?.ok === false) && configuration.human_handoff_enabled !== false) {
-              const handoff = await db(
-                `UPDATE whatsapp_conversations
-                    SET status='HUMAN',updated_at=NOW(),
-                        metadata=metadata || $3::jsonb
-                  WHERE id=$1 AND company_id=$2
-                  RETURNING *`,
-                [
-                  conversation.id,
-                  companyId,
-                  JSON.stringify({
-                    handoffReason: aiResult?.handoff === true ? "ai_handoff" : (aiResult?.reason || "ai_unavailable"),
-                    aiIntent: aiResult?.intent || null,
-                    aiProvider: aiResult?.provider || configuration.ai_provider || null,
-                  }),
-                ]
-              );
-              conversation = handoff.rows[0] || conversation;
-              await writeAudit?.(companyId, null, "whatsapp_assistant_handoff", "whatsapp_conversation", conversation.id, {
-                channel: "WHATSAPP",
-                messageId: storedMessage.id,
-                reason: aiResult?.handoff === true ? "ai_handoff" : (aiResult?.reason || "ai_unavailable"),
-              });
-              continue;
-            }
-          }
-
-          // Appointment booking is intentionally not implemented in this transport route.
-          // recordCommunicationEvent above publishes communication_message_received;
-          // the active OneAssistant workflow owns the conversational booking state machine.
+          const aiResult = null;
 
           const workflowsResult = await db(
             `SELECT id,name,object_id,action
@@ -1262,7 +1200,7 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
               intent: aiResult?.intent || null,
               confidence: aiResult?.confidence ?? null,
               ai_reply: aiResult?.reply || null,
-              allowed_intents: configuration.allowed_intents || "sales_enquiry,appointment",
+              allowed_intents: configuration.allowed_intents || "",
               privacy_scope: configuration.privacy_scope || "MINIMUM_REQUIRED",
               human_handoff_enabled: configuration.human_handoff_enabled !== false,
             },
