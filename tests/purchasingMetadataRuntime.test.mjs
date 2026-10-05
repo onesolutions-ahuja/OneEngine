@@ -162,3 +162,14 @@ test("layaway uses metadata ownership", async () => {
   assert.match(metadata, /key: "layaway_line"/);
   assert.match(metadata, /key: "layaway_payment"/);
 });
+
+
+test("pricing promotions and combos keep runtime pricing but remove legacy administration", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const pricingEngine = await readFile(new URL("../server/services/pricingEngine.js", import.meta.url), "utf8");
+  assert.equal(server.includes("createPricingRouter"), false);
+  assert.match(metadata, /key: "promotion"/);
+  assert.match(metadata, /key: "price_list"/);
+  assert.match(pricingEngine, /export function resolvePrice/);
+});

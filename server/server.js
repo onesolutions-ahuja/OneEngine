@@ -39,7 +39,6 @@ import createHeldSalesRouter from "./routes/heldSales.js";
 import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
-import createPricingRouter from "./routes/pricing.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
 import createSuppliersRouter from "./routes/suppliers.js";
 import createPurchasesRouter from "./routes/purchases.js";
@@ -2135,10 +2134,6 @@ app.use(
     db,
     pool,
   })
-);
-app.use(
-  "/api",
-  createPricingRouter({ authenticate, authorize, db, pool })
 );
 
 /*
