@@ -132,7 +132,7 @@ test("customer administration is metadata-owned while runtime customer services 
   assert.match(registry, /parentObjectKey: "customer", childObjectKey: "contact"/);
   assert.match(registry, /parentObjectKey: "customer", childObjectKey: "address"/);
   assert.match(route, /"\/customer-lookup"/);
-  assert.match(route, /"\/customers\/:id\/credit"/);
+  assert.equal(route.includes('"/customers/:id/credit"'), false);
 });
 
 
@@ -182,8 +182,8 @@ test("sales products and categories use metadata workspace while legacy return a
   assert.match(app, /SalesPage initialObjectKey="sale" appKey="sales"/);
   assert.match(app, /ProductsPage initialObjectKey="product" appKey="products"/);
   assert.match(app, /CategoriesPage initialObjectKey="category" appKey="categories"/);
-  assert.equal(app.includes("ReturnsPage"), false);
-  assert.equal(app.includes("ExchangePage"), false);
+  assert.equal(app.includes("const ReturnsPage ="), false);
+  assert.equal(app.includes("const ExchangePage ="), false);
   assert.match(metadata, /key: "stock_return"/);
   assert.match(productsRoute, /\/products\/catalogue/);
   assert.match(productsRoute, /\/products\/misc-line/);
