@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 
 const uid = () => globalThis.crypto?.randomUUID?.() || `cs-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
 const fieldKey = (value) => String(value?.api_name || value?.apiName || value?.field_key || value?.key || value?.id || '')
 const fieldLabel = (value) => value?.label || value?.name || fieldKey(value)
