@@ -2336,6 +2336,19 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             if (mapping.round === true) value = Math.round(Number(value));
             return value;
           }
+          // A path binding is already understood by the generic resource
+          // resolver. Other plain objects are nested transform structures and
+          // must resolve recursively instead of leaking mapping definitions
+          // into the generated payload.
+          if (Object.prototype.hasOwnProperty.call(mapping, "path")) {
+            return sourceValue(mapping, item, rowContext);
+          }
+          return Object.fromEntries(
+            Object.entries(mapping).map(([key, value]) => [
+              key,
+              resolveMapping(value, item, rowContext, sourceCollections),
+            ])
+          );
         }
         return sourceValue(mapping, item, rowContext);
       };
