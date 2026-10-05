@@ -598,7 +598,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         clearSale()
         setLastSale({ id: null, receipt_number: entry.provisionalReceipt, total, offline: true })
         setMessage(`Cash sale saved offline · ${entry.provisionalReceipt} · Pending sync.`)
-        setSaleCompleteNotice({ receiptNumber: entry.provisionalReceipt, total, received, change: Math.max(0, received - total), pendingSync: true })
+        setSaleCompleteNotice({ receiptNumber: entry.provisionalReceipt, total, received, change: null, pendingSync: true })
         await refreshOfflineCount()
         return
       }
@@ -609,7 +609,14 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       setLastSale(sale)
       clearSale()
       const serverTotal = Number(sale.total || 0)
-      const change = paymentMethod === 'cash' ? Math.max(0, Number(received || 0) - serverTotal) : 0
+      let savedSale = sale
+      if (sale.id) {
+        try {
+          const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(sale.id)}`)
+          savedSale = savedResponse?.record || savedResponse?.data || sale
+        } catch {}
+      }
+      const change = paymentMethod === 'cash' ? Number(savedSale?.change_due || 0) : 0
       setSaleCompleteNotice({
         receiptNumber: sale.receipt_number || null,
         total: serverTotal,
@@ -628,7 +635,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         setLastSale({ id: null, receipt_number: durableCashEntry.provisionalReceipt, total, offline: true })
         setOnline(false)
         setMessage(`Cash sale saved offline · ${durableCashEntry.provisionalReceipt} · Pending sync.`)
-        setSaleCompleteNotice({ receiptNumber: durableCashEntry.provisionalReceipt, total, received, change: Math.max(0, received - total), pendingSync: true })
+        setSaleCompleteNotice({ receiptNumber: durableCashEntry.provisionalReceipt, total, received, change: null, pendingSync: true })
         await refreshOfflineCount()
         return
       }
@@ -1090,7 +1097,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         }
       }}>Regenerate QR</button></div></Modal> : null}
       {modal === 'offline_queue' ? <Modal title="Offline sales queue" onClose={() => setModal(null)} wide><div className="till-offline-queue"><p>Saved cash sales sync automatically when the onePOS server is reachable. Failed sales remain here for review.</p><div className="till-offline-stats"><div><strong>{offlineEntries.filter((entry) => entry.status !== 'failed').length}</strong><span>Pending</span></div><div><strong>{offlineEntries.filter((entry) => entry.status === 'failed').length}</strong><span>Needs attention</span></div><div><strong>{offlineStats.syncedTotal || 0}</strong><span>Synced</span></div><div><strong>{offlineStats.lastSyncedAt ? new Date(offlineStats.lastSyncedAt).toLocaleTimeString() : '—'}</strong><span>Last sync</span></div></div>{offlineStats.lastError ? <div className="till-notice is-error">{offlineStats.lastError}</div> : null}{offlineEntries.length ? offlineEntries.map((entry) => <div className="till-offline-row" key={entry.id}><div><strong>{entry.provisionalReceipt || 'Saved sale'}</strong><span>{entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''} · {entry.status === 'failed' ? 'Needs attention' : 'Pending sync'}</span>{entry.lastError ? <small>{entry.lastError}</small> : null}</div>{entry.status === 'failed' ? <button type="button" onClick={async () => { await retryOfflineCashSale(entry.id); await syncOfflineCashSales(apiRequest); await refreshOfflineCount() }}>Retry</button> : null}</div>) : <div className="till-empty">No sales waiting to sync.</div>}<div className="till-form-actions"><button type="button" onClick={async () => { await syncOfflineCashSales(apiRequest); await refreshOfflineCount() }}>Sync pending</button>{offlineEntries.some((entry) => entry.status === 'failed') ? <button type="button" className="till-primary" onClick={async () => { await retryAllOfflineCashSales(); await syncOfflineCashSales(apiRequest); await refreshOfflineCount() }}>Retry all failed</button> : null}</div></div></Modal> : null}
-      {saleCompleteNotice ? <Modal title={saleCompleteNotice.pendingSync ? 'Sale saved — pending sync' : 'Transaction complete'} onClose={() => setSaleCompleteNotice(null)}><div className="till-form"><p>{saleCompleteNotice.receiptNumber ? `Receipt ${saleCompleteNotice.receiptNumber}` : 'Sale complete'}</p><div className="till-payment-remaining"><span>Total</span><strong>{money(saleCompleteNotice.total, currency)}</strong></div>{saleCompleteNotice.received != null ? <div className="till-payment-remaining"><span>Cash received</span><strong>{money(saleCompleteNotice.received, currency)}</strong></div> : null}<div className="till-payment-remaining"><span>Change</span><strong>{money(saleCompleteNotice.change, currency)}</strong></div><button type="button" className="till-primary" onClick={() => setSaleCompleteNotice(null)}>OK</button></div></Modal> : null}
+      {saleCompleteNotice ? <Modal title={saleCompleteNotice.pendingSync ? 'Sale saved — pending sync' : 'Transaction complete'} onClose={() => setSaleCompleteNotice(null)}><div className="till-form"><p>{saleCompleteNotice.receiptNumber ? `Receipt ${saleCompleteNotice.receiptNumber}` : 'Sale complete'}</p><div className="till-payment-remaining"><span>Total</span><strong>{money(saleCompleteNotice.total, currency)}</strong></div>{saleCompleteNotice.received != null ? <div className="till-payment-remaining"><span>Cash received</span><strong>{money(saleCompleteNotice.received, currency)}</strong></div> : null}{saleCompleteNotice.change != null ? <div className="till-payment-remaining"><span>Change</span><strong>{money(saleCompleteNotice.change, currency)}</strong></div> : null}<button type="button" className="till-primary" onClick={() => setSaleCompleteNotice(null)}>OK</button></div></Modal> : null}
     </section>
   )
 }
