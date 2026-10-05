@@ -6,13 +6,13 @@ import { getWorkflowActionDefinition } from "../server/services/platformWorkflow
 import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
 
 test("system workflow catalogue exposes Send Communication but not legacy transports", () => {
-  const keys = systemWorkflowDefinitions().map((item) => item.systemKey);
-  assert.ok(keys.includes("action:SEND_COMMUNICATION"));
+  const keys = systemWorkflowDefinitions().filter((item) => item.action?.capabilityType === "action").map((item) => item.action?.capabilityKey);
+  assert.ok(keys.includes("SEND_COMMUNICATION"));
   for (const key of [
-    "action:SEND_EMAIL",
-    "action:SEND_SMS",
-    "action:SEND_WHATSAPP",
-    "action:IN_APP_NOTIFICATION",
+    "SEND_EMAIL",
+    "SEND_SMS",
+    "SEND_WHATSAPP",
+    "IN_APP_NOTIFICATION",
   ]) {
     assert.equal(keys.includes(key), false, key + " must remain internal compatibility only");
   }
