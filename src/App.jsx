@@ -126,8 +126,6 @@ const AccountingAdmin = lazyWithRecovery(() => import('./pages/integrations/Acco
 const OnlineOrdersAdmin = lazyWithRecovery(() => import('./pages/online/OnlineOrdersAdmin'))
 const OnlineOrdersPrep = lazyWithRecovery(() => import('./pages/online/OnlineOrdersPrep'))
 const OwnDeliveryWorkspace = lazyWithRecovery(() => import('./pages/online/OwnDeliveryWorkspace'))
-const ReturnsAdmin = lazyWithRecovery(() => import('./pages/returns/ReturnsAdmin'))
-const SupplierReturnsAdmin = lazyWithRecovery(() => import('./pages/returns/ReturnsAdmin').then((module) => ({ default: module.SupplierReturnsAdmin })))
 const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
