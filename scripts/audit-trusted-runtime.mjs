@@ -84,8 +84,8 @@ for (const required of ['internalAppCatalog', 'packageDefinition', 'hashPackageM
   if (!serverPackages.includes(required)) findings.push({ severity: 'ERROR', rule: 'TRUSTED_PACKAGE_CATALOGUE_INVALID', file: path.relative(ROOT, SERVER_PACKAGES), detail: required })
 }
 const packageAssertions = (packageRoutes.match(/assertTrustedPackageManifest\(item\.packageKey, item\.manifest, item\.version\)/g) || []).length
-if (packageAssertions < 3) {
-  findings.push({ severity: 'ERROR', rule: 'PACKAGE_LIFECYCLE_GATE_MISSING', file: path.relative(ROOT, PACKAGE_ROUTES), detail: `expected plan/install/upgrade assertions; found ${packageAssertions}` })
+if (packageAssertions < 2) {
+  findings.push({ severity: 'ERROR', rule: 'PACKAGE_LIFECYCLE_GATE_MISSING', file: path.relative(ROOT, PACKAGE_ROUTES), detail: `expected plan and Flow-routed lifecycle assertions; found ${packageAssertions}` })
 }
 if (!serverEntry.includes('validateTrustedPackageCatalogue()')) {
   findings.push({ severity: 'ERROR', rule: 'PACKAGE_STARTUP_VALIDATION_MISSING', file: path.relative(ROOT, SERVER_ENTRY) })
