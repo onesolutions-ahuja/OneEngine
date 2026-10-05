@@ -3306,18 +3306,8 @@ export function packageDefinition(entry) {
           {objectKey:"purchase_receipt",viewKey:"receipts",label:"Purchase Receipts",columns:["purchase_id","reference_number","received_at","received_by","notes"],sort:{field:"received_at",direction:"desc"},isDefault:true},
         ],
         workflows: [
-          {objectKey:"purchase",name:"Purchase Create",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[
-            {id:"purchase_create",label:"Create Purchase",key:"CALL_FUNCTION",functionKey:"purchase.create",inputs:{
-              supplierId:{path:"record.supplierId"},supplierName:{path:"record.supplierName"},referenceNumber:{path:"record.referenceNumber"},
-              purchaseDate:{path:"record.purchaseDate"},notes:{path:"record.notes"},items:{path:"record.items"},receiveNow:{path:"record.receiveNow"},
-              recordTypeId:{path:"record.recordTypeId"},customFields:{path:"record.customFields"}
-            }}
-          ]},
-          {objectKey:"purchase",name:"Purchase Receive",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[
-            {id:"purchase_receive",label:"Receive Purchase",key:"CALL_FUNCTION",functionKey:"purchase.receive",inputs:{
-              purchaseId:{path:"record.id"},receivingReference:{path:"record.receivingReference"},receivingNotes:{path:"record.receivingNotes"}
-            }}
-          ]},
+          {objectKey:"purchase",name:"Purchase Create",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[{id:"purchase_create",label:"Purchase Create",key:"RUN_SUBFLOW",subflowApiName:"PURCHASE_CREATE",inputAssignments:{supplierId:{path:"record.supplierId"},supplierName:{path:"record.supplierName"},referenceNumber:{path:"record.referenceNumber"},purchaseDate:{path:"record.purchaseDate"},notes:{path:"record.notes"},items:{path:"record.items"}}}]},
+          {objectKey:"purchase",name:"Purchase Receive",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[{id:"purchase_receive",label:"Purchase Receive",key:"RUN_SUBFLOW",subflowApiName:"PURCHASE_RECEIVE",inputAssignments:{purchaseId:{path:"record.id"},receivingReference:{path:"record.receivingReference"},receivingNotes:{path:"record.receivingNotes"},now:{path:"record.now"},userId:{path:"record.userId"}}}]},
           {objectKey:"purchase_line",name:"Supplier Return Execute",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[
             {id:"supplier_return",label:"Return Stock",key:"CALL_FUNCTION",functionKey:"supplier.return.execute",inputs:{
               purchaseItemId:{path:"record.id"},purchaseId:{path:"record.purchase_id"},productId:{path:"record.product_id"},
