@@ -333,6 +333,8 @@
   .gptb-new-flow-link{display:none}
 }
 @media(max-width:520px){
+  .gptb-workspace.has-toolbox{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(120px,38vh) minmax(0,1fr)}
+  .gptb-workspace.has-toolbox .gptb-toolbox{position:relative;top:auto;right:auto;bottom:auto;left:auto;width:100%;max-width:none;min-height:0;z-index:10;border-right:0;border-bottom:1px solid #c9c9c9;box-shadow:none}
   .gptb-config-panel,.gptb-diagnostics,.gptb-element-properties-panel,.gptb-element-editor-shell{width:100%;max-width:none;border-left:0}
   .gptb-config-panel>footer,.gptb-element-editor-shell>footer,.gptb-element-properties-panel>footer{flex-wrap:wrap;height:auto;min-height:54px;padding:8px}
   .gptb-two-col{grid-template-columns:1fr}
