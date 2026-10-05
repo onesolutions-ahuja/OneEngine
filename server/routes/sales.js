@@ -1054,11 +1054,7 @@ export default function createSalesRouter({
 
         const saleId = sale.rows[0].id;
 
-        /*
-         * Sale items + stock reduction. Misc lines are appended to the same
-         * insert as ordinary lines, but flagged item_type='MISC' and never
-         * stock-decremented (no catalogue SKU exists to decrement).
-          */
+        /* Catalogue sale items and their stock movements. Flow-owned extension lines are persisted separately below. */
           const saleItemIds = [];
           for (const [itemIndex, item] of items.entries()) {
           const product = await client.query(
