@@ -496,13 +496,15 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
     name: "Validate Payment Method",
     inputs: [
       creditInput("paymentMode", "text", { required: true }),
-      creditInput("paymentKind", "text", { required: true }),
       creditInput("online", "boolean", { required: true }),
       creditInput("allowOffline", "boolean", { required: true }),
       creditInput("requiresConnector", "boolean", { required: true }),
       creditInput("connectorAvailable", "boolean", { required: true }),
+      creditInput("requiresCustomer", "boolean", { required: true }),
       creditInput("customerSelected", "boolean", { required: true }),
+      creditInput("requiresGiftCardCode", "boolean", { required: true }),
       creditInput("hasGiftCardCode", "boolean", { required: true }),
+      creditInput("requiresCashReceived", "boolean", { required: true }),
       creditInput("cashReceived", "number", { required: true }),
       creditInput("total", "number", { required: true }),
     ],
@@ -518,16 +520,16 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
         requiresConnector: { path: "variables.requiresConnector" },
         connectorAvailable: { path: "variables.connectorAvailable" },
       }),
-      creditFormula("payment_customer_allowed", "customerAllowed", "boolean", 'paymentKind != "CREDIT" || customerSelected', {
-        paymentKind: { path: "variables.paymentKind" },
+      creditFormula("payment_customer_allowed", "customerAllowed", "boolean", "!requiresCustomer || customerSelected", {
+        requiresCustomer: { path: "variables.requiresCustomer" },
         customerSelected: { path: "variables.customerSelected" },
       }),
-      creditFormula("payment_gift_allowed", "giftAllowed", "boolean", 'paymentKind != "GIFT_CARD" || hasGiftCardCode', {
-        paymentKind: { path: "variables.paymentKind" },
+      creditFormula("payment_gift_allowed", "giftAllowed", "boolean", "!requiresGiftCardCode || hasGiftCardCode", {
+        requiresGiftCardCode: { path: "variables.requiresGiftCardCode" },
         hasGiftCardCode: { path: "variables.hasGiftCardCode" },
       }),
-      creditFormula("payment_cash_allowed", "cashAllowed", "boolean", 'paymentKind != "CASH" || cashReceived >= total', {
-        paymentKind: { path: "variables.paymentKind" },
+      creditFormula("payment_cash_allowed", "cashAllowed", "boolean", "!requiresCashReceived || cashReceived >= total", {
+        requiresCashReceived: { path: "variables.requiresCashReceived" },
         cashReceived: { path: "variables.cashReceived" },
         total: { path: "variables.total" },
       }),
