@@ -377,11 +377,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     let groups = []
     try {
       if (online) {
-        const groupResponse = await apiRequest(`/api/platform/objects/product_modifier_group/records?page=1&pageSize=100&product_id=${encodeURIComponent(product.id)}`)
+        const groupResponse = await apiRequest(`/api/platform/objects/product_modifier_group/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ product_id: product.id }))}`)
         const groupRows = Array.isArray(groupResponse?.records) ? groupResponse.records : Array.isArray(groupResponse?.data) ? groupResponse.data : []
         const activeGroups = groupRows.filter((row) => row.active !== false && String(row.product_id) === String(product.id))
         const optionResponses = await Promise.all(activeGroups.map((group) =>
-          apiRequest(`/api/platform/objects/product_modifier_option/records?page=1&pageSize=100&group_id=${encodeURIComponent(group.id)}`).catch(() => ({ records: [] }))
+          apiRequest(`/api/platform/objects/product_modifier_option/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ group_id: group.id }))}`).catch(() => ({ records: [] }))
         ))
         groups = activeGroups
           .sort((a,b) => Number(a.display_order || 0) - Number(b.display_order || 0))
