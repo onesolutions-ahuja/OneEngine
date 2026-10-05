@@ -111,22 +111,27 @@ export function setStoredSessionPermissions(value) {
   } catch {}
 }
 
-let permissionsInFlight = null
+const permissionsInFlight = new Map()
 export async function loadSessionPermissions({ force = false, includeEntitlements = false } = {}) {
   if (!force) {
     const cached = getStoredSessionPermissions()
-    if (cached) return cached
+    if (cached && (!includeEntitlements || cached?.entitlements !== undefined)) return cached
   }
-  if (permissionsInFlight) return permissionsInFlight
+  const key = includeEntitlements ? 'with-entitlements' : 'permissions-only'
+  const existing = permissionsInFlight.get(key)
+  if (existing) return existing
   const suffix = includeEntitlements ? '' : '?includeEntitlements=0'
-  permissionsInFlight = apiRequest(`/api/auth/me/permissions${suffix}`)
+  const request = apiRequest(`/api/auth/me/permissions${suffix}`)
     .then((response) => {
       const data = response?.data || {}
       setStoredSessionPermissions(data)
       return data
     })
-    .finally(() => { permissionsInFlight = null })
-  return permissionsInFlight
+    .finally(() => {
+      if (permissionsInFlight.get(key) === request) permissionsInFlight.delete(key)
+    })
+  permissionsInFlight.set(key, request)
+  return request
 }
 
 export function normaliseServerAddress(value) {
