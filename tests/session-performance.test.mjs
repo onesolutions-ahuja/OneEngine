@@ -273,3 +273,18 @@ test('normal password login preflight uses one bundled database query before opt
   assert.match(server, /securityContext\.googleConnection/)
   assert.equal(server.includes('getGoogleConnectPasswordLoginRuntime((query'), false)
 })
+
+
+test('all production-facing live E2E workflows are manual-only', async () => {
+  for (const path of [
+    '../.github/workflows/playwright-e2e.yml',
+    '../.github/workflows/cypress-deep-e2e.yml',
+    '../.github/workflows/workflow-builder-e2e.yml',
+    '../.github/workflows/appointment-debug.yml',
+  ]) {
+    const source = await read(path)
+    assert.match(source, /on:\n\s+workflow_dispatch:/)
+    assert.equal(source.includes('\n  push:'), false, path)
+    assert.equal(source.includes('\n  workflow_run:'), false, path)
+  }
+})
