@@ -82,7 +82,6 @@ import createDataProtectionRouter from "./routes/dataProtection.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, finalizeSuccessfulLogin, loadLoginSecurityContext, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
-import createOwnDeliveryRouter from "./routes/ownDelivery.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
 import createPaypalQrRouter from "./routes/paypalQr.js";
@@ -2002,15 +2001,7 @@ app.use("/api", createClientWebShopRouter({
   createInventoryMovement,
   getCompanyEntitlements: (companyId) => getCompanyEntitlements(db, companyId),
 }));
-app.use("/api", createOwnDeliveryRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  canAccessStore,
-  createInventoryMovement,
-  writeAudit,
-}));
+
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));

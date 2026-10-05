@@ -121,7 +121,6 @@ const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReports
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
 const AccountingAdmin = lazyWithRecovery(() => import('./pages/integrations/AccountingAdmin'))
-const OwnDeliveryWorkspace = lazyWithRecovery(() => import('./pages/online/OwnDeliveryWorkspace'))
 const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
@@ -2466,7 +2465,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'online-orders' ? (
           <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
-          <OwnDeliveryWorkspace />
+          <WorkspacePage initialObjectKey="online_order" appKey="own-delivery" />
         ) : activeApp === 'assistant' ? (
           <OneAssistantPage />
         ) : activeApp === 'kiosk' ? (

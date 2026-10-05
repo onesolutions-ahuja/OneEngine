@@ -279,3 +279,14 @@ test("reports use generic platform reporting instead of fixed business report ro
   assert.match(route, /\/reports\/custom\/capabilities/);
   assert.match(route, /\/reports\/custom\/preview/);
 });
+
+
+test("own delivery package uses metadata workspace instead of hardcoded business route and UI", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const catalogue = await readFile(new URL("../server/services/internalAppCatalog.js", import.meta.url), "utf8");
+  assert.equal(app.includes("OwnDeliveryWorkspace"), false);
+  assert.match(app, /initialObjectKey="online_order" appKey="own-delivery"/);
+  assert.equal(server.includes("createOwnDeliveryRouter"), false);
+  assert.match(catalogue, /key: "own_delivery"/);
+});
