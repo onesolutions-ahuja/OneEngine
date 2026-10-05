@@ -894,7 +894,7 @@ function SettingsPage({ onOpenProfile }) {
 
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
-          <LazyLoadBoundary>
+          <LazyLoadBoundary key={current?.key || active} resetKey={current?.key || active}>
           <Suspense fallback={<div className="settings-card settings-state-card">Loading section…</div>}>
           {loading ? (
             <div className="settings-card settings-state-card">Loading settings…</div>
