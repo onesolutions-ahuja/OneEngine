@@ -40,6 +40,13 @@ test('shared API client deduplicates concurrent GET loaders by session context',
   assert.match(source, /apiRequestInFlight\.get\(key\)/)
 })
 
+test('permission dedupe never aliases entitlement and non-entitlement payloads', async () => {
+  const source = await read('../src/services/api.js')
+  assert.match(source, /const permissionsInFlight = new Map\(\)/)
+  assert.match(source, /includeEntitlements \? 'with-entitlements' : 'permissions-only'/)
+  assert.match(source, /cached && \(!includeEntitlements \|\| cached\?\.entitlements !== undefined\)/)
+})
+
 test('login resolves central and tenant identity reads in parallel', async () => {
   const source = await read('../server/server.js')
   assert.match(source, /const \[centralIdentity, tenantIdentity\] = await Promise\.all/)
