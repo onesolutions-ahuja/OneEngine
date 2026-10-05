@@ -857,7 +857,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
       const response = await apiRequest(endpoint, {
         method: 'POST',
-        body: JSON.stringify(useRecordScope && scopedRecordId ? { inputs: context } : { context }),
+        body: JSON.stringify(useRecordScope && scopedRecordId ? { inputs: context } : { context, inputs: context }),
       })
       if (response?.success === false) throw new Error(response?.message || 'Unable to run Till action')
       return response
