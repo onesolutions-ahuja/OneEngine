@@ -386,7 +386,7 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
         vatLineDiscount: { path: "variables.vatLineDiscount" },
       }),
       creditFormula("sale_totals_vat_rate", "effectiveVatRate", "number",
-        "IF(vatEnabled && vatApplicable, IF(ISBLANK(lineVatRate), defaultVatRate / 100, lineVatRate / 100), 0)", {
+        "IF(vatEnabled && vatApplicable, IF(ISBLANK(lineVatRate), defaultVatRate, lineVatRate / 100), 0)", {
           vatEnabled: { path: "variables.vatEnabled" },
           vatApplicable: { path: "variables.vatLine.vatApplicable" },
           lineVatRate: { path: "variables.vatLine.vatRate" },
