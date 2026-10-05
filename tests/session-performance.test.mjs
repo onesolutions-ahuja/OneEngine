@@ -50,3 +50,16 @@ test('session bootstrap resolves identity and RBAC reads in parallel', async () 
   const source = await read('../server/server.js')
   assert.match(source, /const \[result, rolePermissions, permissionSets\] = await Promise\.all/)
 })
+
+
+test('per-request session security skips unused trusted-network lookup and parallelizes session state reads', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  assert.match(source, /includeTrustedNetwork = true/)
+  assert.match(source, /includeTrustedNetwork: false/)
+  assert.match(source, /const \[sessionResult, state\] = await Promise\.all/)
+})
+
+test('RBAC role and permission-set reads run in parallel', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /const \[codes, permissionSets\] = await Promise\.all/)
+})
