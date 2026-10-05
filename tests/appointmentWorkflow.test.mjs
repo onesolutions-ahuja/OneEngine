@@ -2,16 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { packageDefinitions } from "../server/services/packageRegistry.js";
+import { oneAssistantManifest } from "../server/packages/oneAssistantManifest.js";
 import { getWorkflowActionDefinition } from "../server/services/platformWorkflow.js";
 import { resolveBindingTree } from "../server/services/platformRecordPaths.js";
 
 function oneAssistantRouter() {
-  const pkg = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
-  assert.ok(pkg, "OneAssistant package must exist");
-  const workflow = pkg.manifest.workflows.find((item) => item.name === "OneAssistant - Booking Channel Router");
+  const workflow = (oneAssistantManifest.workflows || []).find((item) => item.name === "OneAssistant - Booking Channel Router");
   assert.ok(workflow, "booking channel router must exist");
-  return { pkg, workflow };
+  return { manifest: oneAssistantManifest, workflow };
 }
 
 test("OneAssistant uses one active communication-event router for SMS and WhatsApp", () => {
@@ -49,20 +47,17 @@ test("OneAssistant uses one active communication-event router for SMS and WhatsA
   assert.ok(whatsappApi.every((action) => action.method === "POST" && action.endpoint === "/{{phoneNumberId}}/messages"));
 
   assert.equal(
-    packageDefinitions().find((definition) => definition.packageKey === "one_assistant")
-      .manifest.workflows.some((item) => item.name === "OneAssistant - Email Booking"),
+    (oneAssistantManifest.workflows || []).some((item) => item.name === "OneAssistant - Email Booking"),
     false,
     "inactive legacy Email booking flow must not be packaged"
   );
   assert.equal(
-    packageDefinitions().find((definition) => definition.packageKey === "one_assistant")
-      .manifest.workflows.some((item) => item.name === "OneAssistant - SMS Booking"),
+    (oneAssistantManifest.workflows || []).some((item) => item.name === "OneAssistant - SMS Booking"),
     false,
     "legacy SMS event flow must not be installed alongside the router"
   );
   assert.equal(
-    packageDefinitions().find((definition) => definition.packageKey === "one_assistant")
-      .manifest.workflows.some((item) => item.name === "OneAssistant - WhatsApp Booking"),
+    (oneAssistantManifest.workflows || []).some((item) => item.name === "OneAssistant - WhatsApp Booking"),
     false,
     "legacy WhatsApp event flow must not be installed alongside the router"
   );
@@ -303,8 +298,7 @@ test("SMSGate webhook only records inbound communication and no longer hard-code
 
 
 test("OneAssistant exposes service-resource and slot-hold metadata for visible availability Flow", () => {
-  const pkg = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
-  const objects = pkg?.manifest?.objects || [];
+  const objects = oneAssistantManifest.objects || [];
   const keys = objects.map((item) => item.objectKey);
   assert.ok(keys.includes("appointment_resource_service"));
   assert.ok(keys.includes("appointment_slot_hold"));
