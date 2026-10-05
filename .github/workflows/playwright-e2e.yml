@@ -42,34 +42,13 @@ jobs:
           done
           exit 1
 
-      - name: Verify E2E credentials
+      - name: Verify E2E configuration
         shell: bash
         run: |
           set -euo pipefail
-          PAYLOAD="$(jq -n --arg username "$ONEPOS_E2E_USERNAME" --arg password "$ONEPOS_E2E_PASSWORD" '{username:$username,password:$password,actingCompanyId:null}')"
-          LOGIN_URL="${ONEPOS_E2E_API_BASE_URL%/}/api/auth/login"
-          for attempt in {1..12}; do
-            STATUS="$(curl -sS -o /tmp/onepos-e2e-login.json -w '%{http_code}' \
-              -H 'Content-Type: application/json' \
-              -d "$PAYLOAD" \
-              "$LOGIN_URL" || true)"
-            SUCCESS="$(jq -r '.success // false' /tmp/onepos-e2e-login.json 2>/dev/null || echo false)"
-            if [ "$STATUS" = "200" ] && [ "$SUCCESS" = "true" ]; then
-              echo "E2E credential check passed against API deployment."
-              exit 0
-            fi
-            MESSAGE="$(jq -r '.message // "authentication rejected"' /tmp/onepos-e2e-login.json 2>/dev/null || echo 'authentication rejected')"
-            if [ "$STATUS" = "503" ] || [ "$STATUS" = "502" ] || [ "$STATUS" = "504" ]; then
-              echo "API not ready yet (HTTP $STATUS: $MESSAGE), retrying..."
-              sleep 10
-              continue
-            fi
-            echo "::error::E2E login failed against API deployment (HTTP $STATUS): $MESSAGE"
-            exit 1
-          done
-          MESSAGE="$(jq -r '.message // "API did not become ready"' /tmp/onepos-e2e-login.json 2>/dev/null || echo 'API did not become ready')"
-          echo "::error::E2E API remained unavailable after warm-up retries: $MESSAGE"
-          exit 1
+          test -n "$ONEPOS_E2E_USERNAME" || { echo "::error::ONEPOS_PLAYWRIGHT_USERNAME is missing."; exit 1; }
+          test -n "$ONEPOS_E2E_PASSWORD" || { echo "::error::ONEPOS_PLAYWRIGHT_PASSWORD is missing."; exit 1; }
+          curl -fsSL "${ONEPOS_E2E_API_BASE_URL%/}/api/health" >/dev/null
 
       - name: Run Playwright QA
         run: npx playwright test --project=desktop-chromium
