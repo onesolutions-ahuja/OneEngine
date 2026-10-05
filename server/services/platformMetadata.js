@@ -1862,6 +1862,66 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     if (saleObjectId) {
       const tillWorkflowDefinitions = [
         {
+          name: "OneTill - Open Till Session",
+          apiName: "ONETILL_OPEN_SESSION",
+          inputContract: [
+            { name: "terminalId", label: "Till", type: "text", required: true },
+            { name: "userId", label: "User", type: "text", required: true },
+            { name: "openingCash", label: "Opening Cash", type: "currency", required: true },
+          ],
+          outputContract: [],
+          actions: [
+            { id: "create_till_session", label: "Create Till Session", apiName: "create_till_session", key: "CREATE_RECORD", objectKey: "till_session",
+              fieldValues: { terminal_id: { path: "$record.terminalId" }, user_id: { path: "$record.userId" }, opening_cash: { path: "$record.openingCash" }, status: "open" } },
+          ],
+        },
+        {
+          name: "OneTill - Cash In",
+          apiName: "ONETILL_CASH_IN",
+          inputContract: [
+            { name: "tillSessionId", label: "Till Session", type: "text", required: true },
+            { name: "userId", label: "User", type: "text", required: true },
+            { name: "amount", label: "Amount", type: "currency", required: true },
+            { name: "reason", label: "Reason", type: "text", required: false },
+          ],
+          outputContract: [],
+          actions: [
+            { id: "create_cash_in", label: "Create Cash In", apiName: "create_cash_in", key: "CREATE_RECORD", objectKey: "cash_ledger",
+              fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_in", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
+          ],
+        },
+        {
+          name: "OneTill - Cash Out",
+          apiName: "ONETILL_CASH_OUT",
+          inputContract: [
+            { name: "tillSessionId", label: "Till Session", type: "text", required: true },
+            { name: "userId", label: "User", type: "text", required: true },
+            { name: "amount", label: "Amount", type: "currency", required: true },
+            { name: "reason", label: "Reason", type: "text", required: false },
+          ],
+          outputContract: [],
+          actions: [
+            { id: "create_cash_out", label: "Create Cash Out", apiName: "create_cash_out", key: "CREATE_RECORD", objectKey: "cash_ledger",
+              fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_out", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
+          ],
+        },
+        {
+          name: "OneTill - Close Till Session",
+          apiName: "ONETILL_CLOSE_SESSION",
+          inputContract: [
+            { name: "tillSessionId", label: "Till Session", type: "text", required: true },
+            { name: "userId", label: "Closed By", type: "text", required: true },
+            { name: "countedCash", label: "Counted Cash", type: "currency", required: true },
+            { name: "closedAt", label: "Closed At", type: "text", required: true },
+          ],
+          outputContract: [],
+          actions: [
+            { id: "close_till_session", label: "Close Till Session", apiName: "close_till_session", key: "UPDATE_RECORD", objectKey: "till_session",
+              recordId: { path: "$record.tillSessionId" },
+              fieldValues: { status: "closed", closing_cash: { path: "$record.countedCash" }, closed_by: { path: "$record.userId" }, closed_at: { path: "$record.closedAt" } } },
+          ],
+        },
+        {
           name: "OneTill - Validate Price Override",
           apiName: "ONETILL_VALIDATE_PRICE_OVERRIDE",
           inputContract: [
@@ -2287,10 +2347,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_customer_display","command","customer_display", { command: "customer_display" }],
         ["till_open_drawer","command","open_drawer", { command: "open_drawer" }],
         ["till_price_override","modal","price_override", { modal: "price_override", submitButtonKey: "till_price_override_apply" }],
-        ["till_open_session","crud","till_session", { operation: "create", modal: "till" }],
-        ["till_close_session","crud","till_session", { operation: "update", modal: "till" }],
-        ["till_cash_in","crud","cash_ledger", { operation: "create", modal: "till" }],
-        ["till_cash_out","crud","cash_ledger", { operation: "create", modal: "till" }],
+        ["till_open_session","workflow",tillWorkflowIds.get("ONETILL_OPEN_SESSION"), { modal: "till" }],
+        ["till_close_session","workflow",tillWorkflowIds.get("ONETILL_CLOSE_SESSION"), { modal: "till" }],
+        ["till_cash_in","workflow",tillWorkflowIds.get("ONETILL_CASH_IN"), { modal: "till" }],
+        ["till_cash_out","workflow",tillWorkflowIds.get("ONETILL_CASH_OUT"), { modal: "till" }],
       ];
       for (const [buttonKey,targetType,targetKey,config] of targetUpdates) {
         if (!targetKey) continue;
