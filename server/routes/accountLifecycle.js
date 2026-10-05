@@ -92,6 +92,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
         capabilityType:"action",capabilityKey:"SEND_COMMUNICATION",
         req,
         input:{
+          channel:"EMAIL",
           recipient:email,
           to:email,
           contentMode:"CUSTOM",
