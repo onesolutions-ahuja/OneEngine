@@ -155,7 +155,7 @@ test('deployment smoke accepts ready health state', async () => {
 test('deployment smoke waits for the exact GitHub Pages commit instead of assuming fixed deploy time', async () => {
   const source = await read('../.github/workflows/deployment-smoke.yml')
   assert.match(source, /for attempt in \{1\.\.18\}/)
-  assert.match(source, /if \[ "\$DEPLOYED_SHA" = "\$GITHUB_SHA" \]/)
+  assert.match(source, /if \[ "\$DEPLOYED_SHA" = "\$DEPLOY_SHA" \]/)
 })
 
 
@@ -352,7 +352,7 @@ test('final loading verification waits for backend readiness before live login',
   assert.match(source, /\/api\/health/)
   assert.match(source, /STATUS.*ready.*online/s)
   assert.match(source, /diagnostics\.buildCommit/)
-  assert.match(source, /COMMIT.*GITHUB_SHA/s)
+  assert.match(source, /COMMIT.*DEPLOY_SHA/s)
 })
 
 
