@@ -51,12 +51,13 @@ const icons = {
 }
 
 const CHILD_COLORS = [
+  { key: 'red', hex: '#dc2626' },
   { key: 'green', hex: '#16a34a' },
-  { key: 'orange', hex: '#ea580c' },
+  { key: 'orange', hex: '#f97316' },
   { key: 'blue', hex: '#2563eb' },
-  { key: 'pink', hex: '#db2777' },
+  { key: 'yellow', hex: '#ca8a04' },
   { key: 'cyan', hex: '#0891b2' },
-  { key: 'violet', hex: '#7c3aed' },
+  { key: 'magenta', hex: '#c026d3' },
 ]
 
 function seededColorOrder(seed) {
