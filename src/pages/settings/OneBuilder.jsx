@@ -168,41 +168,38 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     setLoading(true)
     setError('')
     try {
-      const [components, actions, reportElements, triggerRes, objectRes, roleRes, ruleRes, approvalRes, dashboardRes, customReportRes] = await Promise.all([
-        apiRequest('/api/platform/component-registry').catch(() => ({ data: [] })),
-        apiRequest('/api/platform/workflow-actions').catch(() => ({ data: [] })),
-        apiRequest('/api/platform/report-builder-registry').catch(() => ({ data: [] })),
-        apiRequest('/api/platform/workflow-triggers').catch(() => ({ data: [] })),
-        apiRequest('/api/platform/objects'),
-        apiRequest('/api/platform/approval-roles').catch(() => ({ data: [] })),
-        apiRequest('/api/platform/rules').catch(() => ({ data: [] })),
-        apiRequest('/api/platform/approval-processes').catch(() => ({ data: [] })),
-        apiRequest('/api/dashboards').catch(() => ({ data: [] })),
-        apiRequest('/api/reports/custom').catch(() => ({ data: [] })),
-      ])
-      const objectRows = objectRes?.data?.objects || objectRes?.data || []
-      setComponentRegistry(normalizeRegistry(components?.data?.components || components?.data || []))
-      setActionRegistry(normalizeRegistry(actions?.data || []))
-      setReportRegistry(normalizeRegistry(reportElements?.data || []))
-      setTriggers(normalizeRegistry(triggerRes?.data || []))
-      setObjects(Array.isArray(objectRows) ? objectRows.filter((object) => object.active !== false) : [])
-      setRoles(Array.isArray(roleRes?.data) ? roleRes.data : [])
-      setSaved((current) => ({
-        ...current,
-        workflow: responseRows(ruleRes).filter(isWorkflowRule),
-        approval: responseRows(approvalRes),
-        dashboard: responseRows(dashboardRes),
-        report: responseRows(customReportRes),
-      }))
+      await loadSavedDefinitions(tab, { manageLoading: false })
     } catch (err) {
-      setError(err?.message || 'Unable to load Builder metadata')
+      setError(err?.message || 'Unable to load Builder definitions')
     } finally {
       setLoading(false)
     }
   }
 
-  const loadSavedDefinitions = async (builderType = tab) => {
-    setListLoading(true)
+  const loadEditorMetadata = async (builderType = tab) => {
+    const objectPromise = apiRequest('/api/platform/objects')
+    if (builderType === 'workflow') {
+      const [objectRes, actions, triggerRes] = await Promise.all([objectPromise, apiRequest('/api/platform/workflow-actions').catch(() => ({ data: [] })), apiRequest('/api/platform/workflow-triggers').catch(() => ({ data: [] }))])
+      const rows = objectRes?.data?.objects || objectRes?.data || []
+      setObjects(Array.isArray(rows) ? rows.filter((object) => object.active !== false) : [])
+      setActionRegistry(normalizeRegistry(actions?.data || [])); setTriggers(normalizeRegistry(triggerRes?.data || []))
+    } else if (builderType === 'approval') {
+      const [objectRes, roleRes] = await Promise.all([objectPromise, apiRequest('/api/platform/approval-roles').catch(() => ({ data: [] }))])
+      const rows = objectRes?.data?.objects || objectRes?.data || []
+      setObjects(Array.isArray(rows) ? rows.filter((object) => object.active !== false) : []); setRoles(Array.isArray(roleRes?.data) ? roleRes.data : [])
+    } else if (builderType === 'dashboard') {
+      const [objectRes, components] = await Promise.all([objectPromise, apiRequest('/api/platform/component-registry').catch(() => ({ data: [] }))])
+      const rows = objectRes?.data?.objects || objectRes?.data || []
+      setObjects(Array.isArray(rows) ? rows.filter((object) => object.active !== false) : []); setComponentRegistry(normalizeRegistry(components?.data?.components || components?.data || []))
+    } else {
+      const [objectRes, reportElements] = await Promise.all([objectPromise, apiRequest('/api/platform/report-builder-registry').catch(() => ({ data: [] }))])
+      const rows = objectRes?.data?.objects || objectRes?.data || []
+      setObjects(Array.isArray(rows) ? rows.filter((object) => object.active !== false) : []); setReportRegistry(normalizeRegistry(reportElements?.data || []))
+    }
+  }
+
+  const loadSavedDefinitions = async (builderType = tab, { manageLoading = true } = {}) => {
+    if (manageLoading) setListLoading(true)
     setError('')
     try {
       if (builderType === 'workflow') {
@@ -221,7 +218,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     } catch (err) {
       setError(err?.message || `Unable to load existing ${builderType} definitions`)
     } finally {
-      setListLoading(false)
+      if (manageLoading) setListLoading(false)
     }
   }
 
@@ -316,6 +313,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
   }
 
   const newDefinition = () => {
+    void loadEditorMetadata(tab).catch((err) => setError(err?.message || 'Unable to load Builder metadata'))
     if (tab === 'workflow') {
       setWorkflowNewType('')
       setWorkflowNewObjectKey('')
@@ -383,6 +381,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
 
   const openSaved = async (id) => {
     if (!id) return newDefinition()
+    await loadEditorMetadata(tab)
     setMode('builder')
     setSideTab('components')
     setError('')
