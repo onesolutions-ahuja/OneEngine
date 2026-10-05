@@ -419,7 +419,36 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   }
 }
 
-export async function apiRequest(path, options = {}) {
+const apiRequestInFlight = new Map()
+
+function apiRequestDedupeKey(path, token) {
+  const actingCompanyId = getActingCompanyId()
+  const storeId = getActiveStoreId()
+  return [String(path || ''), String(token || ''), String(actingCompanyId || ''), String(storeId || '')].join('|')
+}
+
+export function apiRequest(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase()
+  const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
+  const kioskDisplay = typeof window !== 'undefined' && /\/kiosk-display\/?$/.test(window.location.pathname)
+  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
+  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
+  const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const canDedupe = method === 'GET' && options.dedupe !== false && !options.signal && !options.body
+  if (!canDedupe) return apiRequestCore(path, options, token)
+
+  const key = apiRequestDedupeKey(path, token)
+  const existing = apiRequestInFlight.get(key)
+  if (existing) return existing
+
+  const request = apiRequestCore(path, options, token).finally(() => {
+    if (apiRequestInFlight.get(key) === request) apiRequestInFlight.delete(key)
+  })
+  apiRequestInFlight.set(key, request)
+  return request
+}
+
+async function apiRequestCore(path, options = {}, tokenOverride = '') {
   const method = String(options.method || 'GET').toUpperCase()
   const capability = resolveTrustedCapability(path, method)
   if (isPrivilegedMutation(path, method) && !capability) {
@@ -432,13 +461,11 @@ export async function apiRequest(path, options = {}) {
   const {
     timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     retryGet = true,
+    dedupe: _dedupe = true,
     ...fetchOptions
   } = options
-  const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
-  const kioskDisplay = typeof window !== 'undefined' && /\/kiosk-display\/?$/.test(window.location.pathname)
-  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
-  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
-  const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  void _dedupe
+  const token = tokenOverride || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   const maxAttempts = method === 'GET' && retryGet ? 2 : 1
   let lastError = null
 
