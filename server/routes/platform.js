@@ -3349,7 +3349,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (workflow.object_id && object && String(workflow.object_id) !== String(object.id)) {
           return res.status(400).json({ success: false, message: "The configured workflow belongs to a different object" });
         }
-        const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
+        if (executionMode === "DEBUG" && req.body?.runAsUserId && String(req.body.runAsUserId) !== String(req.user.id || "")) {
+        const selectedUser = await db(
+          "SELECT u.id,u.company_id,u.role_id,u.username,u.full_name,u.email,u.active FROM users u WHERE u.id=$1 AND u.company_id=$2 AND u.active=true LIMIT 1",
+          [String(req.body.runAsUserId), req.user.companyId]
+        );
+        if (!selectedUser.rows.length) return res.status(404).json({ success: false, message: "Selected Debug user is unavailable" });
+        const executionUser = selectedUser.rows[0];
+        req = Object.assign(Object.create(req), { user: { ...req.user, id: executionUser.id, companyId: executionUser.company_id, roleId: executionUser.role_id, username: executionUser.username, full_name: executionUser.full_name, email: executionUser.email } });
+      }
+
+      const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
         if (!actions.length) return res.status(422).json({ success: false, message: "Configured workflow contains no executable actions" });
         for (const workflowAction of actions) {
           validateWorkflowAction(workflowAction);
