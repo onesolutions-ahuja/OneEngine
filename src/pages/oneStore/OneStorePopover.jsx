@@ -69,7 +69,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
   },[shown,selectedKey])
   const selected=shown.find(i=>i.package_key===selectedKey)||packages.find(i=>i.package_key===selectedKey)||shown[0]||null
   const dependencies=selected?packageDependencies(selected):[]
-  const installedKeys=new Set(packages.filter(i=>['INSTALLED','ACTIVE','INACTIVE'].includes(String(i?.tenant_app_status||'').toUpperCase())).map(i=>i.package_key))
+  const installedKeys=new Set(packages.filter(i=>i?.is_installed===true).map(i=>i.package_key))
 
   useEffect(()=>{
     let live=true
@@ -98,10 +98,10 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
     finally{setWorkingKey('')}
   }
 
-  const hasTenantInstall=['INSTALLED','ACTIVE','INACTIVE'].includes(String(selected?.tenant_app_status||'').toUpperCase())
+  const hasTenantInstall=selected?.is_installed===true
   const version=hasTenantInstall?installedPackageVersionState(selected):null
   const openInstalled=()=>{
-    if(String(selected?.tenant_app_status||'').toUpperCase()!=='ACTIVE')return
+    if(selected?.launchable!==true)return
     const route=resolveAppOpenRoute(selected)
     onOpenRoute?.(route)
     onClose?.()
@@ -146,7 +146,7 @@ export default function OneStorePopover({onClose,onOpenRoute,initialPackages=[],
           {dependencies.length?<div className="onestore-deps"><b>Dependencies</b>{dependencies.map(dep=><div key={dep.key}><span>{packages.find(p=>p.package_key===dep.key)?.name||dep.key}</span><small>{installedKeys.has(dep.key)?'Included':'Installed automatically'}{dep.optional?' · Optional':''}</small></div>)}</div>:null}
           {workingKey===selected.package_key?<progress className="onestore-action-progress" aria-label="App action in progress"/>:null}
           <div className="onestore-actions">
-            {String(selected?.tenant_app_status||'').toUpperCase()==='ACTIVE'?<button onClick={openInstalled}>Open</button>:null}
+            {selected?.launchable===true?<button onClick={openInstalled}>Open</button>:null}
             {actionsLoading?<button disabled>Loading actions…</button>:recordActions.map((button,index)=><button
               key={button.id||button.button_key}
               className={index===recordActions.length-1?'module-primary-button':''}
