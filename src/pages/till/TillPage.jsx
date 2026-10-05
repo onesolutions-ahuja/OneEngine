@@ -487,34 +487,23 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const buildSalePayload = (paymentMethod, verifiedOverride = false, options = {}) => ({
     clientRequestId: crypto.randomUUID(),
-    items: basket.map((item) => {
-      const line = Number(item.price) * item.quantity
-      const lineDiscount = grossSubtotal ? discountAmount * (line / grossSubtotal) : 0
-      return {
-        productId: item.id,
-        quantity: item.quantity,
-        unitPrice: item.price,
-        tax: 0,
-        discount: lineDiscount,
-        total: Math.max(0, line - lineDiscount),
-        ...(Array.isArray(item.modifiers) && item.modifiers.length ? { modifiers: item.modifiers } : {}),
-        ...(item.priceOverride ? { priceOverride: item.priceOverride, priceOverrideReason: item.priceOverrideReason || null } : {}),
-      }
-    }),
+    items: basket.map((item) => ({
+      productId: item.id,
+      quantity: item.quantity,
+      ...(Array.isArray(item.modifiers) && item.modifiers.length ? { modifiers: item.modifiers } : {}),
+      ...(item.priceOverride ? { priceOverride: item.priceOverride, priceOverrideReason: item.priceOverrideReason || null } : {}),
+    })),
     customerId: selectedCustomer?.id || null,
     miscLines: miscLines.map((line) => ({ description: line.description, price: line.price, quantity: line.quantity, vatRate: line.vatRate })),
     vatEnabled,
     vatRate: defaultVatRate,
-    subtotal,
-    tax: vat,
-    discount: discountAmount,
-    total,
     paymentMethod,
+    cashReceived: paymentMethod === 'cash' ? Number(options.cashReceived ?? cashReceived || 0) : null,
     ...(Array.isArray(options.payments) && options.payments.length ? { payments: options.payments } : {}),
     ...(options.giftCardCode ? { giftCardCode: options.giftCardCode } : {}),
     discountType: discount.type,
     discountValue: discount.value,
-    ageVerified: hasAgeRestricted ? (ageVerified || verifiedOverride) : undefined,
+    ageVerified: hasAgeRestricted ? (ageVerified || verifiedOverride) : false,
   })
 
   const maybeShowReceiptQr = async (sale) => {
@@ -537,16 +526,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       setModal('age')
       return
     }
-    const stockShortfalls = basket
-      .filter((item) => item.trackStock !== false)
-      .filter((item) => Number(item.stock || 0) < Number(item.quantity || 0))
-      .map((item) => ({ name: item.name, recordedStock: Number(item.stock || 0), requestedQuantity: Number(item.quantity || 0) }))
-    if (allowNegativeBilling && stockShortfalls.length && !skipStockWarning) {
-      setPendingSaleRequest({ paymentMethod, options: { verifiedOverride, payments, giftCardCode, cashReceivedOverride, skipStockWarning: true } })
-      setNegativeStockNotice(stockShortfalls)
-      setModal('negative_stock')
-      return
-    }
     if (!till && online) {
       setModal('till')
       return setError('Open a till session before completing a sale.')
@@ -557,14 +536,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       const capability = await refreshPaymentCapability()
       if (!capability.available) return setError(capability.message || 'No healthy payment connector is assigned to this till.')
     }
-    if (paymentMethod === 'customer_credit' && !selectedCustomer) return setError('Select a customer before using customer credit.')
-    if (paymentMethod === 'gift_card' && !giftCardCode.trim()) return setError('Enter a gift card code.')
-    const received = paymentMethod === 'cash' ? Number((cashReceivedOverride ?? cashReceived) || total) : total
-    if (paymentMethod === 'cash' && received < total) return setError('Cash received is less than the sale total.')
+    const received = paymentMethod === 'cash' ? Number((cashReceivedOverride ?? cashReceived) || 0) : null
 
     setBusy(true)
     setError('')
-    const payload = buildSalePayload(paymentMethod, verifiedOverride, { payments, giftCardCode })
+    const payload = buildSalePayload(paymentMethod, verifiedOverride, { payments, giftCardCode, cashReceived: received })
     let durableCashEntry = null
     try {
       if (paymentMethod === 'cash') {
@@ -585,10 +561,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       if (durableCashEntry) await removeOfflineCashSale(durableCashEntry.id)
       setLastSale(sale)
       clearSale()
-      const change = paymentMethod === 'cash' ? Math.max(0, received - total) : 0
+      const serverTotal = Number(sale.total || 0)
+      const change = paymentMethod === 'cash' ? Math.max(0, Number(received || 0) - serverTotal) : 0
       setSaleCompleteNotice({
         receiptNumber: sale.receipt_number || null,
-        total,
+        total: serverTotal,
         received: paymentMethod === 'cash' ? received : null,
         change,
         pendingSync: false,
