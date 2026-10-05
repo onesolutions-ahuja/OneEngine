@@ -197,7 +197,7 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
           text: { preview_url: false, body },
         },
       });
-      results.push({ ok: providerResult?.ok === true, httpStatus: providerResult?.status || 0, reference: providerResult?.data?.messages?.[0]?.id || null });
+      results.push({ ok: providerResult?.success === true, httpStatus: providerResult?.statusCode || 0, reference: providerResult?.providerMessageId || null });
     }
   } else {
     const runtime = await provider(db, companyId, definition.provider);
