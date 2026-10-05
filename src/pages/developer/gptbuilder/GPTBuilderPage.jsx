@@ -861,6 +861,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
   const [autoInsertIndex, setAutoInsertIndex] = useState(null)
   const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
+  const [endPosition, setEndPosition] = useState(() => templateAction.endPosition || { afterElementId: Array.isArray(templateAction.gptBuilderElements) && templateAction.gptBuilderElements.length ? templateAction.gptBuilderElements[templateAction.gptBuilderElements.length - 1].id : 'start' })
   const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
   const [providerResources, setProviderResources] = useState([])
   // Keep the resource list safe during the first render of every flow type. Provider
@@ -1002,6 +1003,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     if (flow.key === 'schedule' && (!startConfig.startDate || !startConfig.startTime)) next.push({ id: 'schedule', level: 'error', group: 'Start', targetId: 'start', title: 'Schedule isn’t configured', detail: 'Enter a start date and start time.' })
     if (flow.key === 'platform_event' && !startConfig.eventKey) next.push({ id: 'event', level: 'error', group: 'Start', targetId: 'start', title: 'Platform event isn’t configured', detail: 'Select the event that triggers this flow.' })
     if (!elements.length) next.push({ id: 'elements', level: 'error', group: 'Flow', title: 'The flow has no executable elements', detail: 'Add at least one element before activating the flow.' })
+    if (!String(flowProps.label || '').trim()) next.push({ id:'flow-label-required', level:'error', group:'Flow', title:'Flow Label is required', detail:'Enter a Flow Label before saving.' })
+    if (String(flowProps.label || '').length > 80) next.push({ id:'flow-label-length', level:'error', group:'Flow', title:'Flow Label is too long', detail:'Flow Label must be 80 characters or fewer.' })
+    if (!String(flowProps.apiName || '').trim()) next.push({ id:'flow-api-required', level:'error', group:'Flow', title:'Flow API Name is required', detail:'Enter an API Name before saving.' })
+    if (String(flowProps.apiName || '').length > 80) next.push({ id:'flow-api-length', level:'error', group:'Flow', title:'Flow API Name is too long', detail:'API Name must be 80 characters or fewer.' })
+    elements.filter((element)=>element.key==='create_records').forEach((element)=>{ const values=element.config?.fieldValues || element.config?.fields || []; if (!element.config?.recordResource && (!Array.isArray(values) || !values.length)) next.push({id:`create-required-${element.id}`,level:'error',group:element.label||'Create Records',targetId:element.id,title:'Create Records is missing required field values',detail:'Choose a record resource or configure the required field values before saving.'}) })
     elements.forEach((element) => {
       const common = elementCommonErrors(element, elements)
       common.forEach((detail, index) => next.push({ id: `element-${element.id}-common-${index}`, level: 'error', group: element.label || 'Element', targetId: element.id, title: `${element.label || 'Element'} needs attention`, detail }))
@@ -1009,7 +1015,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     })
     if (dirty && workflowId) next.push({ id: 'unsaved', level: 'warning', group: 'Flow', title: 'Unsaved changes', detail: 'Run, Test, and Debug use the most recent saved version until you save these changes.' })
     return next
-  }, [flow.key, startConfig, dirty, workflowId, elements])
+  }, [flow.key, startConfig, dirty, workflowId, elements, flowProps])
 
   const startConfigured = !issues.some((issue) => ['record-object', 'schedule', 'event'].includes(issue.id))
   const buildPayload = (props = flowProps, startOverride = startConfig) => ({
@@ -1042,6 +1048,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       entryTransition: startOverride.updateMode === 'transition' ? 'UPDATED_TO_MEET' : 'EVERY_TIME',
       start: startOverride,
       layout: { mode: layout === 'free' ? 'FREE_FORM' : 'AUTO' },
+      endPosition: { ...endPosition, afterElementId: elements.length ? elements[elements.length - 1].id : 'start' },
       gptBuilderElements: elements.map((element) => ({
         id: element.id,
         key: element.key,
@@ -1082,6 +1089,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   })
 
   const save = async (props = flowProps, options = {}, startOverride = startConfig) => {
+    const blockingIssues = issues.filter((issue) => issue.level === 'error')
+    if (blockingIssues.length) { setDiagnosticsOpen(true); setSaveError('Fix the flow errors before saving.'); return null }
     setSaving(true); setSaveError(''); setMessage('')
     try {
       const forceNewFlow = options.forceNewFlow === true
