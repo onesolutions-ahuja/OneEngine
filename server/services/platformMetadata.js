@@ -1058,8 +1058,6 @@ const retailObjects = [
       ["low_stock_level", "Low Stock Level", "decimal", "low_stock_level", false],
       ["category_id", "Category", "lookup", "category_id", false],
       ["image_url", "Image", "text", "image_url", false],
-      ["available_on_uber", "Available on Uber", "boolean", "available_on_uber", false],
-      ["available_on_deliveroo", "Available on Deliveroo", "boolean", "available_on_deliveroo", false],
     ],
   },
   {
