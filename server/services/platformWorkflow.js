@@ -11,7 +11,6 @@ import { domainAllowed, issueAccountToken, normalizeEmail } from "./accountPolic
 import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { effectiveManifest, resolvePersistedConnectorCapability } from "./connectorRuntime.js";
 import { createInventoryMovement } from "./inventory.js";
-import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
@@ -20,7 +19,6 @@ import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
 import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
 import { createShopifyAdapter } from "./shopifyAdapter.js";
 import { exportShopifyFulfillment, exportShopifyRefund, syncShopifyInventory, syncShopifyProducts } from "./shopifySync.js";
-import { processShopifyWebhookEvent } from "./onlineOrders/shopifyWebhookProcessor.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
@@ -5580,56 +5578,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         );
       }
       return { status: job ? "waiting" : "skipped", jobId: job?.id || null, resumeAt: runAt.toISOString() };
-    },
-  },
-  {
-    key: "SHOPIFY_PROCESS_WEBHOOK",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Process Shopify Webhook",
-    description: "Import Shopify orders into Online Orders and apply cancellation events through the canonical lifecycle.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["online_orders.manage"],
-    executor: async (context) => {
-      const companyId = context.companyId || context.req?.user?.companyId;
-      const connectionId = context.action?.connectionId;
-      try {
-        const unavailable = await shopifyPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "shopify", connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
-        const result = await processShopifyWebhookEvent({
-          db: context.db,
-          pool: context.pool,
-          companyId,
-          connection: loaded.connection,
-          credentials: loaded.credentials,
-          event: context.action,
-          createInventoryMovement: context.createInventoryMovement,
-        });
-        if (result?.syncRequired === true) {
-          const eventKey = context.action?.eventId || context.action?.deliveryId || `${result.inventoryItemId}:${result.locationId}:${result.externalQuantity}`;
-          await enqueuePlatformJob({
-            db: context.db,
-            companyId,
-            kind: "SHOPIFY_PROVIDER_SYNC",
-            idempotencyKey: `shopify:inventory-reconcile:${loaded.connection.id}:${eventKey}`.slice(0, 200),
-            payload: { type: "SHOPIFY_SYNC_INVENTORY", connectionId: loaded.connection.id, storeId: result.storeId },
-          });
-          result.reconciliationQueued = true;
-        }
-        if (result?.success === false) return { ...result, retryable: result.retryable === true };
-        return { success: true, ...result };
-      } catch (error) {
-        return {
-          success: false,
-          code: "PROCESSING_FAILED",
-          retryable: error?.retryable === true,
-          message: String(error?.message || "Shopify webhook processing failed").slice(0, 500),
-        };
-      }
     },
   },
   {
