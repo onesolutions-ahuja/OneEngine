@@ -5955,7 +5955,7 @@ async function resolveWorkflowTargetObject({ db, action = {}, object = null, com
   return target;
 }
 
-async function assertWorkflowObjectPermission({ db, req, object, access }) {
+async function assertResolvedWorkflowObjectPermission({ db, req, object, access }) {
   if (!req?.user) throw new Error("Workflow object authorization requires an authenticated user");
   const allowed = await hasPlatformObjectPermission(db, req, object.id, access);
   if (!allowed) {
