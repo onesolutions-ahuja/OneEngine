@@ -337,3 +337,21 @@ test('login timing keeps permission and authorization phases separate', async ()
   assert.match(source, /loginTimings\.authorization_bundle_ms = Date\.now\(\) - authorizationStartedAt/)
   assert.equal(source.includes('loginTimings.permissions_ms = loginTimings.authorization_bundle_ms'), false)
 })
+
+
+test('email login uses indexed normalized-email lookup without OR on the common path', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /const looksLikeEmail = normalizedIdentifier\.includes\("@"/)
+  assert.match(source, /WHERE LOWER\(BTRIM\(u\.email\)\)=\$1 LIMIT 1/)
+  assert.match(source, /if \(byEmail\.rows\.length\) return byEmail/)
+})
+
+test('login security settings, state and policy reads execute concurrently', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  const start = source.indexOf('export async function loadLoginSecurityContext')
+  const end = source.indexOf('export async function registerFailedLogin', start)
+  const preflight = source.slice(start, end)
+  assert.match(preflight, /const \[settingsResult, stateResult, policyResult\] = await Promise\.all/)
+  assert.match(preflight, /identity_user_security_state WHERE user_id=\$1/)
+  assert.match(preflight, /identity_access_policies ap/)
+})
