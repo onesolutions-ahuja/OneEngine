@@ -17,8 +17,8 @@ test("Open Food Facts GPT flows are platform system flows, not tenant package fl
   assert.equal((pkg.manifest.workflows || []).some((flow) => String(flow?.action?.apiName || "").startsWith("GPT_OPEN_FOOD_FACTS_")), false);
 
   const definitions = systemWorkflowDefinitions();
-  const lookup = definitions.find((flow) => flow.systemKey === "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT");
-  const connection = definitions.find((flow) => flow.systemKey === "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION");
+  const lookup = definitions.find((flow) => flow.action?.apiName === "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT");
+  const connection = definitions.find((flow) => flow.action?.apiName === "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION");
   assert.ok(lookup);
   assert.ok(connection);
   assert.equal(lookup.name, "GPT - Open Food Facts - Lookup Product");
@@ -38,8 +38,8 @@ test("Open Food Facts GPT flows are platform system flows, not tenant package fl
 
 test("Open Food Facts system flows expose editable output resources and explicit assignment targets", () => {
   const definitions = systemWorkflowDefinitions();
-  const lookup = definitions.find((flow) => flow.systemKey === "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT");
-  const connection = definitions.find((flow) => flow.systemKey === "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION");
+  const lookup = definitions.find((flow) => flow.action?.apiName === "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT");
+  const connection = definitions.find((flow) => flow.action?.apiName === "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION");
 
   assert.deepEqual(lookup.action.resources.filter((r) => r.availableOutput).map((r) => r.apiName),
     ["barcode","found","productName","brand","imageUrl","ingredients"]);
