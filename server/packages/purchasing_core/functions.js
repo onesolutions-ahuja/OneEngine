@@ -1,4 +1,4 @@
-// Purchasing business behavior is implemented by visible package Flows:
-// PURCHASE_CREATE, PURCHASE_RECEIVE and SUPPLIER_RETURN_EXECUTE.
+// Purchasing behavior is defined entirely by package object metadata, validation rules and Flows.
+// No purchasing-specific runtime functions belong in Core.
 export const packageFunctions = [];
 export default packageFunctions;
