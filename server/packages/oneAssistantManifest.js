@@ -195,7 +195,7 @@ export function oneAssistantAppointmentRouterWorkflow() {
 
   return {
     objectKey:"communication_event",name:"OneAssistant - Booking Channel Router",triggerKey:"communication_message_received",conditions:[],
-    action:{type:"workflow",builder2:true,flowType:"platform_event",apiName:"OneAssistant_Booking_Channel_Router",
+    action:{type:"workflow",flowType:"platform_event",apiName:"OneAssistant_Booking_Channel_Router",
       description:"Fully Builder-visible appointment booking flow. Business decisions, record reads/writes and customer messages are explicit nodes.",
       apiVersion:"66.0",runContext:"system",start:{eventKey:"communication_message_received"},scope:"one_assistant",
       subflowCapability:"assistant.booking.router",
