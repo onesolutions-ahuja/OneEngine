@@ -60,3 +60,30 @@ jobs:
             "https://oneengine-6gas.onrender.com/api/health")"
           echo "$HEADERS"
           echo "$HEADERS" | grep -qi 'access-control-allow-origin:'
+
+
+      - name: Checkout for final performance verification
+        if: contains(github.event.head_commit.message, '[perf-verify]')
+        uses: actions/checkout@v4
+
+      - name: Set up Node for final performance verification
+        if: contains(github.event.head_commit.message, '[perf-verify]')
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install final performance verifier
+        if: contains(github.event.head_commit.message, '[perf-verify]')
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Final live login and page-loading verification
+        if: contains(github.event.head_commit.message, '[perf-verify]')
+        env:
+          ONEPOS_E2E_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
+          ONEPOS_E2E_API_BASE_URL: https://oneengine-6gas.onrender.com/
+          ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
+          ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
+        run: npx playwright test tests/e2e/final-performance.spec.mjs --project=desktop-chromium --workers=1
