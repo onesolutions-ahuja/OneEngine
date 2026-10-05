@@ -2407,12 +2407,8 @@ export function packageDefinition(entry) {
               actions:[
                 {id:"create_sale",label:"1. Create Sale",apiName:"create_sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"variables.sale"},store:"record"},
                 {id:"set_sale_id",label:"2. Store Sale ID",apiName:"set_sale_id",key:"ASSIGNMENT",variableName:"saleId",variableType:"text",operator:"set",value:{path:"steps.create_sale.created.id"}},
-                {id:"stamp_items",label:"3. Attach Sale To Items",apiName:"stamp_items",key:"LOOP",collection:"variables.items",itemVariable:"saleItem",bodyBranch:["set_item_sale"]},
-                {id:"set_item_sale",label:"Set Item Sale",apiName:"set_item_sale",key:"ASSIGNMENT",variableName:"saleItem",variableType:"record",operator:"set_field",field:"sale_id",value:{path:"variables.saleId"}},
-                {id:"create_items",label:"4. Create Sale Items",apiName:"create_items",key:"CREATE_RECORD",objectKey:"sale_item",recordCollectionResource:{path:"variables.items"}},
-                {id:"stamp_payments",label:"5. Attach Sale To Payments",apiName:"stamp_payments",key:"LOOP",collection:"variables.payments",itemVariable:"salePayment",bodyBranch:["set_payment_sale"]},
-                {id:"set_payment_sale",label:"Set Payment Sale",apiName:"set_payment_sale",key:"ASSIGNMENT",variableName:"salePayment",variableType:"record",operator:"set_field",field:"sale_id",value:{path:"variables.saleId"}},
-                {id:"create_payments",label:"6. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"}}
+                {id:"create_items",label:"3. Create Sale Items",apiName:"create_items",key:"CREATE_RECORD",objectKey:"sale_item",recordCollectionResource:{path:"variables.items"},commonFieldValues:{sale_id:{path:"variables.saleId"}}},
+                {id:"create_payments",label:"4. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"},commonFieldValues:{sale_id:{path:"variables.saleId"}}}}
               ]
             }
           }
