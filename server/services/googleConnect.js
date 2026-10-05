@@ -71,6 +71,76 @@ export async function getGoogleConnectRuntime(db, companyId) {
   };
 }
 
+export async function getGoogleConnectPasswordLoginRuntime(db, companyId) {
+  if (!companyId) {
+    return { ready: false, licensed: false, installed: false, configured: false, enabled: false, reason: "SSO_NOT_CONNECTED", config: { allowPasswordLogin: true } };
+  }
+
+  const [packageResult, connectionResult] = await Promise.all([
+    db(
+      `SELECT p.*, i.status AS installation_status, i.suspended_by_entitlement, i.deactivated_by_user
+         FROM package_registry p
+         LEFT JOIN company_package_installations i
+           ON i.package_id=p.id AND i.company_id=$1
+        WHERE p.package_key=$2 AND p.active=true
+        LIMIT 1`,
+      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+    ),
+    db(
+      `SELECT *
+         FROM integration_connections
+        WHERE company_id=$1 AND connector_package_key=$2
+        ORDER BY updated_at DESC
+        LIMIT 1`,
+      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+    ),
+  ]);
+
+  const packageRow = packageResult.rows[0] || null;
+  const connection = connectionResult.rows[0] || null;
+  const config = configFromRow(connection);
+  const installed = Boolean(
+    packageRow
+    && packageRow.installation_status === "active"
+    && packageRow.suspended_by_entitlement !== true
+    && packageRow.deactivated_by_user !== true
+  );
+  const configured = Boolean(config.clientId && config.clientSecret && config.redirectUri);
+  const enabled = connection?.enabled === true && config.enabled;
+
+  // Password login only needs full entitlement resolution when Google SSO
+  // could actually become authoritative. Disabled/unconfigured/uninstalled
+  // Google Connect must not make every password login execute the full
+  // commercial entitlement graph.
+  if (!packageRow || !installed || !enabled || !configured) {
+    return {
+      ready: false,
+      licensed: false,
+      installed,
+      configured,
+      enabled,
+      reason: "SSO_NOT_CONNECTED",
+      package: packageRow,
+      connection,
+      config,
+    };
+  }
+
+  const entitlements = await getCompanyEntitlements(db, companyId);
+  const licensed = isPackageLicensed(entitlements, packageRow);
+  return {
+    ready: licensed,
+    licensed,
+    installed,
+    configured,
+    enabled,
+    reason: licensed ? "READY" : "SSO_NOT_CONNECTED",
+    package: packageRow,
+    connection,
+    config,
+  };
+}
+
 export async function getGoogleConnectRuntimeForEmail(db, email) {
   const value = normalizedEmail(email);
   if (!value) return { ready: false, reason: "SSO_NOT_CONNECTED" };

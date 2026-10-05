@@ -165,3 +165,17 @@ test('successful password login finalizes session, security state, last-login an
   assert.match(security, /user_touch AS \(/)
   assert.match(security, /INSERT INTO identity_login_history/)
 })
+
+
+test('password login skips full Google entitlement resolution unless SSO could be authoritative', async () => {
+  const server = await read('../server/server.js')
+  const google = await read('../server/services/googleConnect.js')
+  assert.match(server, /getGoogleConnectPasswordLoginRuntime/)
+  assert.match(google, /export async function getGoogleConnectPasswordLoginRuntime/)
+  assert.match(google, /if \(!packageRow \|\| !installed \|\| !enabled \|\| !configured\)/)
+  const fastPath = google.slice(
+    google.indexOf('export async function getGoogleConnectPasswordLoginRuntime'),
+    google.indexOf('export async function getGoogleConnectRuntimeForEmail')
+  )
+  assert.ok(fastPath.indexOf('if (!packageRow || !installed || !enabled || !configured)') < fastPath.indexOf('getCompanyEntitlements'))
+})

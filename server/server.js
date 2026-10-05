@@ -116,7 +116,7 @@ import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegis
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { reconcileCompanyPackageEntitlements } from "./services/packageEntitlements.js";
 import { requireEntitlement } from "./services/licensing.js";
-import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime } from "./services/googleConnect.js";
+import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
 import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
 import { createCanonicalRelatedTransaction, syncCanonicalSaleTransaction } from "./services/canonicalTransactions.js";
@@ -1306,7 +1306,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
         : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null }),
       user.company_id
-        ? getGoogleConnectRuntime((query, params = []) => loginPool.query(query, params), user.company_id)
+        ? getGoogleConnectPasswordLoginRuntime((query, params = []) => loginPool.query(query, params), user.company_id)
         : Promise.resolve(null),
     ]);
     const securitySettings = securityContext.settings;
