@@ -388,7 +388,7 @@ export default function MetadataSettingsPage({ initialSection = '' }) {
     if (!cachedCatalog.length) setLoading(true)
     setError('')
     Promise.all([
-      apiRequest('/api/platform/runtime/settings-catalog'),
+      apiRequest('/api/platform/runtime/settings-hosts'),
       Promise.resolve({ user: getStoredUser() }),
     ]).then(async ([catalogRes, meRes]) => {
       if (!live) return
