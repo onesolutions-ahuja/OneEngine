@@ -8768,7 +8768,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       ui: initialWorkflow.action?.ui || null,
       builderLayout: initialWorkflow.action?.builderLayout || initialWorkflow.actionMetadata?.builderLayout || { mode: "AUTO", positions: {} },
       builderGroups: initialWorkflow.action?.builderGroups || initialWorkflow.actionMetadata?.builderGroups || [],
-      schedule: initialWorkflow.action?.schedule || initialWorkflow.actionMetadata?.schedule || { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } },
+      schedule: initialWorkflow.action?.schedule || initialWorkflow.actionMetadata?.schedule || { scheduleType: "DAILY", timezone: "", definition: { time: "" } },
     },
     steps: (initialWorkflow.steps || initialWorkflow.action?.actions || []).map((step) => ({
       ...makeStep(step.type || step.key || "CREATE_RECORD"),
@@ -9088,7 +9088,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
             ui: rule.action?.ui || null,
             builderLayout: rule.action?.builderLayout || { mode: "AUTO", positions: {} },
             builderGroups: rule.action?.builderGroups || [],
-            schedule: rule.action?.schedule || { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } },
+            schedule: rule.action?.schedule || { scheduleType: "DAILY", timezone: "", definition: { time: "" } },
           },
           lifecycleStatus: rule.lifecycle_status || (rule.active === false ? "INACTIVE" : "ACTIVE"),
           version: Number(rule.version || 1),
@@ -9838,7 +9838,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
           ui: rule.action?.ui || null,
           builderLayout: rule.action?.builderLayout || { mode: "AUTO", positions: {} },
           builderGroups: rule.action?.builderGroups || [],
-          schedule: rule.action?.schedule || { scheduleType: "DAILY", timezone: "Europe/London", definition: { time: "09:00" } },
+          schedule: rule.action?.schedule || { scheduleType: "DAILY", timezone: "", definition: { time: "" } },
         },
         conditions: rule.conditions || [],
         steps: (rule.action?.actions || []).map((action) => {
