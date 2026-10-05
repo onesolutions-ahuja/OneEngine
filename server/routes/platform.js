@@ -5799,9 +5799,15 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (value !== undefined) inputVariables[name] = value;
       }
       const workflowVariables = { variables: inputVariables, steps: {} };
+      const mockOutputs = executionMode === "TEST" && req.body?.mockOutputs && typeof req.body.mockOutputs === "object" && !Array.isArray(req.body.mockOutputs) ? req.body.mockOutputs : {};
+      const executableActions = actions.map((action) => {
+        const mock = mockOutputs[action.id] ?? mockOutputs[action.apiName] ?? null;
+        if (mock == null || !["RUN_SUBFLOW","ACTION"].includes(String(action.key || action.type || "").toUpperCase())) return action;
+        return { ...action, __testMockOutput: mock };
+      });
       try {
         results = await executeWorkflowActions({
-          actions,
+          actions: executableActions,
           db: executionDb,
           traceDb: db,
           pool,
