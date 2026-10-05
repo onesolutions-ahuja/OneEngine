@@ -1306,6 +1306,7 @@ export default function createSalesRouter({
             id,
             created_at,
             total,
+            cash_received,
             receipt_number
           `,
           [
