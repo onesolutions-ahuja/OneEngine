@@ -6,14 +6,13 @@
  * event endpoints (T9G status contract) and the API logs section.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Boxes, FlaskConical, PlugZap, Plus, Pencil, RefreshCw } from "lucide-react";
+import { Activity, FlaskConical, PlugZap, Plus, Pencil, RefreshCw } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
 import { fmtDateTime, Flash } from "./shared.jsx";
 import EndpointFormModal from "./EndpointFormModal.jsx";
 import MappingEditorModal from "./MappingEditorModal.jsx";
 import EndpointTestModal from "./EndpointTestModal.jsx";
 import ApiLogsPanel from "./ApiLogsPanel.jsx";
-import { BrandIcon } from "../../components/BrandIcons.jsx";
 
 export default function IntegrationDetail({ integration, onBack }) {
   const [endpoints, setEndpoints] = useState([]);
@@ -83,34 +82,12 @@ export default function IntegrationDetail({ integration, onBack }) {
     }
   };
 
-  const runShopifyAction = async (type, extra = {}) => {
-    setShopifyAction(type);
-    setError("");
-    setMessage("");
-    try {
-      const response = await apiRequest(`/api/integrations/${integration.id}/shopify/action`, {
-        method: "POST",
-        body: JSON.stringify({ type, ...extra }),
-      });
-      const result = response?.data || {};
-      if (result.success !== true) throw new Error(result.message || "Shopify action failed");
-      setMessage(result.duplicate ? "Shopify fulfilment was already exported." : `${type === "SHOPIFY_SYNC_PRODUCTS" ? "Products" : type === "SHOPIFY_SYNC_INVENTORY" ? "Inventory" : "Sync retry"} synced successfully.`);
-    } catch (err) {
-      setError(err.message || "Shopify action failed");
-    } finally {
-      setShopifyAction("");
-    }
-  };
-
-  const isShopify = String(integration.providerName || "").toLowerCase() === "shopify";
-
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <div>
           <button onClick={onBack} className="text-sm text-blue-700 hover:underline mb-1">← All integrations</button>
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            {String(integration.providerName || "").toLowerCase() === "shopify" && <span className="w-6 h-6" title="Shopify"><BrandIcon name="shopify" /></span>}
             {integration.name}
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${integration.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
               {integration.enabled ? "Enabled" : "Disabled"}
@@ -121,26 +98,6 @@ export default function IntegrationDetail({ integration, onBack }) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {isShopify && (
-            <>
-              <button onClick={() => runShopifyAction("SHOPIFY_SYNC_PRODUCTS")} disabled={Boolean(shopifyAction)} className="h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm flex items-center gap-2 hover:bg-slate-50 disabled:opacity-50" title="Sync Products">
-                <Boxes size={15} /> Products
-              </button>
-              <button onClick={() => runShopifyAction("SHOPIFY_SYNC_INVENTORY")} disabled={Boolean(shopifyAction)} className="h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm flex items-center gap-2 hover:bg-slate-50 disabled:opacity-50" title="Sync Inventory">
-                <RefreshCw size={15} /> Inventory
-              </button>
-              <select value={retryType} onChange={(event) => setRetryType(event.target.value)} className="h-9 border border-slate-200 rounded-lg text-sm px-2" aria-label="Retry sync type">
-                <option value="products">Products</option>
-                <option value="inventory">Inventory</option>
-                <option value="fulfilment">Fulfilment</option>
-                <option value="refund">Refund</option>
-              </select>
-              {(retryType === "fulfilment" || retryType === "refund") && <input value={retryOrderId} onChange={(event) => setRetryOrderId(event.target.value)} placeholder={retryType === "refund" ? "Return ID" : "Online order ID"} aria-label={retryType === "refund" ? "Return ID" : "Online order ID"} className="h-9 w-36 border border-slate-200 rounded-lg text-sm px-2" />}
-              <button onClick={() => runShopifyAction("SHOPIFY_RETRY_FAILED_SYNC", { syncType: retryType, ...(retryType === "fulfilment" ? { orderId: retryOrderId } : {}), ...(retryType === "refund" ? { returnId: retryOrderId } : {}) })} disabled={Boolean(shopifyAction) || (["fulfilment", "refund"].includes(retryType) && !retryOrderId.trim())} className="h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm flex items-center gap-2 hover:bg-slate-50 disabled:opacity-50" title="Retry Failed Sync">
-                <RefreshCw size={15} /> Retry
-              </button>
-            </>
-          )}
           <button onClick={runConnectionTest} disabled={testingConn || Boolean(shopifyAction)} className="h-9 px-4 bg-white border border-slate-200 rounded-lg text-sm flex items-center gap-2 hover:bg-slate-50 disabled:opacity-50">
             <PlugZap size={15} /> {testingConn ? "Testing…" : "Test Connection"}
           </button>

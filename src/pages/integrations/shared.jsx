@@ -16,10 +16,10 @@ export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 /* entity_type values accepted by the backend endpoints API. The dispatcher
  * maps events to these: SALE_CREATED->sale, PURCHASE_CREATED/RECEIVED->purchase,
  * SALES_RETURN_CREATED->custom (1:1 by design). */
-export const ENTITY_TYPES = ["sale", "purchase", "product", "customer", "custom"];
+export const ENTITY_TYPES = ["custom"];
 
 export const ENTITY_EVENT_HINT =
-  "Events: sale = SALE_CREATED · purchase = PURCHASE_CREATED / PURCHASE_RECEIVED · custom = SALES_RETURN_CREATED";
+  "Use a metadata-defined event key.";
 
 export function fmtDateTime(value) {
   if (!value) return "—";

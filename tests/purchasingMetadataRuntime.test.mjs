@@ -357,3 +357,16 @@ test("generic integration layer has no fixed business object or supplier feed kn
   assert.equal(route.includes("FROM products"), false);
   assert.equal(ui.includes("SupplierFeedPreview"), false);
 });
+
+
+test("generic integration UI and route contain no provider-specific or fixed business entity behavior", async () => {
+  const route = await readFile(new URL("../server/routes/integrations.js", import.meta.url), "utf8");
+  const detail = await readFile(new URL("../src/pages/integrations/IntegrationDetail.jsx", import.meta.url), "utf8");
+  const admin = await readFile(new URL("../src/pages/integrations/IntegrationsAdmin.jsx", import.meta.url), "utf8");
+  const shared = await readFile(new URL("../src/pages/integrations/shared.jsx", import.meta.url), "utf8");
+  assert.equal(route.includes("/integrations/:id/shopify/action"), false);
+  assert.equal(detail.toLowerCase().includes("shopify"), false);
+  assert.equal(admin.toLowerCase().includes("shopify"), false);
+  assert.equal(shared.includes('"sale", "purchase", "product", "customer"'), false);
+  assert.match(route, /\/integrations\/\:id\/test-connection/);
+});

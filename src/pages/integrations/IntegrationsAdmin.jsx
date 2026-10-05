@@ -13,7 +13,6 @@ import { apiRequest } from "../../services/api.js";
 import { fmtDateTime, Flash, StatusPill } from "./shared.jsx";
 import IntegrationFormModal from "./IntegrationFormModal.jsx";
 import IntegrationDetail from "./IntegrationDetail.jsx";
-import { BrandIcon } from "../../components/BrandIcons.jsx";
 import ConnectorInstancesPanel from "./ConnectorInstancesPanel.jsx";
 
 export default function IntegrationsAdmin({ storeId }) {
@@ -161,7 +160,6 @@ export default function IntegrationsAdmin({ storeId }) {
                       <tr key={integration.id} className="border-b border-slate-100 hover:bg-slate-50/60 align-top">
                         <td className="px-4 py-2.5">
                           <button onClick={() => setManaging(integration)} className="font-medium text-blue-700 hover:underline text-left flex items-center gap-2">
-                            {String(integration.providerName || "").toLowerCase() === "shopify" && <span className="w-5 h-5" title="Shopify"><BrandIcon name="shopify" /></span>}
                             {integration.name}
                           </button>
                           <div className="text-xs text-slate-400 max-w-[13rem] truncate" title={integration.baseUrl || ""}>{integration.baseUrl || "No base URL"}</div>

@@ -27,7 +27,6 @@ import {
 } from "../services/integrationCredentials.js";
 import { buildPayload } from "../services/integrationFieldResolver.js";
 import { getIntegrationDispatchStatus } from "../services/integrationDispatcher.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -923,50 +922,6 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
         res.status(500).json({ success: false, message: "Unable to run connection test" });
       }
     }
-  );
-
-  router.post(
-    "/integrations/:id/shopify/action",
-    authenticate,
-    authorize("integration.manage"),
-    async (req, res) => {
-      try {
-        const integration = await loadIntegration(req.params.id, req.user.companyId);
-        if (!integration || String(integration.provider_name || "").toLowerCase() !== "shopify") {
-          return res.status(404).json({ success: false, message: "Shopify integration not found" });
-        }
-        if (integration.store_id && String(integration.store_id) !== String(req.user.storeId || "")) {
-          return res.status(403).json({ success: false, message: "Shopify integration is not available to this store" });
-        }
-        const type = String(req.body?.type || "").toUpperCase();
-        const allowed = new Set(["CONNECTOR_TEST_CONNECTION", "SHOPIFY_SYNC_PRODUCTS", "SHOPIFY_SYNC_INVENTORY", "SHOPIFY_EXPORT_REFUND", "SHOPIFY_RETRY_FAILED_SYNC"]);
-        if (!allowed.has(type)) return res.status(400).json({ success: false, message: "Unsupported Shopify manual action" });
-        const execution = await executeSystemWorkflow({
-          db,
-          companyId: req.user.companyId,
-          userId: req.user.id || null,
-          systemKey: `action:${type}`,
-          req,
-          storeId: integration.store_id || req.user.storeId || null,
-          input: {
-            connectorInstanceId: integration.id,
-            syncType: req.body?.syncType,
-            orderId: req.body?.orderId,
-            returnId: req.body?.returnId,
-          },
-          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: type },
-          extraContext: { pool },
-        });
-        const result = execution.result;
-        await writeAudit(req.user.companyId, req.user.id, `shopify_${type.toLowerCase()}`, "integration_connection", integration.id, {
-          success: result?.success === true, code: result?.code || null,
-        });
-        return res.json({ success: result?.success === true, data: result });
-      } catch (error) {
-        console.error("Shopify manual action error:", error);
-        return res.status(500).json({ success: false, message: error.message || "Shopify action failed" });
-      }
-    },
   );
 
   // Test Endpoint: builds a payload from mappings (sample data supplied by caller) and performs the request.
