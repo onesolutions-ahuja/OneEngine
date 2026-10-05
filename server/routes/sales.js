@@ -545,7 +545,7 @@ export default function createSalesRouter({
         let canOverridePrice = false;
         let roleCodes = [];
         if (typeof getRolePermissionCodes === "function") {
-          roleCodes = await getRolePermissionCodes(req.user.roleId);
+          roleCodes = await getRolePermissionCodes(req.user.roleId, req);
           const canDiscount = isAdmin || roleCodes.includes("sale.discount");
           if (canDiscount) {
             const dt = req.body.discountType ?? null;
