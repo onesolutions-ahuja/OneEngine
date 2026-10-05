@@ -1316,3 +1316,13 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 11 debugger exposes trace rollback history and run-as context', async () => {
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ const platform=await readFile(new URL('../server/routes/platform.js',import.meta.url),'utf8')
+ for(const token of ['Debug Context','Recent Debug Runs','Execution Details','Resource Values','Rollback complete.','duration_ms','runAsUserId','View Element']) assert.ok(page.includes(token),token)
+ assert.ok(platform.includes('await client.query("ROLLBACK")'))
+ assert.ok(platform.includes('Selected Debug user is unavailable'))
+ assert.ok(platform.includes('roleId: executionUser.role_id'))
+})
