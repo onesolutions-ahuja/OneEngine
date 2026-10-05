@@ -20,3 +20,16 @@ test("supplier purchase history is a metadata relationship", async () => {
   const source = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(source, /parentObjectKey: "supplier", childObjectKey: "purchase", relationshipKey: "purchases"/);
 });
+
+
+test("legacy supplier route is read/compatibility only; master writes use generic metadata CRUD", async () => {
+  const source = await readFile(new URL("../server/routes/suppliers.js", import.meta.url), "utf8");
+  assert.equal(source.includes("withDomainSave"), false);
+  assert.equal(source.includes('router.post(\n    "/suppliers"'), false);
+  assert.equal(source.includes('router.put(\n    "/suppliers/:id"'), false);
+  assert.equal(source.includes('"/suppliers/:id/status"'), false);
+  assert.match(source, /"\/suppliers"/);
+  assert.match(source, /"\/suppliers\/:id"/);
+  assert.match(source, /"\/suppliers\/:id\/products"/);
+  assert.match(source, /"\/products\/:productId\/suppliers"/);
+});
