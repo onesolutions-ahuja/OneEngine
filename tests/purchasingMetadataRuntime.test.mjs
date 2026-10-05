@@ -188,3 +188,20 @@ test("sales products and categories use metadata workspace while legacy return a
   assert.match(productsRoute, /\/products\/catalogue/);
   assert.match(productsRoute, /\/products\/misc-line/);
 });
+
+
+test("gift cards online orders and attendance use metadata workspaces while runtime engines remain", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const attendance = await readFile(new URL("../server/routes/attendance.js", import.meta.url), "utf8");
+  const online = await readFile(new URL("../server/routes/online.js", import.meta.url), "utf8");
+  assert.match(app, /initialObjectKey="gift_card" appKey="gift-cards"/);
+  assert.match(app, /initialObjectKey="attendance" appKey="employees"/);
+  assert.match(app, /initialObjectKey="online_order" appKey="online-orders"/);
+  assert.equal(app.includes("OnlineOrdersPrep"), false);
+  assert.match(metadata, /key: "gift_card"/);
+  assert.match(metadata, /key: "online_order"/);
+  assert.match(attendance, /function:attendance\.clock_in/);
+  assert.match(attendance, /function:attendance\.clock_out/);
+  assert.match(online, /online\/orders/);
+});

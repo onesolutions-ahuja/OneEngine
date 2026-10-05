@@ -1286,6 +1286,9 @@ const operationalObjects = [
   { key: "supplier_invoice", label: "Supplier Invoice", plural: "Supplier Invoices", table: "supplier_invoices", fields: [
     ["invoice_number", "Invoice Number", "text", "invoice_number", false], ["supplier_id", "Supplier", "lookup", "supplier_id", false], ["purchase_id", "Purchase", "lookup", "purchase_id", false], ["invoice_date", "Invoice Date", "date", "invoice_date", false], ["status", "Status", "picklist", "status", false], ["total", "Total", "currency", "total", false],
   ] },
+  { key: "gift_card", label: "Gift Card", plural: "Gift Cards", table: "gift_cards", fields: [
+    ["code", "Code", "text", "code", false], ["reference_number", "Reference", "text", "reference_number", false], ["customer_id", "Customer", "lookup", "customer_id", false], ["status", "Status", "picklist", "status", false], ["balance", "Balance", "currency", "balance", false], ["expires_at", "Expires", "datetime", "expires_at", false], ["created_at", "Created", "datetime", "created_at", false],
+  ] },
   { key: "online_order", label: "Online Order", plural: "Online Orders", table: "online_orders", fields: [
     ["external_order_id", "Order Reference", "text", "external_order_id", false], ["platform", "Channel", "text", "platform", false], ["fulfilment_type", "Fulfilment", "text", "fulfilment_type", false], ["customer_name", "Customer", "text", "customer_name", false], ["store_id", "Store", "lookup", "store_id", false], ["status", "Status", "text", "status", false], ["total", "Total", "currency", "total", false], ["created_at", "Created", "datetime", "created_at", false],
   ] },  { key: "purchase_line", label: "Purchase Line", plural: "Purchase Lines", table: "purchase_items", fields: [

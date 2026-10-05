@@ -15,6 +15,7 @@ const definitions = [
   ["inventory_batch", "inventory_batches", "inventory.view", "/app/objects/inventory_batch?appKey=batch_expiry"],
   ["customer_credit_account", "customers", "customer.credit.view", "/app/customers"],
   ["customer_credit_ledger", "customer_credit_ledger", "customer.credit.view", "/app/customers"],
+  ["gift_card", "gift_cards", "customer.view", "/app/gift-cards"],
   ["inventory", "product_store_stock", "inventory.view", "/app/objects/inventory?appKey=inventory"],
   ["purchase", "purchases", "purchase.view", "/app/purchases"],
   ["purchase_line", "purchase_items", "purchase.view", "/app/purchases", { companyScoped: false }],

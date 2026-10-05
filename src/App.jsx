@@ -116,15 +116,11 @@ const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/
 const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
 const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
 const CustomersPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
-const GiftCardsPage = lazyWithRecovery(() => import('./pages/customers/GiftCardsPage'))
-const AttendancePage = lazyWithRecovery(() => import('./pages/employees/AttendancePage'))
 const StoresPage = lazyWithRecovery(() => import('./pages/stores/StoresPage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/ReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
 const AccountingAdmin = lazyWithRecovery(() => import('./pages/integrations/AccountingAdmin'))
-const OnlineOrdersAdmin = lazyWithRecovery(() => import('./pages/online/OnlineOrdersAdmin'))
-const OnlineOrdersPrep = lazyWithRecovery(() => import('./pages/online/OnlineOrdersPrep'))
 const OwnDeliveryWorkspace = lazyWithRecovery(() => import('./pages/online/OwnDeliveryWorkspace'))
 const ReturnsAdmin = lazyWithRecovery(() => import('./pages/returns/ReturnsAdmin'))
 const SupplierReturnsAdmin = lazyWithRecovery(() => import('./pages/returns/ReturnsAdmin').then((module) => ({ default: module.SupplierReturnsAdmin })))
@@ -2456,9 +2452,9 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'customers' ? (
           <CustomersPage initialObjectKey="customer" appKey="customers" />
         ) : activeApp === 'gift-cards' ? (
-          <GiftCardsPage onBack={() => openItem('customers')} />
+          <WorkspacePage initialObjectKey="gift_card" appKey="gift-cards" />
         ) : activeApp === 'employees' ? (
-          <AttendancePage />
+          <WorkspacePage initialObjectKey="attendance" appKey="employees" />
         ) : activeApp === 'stores' ? (
           <StoresPage />
         ) : activeApp === 'reports' ? (
@@ -2470,9 +2466,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'accounting' ? (
           <AccountingAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'online-orders' ? (
-          <OnlineOrdersAdmin />
-        ) : activeApp === 'order-prep' ? (
-          <OnlineOrdersPrep />
+          <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
           <OwnDeliveryWorkspace />
         ) : activeApp === 'assistant' ? (
