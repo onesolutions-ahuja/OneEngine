@@ -43,7 +43,7 @@ import createPurchasesRouter from "./routes/purchases.js";
 
 import createSalesRouter from "./routes/sales.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
-import createKioskRouter, { createKioskModeGate } from "./routes/kiosk.js";
+import { createKioskModeGate } from "./routes/kiosk.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReportsRouter from "./routes/reports.js";
 import createSecureInvoiceRouter from "./routes/secureInvoice.js";
@@ -63,7 +63,6 @@ import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
 import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
-import createOnlineRouter from "./routes/online.js";
 import createCustomerAuthRouter from "./routes/customerAuth.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
@@ -77,7 +76,6 @@ import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
 import createDataProtectionRouter from "./routes/dataProtection.js";
 import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, finalizeSuccessfulLogin, loadLoginSecurityContext, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
-import { createClientWebShopRouter } from "./routes/clientWebShop.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
 import createPaypalQrRouter from "./routes/paypalQr.js";
@@ -1989,14 +1987,6 @@ app.use("/api", createIdentityAssuranceRouter({ authenticate, authorize, db, cre
 app.use("/api", createIdentityProviderLoginRouter({ db, createToken, decryptCredentials, encryptCredentials }));
 app.use("/api", createSecurityGovernanceRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeAudit }));
-app.use("/api", createClientWebShopRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  createInventoryMovement,
-  getCompanyEntitlements: (companyId) => getCompanyEntitlements(db, companyId),
-}));
 
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
@@ -2145,7 +2135,6 @@ app.use(
 );
 
 app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, createInventoryMovement, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
-app.use("/api", createKioskRouter({ authenticate, authorize, db, pool, writeAudit, connectorDrivers }));
 
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
@@ -2198,24 +2187,6 @@ app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStor
 | /api/sales/:saleId/secure-links using the existing permission model.
 */
 app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudit }));
-
-/*
-| Online Orders (Uber Eats / Deliveroo foundation) - product platform
-| configuration and online order lifecycle. Platform-specific logic stays
-| isolated in services/onlineOrders/* (stubbed until real API credentials).
-*/
-
-app.use(
-  "/api",
-  createOnlineRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    writeAudit,
-    createInventoryMovement,
-  })
-);
 
 /*
 | T9A - generic integration foundation (provider-agnostic). Credentials are
