@@ -19,26 +19,20 @@ test("purchases and supplier returns use generic workspace", async () => {
   for (const source of [purchase,returns]) for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(source.includes(value),false,value);
 });
 
-test("protected transactional objects cannot use generic CRUD", async () => {
-  const route = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
-  assert.match(route, /config\?\.protectedWrites === true/);
-  const workspace = await readFile(new URL("../src/platform/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
-  assert.match(workspace, /protectedWrites/);
+test("transactional objects use metadata flow writes instead of protected business routes", async () => {
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.equal(registry.includes('config: { protectedWrites: true'), false);
+  assert.match(registry, /flowWritesOnly:true|flowWritesOnly: true/);
 });
 
 test("system object helper contains no business-specific purchase metadata", async () => {\n  const source = await readFile(new URL("../server/services/systemObjects.js", import.meta.url), "utf8");\n  assert.match(source, /SYSTEM_OBJECTS = Object\\.freeze\\(\\[\\]\\)/);\n  assert.equal(source.includes("purchase_line"), false);\n  assert.equal(source.includes("purchase_items"), false);\n});\n
 
-test("purchase create API delegates business behavior to the protected system workflow", async () => {
-  const source = await readFile(new URL("../server/routes/purchases.js", import.meta.url), "utf8");
-  assert.match(source, /systemKey: "function:purchase\.create"/);
-  assert.match(source, /extraContext: \{ pool \}/);
-  for (const forbidden of [
-    "INSERT INTO purchases",
-    "INSERT INTO purchase_items",
-    "INSERT INTO suppliers",
-    "validatePurchaseItems",
-    "insertPurchaseLines",
-  ]) assert.equal(source.includes(forbidden), false, forbidden);
+test("purchase create is generic object flow metadata", async () => {
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.match(registry, /name:"Purchase Create"/);
+  assert.match(registry, /key:"CREATE_RECORD",objectKey:"purchase"/);
+  assert.match(registry, /key:"CREATE_RECORD",objectKey:"purchase_line"/);
+  assert.equal(registry.includes('subflowApiName:"PURCHASE_CREATE"'), false);
 });
 
 test("purchase create capability preserves optional initial receipt and metadata inputs", async () => {
@@ -57,13 +51,10 @@ test("legacy supplier return endpoints are removed in favor of protected metadat
 });
 
 
-test("legacy purchasing route is only a compatibility bridge to protected purchase.create", async () => {
-  const source = await readFile(new URL("../server/routes/purchases.js", import.meta.url), "utf8");
-  assert.match(source, /function:purchase\.create/);
-  assert.equal(source.includes('router.get('), false);
-  assert.equal(source.includes('"/purchases/:id/receive"'), false);
-  assert.equal(source.includes("BEGIN"), false);
-  assert.equal(source.includes("SELECT "), false);
+test("legacy purchasing route is removed", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.equal(server.includes("./routes/purchases.js"), false);
+  assert.equal(server.includes("createPurchasesRouter"), false);
 });
 
 test("purchasing business receipt logic is package-owned, not a reusable core service", async () => {
