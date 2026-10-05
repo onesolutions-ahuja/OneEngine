@@ -24,32 +24,34 @@ function configFromRow(row) {
 export async function getGoogleConnectRuntime(db, companyId) {
   if (!companyId) return { ready: false, licensed: false, installed: false, enabled: false, reason: "SSO_NOT_CONNECTED" };
 
-  const packageResult = await db(
-    `SELECT p.*, i.status AS installation_status, i.suspended_by_entitlement, i.deactivated_by_user
-       FROM package_registry p
-       LEFT JOIN company_package_installations i
-         ON i.package_id=p.id AND i.company_id=$1
-      WHERE p.package_key=$2 AND p.active=true
-      LIMIT 1`,
-    [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
-  );
+  const [packageResult, entitlements, connectionResult] = await Promise.all([
+    db(
+      `SELECT p.*, i.status AS installation_status, i.suspended_by_entitlement, i.deactivated_by_user
+         FROM package_registry p
+         LEFT JOIN company_package_installations i
+           ON i.package_id=p.id AND i.company_id=$1
+        WHERE p.package_key=$2 AND p.active=true
+        LIMIT 1`,
+      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+    ),
+    getCompanyEntitlements(db, companyId),
+    db(
+      `SELECT *
+         FROM integration_connections
+        WHERE company_id=$1 AND connector_package_key=$2
+        ORDER BY updated_at DESC
+        LIMIT 1`,
+      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+    ),
+  ]);
   const packageRow = packageResult.rows[0] || null;
   if (!packageRow) return { ready: false, licensed: false, installed: false, enabled: false, reason: "SSO_NOT_CONNECTED" };
 
-  const entitlements = await getCompanyEntitlements(db, companyId);
   const licensed = isPackageLicensed(entitlements, packageRow);
   const installed = packageRow.installation_status === "active"
     && packageRow.suspended_by_entitlement !== true
     && packageRow.deactivated_by_user !== true;
 
-  const connectionResult = await db(
-    `SELECT *
-       FROM integration_connections
-      WHERE company_id=$1 AND connector_package_key=$2
-      ORDER BY updated_at DESC
-      LIMIT 1`,
-    [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
-  );
   const connection = connectionResult.rows[0] || null;
   const config = configFromRow(connection);
   const configured = Boolean(config.clientId && config.clientSecret && config.redirectUri);

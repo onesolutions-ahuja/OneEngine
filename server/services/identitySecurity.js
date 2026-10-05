@@ -122,12 +122,24 @@ export async function ipMatchesRanges(db, { companyId, policyId = null, type, ip
   return { matches: result.rows[0]?.matches === true, count: Number(result.rows[0]?.range_count || 0) };
 }
 
-export async function accessDecision(db, { companyId, userId, roleId, ip, now = new Date(), includeTrustedNetwork = true }) {
+export async function accessDecision(db, {
+  companyId,
+  userId,
+  roleId,
+  ip,
+  now = new Date(),
+  includeTrustedNetwork = true,
+  settingsOverride = undefined,
+  policyOverride = undefined,
+  companyTimezoneOverride = undefined,
+}) {
   if (!companyId) return { allowed: true, settings: null, policy: null, trustedNetwork: false };
   const [settings, policy, company] = await Promise.all([
-    loadSecuritySettings(db, companyId),
-    resolveAccessPolicy(db, { companyId, userId, roleId }),
-    db("SELECT timezone FROM companies WHERE id=$1", [companyId]),
+    settingsOverride !== undefined ? Promise.resolve(settingsOverride) : loadSecuritySettings(db, companyId),
+    policyOverride !== undefined ? Promise.resolve(policyOverride) : resolveAccessPolicy(db, { companyId, userId, roleId }),
+    companyTimezoneOverride !== undefined
+      ? Promise.resolve({ rows: [{ timezone: companyTimezoneOverride }] })
+      : db("SELECT timezone FROM companies WHERE id=$1", [companyId]),
   ]);
   const timezone = policy?.timezone || company.rows[0]?.timezone || "UTC";
   if (!loginHoursAllowed(policy, now, timezone)) {

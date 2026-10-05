@@ -27,10 +27,10 @@ export function effectiveAssurance(settings, policy) {
   };
 }
 
-export async function loadEffectiveAssurance(db,{companyId,userId,roleId}) {
+export async function loadEffectiveAssurance(db,{companyId,userId,roleId},{settings:settingsOverride=undefined,policy:policyOverride=undefined}={}) {
   const [settings,policy]=await Promise.all([
-    loadSecuritySettings(db,companyId),
-    resolveAccessPolicy(db,{companyId,userId,roleId}),
+    settingsOverride !== undefined ? Promise.resolve(settingsOverride) : loadSecuritySettings(db,companyId),
+    policyOverride !== undefined ? Promise.resolve(policyOverride) : resolveAccessPolicy(db,{companyId,userId,roleId}),
   ]);
   return {settings,policy,effective:effectiveAssurance(settings,policy)};
 }
