@@ -1316,3 +1316,14 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 8 approval elements', async () => {
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderApprovalElement.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  for (const label of ['Approval Step','Background Step','Stage']) assert.ok(elements.includes(label), label)
+  for (const token of ['Sequential','Concurrent','Group / Queue','All Must Approve','Associated Screen Flow','Evaluation Flow','Lock record while pending','Allow recall','Follow Fault Path']) assert.ok(editor.includes(token), token)
+  assert.ok(page.includes('approvalRuntimeElement'))
+  assert.ok(page.includes('GPTBuilderApprovalElement'))
+})
