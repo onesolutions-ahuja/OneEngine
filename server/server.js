@@ -53,7 +53,6 @@ import createWhatsAppSettingsRouter from "./routes/whatsapp.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
-import createAttendanceRouter from "./routes/attendance.js"; // Staff clock in/out — routes/attendance.js
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
 import createIntegrationsRouter from "./routes/integrations.js";
