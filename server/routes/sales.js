@@ -11,6 +11,7 @@ import { getRequestPool } from "../services/tenantDatabase.js";
 import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes, listPaymentMethods } from "../services/paymentMethods.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeWorkflowActions } from "../services/platformWorkflow.js";
 import { evaluateValidationRules } from "../services/platformValidation.js";
 
 export const PAYMENT_METHODS = DEFAULT_PAYMENT_METHODS.map((method) => method.code);
@@ -48,6 +49,79 @@ export default function createSalesRouter({
   savePlatformRecord = null,
 }) {
   const router = express.Router();
+
+  async function runConfiguredPaymentFlow(client, req, {
+    paymentMode,
+    amount,
+    cashReceived = 0,
+    customerSelected = false,
+    hasGiftCardCode = false,
+    currency = "GBP",
+    clientRequestId = "",
+    terminalId = null,
+    online = true,
+    selfCheckout = false,
+    executeConnector = true,
+  }) {
+    const flowResult = await client.query(
+      `SELECT r.action,o.id AS object_id,o.object_key,o.source_table,o.label
+         FROM platform_rules r
+         JOIN platform_objects o ON o.id=r.object_id
+        WHERE o.object_key='sale'
+          AND r.active=TRUE
+          AND r.lifecycle_status='ACTIVE'
+          AND r.action->>'apiName'='ONETILL_PAYMENT_MODE'
+          AND (r.company_id IS NULL OR r.company_id=$1)
+        ORDER BY CASE WHEN r.company_id=$1 THEN 0 ELSE 1 END,r.updated_at DESC
+        LIMIT 1`,
+      [req.user.companyId]
+    );
+    const row = flowResult.rows[0];
+    const actions = Array.isArray(row?.action?.actions) ? row.action.actions : [];
+    if (!row || !actions.length) {
+      const error = new Error("Process Payment Flow is not configured");
+      error.code = "PAYMENT_FLOW_UNAVAILABLE";
+      error.status = 409;
+      throw error;
+    }
+    const record = {
+      paymentMode: String(paymentMode || ""),
+      online: online === true,
+      customerSelected: customerSelected === true,
+      hasGiftCardCode: hasGiftCardCode === true,
+      cashReceived: Number(cashReceived || 0),
+      total: Number(amount || 0),
+      executeConnector: executeConnector === true,
+      currency: String(currency || "GBP").toUpperCase(),
+      clientRequestId: String(clientRequestId || ""),
+      terminalId: terminalId || null,
+      selfCheckout: selfCheckout === true,
+    };
+    const workflowVariables = { variables: {}, steps: {} };
+    await executeWorkflowActions({
+      actions,
+      allActions: actions,
+      db: (sql, params = []) => client.query(sql, params),
+      req,
+      companyId: req.user.companyId,
+      object: { id: row.object_id, object_key: row.object_key, source_table: row.source_table, label: row.label },
+      record,
+      storeId: req.user.storeId || null,
+      tillId: terminalId || null,
+      connectorDrivers,
+      writeAudit,
+      actorUserId: req.user.id || null,
+      workflowVariables,
+    });
+    return {
+      allowed: workflowVariables.variables.allowed === true,
+      selectedPaymentMode: String(workflowVariables.variables.selectedPaymentMode || paymentMode || ""),
+      connectorRequired: workflowVariables.variables.connectorRequired === true,
+      connectorApproved: workflowVariables.variables.connectorApproved === true,
+      connectorPayment: workflowVariables.steps.call_payment_connector || null,
+      workflowVariables,
+    };
+  }
 
   function reportDateFilters(query, params, alias = "s") {
     const filters = [];
@@ -1175,34 +1249,6 @@ export default function createSalesRouter({
         const receivedAmount = selectedPaymentConfig.requiresCashReceived === true
           ? Number(cashReceived == null || cashReceived === "" ? total : cashReceived)
           : total;
-        const paymentValidation = await executeSystemWorkflow({
-          db,
-          companyId: req.user.companyId,
-          userId: req.user.id || null,
-          systemKey: "flow:till.payment.validate",
-          req,
-          input: {
-            paymentMode: String(paymentMethod || ""),
-            online: true,
-            allowOffline: selectedPaymentDefinition?.allowOffline === true,
-            requiresConnector: selectedPaymentDefinition?.requiresConnector === true,
-            connectorAvailable: selectedPaymentDefinition?.requiresConnector !== true || Boolean(connectorDrivers),
-            requiresCustomer: selectedPaymentConfig.requiresCustomer === true,
-            customerSelected: Boolean(customerId),
-            requiresGiftCardCode: selectedPaymentConfig.requiresGiftCardCode === true,
-            hasGiftCardCode: Boolean(normaliseGiftCardCode(giftCardCode)),
-            requiresCashReceived: selectedPaymentConfig.requiresCashReceived === true,
-            cashReceived: Number.isFinite(receivedAmount) ? receivedAmount : 0,
-            total,
-          },
-          storeId: req.user.storeId || null,
-          tillId: session.rows[0].terminal_id || null,
-          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "till.payment.validate" },
-        });
-        if (paymentValidation?.result?.allowed !== true) {
-          await client.query("ROLLBACK");
-          return res.status(400).json({ success: false, code: "PAYMENT_VALIDATION_FAILED", message: "Payment method requirements were not met" });
-        }
 
         let giftCardTender = null;
         if (String(selectedPaymentConfig.handler || "").toLowerCase() === "gift_card") {
@@ -1243,128 +1289,54 @@ export default function createSalesRouter({
         }
 
         const connectorPayments = new Map();
-        const connectorTenders = paymentLines
-          ? paymentLines.filter((line) => paymentMethodByCode.get(String(line.method || ""))?.requiresConnector === true)
-          : selectedPaymentDefinition?.requiresConnector === true && payableAfterLoyalty > 0
+        const paymentTenders = paymentLines
+          ? paymentLines.map((line) => ({ method: String(line.method || ""), amount: Number(line.amount || 0) }))
+          : payableAfterLoyalty > 0
             ? [{ method: String(paymentMethod || ""), amount: payableAfterLoyalty }]
             : [];
 
-        for (const tender of connectorTenders) {
+        for (const tender of paymentTenders) {
           const methodCode = String(tender.method || "").trim();
-          const methodDefinition = paymentMethodByCode.get(methodCode);
           const amount = roundCurrency(Number(tender.amount || 0));
-          if (!methodDefinition || amount <= 0) continue;
+          if (!methodCode || amount <= 0) continue;
           if (!clientRequestId) {
             await client.query("ROLLBACK");
             return res.status(400).json({
               success: false,
               code: "IDEMPOTENCY_REQUIRED",
-              message: `${methodDefinition.label || methodCode} payments require a stable clientRequestId`,
-            });
-          }
-          if (!connectorDrivers) {
-            await client.query("ROLLBACK");
-            return res.status(503).json({
-              success: false,
-              code: "CONNECTOR_UNAVAILABLE",
-              message: `${methodDefinition.label || methodCode} payment connector is unavailable`,
+              message: "Payment processing requires a stable clientRequestId",
             });
           }
 
-          const configuredPackageKey = String(methodDefinition?.config?.connectorPackageKey || "").trim();
-          let connectorInstanceId = kioskContext?.connector_instance_id || null;
-          if (!connectorInstanceId && configuredPackageKey) {
-            const instance = await client.query(
-              `SELECT id
-                 FROM integration_connections
-                WHERE company_id=$1
-                  AND connector_package_key=$2
-                  AND enabled=TRUE
-                  AND UPPER(COALESCE(connection_status,''))='CONNECTED'
-                  AND (store_id IS NULL OR store_id=$3)
-                  AND (till_id IS NULL OR till_id=$4)
-                ORDER BY (till_id IS NOT NULL) DESC,(store_id IS NOT NULL) DESC,fallback_order ASC,updated_at DESC
-                LIMIT 1`,
-              [req.user.companyId, configuredPackageKey, req.user.storeId, session.rows[0].terminal_id]
-            );
-            connectorInstanceId = instance.rows[0]?.id || null;
-            if (!connectorInstanceId) {
-              await client.query("ROLLBACK");
-              return res.status(503).json({
-                success: false,
-                code: "CONNECTOR_UNAVAILABLE",
-                message: `${methodDefinition.label || methodCode} connector is not configured and available for this till`,
-              });
-            }
-          }
-
-          const idempotencyKey = `${req.user.companyId}:${clientRequestId.toLowerCase()}:payment.${methodCode}`;
-          const paymentExecution = await executeSystemWorkflow({
-            db,
-            companyId: req.user.companyId,
-            userId: req.user.id || null,
-            systemKey: "action:PAYMENT_START",
-            req,
-            input: {
-              amount,
-              currency: String(session.rows[0]?.currency || "GBP").toUpperCase(),
-              idempotencyKey,
-              reference: clientRequestId,
-              terminalId: session.rows[0].terminal_id,
-              paymentMode: methodCode,
-              connectorInstanceId,
-              selfCheckout: typeof selfCheckoutMode === "function" && selfCheckoutMode(req),
-            },
-            storeId: req.user.storeId,
-            tillId: session.rows[0].terminal_id,
-            connectorDrivers,
-            writeAudit,
-            source: {
-              type: "api",
-              method: req.method,
-              path: req.originalUrl || req.path,
-              capability: "payment.sale",
-              connectorInstanceId,
-              paymentMode: methodCode,
-              appName: kioskContext ? "OneKiosk" : null,
-            },
-          });
-
-          const workflowPayment = paymentExecution.result || {};
-          const connectorPayment = workflowPayment.success === true
-            ? { available: true, ...workflowPayment, workflowRunId: paymentExecution.runId }
-            : { available: false, ...workflowPayment, workflowRunId: paymentExecution.runId };
-          const paymentResult = connectorPayment.result;
-          const code = paymentResult?.status || connectorPayment.code || "CONNECTOR_UNAVAILABLE";
-          if (!connectorPayment.available || paymentResult?.status !== "APPROVED") {
-            await client.query("ROLLBACK");
-            const statusCode = code === "DECLINED" ? 402 : code === "TIMEOUT" ? 504 : 503;
-            await writeAudit?.(req.user.companyId, req.user.id, "payment.connector.failed", "connector", connectorPayment.connectorInstanceId || connectorInstanceId || null, {
-              paymentMode: methodCode,
-              code,
-              amount,
-              clientRequestId,
-            });
-            return res.status(statusCode).json({
-              success: false,
-              code,
-              message: code === "DECLINED"
-                ? `${methodDefinition.label || methodCode} payment was declined`
-                : `${methodDefinition.label || methodCode} payment could not be confirmed`,
-            });
-          }
-
-          connectorPayments.set(methodCode, {
-            ...connectorPayment,
-            idempotencyKey,
-          });
-          await writeAudit?.(req.user.companyId, req.user.id, "payment.connector.approved", "connector", connectorPayment.connectorInstanceId || connectorInstanceId || null, {
+          const paymentFlow = await runConfiguredPaymentFlow(client, req, {
             paymentMode: methodCode,
             amount,
-            providerTransactionId: paymentResult?.providerTransactionId || null,
-            terminalId: paymentResult?.terminalId || null,
-            clientRequestId,
+            cashReceived: methodCode === String(paymentMethod || "") ? receivedAmount : amount,
+            customerSelected: Boolean(customerId),
+            hasGiftCardCode: Boolean(normaliseGiftCardCode(giftCardCode)),
+            currency: session.rows[0]?.currency || "GBP",
+            clientRequestId: `${req.user.companyId}:${clientRequestId.toLowerCase()}:payment.${methodCode}`,
+            terminalId: session.rows[0].terminal_id,
+            online: true,
+            selfCheckout: typeof selfCheckoutMode === "function" && selfCheckoutMode(req),
+            executeConnector: true,
           });
+          if (!paymentFlow.allowed) {
+            const connectorStep = paymentFlow.connectorPayment || {};
+            const code = connectorStep?.result?.status || connectorStep?.code || "PAYMENT_VALIDATION_FAILED";
+            await client.query("ROLLBACK");
+            return res.status(code === "DECLINED" ? 402 : code === "TIMEOUT" ? 504 : 400).json({
+              success: false,
+              code,
+              message: "Selected payment method could not be approved",
+            });
+          }
+          if (paymentFlow.connectorRequired && paymentFlow.connectorPayment) {
+            connectorPayments.set(methodCode, {
+              ...paymentFlow.connectorPayment,
+              idempotencyKey: `${req.user.companyId}:${clientRequestId.toLowerCase()}:payment.${methodCode}`,
+            });
+          }
         }
 
         /*
