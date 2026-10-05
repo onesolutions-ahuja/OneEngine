@@ -87,6 +87,39 @@ export function normalizeGraph(nodes=[],edges=[]) {
   }
 }
 
+
+export function graphTopologyIssues(nodes=[],edges=[]) {
+  const graph=normalizeGraph(nodes,edges)
+  const issues=[]
+  const normal=graph.edges.filter(edge=>edge.kind!=='fault')
+  const bySource=new Map(), byTarget=new Map()
+  for(const edge of normal){
+    const sourceKey=`${edge.source}:${edge.sourceHandle||'default'}`
+    bySource.set(sourceKey,[...(bySource.get(sourceKey)||[]),edge])
+    byTarget.set(edge.target,[...(byTarget.get(edge.target)||[]),edge])
+  }
+  for(const [key,list] of bySource) if(list.length>1) issues.push({level:'error',code:'GRAPH_MULTIPLE_OUTGOING',text:`Connector ${key} has multiple outgoing paths.`,node:list[0].source})
+  for(const [target,list] of byTarget) if(list.length>1) issues.push({level:'error',code:'GRAPH_MULTIPLE_INCOMING',text:'An element has multiple incoming paths. Use a Decision/Loop path instead of ambiguous Free-Form connectors.',node:target})
+  const adjacency=new Map(nodes.map(node=>[node.id,[]]))
+  normal.forEach(edge=>adjacency.get(edge.source)?.push(edge.target))
+  const visiting=new Set(), visited=new Set()
+  const visit=id=>{if(visiting.has(id))return true;if(visited.has(id))return false;visiting.add(id);for(const next of adjacency.get(id)||[])if(visit(next))return true;visiting.delete(id);visited.add(id);return false}
+  if(nodes.some(node=>visit(node.id)))issues.push({level:'error',code:'GRAPH_CYCLE',text:'Free-Form connectors contain a cycle. Remove the cycle before saving or switching to Auto-Layout.'})
+  return issues
+}
+
+export function validateGraphConnection(nodes=[],edges=[],candidate={}) {
+  if(!candidate.source||!candidate.target)return 'Connector requires a source and target.'
+  if(candidate.source===candidate.target)return 'An element cannot connect to itself.'
+  const kind=candidate.kind||'normal'
+  const sameHandle=edges.some(edge=>edge.source===candidate.source&&(edge.sourceHandle||'default')===(candidate.sourceHandle||'default')&&(edge.kind||'normal')===kind)
+  if(sameHandle)return 'This connector already has an outgoing path. Remove it before connecting another element.'
+  if(kind!=='fault'&&edges.some(edge=>edge.kind!=='fault'&&edge.target===candidate.target))return 'The target already has an incoming path. Use an explicit branch instead.'
+  const issues=graphTopologyIssues(nodes,[...edges,{...candidate,id:'candidate'}])
+  const blocking=issues.find(issue=>['GRAPH_MULTIPLE_OUTGOING','GRAPH_MULTIPLE_INCOMING','GRAPH_CYCLE'].includes(issue.code))
+  return blocking?.text||''
+}
+
 export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],resources=[]}) {
   const issues=[]
   const add=(level,code,text,node='')=>issues.push({level,code,text,node})
@@ -140,6 +173,7 @@ export function validateDefinition({flowType,startConfig={},nodes=[],edges=[],re
     else names.add(name)
   }
   const graph=normalizeGraph(nodes,edges)
+  issues.push(...graphTopologyIssues(nodes,graph.edges))
   for (const e of graph.edges) {
     if (e.kind==='fault' && !e.source) add('error','FAULT_SOURCE','Fault connector requires a source element.')
   }
