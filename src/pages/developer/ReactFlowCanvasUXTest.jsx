@@ -19,7 +19,7 @@ import {
   GitBranch,
   MessageSquare,
   Minus,
-    Plus,
+  Plus,
   Sparkles,
   WandSparkles,
   Zap,
@@ -59,12 +59,28 @@ const CHILD_COLORS = [
   { key: 'violet', hex: '#7c3aed' },
 ]
 
+function seededColorOrder(seed) {
+  const values = [...CHILD_COLORS]
+  let hash = 0
+  for (let i = 0; i < String(seed).length; i += 1) {
+    hash = ((hash << 5) - hash + String(seed).charCodeAt(i)) | 0
+  }
+  for (let i = values.length - 1; i > 0; i -= 1) {
+    hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b)
+    const j = Math.abs(hash) % (i + 1)
+    ;[values[i], values[j]] = [values[j], values[i]]
+  }
+  return values
+}
+
 function WorkflowNode({ id, data, selected }) {
   const Icon = icons[data.icon] || Sparkles
   const removable = !data.hasChildren && !data.isRoot
+
   return (
     <div className={`rfux-node rfux-node--${data.tone || 'blue'} ${selected ? 'is-selected' : ''}`}>
       <Handle type="target" position={Position.Top} className="rfux-handle" />
+
       <div className="rfux-node-icon"><Icon size={16} /></div>
       <div className="rfux-node-copy">
         <strong>{data.title}</strong>
@@ -74,7 +90,7 @@ function WorkflowNode({ id, data, selected }) {
       <button
         type="button"
         className="rfux-node-remove nodrag"
-        aria-label={removable ? 'Remove node' : 'Node cannot be removed while it has children'}
+        aria-label={removable ? 'Remove node' : 'Node cannot be removed'}
         title={data.isRoot ? 'Start node cannot be removed' : removable ? 'Remove node' : 'Remove child nodes first'}
         disabled={!removable}
         onClick={(event) => {
@@ -103,6 +119,51 @@ function WorkflowNode({ id, data, selected }) {
   )
 }
 
+function computeLayout(nodes, edges) {
+  const depth = new Map()
+
+  const resolveDepth = (id, trail = new Set()) => {
+    if (depth.has(id)) return depth.get(id)
+    if (trail.has(id)) return 0
+
+    const parents = edges.filter((edge) => edge.target === id).map((edge) => edge.source)
+    if (!parents.length) {
+      depth.set(id, 0)
+      return 0
+    }
+
+    const nextTrail = new Set(trail)
+    nextTrail.add(id)
+    const value = Math.max(...parents.map((parentId) => resolveDepth(parentId, nextTrail))) + 1
+    depth.set(id, value)
+    return value
+  }
+
+  nodes.forEach((node) => resolveDepth(node.id))
+
+  const grouped = new Map()
+  nodes.forEach((node) => {
+    const level = depth.get(node.id) || 0
+    if (!grouped.has(level)) grouped.set(level, [])
+    grouped.get(level).push(node.id)
+  })
+
+  return nodes.map((node) => {
+    const level = depth.get(node.id) || 0
+    const row = grouped.get(level) || []
+    const index = row.indexOf(node.id)
+    const width = (row.length - 1) * 300
+
+    return {
+      ...node,
+      position: {
+        x: 480 - width / 2 + index * 300,
+        y: 60 + level * 165,
+      },
+    }
+  })
+}
+
 let nextId = 10
 
 export default function ReactFlowCanvasUXTest() {
@@ -114,13 +175,14 @@ export default function ReactFlowCanvasUXTest() {
   const addChild = useCallback((sourceId) => {
     const source = nodes.find((node) => node.id === sourceId)
     if (!source) return
+
     const id = String(nextId++)
     const siblingCount = edges.filter((edge) => edge.source === sourceId).length
     const newNode = {
       id,
       type: 'workflow',
       position: {
-        x: source.position.x + (siblingCount % 2 === 0 ? 120 : -120),
+        x: source.position.x + (siblingCount % 2 === 0 ? 140 : -140),
         y: source.position.y + 165,
       },
       data: {
@@ -130,6 +192,7 @@ export default function ReactFlowCanvasUXTest() {
         icon: 'sparkles',
       },
     }
+
     setNodes((current) => [...current, newNode])
     setEdges((current) => addEdge({
       id: `e${sourceId}-${id}`,
@@ -139,16 +202,18 @@ export default function ReactFlowCanvasUXTest() {
       markerEnd: { type: MarkerType.ArrowClosed },
     }, current))
     setSelectedId(sourceId)
-    setMessage('Child added. Select its parent to see each child path flow in a different colour.')
+    setMessage('Child added. The selected parent now shows each child path in a different moving colour.')
   }, [nodes, edges, setNodes, setEdges])
 
   const removeNode = useCallback((nodeId) => {
     const hasChildren = edges.some((edge) => edge.source === nodeId)
     const isRoot = !edges.some((edge) => edge.target === nodeId)
+
     if (hasChildren || isRoot) {
       setMessage(isRoot ? 'The start/root node cannot be removed.' : 'This node has children. Remove its children first.')
       return
     }
+
     setNodes((current) => current.filter((node) => node.id !== nodeId))
     setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId))
     if (selectedId === nodeId) setSelectedId('')
@@ -173,7 +238,9 @@ export default function ReactFlowCanvasUXTest() {
   )
 
   const edgesWithState = useMemo(() => {
+    const colorOrder = seededColorOrder(selectedId || 'none')
     let childIndex = 0
+
     return edges.map((edge) => {
       if (edge.source !== selectedId) {
         return {
@@ -184,13 +251,18 @@ export default function ReactFlowCanvasUXTest() {
           markerEnd: { type: MarkerType.ArrowClosed },
         }
       }
-      const color = CHILD_COLORS[childIndex % CHILD_COLORS.length]
+
+      const color = colorOrder[childIndex % colorOrder.length]
       childIndex += 1
+
       return {
         ...edge,
-        animated: true,
+        animated: false,
         className: `rfux-child-running-edge rfux-child-${color.key}`,
-        style: { stroke: color.hex },
+        style: {
+          '--rfux-edge-color': color.hex,
+          stroke: color.hex,
+        },
         markerEnd: { type: MarkerType.ArrowClosed, color: color.hex },
       }
     })
@@ -198,54 +270,76 @@ export default function ReactFlowCanvasUXTest() {
 
   const onConnect = useCallback((connection) => {
     if (!connection.source || !connection.target || connection.source === connection.target) return
-    const duplicate = edges.some((edge) => edge.source === connection.source && edge.target === connection.target)
+
+    const duplicate = edges.some(
+      (edge) => edge.source === connection.source && edge.target === connection.target
+    )
     if (duplicate) return
+
     setEdges((current) => addEdge({
       ...connection,
       id: `e${connection.source}-${connection.target}-${Date.now()}`,
       type: 'smoothstep',
       markerEnd: { type: MarkerType.ArrowClosed },
     }, current))
+
     setMessage('Additional parent connected. A child can have two, three, or more parents.')
   }, [edges, setEdges])
 
   return (
-    <div className={`rfux-node rfux-node--${data.tone || 'blue'} ${selected ? 'is-selected' : ''}`}>
-      <Handle type="target" position={Position.Top} className="rfux-handle" />
-      <div className="rfux-node-icon"><Icon size={16} /></div>
-      <div className="rfux-node-copy">
-        <strong>{data.title}</strong>
-        <span>{data.subtitle}</span>
+    <div className="rfux-page">
+      <div className="rfux-header">
+        <div>
+          <span className="rfux-kicker">Canvas UX prototype</span>
+          <h2>React Flow workflow editor test</h2>
+          <p>Isolated visual prototype only — no OneEngine workflow data or runtime actions.</p>
+        </div>
       </div>
 
-      <button
-        type="button"
-        className="rfux-node-remove nodrag"
-        aria-label={removable ? 'Remove node' : 'Node cannot be removed while it has children'}
-        title={data.isRoot ? 'Start node cannot be removed' : removable ? 'Remove node' : 'Remove child nodes first'}
-        disabled={!removable}
-        onClick={(event) => {
-          event.stopPropagation()
-          data.onRemoveNode?.(id)
-        }}
-      >
-        <Minus size={14} />
-      </button>
+      <div className="rfux-canvas-shell">
+        <div className="rfux-floating-toolbar" aria-label="Workflow canvas toolbar">
+          <button
+            type="button"
+            title="Auto layout"
+            onClick={() => {
+              setNodes((current) => computeLayout(current, edges))
+              setMessage('Auto layout applied.')
+            }}
+          >
+            <WandSparkles size={15} />
+          </button>
+        </div>
 
-      <button
-        type="button"
-        className="rfux-node-add nodrag"
-        aria-label="Add child"
-        title="Add child"
-        onClick={(event) => {
-          event.stopPropagation()
-          data.onQuickAdd?.(id)
-        }}
-      >
-        <Plus size={14} />
-      </button>
+        <ReactFlow
+          nodes={nodesWithActions}
+          edges={edgesWithState}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={(_, node) => setSelectedId(node.id)}
+          onPaneClick={() => setSelectedId('')}
+          fitView
+          fitViewOptions={{ padding: 0.24 }}
+          minZoom={0.25}
+          maxZoom={2}
+          connectionMode={ConnectionMode.Loose}
+          nodesDeletable={false}
+          edgesDeletable={false}
+          deleteKeyCode={null}
+          defaultEdgeOptions={{ type: 'smoothstep' }}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background gap={22} size={1} />
+          <MiniMap pannable zoomable className="rfux-minimap" />
+          <Controls position="bottom-left" showInteractive={false} />
+        </ReactFlow>
 
-      <Handle type="source" position={Position.Bottom} className="rfux-handle" />
+        <div className="rfux-status">
+          <Bot size={15} />
+          <span>{message}</span>
+        </div>
+      </div>
     </div>
   )
 }
