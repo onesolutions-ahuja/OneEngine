@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search, Trash2 } from 'lucide-react'
+import { Plus, Search, Trash2, WandSparkles } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 
@@ -126,14 +126,44 @@ function ActionInput({ name, schema = {}, description, required, includeState, m
   </div>
 }
 
+function inferJsonSchema(value){
+  if(Array.isArray(value))return{type:'array',items:value.length?inferJsonSchema(value[0]):{}}
+  if(value===null)return{type:['null']}
+  if(typeof value==='object')return{type:'object',properties:Object.fromEntries(Object.entries(value).map(([key,item])=>[key,inferJsonSchema(item)]))}
+  if(typeof value==='number')return{type:Number.isInteger(value)?'integer':'number'}
+  if(typeof value==='boolean')return{type:'boolean'}
+  return{type:'string'}
+}
+
+function HttpCalloutWizard({ integrations, onCancel, onCreate }){
+  const [step,setStep]=useState(1),[integrationId,setIntegrationId]=useState(''),[method,setMethod]=useState('GET'),[endpoint,setEndpoint]=useState(''),[headers,setHeaders]=useState('{}'),[query,setQuery]=useState('{}'),[body,setBody]=useState('{}'),[sample,setSample]=useState('{}'),[schema,setSchema]=useState(null),[testState,setTestState]=useState(null)
+  const selected=integrations.find((item)=>String(item.id)===String(integrationId))
+  const parse=(text)=>{try{return JSON.parse(text||'{}')}catch{return null}}
+  const infer=()=>{const value=parse(sample);if(value===null)return;setSchema(inferJsonSchema(value));setStep(3)}
+  const test=async()=>{if(!integrationId)return;setTestState({loading:true});try{const response=await apiRequest(`/api/integrations/${encodeURIComponent(integrationId)}/test-connection`,{method:'POST'});const result=response?.data||{};setTestState({ok:result.ok===true||result.success===true,message:result.message||`HTTP ${result.status||'OK'}`})}catch(error){setTestState({ok:false,message:error.message||'Connection test failed.'})}}
+  const create=()=>onCreate({providerKey:selected?.providerKey||selected?.provider_key||selected?.type||selected?.name||'',connectionKey:integrationId,method,endpoint,headers:parse(headers)||{},query:parse(query)||{},body:parse(body)||{},responseSchema:schema||inferJsonSchema(parse(sample)||{}),sampleResponse:parse(sample)||{}})
+  return <div className="gptb-modal-backdrop"><section className="gptb-properties-modal gptb-http-wizard" role="dialog" aria-modal="true" aria-label="New HTTP Callout">
+    <header><strong>New HTTP Callout</strong><span>Step {step} of 3</span></header>
+    <div className="gptb-properties-body">
+      {step===1?<><h3>Select Connection</h3><label><span>Connection <b>*</b></span><select value={integrationId} onChange={(event)=>setIntegrationId(event.target.value)}><option value="">Select a connection</option>{integrations.map((item)=><option key={item.id} value={item.id}>{item.name||item.provider_name||item.type||item.id}</option>)}</select></label><button type="button" className="gptb-button" disabled={!integrationId||testState?.loading} onClick={test}>Test Connection</button>{testState?<small className={testState.ok?'gptb-http-test-ok':'gptb-manager-error'}>{testState.loading?'Testing…':testState.message}</small>:null}</>:null}
+      {step===2?<><h3>Configure Request</h3><label><span>Method</span><select value={method} onChange={(event)=>setMethod(event.target.value)}>{['GET','POST','PUT','PATCH','DELETE'].map((item)=><option key={item}>{item}</option>)}</select></label><label><span>Endpoint <b>*</b></span><input value={endpoint} onChange={(event)=>setEndpoint(event.target.value)} placeholder="/v1/resource/{id}"/></label><label><span>Headers (JSON)</span><textarea rows={4} value={headers} onChange={(event)=>setHeaders(event.target.value)}/></label><label><span>Query Parameters (JSON)</span><textarea rows={4} value={query} onChange={(event)=>setQuery(event.target.value)}/></label><label><span>Request Body (JSON)</span><textarea rows={6} value={body} onChange={(event)=>setBody(event.target.value)}/></label></>:null}
+      {step===3?<><h3>Configure Response</h3><label><span>Sample JSON Response</span><textarea rows={10} value={sample} onChange={(event)=>setSample(event.target.value)}/></label><button type="button" className="gptb-button" onClick={infer}>Connect for Schema</button>{schema?<pre className="gptb-http-schema">{JSON.stringify(schema,null,2)}</pre>:null}</>:null}
+    </div>
+    <footer><button className="gptb-button" onClick={onCancel}>Cancel</button>{step>1?<button className="gptb-button" onClick={()=>setStep(step-1)}>Previous</button>:null}{step<3?<button className="gptb-button is-brand" disabled={step===1?!integrationId:!endpoint} onClick={()=>setStep(step+1)}>Next</button>:<button className="gptb-button is-brand" disabled={!integrationId||!endpoint} onClick={create}>Done</button>}</footer>
+  </section></div>
+}
+
 export default function GPTBuilderAction({ draft, updateConfig, resources = [], object = null, onResourcesChange, onConfiguredChange }) {
   const config = normalizeActionConfig(draft.config)
   const [actions,setActions]=useState([])
   const [query,setQuery]=useState('')
   const [loading,setLoading]=useState(true)
+  const [integrations,setIntegrations]=useState([])
+  const [httpWizardOpen,setHttpWizardOpen]=useState(false)
   useEffect(()=>{
     let live=true
     setLoading(true)
+    apiRequest('/api/integrations').then((response)=>setIntegrations(Array.isArray(response?.data)?response.data:[])).catch(()=>setIntegrations([]))
     apiRequest('/api/platform/workflow-actions').then((response)=>{
       if(!live)return
       setActions((Array.isArray(response?.data)?response.data:[]).filter((action)=>action?.builderVisible!==false && !['RUN_AGENT','SCREEN','RUN_SUBFLOW'].includes(action.key)))
@@ -158,7 +188,7 @@ export default function GPTBuilderAction({ draft, updateConfig, resources = [], 
   },[draft.id,draft.apiName,draft.label,config.actionKey,config.outputMode])
 
   return <div className="gptb-gr gptb-action-editor">
-    <section><h3>Action</h3>
+    <section><div className="gptb-action-title-row"><h3>Action</h3><button type="button" className="gptb-inline-action" onClick={()=>setHttpWizardOpen(true)}><WandSparkles size={12}/> New HTTP Callout</button></div>
       <div className="gptb-action-search"><Search size={13}/><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search actions..."/></div>
       <label><span>Action <b>*</b></span><select value={config.actionKey} disabled={loading} onChange={(event)=>{
         const next=actions.find((action)=>action.key===event.target.value)
@@ -177,5 +207,12 @@ export default function GPTBuilderAction({ draft, updateConfig, resources = [], 
       {config.outputMode==='automatic'?<small>Outputs are available later in the flow as <b>Outputs from {draft.label||draft.apiName}</b>.</small>:<><div className="gptb-action-output-mappings">{config.manualOutputs.map((mapping,index)=><div key={mapping.id}><span>{index+1}</span>{outputFields.length?<select value={mapping.outputPath||''} onChange={(event)=>patch({manualOutputs:config.manualOutputs.map((item)=>item.id===mapping.id?{...item,outputPath:event.target.value}:item)})}><option value="">Select output</option>{outputFields.map((field)=><option key={field} value={field}>{field}</option>)}</select>:<input value={mapping.outputPath||''} onChange={(event)=>patch({manualOutputs:config.manualOutputs.map((item)=>item.id===mapping.id?{...item,outputPath:event.target.value}:item)})} placeholder="Output name/path"/>}<select value={mapping.targetVariable||''} onChange={(event)=>patch({manualOutputs:config.manualOutputs.map((item)=>item.id===mapping.id?{...item,targetVariable:event.target.value}:item)})}><option value="">Select variable</option>{resources.filter((resource)=>resource.writable!==false&&resource.generatedByElementId!==draft.id).map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resource.label||resource.apiName}{resource.secure?' — ********':''}</option>)}</select><button type="button" aria-label={`Remove output mapping ${index+1}`} onClick={()=>patch({manualOutputs:config.manualOutputs.filter((item)=>item.id!==mapping.id)})}><Trash2 size={12}/></button></div>)}</div><button type="button" className="gptb-inline-action" onClick={()=>patch({manualOutputs:[...config.manualOutputs,{id:uid('output'),outputPath:'',targetVariable:''}]})}><Plus size={12}/> Add Output Mapping</button></>}
     </section>:null}
     {errors.length?<div className="gptb-gr-errors"><b>Complete this Action element</b>{errors.map((error)=><span key={error}>{error}</span>)}</div>:null}
+    {httpWizardOpen?<HttpCalloutWizard integrations={integrations} onCancel={()=>setHttpWizardOpen(false)} onCreate={(callout)=>{
+      const http=actions.find((action)=>action.key==='ONE_HTTP_REQUEST')
+      const inputs={},modes={},included={},transforms={}
+      for(const [name,schema] of Object.entries(http?.schema?.properties||{})){inputs[name]=Object.prototype.hasOwnProperty.call(callout,name)?callout[name]:inputDefault(schema);modes[name]='value';included[name]=(http?.schema?.required||[]).includes(name)||Object.prototype.hasOwnProperty.call(callout,name)?'specified':'omit';transforms[name]={source:'',mappings:[]}}
+      patch({actionKey:'ONE_HTTP_REQUEST',actionLabel:'HTTP Callout',inputs,inputModes:modes,inputIncluded:included,transforms,outputMode:'automatic',manualOutputs:[],httpCallout:{connectionKey:callout.connectionKey,responseSchema:callout.responseSchema,sampleResponse:callout.sampleResponse}})
+      setHttpWizardOpen(false)
+    }}/>:null}
   </div>
 }
