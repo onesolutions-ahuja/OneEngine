@@ -17,6 +17,11 @@ function resourceType(resource) {
   return String(resource?.dataType || 'text').toLowerCase()
 }
 
+function compatibleAssignmentValue(target, candidate) {
+  if (!target || !candidate) return false
+  return resourceType(target) === resourceType(candidate)
+}
+
 export function assignmentOperators(type) {
   if (type === 'collection') return [
     ['set','Equals'],
@@ -46,6 +51,10 @@ export function assignmentConfigErrors(config = {}, resources = []) {
     const type = resourceType(resource)
     if (row.operator && !assignmentOperators(type).some(([key]) => key === row.operator)) errors.push(`Assignment ${index + 1}: operator isn't valid for this variable type.`)
     if (row.value === '' || row.value == null) errors.push(`Assignment ${index + 1}: enter or select a value.`)
+    if (row.valueMode === 'resource' && row.value) {
+      const valueResource = resources.find((item) => resourcePath(item) === row.value)
+      if (!valueResource || !compatibleAssignmentValue(resource, valueResource)) errors.push(`Assignment ${index + 1}: selected value resource isn't compatible with the target variable.`)
+    }
   })
   return errors
 }
@@ -104,7 +113,7 @@ export default function GPTBuilderAssignment({ draft, updateConfig, resources, o
             <div className="gptb-gr-value">
               <button type="button" onClick={() => patchRow(row.id,{valueMode:row.valueMode === 'resource' ? 'literal' : 'resource',value:''})}>{row.valueMode === 'resource' ? 'Resource' : 'Value'}</button>
               {row.valueMode === 'resource'
-                ? <select value={row.value || ''} onChange={(event) => patchRow(row.id,{value:event.target.value})}><option value="">Select a resource</option>{resources.map((item) => <option key={item.id || item.apiName} value={resourcePath(item)}>{item.label || item.apiName}</option>)}</select>
+                ? <select value={row.value || ''} onChange={(event) => patchRow(row.id,{value:event.target.value})}><option value="">Select a resource</option>{resources.filter((item) => compatibleAssignmentValue(resource, item)).map((item) => <option key={item.id || item.apiName} value={resourcePath(item)}>{item.label || item.apiName}</option>)}</select>
                 : <input value={row.value ?? ''} placeholder={row.operator === 'remove_position' ? 'Position' : 'Enter value'} onChange={(event) => patchRow(row.id,{value:event.target.value})}/>}
             </div>
             <button type="button" aria-label={`Remove assignment ${index + 1}`} onClick={() => patch({ assignments: config.assignments.filter((item) => item.id !== row.id) })}><Trash2 size={13}/></button>
