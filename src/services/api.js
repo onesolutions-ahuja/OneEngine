@@ -32,6 +32,7 @@ export function getActingCompanyId() {
 }
 
 export function setActingCompanyId(companyId) {
+  clearApiResponseCache()
   try {
     if (companyId) sessionStorage.setItem(ACTING_COMPANY_STORAGE_KEY, String(companyId))
     else sessionStorage.removeItem(ACTING_COMPANY_STORAGE_KEY)
@@ -46,6 +47,7 @@ export function getActiveStoreId() {
 }
 
 export function setActiveStoreId(storeId) {
+  clearApiResponseCache()
   if (storeId && !getAvailableStores().some((store) => String(store.id) === String(storeId))) storeId = ''
   try {
     if (storeId) localStorage.setItem(ACTIVE_STORE_STORAGE_KEY, String(storeId))
@@ -425,6 +427,38 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 }
 
 const apiRequestInFlight = new Map()
+const apiResponseCache = new Map()
+const API_RESPONSE_CACHE_TTL_MS = 15 * 1000
+const API_RESPONSE_CACHE_MAX_ENTRIES = 150
+const NO_MEMORY_CACHE_PATHS = [/^\/api\/health(?:\/|$|\?)/, /^\/api\/auth\//]
+
+function canUseMemoryGetCache(path, options = {}) {
+  if (options.cache === false || options.cacheTtlMs === 0) return false
+  return !NO_MEMORY_CACHE_PATHS.some((pattern) => pattern.test(String(path || '')))
+}
+
+function readMemoryGetCache(key) {
+  const entry = apiResponseCache.get(key)
+  if (!entry) return null
+  if (entry.expiresAt <= Date.now()) {
+    apiResponseCache.delete(key)
+    return null
+  }
+  return entry.value
+}
+
+function writeMemoryGetCache(key, value, ttlMs = API_RESPONSE_CACHE_TTL_MS) {
+  if (!(ttlMs > 0)) return
+  apiResponseCache.delete(key)
+  apiResponseCache.set(key, { value, expiresAt: Date.now() + ttlMs })
+  while (apiResponseCache.size > API_RESPONSE_CACHE_MAX_ENTRIES) {
+    apiResponseCache.delete(apiResponseCache.keys().next().value)
+  }
+}
+
+function clearApiResponseCache() {
+  apiResponseCache.clear()
+}
 
 function apiRequestDedupeKey(path, token) {
   const actingCompanyId = getActingCompanyId()
@@ -443,12 +477,21 @@ export function apiRequest(path, options = {}) {
   if (!canDedupe) return apiRequestCore(path, options, token)
 
   const key = apiRequestDedupeKey(path, token)
+  if (canUseMemoryGetCache(path, options)) {
+    const cached = readMemoryGetCache(key)
+    if (cached !== null) return Promise.resolve(cached)
+  }
   const existing = apiRequestInFlight.get(key)
   if (existing) return existing
 
-  const request = apiRequestCore(path, options, token).finally(() => {
-    if (apiRequestInFlight.get(key) === request) apiRequestInFlight.delete(key)
-  })
+  const request = apiRequestCore(path, options, token)
+    .then((value) => {
+      if (canUseMemoryGetCache(path, options)) writeMemoryGetCache(key, value, Number(options.cacheTtlMs ?? API_RESPONSE_CACHE_TTL_MS))
+      return value
+    })
+    .finally(() => {
+      if (apiRequestInFlight.get(key) === request) apiRequestInFlight.delete(key)
+    })
   apiRequestInFlight.set(key, request)
   return request
 }
@@ -471,7 +514,7 @@ async function apiRequestCore(path, options = {}, tokenOverride = '') {
   } = options
   void _dedupe
   const token = tokenOverride || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
-  const maxAttempts = method === 'GET' && retryGet ? 2 : 1
+  const maxAttempts = method === 'GET' && retryGet && options.retryGet === true ? 2 : 1
   let lastError = null
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
