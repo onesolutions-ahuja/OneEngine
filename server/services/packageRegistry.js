@@ -3169,6 +3169,18 @@ export function packageDefinition(entry) {
         workflows: [
           {
             objectKey: "employee",
+            name: "Staff - Set Active Status",
+            apiName: "STAFF_SET_ACTIVE_STATUS",
+            triggerKey: "manual",
+            active: true,
+            lifecycleStatus: "ACTIVE",
+            inputContract: [{ name:"active",label:"Active",type:"boolean",required:true }],
+            actions: [
+              { id:"set_active_status",label:"Set Active Status",apiName:"set_active_status",key:"UPDATE_RECORD",objectKey:"employee",recordId:{path:"$record.id"},fieldValues:{active:{path:"$record.active"}} },
+            ],
+          },
+          {
+            objectKey: "employee",
             name: "Staff - Send Password Reset",
             apiName: "STAFF_SEND_PASSWORD_RESET",
             triggerKey: "manual",
