@@ -38,20 +38,21 @@ jobs:
           done
           echo "::error::GitHub Pages did not reach $GITHUB_SHA"
           exit 1
-      - name: Wait for backend readiness
+      - name: Wait for exact backend deployment readiness
         shell: bash
         run: |
           set -euo pipefail
           API="${ONEPOS_E2E_API_BASE_URL%/}"
-          for attempt in {1..30}; do
+          for attempt in {1..36}; do
             BODY="$(curl -fsSL "$API/api/health" 2>/dev/null || true)"
             STATUS="$(printf '%s' "$BODY" | jq -r '.status // empty' 2>/dev/null || true)"
-            if [ "$STATUS" = "ready" ] || [ "$STATUS" = "online" ]; then
+            COMMIT="$(printf '%s' "$BODY" | jq -r '.diagnostics.buildCommit // empty' 2>/dev/null || true)"
+            if { [ "$STATUS" = "ready" ] || [ "$STATUS" = "online" ]; } && [ "$COMMIT" = "$GITHUB_SHA" ]; then
               exit 0
             fi
             sleep 5
           done
-          echo "::error::OneEngine API did not become ready before final loading verification"
+          echo "::error::OneEngine API did not reach ready state for commit $GITHUB_SHA"
           exit 1
 
       - name: Run final loading verification
