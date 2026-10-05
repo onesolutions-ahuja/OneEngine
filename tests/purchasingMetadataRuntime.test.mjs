@@ -125,7 +125,7 @@ test("customer credit and loyalty administration has no legacy route-local write
 test("layaway uses metadata ownership", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(app.includes("LayawayPage"), false);
   assert.equal(server.includes("createLayawaysRouter"), false);
   assert.ok(metadata.includes('key:"layaway"') || metadata.includes('key: "layaway"'));
@@ -136,7 +136,7 @@ test("layaway uses metadata ownership", async () => {
 
 test("pricing promotions and combos remain metadata-owned without legacy administration", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(server.includes("createPricingRouter"), false);
   assert.ok(metadata.includes('key:"promotion"') || metadata.includes('key: "promotion"'));
   assert.ok(metadata.includes('key:"price_list"') || metadata.includes('key: "price_list"'));
@@ -145,14 +145,14 @@ test("pricing promotions and combos remain metadata-owned without legacy adminis
 
 test("sales products and categories use metadata workspace while legacy return apps are removed", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   const productsRoute = await readFile(new URL("../server/routes/products.js", import.meta.url), "utf8");
   assert.match(app, /SalesPage initialObjectKey="sale" appKey="sales"/);
   assert.match(app, /ProductsPage initialObjectKey="product" appKey="products"/);
   assert.match(app, /CategoriesPage initialObjectKey="category" appKey="categories"/);
   assert.equal(app.includes("const ReturnsPage ="), false);
   assert.equal(app.includes("const ExchangePage ="), false);
-  assert.ok(metadata.includes('key:"stock_return"') || metadata.includes('key: "stock_return"'));
+  assert.ok(metadata.includes('objectKey:"stock_return"') || metadata.includes('objectKey: "stock_return"'));
   assert.match(productsRoute, /\/products\/catalogue/);
   assert.match(productsRoute, /\/products\/misc-line/);
 });
@@ -166,8 +166,8 @@ test("gift cards online orders and attendance use metadata workspaces", async ()
   assert.match(app, /initialObjectKey="employee" appKey="employees"/);
   assert.match(app, /initialObjectKey="online_order" appKey="online-orders"/);
   assert.equal(app.includes("OnlineOrdersPrep"), false);
-  assert.ok(metadata.includes('key:"gift_card"') || metadata.includes('key: "gift_card"') || registry.includes('objectKey: "gift_card"'));
-  assert.ok(metadata.includes('key:"online_order"') || metadata.includes('key: "online_order"') || registry.includes('objectKey: "online_order"'));
+  assert.ok(registry.includes('objectKey:"gift_card"') || registry.includes('objectKey: "gift_card"'));
+  assert.ok(registry.includes('objectKey:"online_order"') || registry.includes('objectKey: "online_order"'));
 });
 
 test("sales route no longer depends on deleted legacy loyalty helpers", async () => {
@@ -192,11 +192,11 @@ test("cleanup leaves no stale deleted UI imports or duplicate canvas component",
 
 test("final manifest sweep removes obsolete direct business route stacks", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   const inventory = await readFile(new URL("../server/services/inventory.js", import.meta.url), "utf8");
   assert.equal(server.includes("createReturnsRouter"), false);
   assert.ok(metadata.includes('key:"stock_return"') || metadata.includes('key: "stock_return"'));
-  assert.ok(metadata.includes('key:"product"') || metadata.includes('key: "product"'));
+  assert.ok(metadata.includes('objectKey:"product"') || metadata.includes('objectKey: "product"'));
   assert.equal(server.includes("pricingEngine"), false);
   assert.match(inventory, /export async function createInventoryMovement/);
 });
@@ -246,16 +246,17 @@ test("own delivery package uses metadata workspace instead of hardcoded business
   assert.equal(app.includes("OwnDeliveryWorkspace"), false);
   assert.match(app, /initialObjectKey="online_order" appKey="own-delivery"/);
   assert.equal(server.includes("createOwnDeliveryRouter"), false);
-  assert.ok(registry.includes('key: "own_delivery"') || registry.includes('key:"own_delivery"'));
+  const catalogue = await readFile(new URL("../server/packages/packageManifestCatalog.js", import.meta.url), "utf8");
+  assert.ok(catalogue.includes('key: "own_delivery"') || catalogue.includes('key:"own_delivery"'));
 });
 
 test("kiosk administration is metadata-driven and obsolete kiosk route is removed", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(app.includes("OneKioskDevicesPage"), false);
   assert.match(app, /initialObjectKey="kiosk_device" appKey="one_kiosk"/);
-  assert.ok(metadata.includes('key:"kiosk_device"') || metadata.includes('key: "kiosk_device"'));
+  assert.ok(metadata.includes('objectKey:"kiosk_device"') || metadata.includes('objectKey: "kiosk_device"'));
   assert.equal(server.includes("createKioskRouter"), false);
 });
 
@@ -267,8 +268,9 @@ test("store and till administration use metadata while operational till runtime 
   const settingsPage = await readFile(new URL("../src/pages/settings/StoreTillSettingsPage.jsx", import.meta.url), "utf8");
   assert.equal(app.includes("pages/stores/StoresPage"), false);
   assert.match(app, /initialObjectKey="store" appKey="stores"/);
-  assert.ok(metadata.includes('key:"store"') || metadata.includes('key: "store"'));
-  assert.ok(metadata.includes('key:"terminal"') || metadata.includes('key: "terminal"'));
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.ok(registry.includes('objectKey:"store"') || registry.includes('objectKey: "store"'));
+  assert.ok(registry.includes('objectKey:"terminal"') || registry.includes('objectKey: "terminal"'));
   assert.equal(admin.includes('router.put("/admin/stores/:id"'), false);
   assert.equal(admin.includes('router.put("/admin/tills/:id"'), false);
   assert.equal(settingsPage.includes("/api/admin/tills/"), false);
@@ -281,7 +283,8 @@ test("staff app is metadata-driven while identity and RBAC administration remain
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
   const admin = await readFile(new URL("../server/routes/admin.js", import.meta.url), "utf8");
   assert.match(app, /initialObjectKey="employee" appKey="employees"/);
-  assert.ok(metadata.includes('key:"employee"') || metadata.includes('key: "employee"'));
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.ok(registry.includes('objectKey:"employee"') || registry.includes('objectKey: "employee"'));
   assert.match(admin, /\/admin\/roles\/\:roleId\/permissions/);
   assert.match(admin, /\/admin\/users\/\:id\/reset-password/);
   assert.match(admin, /\/admin\/users\/\:id\/stores/);
