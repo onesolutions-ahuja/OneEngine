@@ -55,7 +55,7 @@
   font: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: background .15s ease, border-color .15s ease, transform .15s ease, color .15s ease;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
 }
 
 .rfux-header-actions button:hover,
@@ -69,16 +69,15 @@
   transform: translateY(1px);
 }
 
-.rfux-header-actions button:disabled,
-.rfux-floating-toolbar button:disabled {
-  opacity: .38;
+.rfux-header-actions button:disabled {
+  opacity: .45;
   cursor: default;
 }
 
 .rfux-canvas-shell {
   position: relative;
-  height: min(74vh, 820px);
-  min-height: 640px;
+  height: min(72vh, 760px);
+  min-height: 610px;
   overflow: hidden;
   border: 1px solid #e4e4e7;
   border-radius: 14px;
@@ -94,24 +93,8 @@
 }
 
 .rfux-canvas-shell .react-flow__edge-path {
-  stroke: #9ca3af;
-  stroke-width: 1.55;
-  stroke-linecap: round;
-}
-
-.rfux-canvas-shell .react-flow__edge.rfux-running-edge .react-flow__edge-path {
-  stroke-dasharray: 7 6;
-  animation: rfux-dash 1s linear infinite;
-}
-
-.rfux-canvas-shell .react-flow__edge.rfux-running-edge.is-selected .react-flow__edge-path,
-.rfux-canvas-shell .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #7c3aed;
-  stroke-width: 2;
-}
-
-@keyframes rfux-dash {
-  to { stroke-dashoffset: -26; }
+  stroke: #a1a1aa;
+  stroke-width: 1.5;
 }
 
 .rfux-canvas-shell .react-flow__edge-text {
@@ -124,9 +107,33 @@
   fill: #fff;
 }
 
+.rfux-canvas-shell .react-flow__edge.rfux-child-running-edge .react-flow__edge-path {
+  stroke: #7c3aed;
+  stroke-width: 1.8;
+  stroke-dasharray: 8 6;
+  animation: rfux-child-flow .75s linear infinite;
+}
+
+@keyframes rfux-child-flow {
+  to { stroke-dashoffset: -28; }
+}
+
+.rfux-canvas-shell .react-flow__edge.rfux-workflow-running-edge .react-flow__edge-path {
+  stroke-width: 2.1;
+  stroke-dasharray: 8 6;
+  animation: rfux-child-flow .75s linear infinite;
+}
+
+.rfux-canvas-shell .react-flow__edge.rfux-run-violet .react-flow__edge-path { stroke: #7c3aed; }
+.rfux-canvas-shell .react-flow__edge.rfux-run-blue .react-flow__edge-path { stroke: #2563eb; }
+.rfux-canvas-shell .react-flow__edge.rfux-run-green .react-flow__edge-path { stroke: #16a34a; }
+.rfux-canvas-shell .react-flow__edge.rfux-run-amber .react-flow__edge-path { stroke: #d97706; }
+.rfux-canvas-shell .react-flow__edge.rfux-run-pink .react-flow__edge-path { stroke: #db2777; }
+.rfux-canvas-shell .react-flow__edge.rfux-run-cyan .react-flow__edge-path { stroke: #0891b2; }
+
 .rfux-floating-toolbar {
   position: absolute;
-  z-index: 30;
+  z-index: 20;
   top: 14px;
   left: 50%;
   transform: translateX(-50%);
@@ -165,90 +172,6 @@
   background: #e4e4e7;
 }
 
-.rfux-palette {
-  position: absolute;
-  z-index: 29;
-  top: 62px;
-  left: 14px;
-  width: 208px;
-  padding: 9px;
-  border: 1px solid #e4e4e7;
-  border-radius: 12px;
-  background: rgba(255,255,255,.97);
-  box-shadow: 0 14px 34px rgba(24,24,27,.12);
-  backdrop-filter: blur(12px);
-}
-
-.rfux-palette-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 3px 4px 8px;
-}
-
-.rfux-palette-heading strong {
-  font-size: 11px;
-}
-
-.rfux-palette-heading span {
-  color: #a1a1aa;
-  font-size: 9px;
-}
-
-.rfux-palette > button {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 30px 1fr;
-  align-items: center;
-  gap: 8px;
-  margin: 3px 0;
-  padding: 7px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  color: #27272a;
-  background: transparent;
-  text-align: left;
-  cursor: grab;
-}
-
-.rfux-palette > button:hover {
-  border-color: #e4e4e7;
-  background: #f8f8fa;
-}
-
-.rfux-palette > button:active {
-  cursor: grabbing;
-}
-
-.rfux-palette > button > span:last-child {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.rfux-palette > button strong {
-  font-size: 11px;
-}
-
-.rfux-palette > button small {
-  color: #a1a1aa;
-  font-size: 9px;
-}
-
-.rfux-palette-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-}
-
-.rfux-palette-icon--blue { background: #e0f2fe; color: #0369a1; }
-.rfux-palette-icon--amber { background: #fef3c7; color: #a16207; }
-.rfux-palette-icon--green { background: #dcfce7; color: #15803d; }
-.rfux-palette-icon--gray { background: #f4f4f5; color: #52525b; }
-
 .rfux-node {
   position: relative;
   width: 232px;
@@ -276,15 +199,15 @@
 }
 
 .rfux-node.is-running {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 4px rgba(124,58,237,.12), 0 8px 24px rgba(124,58,237,.18);
-  animation: rfux-node-pulse .85s ease-in-out infinite alternate;
+  box-shadow: 0 0 0 3px rgba(24,24,27,.06), 0 8px 20px rgba(24,24,27,.09);
 }
 
-@keyframes rfux-node-pulse {
-  from { transform: translateY(0); }
-  to { transform: translateY(-2px); }
-}
+.rfux-node.is-running.rfux-run-violet { border-color: #7c3aed; }
+.rfux-node.is-running.rfux-run-blue { border-color: #2563eb; }
+.rfux-node.is-running.rfux-run-green { border-color: #16a34a; }
+.rfux-node.is-running.rfux-run-amber { border-color: #d97706; }
+.rfux-node.is-running.rfux-run-pink { border-color: #db2777; }
+.rfux-node.is-running.rfux-run-cyan { border-color: #0891b2; }
 
 .rfux-node-icon {
   width: 32px;
@@ -336,14 +259,20 @@
 
 .rfux-more:hover { background: #f4f4f5; }
 
-.rfux-node-link-action {
+.rfux-node-actions {
   position: absolute;
   left: 50%;
   bottom: -39px;
   transform: translateX(-50%);
-  z-index: 8;
-  width: 27px;
-  height: 27px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rfux-node-action {
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
   display: grid;
   place-items: center;
@@ -352,26 +281,31 @@
   cursor: pointer;
 }
 
-.rfux-node-link-action--add {
+.rfux-node-action--add {
   border: 1px solid #ddd6fe;
   color: #6d28d9;
 }
 
-.rfux-node-link-action--add:hover {
+.rfux-node-action--add:hover {
   color: #fff;
   background: #7c3aed;
   border-color: #7c3aed;
 }
 
-.rfux-node-link-action--remove {
+.rfux-node-action--remove {
   border: 1px solid #e4e4e7;
   color: #71717a;
 }
 
-.rfux-node-link-action--remove:hover {
+.rfux-node-action--remove:hover:not(:disabled) {
   color: #b91c1c;
   background: #fff1f2;
   border-color: #fecdd3;
+}
+
+.rfux-node-action:disabled {
+  opacity: .32;
+  cursor: default;
 }
 
 .rfux-handle {
@@ -382,17 +316,9 @@
   box-shadow: 0 0 0 1px #8b5cf6;
 }
 
-.rfux-handle--target:hover,
-.rfux-handle--source:hover {
-  width: 11px !important;
-  height: 11px !important;
-}
-
 .rfux-canvas-shell .react-flow__connection-path {
   stroke: #7c3aed;
   stroke-width: 1.8;
-  stroke-dasharray: 6 5;
-  animation: rfux-dash .8s linear infinite;
 }
 
 .rfux-canvas-shell .react-flow__controls {
@@ -420,7 +346,7 @@
   z-index: 20;
   left: 76px;
   bottom: 16px;
-  max-width: 470px;
+  max-width: 500px;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -434,123 +360,9 @@
   backdrop-filter: blur(8px);
 }
 
-.rfux-capability-badges {
-  position: absolute;
-  z-index: 20;
-  right: 166px;
-  bottom: 16px;
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  pointer-events: none;
-}
-
-.rfux-capability-badges span {
-  padding: 4px 7px;
-  border: 1px solid #e4e4e7;
-  border-radius: 999px;
-  color: #71717a;
-  background: rgba(255,255,255,.9);
-  font-size: 9px;
-}
-
-.rfux-page--dark {
-  color: #f4f4f5;
-  background: #141416;
-}
-
-.rfux-page--dark .rfux-header p {
-  color: #a1a1aa;
-}
-
-.rfux-page--dark .rfux-canvas-shell,
-.rfux-page--dark .rfux-canvas-shell .react-flow {
-  border-color: #34343a;
-  background: #18181b;
-}
-
-.rfux-page--dark .rfux-canvas-shell .react-flow__background pattern circle {
-  fill: #3f3f46;
-}
-
-.rfux-page--dark .rfux-floating-toolbar,
-.rfux-page--dark .rfux-palette,
-.rfux-page--dark .rfux-status,
-.rfux-page--dark .rfux-capability-badges span {
-  border-color: #3f3f46;
-  color: #d4d4d8;
-  background: rgba(31,31,35,.95);
-}
-
-.rfux-page--dark .rfux-floating-toolbar button,
-.rfux-page--dark .rfux-header-actions button {
-  border-color: #3f3f46;
-  color: #e4e4e7;
-  background: #232328;
-}
-
-.rfux-page--dark .rfux-floating-toolbar button:hover,
-.rfux-page--dark .rfux-header-actions button:hover {
-  background: #303036;
-}
-
-.rfux-page--dark .rfux-node {
-  border-color: #3f3f46;
-  color: #f4f4f5;
-  background: #232328;
-  box-shadow: 0 2px 8px rgba(0,0,0,.25);
-}
-
-.rfux-page--dark .rfux-node-copy span,
-.rfux-page--dark .rfux-palette > button small {
-  color: #a1a1aa;
-}
-
-.rfux-page--dark .rfux-palette > button {
-  color: #e4e4e7;
-}
-
-.rfux-page--dark .rfux-palette > button:hover {
-  border-color: #3f3f46;
-  background: #2a2a30;
-}
-
-.rfux-page--dark .rfux-more:hover {
-  background: #303036;
-}
-
-.rfux-page--dark .rfux-node-link-action {
-  background: #232328;
-}
-
-.rfux-page--dark .rfux-canvas-shell .react-flow__edge-textbg {
-  fill: #232328;
-}
-
-.rfux-page--dark .rfux-canvas-shell .react-flow__edge-text {
-  fill: #d4d4d8;
-}
-
-.rfux-page--dark .rfux-canvas-shell .react-flow__controls {
-  border-color: #3f3f46;
-}
-
-.rfux-page--dark .rfux-canvas-shell .react-flow__controls-button {
-  border-bottom-color: #3f3f46;
-  color: #d4d4d8;
-  background: #232328;
-}
-
-.rfux-page--dark .rfux-minimap {
-  border-color: #3f3f46;
-  background: #232328 !important;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .rfux-canvas-shell .react-flow__edge.rfux-running-edge .react-flow__edge-path,
-  .rfux-canvas-shell .react-flow__connection-path,
-  .rfux-node.is-running {
+  .rfux-canvas-shell .react-flow__edge.rfux-child-running-edge .react-flow__edge-path,
+  .rfux-canvas-shell .react-flow__edge.rfux-workflow-running-edge .react-flow__edge-path {
     animation: none;
   }
 }
@@ -558,9 +370,6 @@
 @media (max-width: 900px) {
   .rfux-page { padding: 12px; }
   .rfux-header { align-items: flex-start; flex-direction: column; }
-  .rfux-canvas-shell { min-height: 580px; height: 70vh; }
-  .rfux-status,
-  .rfux-capability-badges { display: none; }
-  .rfux-floating-toolbar { left: auto; right: 10px; transform: none; }
-  .rfux-palette { top: 60px; left: 10px; }
+  .rfux-canvas-shell { min-height: 560px; height: 68vh; }
+  .rfux-status { display: none; }
 }
