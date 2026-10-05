@@ -80,16 +80,35 @@ export default function WhatsAppAssistantSettings() {
       setSaving(true)
       setError('')
       setMessage('')
-      const response = await apiRequest('/api/whatsapp/settings', {
-        method: 'PUT',
-        body: JSON.stringify(payload()),
+      const body = {
+        name: configuration.display_name || 'WhatsApp Business',
+        providerName: 'whatsapp',
+        integrationType: 'communication',
+        baseUrl: 'https://graph.facebook.com/v21.0',
+        authType: 'bearer',
+        enabled,
+        connectorConfiguration: {
+          phoneNumberId: configuration.phone_number_id || '',
+          businessAccountId: configuration.business_account_id || '',
+          defaultCountryCode: configuration.default_country_code || '+44',
+          assistantMode: configuration.assistant_mode || 'RULES',
+          customerMatchMode: configuration.customer_match_mode || 'PHONE',
+          createCustomerIfMissing: configuration.create_customer_if_missing === true,
+          humanHandoffEnabled: configuration.human_handoff_enabled !== false,
+          optOutEnabled: configuration.opt_out_enabled !== false,
+        },
+        ...(secrets.accessToken ? { credentials: { token: secrets.accessToken } } : {}),
+      }
+      const response = await apiRequest(configuration.connection_id ? `/api/integrations/${encodeURIComponent(configuration.connection_id)}` : '/api/integrations', {
+        method: configuration.connection_id ? 'PUT' : 'POST',
+        body: JSON.stringify(body),
       })
-      if (response?.success === false) throw new Error(response?.message || 'Unable to save WhatsApp settings.')
-      setMessage(response?.message || 'WhatsApp settings saved.')
+      if (response?.success === false) throw new Error(response?.message || 'Unable to save WhatsApp connection.')
+      setMessage('WhatsApp connection saved.')
       setSecrets({ accessToken: '', webhookVerifyToken: '', appSecret: '' })
       await load()
     } catch (err) {
-      setError(err?.message || 'Unable to save WhatsApp settings.')
+      setError(err?.message || 'Unable to save WhatsApp connection.')
     } finally {
       setSaving(false)
     }
