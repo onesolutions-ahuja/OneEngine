@@ -1,20 +1,22 @@
 name: OneEngine Deployment Smoke Test
 
 on:
-  push:
-    branches: ["main"]
+  workflow_run:
+    workflows: ["Deploy OneEngine to GitHub Pages"]
+    types: [completed]
   workflow_dispatch:
 
 concurrency:
-  group: oneengine-smoke
+  group: oneengine-post-deploy-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
   smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      - name: Wait for deployments
-        run: sleep 10
 
       - name: Test GitHub Pages shell and assets
         run: |
@@ -24,10 +26,10 @@ jobs:
           DEPLOYED_SHA=""
           for attempt in {1..18}; do
             DEPLOYED_SHA="$(curl -fsSL "${PAGE}deploy-sha.txt" 2>/dev/null || true)"
-            if [ "$DEPLOYED_SHA" = "$GITHUB_SHA" ]; then break; fi
+            if [ "$DEPLOYED_SHA" = "$DEPLOY_SHA" ]; then break; fi
             sleep 10
           done
-          test "$DEPLOYED_SHA" = "$GITHUB_SHA"
+          test "$DEPLOYED_SHA" = "$DEPLOY_SHA"
           grep -q '/OneEngine/assets/' /tmp/pages.html
           ASSET="$(grep -oE '/OneEngine/assets/[^"]+\.js' /tmp/pages.html | head -1)"
           test -n "$ASSET"
