@@ -400,3 +400,17 @@ test('login access policy precedence uses indexed exact-scope branches', async (
   assert.match(block, /scope_type='COMPANY'/)
   assert.equal(block.includes("OR (scope_type='ROLE'"), false)
 })
+
+
+test('final live login verification proves five consecutive samples without exceeding the limiter', async () => {
+  const source = await read('../tests/e2e/final-loading-verification.spec.mjs')
+  assert.match(source, /for \(let attempt = 1; attempt <= 4; attempt \+= 1\)/)
+  assert.match(source, /loginTotals\.push\(loginServerTotal\)/)
+  assert.match(source, /toHaveLength\(5\)/)
+  assert.match(source, /ms > 1500/)
+})
+
+test('final live loading verification only runs for explicit perf verification commits', async () => {
+  const source = await read('../.github/workflows/final-loading-verification.yml')
+  assert.match(source, /if: contains\(github\.event\.head_commit\.message, '\[perf-verify\]'\)/)
+})
