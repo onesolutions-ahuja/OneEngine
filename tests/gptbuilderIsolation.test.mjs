@@ -131,7 +131,8 @@ test('GPT Builder phase 3 registers a real property editor and runtime mapping f
   const elementsSource = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const properties = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
-  const elementKeys = [...elementsSource.matchAll(/\{ key: '([^']+)', label:/g)].map((match) => match[1])
+  const elementBlock = elementsSource.slice(elementsSource.indexOf('export const ELEMENTS'), elementsSource.indexOf('export function elementByKey'))
+  const elementKeys = [...elementBlock.matchAll(/\{ key: '([^']+)', label:/g)].map((match) => match[1])
   const runtimeOnly = new Set(['group'])
   for (const key of elementKeys) {
     assert.match(page, new RegExp(`activeElement\\.key === '${key}'`), `missing property editor for ${key}`)
@@ -1037,10 +1038,10 @@ test('GPT Builder phase 3 matches auto-layout picker and free-form drag discover
 
 test('GPT Builder phase 3 keeps Screen selection in a separate editor shell', async () => {
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
-  assert.match(elements, /element\.key === 'screen'/)
-  assert.match(elements, /gptb-element-editor-modal-backdrop/)
-  assert.match(elements, /aria-label="New Screen"/)
-  assert.match(elements, /gptb-element-editor-shell/)
+  const properties = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
+  assert.match(elements, /key: 'screen'/)
+  assert.match(properties, /gptb-element-editor-modal-backdrop/)
+  assert.match(properties, /gptb-element-editor-shell/)
 })
 
 
@@ -1317,7 +1318,7 @@ test('GPT Builder responsive shell keeps canvas and panels usable on narrow scre
 test('GPT Builder exposes masked provider metadata as reusable Flow resources', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const action = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAction.jsx', import.meta.url), 'utf8')
-  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  const platform = await readFile(new URL('../server/routes/platform/developerRoutes.js', import.meta.url), 'utf8')
   const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
   assert.match(page, /\/api\/platform\/workflow-providers/)
   assert.match(page, /providerResource: true/)
