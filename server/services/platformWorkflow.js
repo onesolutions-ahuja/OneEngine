@@ -3892,12 +3892,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     displayName: "Run Subflow",
     description: "Run another approved workflow as a child workflow.",
     validation: (action) => {
-      if (!action?.workflowId && !action?.subflowId && !action?.subflowApiName && !(action?.workflow && Array.isArray(action.workflow.actions))) throw new Error("Run Subflow requires a workflowId or subflowApiName");
+      if (!action?.workflowId && !action?.subflowId && !action?.subflowApiName && !action?.subflowCapability && !(action?.workflow && Array.isArray(action.workflow.actions))) throw new Error("Run Subflow requires a workflowId, subflowApiName, or subflowCapability");
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, db, traceDb = null, debugMode = false, companyId, req, record, previousRecord, object, fields, workflowVariables = {}, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
-      const workflowKey = action.workflowId || action.subflowId || action.subflowApiName || action.workflow?.id || action.workflow?.key || "inline-subflow";
+      const workflowKey = action.workflowId || action.subflowId || action.subflowApiName || action.subflowCapability || action.workflow?.id || action.workflow?.key || "inline-subflow";
       const runDb = debugMode && traceDb && typeof traceDb === "function" ? traceDb : db;
       const stack = Array.isArray(workflowStack) ? workflowStack.slice() : [];
       if (stack.includes(workflowKey)) {
@@ -3913,9 +3913,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             if (!db || typeof db !== "function") return null;
             const id = action.workflowId || action.subflowId;
             if (id) return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
-            const apiName = action.subflowApiName;
+            const apiName = action.subflowApiName || action.subflowCapability;
             if (!apiName) return null;
-            return db(`SELECT * FROM platform_rules WHERE company_id=$1 AND active=true AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2) ORDER BY updated_at DESC LIMIT 1`, [companyId || req?.user?.companyId, apiName]).then((result) => result.rows[0] || null);
+            return db(`SELECT * FROM platform_rules WHERE company_id=$1 AND active=true AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2 OR action->>'subflowCapability'=$2) ORDER BY updated_at DESC LIMIT 1`, [companyId || req?.user?.companyId, apiName]).then((result) => result.rows[0] || null);
           })();
       const definition = await Promise.resolve(subflowDefinition);
       if (!definition) {
