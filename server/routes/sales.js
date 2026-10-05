@@ -324,20 +324,19 @@ export default function createSalesRouter({
           });
         }
 
-        /* `let`, not `const`: the server-authoritative totals engine below
-         * (computeBasketTotals) overwrites these with the recomputed values. */
-        let {
+        const {
           items = [],
           customerId = null,
-          subtotal = 0,
-          tax = 0,
-          discount = 0,
-          total = 0,
           paymentMethod = "cash",
           giftCardCode = null,
-          ageVerified, // T10C: operator confirmation flag, verified against the DB below
-          vatEnabled, // Till Misc Item: the company's global VAT master switch, as applied by the till
+          ageVerified = false,
+          cashReceived = null,
+          vatEnabled,
         } = req.body;
+        let subtotal = 0;
+        let tax = 0;
+        let discount = 0;
+        let total = 0;
 
         if (kioskContext && String(paymentMethod || "").toLowerCase() !== "card") {
           await client.query("ROLLBACK");
@@ -425,15 +424,8 @@ export default function createSalesRouter({
          */
         const allowedPaymentMethods = await getAllowedPaymentMethodCodes(db, req.user.companyId, { storeId: req.user.storeId, tillId: req.user.tillId });
         const rawPayments = Array.isArray(req.body.payments) ? req.body.payments : [];
-        let paymentLines = null;
-        if (rawPayments.length) {
-          try {
-            paymentLines = validateTenderLines({ payments: rawPayments, total, allowedMethods: allowedPaymentMethods, maxLines: 8 });
-          } catch (error) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({ success: false, message: error.message });
-          }
-        } else if (paymentMethod === "split") {
+        let paymentLines = rawPayments.length ? rawPayments : null;
+        if (!rawPayments.length && paymentMethod === "split") {
           await client.query("ROLLBACK");
           return res.status(400).json({ success: false, message: "Split payment requires a payments array" });
         }
@@ -653,13 +645,10 @@ export default function createSalesRouter({
          * is audited fire-and-forget after commit. When the setting is OFF
          * (the default) behaviour is exactly as before.
          */
-        const negativeBillingAllowed =
-          req.body.allowNegativeStockSale === true
-            ? await client.query(
-                "SELECT allow_negative_inventory_billing FROM company_settings WHERE company_id = $1",
-                [req.user.companyId]
-              ).then((r) => r.rows.length > 0 && r.rows[0].allow_negative_inventory_billing === true)
-            : false;
+        const negativeBillingAllowed = await client.query(
+          "SELECT allow_negative_inventory_billing FROM company_settings WHERE company_id = $1",
+          [req.user.companyId]
+        ).then((r) => r.rows.length > 0 && r.rows[0].allow_negative_inventory_billing === true);
         const insufficientStockLines = [];
         for (const item of items) {
           if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
@@ -734,25 +723,53 @@ export default function createSalesRouter({
           }
         }
 
-        /*
-         * T10C: server-side age-verification gate. The POS modal alone is
-         * NOT trusted — a direct API call containing age-restricted products
-         * without a confirmed verification is rejected here, before any
-         * sale/payment/inventory write.
-         */
-        if (basketHasAgeRestricted) {
-          const kioskAgeApproved = kioskContext
-            ? Boolean(kioskContext.age_approved_until && new Date(kioskContext.age_approved_until).getTime() > Date.now())
-            : false;
-          const verified = kioskContext ? kioskAgeApproved : ageVerified === true;
-          if (!verified) {
-            await client.query("ROLLBACK");
-            return res.status(403).json({
-              success: false,
-              code: kioskContext ? "KIOSK_AGE_APPROVAL_REQUIRED" : "AGE_VERIFICATION_REQUIRED",
-              message: "Age verification required for age-restricted products",
-            });
-          }
+        const stockValidation = await executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "flow:till.stock.validate",
+          req,
+          input: {
+            hasShortfall: insufficientStockLines.length > 0,
+            allowNegativeStock: negativeBillingAllowed,
+          },
+          storeId: req.user.storeId || null,
+          tillId: session.rows[0].terminal_id || null,
+          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "till.stock.validate" },
+        });
+        if (stockValidation?.result?.allowed !== true) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            success: false,
+            code: "INSUFFICIENT_STOCK",
+            message: "Insufficient stock for one or more sale items",
+          });
+        }
+
+        const kioskAgeApproved = kioskContext
+          ? Boolean(kioskContext.age_approved_until && new Date(kioskContext.age_approved_until).getTime() > Date.now())
+          : false;
+        const ageValidation = await executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "flow:till.age.verify",
+          req,
+          input: {
+            requiresAgeVerification: basketHasAgeRestricted,
+            ageVerified: kioskContext ? kioskAgeApproved : ageVerified === true,
+          },
+          storeId: req.user.storeId || null,
+          tillId: session.rows[0].terminal_id || null,
+          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "till.age.verify" },
+        });
+        if (ageValidation?.result?.allowed !== true) {
+          await client.query("ROLLBACK");
+          return res.status(403).json({
+            success: false,
+            code: kioskContext ? "KIOSK_AGE_APPROVAL_REQUIRED" : "AGE_VERIFICATION_REQUIRED",
+            message: "Age verification required for age-restricted products",
+          });
         }
 
         /*
@@ -1080,6 +1097,42 @@ export default function createSalesRouter({
         discount = roundCurrency(engine.discountAmount);
         total = roundCurrency(engine.total);
 
+        if (paymentLines) {
+          try {
+            paymentLines = validateTenderLines({ payments: paymentLines, total, allowedMethods: allowedPaymentMethods, maxLines: 8 });
+          } catch (error) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ success: false, message: error.message });
+          }
+        }
+
+        const receivedAmount = paymentMethod === "cash"
+          ? Number(cashReceived == null || cashReceived === "" ? total : cashReceived)
+          : total;
+        const paymentValidation = await executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "flow:till.payment.validate",
+          req,
+          input: {
+            paymentMethod: String(paymentMethod || ""),
+            online: true,
+            cardAvailable: paymentMethod !== "card" || Boolean(connectorDrivers),
+            customerSelected: Boolean(customerId),
+            hasGiftCardCode: Boolean(normaliseGiftCardCode(giftCardCode)),
+            cashReceived: Number.isFinite(receivedAmount) ? receivedAmount : 0,
+            total,
+          },
+          storeId: req.user.storeId || null,
+          tillId: session.rows[0].terminal_id || null,
+          source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "till.payment.validate" },
+        });
+        if (paymentValidation?.result?.allowed !== true) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ success: false, code: "PAYMENT_VALIDATION_FAILED", message: "Payment method requirements were not met" });
+        }
+
         let giftCardTender = null;
         if (paymentMethod === "gift_card") {
           if (paymentLines || !normaliseGiftCardCode(giftCardCode)) {
@@ -1232,6 +1285,7 @@ export default function createSalesRouter({
             tax,
             discount,
             total,
+            cash_received,
             status,
             offline_created,
             sync_status,
@@ -1240,7 +1294,7 @@ export default function createSalesRouter({
             completed_at
           )
           VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14,
             $12,
             false,
             'synced',
@@ -1268,6 +1322,7 @@ export default function createSalesRouter({
             clientRequestId,
             clientRequestFingerprint,
             saleStatus,
+            paymentMethod === "cash" ? (Number.isFinite(receivedAmount) ? receivedAmount : Number(total) || 0) : null,
           ]
         );
 
