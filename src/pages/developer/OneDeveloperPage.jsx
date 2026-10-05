@@ -82,13 +82,19 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
         const preferred = ownCompany || storedCompany || rows[0] || null
         if (preferred) {
           const preferredId = String(preferred.id)
-          if (preferredId !== String(current || '')) {
+          const isOwnAuthenticatedCompany = Boolean(loggedInCompanyId && preferredId === loggedInCompanyId)
+          // A tenant-bound user is already scoped to their authenticated
+          // company. Do not create a redundant acting-company override just to
+          // render Developer; that used to add a blocking PUT + cache reset.
+          if (!isOwnAuthenticatedCompany && preferredId !== String(current || '')) {
             await apiRequest('/api/platform/developer/acting-company', {
               method: 'PUT',
               body: JSON.stringify({ actingCompanyId: preferred.id }),
             })
             setActingCompanyId(preferred.id)
             clearSettingsContextCache()
+          } else if (isOwnAuthenticatedCompany && current) {
+            setActingCompanyId('')
           }
           if (alive) setSelectedClient(preferredId)
         }
