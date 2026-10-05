@@ -3,13 +3,20 @@ import { loginIfConfigured } from "./helpers.mjs";
 
 const ROUTES = [
   "dashboard",
-  "developer/objects",
-  "settings/security-identity",
   "till",
-  "customers",
+  "sales",
   "products",
   "inventory",
+  "purchases",
+  "suppliers",
+  "customers",
   "reports",
+  "settings/security-identity",
+  "developer/objects",
+  "developer/workflow-builder",
+  "developer/page-builder",
+  "developer/dashboard-builder",
+  "developer/report-builder",
 ];
 
 test("final loading performance verification", async ({ page, baseURL }) => {
@@ -17,6 +24,7 @@ test("final loading performance verification", async ({ page, baseURL }) => {
 
   let loginServerTotal = null;
   const contextCalls = [];
+  const apiFailures = [];
   page.on("response", async (response) => {
     const url = response.url();
     if (url.includes("/api/auth/login")) {
@@ -28,35 +36,51 @@ test("final loading performance verification", async ({ page, baseURL }) => {
       url.includes("/api/auth/bootstrap")
       || url.includes("/api/auth/me/stores")
       || url.includes("/api/auth/me/permissions")
+      || url.includes("/api/platform/developer/acting-company")
     ) {
       contextCalls.push(url);
+    }
+    if (url.includes("/api/") && response.status() >= 400) {
+      apiFailures.push({ status: response.status(), url });
     }
   });
 
   await loginIfConfigured(page);
 
-  expect(loginServerTotal, "server-reported login duration").not.toBeNull();
-  expect(loginServerTotal, "login server duration must stay <= 1500ms").toBeLessThanOrEqual(1500);
-
   contextCalls.length = 0;
+  apiFailures.length = 0;
   const routeTimings = [];
+  const loadingFailures = [];
 
   for (const route of ROUTES) {
     const started = Date.now();
     await page.goto(new URL(route, baseURL).href, { waitUntil: "domcontentloaded", timeout: 30000 });
     await expect(page.locator("body")).toBeVisible();
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(500);
 
     const bodyText = await page.locator("body").innerText();
-    expect(bodyText).not.toMatch(/Resolving client context|Checking OneEngine permissions|OneEngine service is unavailable|Application error|Something went wrong/i);
+    const fatal = /Resolving client context|Checking OneEngine permissions|OneEngine service is unavailable|Application error|Something went wrong/i.test(bodyText);
+    const stuck = /Loading(?:\s+[A-Za-z ]+)?…|Loading\.\.\.|Please wait/i.test(bodyText);
+    if (fatal || stuck) loadingFailures.push({ route, fatal, stuck, excerpt: bodyText.slice(0, 500) });
 
     routeTimings.push({ route, ms: Date.now() - started });
   }
 
+  console.log("FINAL_LOADING_PERF", JSON.stringify({
+    loginServerTotal,
+    routeTimings,
+    contextCalls,
+    apiFailures,
+    loadingFailures,
+  }));
+
   expect(contextCalls, "page navigation must not repeat base auth/company/store/RBAC bootstrap").toEqual([]);
+  expect(apiFailures, "audited routes must not produce API 4xx/5xx responses").toEqual([]);
+  expect(loadingFailures, "audited routes must not remain in a loading/error state").toEqual([]);
 
   const overLimit = routeTimings.filter((item) => item.ms > 5000);
   expect(overLimit, "no primary route should remain loading beyond 5s on a full deployed navigation").toEqual([]);
 
-  console.log("FINAL_LOADING_PERF", JSON.stringify({ loginServerTotal, routeTimings, contextCalls }));
+  expect(loginServerTotal, "server-reported login duration").not.toBeNull();
+  expect(loginServerTotal, "login server duration must stay <= 1500ms").toBeLessThanOrEqual(1500);
 });
