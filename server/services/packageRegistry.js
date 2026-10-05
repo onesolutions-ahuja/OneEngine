@@ -2311,82 +2311,6 @@ export function packageDefinition(entry) {
           }
         ],
       } : {}),
-      ...(entry.key === "retail_pos" ? {
-        objects: [
-          {
-            objectKey: "sale", metadataScope: "global", label: "Sale", pluralLabel: "Sales",
-            description: "Canonical sales transaction header.", sourceTable: "sales", storeScoped: true,
-            fields: [
-              { apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false },
-              { apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:true },
-              { apiName:"terminal_id",label:"Terminal",fieldType:"lookup",sourceColumn:"terminal_id",writable:true },
-              { apiName:"user_id",label:"User",fieldType:"lookup",sourceColumn:"user_id",writable:true },
-              { apiName:"customer_id",label:"Customer",fieldType:"lookup",sourceColumn:"customer_id",writable:true },
-              { apiName:"receipt_number",label:"Receipt Number",fieldType:"text",sourceColumn:"receipt_number",writable:true },
-              { apiName:"subtotal",label:"Subtotal",fieldType:"currency",sourceColumn:"subtotal",writable:true },
-              { apiName:"tax",label:"Tax",fieldType:"currency",sourceColumn:"tax",writable:true },
-              { apiName:"discount",label:"Discount",fieldType:"currency",sourceColumn:"discount",writable:true },
-              { apiName:"total",label:"Total",fieldType:"currency",sourceColumn:"total",writable:true },
-              { apiName:"status",label:"Status",fieldType:"picklist",sourceColumn:"status",writable:true },
-              { apiName:"offline_created",label:"Offline Created",fieldType:"boolean",sourceColumn:"offline_created",writable:true },
-              { apiName:"sync_status",label:"Sync Status",fieldType:"text",sourceColumn:"sync_status",writable:true },
-              { apiName:"client_request_id",label:"Client Request ID",fieldType:"text",sourceColumn:"client_request_id",writable:true },
-              { apiName:"client_request_fingerprint",label:"Client Request Fingerprint",fieldType:"text",sourceColumn:"client_request_fingerprint",writable:true },
-              { apiName:"created_at",label:"Created",fieldType:"datetime",sourceColumn:"created_at",writable:false },
-              { apiName:"completed_at",label:"Completed",fieldType:"datetime",sourceColumn:"completed_at",writable:true }
-            ],
-          },
-          {
-            objectKey: "sale_item", metadataScope: "global", label: "Sale Item", pluralLabel: "Sale Items",
-            description: "Canonical line item related to a Sale.", sourceTable: "sale_items",
-            fields: [
-              { apiName:"sale_id",label:"Sale",fieldType:"lookup",sourceColumn:"sale_id",required:true,writable:true,config:{relatedObjectKey:"sale"} },
-              { apiName:"product_id",label:"Product",fieldType:"lookup",sourceColumn:"product_id",required:true,writable:true,config:{relatedObjectKey:"product"} },
-              { apiName:"product_name",label:"Product Name",fieldType:"text",sourceColumn:"product_name",required:true,writable:true },
-              { apiName:"quantity",label:"Quantity",fieldType:"decimal",sourceColumn:"quantity",required:true,writable:true },
-              { apiName:"unit_price",label:"Unit Price",fieldType:"currency",sourceColumn:"unit_price",required:true,writable:true },
-              { apiName:"discount",label:"Discount",fieldType:"currency",sourceColumn:"discount",writable:true },
-              { apiName:"tax",label:"Tax",fieldType:"currency",sourceColumn:"tax",writable:true },
-              { apiName:"total",label:"Total",fieldType:"currency",sourceColumn:"total",required:true,writable:true },
-              { apiName:"item_type",label:"Item Type",fieldType:"text",sourceColumn:"item_type",writable:true },
-              { apiName:"modifier_data",label:"Modifiers",fieldType:"json",sourceColumn:"modifier_data",writable:true },
-              { apiName:"bundle_components",label:"Bundle Components",fieldType:"json",sourceColumn:"bundle_components",writable:true }
-            ],
-          },
-          {
-            objectKey: "payment", metadataScope: "global", label: "Payment", pluralLabel: "Payments",
-            description: "Canonical payment record related to a transaction.", sourceTable: "payments", storeScoped: true,
-            fields: [
-              { apiName:"sale_id",label:"Sale",fieldType:"lookup",sourceColumn:"sale_id",writable:true,config:{relatedObjectKey:"sale"} },
-              { apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false },
-              { apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:true },
-              { apiName:"customer_id",label:"Customer",fieldType:"lookup",sourceColumn:"customer_id",writable:true },
-              { apiName:"transaction_id",label:"Transaction",fieldType:"lookup",sourceColumn:"transaction_id",writable:true,config:{relatedObjectKey:"sale"} },
-              { apiName:"direction",label:"Direction",fieldType:"picklist",sourceColumn:"direction",writable:true },
-              { apiName:"reference",label:"Reference",fieldType:"text",sourceColumn:"reference",writable:true },
-              { apiName:"payment_method",label:"Payment Method",fieldType:"text",sourceColumn:"payment_method",required:true,writable:true },
-              { apiName:"amount",label:"Amount",fieldType:"currency",sourceColumn:"amount",required:true,writable:true },
-              { apiName:"provider",label:"Provider",fieldType:"text",sourceColumn:"provider",writable:true },
-              { apiName:"terminal_id",label:"Terminal",fieldType:"text",sourceColumn:"terminal_id",writable:true },
-              { apiName:"provider_transaction_id",label:"Provider Transaction ID",fieldType:"text",sourceColumn:"provider_transaction_id",writable:true },
-              { apiName:"idempotency_key",label:"Idempotency Key",fieldType:"text",sourceColumn:"idempotency_key",writable:true },
-              { apiName:"status",label:"Status",fieldType:"picklist",sourceColumn:"status",writable:true },
-              { apiName:"created_at",label:"Created",fieldType:"datetime",sourceColumn:"created_at",writable:false }
-            ],
-          },
-        ],
-        relationships: [
-          { parentObjectKey:"sale",childObjectKey:"sale_item",relationshipKey:"items",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
-          { parentObjectKey:"sale_item",childObjectKey:"sale",relationshipKey:"sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
-          { parentObjectKey:"sale",childObjectKey:"payment",relationshipKey:"payments",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
-          { parentObjectKey:"payment",childObjectKey:"sale",relationshipKey:"sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
-        ],
-        validationRules: [
-          { objectKey:"sale",name:"Sale total cannot be negative",triggerKey:"before_save",conditions:[{field:"total",operator:"less_than",value:0}],action:{type:"validation",message:"Sale total cannot be negative"} },
-          { objectKey:"sale_item",name:"Sale item quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Sale item quantity must be greater than zero"} },
-          { objectKey:"payment",name:"Payment amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Payment amount must be greater than zero"} },
-        ],
-      } : {}),
       ...(entry.key === "products" ? {
         packageKey: "products",
         packageType: "FOUNDATION",
@@ -2563,6 +2487,161 @@ export function packageDefinition(entry) {
           { duplicateIdentity: "Enforced by the existing Product API and active-company unique indexes for SKU and barcode." },
         ],
         migrations: ["product_core.adopt_canonical_metadata.v1"],
+      } : {}),
+      ...(entry.key === "retail_pos" ? {
+        objects: [{
+            objectKey: "sale", metadataScope: "global", label: "Sale", pluralLabel: "Sales",
+            description: "Canonical sales transaction header.", sourceTable: "sales", storeScoped: true,
+            fields: [
+              { apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false },
+              { apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:true },
+              { apiName:"terminal_id",label:"Terminal",fieldType:"lookup",sourceColumn:"terminal_id",writable:true },
+              { apiName:"user_id",label:"User",fieldType:"lookup",sourceColumn:"user_id",writable:true },
+              { apiName:"customer_id",label:"Customer",fieldType:"lookup",sourceColumn:"customer_id",writable:true },
+              { apiName:"receipt_number",label:"Receipt Number",fieldType:"text",sourceColumn:"receipt_number",writable:true },
+              { apiName:"subtotal",label:"Subtotal",fieldType:"currency",sourceColumn:"subtotal",writable:true },
+              { apiName:"tax",label:"Tax",fieldType:"currency",sourceColumn:"tax",writable:true },
+              { apiName:"discount",label:"Discount",fieldType:"currency",sourceColumn:"discount",writable:true },
+              { apiName:"total",label:"Total",fieldType:"currency",sourceColumn:"total",writable:true },
+              { apiName:"status",label:"Status",fieldType:"picklist",sourceColumn:"status",writable:true },
+              { apiName:"offline_created",label:"Offline Created",fieldType:"boolean",sourceColumn:"offline_created",writable:true },
+              { apiName:"sync_status",label:"Sync Status",fieldType:"text",sourceColumn:"sync_status",writable:true },
+              { apiName:"client_request_id",label:"Client Request ID",fieldType:"text",sourceColumn:"client_request_id",writable:true },
+              { apiName:"client_request_fingerprint",label:"Client Request Fingerprint",fieldType:"text",sourceColumn:"client_request_fingerprint",writable:true },
+              { apiName:"created_at",label:"Created",fieldType:"datetime",sourceColumn:"created_at",writable:false },
+              { apiName:"completed_at",label:"Completed",fieldType:"datetime",sourceColumn:"completed_at",writable:true }
+            ],
+          },
+          {
+            objectKey: "sale_item", metadataScope: "global", label: "Sale Item", pluralLabel: "Sale Items",
+            description: "Canonical line item related to a Sale.", sourceTable: "sale_items",
+            fields: [
+              { apiName:"sale_id",label:"Sale",fieldType:"lookup",sourceColumn:"sale_id",required:true,writable:true,config:{relatedObjectKey:"sale"} },
+              { apiName:"product_id",label:"Product",fieldType:"lookup",sourceColumn:"product_id",required:true,writable:true,config:{relatedObjectKey:"product"} },
+              { apiName:"product_name",label:"Product Name",fieldType:"text",sourceColumn:"product_name",required:true,writable:true },
+              { apiName:"quantity",label:"Quantity",fieldType:"decimal",sourceColumn:"quantity",required:true,writable:true },
+              { apiName:"unit_price",label:"Unit Price",fieldType:"currency",sourceColumn:"unit_price",required:true,writable:true },
+              { apiName:"discount",label:"Discount",fieldType:"currency",sourceColumn:"discount",writable:true },
+              { apiName:"tax",label:"Tax",fieldType:"currency",sourceColumn:"tax",writable:true },
+              { apiName:"total",label:"Total",fieldType:"currency",sourceColumn:"total",required:true,writable:true },
+              { apiName:"item_type",label:"Item Type",fieldType:"text",sourceColumn:"item_type",writable:true },
+              { apiName:"modifier_data",label:"Modifiers",fieldType:"json",sourceColumn:"modifier_data",writable:true },
+              { apiName:"bundle_components",label:"Bundle Components",fieldType:"json",sourceColumn:"bundle_components",writable:true }
+            ],
+          },
+          {
+            objectKey: "payment", metadataScope: "global", label: "Payment", pluralLabel: "Payments",
+            description: "Canonical payment record related to a transaction.", sourceTable: "payments", storeScoped: true,
+            fields: [
+              { apiName:"sale_id",label:"Sale",fieldType:"lookup",sourceColumn:"sale_id",writable:true,config:{relatedObjectKey:"sale"} },
+              { apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false },
+              { apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:true },
+              { apiName:"customer_id",label:"Customer",fieldType:"lookup",sourceColumn:"customer_id",writable:true },
+              { apiName:"transaction_id",label:"Transaction",fieldType:"lookup",sourceColumn:"transaction_id",writable:true,config:{relatedObjectKey:"sale"} },
+              { apiName:"direction",label:"Direction",fieldType:"picklist",sourceColumn:"direction",writable:true },
+              { apiName:"reference",label:"Reference",fieldType:"text",sourceColumn:"reference",writable:true },
+              { apiName:"payment_method",label:"Payment Method",fieldType:"text",sourceColumn:"payment_method",required:true,writable:true },
+              { apiName:"amount",label:"Amount",fieldType:"currency",sourceColumn:"amount",required:true,writable:true },
+              { apiName:"provider",label:"Provider",fieldType:"text",sourceColumn:"provider",writable:true },
+              { apiName:"terminal_id",label:"Terminal",fieldType:"text",sourceColumn:"terminal_id",writable:true },
+              { apiName:"provider_transaction_id",label:"Provider Transaction ID",fieldType:"text",sourceColumn:"provider_transaction_id",writable:true },
+              { apiName:"idempotency_key",label:"Idempotency Key",fieldType:"text",sourceColumn:"idempotency_key",writable:true },
+              { apiName:"status",label:"Status",fieldType:"picklist",sourceColumn:"status",writable:true },
+              { apiName:"created_at",label:"Created",fieldType:"datetime",sourceColumn:"created_at",writable:false }
+            ],
+          },,
+{ objectKey: "layaway", label: "Layaway", pluralLabel: "Layaways", sourceTable: "layaways", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
+            { apiName: "customer_id", label: "Customer", fieldType: "lookup", sourceColumn: "customer_id", writable: true },
+            { apiName: "total", label: "Total", fieldType: "currency", sourceColumn: "total", required: true, writable: false },
+            { apiName: "paid_amount", label: "Paid", fieldType: "currency", sourceColumn: "paid_amount", writable: false },
+            { apiName: "balance", label: "Balance", fieldType: "currency", sourceColumn: "balance", writable: false },
+            { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: false, options: ["OPEN","COMPLETED","CANCELLED"] },
+            { apiName: "due_date", label: "Due Date", fieldType: "date", sourceColumn: "due_date", writable: true },
+            { apiName: "notes", label: "Notes", fieldType: "text", sourceColumn: "notes", writable: true },
+            { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+          ]},
+          { objectKey: "layaway_line", label: "Layaway Line", pluralLabel: "Layaway Lines", sourceTable: "layaway_items", metadataScope: "global", fields: [
+            { apiName: "layaway_id", label: "Layaway", fieldType: "lookup", sourceColumn: "layaway_id", required: true, writable: false },
+            { apiName: "product_id", label: "Product", fieldType: "lookup", sourceColumn: "product_id", required: true, writable: false },
+            { apiName: "product_name", label: "Product Name", fieldType: "text", sourceColumn: "product_name", writable: false },
+            { apiName: "quantity", label: "Quantity", fieldType: "decimal", sourceColumn: "quantity", writable: false },
+            { apiName: "unit_price", label: "Unit Price", fieldType: "currency", sourceColumn: "unit_price", writable: false },
+            { apiName: "total", label: "Total", fieldType: "currency", sourceColumn: "total", writable: false }
+          ]},
+          { objectKey: "layaway_payment", label: "Layaway Payment", pluralLabel: "Layaway Payments", sourceTable: "layaway_payments", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "layaway_id", label: "Layaway", fieldType: "lookup", sourceColumn: "layaway_id", required: true, writable: false },
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
+            { apiName: "payment_method", label: "Payment Method", fieldType: "text", sourceColumn: "payment_method", writable: false },
+            { apiName: "amount", label: "Amount", fieldType: "currency", sourceColumn: "amount", writable: false },
+            { apiName: "status", label: "Status", fieldType: "text", sourceColumn: "status", writable: false },
+            { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+          ]},
+          { objectKey: "gift_card", label: "Gift Card", pluralLabel: "Gift Cards", sourceTable: "gift_cards", metadataScope: "global", fields: [
+            { apiName: "code", label: "Code", fieldType: "text", sourceColumn: "code", required: true, writable: false },
+            { apiName: "reference_number", label: "Reference", fieldType: "text", sourceColumn: "reference_number", writable: false },
+            { apiName: "customer_id", label: "Customer", fieldType: "lookup", sourceColumn: "customer_id", writable: false },
+            { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: false, options: ["active","blocked","expired"] },
+            { apiName: "initial_value", label: "Initial Value", fieldType: "currency", sourceColumn: "initial_value", writable: false },
+            { apiName: "expires_at", label: "Expires", fieldType: "datetime", sourceColumn: "expires_at", writable: false },
+            { apiName: "issued_at", label: "Issued", fieldType: "datetime", sourceColumn: "issued_at", writable: false }
+          ]},
+          { objectKey: "promotion", label: "Promotion", pluralLabel: "Promotions", sourceTable: "promotions", metadataScope: "global", fields: [
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "discount_type", label: "Discount Type", fieldType: "picklist", sourceColumn: "discount_type", writable: true, options: ["percent","fixed"] },
+            { apiName: "discount_value", label: "Discount Value", fieldType: "decimal", sourceColumn: "discount_value", writable: true },
+            { apiName: "starts_at", label: "Starts", fieldType: "datetime", sourceColumn: "starts_at", writable: true },
+            { apiName: "ends_at", label: "Ends", fieldType: "datetime", sourceColumn: "ends_at", writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
+          ]},
+          { objectKey: "price_list", label: "Price List", pluralLabel: "Price Lists", sourceTable: "price_lists", metadataScope: "global", fields: [
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "channel", label: "Channel", fieldType: "text", sourceColumn: "channel", writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
+          ]},
+          { objectKey: "stock_return", label: "Stock Return", pluralLabel: "Stock Returns", sourceTable: "stock_returns", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
+            { apiName: "return_type", label: "Return Type", fieldType: "picklist", sourceColumn: "return_type", writable: false, options: ["CUSTOMER","SUPPLIER"] },
+            { apiName: "return_number", label: "Return Number", fieldType: "text", sourceColumn: "return_number", writable: false },
+            { apiName: "sale_id", label: "Sale", fieldType: "lookup", sourceColumn: "sale_id", writable: false },
+            { apiName: "purchase_id", label: "Purchase", fieldType: "lookup", sourceColumn: "purchase_id", writable: false },
+            { apiName: "supplier_id", label: "Supplier", fieldType: "lookup", sourceColumn: "supplier_id", writable: false },
+            { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: false, options: ["COMPLETED","CANCELLED"] },
+            { apiName: "refund_amount", label: "Refund Amount", fieldType: "currency", sourceColumn: "refund_amount", writable: false },
+            { apiName: "reason", label: "Reason", fieldType: "text", sourceColumn: "reason", writable: false },
+            { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+          ]},
+          { objectKey: "store", label: "Store", pluralLabel: "Stores", sourceTable: "stores", metadataScope: "global", fields: [
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "code", label: "Code", fieldType: "text", sourceColumn: "code", writable: true },
+            { apiName: "address_line1", label: "Address", fieldType: "text", sourceColumn: "address_line1", writable: true },
+            { apiName: "city", label: "City", fieldType: "text", sourceColumn: "city", writable: true },
+            { apiName: "postcode", label: "Postcode", fieldType: "text", sourceColumn: "postcode", writable: true },
+            { apiName: "phone", label: "Phone", fieldType: "phone", sourceColumn: "phone", writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
+          ]},
+          { objectKey: "terminal", label: "Till", pluralLabel: "Tills", sourceTable: "terminals", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: true },
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "terminal_number", label: "Terminal Number", fieldType: "text", sourceColumn: "terminal_number", writable: true },
+            { apiName: "device_identifier", label: "Device", fieldType: "text", sourceColumn: "device_identifier", writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true }
+          ]}],
+        relationships: [{ parentObjectKey:"sale",childObjectKey:"sale_item",relationshipKey:"items",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
+          { parentObjectKey:"sale_item",childObjectKey:"sale",relationshipKey:"sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
+          { parentObjectKey:"sale",childObjectKey:"payment",relationshipKey:"payments",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
+          { parentObjectKey:"payment",childObjectKey:"sale",relationshipKey:"sale",relationshipType:"lookup",childFieldApiName:"sale_id" },,
+{ parentObjectKey: "layaway", childObjectKey: "layaway_line", relationshipKey: "lines", relationshipType: "one_to_many", childFieldApiName: "layaway_id" },
+          { parentObjectKey: "layaway", childObjectKey: "layaway_payment", relationshipKey: "payments", relationshipType: "one_to_many", childFieldApiName: "layaway_id" }],
+        listViews: [
+          { objectKey: "layaway", viewKey: "open", label: "Open Layaways", columns: ["customer_id","total","paid_amount","balance","status","due_date"], isDefault: true },
+          { objectKey: "gift_card", viewKey: "all", label: "Gift Cards", columns: ["code","reference_number","customer_id","status","initial_value","expires_at"], isDefault: true }
+        ],
+        validationRules: [
+          { objectKey:"sale",name:"Sale total cannot be negative",triggerKey:"before_save",conditions:[{field:"total",operator:"less_than",value:0}],action:{type:"validation",message:"Sale total cannot be negative"} },
+          { objectKey:"sale_item",name:"Sale item quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Sale item quantity must be greater than zero"} },
+          { objectKey:"payment",name:"Payment amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Payment amount must be greater than zero"} },
+        ],
       } : {}),
       ...(entry.key === "online_orders" ? {
         metadataOwnership: {
@@ -3843,6 +3922,25 @@ export function packageDefinition(entry) {
             runtimeComponent: "delivery_workspace",
             definition: { presentation_mode: "landing", runtime_component: "delivery_workspace", components: [] },
           },
+        ],
+      } : {}),
+      ...(entry.key === "one_kiosk" ? {
+        objects: [
+          { objectKey: "kiosk_device", label: "Kiosk Device", pluralLabel: "Kiosk Devices", sourceTable: "kiosk_devices", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
+            { apiName: "device_key", label: "Device Key", fieldType: "text", sourceColumn: "device_key", required: true, writable: false },
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true },
+            { apiName: "internet_status", label: "Internet", fieldType: "text", sourceColumn: "internet_status", writable: false },
+            { apiName: "server_status", label: "Server", fieldType: "text", sourceColumn: "server_status", writable: false },
+            { apiName: "payment_status", label: "Payment", fieldType: "text", sourceColumn: "payment_status", writable: false },
+            { apiName: "printer_status", label: "Printer", fieldType: "text", sourceColumn: "printer_status", writable: false },
+            { apiName: "last_heartbeat_at", label: "Last Heartbeat", fieldType: "datetime", sourceColumn: "last_heartbeat_at", writable: false },
+            { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+          ]}
+        ],
+        listViews: [
+          { objectKey: "kiosk_device", viewKey: "all", label: "Kiosk Devices", columns: ["name","store_id","active","internet_status","payment_status","printer_status","last_heartbeat_at"], isDefault: true }
         ],
       } : {}),
       ...(entry.key === "kds" ? {

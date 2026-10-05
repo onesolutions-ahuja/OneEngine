@@ -10,7 +10,7 @@ test("package functions are package-owned and loaded through the generic package
   assert.equal(registry.includes('key: "purchase.receive"'), false);
   assert.equal(registry.includes("await readdir"), false);
   assert.match(index, /export const packageFunctions/);
-  assert.ok(PLATFORM_FUNCTIONS.some((item) => item.key === "purchase.receive"));
+  assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === "purchase.receive"), false);
 });
 
 test("package buttons support workflow targets", async () => {
