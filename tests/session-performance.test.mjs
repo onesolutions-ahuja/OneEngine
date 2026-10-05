@@ -376,3 +376,24 @@ test('login critical path records security and Google sub-timings', async () => 
   assert.match(source, /loginTimings\.security_context_ms/)
   assert.match(source, /loginTimings\.google_runtime_ms/)
 })
+
+
+test('primary PostgreSQL pool retains warm connections for login consistency', async () => {
+  const server = await read('../server/server.js')
+  assert.match(server, /PG_POOL_MIN \|\| "3"/)
+  assert.match(server, /PG_POOL_IDLE_MS \|\| "300000"/)
+  assert.match(server, /core database ready \(pool warm=/)
+})
+
+test('final loading verifier waits for the exact deployed backend commit', async () => {
+  const source = await read('../.github/workflows/final-loading-verification.yml')
+  assert.match(source, /diagnostics\.buildCommit/)
+  assert.match(source, /\[ "\$COMMIT" = "\$GITHUB_SHA" \]/)
+})
+
+test('final loading verifier measures five consecutive production logins', async () => {
+  const source = await read('../tests/e2e/final-loading-verification.spec.mjs')
+  assert.match(source, /attempt <= 5/)
+  assert.match(source, /loginSamples\.push\(totalMs\)/)
+  assert.match(source, /must stay <= 1500ms/)
+})
