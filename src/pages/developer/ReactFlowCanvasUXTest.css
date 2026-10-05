@@ -85,11 +85,14 @@
 }
 
 .rfux-canvas-shell .react-flow {
-  background: #09090b;
+  background:
+    radial-gradient(circle, rgba(255,255,255,.16) 1px, transparent 1.2px),
+    #09090b;
+  background-size: 22px 22px;
 }
 
-.rfux-canvas-shell .react-flow__background pattern circle {
-  fill: #3f3f46;
+.rfux-canvas-shell .react-flow__background {
+  opacity: 0;
 }
 
 .rfux-canvas-shell .react-flow__edge-path {
@@ -198,6 +201,13 @@
 .rfux-node--purple .rfux-node-icon { background: #f3e8ff; color: #7e22ce; }
 .rfux-node--blue .rfux-node-icon { background: #e0f2fe; color: #0369a1; }
 .rfux-node--amber .rfux-node-icon { background: #fef3c7; color: #a16207; }
+
+.rfux-node-icon--decision {
+  width: 44px;
+  height: 28px;
+  border-radius: 999px;
+  margin-left: -4px;
+}
 .rfux-node--green .rfux-node-icon { background: #dcfce7; color: #15803d; }
 .rfux-node--gray .rfux-node-icon { background: #f4f4f5; color: #52525b; }
 
@@ -241,11 +251,6 @@
 .rfux-node-remove:hover:not(:disabled) {
   background: #b91c1c;
   transform: scale(1.06);
-}
-
-.rfux-node-remove:disabled {
-  opacity: .28;
-  cursor: not-allowed;
 }
 
 .rfux-node-add {
