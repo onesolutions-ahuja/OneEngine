@@ -79,8 +79,10 @@ export default function OneKioskDisplayPage() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), 5000);
+    if (!document.hidden) void load();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load();
+    }, 30000);
     return () => window.clearInterval(timer);
   }, [load]);
 
