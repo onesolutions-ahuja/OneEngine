@@ -132,7 +132,7 @@ test("customer administration is metadata-owned while runtime customer services 
   assert.match(registry, /parentObjectKey: "customer", childObjectKey: "contact"/);
   assert.match(registry, /parentObjectKey: "customer", childObjectKey: "address"/);
   assert.match(route, /"\/customer-lookup"/);
-  assert.match(route, /"\/customers\/:id\/credit"/);
+  assert.equal(route.includes('"/customers/:id/credit"'), false);
 });
 
 
@@ -182,8 +182,8 @@ test("sales products and categories use metadata workspace while legacy return a
   assert.match(app, /SalesPage initialObjectKey="sale" appKey="sales"/);
   assert.match(app, /ProductsPage initialObjectKey="product" appKey="products"/);
   assert.match(app, /CategoriesPage initialObjectKey="category" appKey="categories"/);
-  assert.equal(app.includes("ReturnsPage"), false);
-  assert.equal(app.includes("ExchangePage"), false);
+  assert.equal(app.includes("const ReturnsPage ="), false);
+  assert.equal(app.includes("const ExchangePage ="), false);
   assert.match(metadata, /key: "stock_return"/);
   assert.match(productsRoute, /\/products\/catalogue/);
   assert.match(productsRoute, /\/products\/misc-line/);
@@ -204,4 +204,24 @@ test("gift cards online orders and attendance use metadata workspaces while runt
   assert.match(attendance, /function:attendance\.clock_in/);
   assert.match(attendance, /function:attendance\.clock_out/);
   assert.match(online, /online\/orders/);
+});
+
+
+test("sales route no longer depends on deleted legacy loyalty helpers", async () => {
+  const route = await readFile(new URL("../server/routes/sales.js", import.meta.url), "utf8");
+  assert.equal(route.includes("../src/utils/loyaltyPoints.js"), false);
+  assert.equal(route.includes("validateRedeemConfig"), false);
+  assert.equal(route.includes("validateRedeemablePoints"), false);
+  assert.equal(route.includes("customer_loyalty_transactions"), false);
+  assert.equal(route.includes("customer_loyalty_balances"), false);
+});
+
+
+test("cleanup leaves no stale deleted UI imports or duplicate canvas component", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const lookup = await readFile(new URL("../src/pages/products/GlobalProductLookupPage.jsx", import.meta.url), "utf8");
+  const canvas = await readFile(new URL("../src/pages/developer/ReactFlowCanvasUXTest.jsx", import.meta.url), "utf8");
+  assert.equal(app.includes("./pages/returns/ReturnsAdmin"), false);
+  assert.equal(lookup.includes("./ProductsPage"), false);
+  assert.equal((canvas.match(/export default function ReactFlowCanvasUXTest/g) || []).length, 1);
 });

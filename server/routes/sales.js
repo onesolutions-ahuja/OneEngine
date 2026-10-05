@@ -2,7 +2,6 @@ import express from "express";
 import { createHash } from "node:crypto";
 import { allocateBatchConsumption } from "../services/inventory.js";
 import { normaliseGiftCardCode, isCardRedeemable, validateRedemption } from "../services/giftCards.js";
-import { validateRedeemConfig, validateRedeemablePoints } from "../src/utils/loyaltyPoints.js";
 import { computeBasketTotals, roundCurrency, resolveEffectivePrice } from "../src/utils/saleTotals.js";
 import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
@@ -555,101 +554,7 @@ export default function createSalesRouter({
         }
 
 
-        /*
-         * T10R: loyalty points redemption (authoritative, pre-commit).
-         * Validated against the programme config and the row-locked balance;
-         * the debit + REDEEM ledger row commit atomically WITH the sale, so
-         * a failed sale never redeems and a committed sale always redeems.
-         */
-        const redeemPoints = Number(req.body.redeemPoints ?? 0);
-        const loyaltyTenderApplied = redeemPoints > 0;
-        let loyaltyRedeemValue = 0; // currency value redeemed (0 when none)
-        if (redeemPoints > 0) {
-          /* Redemption is a whole-sale tender handled by the loyalty ledger
-             below (pre-commit debit against the full total) — it can never be
-             combined with split payment lines without double-counting money. */
-          if (paymentLines) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "Loyalty redemption cannot be combined with split payments. Complete the sale with a single payment method.",
-            });
-          }
-          if (!customerId) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "A customer must be selected to redeem loyalty points.",
-            });
-          }
-          const settings = await db(
-            `SELECT loyalty_enabled, loyalty_earning_rate, loyalty_min_sale_total, loyalty_redeem_value_per_point, loyalty_min_points_redeem FROM company_settings WHERE company_id = $1`,
-            [req.user.companyId]
-          );
-          const programme = settings.rows[0] ?? null;
-          let valuePerPoint = null;
-          try {
-            ({ valuePerPoint } = validateRedeemConfig(programme));
-          } catch (validationError) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({ success: false, message: validationError.message });
-          }
-
-          // Lock the balance row for the duration of the sale transaction
-          const balanceRes = await client.query(
-            `SELECT balance FROM customer_loyalty_balances WHERE company_id = $1 AND customer_id = $2 FOR UPDATE`,
-            [req.user.companyId, customerId]
-          );
-          const currentBalance = Number(balanceRes.rows[0]?.balance || 0);
-          let pointsToRedeem;
-          try {
-            pointsToRedeem = validateRedeemablePoints(currentBalance, redeemPoints, programme).points;
-          } catch (validationError) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({ success: false, message: validationError.message });
-          }
-
-          const redeemValue = Math.round(pointsToRedeem * valuePerPoint * 100) / 100;
-          loyaltyRedeemValue = redeemValue;
-          if (redeemValue > Number(total) + 0.01) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              success: false,
-              message: "Points redemption exceeds the sale total.",
-            });
-          }
-
-          const newBalance = currentBalance - pointsToRedeem;
-          await client.query(
-            `UPDATE customer_loyalty_balances SET balance = $1, updated_at = NOW() WHERE company_id = $2 AND customer_id = $3`,
-            [newBalance, req.user.companyId, customerId]
-          );
-          await client.query(
-            `
-            INSERT INTO customer_loyalty_transactions
-              (company_id, customer_id, transaction_type, amount, balance_after, reference_type, description, created_by)
-            VALUES ($1, $2, 'REDEEM', $3, $4, $5, $6, $7)
-            `,
-            [
-              req.user.companyId,
-              customerId,
-              -pointsToRedeem,
-              newBalance,
-              "sale",
-              `Redeemed at the till (sale total ${Number(total).toFixed(2)})`,
-              req.user.id,
-            ]
-          );
-        }
-
-        const payableAfterLoyalty = roundCurrency(Math.max((Number(total) || 0) - Number(loyaltyRedeemValue || 0), 0));
-        if (loyaltyTenderApplied && String(paymentMethod || "").toLowerCase() === "loyalty" && payableAfterLoyalty > 0) {
-          await client.query("ROLLBACK");
-          return res.status(400).json({
-            success: false,
-            message: "Selected loyalty points do not cover the full sale. Choose cash or card for the remaining amount.",
-          });
-        }
+        // Loyalty redemption is metadata/Flow-owned; the legacy Sales route no longer mutates loyalty state.
 
         if (customerId) {
           await associateCustomerWithStore(
@@ -1291,9 +1196,7 @@ export default function createSalesRouter({
         const connectorPayments = new Map();
         const paymentTenders = paymentLines
           ? paymentLines.map((line) => ({ method: String(line.method || ""), amount: Number(line.amount || 0) }))
-          : payableAfterLoyalty > 0
-            ? [{ method: String(paymentMethod || ""), amount: payableAfterLoyalty }]
-            : [];
+          : [{ method: String(paymentMethod || ""), amount: Number(total) || 0 }];
 
         for (const tender of paymentTenders) {
           const methodCode = String(tender.method || "").trim();
@@ -1632,12 +1535,7 @@ export default function createSalesRouter({
          */
         const tenderRows = paymentLines
           ? paymentLines.map((line) => [saleId, line.method, line.amount])
-          : loyaltyTenderApplied
-            ? [
-                [saleId, "loyalty", roundCurrency(loyaltyRedeemValue)],
-                ...(payableAfterLoyalty > 0 ? [[saleId, paymentMethod, payableAfterLoyalty]] : []),
-              ]
-            : [[saleId, paymentMethod, Number(total) || 0]];
+          : [[saleId, paymentMethod, Number(total) || 0]];
         for (const [tSaleId, tMethod, tAmount] of tenderRows) {
           const connectorPayment = connectorPayments.get(String(tMethod || "")) || null;
           const paymentResult = connectorPayment?.result?.status === "APPROVED" ? connectorPayment.result : null;
@@ -1905,113 +1803,7 @@ export default function createSalesRouter({
           await writeAudit?.(req.user.companyId, req.user.id || null, "KIOSK_AGE_APPROVAL_CONSUMED", "kiosk_device", kioskContext.kiosk_device_id, {});
         }
 
-        /*
-         * T10R: Customer loyalty earning - fire-and-forget after sale commit
-         * Loyalty failures must never block a completed sale. The earn base
-         * excludes any redemption applied to this sale (a customer never
-         * earns points on points). Redemption itself is handled pre-commit
-         * above, atomically with the sale.
-         */
-        const loyaltyEarnBase = loyaltyTenderApplied ? Math.max(Number(total) - Number(loyaltyRedeemValue), 0) : Number(total);
-        if (customerId && typeof writeAudit === "function") {
-          Promise.resolve(
-            (async () => {
-              try {
-                // Check if loyalty is enabled for this company
-                const settings = await db(
-                  `SELECT loyalty_enabled, loyalty_earning_rate, loyalty_min_sale_total FROM company_settings WHERE company_id = $1`,
-                  [req.user.companyId]
-                );
-                if (!settings.rows.length || !settings.rows[0].loyalty_enabled) return;
-
-                /* Cancelled/void sales must never award points. The earn
-                 * block runs after the sale transaction commits, so the
-                 * sale's CURRENT status is re-read from the database —
-                 * a sale voided between commit and this block (or created
-                 * by a flow that must not award) is skipped here. */
-                const earnableStatuses = ["completed", "paid", "partially_paid"];
-                const saleStatusRow = await db(
-                  `SELECT status FROM sales WHERE id = $1 AND company_id = $2`,
-                  [saleId, req.user.companyId]
-                );
-                if (
-                  !saleStatusRow.rows.length ||
-                  !earnableStatuses.includes(String(saleStatusRow.rows[0].status).toLowerCase())
-                )
-                  return;
-
-                const earningRate = Number(settings.rows[0].loyalty_earning_rate) || 0.01;
-                const minSaleTotal = settings.rows[0].loyalty_min_sale_total;
-                if (minSaleTotal !== null && minSaleTotal !== undefined && loyaltyEarnBase < Number(minSaleTotal)) return;
-
-                const loyaltyEarned = Math.round(loyaltyEarnBase * earningRate * 10000) / 10000;
-
-                if (loyaltyEarned <= 0) return;
-
-                /* T10R idempotent earn: the unique index
-                 * uq_loyalty_earn_per_sale makes a second EARN for the same
-                 * sale impossible (lost-acknowledgement retry / double
-                 * fire). If the insert hits 23505 the balance upsert is
-                 * reversed so the stored balance stays ledger-true. */
-                let balanceAfter;
-                try {
-                  // Insert/update loyalty balance (upsert) and get new balance
-                  const balanceResult = await db(
-                    `
-                    INSERT INTO customer_loyalty_balances (company_id, customer_id, balance)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (company_id, customer_id) 
-                    DO UPDATE SET balance = customer_loyalty_balances.balance + EXCLUDED.balance,
-                                   updated_at = NOW()
-                    RETURNING balance
-                    `,
-                    [req.user.companyId, customerId, loyaltyEarned]
-                  );
-
-                  balanceAfter = Number(balanceResult.rows[0].balance);
-
-                  // Record transaction
-                  await db(
-                    `
-                    INSERT INTO customer_loyalty_transactions 
-                      (company_id, customer_id, transaction_type, amount, balance_after, reference_type, reference_id, description, created_by)
-                    VALUES ($1, $2, 'EARN', $3, $4, 'sale', $5, 'Sale completed', $6)
-                    `,
-                    [req.user.companyId, customerId, loyaltyEarned, balanceAfter, saleId, req.user.id]
-                  );
-                } catch (earnError) {
-                  if (earnError && earnError.code === "23505") {
-                    /* Already earned for this sale - reverse the balance
-                     * upsert so it matches the ledger, then finish quietly. */
-                    try {
-                      await db(
-                        `UPDATE customer_loyalty_balances SET balance = balance - $3, updated_at = NOW() WHERE company_id = $1 AND customer_id = $2`,
-                        [req.user.companyId, customerId, loyaltyEarned]
-                      );
-                    } catch (revertError) {
-                      console.error("Loyalty balance revert error:", revertError);
-                    }
-                    return;
-                  }
-                  throw earnError;
-                }
-
-                // Audit log for loyalty earning
-                writeAudit(
-                  req.user.companyId,
-                  req.user.id,
-                  "loyalty.earned",
-                  "customer",
-                  customerId,
-                  { saleId, amount: loyaltyEarned, balanceAfter }
-                ).catch((auditError) => console.error("Loyalty audit write error:", auditError));
-              } catch (loyaltyError) {
-                console.error("Loyalty earning error:", loyaltyError);
-                // Do not throw - loyalty failures must not block sales
-              }
-            })()
-          ).catch(() => {});
-        }
+        // Loyalty earning is metadata/Flow-owned; no route-local loyalty writes remain.
 
         /*
          * T10C audit trail: one minimal verification event per restricted
