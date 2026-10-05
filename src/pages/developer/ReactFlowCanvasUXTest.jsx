@@ -218,11 +218,20 @@ export default function ReactFlowCanvasUXTest() {
   const nodeTypes = useMemo(() => ({ workflow: WorkflowNode }), [])
 
   const canvasSize = useMemo(() => {
-    const maxX = nodes.reduce((value, node) => Math.max(value, Number(node.position?.x || 0) + 420), 0)
-    const maxY = nodes.reduce((value, node) => Math.max(value, Number(node.position?.y || 0) + 260), 0)
+    // The stage should be no larger than its actual workflow content.
+    // CSS makes the visible viewport the minimum size; scrollbars appear only
+    // when nodes extend beyond that viewport.
+    const maxX = nodes.reduce(
+      (value, node) => Math.max(value, Number(node.position?.x || 0) + 300),
+      0,
+    )
+    const maxY = nodes.reduce(
+      (value, node) => Math.max(value, Number(node.position?.y || 0) + 110),
+      0,
+    )
     return {
-      width: Math.max(1500, Math.ceil(maxX)),
-      height: Math.max(1100, Math.ceil(maxY)),
+      width: Math.ceil(maxX),
+      height: Math.ceil(maxY),
     }
   }, [nodes])
 
