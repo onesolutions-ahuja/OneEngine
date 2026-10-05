@@ -2,15 +2,6 @@ name: Appointment Workflow Debug
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/appointment-debug.yml"
-      - "scripts/run-appointment-debug.mjs"
-      - "server/services/platformWorkflow.js"
-      - "server/routes/platform.js"
-      - "server/services/packageRegistry.js"
-      - "server/database/init.js"
 
 concurrency:
   group: oneengine-live-e2e
