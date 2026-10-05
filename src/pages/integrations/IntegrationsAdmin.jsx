@@ -13,7 +13,6 @@ import { apiRequest } from "../../services/api.js";
 import { fmtDateTime, Flash, StatusPill } from "./shared.jsx";
 import IntegrationFormModal from "./IntegrationFormModal.jsx";
 import IntegrationDetail from "./IntegrationDetail.jsx";
-import SupplierFeedPreview from "./SupplierFeedPreview.jsx";
 import { BrandIcon } from "../../components/BrandIcons.jsx";
 import ConnectorInstancesPanel from "./ConnectorInstancesPanel.jsx";
 
@@ -218,7 +217,7 @@ export default function IntegrationsAdmin({ storeId }) {
         </div>
       )}
 
-      <SupplierFeedPreview />
+      
 
       {showForm && (
         <IntegrationFormModal

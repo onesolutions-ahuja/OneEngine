@@ -53,20 +53,6 @@ test("purchase create capability preserves optional initial receipt and metadata
 });
 
 
-test("supplier feed preview stays neutral and does not prescribe business endpoints or screens", async () => {
-  const matcher = await readFile(new URL("../server/services/supplierFeedMatch.js", import.meta.url), "utf8");
-  const route = await readFile(new URL("../server/routes/integrations.js", import.meta.url), "utf8");
-  const ui = await readFile(new URL("../src/pages/integrations/SupplierFeedPreview.jsx", import.meta.url), "utf8");
-  for (const source of [matcher, route, ui]) {
-    assert.equal(source.includes("POST /api/products"), false);
-    assert.equal(source.includes("POST /api/purchases"), false);
-    assert.equal(source.includes("Add via Purchases"), false);
-    assert.equal(source.includes("Create via Products"), false);
-  }
-  assert.equal(matcher.includes("purchaseLine"), false);
-});
-
-
 test("legacy supplier return endpoints are removed in favor of protected metadata action", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("createReturnsRouter"), false);
@@ -358,4 +344,16 @@ test("accounting uses generic integration framework instead of sale-specific exp
   assert.match(integrations, /integration_endpoints/);
   assert.match(integrations, /integration_field_mappings/);
   assert.match(integrations, /\/integrations\/\:id\/endpoints/);
+});
+
+
+test("generic integration layer has no fixed business object or supplier feed knowledge", async () => {
+  const route = await readFile(new URL("../server/routes/integrations.js", import.meta.url), "utf8");
+  const ui = await readFile(new URL("../src/pages/integrations/IntegrationsAdmin.jsx", import.meta.url), "utf8");
+  assert.match(route, /const ENTITY_TYPES = \["custom"\]/);
+  assert.equal(route.includes("supplier-feed/preview"), false);
+  assert.equal(route.includes("supplierFeedAdapter"), false);
+  assert.equal(route.includes("supplierFeedMatch"), false);
+  assert.equal(route.includes("FROM products"), false);
+  assert.equal(ui.includes("SupplierFeedPreview"), false);
 });
