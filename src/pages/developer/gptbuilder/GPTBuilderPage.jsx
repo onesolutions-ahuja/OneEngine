@@ -1006,11 +1006,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   }, [flow.key, startConfig, dirty, workflowId, elements])
 
   const startConfigured = !issues.some((issue) => ['record-object', 'schedule', 'event'].includes(issue.id))
-  const buildPayload = (props = flowProps) => ({
+  const buildPayload = (props = flowProps, startOverride = startConfig) => ({
     name: props.label || 'New Flow',
-    objectKey: startConfig.objectKey || null,
-    triggerKey: flowTriggerKey(flow.key, startConfig),
-    conditions: startConfig.conditionMode === 'none' ? [] : (startConfig.conditions || []).filter((condition) => condition.field),
+    objectKey: startOverride.objectKey || null,
+    triggerKey: flowTriggerKey(flow.key, startOverride),
+    conditions: startOverride.conditionMode === 'none' ? [] : (startOverride.conditions || []).filter((condition) => condition.field),
     active: false,
     lifecycleStatus: 'DRAFT',
     version: 1,
@@ -1030,11 +1030,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       originalFlowId: props.originalFlowId || undefined,
       isTemplate: props.isTemplate === true,
       overridable: props.overridable === true,
-      match: startConfig.conditionMode === 'custom' ? 'custom' : startConfig.conditionMode === 'any' ? 'any' : 'all',
-      conditionLogic: startConfig.conditionMode === 'custom' ? startConfig.customConditionLogic || '' : '',
-      entryFormula: startConfig.conditionMode === 'formula' ? startConfig.formula || '' : '',
-      entryTransition: startConfig.updateMode === 'transition' ? 'UPDATED_TO_MEET' : 'EVERY_TIME',
-      start: startConfig,
+      match: startOverride.conditionMode === 'custom' ? 'custom' : startOverride.conditionMode === 'any' ? 'any' : 'all',
+      conditionLogic: startOverride.conditionMode === 'custom' ? startOverride.customConditionLogic || '' : '',
+      entryFormula: startOverride.conditionMode === 'formula' ? startOverride.formula || '' : '',
+      entryTransition: startOverride.updateMode === 'transition' ? 'UPDATED_TO_MEET' : 'EVERY_TIME',
+      start: startOverride,
       layout: { mode: layout === 'free' ? 'FREE_FORM' : 'AUTO' },
       gptBuilderElements: elements.map((element) => ({
         id: element.id,
@@ -1075,13 +1075,13 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     },
   })
 
-  const save = async (props = flowProps, options = {}) => {
+  const save = async (props = flowProps, options = {}, startOverride = startConfig) => {
     setSaving(true); setSaveError(''); setMessage('')
     try {
       const forceNewFlow = options.forceNewFlow === true
       const forceNewVersion = options.forceNewVersion === true
       const payload = {
-        ...buildPayload(props),
+        ...buildPayload(props, startOverride),
         ...(forceNewVersion ? { forceNewVersion: true } : {}),
       }
       if (forceNewFlow) {
@@ -1264,8 +1264,10 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       setDirty(true)
     }
     if (workflowId) {
-      // Existing flows save on the next render so a just-committed Start is included.
-      queueMicrotask(() => void save(flowProps))
+      // Pass the committed draft directly. React state updates are asynchronous, so
+      // deferring with a microtask can still serialize the previous Start snapshot.
+      const startForSave = startOpen && flow.startNeedsConfiguration ? structuredClone(startDraft) : startConfig
+      void save(flowProps, {}, startForSave)
     } else {
       setPropertiesOpen(true)
     }
