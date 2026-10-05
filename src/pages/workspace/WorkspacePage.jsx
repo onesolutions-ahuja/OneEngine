@@ -4,6 +4,7 @@ import { apiRequest } from '../../services/api'
 import { cachedGet } from '../../services/cachedApi'
 import { readLazyCache, writeLazyCache } from '../../services/dataCache'
 import RecordListView from '../../components/RecordListView'
+import MetadataActionButtons from '../../components/platform/MetadataActionButtons.jsx'
 import { evaluatePlatformCondition } from '../../utils/platformConditions.js'
 
 function objectKey(object) {
@@ -601,24 +602,6 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
   const outboundRelationships = runtimeMeta.relationships.filter((relationship) => String(relationship.parent_object_id) === String(selectedObject?.id))
   const selectedRecordType = runtimeMeta.recordTypes.find((item) => String(item.id) === String(detailRecord?.recordTypeId || detailRecord?.record_type_id || '')) || null
 
-  const runMetadataButton = async (button) => {
-    if (!selectedObject || !selectedId || !button?.button_key) return
-    setActionBusy(button.button_key)
-    setError('')
-    try {
-      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey(selectedObject))}/records/${encodeURIComponent(selectedId)}/buttons/${encodeURIComponent(button.button_key)}/execute?formFactor=${encodeURIComponent(formFactor)}${appKey ? `&appKey=${encodeURIComponent(appKey)}` : ''}`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      })
-      if (response?.success === false) throw new Error(response.message || 'Action failed')
-      await loadObject(selectedObject, true)
-    } catch (err) {
-      setError(err?.message || 'Unable to execute action')
-    } finally {
-      setActionBusy('')
-    }
-  }
-
   const layoutActionComponents = (detailLayout?.definition?.components || [])
     .map((component, index) => ({ component, index }))
     .filter(({ component }) => component?.type === 'action' && component?.visible !== false)
@@ -758,6 +741,10 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
           <span aria-hidden="true" />
         </div>
         {selectedObject ? (
+          <>
+          <div className="workspace-list-actions">
+            <MetadataActionButtons objectKey={objectKey(selectedObject)} buttons={runtimeMeta.buttons} placements={['list','workspace_list']} formFactor={formFactor} appKey={appKey} onExecuted={() => loadObject(selectedObject, true)} onError={setError} />
+          </div>
           <RecordListView
             title={objectLabel(selectedObject)}
             subtitle={`${rows.length} records`}
@@ -776,6 +763,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
             selectedRowId={selectedId}
             onRowSelect={(row) => { setSelectedId(row.id); setDetailTab('details'); if (formFactor === 'mobile') setMobileStage('detail') }}
           />
+          </>
         ) : <div className="workspace-state">Select an object.</div>}
       </main>
 
@@ -803,14 +791,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
               </div>
               <div className="workspace-detail-actions">
                 {canCreate && quickCreateLayout ? <button type="button" onClick={openQuickCreate}><Plus size={13}/> Quick Create</button> : null}
-                {runtimeMeta.buttons
-                  .filter((button) => ['record','workspace_record','detail'].includes(button.placement) || !button.placement)
-                  .filter((button) => evaluatePlatformCondition(button.visibility_rule, fields, visibilityContext))
-                  .map((button) => (
-                  <button key={button.id || button.button_key} type="button" disabled={actionBusy === button.button_key} onClick={() => runMetadataButton(button)}>
-                    {button.label}
-                  </button>
-                ))}
+                <MetadataActionButtons objectKey={objectKey(selectedObject)} recordId={selectedId} buttons={runtimeMeta.buttons.filter((button) => evaluatePlatformCondition(button.visibility_rule, fields, visibilityContext))} placements={['record','workspace_record','detail']} formFactor={formFactor} appKey={appKey} onExecuted={() => loadObject(selectedObject, true)} onError={setError} />
                 {layoutActionComponents.map(({ component, index }) => {
                   const actionKey = String(component?.id || component?.key || `${component?.action || 'action'}:${index}`)
                   return <button key={actionKey} type="button" disabled={Boolean(actionBusy)} onClick={() => runConfiguredAction(component, index)}>
