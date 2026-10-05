@@ -91,88 +91,35 @@ export default function createSupplierAccountsRouter({ authenticate, authorize, 
   }
 
   async function createLedgerEntry(req, res) {
-    const amount = Number(req.body?.amount);
     const effectiveType = normalizeEntryType(req.body?.entryType ?? req.body?.entry_type ?? req.body?.type);
-    const debit = req.body?.debit ?? req.body?.direction;
-    const rawDebit = parseBoolean(debit);
-    if (typeof debit !== "boolean") {
-      if (typeof debit !== "string" || rawDebit === null) {
-        return res.status(400).json({
-          success: false,
-          message: "Supplier, valid ledger entry type, positive amount and debit flag are required",
-        });
-      }
-    }
-    if (!req.body?.supplierId || !effectiveType || !Number.isFinite(amount) || amount <= 0 || rawDebit === null) {
-      return res.status(400).json({
-        success: false,
-        message: "Supplier, valid ledger entry type, positive amount and debit flag are required",
-      });
-    }
-
+    const rawDebit = parseBoolean(req.body?.debit ?? req.body?.direction);
+    const input = {
+      ...req.body,
+      entryType: effectiveType,
+      debit: rawDebit,
+      supplierId: req.body?.supplierId,
+      storeId: req.body?.storeId || req.user.storeId || null,
+      reference: req.body?.reference ?? req.body?.referenceNumber ?? req.body?.ref ?? null,
+      description: req.body?.description ?? req.body?.notes ?? null,
+    };
     try {
-      const supplier = await ensureSupplierInCompany(req.body.supplierId, req.user.companyId);
-      if (supplier.active === false) {
-        return res.status(400).json({ success: false, message: "Supplier is inactive" });
-      }
-      if (req.body.storeId) {
-        await ensureStoreInCompany(req.body.storeId, req.user.companyId);
-      }
-
-      const idempotencyKey = req.body.idempotencyKey != null ? String(req.body.idempotencyKey).slice(0, 100) : null;
-      if (idempotencyKey) {
-        const existing = await db(
-          "SELECT id FROM supplier_ledger_entries WHERE company_id=$1 AND idempotency_key=$2 LIMIT 1",
-          [req.user.companyId, idempotencyKey]
-        );
-        if (existing.rows.length) {
-          return res.status(409).json({
-            success: false,
-            message: "Ledger entry has already been processed",
-            data: { id: existing.rows[0].id, duplicate: true },
-          });
-        }
-      }
-
-      const reference = req.body.reference ?? req.body.referenceNumber ?? req.body.ref ?? null;
-      const description = req.body.description ?? req.body.notes ?? null;
-      const transactionDate = req.body.transactionDate ?? req.body.date ?? req.body.createdAt ?? null;
-
-      const result = await db(
-        `INSERT INTO supplier_ledger_entries
-          (company_id, supplier_id, store_id, entry_type, reference_type, reference_id, reference, amount, debit, description, idempotency_key, created_by, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, COALESCE($13::timestamptz, NOW()))
-         RETURNING *`,
-        [
-          req.user.companyId,
-          req.body.supplierId,
-          req.body.storeId || req.user.storeId || null,
-          effectiveType,
-          req.body.referenceType || "SUPPLIER_ADJUSTMENT",
-          req.body.referenceId || null,
-          reference ? String(reference).trim() || null : null,
-          amount,
-          rawDebit,
-          description ? String(description).trim() || null : null,
-          idempotencyKey,
-          req.user.id,
-          transactionDate || null,
-        ]
-      );
-
-      res.status(201).json({ success: true, data: normalizeLedgerRow(result.rows[0]) });
+      const execution = await executeSystemWorkflow({
+        db,
+        companyId: req.user.companyId,
+        userId: req.user.id || null,
+        systemKey: "function:supplier.ledger.adjust",
+        req,
+        input,
+        storeId: input.storeId,
+        source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "supplier.ledger.adjust" },
+        extraContext: { pool },
+      });
+      res.status(201).json({ success: true, data: normalizeLedgerRow(execution.result), workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
       console.error("Create supplier ledger entry error:", error);
-      if (error.status === 404) {
-        return res.status(404).json({ success: false, message: error.message });
-      }
-      if (error.code === "23503") {
-        return res.status(400).json({ success: false, message: "Referenced record not found" });
-      }
-      if (error.code === "23505") {
-        return res.status(409).json({ success: false, message: "Duplicate supplier ledger entry" });
-      }
-      return res.status(500).json({ success: false, message: "Unable to create supplier ledger entry" });
+      const status = error.code === "DUPLICATE_LEDGER_ENTRY" || error.code === "23505" ? 409
+        : /not found/i.test(error.message || "") ? 404 : 400;
+      res.status(status).json({ success: false, message: error.message || "Unable to create supplier ledger entry" });
     }
   }
 
@@ -359,45 +306,25 @@ export default function createSupplierAccountsRouter({ authenticate, authorize, 
   });
 
   router.post("/supplier-invoices", authenticate, authorize(...manage), async (req, res) => {
-    const total = Number(req.body?.total);
-    const subtotal = Number(req.body?.subtotal ?? total);
-    const tax = Number(req.body?.tax || 0);
-    if (!req.body?.supplierId || !req.body?.invoiceNumber || !Number.isFinite(total) || total < 0 ||
-        !Number.isFinite(subtotal) || subtotal < 0 || !Number.isFinite(tax) || tax < 0) {
-      return res.status(400).json({ success: false, message: "Supplier, invoice number and valid totals are required" });
-    }
-    if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-    const client = await pool.connect();
     try {
-      await client.query("BEGIN");
-      const result = await client.query(
-        `INSERT INTO supplier_invoices
-          (company_id,supplier_id,store_id,purchase_id,invoice_number,invoice_date,due_date,subtotal,tax,total,notes,created_by)
-         SELECT $1,$2,$3,$4,$5,COALESCE($6::date,CURRENT_DATE),$7,$8,$9,$10,$11,$12
-          WHERE EXISTS (SELECT 1 FROM suppliers WHERE id=$2 AND company_id=$1)
-         RETURNING *`,
-        [req.user.companyId, req.body.supplierId, req.body.storeId || req.user.storeId || null,
-          req.body.purchaseId || null, String(req.body.invoiceNumber).trim(), req.body.invoiceDate || null,
-          req.body.dueDate || null, subtotal, tax, total, req.body.notes || null, req.user.id]
-      );
-      if (!result.rows.length) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ success: false, message: "Supplier not found" });
-      }
-      await client.query(
-        `INSERT INTO supplier_ledger_entries
-          (company_id,supplier_id,store_id,entry_type,reference_type,reference_id,amount,debit,description,created_by)
-         VALUES ($1,$2,$3,'INVOICE','SUPPLIER_INVOICE',$4,$5,true,$6,$7)`,
-        [req.user.companyId, req.body.supplierId, req.body.storeId || req.user.storeId || null,
-          result.rows[0].id, total, `Supplier invoice ${String(req.body.invoiceNumber).trim()}`, req.user.id]
-      );
-      await client.query("COMMIT");
-      res.status(201).json({ success: true, data: result.rows[0] });
+      const execution = await executeSystemWorkflow({
+        db,
+        companyId: req.user.companyId,
+        userId: req.user.id || null,
+        systemKey: "function:supplier.invoice.create",
+        req,
+        input: req.body || {},
+        storeId: req.body?.storeId || req.user.storeId || null,
+        source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "supplier.invoice.create" },
+        extraContext: { pool },
+      });
+      res.status(201).json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => {});
       console.error("Create supplier invoice error:", error);
-      res.status(error.code === "23505" ? 409 : 400).json({ success: false, message: error.code === "23505" ? "Supplier invoice already exists" : error.message });
-    } finally { client.release(); }
+      const status = error.code === "DUPLICATE_INVOICE" || error.code === "23505" ? 409
+        : error.message === "Supplier not found" ? 404 : 400;
+      res.status(status).json({ success: false, message: error.message });
+    }
   });
 
   router.post("/supplier-payments", authenticate, authorize("payment.manage", ...manage), async (req, res) => {

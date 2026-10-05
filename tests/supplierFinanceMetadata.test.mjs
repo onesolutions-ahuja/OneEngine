@@ -25,3 +25,13 @@ test("bootstrap foundations honor dependency order", async () => {
   assert.match(source,/visitFoundation/);
   assert.match(source,/manifest\?\.dependencies/);
 });
+
+
+test("supplier finance write routes delegate invoice and ledger business logic to package functions", async () => {
+  const source = await readFile(new URL("../server/routes/supplierAccounts.js", import.meta.url), "utf8");
+  assert.match(source, /function:supplier\.invoice\.create/);
+  assert.match(source, /function:supplier\.ledger\.adjust/);
+  assert.match(source, /function:supplier\.payment\.execute/);
+  assert.equal(source.includes("INSERT INTO supplier_invoices"), false);
+  assert.equal(source.includes("INSERT INTO supplier_ledger_entries"), false);
+});
