@@ -6,7 +6,7 @@ const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
 const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "&": 5, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
-const ARITY = { IF: [3, 3], AND: [2, 20], OR: [2, 20], NOT: [1, 1], ISBLANK: [1, 1], ISPICKVAL: [2, 2], TEXT: [1, 1], BEGINS: [2, 2], CONTAINS: [2, 2], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], PARSEDATE: [1, 1], TRIM: [1, 1], UPPER: [1, 1] };
+const ARITY = { IF: [3, 3], AND: [2, 20], OR: [2, 20], NOT: [1, 1], ISBLANK: [1, 1], ISPICKVAL: [2, 2], TEXT: [1, 1], BEGINS: [2, 2], CONTAINS: [2, 2], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], PARSEDATE: [1, 1], MINUTESBETWEEN: [2, 2], TRIM: [1, 1], UPPER: [1, 1] };
 export const ROLLUP_OPERATIONS = new Set(["COUNT", "SUM", "MIN", "MAX", "AVG"]);
 const baseType = type => ["number", "decimal", "currency", "percent"].includes(type) ? "number" : type;
 const formulaType = type => STRING_TYPES.has(type) ? "string" : baseType(type);
@@ -169,8 +169,14 @@ function infer(node, resolve, depth = 0) {
   if (node.name === "COALESCE") return common(types);
   if (node.name === "CONCAT") return "string";
   if (["PARSEDATE", "TRIM", "UPPER"].includes(node.name)) { requireType(types[0], "string"); return "string"; }
+  if (node.name === "MINUTESBETWEEN") { requireType(types[0], "string"); requireType(types[1], "string"); return "number"; }
   if (["TODAY", "NOW", "ADDDAYS"].includes(node.name)) {
-    if (node.name === "ADDDAYS") {
+    if (node.name === "MINUTESBETWEEN") {
+    const start = new Date(args[0]), end = new Date(args[1]);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
+  }
+  if (node.name === "ADDDAYS") {
       requireType(types[0], "string");
       requireType(types[1], "number");
     }
