@@ -57,8 +57,10 @@ export async function getJarvesAllowance(db, companyId) {
 
 /** { allowance, enabledUsers, seatsRemaining } for one company - admin UI + enforcement. */
 export async function getJarvesLicenceState(db, companyId) {
-  const allowance = await getJarvesAllowance(db, companyId);
-  const enabledUsers = await countJarvesEnabledUsers(db, companyId);
+  const [allowance, enabledUsers] = await Promise.all([
+    getJarvesAllowance(db, companyId),
+    countJarvesEnabledUsers(db, companyId),
+  ]);
   return { allowance, enabledUsers, seatsRemaining: Math.max(allowance - enabledUsers, 0) };
 }
 
