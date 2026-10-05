@@ -375,3 +375,29 @@ test('Settings loads values only for the active metadata section', async () => {
   assert.match(source, /rowsLoaded === true/)
   assert.match(source, /void loadSectionedRows\(current\.object\)/)
 })
+
+
+test('POS catalogue loads independent product, category and version reads concurrently', async () => {
+  const source = await read('../server/routes/products.js')
+  const start = source.indexOf('router.get("/products/catalogue"')
+  const end = source.indexOf('router.get("/products/export"', start)
+  const route = source.slice(start, end)
+  assert.match(route, /const \[result, categories, versionResult\] = await Promise\.all\(/)
+})
+
+test('customer detail resolves scope and record reads concurrently', async () => {
+  const source = await read('../server/routes/customers.js')
+  const start = source.indexOf('router.get("/customers/:id"')
+  const route = source.slice(start)
+  assert.match(route, /const \[companyAdmin, result\] = await Promise\.all\(/)
+  assert.match(route, /const \[visible, sales\] = await Promise\.all\(/)
+})
+
+test('Jarves licence and user state reads are parallelized', async () => {
+  const licensing = await read('../server/services/jarvis/licensing.js')
+  const settings = await read('../server/routes/settings.js')
+  assert.match(licensing, /const \[allowance, enabledUsers\] = await Promise\.all\(/)
+  const start = settings.indexOf('router.get("/settings/jarves"')
+  const end = settings.indexOf('router.put("/settings/jarves"', start)
+  assert.match(settings.slice(start, end), /const \[state, enabledForMe\] = await Promise\.all\(/)
+})
