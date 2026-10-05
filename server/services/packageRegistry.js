@@ -5879,12 +5879,17 @@ export function seedPackageRegistry(pool) {
   return (async () => {
     const definitions = packageDefinitions();
     try {
+      const moduleKeys = [...new Set(definitions.map((definition) => definition.moduleKey).filter(Boolean))];
+      const moduleRows = moduleKeys.length
+        ? (await pool.query(
+            "SELECT id,module_key FROM platform_modules WHERE module_key=ANY($1::text[])",
+            [moduleKeys]
+          )).rows
+        : [];
+      const moduleByKey = new Map(moduleRows.map((row) => [row.module_key, row]));
       for (const definition of definitions) {
-      const moduleResult = await pool.query(
-        "SELECT * FROM platform_modules WHERE module_key=$1",
-        [definition.moduleKey]
-      );
-      if (!moduleResult.rows.length) continue;
+      const moduleRow = moduleByKey.get(definition.moduleKey);
+      if (!moduleRow) continue;
       await pool.query(
         `INSERT INTO package_registry
          (package_key,name,version,description,module_id,manifest,package_type,publisher,category,visible,installable,billable,system_only,display_order,publication_state,licence_mode,available_tiers)
@@ -5910,7 +5915,7 @@ export function seedPackageRegistry(pool) {
            updated_at=NOW()`,
         [
           definition.packageKey, definition.name, definition.version, definition.description,
-          moduleResult.rows[0].id, JSON.stringify(definition.manifest),
+          moduleRow.id, JSON.stringify(definition.manifest),
           definition.manifest.packageType, definition.manifest.publisher, definition.manifest.category,
           definition.manifest.visibility !== "HIDDEN", definition.manifest.installable !== false,
           definition.manifest.billable !== false, definition.manifest.systemOnly === true,
@@ -5919,10 +5924,15 @@ export function seedPackageRegistry(pool) {
         ]
       );
       }
+      const packageRows = (await pool.query(
+        "SELECT id,package_key FROM package_registry WHERE package_key=ANY($1::text[])",
+        [definitions.map((definition) => definition.packageKey)]
+      )).rows;
+      const packageByKey = new Map(packageRows.map((row) => [row.package_key, row]));
       for (const definition of definitions) {
-      const packageResult = await pool.query("SELECT id FROM package_registry WHERE package_key=$1", [definition.packageKey]);
-      if (!packageResult.rows.length) continue;
-      await pool.query("DELETE FROM package_dependencies WHERE package_id=$1", [packageResult.rows[0].id]);
+      const packageRow = packageByKey.get(definition.packageKey);
+      if (!packageRow) continue;
+      await pool.query("DELETE FROM package_dependencies WHERE package_id=$1", [packageRow.id]);
       const dependencies = [
         ...definition.dependencies,
         ...definition.manifest.optionalDependencies.map((dependency) => (
@@ -5931,15 +5941,15 @@ export function seedPackageRegistry(pool) {
       ];
       for (const dependency of dependencies) {
         const dependencyKey = typeof dependency === "string" ? dependency : dependency.packageKey || dependency.package_key;
-        const dependencyResult = await pool.query("SELECT id FROM package_registry WHERE package_key=$1", [dependencyKey]);
-        if (!dependencyResult.rows.length) throw new Error(`Package dependency not found: ${dependencyKey}`);
+        const dependencyRow = packageByKey.get(dependencyKey);
+        if (!dependencyRow) throw new Error(`Package dependency not found: ${dependencyKey}`);
         await pool.query(
           `INSERT INTO package_dependencies
            (package_id,dependency_id,version_range,min_version,max_version,optional)
            VALUES ($1,$2,$3,$4,$5,$6)`,
           [
-            packageResult.rows[0].id,
-            dependencyResult.rows[0].id,
+            packageRow.id,
+            dependencyRow.id,
             typeof dependency === "string" ? null : dependency.versionRange || dependency.version_range || null,
             typeof dependency === "string" ? null : dependency.minVersion || dependency.min_version || null,
             typeof dependency === "string" ? null : dependency.maxVersion || dependency.max_version || null,
