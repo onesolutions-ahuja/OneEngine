@@ -1423,7 +1423,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     description: "Apply the technical install, activate, deactivate, uninstall or upgrade operation for the current Tenant App record.",
     validation: (action) => {
       const operation = String(action?.operation || "").toUpperCase();
-      if (!["INSTALL","ACTIVATE","DEACTIVATE","UNINSTALL","UPGRADE"].includes(operation)) {
+      if (!["INSTALL","ACTIVATE","DEACTIVATE","UNINSTALL","UPGRADE","TRIAL"].includes(operation)) {
         throw new Error("Package lifecycle action requires a supported operation");
       }
     },
