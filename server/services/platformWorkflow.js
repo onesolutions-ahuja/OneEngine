@@ -6378,6 +6378,19 @@ function applyWorkflowActionOutputStorage(action, result, workflowVariables) {
   }
 }
 
+const RETRYABLE_WORKFLOW_DB_CODES = new Set(["40001","40P01","55P03"])
+async function executeWithTransientRetry(operation, maxAttempts = 3) {
+  let lastError
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try { return await operation() } catch (error) {
+      lastError = error
+      if (!RETRYABLE_WORKFLOW_DB_CODES.has(String(error?.code || "")) || attempt >= maxAttempts) throw error
+      await new Promise((resolve) => setTimeout(resolve, 40 * attempt))
+    }
+  }
+  throw lastError
+}
+
 export async function executeWorkflowAction(context) {
   const action = materializeActionBuilderInputs(context?.action, context);
   const executionContext = action === context?.action ? context : { ...context, action };
@@ -6406,7 +6419,7 @@ export async function executeWorkflowAction(context) {
   if (typeof definition.executor !== "function") {
     return { status: "skipped", reason: "No executor configured" };
   }
-  return definition.executor(executionContext);
+  return executeWithTransientRetry(() => definition.executor(executionContext));
 }
 
 async function recordCompensationFailure({ db, runId, stepRunId, action, error, context }) {
