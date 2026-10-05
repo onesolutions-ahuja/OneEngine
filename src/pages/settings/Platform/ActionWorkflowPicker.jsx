@@ -562,32 +562,11 @@ export function WorkflowCreationOverlay({ contextObjectKey, onClose, onCreated }
 }
 
 function WorkflowAdminOverlayHost({ contextObjectKey, baseline, onClose, onCreated }) {
-  /* WorkflowAdmin is the canonical builder; it renders its own list view first.
-     We mount it and auto-open its builder, then poll the rules registry while
-     the overlay is open: the first NEW workflow row (not in the baseline) is
-     the created one. This keeps the save pipeline 100% canonical — no second
-     workflow engine, no metadata duplication. */
-  const [created, setCreated] = useState(null);
-  useEffect(() => {
-    if (created) return undefined;
-    const timer = setInterval(() => {
-      apiRequest("/api/platform/rules")
-        .then((response) => {
-          const fresh = (Array.isArray(response?.data) ? response.data : []).find((rule) => rule?.action?.type === "workflow" && !baseline.has(String(rule.id)));
-          if (fresh) setCreated(fresh);
-        })
-        .catch(() => {});
-    }, 1200);
-    return () => clearInterval(timer);
-  }, [created, baseline]);
-  useEffect(() => {
-    if (created) onCreated?.({ id: created.id, name: created.name });
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [created]);
+  // InlineNewWorkflowForm already returns the created workflow through onCreated.
+  // Avoid polling the full rules registry while this overlay is open.
   return (
     <div data-overlay-host="workflow-builder" className="space-y-4">
       <InlineNewWorkflowForm contextObjectKey={contextObjectKey} baseline={baseline} onCreated={onCreated} onCancel={onClose} />
-      {created ? null : null}
     </div>
   );
 }
