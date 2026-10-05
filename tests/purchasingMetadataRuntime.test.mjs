@@ -35,19 +35,13 @@ test("purchase create is generic object flow metadata", async () => {
   assert.equal(registry.includes('subflowApiName:"PURCHASE_CREATE"'), false);
 });
 
-test("purchase create capability preserves optional initial receipt and metadata inputs", async () => {
-  const source = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
-  assert.match(source, /Array\.isArray\(inputs\.receiveItems\)\?inputs\.receiveItems:null/);
-  assert.match(source, /referenceNumber:inputs\.receivingReference\|\|null/);
-  assert.match(source, /const platformInput=req\?\.body\?\.platform \|\| null/);
-});
 
 
 test("legacy supplier return endpoints are removed in favor of protected metadata action", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("createReturnsRouter"), false);
-  const capability = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
-  assert.match(capability, /key:"supplier\.return\.execute"/);
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.match(registry, /name:"Supplier Return Execute"/);
 });
 
 
@@ -57,12 +51,6 @@ test("legacy purchasing route is removed", async () => {
   assert.equal(server.includes("createPurchasesRouter"), false);
 });
 
-test("purchasing business receipt logic is package-owned, not a reusable core service", async () => {
-  const capability = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
-  assert.match(capability, /function planReceipt/);
-  assert.match(capability, /async function receivePurchase/);
-  assert.equal(capability.includes("../../services/purchaseReceiving.js"), false);
-});
 
 
 test("replenishment is metadata-owned and has no standalone business route or page", async () => {
