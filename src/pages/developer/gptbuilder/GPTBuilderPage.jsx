@@ -1361,6 +1361,43 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setSelectedElementIds([])
     setDirty(true)
   }
+  const autoNavigationEdges = () => {
+    const edges = [...(goToConnections || [])]
+    const seen = new Set(edges.map((edge) => `${edge.sourceId}->${edge.targetId}`))
+    const add = (sourceId, targetId, kind = 'layout') => {
+      if (!sourceId || !targetId || sourceId === targetId) return
+      const key = `${sourceId}->${targetId}`
+      if (!seen.has(key)) { seen.add(key); edges.push({ sourceId, targetId, kind }) }
+    }
+    const topLevel = elements.filter((item) => item.source === 'auto')
+    const nested = new Set([
+      ...topLevel.filter((item) => item.key === 'group').flatMap((item) => item.config?.memberIds || []),
+      ...topLevel.filter((item) => item.key === 'decision').flatMap((item) => [
+        ...(item.config?.outcomes || []).flatMap((outcome) => outcome.branch || []),
+        ...(item.config?.defaultBranch || []),
+        ...(item.config?.faultBranch || []),
+      ]),
+    ])
+    const linear = topLevel.filter((item) => !nested.has(item.id))
+    linear.forEach((item, index) => add(index ? linear[index - 1].id : 'start', item.id))
+    topLevel.filter((item) => item.key === 'decision').forEach((decision) => {
+      const branches = [
+        ...(decision.config?.outcomes || []).map((outcome) => outcome.branch || []),
+        decision.config?.defaultBranch || [],
+        decision.config?.faultBranch || [],
+      ].filter((branch) => branch.length)
+      branches.forEach((branch) => {
+        add(decision.id, branch[0], 'branch')
+        branch.slice(1).forEach((id, index) => add(branch[index], id, 'branch'))
+      })
+    })
+    topLevel.filter((item) => item.key === 'group').forEach((group) => {
+      const members = group.config?.memberIds || []
+      if (members.length) add(group.id, members[0], 'group')
+      members.slice(1).forEach((id, index) => add(members[index], id, 'group'))
+    })
+    return edges
+  }
   const focusAutoElement = (direction, axis = 'vertical') => {
     if (layout !== 'auto') return
     const nodes = [...document.querySelectorAll('[data-gptb-auto-focus="true"]')]
@@ -1368,18 +1405,18 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     const activeNode = nodes.find((node) => node === document.activeElement || node.contains(document.activeElement))
     if (axis === 'horizontal' && activeNode) {
       const activeId = activeNode.getAttribute('data-gptb-element-id') || 'start'
-      const edge = direction > 0
-        ? goToConnections.find((row) => String(row.sourceId) === String(activeId))
-        : goToConnections.find((row) => String(row.targetId) === String(activeId))
-      const targetId = direction > 0 ? edge?.targetId : edge?.sourceId
-      if (targetId) {
-        const target = nodes.find((node) => String(node.getAttribute('data-gptb-element-id') || 'start') === String(targetId))
-        if (target) { target.focus?.(); return }
-      }
+      const edges = autoNavigationEdges()
+      const candidates = direction > 0
+        ? edges.filter((row) => String(row.sourceId) === String(activeId)).map((row) => row.targetId)
+        : edges.filter((row) => String(row.targetId) === String(activeId)).map((row) => row.sourceId)
+      const target = candidates.map((targetId) => nodes.find((node) => String(node.getAttribute('data-gptb-element-id') || 'start') === String(targetId))).find(Boolean)
+      if (target) { target.focus?.(); target.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); return }
     }
     const activeIndex = nodes.findIndex((node) => node === activeNode)
     const nextIndex = activeIndex < 0 ? (direction > 0 ? 0 : nodes.length - 1) : Math.max(0, Math.min(nodes.length - 1, activeIndex + direction))
-    nodes[nextIndex]?.focus?.()
+    const target = nodes[nextIndex]
+    target?.focus?.()
+    target?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }
   const switchPanelFocus = () => {
     const panels = [
@@ -1444,18 +1481,23 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setDirty(true)
   }
 
+  const connectSourceRef = useRef('start')
   const beginConnectToElement = () => {
     if (!elements.length) return
+    const focusedId = focusedAutoElementId()
+    const selectedId = selectedElementIds.length === 1 ? selectedElementIds[0] : ''
+    connectSourceRef.current = selectedId || focusedId || elements.filter((element) => element.source === 'auto').at(-1)?.id || 'start'
     setConnectMode(true)
     setElementPickerOpen(false)
     setSelecting(false)
     setSelectedElementIds([])
   }
   const connectToElement = (targetId) => {
-    const sourceId = elements.filter((element) => element.source === 'auto').at(-1)?.id || 'start'
+    const sourceId = connectSourceRef.current || 'start'
     if (targetId === sourceId) return
-    setGoToConnections((current) => [...current.filter((edge) => edge.sourceId !== sourceId), { sourceId, targetId }])
+    setGoToConnections((current) => [...current.filter((edge) => String(edge.sourceId) !== String(sourceId)), { sourceId, targetId }])
     setConnectMode(false)
+    connectSourceRef.current = 'start'
     setDirty(true)
   }
 
