@@ -6,7 +6,6 @@ import { executeTenantReleaseUpgrade } from "../services/appReleaseManager.js";
 import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing.js";
 
 import { packageVersionHasEntitlement, reconcileCompanyPackageEntitlements } from "../services/packageEntitlements.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { executeWorkflowActions } from "../services/platformWorkflow.js";
 import { assertTrustedPackageManifest } from "../services/trustedPackages.js";
 
