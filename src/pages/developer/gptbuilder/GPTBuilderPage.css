@@ -341,3 +341,11 @@
   .gptb-modal-backdrop,.gptb-element-editor-modal-backdrop{padding:0}
   .gptb-properties-modal,.gptb-element-dialog{width:100vw;max-height:100vh;height:100%;border:0;border-radius:0}
 }
+
+.gptb-manager-unused{display:flex;align-items:center;gap:7px;padding:7px 12px;border-bottom:1px solid #ecebea;font-size:11px;color:#3e3e3c}
+.gptb-manager-unused input{margin:0}
+.gptb-manager-resource-group{border-top:1px solid #f0f0f0}
+.gptb-manager-resource-group h4{display:flex;align-items:center;justify-content:space-between;margin:0;padding:7px 12px;background:#fafaf9;color:#514f4d;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.gptb-manager-resource-group h4 span{font-weight:500;color:#706e6b}
+.gptb-manager-detail-actions{display:flex;gap:10px;align-items:center}
+.gptb-inline-action.is-danger{color:#ba0517}
