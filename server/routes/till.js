@@ -1,5 +1,5 @@
 import express from "express";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeCapabilityWorkflow } from "../services/systemWorkflowRuntime.js";
 
 export default function createTillRouter({ authenticate, authorize, db, pool, getRolePermissionCodes, canViewCompanyCustomers }) {
   const router = express.Router();
@@ -19,11 +19,11 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
     requestedCashOut = 0,
     terminalId = null,
   } = {}) {
-    const execution = await executeSystemWorkflow({
+    const execution = await executeCapabilityWorkflow({
       db,
       companyId: req.user.companyId,
       userId: req.user.id || null,
-      systemKey: "flow:till.cash.position",
+      capabilityType: "action", capabilityKey: "TILL_CASH_POSITION",
       req,
       input: {
         openingCash: Number(openingCash) || 0,
