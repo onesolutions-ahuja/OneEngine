@@ -102,7 +102,7 @@ test('successful login finalization avoids a second session assurance update', a
   const security = await read('../server/services/identitySecurity.js')
   assert.match(server, /assuranceLevel: effectiveAssurance\.passwordAssurance/)
   const loginStart = server.indexOf('app.post("/api/auth/login"')
-  const loginEnd = server.indexOf('/*\n| CURRENT USER', loginStart)
+  const loginEnd = server.indexOf('| CURRENT USER', loginStart)
   const loginSource = server.slice(loginStart, loginEnd > loginStart ? loginEnd : undefined)
   assert.equal(loginSource.includes('UPDATE identity_sessions SET assurance_level=$2'), false)
   assert.match(security, /INSERT INTO identity_sessions\(id,company_id,user_id,expires_at,ip_address,user_agent,auth_method,origin_host,assurance_level,assurance_verified_at\)/)
