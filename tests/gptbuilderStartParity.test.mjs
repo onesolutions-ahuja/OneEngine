@@ -66,3 +66,21 @@ test('Screen keeps dialog Done-Cancel editing while other auto-layout elements u
   assert.match(props, /const useDialog = layout === 'free' \|\| isScreen/)
   assert.doesNotMatch(props, /const isAction = instance\?\.key === 'action'/)
 })
+
+
+test('Phase 1 keeps Wait elements autolaunched-only and excludes AI/Apex surfaces', async () => {
+  const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const decision = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDecision.jsx', import.meta.url), 'utf8')
+  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\)\) return flowType === 'autolaunched'/)
+  assert.doesNotMatch(page, /Apex-Defined/)
+  assert.doesNotMatch(decision, /logicMode === 'ai'/)
+})
+
+test('Phase 1 data resource paths do not recurse on apiName resources', async () => {
+  for (const file of ['GPTBuilderGetRecords.jsx', 'GPTBuilderCreateRecords.jsx']) {
+    const source = await readFile(new URL('../src/pages/developer/gptbuilder/' + file, import.meta.url), 'utf8')
+    assert.doesNotMatch(source, /resource\?\.apiName \? resourcePath\(resource\)/)
+    assert.match(source, /variables\.\$\{resource\.apiName\}/)
+  }
+})
