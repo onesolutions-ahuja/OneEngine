@@ -2637,7 +2637,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, req, object, companyId, record, previousRecord, workflowVariables = {} }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "create" });
+      await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "view" });
       const table = targetObject.source_table;
       const fieldResult = await db(
         "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
@@ -2885,6 +2885,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, req, object, companyId, fields, record, previousRecord, workflowVariables = {} }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "create" });
       const table = targetObject.source_table;
       const runtimeCompanyId = req?.user?.companyId || companyId || null;
       const runtimeStoreId = req?.user?.storeId || null;
@@ -3046,7 +3047,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
     },
     async: false,
-    requiredPermissions: ["records.update"],
+    requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, object, req, companyId, fields, record, previousRecord, workflowVariables = {} }) => {
       const context = { record, previousRecord, req, object, workflowVariables };
       const runtimeCompanyId = req?.user?.companyId || companyId || null;
@@ -3054,6 +3055,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
       const updateById = async ({ targetObject, recordId, payload }) => {
         if (!recordId) throw new Error("Update Record requires a record ID");
+        await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "edit" });
         const entries = Object.entries(payload || {}).filter(([key]) => key !== "id");
         if (!entries.length) return null;
         const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
@@ -3094,7 +3096,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
       if (action.objectKey && Array.isArray(action.conditions)) {
         const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "edit" });
         const fieldResult = await db(
           "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
           [targetObject.id, runtimeCompanyId]
@@ -3304,6 +3305,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
       const deleteById = async ({ targetObject, recordId }) => {
         if (!recordId) return null;
+        await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "delete" });
         const table = targetObject.source_table;
         const hasActive = await db(
           "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'active'",
@@ -3345,7 +3347,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
       if (action.objectKey && Array.isArray(action.conditions) && action.conditions.length) {
         const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
-      await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "delete" });
         const fieldResult = await db(
           "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
           [targetObject.id, runtimeCompanyId]
