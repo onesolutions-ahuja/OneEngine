@@ -48,13 +48,9 @@ function login() {
       expect(token, "issued onepos auth token").to.be.a("string").and.not.be.empty;
     });
   }, {
-    validate() {
-      cy.visit("/");
-      cy.window().then((win) => {
-        const token = win.sessionStorage.getItem("onepos_token") || win.localStorage.getItem("onepos_token");
-        expect(token, "restored onepos auth token").to.be.a("string").and.not.be.empty;
-      });
-    },
+    // Cypress restores the cached session state directly. Avoid visiting the
+    // app just to validate every test: that doubled API/bootstrap traffic for
+    // each route audit. The first real route visit remains the validation.
     cacheAcrossSpecs: true,
   });
 }
