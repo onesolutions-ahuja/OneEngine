@@ -13,8 +13,8 @@ on:
       - "server/database/init.js"
 
 concurrency:
-  group: appointment-workflow-debug-${{ github.ref }}
-  cancel-in-progress: true
+  group: oneengine-live-e2e
+  cancel-in-progress: false
 
 permissions:
   contents: read

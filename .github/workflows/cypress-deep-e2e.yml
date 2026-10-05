@@ -8,8 +8,8 @@ on:
     types: [completed]
 
 concurrency:
-  group: oneengine-cypress-deep-e2e
-  cancel-in-progress: true
+  group: oneengine-live-e2e
+  cancel-in-progress: false
 
 jobs:
   deep-e2e:
