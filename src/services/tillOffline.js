@@ -146,7 +146,7 @@ export async function syncOfflineCashSales(apiRequest) {
     if (entry.status === 'failed') continue
     try {
       const response = await apiRequest('/api/platform/runtime/objects/sale/buttons/till_complete_sale/execute', { method: 'POST', body: JSON.stringify({ context: { source: 'OFFLINE_SYNC' }, inputs: { sale: { ...(entry.payload.sale || {}), offline_created: true, sync_status: 'SYNCED' }, items: entry.payload.items || [], payments: entry.payload.payments || [] } }) })
-      const saleId = response?.data?.results?.find?.((step) => step?.stepId === 'set_sale_id')?.result?.value || response?.data?.saleId || null
+      const saleId = response?.data?.results?.find?.((step) => step?.stepId === 'create_sale')?.result?.created?.id || null
       if (!response?.success || !saleId) throw Object.assign(new Error(response?.message || 'Unconfirmed sale response'), { serverResponse: true })
       await transaction('readwrite', (store) => store.delete(entry.id))
       const stats = readSyncStats()
