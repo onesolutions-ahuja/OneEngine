@@ -341,3 +341,90 @@
   .gptb-modal-backdrop,.gptb-element-editor-modal-backdrop{padding:0}
   .gptb-properties-modal,.gptb-element-dialog{width:100vw;max-height:100vh;height:100%;border:0;border-radius:0}
 }
+
+
+/* Phase 1: Salesforce Flow Builder shell parity tokens */
+.gptb-root{
+  --gptb-font:"Salesforce Sans",Arial,"Helvetica Neue",sans-serif;
+  --gptb-text:#181818;
+  --gptb-text-weak:#444;
+  --gptb-text-muted:#706e6b;
+  --gptb-brand:#0176d3;
+  --gptb-brand-hover:#014486;
+  --gptb-brand-soft:#eef4ff;
+  --gptb-border:#c9c9c9;
+  --gptb-border-soft:#e5e5e5;
+  --gptb-surface:#fff;
+  --gptb-surface-alt:#f3f3f3;
+  --gptb-success:#2e844a;
+  --gptb-error:#ba0517;
+  --gptb-warning:#fe9339;
+  --gptb-focus:#1b96ff;
+  --gptb-radius:4px;
+  --gptb-shadow-menu:0 2px 4px rgba(0,0,0,.16);
+  font-family:var(--gptb-font);
+}
+.gptb-builder{background:var(--gptb-surface);color:var(--gptb-text)}
+.gptb-buttonbar{
+  height:48px;flex-basis:48px;gap:8px;padding:0 12px;
+  border-bottom:1px solid var(--gptb-border);background:var(--gptb-surface);
+  box-shadow:0 1px 2px rgba(0,0,0,.06);
+}
+.gptb-brand{min-width:188px;gap:8px}
+.gptb-brand-icon{width:32px;height:32px;border-radius:6px;background:var(--gptb-brand)}
+.gptb-brand strong{font-size:14px;line-height:18px;font-weight:700;color:var(--gptb-text)}
+.gptb-brand small{max-width:150px;font-size:11px;line-height:14px;color:var(--gptb-text-muted)}
+.gptb-status{gap:6px;font-size:12px;line-height:16px;color:var(--gptb-text-muted)}
+.gptb-status-dot{width:8px;height:8px;background:var(--gptb-error)}
+.gptb-toolbar{gap:2px;min-height:36px}
+.gptb-toolbar>button,.gptb-layout-button{
+  min-width:32px;height:32px;padding:0 8px;border-radius:var(--gptb-radius);
+  color:var(--gptb-text-weak);background:var(--gptb-surface);
+}
+.gptb-toolbar>button:hover:not(:disabled),.gptb-layout-button:hover{background:var(--gptb-surface-alt)}
+.gptb-toolbar>button:focus-visible,.gptb-layout-button:focus-visible,.gptb-button:focus-visible,.gptb-icon-button:focus-visible{
+  outline:2px solid var(--gptb-focus);outline-offset:2px;
+}
+.gptb-toolbar>button.is-on{background:var(--gptb-brand-soft);color:var(--gptb-brand)}
+.gptb-toolbar>button.is-brand{background:var(--gptb-success);color:#fff}
+.gptb-toolbar>button:disabled{opacity:.45}
+.gptb-text-tool{font-size:12px;font-weight:700}
+.gptb-toolbar-separator{height:24px;margin:0 5px;background:var(--gptb-border-soft)}
+.gptb-layout-button{border-color:var(--gptb-border);font-size:12px;color:var(--gptb-text)}
+.gptb-layout-menu{
+  top:36px;width:164px;padding:4px;border-color:var(--gptb-border);
+  border-radius:var(--gptb-radius);box-shadow:var(--gptb-shadow-menu);
+}
+.gptb-layout-menu button{height:34px;padding:0 10px;font-size:12px}
+.gptb-button{min-height:32px;padding:0 16px;border-color:var(--gptb-border);font-size:12px;border-radius:var(--gptb-radius)}
+.gptb-button.is-brand{border-color:var(--gptb-brand);background:var(--gptb-brand)}
+.gptb-button.is-brand:hover:not(:disabled){background:var(--gptb-brand-hover)}
+.gptb-icon-button{width:32px;height:32px;border-radius:var(--gptb-radius)}
+.gptb-workspace{background:var(--gptb-surface-alt)}
+.gptb-toolbox{border-right-color:var(--gptb-border);background:var(--gptb-surface)}
+.gptb-toolbox-tabs{height:44px;border-bottom-color:var(--gptb-border-soft)}
+.gptb-toolbox-tabs>button:not(.gptb-toolbox-close){height:44px;padding:0 16px;font-size:12px}
+.gptb-toolbox-tabs>button.is-active{border-bottom-color:var(--gptb-brand);color:var(--gptb-brand)}
+.gptb-config-panel,.gptb-diagnostics,.gptb-element-properties-panel,.gptb-element-editor-shell{
+  border-left-color:var(--gptb-border);background:var(--gptb-surface);
+}
+.gptb-config-panel>header,.gptb-diagnostics>header{min-height:56px;padding:0 12px 0 16px}
+.gptb-config-panel>header strong,.gptb-diagnostics>header strong{font-size:14px;line-height:18px}
+.gptb-config-panel>header small{font-size:11px;line-height:14px}
+.gptb-config-body h3{font-size:13px;line-height:18px}
+.gptb-config-body label,.gptb-properties-body label{font-size:12px;line-height:16px}
+.gptb-config-body input,.gptb-config-body select,.gptb-config-body textarea,.gptb-properties-body input,.gptb-properties-body select,.gptb-properties-body textarea{
+  min-height:32px;font-size:12px;line-height:16px;
+}
+.gptb-properties-modal{border-color:var(--gptb-border);border-radius:8px}
+.gptb-modal-backdrop{background:rgba(8,7,7,.48)}
+.gptb-toast{top:56px;font-size:12px;line-height:16px}
+.gptb-diagnostic b{font-size:12px;line-height:16px}
+.gptb-diagnostic small{font-size:11px;line-height:15px}
+.gptb-canvas-help{font-size:11px;line-height:15px}
+.gptb-zoom button{height:32px;min-width:32px}
+.gptb-zoom .gptb-zoom-value{min-width:48px;font-size:11px}
+@media(max-width:760px){
+  .gptb-buttonbar{height:48px;flex-basis:48px}
+  .gptb-toolbox{top:48px}
+}
