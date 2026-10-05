@@ -1316,3 +1316,21 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 18 closes analytics agent and AI gaps', async () => {
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ const analytics=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAnalyticsPanel.jsx',import.meta.url),'utf8')
+ const ai=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAIAssistant.jsx',import.meta.url),'utf8')
+ const agent=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderRunAgent.jsx',import.meta.url),'utf8')
+ for(const token of ['Average Duration','Total Runs','Completed','Failed'])assert.ok(analytics.includes(token),token)
+ assert.match(page,/Analytics/)
+ assert.match(page,/Flow Assistant/)
+ assert.match(ai,/validateProposal/)
+ assert.match(ai,/unsupported Builder element/)
+ assert.match(ai,/Validated Builder Changes/)
+ assert.match(ai,/Undo/)
+ assert.match(agent,/Agent Information/)
+ assert.match(agent,/Available Actions & Tools/)
+ assert.match(agent,/Agent Type/)
+})
