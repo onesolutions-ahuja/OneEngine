@@ -972,16 +972,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       return
     }
     if (type === 'workflow') {
-      if (config.checkoutFlow === true) {
-        const paymentMode = String(config.paymentMode || '')
-        try {
-          const selected = await runPaymentModeFlow(paymentMode, {}, button)
-          return completeSale(selected.paymentMode, { paymentFlowValidated: true })
-        } catch (err) {
-          setError(err?.message || 'Payment method validation failed.')
-          return
-        }
-      }
       if (config.policyEvent) {
         const allowed = await runReceiptPolicy(config.policyEvent)
         if (!allowed) return
