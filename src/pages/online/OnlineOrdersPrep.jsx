@@ -150,9 +150,9 @@ export default function OnlineOrdersPrep({ permissions = null }) {
    */
   useEffect(() => {
     const timer = setInterval(() => {
-      if (Object.keys(busyActions).length || completeTarget) return;
+      if (document.hidden || Object.keys(busyActions).length || completeTarget) return;
       loadOrders().catch((err) => console.error("Order Prep refresh:", err));
-    }, 20000);
+    }, 60000);
     return () => clearInterval(timer);
   }, [busyActions, completeTarget, loadOrders]);
 
@@ -186,7 +186,7 @@ export default function OnlineOrdersPrep({ permissions = null }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Auto-refreshes every 20s</span>
+          <span className="text-xs text-slate-400">Auto-refreshes every 60s</span>
           <button onClick={loadAll} className="h-10 px-4 bg-white border border-slate-200 rounded-lg text-sm flex items-center gap-2 hover:bg-slate-50">
             <RefreshCw size={16} />
             Refresh
