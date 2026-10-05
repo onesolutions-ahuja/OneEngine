@@ -55,58 +55,6 @@ export default function createProductsRouter({ authenticate, authorize, db: doma
   });
 
   /*
-   * POST /api/products/misc-line
-   *
-   * Till "Misc Item" support. sale_items.product_id is NOT NULL, so a
-   * manual-price line needs a catalogue row to reference. This endpoint
-   * find-or-creates the company's ONE invisible MISC placeholder product
-   * (sku='MISC', inactive — it never appears in the till grid, global
-   * search or product lists, and its stock is never touched: misc lines
-   * carry item_type='MISC' and the sale engine skips stock movement for
-   * them). The cashier's typed description is stored per-line on
-   * sale_items.product_name, so no product is created per transaction.
-   *
-   * Permission: sale.create (the same gate as completing the sale itself).
-   */
-  router.post("/products/misc-line", authenticate, authorize("sale.create"), async (req, res) => {
-    try {
-      const inserted = await db(
-        `
-        INSERT INTO products (
-          company_id,
-          name,
-          sku,
-          price,
-          cost_price,
-          vat_rate,
-          vat_applicable,
-          track_stock,
-          stock_quantity,
-          active
-        )
-        VALUES ($1, 'Misc Item', 'MISC', 0, 0, 20, false, false, 0, false)
-        ON CONFLICT (company_id) WHERE sku = 'MISC' AND active = false
-        DO UPDATE SET updated_at = NOW()
-        RETURNING id
-        `,
-        [req.user.companyId]
-      );
-
-      res.status(201).json({
-        success: true,
-        data: { productId: inserted.rows[0].id },
-      });
-    } catch (error) {
-      console.error("Misc placeholder product error:", error);
-
-      res.status(500).json({
-        success: false,
-        message: "Unable to prepare misc item",
-      });
-    }
-  });
-
-  /*
    * GET /api/products/most-selling
    *
    * Till "Most Selling" pseudo-category. Ranks products by how FREQUENTLY
@@ -215,12 +163,6 @@ export default function createProductsRouter({ authenticate, authorize, db: doma
           ON c.id = p.category_id
         WHERE p.company_id = $1
           AND p.active = true
-          /* Exclude only the MISC placeholder. The legacy "sku <> 'MISC'" form is NOT NULL-safe:
-           * for a row with sku IS NULL (e.g. every product added from the
-           * Global Product Master, which has no SKU) the comparison yields
-           * NULL and the row silently disappears from the Products page and
-           * the till grid even though the create returned 201. */
-          AND p.sku IS DISTINCT FROM 'MISC'
         ORDER BY p.name
         `,
         [req.user.companyId]
