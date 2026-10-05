@@ -2231,23 +2231,6 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Checkout Session Preflight",
-          apiName: "ONETILL_SESSION_PREFLIGHT",
-          inputContract: [
-            { name: "tillSessionId", label: "Till Session", type: "text", required: false },
-            { name: "online", label: "Online", type: "boolean", required: true },
-          ],
-          outputContract: [
-            { name: "requiresSession", label: "Requires Open Till Session", type: "boolean", source: "variables.requiresSession" },
-            { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
-          ],
-          actions: [
-            { id:"session_required",label:"1. Decide If Till Session Is Required",apiName:"session_required",key:"ASSIGNMENT",variableName:"requiresSession",variableType:"boolean",operator:"set",value:{path:"$record.online"} },
-            { id:"session_exists",label:"2. Check Open Till Session Record",apiName:"session_exists",key:"FORMULA",resourceName:"hasTillSession",resultType:"boolean",expression:'COALESCE(tillSessionId,"") != ""',inputs:{tillSessionId:{path:"$record.tillSessionId"}} },
-            { id:"session_allowed",label:"3. Decide If Checkout Can Continue",apiName:"session_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"!requiresSession || hasTillSession",inputs:{requiresSession:{path:"variables.requiresSession"},hasTillSession:{path:"variables.hasTillSession"}} },
-          ],
-        },
-        {
           name: "OneTill - Process Payment",
           apiName: "ONETILL_PAYMENT_MODE",
           inputContract: [
