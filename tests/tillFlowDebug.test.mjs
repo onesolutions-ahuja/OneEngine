@@ -5,8 +5,8 @@ import { executeWorkflowActions, getWorkflowActionDefinition } from "../server/s
 
 const systemFlows = new Map(
   systemWorkflowDefinitions()
-    .filter((flow) => ["flow:till.", "flow:sale."].some((prefix) => String(flow?.systemKey || "").startsWith(prefix)))
-    .map((flow) => [flow.systemKey, flow.action])
+    .filter((flow) => flow?.action?.capabilityType === "action" && /^(TILL_|SALE_)/.test(String(flow?.action?.capabilityKey || "")))
+    .map((flow) => [flow.action.capabilityKey, flow.action])
 );
 
 function permissionDb({ products = [], inserted = [] } = {}) {
@@ -61,9 +61,9 @@ const req = {
   _workflowEffectivePermissionSets: [],
 };
 
-async function debugSystem(systemKey, inputs) {
-  const flow = systemFlows.get(systemKey);
-  assert.ok(flow, systemKey + " missing");
+async function debugSystem(capabilityKey, inputs) {
+  const flow = systemFlows.get(capabilityKey);
+  assert.ok(flow, capabilityKey + " missing");
   const workflowVariables = { variables:{ ...inputs }, steps:{} };
   const results = await executeWorkflowActions({
     actions:flow.actions,
@@ -80,7 +80,7 @@ async function debugSystem(systemKey, inputs) {
 }
 
 test("Till system Flows are present and validate", () => {
-  for (const key of ["flow:till.stock.validate","flow:till.age.verify","flow:till.payment.validate","flow:till.split.payment.validate","flow:till.cash.position","flow:till.receipt.qr","flow:sale.totals.calculate"]) {
+  for (const key of ["TILL_STOCK_VALIDATE","TILL_AGE_VERIFY","TILL_PAYMENT_VALIDATE","TILL_SPLIT_PAYMENT_VALIDATE","TILL_CASH_POSITION","TILL_RECEIPT_QR","SALE_TOTALS_CALCULATE"]) {
     const flow = systemFlows.get(key);
     assert.ok(flow, key + " missing");
     for (const action of flow.actions) {
@@ -92,7 +92,7 @@ test("Till system Flows are present and validate", () => {
 });
 
 test("Sale totals Flow replaces hardcoded basket VAT and discount math", async () => {
-  const run = await debugSystem("flow:sale.totals.calculate", {
+  const run = await debugSystem("SALE_TOTALS_CALCULATE", {
     basket: [{ price:10, quantity:2, vatApplicable:true, vatRate:20, discountType:null, discountValue:0 }],
     vatEnabled:true,
     defaultVatRate:0.2,
@@ -108,7 +108,7 @@ test("Sale totals Flow replaces hardcoded basket VAT and discount math", async (
 });
 
 test("Till cash position Flow owns drawer policy", async () => {
-  const run = await debugSystem("flow:till.cash.position", {
+  const run = await debugSystem("TILL_CASH_POSITION", {
     openingCash:100,
     cashIn:10,
     cashOut:20,
@@ -123,16 +123,16 @@ test("Till cash position Flow owns drawer policy", async () => {
 });
 
 test("Till stock Flow debug blocks shortfalls and allows available stock", async () => {
-  let run = await debugSystem("flow:till.stock.validate", { hasShortfall:true });
+  let run = await debugSystem("TILL_STOCK_VALIDATE", { hasShortfall:true });
   assert.equal(run.workflowVariables.variables.allowed, false);
-  run = await debugSystem("flow:till.stock.validate", { hasShortfall:false });
+  run = await debugSystem("TILL_STOCK_VALIDATE", { hasShortfall:false });
   assert.equal(run.workflowVariables.variables.allowed, true);
 });
 
 test("Till age Flow debug covers required and verified paths", async () => {
-  let run = await debugSystem("flow:till.age.verify", { requiresAgeVerification:true, ageVerified:false });
+  let run = await debugSystem("TILL_AGE_VERIFY", { requiresAgeVerification:true, ageVerified:false });
   assert.equal(run.workflowVariables.variables.allowed, false);
-  run = await debugSystem("flow:till.age.verify", { requiresAgeVerification:true, ageVerified:true });
+  run = await debugSystem("TILL_AGE_VERIFY", { requiresAgeVerification:true, ageVerified:true });
   assert.equal(run.workflowVariables.variables.allowed, true);
 });
 
@@ -151,13 +151,13 @@ test("Till payment Flow debug is metadata-driven for cash, connector, credit and
     cashReceived:20,
     total:10,
   };
-  let run = await debugSystem("flow:till.payment.validate", base);
+  let run = await debugSystem("TILL_PAYMENT_VALIDATE", base);
   assert.equal(run.workflowVariables.variables.allowed, true);
 
-  run = await debugSystem("flow:till.payment.validate", { ...base, cashReceived:5 });
+  run = await debugSystem("TILL_PAYMENT_VALIDATE", { ...base, cashReceived:5 });
   assert.equal(run.workflowVariables.variables.allowed, false);
 
-  run = await debugSystem("flow:till.payment.validate", {
+  run = await debugSystem("TILL_PAYMENT_VALIDATE", {
     ...base,
     paymentMode:"card",
     allowOffline:false,
@@ -167,7 +167,7 @@ test("Till payment Flow debug is metadata-driven for cash, connector, credit and
   });
   assert.equal(run.workflowVariables.variables.allowed, false);
 
-  run = await debugSystem("flow:till.payment.validate", {
+  run = await debugSystem("TILL_PAYMENT_VALIDATE", {
     ...base,
     paymentMode:"paypal",
     allowOffline:false,
@@ -177,7 +177,7 @@ test("Till payment Flow debug is metadata-driven for cash, connector, credit and
   });
   assert.equal(run.workflowVariables.variables.allowed, true);
 
-  run = await debugSystem("flow:till.payment.validate", {
+  run = await debugSystem("TILL_PAYMENT_VALIDATE", {
     ...base,
     paymentMode:"customer_credit",
     allowOffline:false,
@@ -187,7 +187,7 @@ test("Till payment Flow debug is metadata-driven for cash, connector, credit and
   });
   assert.equal(run.workflowVariables.variables.allowed, false);
 
-  run = await debugSystem("flow:till.payment.validate", {
+  run = await debugSystem("TILL_PAYMENT_VALIDATE", {
     ...base,
     paymentMode:"gift_card",
     allowOffline:false,
@@ -200,7 +200,7 @@ test("Till payment Flow debug is metadata-driven for cash, connector, credit and
 
 test("Till split payment Flow debug calculates paid total, remaining, duplicates and allowed methods", async () => {
   const allowedMethodsText = "|cash|card|gift_card|";
-  let run = await debugSystem("flow:till.split.payment.validate", {
+  let run = await debugSystem("TILL_SPLIT_PAYMENT_VALIDATE", {
     payments: [{ paymentMethod:"cash", amount:4 }, { paymentMethod:"card", amount:6 }],
     total:10,
     allowedMethodsText,
@@ -209,7 +209,7 @@ test("Till split payment Flow debug calculates paid total, remaining, duplicates
   assert.equal(run.workflowVariables.variables.remaining, 0);
   assert.equal(run.workflowVariables.variables.allowed, true);
 
-  run = await debugSystem("flow:till.split.payment.validate", {
+  run = await debugSystem("TILL_SPLIT_PAYMENT_VALIDATE", {
     payments: [{ paymentMethod:"cash", amount:4 }, { paymentMethod:"card", amount:5 }],
     total:10,
     allowedMethodsText,
@@ -217,14 +217,14 @@ test("Till split payment Flow debug calculates paid total, remaining, duplicates
   assert.equal(run.workflowVariables.variables.remaining, 1);
   assert.equal(run.workflowVariables.variables.allowed, false);
 
-  run = await debugSystem("flow:till.split.payment.validate", {
+  run = await debugSystem("TILL_SPLIT_PAYMENT_VALIDATE", {
     payments: [{ paymentMethod:"cash", amount:5 }, { paymentMethod:"cash", amount:5 }],
     total:10,
     allowedMethodsText,
   });
   assert.equal(run.workflowVariables.variables.allowed, false);
 
-  run = await debugSystem("flow:till.split.payment.validate", {
+  run = await debugSystem("TILL_SPLIT_PAYMENT_VALIDATE", {
     payments: [{ paymentMethod:"unknown", amount:10 }],
     total:10,
     allowedMethodsText,
