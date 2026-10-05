@@ -545,7 +545,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       Promise.all([
         apiRequest(`/api/platform/workflow-runs?workflowId=${encodeURIComponent(workflowId)}&mode=DEBUG&limit=10`).catch(()=>({data:[]})),
         apiRequest('/api/platform/approval-users').catch(()=>({data:[]})),
-      ]).then(([runs,users])=>{if(live){setDebugRuns(Array.isArray(runs?.data)?runs.data:[]);setDebugUsers(Array.isArray(users?.data)?users.data:[])}})
+      ]).then(([runs,users])=>{if(live){setDebugRuns((Array.isArray(runs?.data)?runs.data:[]).filter((run)=>String(run.workflow_id||'')===String(workflowId)&&String(run.trigger_key||'').toUpperCase()==='DEBUG'));setDebugUsers(Array.isArray(users?.data)?users.data:[])}})
     }
     return () => { live = false }
   }, [mode, workflowId])
@@ -797,7 +797,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           {invalidAssertions ? <p className="gptb-execution-error" role="alert">Complete every assertion before saving or running the scenario.</p> : null}
         </> : null}
       </section> : null}
-      {mode === 'debug' ? <section><h3>Debug Context</h3><label><span>Run As</span><select value={runAsUserId} onChange={(event)=>setRunAsUserId(event.target.value)}><option value="">Current User</option>{debugUsers.map((user)=><option key={user.id} value={user.id}>{user.name||user.email||user.id}</option>)}</select><small>Debug respects the selected user's OneEngine RBAC and record access.</small></label>{debugRuns.length?<><h4>Recent Debug Runs</h4>{debugRuns.map((run)=><button type="button" className="gptb-inline-action" key={run.id} onClick={()=>setResult(run)}>{run.status||'Debug'} · {run.created_at||run.createdAt||run.id}</button>)}</>:null}</section> : null}
+      {mode === 'debug' ? <section><h3>Debug Context</h3><label><span>Run As</span><select value={runAsUserId} onChange={(event)=>setRunAsUserId(event.target.value)}><option value="">Current User</option>{debugUsers.map((user)=><option key={user.id} value={user.id}>{user.name||user.email||user.id}</option>)}</select><small>Debug respects the selected user's OneEngine RBAC and record access.</small></label>{debugRuns.length?<><h4>Recent Debug Runs</h4>{debugRuns.map((run)=><button type="button" className="gptb-inline-action" key={run.id} onClick={async()=>{try{const detail=await apiRequest(`/api/platform/workflow-runs/${encodeURIComponent(run.id)}`);setResult(detail?.data||run)}catch{setResult(run)}}}>{run.status||'Debug'} · {run.created_at||run.createdAt||run.id}</button>)}</>:null}</section> : null}
       {mode !== 'run' ? <section><h3>Select Run Options</h3>
         {mode === 'test' && flowType === 'record' ? <label className="gptb-properties-check"><input type="checkbox" checked={skipStartConditions} onChange={(event) => setSkipStartConditions(event.target.checked)}/><span>Skip start condition requirements</span></label> : null}
         {mode === 'test' && flowType === 'autolaunched' && waitElements.length ? <>
