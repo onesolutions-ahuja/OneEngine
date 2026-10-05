@@ -537,13 +537,12 @@
 
 .route-loading {
   position: absolute;
-  inset: 28px 0 var(--onepos-dock-clearance, 74px);
+  inset: 28px 0 0;
   z-index: 3;
   display: grid;
   place-items: center;
   color: #5f6670;
-  background: rgba(246,247,249,.82);
-  backdrop-filter: blur(8px);
+  background: #f5f5f6;
   font-size: 12px;
   font-weight: 650;
   pointer-events: none;
