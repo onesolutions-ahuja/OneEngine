@@ -30,6 +30,7 @@ import GPTBuilderAction, { actionRuntimeAction } from './GPTBuilderAction'
 import GPTBuilderRunAgent, { runAgentRuntimeAction } from './GPTBuilderRunAgent'
 import GPTBuilderScreen, { screenRuntimeAction } from './GPTBuilderScreen'
 import GPTBuilderSubflow, { subflowRuntimeAction } from './GPTBuilderSubflow'
+import GPTBuilderOrchestrationElement, { orchestrationRuntimeElement } from './GPTBuilderOrchestrationElement'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
@@ -1070,6 +1071,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (element.key === 'run_agent') return runAgentRuntimeAction(element)
         if (element.key === 'screen') return screenRuntimeAction(element)
         if (element.key === 'subflow') return subflowRuntimeAction(element)
+        if (['orchestration_stage','orchestration_interactive_step','orchestration_background_step'].includes(element.key)) return orchestrationRuntimeElement(element)
         return null
       }).filter(Boolean),
     },
@@ -2013,6 +2015,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                                                 currentFlowType={flow.key}
                                                 onConfiguredChange={setConfigured}
                                               />
+                                            : ['orchestration_stage','orchestration_interactive_step','orchestration_background_step'].includes(activeElement.key)
+                                              ? <GPTBuilderOrchestrationElement draft={draft} updateConfig={updateConfig} onConfiguredChange={setConfigured}/>
                                             : null}</GPTBuilderElementProperties> : null}
     </div>
     <button className="gptb-new-flow-link" onClick={onNew}>New Automation</button>
