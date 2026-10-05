@@ -217,19 +217,25 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       if (cachedScope) catalogueQuery.set('scope', cachedScope)
       const cataloguePath = `/api/products/catalogue${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
       const tillPromise = loadTill()
-      const [catalogueDelta, settingsResponse, buttonResponse, paymentResponse, permissionResponse] = await Promise.all([
+      const permissionPromise = loadSessionPermissions().catch(() => ({ permissions: [] }))
+      const paymentPromise = apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] }))
+      const [catalogueDelta, settingsResponse, buttonResponse] = await Promise.all([
         apiRequest(cataloguePath),
         apiRequest('/api/settings'),
         apiRequest('/api/platform/runtime/objects/sale/buttons'),
-        apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
-        loadSessionPermissions().catch(() => ({ permissions: [] })),
       ])
       const catalogue = mergeCatalogueResponse(usableCached?.catalogue, catalogueDelta)
-      const paymentRows = paymentResponse?.data || []
-      applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [], paymentRows)
-      cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
-      setPermissions(permissionResponse?.permissions || [])
+      // Products/settings/buttons are enough to make the Till browseable. Keep
+      // payment and permission refreshes out of first paint; checkout remains
+      // protected by the independently resolved till-session/payment state.
+      applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [], usableCached?.paymentMethods || [])
       setOnline(true)
+      setLoading(false)
+      const [paymentResponse, permissionResponse] = await Promise.all([paymentPromise, permissionPromise])
+      const paymentRows = paymentResponse?.data || []
+      setPaymentMethods(Array.isArray(paymentRows) ? paymentRows.filter((method) => method?.active !== false) : [])
+      setPermissions(permissionResponse?.permissions || [])
+      cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
       await tillPromise
     } catch (err) {
       if (usableCached) {
