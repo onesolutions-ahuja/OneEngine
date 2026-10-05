@@ -1052,12 +1052,19 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   const workflowExecute = [authenticate, authorizeWorkflowExecute];
   // Record CRUD is governed by Object permissions/RBAC, not by identity,
   // role names, or the Settings administration permission.
-  const recordAccess = [authenticate, resolveActingCompany];
+  const recordAccess = [authenticate, resolveActingCompany, resolvePlatformCompanyCustomerScope];
 
-  router.use("/platform", authenticate, async (req, res, next) => {
-    try { req.platformCompanyCustomers = await canViewCompanyCustomers(req.user, req); next(); }
-    catch (error) { next(error); }
-  });
+  // Keep generic platform metadata reads lightweight. Company-wide customer
+  // visibility is record-data scope and must not be resolved for every
+  // /platform metadata request (objects, fields, relationships, etc.).
+  async function resolvePlatformCompanyCustomerScope(req, res, next) {
+    try {
+      req.platformCompanyCustomers = await canViewCompanyCustomers(req.user, req);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  }
 
   router.get("/platform/search", authenticate, async (req, res, next) => {
     try {
