@@ -1009,8 +1009,6 @@ function PaymentSheet({ total, methods, online, customer, credit, onPay }) {
   const splitTotal = splitLines.reduce((sum, line) => sum + line.amount, 0)
   const remaining = Math.round((total - splitTotal) * 100) / 100
   const unavailable = !online && selected?.allowOffline !== true
-    || method === 'card' && !cardAvailable
-    || method === 'customer_credit' && !customer
 
   if (mode === 'split') return <div className="till-form">
     <p>Split the total across configured payment methods. The amounts must equal the sale total.</p>
@@ -1022,13 +1020,12 @@ function PaymentSheet({ total, methods, online, customer, credit, onPay }) {
   return <div className="till-form">
     <label>Payment method<select value={method} onChange={(e) => setMethod(e.target.value)}>{activeMethods.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
     {!online ? <p>Offline mode only allows payment methods marked for offline use.</p> : null}
-    {method === 'card' && !cardAvailable ? <p>No healthy payment connector is assigned to this till.</p> : null}
-    {method === 'customer_credit' ? <p>{customer ? `${customer.name || 'Customer'} · Available ${money(credit?.available || 0)}` : 'Select a customer before using customer credit.'}</p> : null}
+    {method === 'customer_credit' && customer ? <p>{customer.name || 'Customer'}</p> : null}
     {method === 'gift_card' ? <label>Gift card code<input value={giftCardCode} onChange={(e) => setGiftCardCode(e.target.value)} placeholder="Scan or enter gift card code"/></label> : null}
     {method === 'cash' ? <label>Cash received<input type="number" min="0" step="0.01" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} placeholder={money(total)}/></label> : null}
     <div className="till-form-actions">
       <button type="button" disabled={!online} onClick={() => setMode('split')}><Layers size={14}/> Split Payment</button>
-      <button type="button" className="till-primary" disabled={unavailable || (method === 'gift_card' && !giftCardCode.trim())} onClick={() => onPay(method, { cashReceivedOverride: method === 'cash' ? Number(cashReceived || total) : null, giftCardCode })}>Pay {selected?.label || method}</button>
+      <button type="button" className="till-primary" disabled={unavailable} onClick={() => onPay(method, { cashReceivedOverride: method === 'cash' ? Number(cashReceived || total) : null, giftCardCode })}>Pay {selected?.label || method}</button>
     </div>
   </div>
 }
