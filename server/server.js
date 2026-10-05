@@ -337,7 +337,7 @@ function normalizePrimaryDatabaseUrl(value) {
   return parsed.toString();
 }
 
-const primaryDatabaseUrl = process.env.DATABASE_URL
+const normalizedPrimaryDatabaseUrl = process.env.DATABASE_URL
   ? normalizePrimaryDatabaseUrl(process.env.DATABASE_URL)
   : "";
 
@@ -347,6 +347,14 @@ function normalizePemCertificate(value) {
   return certificate.includes("\\n") ? certificate.replace(/\\n/g, "\n") : certificate;
 }
 
+function stripConnectionStringSslOptions(value) {
+  const parsed = new URL(value);
+  for (const key of ["sslmode", "sslcert", "sslkey", "sslrootcert"]) {
+    parsed.searchParams.delete(key);
+  }
+  return parsed.toString();
+}
+
 const primaryDatabaseCaCertificate = normalizePemCertificate(process.env.DATABASE_CA_CERT);
 const primaryDatabaseSsl = primaryDatabaseCaCertificate
   ? {
@@ -354,6 +362,9 @@ const primaryDatabaseSsl = primaryDatabaseCaCertificate
       rejectUnauthorized: true,
     }
   : undefined;
+const primaryDatabaseUrl = primaryDatabaseCaCertificate
+  ? stripConnectionStringSslOptions(normalizedPrimaryDatabaseUrl)
+  : normalizedPrimaryDatabaseUrl;
 
 function describeDatabaseTarget(connectionString) {
   try {
