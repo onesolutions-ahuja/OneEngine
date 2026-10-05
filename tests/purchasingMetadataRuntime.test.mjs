@@ -68,10 +68,8 @@ test("supplier feed preview stays neutral and does not prescribe business endpoi
 
 
 test("legacy supplier return endpoints are removed in favor of protected metadata action", async () => {
-  const route = await readFile(new URL("../server/routes/returns.js", import.meta.url), "utf8");
-  assert.equal(route.includes('"/returns/supplier"'), false);
-  assert.equal(route.includes('"/supplier-returns/available"'), false);
-  assert.equal(route.includes("INSERT INTO supplier_ledger_entries"), false);
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.equal(server.includes("createReturnsRouter"), false);
   const capability = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
   assert.match(capability, /key:"supplier\.return\.execute"/);
 });
@@ -260,4 +258,12 @@ test("repo-wide manifest sweep keeps supplier accounts and product features read
   assert.equal(/router\.(post|put|patch|delete)\(/.test(features), false);
   assert.match(supplier, /router\.get\("\/supplier-invoices"/);
   assert.match(features, /router\.get\("\/products\/\:id\/variants"/);
+});
+
+
+test("repo-wide manifest sweep removes hidden legacy hospitality scan-go and held-sale stacks", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  for (const legacy of ["createHospitalityRouter", "createScanGoRouter", "createHeldSalesRouter"]) assert.equal(server.includes(legacy), false);
+  assert.match(metadata, /hospitality/);
 });
