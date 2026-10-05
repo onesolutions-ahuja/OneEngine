@@ -1104,7 +1104,7 @@ export default function createSalesRouter({
               db: (sql, params = []) => client.query(sql, params),
               companyId: req.user.companyId,
               userId: req.user.id || null,
-              systemKey: "flow:inventory.movement.create",
+              capabilityType: "function", capabilityKey: "inventory.movement.create",
               req,
               input: {
                 productId: stockLine.productId,
@@ -1116,7 +1116,7 @@ export default function createSalesRouter({
                 createdBy: req.user.id || "",
               },
               storeId: inventoryStoreId,
-              source: { type: "flow", capability: "inventory.movement.create" },
+              source: { type: "capability", capability: "inventory.movement.create" },
             });
 
             if (stockLine.productId === item.productId) p.stock_quantity = Number(movementExecution.result?.balance || 0);
