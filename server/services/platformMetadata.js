@@ -1862,6 +1862,38 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     if (saleObjectId) {
       const tillWorkflowDefinitions = [
         {
+          name: "OneTill - Hold Sale",
+          apiName: "ONETILL_HOLD_SALE",
+          inputContract: [
+            { name: "userId", label: "User", type: "text", required: false },
+            { name: "customerId", label: "Customer", type: "text", required: false },
+            { name: "items", label: "Items", type: "object", required: true },
+            { name: "discountType", label: "Discount Type", type: "text", required: false },
+            { name: "discountValue", label: "Discount Value", type: "number", required: false },
+          ],
+          outputContract: [],
+          actions: [
+            { id: "create_held_sale", label: "Create Held Sale", apiName: "create_held_sale", key: "CREATE_RECORD", objectKey: "held_sale",
+              fieldValues: { user_id: { path: "$record.userId" }, customer_id: { path: "$record.customerId" }, items: { path: "$record.items" }, discount_type: { path: "$record.discountType" }, discount_value: { path: "$record.discountValue" } } },
+          ],
+        },
+        {
+          name: "OneTill - Resume Held Sale",
+          apiName: "ONETILL_RESUME_HELD_SALE",
+          inputContract: [
+            { name: "heldSaleId", label: "Held Sale", type: "text", required: true },
+          ],
+          outputContract: [
+            { name: "heldSale", label: "Held Sale", type: "object", source: "steps.get_held_sale.record" },
+          ],
+          actions: [
+            { id: "get_held_sale", label: "Get Held Sale", apiName: "get_held_sale", key: "GET_RECORDS", objectKey: "held_sale",
+              filters: [{ field: "id", operator: "equals", value: { path: "$record.heldSaleId" } }], limit: 1, store: "first" },
+            { id: "delete_held_sale", label: "Delete Held Sale", apiName: "delete_held_sale", key: "DELETE_RECORD", objectKey: "held_sale",
+              recordId: { path: "$record.heldSaleId" } },
+          ],
+        },
+        {
           name: "OneTill - Open Till Session",
           apiName: "ONETILL_OPEN_SESSION",
           inputContract: [
@@ -2332,8 +2364,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       const targetUpdates = [
         ["till_session","modal","till", { modal: "till" }],
         ["till_customer","modal","customer", { modal: "customer" }],
-        ["till_hold","crud","held_sale", { operation: "create", uiHandler: "hold_sale" }],
-        ["till_resume","crud","held_sale", { operation: "list_resume", uiHandler: "resume_sale" }],
+        ["till_hold","workflow",tillWorkflowIds.get("ONETILL_HOLD_SALE"), {}],
+        ["till_resume","modal","held", { modal: "held", resumeButtonKey: "till_resume" }],
         ["till_returns","navigation","returns", { route: "returns" }],
         ["till_exchange","navigation","exchange", { route: "exchange" }],
         ["till_layaway","navigation","layaway", { route: "layaway" }],
