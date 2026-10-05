@@ -462,7 +462,7 @@ test('GPT Builder Wait Until Date matches Salesforce Enter Date and Get from Att
   assert.match(wait, /Select a Date or Date\/Time resource/)
   assert.match(page, /activeElement\.key === 'wait_until_date'/)
   assert.match(page, /waitUntilDateRuntimeAction\(element, resources\)/)
-  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\).*\['autolaunched', 'schedule'\]/s)
+  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\).*flowType === 'autolaunched'/s)
   assert.match(runtime, /key: "WAIT_UNTIL_DATE"/)
   assert.match(runtime, /relative unit must be Hours or Days/)
   assert.match(runtime, /specificTimeEnabled/)
@@ -524,7 +524,7 @@ test('GPT Builder Wait for Conditions matches Salesforce multi-configuration wai
   assert.match(wait, /waitConditionsRuntimeAction/)
   assert.match(page, /activeElement\.key === 'wait_conditions'/)
   assert.match(page, /waitConditionsRuntimeAction\(element\)/)
-  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\).*\['autolaunched', 'schedule'\]/s)
+  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\).*flowType === 'autolaunched'/s)
   assert.match(runtime, /waitConfigurations/)
   assert.match(runtime, /eligibleConfigurations/)
   assert.match(runtime, /defaultPath: true/)
@@ -552,7 +552,7 @@ test('GPT Builder Wait for Amount of Time matches Salesforce duration units resu
   assert.match(wait, /waitDurationRuntimeAction/)
   assert.match(page, /activeElement\.key === 'wait_duration'/)
   assert.match(page, /waitDurationRuntimeAction\(element\)/)
-  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\)\) return \['autolaunched', 'schedule'\]\.includes\(flowType\)/)
+  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\)\) return flowType === 'autolaunched'/)
   assert.match(runtime, /key: "WAIT_DURATION"/)
   assert.match(runtime, /unit must be Minutes, Hours, Days, or Months/)
   assert.match(runtime, /resumeAtSpecificTime/)
@@ -680,23 +680,13 @@ test('GPT Builder Loop matches current Salesforce collection direction and curre
   assert.doesNotMatch(runtime, /Loop requires at least one body step/)
 })
 
-test('GPT Builder Decision matches current Salesforce manual and AI outcome behavior', async () => {
+test('GPT Builder Decision matches current Salesforce manual outcome behavior with AI excluded', async () => {
   const decision = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDecision.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
-  for (const text of [
-    'Select Decision Logic',
-    'Define Manually (Default)',
-    'Define with AI (Advanced)',
-    'Decision Instructions',
-    'Outcome Order',
-    'Outcome Label',
-    'Outcome API Name',
-    'Condition Requirements',
-    'Custom Condition Logic Is Met',
-    'Default Outcome Label',
-    'New Outcome',
-  ]) assert.ok(decision.includes(text), text)
+  for (const text of ['Outcome Order','Default Outcome','Condition Requirements','Resource','Value']) assert.ok(decision.includes(text), text)
+  assert.equal(decision.includes('AI-Assisted'), false)
+  assert.equal(decision.includes('Decision Instructions'), false)
   assert.match(decision, /flowType !== 'record'/)
   assert.match(decision, /decisionRuntimeAction/)
   assert.match(page, /activeElement\.key === 'decision'/)
@@ -859,7 +849,7 @@ test('GPT Builder phase 3 element discovery matches the supported Salesforce cat
   assert.match(elements, /if \(element\.key === 'screen'\) return flowType === 'screen'/)
   assert.match(elements, /if \(element\.key === 'custom_error'\) return flowType === 'record'/)
   assert.match(elements, /if \(element\.key === 'group'\) return layout === 'auto'/)
-  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\)\) return \['autolaunched', 'schedule'\]\.includes\(flowType\)/)
+  assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\)\) return flowType === 'autolaunched'/)
   assert.match(elements, /return \['assignment', 'decision', 'get_records', 'loop'\]\.includes\(element\.key\)/)
   assert.match(elements, /placeholder="Search elements\.\.\."/)
   assert.match(elements, /No matching elements/)
