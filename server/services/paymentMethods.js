@@ -1,8 +1,8 @@
 // Canonical payment-method registry backed by company metadata records.
 // Consumers must resolve methods here instead of maintaining local tender lists.
 export const DEFAULT_PAYMENT_METHODS = Object.freeze([
-  { code: "cash", label: "Cash", kind: "CASH", allowOffline: true, sortOrder: 10 },
-  { code: "card", label: "Card", kind: "CARD", allowOffline: false, sortOrder: 20 },
+  { code: "cash", label: "Cash", kind: "CASH", allowOffline: true, requiresConnector: false, sortOrder: 10 },
+  { code: "card", label: "Card", kind: "CARD", allowOffline: false, requiresConnector: true, sortOrder: 20 },
   { code: "customer_credit", label: "Customer Credit", kind: "CREDIT", allowOffline: false, sortOrder: 30 },
   { code: "gift_card", label: "Gift Card", kind: "GIFT_CARD", allowOffline: false, sortOrder: 40 },
   { code: "voucher", label: "Voucher", kind: "VOUCHER", allowOffline: false, sortOrder: 50 },
@@ -21,15 +21,22 @@ export async function listPaymentMethods(db, companyId, { activeOnly = true } = 
        ORDER BY sort_order, label`,
       [companyId]
     );
-    if (result.rows.length) return result.rows.map((row) => ({
-      id: row.id, code: row.code, label: row.label, kind: row.kind, active: row.active,
-      allowOffline: row.allow_offline, sortOrder: row.sort_order, config: row.config || {}, system: false,
-    }));
+    if (result.rows.length) return result.rows.map((row) => {
+      const config = row.config || {};
+      return {
+        id: row.id, code: row.code, label: row.label, kind: row.kind, active: row.active,
+        allowOffline: row.allow_offline,
+        requiresConnector: config.requiresConnector === true || Boolean(config.connectorPackageKey) || String(row.kind || "").toUpperCase() === "CARD",
+        sortOrder: row.sort_order,
+        config,
+        system: false,
+      };
+    });
   } catch (error) {
     // Backward-compatible during rolling deployments before the migration runs.
     if (error?.code !== "42P01") throw error;
   }
-  return DEFAULT_PAYMENT_METHODS.map((item) => ({ ...item, active: true, system: true }));
+  return DEFAULT_PAYMENT_METHODS.map((item) => ({ ...item, active: true, system: true, requiresConnector: item.requiresConnector === true }));
 }
 
 export async function getAllowedPaymentMethodCodes(db, companyId, scope = {}) {
