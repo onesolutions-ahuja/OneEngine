@@ -11,7 +11,6 @@ const apiNameFromLabel = (label, fallback = 'Outcome') => {
 
 export const DECISION_DEFAULTS = Object.freeze({
   logicMode: 'manual',
-  decisionInstructions: '',
   outcomes: [],
   defaultLabel: 'Default Outcome',
   defaultBranch: [],
@@ -29,8 +28,6 @@ export function decisionConfigErrors(config = {}, flowType = '') {
   const c = normalizeDecisionConfig(config)
   const errors = []
   if (!c.outcomes.length) errors.push('Add at least one outcome.')
-  if (c.logicMode === 'ai' && flowType === 'record') errors.push('AI Decision isn’t supported for record-triggered flows.')
-  if (c.logicMode === 'ai' && !String(c.decisionInstructions || '').trim()) errors.push('Enter Decision Instructions.')
   const apiNames = new Set()
   c.outcomes.forEach((outcome,index) => {
     if (!String(outcome.label || '').trim()) errors.push(`Outcome ${index + 1}: enter a label.`)
@@ -38,9 +35,7 @@ export function decisionConfigErrors(config = {}, flowType = '') {
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(apiName) || apiName.endsWith('_') || apiName.includes('__')) errors.push(`Outcome ${index + 1}: enter a valid API Name.`)
     if (apiNames.has(apiName.toLowerCase())) errors.push(`Outcome ${index + 1}: API Name must be unique.`)
     apiNames.add(apiName.toLowerCase())
-    if (c.logicMode === 'ai') {
-      if (!String(outcome.instructions || '').trim()) errors.push(`Outcome ${index + 1}: enter Outcome Instructions.`)
-    } else {
+    {
       if (!outcome.conditions?.length) errors.push(`Outcome ${index + 1}: add at least one condition.`)
       if (outcome.conditionLogic === 'custom' && !String(outcome.customConditionLogic || '').trim()) errors.push(`Outcome ${index + 1}: enter custom condition logic.`)
       ;(outcome.conditions || []).forEach((row,rowIndex) => {
@@ -64,19 +59,17 @@ export function decisionRuntimeAction(instance) {
     label: instance.label,
     apiName: instance.apiName,
     description: instance.description || '',
-    decisionLogic: c.logicMode,
-    decisionInstructions: c.logicMode === 'ai' ? c.decisionInstructions : undefined,
+    decisionLogic: 'manual',
     outcomes: c.outcomes.map((outcome,index) => ({
       id: outcome.id || `outcome-${index + 1}`,
       label: outcome.label || `Outcome ${index + 1}`,
       apiName: outcome.apiName || apiNameFromLabel(outcome.label || `Outcome ${index + 1}`, `Outcome_${index + 1}`),
-      instructions: c.logicMode === 'ai' ? outcome.instructions : undefined,
       branch: Array.isArray(outcome.branch) ? outcome.branch : [],
-      condition: c.logicMode === 'manual' ? {
+      condition: {
         match: outcome.conditionLogic === 'any' ? 'any' : 'all',
         customConditionLogic: outcome.conditionLogic === 'custom' ? outcome.customConditionLogic : undefined,
         conditions: (outcome.conditions || []).map((row) => ({ field: row.resource, operator: row.operator, value: configuredValue(row) })),
-      } : undefined,
+      },
     })),
     defaultLabel: c.defaultLabel || 'Default Outcome',
     defaultBranch: Array.isArray(c.defaultBranch) ? c.defaultBranch : [],
@@ -110,13 +103,6 @@ export default function GPTBuilderDecision({ draft, updateConfig, resources, flo
   }
 
   return <div className="gptb-gr gptb-decision">
-    <section><h3>Select Decision Logic</h3>
-      <label className="gptb-gr-radio"><input type="radio" name={`dc-logic-${draft.id}`} checked={config.logicMode === 'manual'} onChange={() => patch({ logicMode: 'manual' })}/><span><b>Define Manually (Default)</b><small>Evaluate outcomes in the order shown and take the first matching path.</small></span></label>
-      {flowType !== 'record' ? <label className="gptb-gr-radio"><input type="radio" name={`dc-logic-${draft.id}`} checked={config.logicMode === 'ai'} onChange={() => patch({ logicMode: 'ai' })}/><span><b>Define with AI (Advanced)</b><small>Use instructions to let AI choose the outcome.</small></span></label> : null}
-    </section>
-
-    {config.logicMode === 'ai' ? <section><h3>Describe the Decision</h3><label><span>Decision Instructions <b>*</b></span><textarea rows={4} value={config.decisionInstructions} onChange={(event) => patch({ decisionInstructions: event.target.value })}/></label></section> : null}
-
     <section><h3>Outcome Order</h3>
       <div className="gptb-decision-outcomes">
         {config.outcomes.map((outcome,index) => <fieldset key={outcome.id}>
