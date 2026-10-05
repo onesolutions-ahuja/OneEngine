@@ -13,7 +13,7 @@ export function normalizeLoopConfig(config = {}) {
 }
 
 function resourcePath(resource) {
-  return resource ? `variables.${resource.apiName}` : ''
+  return resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 }
 
 export function loopConfigErrors(config = {}, resources = []) {
