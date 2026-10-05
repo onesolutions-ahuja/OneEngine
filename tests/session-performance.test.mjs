@@ -63,3 +63,21 @@ test('RBAC role and permission-set reads run in parallel', async () => {
   const source = await read('../server/server.js')
   assert.match(source, /const \[codes, permissionSets\] = await Promise\.all/)
 })
+
+
+test('login reuses one preloaded security context instead of re-querying settings and policy', async () => {
+  const server = await read('../server/server.js')
+  const security = await read('../server/services/identitySecurity.js')
+  const assurance = await read('../server/services/identityAssurance.js')
+  assert.match(server, /resolveAccessPolicy\(loginDb/)
+  assert.match(server, /settingsOverride: securitySettings/)
+  assert.match(server, /policyOverride: accessPolicy/)
+  assert.match(server, /\{ settings: securitySettings, policy: accessPolicy \}/)
+  assert.match(security, /settingsOverride !== undefined/)
+  assert.match(assurance, /settingsOverride !== undefined/)
+})
+
+test('Google Connect login readiness uses one parallel read bundle', async () => {
+  const source = await read('../server/services/googleConnect.js')
+  assert.match(source, /const \[packageResult, entitlements, connectionResult\] = await Promise\.all/)
+})
