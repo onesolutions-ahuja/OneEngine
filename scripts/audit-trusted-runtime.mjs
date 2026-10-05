@@ -83,9 +83,15 @@ if (!serverJobs.includes('assertTrustedJobKind(kind)')) {
 for (const required of ['internalAppCatalog', 'packageDefinition', 'hashPackageManifest', 'assertTrustedPackageManifest', 'validateTrustedPackageCatalogue', 'Object.freeze(Object.fromEntries']) {
   if (!serverPackages.includes(required)) findings.push({ severity: 'ERROR', rule: 'TRUSTED_PACKAGE_CATALOGUE_INVALID', file: path.relative(ROOT, SERVER_PACKAGES), detail: required })
 }
-const packageAssertions = (packageRoutes.match(/assertTrustedPackageManifest\(item\.packageKey, item\.manifest, item\.version\)/g) || []).length
-if (packageAssertions < 2) {
-  findings.push({ severity: 'ERROR', rule: 'PACKAGE_LIFECYCLE_GATE_MISSING', file: path.relative(ROOT, PACKAGE_ROUTES), detail: `expected plan and Flow-routed lifecycle assertions; found ${packageAssertions}` })
+const hasPlanPackageAssertion = packageRoutes.includes('assertTrustedPackageManifest(item.packageKey, item.manifest, item.version)')
+const hasLifecyclePackageAssertion = packageRoutes.includes('assertTrustedPackageManifest(trustedPackage.package_key, trustedPackage.manifest || {}, trustedPackage.version)')
+if (!hasPlanPackageAssertion || !hasLifecyclePackageAssertion) {
+  findings.push({
+    severity: 'ERROR',
+    rule: 'PACKAGE_LIFECYCLE_GATE_MISSING',
+    file: path.relative(ROOT, PACKAGE_ROUTES),
+    detail: `planAssertion=${hasPlanPackageAssertion} lifecycleAssertion=${hasLifecyclePackageAssertion}`,
+  })
 }
 if (!serverEntry.includes('validateTrustedPackageCatalogue()')) {
   findings.push({ severity: 'ERROR', rule: 'PACKAGE_STARTUP_VALIDATION_MISSING', file: path.relative(ROOT, SERVER_ENTRY) })
