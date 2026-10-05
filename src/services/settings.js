@@ -39,7 +39,10 @@ export function clearSettingsContextCache() {
   try { sessionStorage.removeItem(SETTINGS_CONTEXT_CACHE_KEY) } catch {}
 }
 
-export async function loadSettingsContext() {
+export async function loadSettingsContext({ force = false } = {}) {
+  const cachedContext = !force ? readSettingsContextCache() : null
+  if (cachedContext) return cachedContext
+
   const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
 
   /*

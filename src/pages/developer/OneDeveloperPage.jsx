@@ -3,7 +3,7 @@ import {
   Bell, Bug, Building2, ChevronRight, AppWindow, BarChart3, LayoutDashboard,
   LayoutGrid, ListChecks, UserCheck, Rocket, Search, Workflow,
 } from 'lucide-react'
-import { apiRequest, loadSessionPermissions, getActingCompanyId, getStoredUser, setActingCompanyId } from '../../services/api'
+import { apiRequest, getActingCompanyId, getStoredSessionPermissions, getStoredUser, loadSessionPermissions, setActingCompanyId } from '../../services/api'
 import { clearSettingsContextCache } from '../../services/settings'
 import OneBuilder from '../settings/OneBuilder'
 import { ReportTypeManager } from '../reports/ReportTypeDesigner.jsx'
@@ -52,8 +52,8 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
   const [clients, setClients] = useState([])
   const [clientQuery, setClientQuery] = useState('')
   const [selectedClient, setSelectedClient] = useState(() => loggedInCompanyId || getActingCompanyId() || '')
-  const [canManageEngine, setCanManageEngine] = useState(false)
-  const [clientsLoading, setClientsLoading] = useState(true)
+  const [canManageEngine, setCanManageEngine] = useState(() => Boolean(getStoredSessionPermissions()?.permissions?.includes('oneengine.manage')))
+  const [clientsLoading, setClientsLoading] = useState(false)
 
   useEffect(() => { setActive(normalizeSection(initialSection)) }, [initialSection])
 
@@ -61,16 +61,20 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
     let alive = true
     ;(async () => {
       try {
+        const cachedPermissions = getStoredSessionPermissions()
+        const permissions = cachedPermissions || await loadSessionPermissions()
+        const mayManage = Boolean(permissions?.permissions?.includes('oneengine.manage'))
+        if (!alive) return
+        setCanManageEngine(mayManage)
+        if (!mayManage) return
+
+        // Client discovery is a manager convenience, not a prerequisite for
+        // rendering Developer. Keep the current authenticated/acting company
+        // usable while the selector list refreshes in the background.
         setClientsLoading(true)
-        const permissions = await loadSessionPermissions()
-        if (!permissions?.permissions?.includes('oneengine.manage')) {
-          setCanManageEngine(false)
-          return
-        }
         const response = await apiRequest('/api/platform/developer/companies')
         if (!alive) return
         const rows = Array.isArray(response?.data) ? response.data : []
-        setCanManageEngine(true)
         setClients(rows)
         const current = getActingCompanyId()
         const ownCompany = rows.find((row) => loggedInCompanyId && String(row.id) === String(loggedInCompanyId))
@@ -86,7 +90,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             setActingCompanyId(preferred.id)
             clearSettingsContextCache()
           }
-          setSelectedClient(preferredId)
+          if (alive) setSelectedClient(preferredId)
         }
       } catch (e) {
         if (!alive) return
@@ -194,8 +198,8 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
       <div className="settings-content" key={contentKey}>
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
-          {clientsLoading ? <div className="settings-state-card">Resolving client context…</div>
-            : current.key === 'objects' ? <ObjectsSettingsPane />
+          {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
+          {current.key === 'objects' ? <ObjectsSettingsPane />
             : current.key === 'workflow-builder' ? <OneBuilder initialTab="workflow" singleBuilder initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('workflow-builder', { workflowId })} onWorkflowClose={() => onSectionChange?.('workflow-builder', { workflowId: '' })} />
             : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />

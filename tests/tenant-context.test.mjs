@@ -24,9 +24,9 @@ let stores = []
 let serverPermissions = []
 globalThis.fetch = async (url, options) => {
   requests.push({ url, options })
-  const body = url.endsWith('/login') ? { success: true, token: 'token', user: { id: 'u', company_id: 'home' }, actingCompanyId: 'other' }
+  const body = url.endsWith('/login') ? { success: true, token: 'token', user: { id: 'u', company_id: 'home' }, permissions: { permissions: serverPermissions }, stores, actingCompanyId: 'other' }
     : url.includes('/me/permissions') ? { data: { permissions: serverPermissions } }
-    : url.endsWith('/bootstrap') ? { user: { id: 'u', company_id: 'home' }, stores }
+    : url.endsWith('/bootstrap') ? { user: { id: 'u', company_id: 'home' }, stores, permissions: { permissions: serverPermissions } }
     : url.endsWith('/me') ? { user: { id: 'u', company_id: 'home' } } : { data: stores }
   return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
 }
@@ -40,6 +40,23 @@ test('forced permission checks refresh both stale denials and revoked grants', a
   serverPermissions = []
   assert.deepEqual((await api.loadSessionPermissions({ force: true })).permissions, [])
   assert.deepEqual(api.getStoredSessionPermissions().permissions, [])
+})
+
+test('complete cached session context avoids duplicate bootstrap, stores and permission requests', async () => {
+  sessionStorage.clear()
+  localStorage.clear()
+  requests.length = 0
+  sessionStorage.setItem('onepos_token', 'token')
+  sessionStorage.setItem('onepos_user', JSON.stringify({ id: 'u', companyId: 'home', storeId: 's1' }))
+  sessionStorage.setItem(api.AVAILABLE_STORES_STORAGE_KEY, JSON.stringify([{ id: 's1', company_id: 'home', is_primary: true }]))
+  api.setStoredSessionPermissions({ permissions: ['oneengine.manage'] })
+  localStorage.setItem(api.ACTIVE_STORE_STORAGE_KEY, 's1')
+
+  assert.equal(api.hasSessionContext(), true)
+  assert.equal(await api.ensureActingCompanyContext(), 'home')
+  assert.equal((await api.ensureActiveStoreContext()).activeStoreId, 's1')
+  assert.deepEqual((await api.loadSessionPermissions()).permissions, ['oneengine.manage'])
+  assert.equal(requests.length, 0)
 })
 
 test('normal requests ignore remembered and supplied acting-company context', async () => {
@@ -68,11 +85,11 @@ test('login and refresh use company binding and permitted stores', async () => {
   assert.equal(JSON.parse(requests.find(r => r.url.endsWith('/login')).options.body).actingCompanyId, undefined)
   api.setActingCompanyId('other')
   sessionStorage.setItem('onepos_user', JSON.stringify({ id: 'u', companyId: 'other' }))
-  assert.equal(await api.ensureActingCompanyContext(), 'home')
+  assert.equal(await api.ensureActingCompanyContext({ force: true }), 'home')
   assert.equal(api.getStoredUser().companyId, 'home')
   stores = [{ id: 'a', is_primary: true }, { id: 'b' }]
   localStorage.setItem(api.ACTIVE_STORE_STORAGE_KEY, 'b')
-  await api.ensureActiveStoreContext()
+  await api.ensureActiveStoreContext({ force: true })
   assert.equal(api.getActiveStoreId(), 'b')
   localStorage.setItem(api.ACTIVE_STORE_STORAGE_KEY, 'foreign')
   await api.ensureActiveStoreContext()

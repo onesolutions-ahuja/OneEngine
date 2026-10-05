@@ -1241,9 +1241,12 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         u.active,
         u.must_change_password,
         r.name AS role_name,
-        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
+        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page,
+        s.code AS store_code,
+        s.name AS store_name
       FROM users u
       LEFT JOIN roles r ON r.id = u.role_id
+      LEFT JOIN stores s ON s.id = u.store_id AND s.company_id = u.company_id AND s.active = true
       WHERE LOWER(BTRIM(u.email)) = LOWER(BTRIM($1))
          OR (u.email IS NULL AND LOWER(u.username) = LOWER(BTRIM($1)))
       LIMIT 1
@@ -1265,7 +1268,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       : (req.tenantPool || tenantPoolManager.getPoolForRequest(req) || pool);
 
     stepStartedAt = Date.now();
-    const result = isPlatformIdentity
+    const result = isPlatformIdentity || loginPool === pool
       ? centralIdentity
       : await loginPool.query(identitySql, [email]);
     markLoginTiming("tenant_identity_ms", stepStartedAt);
@@ -1282,8 +1285,13 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const loginDb = (sql, params = []) => loginPool.query(sql, params);
     const requestIp = clientIp(req);
     const requestUserAgent = req.get("user-agent") || null;
-    const securitySettings = user.company_id ? await loadSecuritySettings(loginDb, user.company_id) : null;
-    const state = await loginState(loginDb, user.id);
+    const [securitySettings, state, googleRuntime] = await Promise.all([
+      user.company_id ? loadSecuritySettings(loginDb, user.company_id) : Promise.resolve(null),
+      loginState(loginDb, user.id),
+      user.company_id
+        ? getGoogleConnectRuntime((query, params = []) => loginPool.query(query, params), user.company_id)
+        : Promise.resolve(null),
+    ]);
     if (state?.locked_indefinitely === true || (state?.locked_until && new Date(state.locked_until).getTime() > Date.now())) {
       await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: "ACCOUNT_LOCKED", ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({
@@ -1302,18 +1310,12 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    if (user.company_id) {
-      const googleRuntime = await getGoogleConnectRuntime(
-        (query, params = []) => loginPool.query(query, params),
-        user.company_id
-      );
-      if (googleRuntime.ready && googleRuntime.config?.allowPasswordLogin === false) {
-        return res.status(403).json({
-          success: false,
-          code: "GOOGLE_SSO_REQUIRED",
-          message: "This company requires Google SSO. Use Continue with Google.",
-        });
-      }
+    if (googleRuntime?.ready && googleRuntime.config?.allowPasswordLogin === false) {
+      return res.status(403).json({
+        success: false,
+        code: "GOOGLE_SSO_REQUIRED",
+        message: "This company requires Google SSO. Use Continue with Google.",
+      });
     }
 
     stepStartedAt = Date.now();
@@ -1362,17 +1364,52 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    const access = await accessDecision(loginDb, {
-      companyId: user.company_id,
-      userId: user.id,
-      roleId: user.role_id,
-      ip: requestIp,
-    });
+    const loginPermissionUser = {
+      id: user.id,
+      companyId: user.company_id || null,
+    };
+    const authorizationStartedAt = Date.now();
+    const [access, rolePermissionResult, permissionSets, assurancePolicy, trustedDevice] = await Promise.all([
+      accessDecision(loginDb, {
+        companyId: user.company_id,
+        userId: user.id,
+        roleId: user.role_id,
+        ip: requestIp,
+      }),
+      user.role_id
+        ? loginPool.query(
+            `SELECT p.code
+               FROM role_permissions rp
+               JOIN permissions p ON p.id=rp.permission_id
+              WHERE rp.role_id=$1`,
+            [user.role_id]
+          )
+        : Promise.resolve({ rows: [] }),
+      loadEffectivePermissionSets(loginDb, loginPermissionUser),
+      user.company_id
+        ? loadEffectiveAssurance(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
+        : Promise.resolve(null),
+      user.company_id
+        ? findTrustedDevice(loginDb, {
+            companyId: user.company_id,
+            userId: user.id,
+            token: req.body?.deviceToken,
+            ip: requestIp,
+          })
+        : Promise.resolve(null),
+    ]);
+    loginTimings.authorization_bundle_ms = Date.now() - authorizationStartedAt;
+    loginTimings.permissions_ms = loginTimings.authorization_bundle_ms;
+
     if (!access.allowed) {
       await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: access.code, ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({ success: false, code: access.code, message: access.reason });
     }
-    await clearFailedLogin(loginDb, user);
+
+    const effectivePermissions = [...new Set([
+      ...rolePermissionResult.rows.map((row) => row.code),
+      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+    ])];
 
     let passwordExpired = false;
     if (securitySettings && Number(securitySettings.password_expiry_days || 0) > 0) {
@@ -1385,57 +1422,24 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     }
 
     stepStartedAt = Date.now();
-    await loginPool.query(
-      `
-      UPDATE users
-      SET last_login_at = NOW()
-      WHERE id = $1
-      `,
-      [user.id]
-    );
+    await Promise.all([
+      clearFailedLogin(loginDb, user),
+      loginPool.query(
+        `
+        UPDATE users
+        SET last_login_at = NOW()
+        WHERE id = $1
+        `,
+        [user.id]
+      ),
+    ]);
     markLoginTiming("last_login_update_ms", stepStartedAt);
 
     // Login always keeps the authenticated company binding. OneDeveloper
     // selects a target company separately, and only through oneengine.manage.
     const actingCompanyId = null;
 
-    /*
-     * Return the effective RBAC permission set with the login response so the
-     * client can build its UI from one authenticated bootstrap. This avoids
-     * every page re-fetching /auth/me/permissions. Runtime endpoints still
-     * enforce authorization independently.
-     */
-    stepStartedAt = Date.now();
-    const rolePermissionResult = user.role_id
-      ? await loginPool.query(
-          `SELECT p.code
-             FROM role_permissions rp
-             JOIN permissions p ON p.id=rp.permission_id
-            WHERE rp.role_id=$1`,
-          [user.role_id]
-        )
-      : { rows: [] };
-    const loginPermissionUser = {
-      id: user.id,
-      companyId: user.company_id || null,
-    };
-    const permissionSets = await loadEffectivePermissionSets(loginDb, loginPermissionUser);
-    const effectivePermissions = [...new Set([
-      ...rolePermissionResult.rows.map((row) => row.code),
-      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
-    ])];
-    markLoginTiming("permissions_ms", stepStartedAt);
-
-    const assurancePolicy = user.company_id
-      ? await loadEffectiveAssurance(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
-      : null;
     const effectiveAssurance = assurancePolicy?.effective || { mfaRequired: false, phishingResistantRequired: false, requiredLoginAssurance: "STANDARD", passwordAssurance: "STANDARD" };
-    const trustedDevice = user.company_id ? await findTrustedDevice(loginDb, {
-      companyId: user.company_id,
-      userId: user.id,
-      token: req.body?.deviceToken,
-      ip: requestIp,
-    }) : null;
     const activationSatisfied = !effectiveAssurance.deviceActivationRequired
       || Boolean(trustedDevice)
       || (effectiveAssurance.skipDeviceActivationOnTrustedNetwork && access.trustedNetwork === true);
@@ -1479,10 +1483,12 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       settings: securitySettings,
       originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null,
     });
-    await loginDb("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW() WHERE id=$1", [sessionId, effectiveAssurance.passwordAssurance]);
     user.session_id = sessionId;
     const token = createToken(user);
-    await writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req });
+    await Promise.all([
+      loginDb("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW() WHERE id=$1", [sessionId, effectiveAssurance.passwordAssurance]),
+      writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req }),
+    ]);
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
       ...loginTimings,
@@ -1506,6 +1512,14 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       permissions: {
         permissions: effectivePermissions,
       },
+      stores: user.store_id ? [{
+        id: user.store_id,
+        code: user.store_code || null,
+        name: user.store_name || null,
+        active: true,
+        is_primary: true,
+        companyId: user.company_id || null,
+      }] : [],
       user: {
         id: user.id,
         username: user.username,
@@ -1695,6 +1709,13 @@ app.get("/api/auth/bootstrap", authenticate, async (req, res) => {
     }
 
     const user = result.rows[0];
+    let permissions = req.user.roleId ? await getRolePermissionCodes(req.user.roleId, req) : [];
+    const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
+    permissions = [...new Set([
+      ...permissions,
+      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+    ])];
+
     res.json({
       success: true,
       user: {
@@ -1708,6 +1729,7 @@ app.get("/api/auth/bootstrap", authenticate, async (req, res) => {
         mustChangePassword: user.must_change_password === true,
       },
       stores: Array.isArray(user.stores) ? user.stores : [],
+      permissions: { permissions },
     });
   } catch (error) {
     console.error("Session bootstrap error:", error);

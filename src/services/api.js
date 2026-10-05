@@ -65,24 +65,33 @@ export function getAvailableStores() {
   }
 }
 
-export async function ensureActiveStoreContext() {
-  sessionStorage.removeItem(AVAILABLE_STORES_STORAGE_KEY)
-  const response = await apiRequest('/api/auth/me/stores', { timeoutMs: 12000, retryGet: true })
+function resolveActiveStoreFromRows(stores = []) {
+  const rows = Array.isArray(stores) ? stores : []
+  const remembered = localStorage.getItem(ACTIVE_STORE_STORAGE_KEY) || ''
+  const rememberedAllowed = rows.some((store) => String(store.id) === String(remembered))
+  const primary = rows.find((store) => store.is_primary === true)
+  const selected = rememberedAllowed
+    ? remembered
+    : primary?.id || rows[0]?.id || ''
+  setActiveStoreId(selected || '')
+  return { stores: rows, activeStoreId: selected || '' }
+}
+
+export async function ensureActiveStoreContext({ force = false } = {}) {
   const companyId = getStoredUser()?.companyId || getStoredUser()?.company_id
+  let cacheInitialized = false
+  try { cacheInitialized = sessionStorage.getItem(AVAILABLE_STORES_STORAGE_KEY) !== null } catch {}
+
+  if (!force && companyId && cacheInitialized) {
+    return resolveActiveStoreFromRows(getAvailableStores())
+  }
+
+  const response = await apiRequest('/api/auth/me/stores', { timeoutMs: 5000, retryGet: false })
   const stores = companyId && Array.isArray(response?.data)
     ? response.data.filter((store) => !(store.companyId || store.company_id) || String(store.companyId || store.company_id) === String(companyId))
     : []
   sessionStorage.setItem(AVAILABLE_STORES_STORAGE_KEY, JSON.stringify(stores))
-
-  const remembered = localStorage.getItem(ACTIVE_STORE_STORAGE_KEY) || ''
-  const rememberedAllowed = stores.some((store) => String(store.id) === String(remembered))
-  const primary = stores.find((store) => store.is_primary === true)
-  const selected = rememberedAllowed
-    ? remembered
-    : primary?.id || stores[0]?.id || ''
-
-  setActiveStoreId(selected || '')
-  return { stores, activeStoreId: selected || '' }
+  return resolveActiveStoreFromRows(stores)
 }
 
 
@@ -614,7 +623,14 @@ export async function login(username, password) {
   }
 
   if (resolvedUser?.companyId) {
-    const storeContext = await ensureActiveStoreContext().catch(() => { setActiveStoreId(''); return { stores: [], activeStoreId: '' } })
+    let storeContext
+    if (Array.isArray(data?.stores)) {
+      const stores = data.stores.filter((store) => !(store.companyId || store.company_id) || String(store.companyId || store.company_id) === String(resolvedUser.companyId))
+      sessionStorage.setItem(AVAILABLE_STORES_STORAGE_KEY, JSON.stringify(stores))
+      storeContext = resolveActiveStoreFromRows(stores)
+    } else {
+      storeContext = await ensureActiveStoreContext().catch(() => { setActiveStoreId(''); return { stores: [], activeStoreId: '' } })
+    }
     if (storeContext.activeStoreId) {
       resolvedUser = { ...resolvedUser, storeId: storeContext.activeStoreId }
       sessionStorage.setItem('onepos_user', JSON.stringify(resolvedUser))
@@ -854,34 +870,50 @@ export function getStoredUser() {
   }
 }
 
-export async function ensureActingCompanyContext() {
-  clearCompanyContext()
-  sessionStorage.removeItem('onepos_user')
-  localStorage.removeItem('onepos_user')
-  sessionStorage.removeItem('onepos.settings.context.v2')
-  setStoredSessionPermissions(null)
+export function hasSessionContext() {
+  const user = getStoredUser()
+  let storesInitialized = false
+  try { storesInitialized = sessionStorage.getItem(AVAILABLE_STORES_STORAGE_KEY) !== null } catch {}
+  return Boolean(
+    user?.id
+    && (user?.companyId || user?.company_id || user?.company?.id)
+    && getStoredSessionPermissions()
+    && storesInitialized
+  )
+}
 
-  // Restore the authenticated identity and allowed stores in one request.
-  // This keeps refresh/bootstrap fast and avoids serial /auth/me then /stores calls.
-  const bootstrap = await apiRequest('/api/auth/bootstrap', { timeoutMs: 5000, retryGet: false })
-  const user = bootstrap?.user || {}
-  const companyId = user.companyId || user.company_id || ''
-  const stores = companyId && Array.isArray(bootstrap?.stores)
-    ? bootstrap.stores.filter((store) => !(store.companyId || store.company_id) || String(store.companyId || store.company_id) === String(companyId))
-    : []
+let sessionBootstrapInFlight = null
+export async function ensureActingCompanyContext({ force = false } = {}) {
+  const existingUser = getStoredUser()
+  const existingCompanyId = existingUser?.companyId || existingUser?.company_id || existingUser?.company?.id || ''
+  if (!force && hasSessionContext()) return existingCompanyId
+  if (sessionBootstrapInFlight) return sessionBootstrapInFlight
 
-  sessionStorage.setItem('onepos_user', JSON.stringify({ ...user, companyId, storeId: null }))
-  sessionStorage.setItem(AVAILABLE_STORES_STORAGE_KEY, JSON.stringify(stores))
+  // One server round-trip restores identity + stores + effective RBAC. Do not
+  // clear usable cached context before the replacement is available: that used
+  // to make every refresh/page transition rediscover the same session.
+  sessionBootstrapInFlight = apiRequest('/api/auth/bootstrap', { timeoutMs: 5000, retryGet: false })
+    .then((bootstrap) => {
+      const user = bootstrap?.user || {}
+      const companyId = user.companyId || user.company_id || ''
+      const stores = companyId && Array.isArray(bootstrap?.stores)
+        ? bootstrap.stores.filter((store) => !(store.companyId || store.company_id) || String(store.companyId || store.company_id) === String(companyId))
+        : []
 
-  const remembered = localStorage.getItem(ACTIVE_STORE_STORAGE_KEY) || ''
-  const rememberedAllowed = stores.some((store) => String(store.id) === String(remembered))
-  const primary = stores.find((store) => store.is_primary === true)
-  const selected = rememberedAllowed
-    ? remembered
-    : primary?.id || stores[0]?.id || ''
-  setActiveStoreId(selected || '')
+      sessionStorage.setItem('onepos_user', JSON.stringify({ ...user, companyId, storeId: null }))
+      sessionStorage.setItem(AVAILABLE_STORES_STORAGE_KEY, JSON.stringify(stores))
+      if (bootstrap?.permissions && typeof bootstrap.permissions === 'object') {
+        setStoredSessionPermissions(bootstrap.permissions)
+      }
+      const storeContext = resolveActiveStoreFromRows(stores)
+      if (storeContext.activeStoreId) {
+        sessionStorage.setItem('onepos_user', JSON.stringify({ ...user, companyId, storeId: storeContext.activeStoreId }))
+      }
+      return companyId
+    })
+    .finally(() => { sessionBootstrapInFlight = null })
 
-  return companyId
+  return sessionBootstrapInFlight
 }
 
 export function lockToKioskDisplayMode() {
