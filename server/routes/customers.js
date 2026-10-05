@@ -63,10 +63,6 @@ export default function createCustomersRouter({
         `
         SELECT c.id, c.company_id, c.name, c.phone, c.email, c.address, c.postcode,
           c.loyalty_number, c.notes, c.active, c.created_at, c.updated_at,
-          COALESCE(clb.balance, 0) AS loyalty_balance,
-          c.credit_enabled,
-          c.credit_limit,
-          COALESCE(ccl.outstanding, 0) AS credit_balance,
           MAX(cs.last_purchase_at) AS last_purchase_at,
           STRING_AGG(DISTINCT st.name, ', ' ORDER BY st.name) AS store_names
         FROM customers c
@@ -76,32 +72,16 @@ export default function createCustomersRouter({
             : "INNER JOIN customer_stores cs ON cs.customer_id = c.id"
         }
         LEFT JOIN stores st ON st.id = cs.store_id
-        LEFT JOIN customer_loyalty_balances clb ON clb.company_id = c.company_id AND clb.customer_id = c.id
-        LEFT JOIN LATERAL (
-          SELECT COALESCE(SUM(l.amount * CASE WHEN l.transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END), 0) AS outstanding
-          FROM customer_credit_ledger l
-          WHERE l.company_id = c.company_id AND l.customer_id = c.id
-        ) ccl ON TRUE
         WHERE ${filters.join(" AND ")}
-        GROUP BY c.id, clb.balance, c.credit_enabled, c.credit_limit, ccl.outstanding
+        GROUP BY c.id
         ORDER BY c.name
         `,
         params
       );
 
-      const enriched = result.rows.map((r) => ({
-        ...r,
-        credit: {
-          enabled: !!r.credit_enabled,
-          limit: Number(r.credit_limit) || 0,
-          balance: Number(r.credit_balance) || 0,
-          available: Math.max(0, (Number(r.credit_limit) || 0) - (Number(r.credit_balance) || 0)),
-        },
-      }));
-
       res.json({
         success: true,
-        data: enriched,
+        data: result.rows,
         scope: companyScope ? "company" : "store",
       });
     } catch (error) {
@@ -155,9 +135,6 @@ export default function createCustomersRouter({
         `
         SELECT c.id, c.company_id, c.name, c.phone, c.email, c.address, c.postcode,
           c.loyalty_number, c.notes, c.active, c.created_at, c.updated_at,
-          COALESCE(clb.balance, 0) AS loyalty_balance,
-          c.credit_enabled, c.credit_limit,
-          COALESCE(ccl.outstanding, 0) AS credit_balance,
           COALESCE(json_agg(json_build_object(
             'storeId', cs.store_id,
             'storeName', st.name,
@@ -167,14 +144,8 @@ export default function createCustomersRouter({
         FROM customers c
         LEFT JOIN customer_stores cs ON cs.customer_id = c.id
         LEFT JOIN stores st ON st.id = cs.store_id
-        LEFT JOIN customer_loyalty_balances clb ON clb.company_id = c.company_id AND clb.customer_id = c.id
-        LEFT JOIN LATERAL (
-          SELECT COALESCE(SUM(l.amount * CASE WHEN l.transaction_type IN ('payment','debit_note') THEN -1 ELSE 1 END), 0) AS outstanding
-          FROM customer_credit_ledger l
-          WHERE l.company_id = c.company_id AND l.customer_id = c.id
-        ) ccl ON TRUE
         WHERE c.id = $1 AND c.company_id = $2
-        GROUP BY c.id, clb.balance, c.credit_enabled, c.credit_limit, ccl.outstanding
+        GROUP BY c.id
         `,
         [req.params.id, req.user.companyId]
       );
@@ -216,16 +187,10 @@ export default function createCustomersRouter({
         [req.params.id, req.user.companyId]
       );
 
-      const credit = {
-        enabled: !!result.rows[0].credit_enabled,
-        limit: Number(result.rows[0].credit_limit) || 0,
-        balance: Number(result.rows[0].credit_balance) || 0,
-      };
-      credit.available = Math.max(0, credit.limit - credit.balance);
 
       res.json({
         success: true,
-        data: { ...result.rows[0], sales: sales.rows, credit },
+        data: { ...result.rows[0], sales: sales.rows },
       });
     } catch (error) {
       console.error("Get customer error:", error);
@@ -235,86 +200,7 @@ export default function createCustomersRouter({
     }
   });
 
-  /*
-   * GET /api/customers/:id/loyalty
-   * Returns customer loyalty balance and transaction history
-   */
-  router.get("/customers/:id/loyalty", authenticate, requireLoyaltyEntitlement, authorize("customer.view"), async (req, res) => {
-    try {
-      const companyAdmin = await canViewCompanyCustomers(req.user);
 
-      // Verify customer belongs to user's company
-      const customerCheck = await db(
-        `SELECT id, name FROM customers WHERE id = $1 AND company_id = $2`,
-        [req.params.id, req.user.companyId]
-      );
-
-      if (!customerCheck.rows.length) {
-        return res.status(404).json({
-          success: false,
-          message: "Customer not found",
-        });
-      }
-
-      // Check store access for non-admin users
-      if (!companyAdmin) {
-        const visible = await db(
-          `SELECT 1 FROM customer_stores WHERE customer_id = $1 AND store_id = $2 AND active = true`,
-          [req.params.id, req.user.storeId]
-        );
-        if (!visible.rows.length)
-          return res.status(404).json({
-            success: false,
-            message: "Customer not found",
-          });
-      }
-
-      // Get loyalty balance
-      const balanceResult = await db(
-        `SELECT COALESCE(balance, 0) AS balance FROM customer_loyalty_balances WHERE company_id = $1 AND customer_id = $2`,
-        [req.user.companyId, req.params.id]
-      );
-
-      // Get loyalty transactions
-      const transactionsResult = await db(
-        `
-        SELECT
-          clt.id,
-          clt.transaction_type,
-          clt.amount,
-          clt.balance_after,
-          clt.reference_type,
-          clt.reference_id,
-          clt.description,
-          clt.created_at,
-          u.username,
-          u.full_name
-        FROM customer_loyalty_transactions clt
-        LEFT JOIN users u ON u.id = clt.created_by
-        WHERE clt.company_id = $1 AND clt.customer_id = $2
-        ORDER BY clt.created_at DESC
-        LIMIT 100
-        `,
-        [req.user.companyId, req.params.id]
-      );
-
-      res.json({
-        success: true,
-        data: {
-          customerId: req.params.id,
-          customerName: customerCheck.rows[0].name,
-          balance: Number(balanceResult.rows[0]?.balance || 0),
-          transactions: transactionsResult.rows,
-        },
-      });
-    } catch (error) {
-      console.error("Get customer loyalty error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Unable to load customer loyalty",
-      });
-    }
-  });
 
 
 
