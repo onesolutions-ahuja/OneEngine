@@ -17,6 +17,10 @@ for (const key of developerSet) {
   routes.add(`developer/${key}`)
   routes.add(`settings/${key}`)
 }
+// Legacy Builder URLs are normalized by readRoute() to GPT Builder but still
+// need real Pages entry documents so direct/saved links return HTTP 200.
+routes.add('developer/workflow-builder')
+routes.add('developer/builder-2')
 for (const match of settingsVisuals.matchAll(/^\s*(?:'([a-z-]+)'|([a-z-]+))\s*:/gm)) {
   const key = match[1] || match[2]
   if (!key || developerSet.has(key)) continue
