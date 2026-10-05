@@ -49,6 +49,20 @@ export function GPTBuilderUnsavedHistoryDialog({ saving, onCancel, onSaveAndView
   </div>
 }
 
+
+function versionItems(entry){
+  const action=entry?.definition?.action||{}
+  return [
+    {id:'flow',kind:'Flow',label:entry?.definition?.name||action.label||'Flow',value:{flowType:action.flowType,start:action.start,runContext:action.runContext}},
+    ...(Array.isArray(action.resources)?action.resources:[]).map((item)=>({id:`resource:${item.id||item.apiName}`,kind:'Resource',label:item.label||item.apiName,value:item})),
+    ...(Array.isArray(action.gptBuilderElements)?action.gptBuilderElements:[]).map((item)=>({id:`element:${item.id||item.apiName}`,kind:item.key==='screen'?'Screen':item.key==='transform'?'Transform':'Element',label:item.label||item.apiName,value:item})),
+  ]
+}
+function compareVersionItems(left,right){
+ const a=new Map(versionItems(left).map(item=>[item.id,item])),b=new Map(versionItems(right).map(item=>[item.id,item]))
+ return [...new Set([...a.keys(),...b.keys()])].map(id=>{const before=b.get(id),after=a.get(id);return {id,kind:after?.kind||before?.kind,label:after?.label||before?.label,status:!before?'Added':!after?'Deleted':JSON.stringify(before.value)===JSON.stringify(after.value)?'Unchanged':'Changed',before:before?.value,after:after?.value}})
+}
+
 function changeSummary(entry, previous) {
   const currentActions = Array.isArray(entry?.definition?.action?.gptBuilderElements) ? entry.definition.action.gptBuilderElements : []
   const previousActions = Array.isArray(previous?.definition?.action?.gptBuilderElements) ? previous.definition.action.gptBuilderElements : []
@@ -62,7 +76,12 @@ function changeSummary(entry, previous) {
 }
 
 export function GPTBuilderEditHistoryPanel({ entries, loading, selectedVersion, onSelect, onRestore, onSaveAsVersion, onSaveAsFlow, onClose }) {
+  const [compareMode,setCompareMode]=useState('table')
+  const [changedOnly,setChangedOnly]=useState(true)
   const selected = entries.find((entry) => Number(entry.version) === Number(selectedVersion)) || entries[0] || null
+  const selectedIndex=entries.indexOf(selected)
+  const compared=selected?compareVersionItems(selected,entries[selectedIndex+1]):[]
+  const visibleCompared=changedOnly?compared.filter((item)=>item.status!=='Unchanged'):compared
   const summaries = useMemo(() => new Map(entries.map((entry, index) => [Number(entry.version), changeSummary(entry, entries[index + 1])])), [entries])
   return <aside className="gptb-edit-history" aria-label="Flow Version Edit History">
     <header><div><Clock3 size={16}/><span><strong>Flow Version Edit History</strong><small>Saved changes for this flow version.</small></span></div><button className="gptb-icon-button" aria-label="Exit Edit History" onClick={onClose}><X size={16}/></button></header>
@@ -79,7 +98,7 @@ export function GPTBuilderEditHistoryPanel({ entries, loading, selectedVersion, 
     {selected ? <div className="gptb-edit-history-detail">
       <h4>Save {selected.version}</h4>
       <p>{selected.lifecycle_status || 'DRAFT'} · {selected.created_at ? new Date(selected.created_at).toLocaleString() : 'Saved'}</p>
-      <details><summary>Details</summary><div>{(selected.definition?.action?.gptBuilderElements || []).map((element) => <span key={element.id || element.apiName}>{element.label || element.apiName}<small>{element.key || 'Element'}</small></span>)}</div></details>
+      <details><summary>Details</summary><div>{(selected.definition?.action?.gptBuilderElements || []).map((element) => <span key={element.id || element.apiName}>{element.label || element.apiName}<small>{element.key || 'Element'}</small></span>)}</div></details>      <section className="gptb-version-compare"><div className="gptb-version-compare-toolbar"><b>Compare Versions</b><button className={compareMode==='table'?'is-active':''} onClick={()=>setCompareMode('table')}>Table</button><button className={compareMode==='visual'?'is-active':''} onClick={()=>setCompareMode('visual')}>Visual</button><label><input type="checkbox" checked={changedOnly} onChange={(event)=>setChangedOnly(event.target.checked)}/> Show Only Changed Items</label></div><p>{visibleCompared.filter(i=>i.status==='Added').length} added · {visibleCompared.filter(i=>i.status==='Changed').length} changed · {visibleCompared.filter(i=>i.status==='Deleted').length} deleted</p>{compareMode==='table'?<div className="gptb-version-table">{visibleCompared.map(item=><div key={item.id}><span>{item.kind}</span><b>{item.label}</b><em>{item.status}</em><details><summary>Property changes</summary><pre>{JSON.stringify({before:item.before,after:item.after},null,2)}</pre></details></div>)}</div>:<div className="gptb-version-visual">{visibleCompared.map(item=><div key={item.id} className={`is-${item.status.toLowerCase()}`}><b>{item.label}</b><small>{item.kind} · {item.status}</small></div>)}</div>}</section>
       <div className="gptb-edit-history-actions"><button className="gptb-button" onClick={() => onRestore(selected)}><RotateCcw size={13}/> Restore</button><button className="gptb-button" onClick={() => onSaveAsVersion(selected)}><Save size={13}/> Save as New Version</button><button className="gptb-button" onClick={() => onSaveAsFlow(selected)}>Save as New Flow</button></div>
     </div> : null}
   </aside>
