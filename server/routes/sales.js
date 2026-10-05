@@ -65,14 +65,15 @@ export default function createSalesRouter({
   }) {
     const flowResult = await client.query(
       `SELECT r.action,o.id AS object_id,o.object_key,o.source_table,o.label
-         FROM platform_rules r
-         JOIN platform_objects o ON o.id=r.object_id
-        WHERE o.object_key='sale'
-          AND r.active=TRUE
-          AND r.lifecycle_status='ACTIVE'
-          AND r.action->>'apiName'='ONETILL_PAYMENT_MODE'
+         FROM platform_buttons b
+         JOIN platform_objects o ON o.id=b.object_id
+         JOIN platform_rules r ON r.id::text=b.target_key
+        WHERE b.button_key='till_payment_process'
+          AND b.active=TRUE AND b.target_type='workflow'
+          AND r.active=TRUE AND r.lifecycle_status='ACTIVE'
+          AND (b.company_id IS NULL OR b.company_id=$1)
           AND (r.company_id IS NULL OR r.company_id=$1)
-        ORDER BY CASE WHEN r.company_id=$1 THEN 0 ELSE 1 END,r.updated_at DESC
+        ORDER BY CASE WHEN b.company_id=$1 THEN 0 ELSE 1 END,r.updated_at DESC
         LIMIT 1`,
       [req.user.companyId]
     );
