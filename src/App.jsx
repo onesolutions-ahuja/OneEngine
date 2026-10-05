@@ -1580,8 +1580,8 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, onRetr
   const q = String(query || '').trim().toLowerCase()
   const visible = apps.filter((item) => item?.visible !== false && item?.system_only !== true)
     .filter((item) => !q || marketplaceSearchText(item).includes(q))
-  const installed = visible.filter((item) => ['INSTALLED','ACTIVE','INACTIVE'].includes(String(item?.tenant_app_status || '').toUpperCase()))
-  const available = visible.filter((item) => !['INSTALLED','ACTIVE','INACTIVE'].includes(String(item?.tenant_app_status || '').toUpperCase()))
+  const installed = visible.filter((item) => item?.is_installed === true)
+  const available = visible.filter((item) => item?.is_installed !== true)
   const showInstalled = mode !== 'store'
   const renderRows = (rows, start = 0) => rows.slice(0, 12).map((item, index) => {
     const icon = appIconUrl(item)
@@ -1592,8 +1592,7 @@ function TopbarAppsMenu({ apps, query, onClose, onOpenRoute, onOpenStore, onRetr
         className="topbar-app-row"
         onClick={() => {
           const route = resolveAppOpenRoute(item)
-          const tenantStatus = String(item?.tenant_app_status || '').toUpperCase()
-          if (mode !== 'store' && tenantStatus === 'ACTIVE' && route) {
+          if (mode !== 'store' && item?.launchable === true && route) {
             onOpenRoute?.(route)
             onClose?.()
             return
@@ -1669,9 +1668,8 @@ function LauncherOverlay({ apps, query, onQueryChange, onClose, onOpenRoute, onO
           {visible.map((item, index) => {
             const icon = appIconUrl(item)
             const route = resolveAppOpenRoute(item)
-            const tenantStatus = String(item?.tenant_app_status || '').toUpperCase()
-            const installed = ['INSTALLED','ACTIVE','INACTIVE'].includes(tenantStatus)
-            const active = tenantStatus === 'ACTIVE'
+            const installed = item?.is_installed === true
+            const active = item?.launchable === true
             return (
               <motion.button
                 key={item.package_key || item.id}
