@@ -8,7 +8,7 @@ export const DEFAULT_PAYMENT_METHODS = Object.freeze([
   { code: "customer_credit", label: "Customer Credit", kind: "CREDIT", allowOffline: false, sortOrder: 30,
     config: { requiresCustomer: true, inputFields: [] } },
   { code: "gift_card", label: "Gift Card", kind: "GIFT_CARD", allowOffline: false, sortOrder: 40,
-    config: { requiresGiftCardCode: true, inputFields: [{ key: "giftCardCode", label: "Gift card code", type: "text", required: true }] } },
+    config: { handler: "gift_card", requiresGiftCardCode: true, inputFields: [{ key: "giftCardCode", label: "Gift card code", type: "text", required: true }] } },
   { code: "voucher", label: "Voucher", kind: "VOUCHER", allowOffline: false, sortOrder: 50, config: { inputFields: [] } },
   { code: "cheque", label: "Cheque", kind: "CHEQUE", allowOffline: false, sortOrder: 60, config: { inputFields: [] } },
   { code: "bank_transfer", label: "Bank Transfer", kind: "BANK_TRANSFER", allowOffline: false, sortOrder: 70, config: { inputFields: [] } },
