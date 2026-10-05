@@ -1,0 +1,35 @@
+import { useEffect, useMemo, useState } from 'react'
+import { apiRequest } from '../../../services/api'
+
+export function approvalElementDefaults(key){
+  if(key==='approval_stage')return{entryRequirement:'all',entryConditions:[],exitRequirement:'all',exitConditions:[],stepMode:'sequential'}
+  if(key==='approval_step')return{assignmentType:'user',assignmentId:'',approvalMode:'first_response',screenFlowId:'',evaluationFlowId:'',runAs:'current_user',lockRecord:true,allowRecall:true,notifyAssignee:true}
+  return{automationType:'flow',flowId:'',actionKey:'',runAs:'system',faultBehavior:'fault_path'}
+}
+export function approvalElementErrors(key,config={}){
+  const errors=[]
+  if(key==='approval_step'&&!config.assignmentId)errors.push('Select an approver.')
+  if(key==='approval_background_step'&&config.automationType==='flow'&&!config.flowId)errors.push('Select an autolaunched flow.')
+  if(key==='approval_background_step'&&config.automationType==='action'&&!config.actionKey)errors.push('Select an action.')
+  return errors
+}
+export function approvalRuntimeElement(instance){
+  const config={...approvalElementDefaults(instance.key),...(instance.config||{})}
+  return{id:instance.id,key:instance.key,label:instance.label,apiName:instance.apiName,description:instance.description||'',...config}
+}
+export default function GPTBuilderApprovalElement({draft,updateConfig,onConfiguredChange}){
+  const config={...approvalElementDefaults(draft.key),...(draft.config||{})}
+  const [users,setUsers]=useState([]),[groups,setGroups]=useState([]),[flows,setFlows]=useState([]),[actions,setActions]=useState([])
+  useEffect(()=>{let live=true;Promise.all([
+    apiRequest('/api/platform/approval-users').catch(()=>({data:[]})),
+    apiRequest('/api/platform/approval-groups').catch(()=>({data:[]})),
+    apiRequest('/api/platform/rules').catch(()=>({data:[]})),
+    apiRequest('/api/platform/workflow-actions').catch(()=>({data:[]})),
+  ]).then(([u,g,f,a])=>{if(!live)return;setUsers(u?.data||[]);setGroups(g?.data||[]);setFlows(f?.data||[]);setActions(a?.data||[])});return()=>{live=false}},[])
+  const errors=useMemo(()=>approvalElementErrors(draft.key,config),[draft.key,JSON.stringify(config)])
+  useEffect(()=>onConfiguredChange?.(!errors.length,errors),[JSON.stringify(errors)])
+  const patch=(changes)=>updateConfig({...config,...changes})
+  if(draft.key==='approval_stage')return <div className="gptb-gr"><section><h3>Stage</h3><label><span>Step Execution</span><select value={config.stepMode} onChange={e=>patch({stepMode:e.target.value})}><option value="sequential">Sequential</option><option value="concurrent">Concurrent</option></select></label><label><span>Entry Requirements</span><select value={config.entryRequirement} onChange={e=>patch({entryRequirement:e.target.value})}><option value="all">All Conditions Are Met</option><option value="any">Any Condition Is Met</option><option value="formula">Formula Evaluates to True</option></select></label><label><span>Entry Formula / Evaluation Flow</span><input value={config.entryFormula||''} onChange={e=>patch({entryFormula:e.target.value})}/></label><label><span>Exit Requirements</span><select value={config.exitRequirement} onChange={e=>patch({exitRequirement:e.target.value})}><option value="all">All Conditions Are Met</option><option value="any">Any Condition Is Met</option><option value="formula">Formula Evaluates to True</option></select></label><label><span>Exit Formula / Evaluation Flow</span><input value={config.exitFormula||''} onChange={e=>patch({exitFormula:e.target.value})}/></label></section></div>
+  if(draft.key==='approval_step'){const targets=config.assignmentType==='group'?groups:users;return <div className="gptb-gr"><section><h3>Approval Step</h3><label><span>Approver Type</span><select value={config.assignmentType} onChange={e=>patch({assignmentType:e.target.value,assignmentId:''})}><option value="user">User</option><option value="group">Group / Queue</option></select></label><label><span>Approver <b>*</b></span><select value={config.assignmentId} onChange={e=>patch({assignmentId:e.target.value})}><option value="">Select approver</option>{targets.map(item=><option key={item.id} value={item.id}>{item.name||item.label||item.email||item.id}</option>)}</select></label><label><span>Approval Behavior</span><select value={config.approvalMode} onChange={e=>patch({approvalMode:e.target.value})}><option value="first_response">First Response</option><option value="unanimous">All Must Approve</option></select></label><label><span>Associated Screen Flow</span><select value={config.screenFlowId||''} onChange={e=>patch({screenFlowId:e.target.value})}><option value="">None</option>{flows.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Evaluation Flow</span><select value={config.evaluationFlowId||''} onChange={e=>patch({evaluationFlowId:e.target.value})}><option value="">None</option>{flows.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Run As</span><select value={config.runAs} onChange={e=>patch({runAs:e.target.value})}><option value="current_user">Current User</option><option value="system">System Context</option></select></label>{[['lockRecord','Lock record while pending'],['allowRecall','Allow recall'],['notifyAssignee','Notify assignee']].map(([key,label])=><label key={key}><input type="checkbox" checked={config[key]!==false} onChange={e=>patch({[key]:e.target.checked})}/><span>{label}</span></label>)}</section>{errors.length?<div className="gptb-gr-errors">{errors.map(e=><span key={e}>{e}</span>)}</div>:null}</div>}
+  return <div className="gptb-gr"><section><h3>Background Step</h3><label><span>Automation</span><select value={config.automationType} onChange={e=>patch({automationType:e.target.value})}><option value="flow">Autolaunched Flow</option><option value="action">Action</option></select></label>{config.automationType==='flow'?<label><span>Flow <b>*</b></span><select value={config.flowId||''} onChange={e=>patch({flowId:e.target.value})}><option value="">Select flow</option>{flows.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>:<label><span>Action <b>*</b></span><select value={config.actionKey||''} onChange={e=>patch({actionKey:e.target.value})}><option value="">Select action</option>{actions.map(item=><option key={item.key} value={item.key}>{item.displayName||item.key}</option>)}</select></label>}<label><span>Run As</span><select value={config.runAs} onChange={e=>patch({runAs:e.target.value})}><option value="system">System Context</option><option value="current_user">Current User</option></select></label><label><span>On Error</span><select value={config.faultBehavior} onChange={e=>patch({faultBehavior:e.target.value})}><option value="fault_path">Follow Fault Path</option><option value="stop">Stop Approval Process</option></select></label></section>{errors.length?<div className="gptb-gr-errors">{errors.map(e=><span key={e}>{e}</span>)}</div>:null}</div>
+}
