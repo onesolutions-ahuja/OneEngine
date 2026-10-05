@@ -179,3 +179,14 @@ test('password login skips full Google entitlement resolution unless SSO could b
   )
   assert.ok(fastPath.indexOf('if (!packageRow || !installed || !enabled || !configured)') < fastPath.indexOf('getCompanyEntitlements'))
 })
+
+
+test('security governance connected-apps query avoids unsupported FULL OUTER JOIN with OR conditions', async () => {
+  const source = await read('../server/routes/securityGovernance.js')
+  const start = source.indexOf('router.get("/security/governance/connected-apps"')
+  const end = source.indexOf('router.put("/security/governance/connected-apps/:appKey"', start)
+  const route = source.slice(start, end)
+  assert.equal(route.includes('FULL OUTER JOIN'), false)
+  assert.match(route, /UNION ALL/)
+  assert.match(route, /NOT EXISTS/)
+})
