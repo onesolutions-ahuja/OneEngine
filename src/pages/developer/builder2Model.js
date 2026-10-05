@@ -91,7 +91,7 @@ export function normalizeGraph(nodes=[],edges=[]) {
 export function graphTopologyIssues(nodes=[],edges=[]) {
   const graph=normalizeGraph(nodes,edges)
   const issues=[]
-  const normal=graph.edges.filter(edge=>edge.kind!=='fault')
+  const normal=graph.edges.filter(edge=>!['fault','goto'].includes(edge.kind))
   const bySource=new Map(), byTarget=new Map()
   for(const edge of normal){
     const sourceKey=`${edge.source}:${edge.sourceHandle||'default'}`
@@ -114,7 +114,7 @@ export function validateGraphConnection(nodes=[],edges=[],candidate={}) {
   const kind=candidate.kind||'normal'
   const sameHandle=edges.some(edge=>edge.source===candidate.source&&(edge.sourceHandle||'default')===(candidate.sourceHandle||'default')&&(edge.kind||'normal')===kind)
   if(sameHandle)return 'This connector already has an outgoing path. Remove it before connecting another element.'
-  if(kind!=='fault'&&edges.some(edge=>edge.kind!=='fault'&&edge.target===candidate.target))return 'The target already has an incoming path. Use an explicit branch instead.'
+  if(!['fault','goto'].includes(kind)&&edges.some(edge=>!['fault','goto'].includes(edge.kind)&&edge.target===candidate.target))return 'The target already has an incoming path. Use an explicit Go To connector instead.'
   const issues=graphTopologyIssues(nodes,[...edges,{...candidate,id:'candidate'}])
   const blocking=issues.find(issue=>['GRAPH_MULTIPLE_OUTGOING','GRAPH_MULTIPLE_INCOMING','GRAPH_CYCLE'].includes(issue.code))
   return blocking?.text||''
