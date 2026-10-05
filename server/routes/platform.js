@@ -7861,20 +7861,32 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             : {},
           steps: {},
         };
-        const results = await executeWorkflowActions({
-          actions,
-          db,
-          pool,
-          req,
-          object,
-          record: virtualRecord,
-          recordId: null,
-          companyId: req.user.companyId,
-          runId: run?.id || null,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
-          trigger: "till_button",
-          workflowVariables,
-        });
+        const transactionClient = await pool.connect();
+        let results;
+        try {
+          await transactionClient.query("BEGIN");
+          const transactionDb = transactionClient.query.bind(transactionClient);
+          results = await executeWorkflowActions({
+            actions,
+            db: transactionDb,
+            pool,
+            req,
+            object,
+            record: virtualRecord,
+            recordId: null,
+            companyId: req.user.companyId,
+            runId: run?.id || null,
+            workflowVersion: Number(workflow.active_version || workflow.version || 1),
+            trigger: "till_button",
+            workflowVariables,
+          });
+          await transactionClient.query("COMMIT");
+        } catch (error) {
+          await transactionClient.query("ROLLBACK");
+          throw error;
+        } finally {
+          transactionClient.release();
+        }
         const waiting = workflowResultsContainStatus(results, "waiting");
         if (run?.id) {
           await db(
