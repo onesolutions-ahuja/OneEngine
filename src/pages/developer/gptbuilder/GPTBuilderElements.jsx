@@ -2,7 +2,7 @@ import React from 'react'
 import {
   ArrowUpDown, Bot, Boxes, CircleHelp, Clock3, Copy, Database, Filter, GitBranch,
   LayoutPanelLeft, ListChecks, Pencil, Plus, Repeat2, Search, Shuffle,
-  Trash2, TriangleAlert, Workflow, X, Zap,
+  Trash2, TriangleAlert, Workflow, X, Zap, CheckCircle2, Layers3,
 } from 'lucide-react'
 
 export const ELEMENT_CATEGORIES = [
@@ -16,6 +16,9 @@ export const ELEMENTS = [
   { key: 'run_agent', label: 'Run Agent', category: 'interaction', icon: Bot, description: 'Use an active agent to handle a task dynamically and return its response to the flow.' },
   { key: 'screen', label: 'Screen', category: 'interaction', icon: LayoutPanelLeft, description: 'Display information to users or collect information from them.' },
   { key: 'subflow', label: 'Subflow', category: 'interaction', icon: Workflow, description: 'Run another active flow and pass values between the parent flow and subflow.' },
+  { key: 'approval_stage', label: 'Stage', category: 'interaction', icon: Layers3, description: 'Group approval steps into a stage with entry and exit requirements.' },
+  { key: 'approval_step', label: 'Approval Step', category: 'interaction', icon: CheckCircle2, description: 'Create an approval work item for configured approvers.' },
+  { key: 'approval_background_step', label: 'Background Step', category: 'interaction', icon: Workflow, description: 'Run an autolaunched flow or action in an approval stage without a user work item.' },
 
   { key: 'assignment', label: 'Assignment', category: 'logic', icon: ListChecks, description: 'Set or change values in variables and other flow resources.' },
   { key: 'decision', label: 'Decision', category: 'logic', icon: GitBranch, description: 'Evaluate conditions and route the flow through different outcome paths.' },
@@ -42,6 +45,8 @@ export function elementByKey(key) {
 export function getAvailableElements({ flowType, startConfig = {}, layout = 'auto' }) {
   const fastRecord = flowType === 'record' && startConfig.optimize === 'fast'
   return ELEMENTS.filter((element) => {
+    const approvalFlow = ['approval_autolaunched','approval_record','approval_external'].includes(flowType)
+    if (['approval_stage','approval_step','approval_background_step'].includes(element.key)) return approvalFlow
     if (element.key === 'screen') return flowType === 'screen'
     if (element.key === 'custom_error') return flowType === 'record'
     if (element.key === 'group') return layout === 'auto'
