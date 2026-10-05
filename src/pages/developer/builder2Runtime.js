@@ -8,7 +8,7 @@ export function configuredValue(value) {
   return value
 }
 
-const operators = { Equals: 'equals', 'Does Not Equal': 'not_equals', 'Is Null': 'is_empty', 'Is Changed': 'changed', 'Greater Than': 'greater_than', 'Greater Than or Equal': 'greater_than_or_equal', 'Less Than': 'less_than', 'Less Than or Equal': 'less_than_or_equal' }
+const operators = { Equals: 'equals', 'Does Not Equal': 'not_equals', 'Is Null': 'is_empty', 'Is Blank': 'is_blank', 'Is Changed': 'changed', 'Greater Than': 'greater_than', 'Greater Than or Equal': 'greater_than_or_equal', 'Less Than': 'less_than', 'Less Than or Equal': 'less_than_or_equal', 'Starts With': 'starts_with', 'Ends With': 'ends_with', Contains: 'contains', In: 'in', 'Not In': 'not_in', 'Was Set': 'was_set', 'Was Visited': 'was_visited', 'Has Error': 'has_error' }
 export function runtimeCondition(row) {
   const operator = row.operator === 'Is Null' && String(row.value) === 'false' ? 'is_not_empty' : operators[row.operator] || row.operator || 'equals'
   return { field: row.resource || row.field || '', operator, value: configuredValue(row.value) }
