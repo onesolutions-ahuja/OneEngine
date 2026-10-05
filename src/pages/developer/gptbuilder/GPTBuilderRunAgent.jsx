@@ -90,6 +90,7 @@ export default function GPTBuilderRunAgent({ draft, updateConfig, resources = []
   const [agentCreateBusy,setAgentCreateBusy]=useState(false)
   const [agentCreateError,setAgentCreateError]=useState('')
   const [actionQuery,setActionQuery]=useState('')
+  const [infoOpen,setInfoOpen]=useState(false)
   useEffect(()=>{
     let live=true
     Promise.all([
@@ -151,6 +152,8 @@ export default function GPTBuilderRunAgent({ draft, updateConfig, resources = []
         <button type="button" className="gptb-button is-brand" disabled={!canCreateAgent||agentCreateBusy} onClick={()=>void createAndActivateAgent()}>{agentCreateBusy?'Creating…':'Create & Activate'}</button>
       </div>}
     </section>
+
+    <section className="gptb-agent-information"><button type="button" className="gptb-inline-action" onClick={()=>setInfoOpen((value)=>!value)}>Agent Information</button>{infoOpen?<div><h4>Available Actions & Tools</h4><p>The selected agent can use its configured actions as tools while processing the request.</p><div>{availableActions.map((action)=><article key={action.key}><b>{action.displayName||action.key}</b><small>{action.description||'Flow action'}</small><code>{action.key}</code></article>)}</div><h4>Agent Type</h4><p>{config.agentMode==='create'?'Flow-created agent':'Existing active agent'} · {config.agentKey||config.createdAgent.apiName||'Not selected'}</p></div>:null}</section>
 
     <section><h3>Set Input Values</h3>
       <label><span>Agent Request <b>*</b></span><select value={config.requestMode} onChange={(event)=>patch({requestMode:event.target.value,request:''})}><option value="value">Value</option><option value="resource">Resource</option></select></label>
