@@ -1,7 +1,6 @@
 import express from "express";
 import { createHash } from "node:crypto";
 import { allocateBatchConsumption } from "../services/inventory.js";
-import { normaliseGiftCardCode, isCardRedeemable, validateRedemption } from "../services/giftCards.js";
 import { computeBasketTotals, roundCurrency, resolveEffectivePrice } from "../src/utils/saleTotals.js";
 import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
@@ -1064,33 +1063,6 @@ export default function createSalesRouter({
           ? Number(cashReceived == null || cashReceived === "" ? total : cashReceived)
           : total;
 
-        let giftCardTender = null;
-        if (String(selectedPaymentConfig.handler || "").toLowerCase() === "gift_card") {
-          if (paymentLines || !normaliseGiftCardCode(giftCardCode)) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({ success: false, message: "A gift card code and a single gift card tender are required" });
-          }
-          const card = await client.query(
-            `SELECT * FROM gift_cards WHERE company_id = $1 AND UPPER(REPLACE(REPLACE(code, '-', ''), ' ', '')) = $2 FOR UPDATE`,
-            [req.user.companyId, normaliseGiftCardCode(giftCardCode)]
-          );
-          const eligibility = isCardRedeemable(card.rows[0]);
-          if (!eligibility.ok) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({ success: false, message: eligibility.reason });
-          }
-          const balance = await client.query(
-            `SELECT COALESCE(SUM(CASE transaction_type WHEN 'redeem' THEN -amount ELSE amount END), 0) AS balance
-             FROM gift_card_transactions WHERE gift_card_id = $1 AND company_id = $2`,
-            [card.rows[0].id, req.user.companyId]
-          );
-          const redemption = validateRedemption(balance.rows[0]?.balance, total);
-          if (!redemption.ok) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({ success: false, message: redemption.reason });
-          }
-          giftCardTender = { id: card.rows[0].id, balance: Number(balance.rows[0]?.balance) || 0 };
-        }
 
         if (allowedOrderDiscountType && engine.orderDiscount > 0 && req.user.id) {
           saleDiscountAudit.push({
@@ -1125,7 +1097,7 @@ export default function createSalesRouter({
             amount,
             cashReceived: methodCode === String(paymentMethod || "") ? receivedAmount : amount,
             customerSelected: Boolean(customerId),
-            hasGiftCardCode: Boolean(normaliseGiftCardCode(giftCardCode)),
+            hasGiftCardCode: Boolean(String(giftCardCode || "").trim()),
             currency: session.rows[0]?.currency || "GBP",
             clientRequestId: `${req.user.companyId}:${clientRequestId.toLowerCase()}:payment.${methodCode}`,
             terminalId: session.rows[0].terminal_id,
@@ -1474,19 +1446,6 @@ export default function createSalesRouter({
           );
         }
 
-        if (giftCardTender) {
-          await client.query(
-            `INSERT INTO gift_card_transactions
-              (company_id, gift_card_id, transaction_type, amount, balance_after, reference_type, reference_id, description, store_id, created_by)
-             VALUES ($1, $2, 'redeem', $3, $4 - $3, 'sale', $5, 'Gift card sale', $6, $7)
-             ON CONFLICT DO NOTHING RETURNING balance_after`,
-            [req.user.companyId, giftCardTender.id, total, giftCardTender.balance, saleId, req.user.storeId, req.user.id]
-          );
-          await client.query(
-            `UPDATE payments SET provider_transaction_id = $1 WHERE sale_id = $2 AND payment_method = $3`,
-            [`giftcard:${giftCardTender.id}`, saleId, "gift_card"]
-          );
-        }
 
         /*
          * T10Y — Customer credit sale. Runs INSIDE the sale transaction so
