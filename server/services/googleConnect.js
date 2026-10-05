@@ -120,31 +120,38 @@ export async function getGoogleConnectPasswordLoginRuntime(db, companyId) {
     return resolveGoogleConnectPasswordLoginRuntime(db, companyId, null, null);
   }
 
-  const [packageResult, connectionResult] = await Promise.all([
-    db(
-      `SELECT p.*, i.status AS installation_status, i.suspended_by_entitlement, i.deactivated_by_user
-         FROM package_registry p
-         LEFT JOIN company_package_installations i
-           ON i.package_id=p.id AND i.company_id=$1
-        WHERE p.package_key=$2 AND p.active=true
-        LIMIT 1`,
-      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
-    ),
-    db(
-      `SELECT *
-         FROM integration_connections
-        WHERE company_id=$1 AND connector_package_key=$2
-        ORDER BY updated_at DESC
-        LIMIT 1`,
-      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
-    ),
-  ]);
+  const lookup = await db(
+    `SELECT
+       (
+         SELECT row_to_json(pkg)
+           FROM (
+             SELECT p.*, i.status AS installation_status, i.suspended_by_entitlement, i.deactivated_by_user
+               FROM package_registry p
+               LEFT JOIN company_package_installations i
+                 ON i.package_id=p.id AND i.company_id=$1
+              WHERE p.package_key=$2 AND p.active=true
+              LIMIT 1
+           ) pkg
+       ) AS package,
+       (
+         SELECT row_to_json(conn)
+           FROM (
+             SELECT *
+               FROM integration_connections
+              WHERE company_id=$1 AND connector_package_key=$2
+              ORDER BY updated_at DESC
+              LIMIT 1
+           ) conn
+       ) AS connection`,
+    [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+  );
+  const row = lookup.rows[0] || {};
 
   return resolveGoogleConnectPasswordLoginRuntime(
     db,
     companyId,
-    packageResult.rows[0] || null,
-    connectionResult.rows[0] || null
+    row.package || null,
+    row.connection || null
   );
 }
 
