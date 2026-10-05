@@ -7,6 +7,7 @@ import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing
 
 import { packageVersionHasEntitlement, reconcileCompanyPackageEntitlements } from "../services/packageEntitlements.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeWorkflowActions } from "../services/platformWorkflow.js";
 import { assertTrustedPackageManifest } from "../services/trustedPackages.js";
 
 
@@ -480,6 +481,89 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
   });
 
 
+
+
+  async function runTenantAppLifecycleFlow(req, packageKey, buttonKey) {
+    const tenantResult = await db(
+      `SELECT ta.*,osa.app_key
+         FROM tenant_apps ta
+         JOIN onestore_apps osa ON osa.id=ta.onestore_app_id
+        WHERE ta.company_id=$1 AND osa.app_key=$2
+        LIMIT 1`,
+      [req.user.companyId, packageKey]
+    );
+    const record = tenantResult.rows[0];
+    if (!record) throw Object.assign(new Error("Tenant App record is unavailable"), { status: 404 });
+
+    const objectResult = await db(
+      "SELECT * FROM platform_objects WHERE object_key='tenant_app' AND active=TRUE AND company_id IS NULL LIMIT 1"
+    );
+    const object = objectResult.rows[0];
+    if (!object) throw Object.assign(new Error("Tenant App object is unavailable"), { status: 503 });
+
+    const buttonResult = await db(
+      `SELECT * FROM platform_buttons
+        WHERE object_id=$1 AND button_key=$2 AND active=TRUE AND company_id IS NULL
+        LIMIT 1`,
+      [object.id, buttonKey]
+    );
+    const button = buttonResult.rows[0];
+    if (!button || button.target_type !== "workflow" || !button.target_key) {
+      throw Object.assign(new Error("Tenant App lifecycle Flow is not configured"), { status: 503 });
+    }
+
+    const workflowResult = await db(
+      `SELECT * FROM platform_rules
+        WHERE object_id=$1 AND id::text=$2 AND active=TRUE
+          AND lifecycle_status='ACTIVE'
+          AND company_id IS NULL
+        LIMIT 1`,
+      [object.id, String(button.target_key)]
+    );
+    const workflow = workflowResult.rows[0];
+    const actions = Array.isArray(workflow?.action?.actions) ? workflow.action.actions : [];
+    if (!workflow || !actions.length) {
+      throw Object.assign(new Error("Tenant App lifecycle Flow has no executable steps"), { status: 503 });
+    }
+
+    const results = await executeWorkflowActions({
+      actions,
+      db,
+      pool,
+      req,
+      object,
+      record,
+      recordId: record.id,
+      companyId: req.user.companyId,
+      userId: req.user.id || null,
+      trigger: "package_lifecycle_compatibility_route",
+    });
+    const refreshed = await db(
+      "SELECT * FROM tenant_apps WHERE id=$1 AND company_id=$2 LIMIT 1",
+      [record.id, req.user.companyId]
+    );
+    return { results, tenantApp: refreshed.rows[0] || record };
+  }
+
+  const lifecycleCompatibility = [
+    { paths: ["/packages/:packageKey/install", "/platform/packages/:packageKey/install"], buttonKey: "onestore_install" },
+    { paths: ["/packages/:packageKey/deactivate", "/platform/packages/:packageKey/deactivate"], buttonKey: "onestore_deactivate" },
+    { paths: ["/packages/:packageKey/reactivate", "/platform/packages/:packageKey/reactivate"], buttonKey: "onestore_activate" },
+    { paths: ["/packages/:packageKey/uninstall", "/platform/packages/:packageKey/uninstall"], buttonKey: "onestore_uninstall" },
+    { paths: ["/packages/:packageKey/upgrade", "/platform/packages/:packageKey/upgrade"], buttonKey: "onestore_upgrade" },
+    { paths: ["/packages/:packageKey/activate-trial"], buttonKey: "onestore_trial" },
+  ];
+
+  for (const lifecycle of lifecycleCompatibility) {
+    router.post(lifecycle.paths, ...manage, async (req, res) => {
+      try {
+        const data = await runTenantAppLifecycleFlow(req, req.params.packageKey, lifecycle.buttonKey);
+        res.json({ success: true, data });
+      } catch (error) {
+        res.status(error.status || 400).json({ success: false, code: error.code || null, message: error.message || "Package lifecycle Flow failed" });
+      }
+    });
+  }
 
   router.post("/packages/:packageKey/activate-trial", ...manage, async (req, res) => {
     const packageKey = req.params.packageKey;
