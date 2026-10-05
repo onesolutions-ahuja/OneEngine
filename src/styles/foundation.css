@@ -66,6 +66,12 @@ button:focus-visible {
   background: transparent;
 }
 
+/* Authenticated app routes sit above this substrate. Keep it neutral so any
+   temporary/unpainted route gap cannot expose the lock-screen colour wallpaper. */
+.wallpaper--desktop {
+  background: #f5f5f6;
+}
+
 .wallpaper--lock {
   filter: saturate(0.92) brightness(0.78);
 }
