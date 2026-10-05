@@ -75,3 +75,20 @@ test("legacy supplier return endpoints are removed in favor of protected metadat
   const capability = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
   assert.match(capability, /key:"supplier\.return\.execute"/);
 });
+
+
+test("legacy purchasing route is only a compatibility bridge to protected purchase.create", async () => {
+  const source = await readFile(new URL("../server/routes/purchases.js", import.meta.url), "utf8");
+  assert.match(source, /function:purchase\.create/);
+  assert.equal(source.includes('router.get('), false);
+  assert.equal(source.includes('"/purchases/:id/receive"'), false);
+  assert.equal(source.includes("BEGIN"), false);
+  assert.equal(source.includes("SELECT "), false);
+});
+
+test("purchasing business receipt logic is package-owned, not a reusable core service", async () => {
+  const capability = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
+  assert.match(capability, /function planReceipt/);
+  assert.match(capability, /async function receivePurchase/);
+  assert.equal(capability.includes("../../services/purchaseReceiving.js"), false);
+});
