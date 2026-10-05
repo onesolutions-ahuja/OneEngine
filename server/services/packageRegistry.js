@@ -2488,6 +2488,54 @@ export function packageDefinition(entry) {
         ],
         migrations: ["product_core.adopt_canonical_metadata.v1"],
       } : {}),
+      ...(entry.key === "retail_pos" ? {
+        objects: [
+          { objectKey: "layaway", label: "Layaway", pluralLabel: "Layaways", sourceTable: "layaways", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
+            { apiName: "customer_id", label: "Customer", fieldType: "lookup", sourceColumn: "customer_id", writable: true },
+            { apiName: "total", label: "Total", fieldType: "currency", sourceColumn: "total", required: true, writable: false },
+            { apiName: "paid_amount", label: "Paid", fieldType: "currency", sourceColumn: "paid_amount", writable: false },
+            { apiName: "balance", label: "Balance", fieldType: "currency", sourceColumn: "balance", writable: false },
+            { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: false, options: ["OPEN","COMPLETED","CANCELLED"] },
+            { apiName: "due_date", label: "Due Date", fieldType: "date", sourceColumn: "due_date", writable: true },
+            { apiName: "notes", label: "Notes", fieldType: "text", sourceColumn: "notes", writable: true },
+            { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+          ]},
+          { objectKey: "layaway_line", label: "Layaway Line", pluralLabel: "Layaway Lines", sourceTable: "layaway_items", metadataScope: "global", fields: [
+            { apiName: "layaway_id", label: "Layaway", fieldType: "lookup", sourceColumn: "layaway_id", required: true, writable: false },
+            { apiName: "product_id", label: "Product", fieldType: "lookup", sourceColumn: "product_id", required: true, writable: false },
+            { apiName: "product_name", label: "Product Name", fieldType: "text", sourceColumn: "product_name", writable: false },
+            { apiName: "quantity", label: "Quantity", fieldType: "decimal", sourceColumn: "quantity", writable: false },
+            { apiName: "unit_price", label: "Unit Price", fieldType: "currency", sourceColumn: "unit_price", writable: false },
+            { apiName: "total", label: "Total", fieldType: "currency", sourceColumn: "total", writable: false }
+          ]},
+          { objectKey: "layaway_payment", label: "Layaway Payment", pluralLabel: "Layaway Payments", sourceTable: "layaway_payments", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "layaway_id", label: "Layaway", fieldType: "lookup", sourceColumn: "layaway_id", required: true, writable: false },
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
+            { apiName: "payment_method", label: "Payment Method", fieldType: "text", sourceColumn: "payment_method", writable: false },
+            { apiName: "amount", label: "Amount", fieldType: "currency", sourceColumn: "amount", writable: false },
+            { apiName: "status", label: "Status", fieldType: "text", sourceColumn: "status", writable: false },
+            { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+          ]},
+          { objectKey: "gift_card", label: "Gift Card", pluralLabel: "Gift Cards", sourceTable: "gift_cards", metadataScope: "global", fields: [
+            { apiName: "code", label: "Code", fieldType: "text", sourceColumn: "code", required: true, writable: false },
+            { apiName: "reference_number", label: "Reference", fieldType: "text", sourceColumn: "reference_number", writable: false },
+            { apiName: "customer_id", label: "Customer", fieldType: "lookup", sourceColumn: "customer_id", writable: false },
+            { apiName: "status", label: "Status", fieldType: "picklist", sourceColumn: "status", writable: false, options: ["active","blocked","expired"] },
+            { apiName: "initial_value", label: "Initial Value", fieldType: "currency", sourceColumn: "initial_value", writable: false },
+            { apiName: "expires_at", label: "Expires", fieldType: "datetime", sourceColumn: "expires_at", writable: false },
+            { apiName: "issued_at", label: "Issued", fieldType: "datetime", sourceColumn: "issued_at", writable: false }
+          ]}
+        ],
+        relationships: [
+          { parentObjectKey: "layaway", childObjectKey: "layaway_line", relationshipKey: "lines", relationshipType: "one_to_many", childFieldApiName: "layaway_id" },
+          { parentObjectKey: "layaway", childObjectKey: "layaway_payment", relationshipKey: "payments", relationshipType: "one_to_many", childFieldApiName: "layaway_id" }
+        ],
+        listViews: [
+          { objectKey: "layaway", viewKey: "open", label: "Open Layaways", columns: ["customer_id","total","paid_amount","balance","status","due_date"], isDefault: true },
+          { objectKey: "gift_card", viewKey: "all", label: "Gift Cards", columns: ["code","reference_number","customer_id","status","initial_value","expires_at"], isDefault: true }
+        ],
+      } : {}),
       ...(entry.key === "online_orders" ? {
         metadataOwnership: {
           policy: "PACKAGE_MANAGED",
@@ -3767,6 +3815,25 @@ export function packageDefinition(entry) {
             runtimeComponent: "delivery_workspace",
             definition: { presentation_mode: "landing", runtime_component: "delivery_workspace", components: [] },
           },
+        ],
+      } : {}),
+      ...(entry.key === "one_kiosk" ? {
+        objects: [
+          { objectKey: "kiosk_device", label: "Kiosk Device", pluralLabel: "Kiosk Devices", sourceTable: "kiosk_devices", metadataScope: "global", storeScoped: true, fields: [
+            { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
+            { apiName: "device_key", label: "Device Key", fieldType: "text", sourceColumn: "device_key", required: true, writable: false },
+            { apiName: "name", label: "Name", fieldType: "text", sourceColumn: "name", required: true, writable: true },
+            { apiName: "active", label: "Active", fieldType: "boolean", sourceColumn: "active", writable: true },
+            { apiName: "internet_status", label: "Internet", fieldType: "text", sourceColumn: "internet_status", writable: false },
+            { apiName: "server_status", label: "Server", fieldType: "text", sourceColumn: "server_status", writable: false },
+            { apiName: "payment_status", label: "Payment", fieldType: "text", sourceColumn: "payment_status", writable: false },
+            { apiName: "printer_status", label: "Printer", fieldType: "text", sourceColumn: "printer_status", writable: false },
+            { apiName: "last_heartbeat_at", label: "Last Heartbeat", fieldType: "datetime", sourceColumn: "last_heartbeat_at", writable: false },
+            { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false }
+          ]}
+        ],
+        listViews: [
+          { objectKey: "kiosk_device", viewKey: "all", label: "Kiosk Devices", columns: ["name","store_id","active","internet_status","payment_status","printer_status","last_heartbeat_at"], isDefault: true }
         ],
       } : {}),
       ...(entry.key === "kds" ? {
