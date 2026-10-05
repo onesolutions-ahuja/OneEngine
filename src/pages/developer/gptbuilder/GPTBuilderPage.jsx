@@ -515,7 +515,7 @@ function AutoDecisionCard({ decision, elements, onOpenDecision, onOpenMember, on
   </div>
 }
 
-function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], resources = [], elements = [], onClose }) {
+function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], resources = [], elements = [], onClose, onNavigateElement }) {
   const [records, setRecords] = useState([])
   const [recordSearch, setRecordSearch] = useState('')
   const [recordId, setRecordId] = useState('')
@@ -533,6 +533,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   const [skipStartConditions, setSkipStartConditions] = useState(false)
   const [debugWaitBehavior, setDebugWaitBehavior] = useState(false)
   const [debugWaitPaths, setDebugWaitPaths] = useState({})
+  const [mockOutputs, setMockOutputs] = useState({})
   const waitElements = elements.filter((element) => ['wait_duration','wait_conditions','wait_until_date'].includes(element.key))
   const executionStorageKey = `gptbuilder.execution.${workflowId || 'new'}.${mode}`
 
@@ -579,15 +580,16 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       setSkipStartConditions(saved.skipStartConditions === true)
       setDebugWaitBehavior(saved.debugWaitBehavior === true)
       setDebugWaitPaths(saved.debugWaitPaths && typeof saved.debugWaitPaths === 'object' ? saved.debugWaitPaths : {})
+      setMockOutputs(saved.mockOutputs && typeof saved.mockOutputs === 'object' ? saved.mockOutputs : {})
     } catch {}
   }, [executionStorageKey, workflowId])
 
   useEffect(() => {
     if (!workflowId) return
     try {
-      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions, skipStartConditions, debugWaitBehavior, debugWaitPaths }))
+      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions, skipStartConditions, debugWaitBehavior, debugWaitPaths, mockOutputs }))
     } catch {}
-  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions, debugWaitBehavior, JSON.stringify(debugWaitPaths)])
+  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions, debugWaitBehavior, JSON.stringify(debugWaitPaths), JSON.stringify(mockOutputs)])
 
   const resetExecutionSettings = () => {
     setRecordId('')
@@ -600,6 +602,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
     setSkipStartConditions(false)
     setDebugWaitBehavior(false)
     setDebugWaitPaths({})
+    setMockOutputs({})
     setResult(null)
     setError('')
     try { sessionStorage.removeItem(executionStorageKey) } catch {}
@@ -620,6 +623,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       setSkipStartConditions(false)
       setDebugWaitBehavior(false)
       setDebugWaitPaths({})
+      setMockOutputs({})
       return
     }
     const config = savedTest.config && typeof savedTest.config === 'object' ? savedTest.config : {}
@@ -640,6 +644,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
     setSkipStartConditions(config.skipStartConditionRequirements === true)
     setDebugWaitBehavior(config.debugWaitElementBehavior === true)
     setDebugWaitPaths(config.debugWaitPaths && typeof config.debugWaitPaths === 'object' ? config.debugWaitPaths : {})
+    setMockOutputs(config.mockOutputs && typeof config.mockOutputs === 'object' ? config.mockOutputs : {})
   }
 
   const filteredRecords = records.filter((record) => {
@@ -680,7 +685,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           ...(recordId ? { recordId } : {}),
           inputs,
           ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
-          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false, debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {}, assertions: automationEnabled ? assertions.map(serializeAssertion) : [] } : {}),
+          ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false, debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {}, mockOutputs: mode === 'test' ? mockOutputs : {}, assertions: automationEnabled ? assertions.map(serializeAssertion) : [] } : {}),
         }),
       })
       setResult(response?.data || {})
@@ -783,6 +788,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           {invalidAssertions ? <p className="gptb-execution-error" role="alert">Complete every assertion before saving or running the scenario.</p> : null}
         </> : null}
       </section> : null}
+      {mode === 'test' && elements.some((element)=>['action','subflow'].includes(element.key)) ? <section><h3>Mock Outputs</h3><p className="gptb-help-text">Provide Scenario Output values for Action and Subflow elements without invoking their external work.</p>{elements.filter((element)=>['action','subflow'].includes(element.key)).map((element)=><label key={element.id}><span>{element.label || element.apiName} · Scenario Output</span><textarea rows={3} value={mockOutputs[element.id] ? JSON.stringify(mockOutputs[element.id],null,2) : ''} placeholder='{"output":"value"}' onChange={(event)=>{try{setMockOutputs((current)=>({...current,[element.id]:event.target.value.trim()?JSON.parse(event.target.value):{}}))}catch{}}}/></label>)}</section> : null}
       {mode !== 'run' ? <section><h3>Select Run Options</h3>
         {mode === 'test' && flowType === 'record' ? <label className="gptb-properties-check"><input type="checkbox" checked={skipStartConditions} onChange={(event) => setSkipStartConditions(event.target.checked)}/><span>Skip start condition requirements</span></label> : null}
         {mode === 'test' && flowType === 'autolaunched' && waitElements.length ? <>
@@ -799,7 +805,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         {mode === 'test' && automationEnabled && flowType !== 'record' ? <p className="gptb-help-text">Rollback is required when Scenario Testing Automation and assertions are enabled.</p> : null}
       </section> : null}
       {error ? <div className="gptb-execution-error" role="alert">{error}</div> : null}
-      {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
+      {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b>{!check.passed && check.stepId ? <button type="button" className="gptb-inline-action" onClick={()=>onNavigateElement?.(check.stepId)}>View Element</button> : null}</summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
     </div>
     <footer><button className="gptb-button" onClick={onClose}>Close</button>{mode !== 'run' ? <button className="gptb-button" onClick={resetExecutionSettings}>Reset Settings</button> : null}<button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId) || invalidAssertions} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
   </aside>
