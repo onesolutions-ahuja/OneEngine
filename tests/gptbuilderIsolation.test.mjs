@@ -1316,3 +1316,11 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 13 monitoring', async () => {
+ const monitor=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderMonitoringPanel.jsx',import.meta.url),'utf8')
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ for(const token of ['Total Runs','Average Duration','Paused / Waiting','Run Status','Element Analytics','Open Details','Dependencies & Usage','Last 7 Days','Last 30 Days','Last 90 Days']) assert.ok(monitor.includes(token),token)
+ assert.ok(page.includes('GPTBuilderMonitoringPanel'))
+})
