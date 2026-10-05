@@ -2383,10 +2383,41 @@ export function packageDefinition(entry) {
         ],
         validationRules: [
           { objectKey:"sale",name:"Sale total cannot be negative",triggerKey:"before_save",conditions:[{field:"total",operator:"less_than",value:0}],action:{type:"validation",message:"Sale total cannot be negative"} },
+          { objectKey:"sale",name:"Sale must contain at least one line",triggerKey:"before_save",conditions:[{field:"line_count",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"A sale must contain at least one line"} },
           { objectKey:"sale_item",name:"Sale item quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Sale item quantity must be greater than zero"} },
           { objectKey:"payment",name:"Payment amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Payment amount must be greater than zero"} },
         ],
-      } : {}),
+        workflows: [
+          {
+            objectKey:"sale",name:"Complete Sale",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
+            action:{
+              type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"COMPLETE_SALE",
+              inputContract:[
+                {name:"sale",type:"record",required:true},
+                {name:"items",type:"collection",required:true},
+                {name:"payments",type:"collection",required:true}
+              ],
+              outputContract:[{name:"saleId",type:"text",source:"variables.saleId"}],
+              resources:[
+                {value:"variables.sale",apiName:"sale",label:"Sale",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:false,objectKey:"sale"},
+                {value:"variables.items",apiName:"items",label:"Sale Items",type:"Variable",dataType:"Collection",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"sale_item"},
+                {value:"variables.payments",apiName:"payments",label:"Payments",type:"Variable",dataType:"Collection",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"payment"},
+                {value:"variables.saleId",apiName:"saleId",label:"Sale ID",type:"Variable",dataType:"Text",defaultValue:"",isCollection:false,availableInput:false,availableOutput:true,objectKey:""}
+              ],
+              actions:[
+                {id:"create_sale",label:"1. Create Sale",apiName:"create_sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"variables.sale"},store:"record"},
+                {id:"set_sale_id",label:"2. Store Sale ID",apiName:"set_sale_id",key:"ASSIGNMENT",variableName:"saleId",variableType:"text",operator:"set",value:{path:"steps.create_sale.created.id"}},
+                {id:"stamp_items",label:"3. Attach Sale To Items",apiName:"stamp_items",key:"LOOP",collection:"variables.items",itemVariable:"saleItem",bodyBranch:["set_item_sale"]},
+                {id:"set_item_sale",label:"Set Item Sale",apiName:"set_item_sale",key:"ASSIGNMENT",variableName:"saleItem",variableType:"record",operator:"set_field",field:"sale_id",value:{path:"variables.saleId"}},
+                {id:"create_items",label:"4. Create Sale Items",apiName:"create_items",key:"CREATE_RECORD",objectKey:"sale_item",recordCollectionResource:{path:"variables.items"}},
+                {id:"stamp_payments",label:"5. Attach Sale To Payments",apiName:"stamp_payments",key:"LOOP",collection:"variables.payments",itemVariable:"salePayment",bodyBranch:["set_payment_sale"]},
+                {id:"set_payment_sale",label:"Set Payment Sale",apiName:"set_payment_sale",key:"ASSIGNMENT",variableName:"salePayment",variableType:"record",operator:"set_field",field:"sale_id",value:{path:"variables.saleId"}},
+                {id:"create_payments",label:"6. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"}}
+              ]
+            }
+          }
+        ],
+      } : {}),      } : {}),
       ...(entry.key === "products" ? {
         packageKey: "products",
         packageType: "FOUNDATION",
