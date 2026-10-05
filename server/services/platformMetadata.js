@@ -1089,6 +1089,7 @@ const retailObjects = [
       ["discount", "Discount", "currency", "discount", false],
       ["total", "Gross / Total", "currency", "total", false],
       ["cash_received", "Cash Received", "currency", "cash_received", false],
+      ["line_count", "Line Count", "number", "line_count", false],
       ["created_at", "Created", "datetime", "created_at", false],
       ["completed_at", "Completed", "datetime", "completed_at", false],
     ],
@@ -1611,6 +1612,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
   export async function initializeStandardObjectEcosystem(pool) {
     await pool.query(`
       ALTER TABLE sales ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2);
+      ALTER TABLE sales ADD COLUMN IF NOT EXISTS line_count INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
       ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
       UPDATE cash_movements cm
@@ -1771,6 +1773,17 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (saleObjectForFormula.rows[0]?.id) {
+      await pool.query(
+        `INSERT INTO platform_rules
+           (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,company_id,managed,package_required,user_modified)
+         VALUES
+           ($1,'Sale must contain at least one line','before_create',
+            '[{"field":"line_count","operator":"less_than","value":1}]'::jsonb,
+            '{"type":"validation","match":"all","message":"Sale contains no items"}'::jsonb,
+            TRUE,'ACTIVE',1,1,NULL,TRUE,FALSE,FALSE)
+         ON CONFLICT DO NOTHING`,
+        [saleObjectForFormula.rows[0].id]
+      ).catch(() => {});
       await pool.query(
         `UPDATE platform_fields
             SET field_type='formula',
