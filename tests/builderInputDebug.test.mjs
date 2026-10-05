@@ -27,7 +27,7 @@ test('record and collection create modes compile to supported core actions', () 
 test('failed database action keeps the original error when execution transaction is aborted', async () => {
   let calls = 0;
   const executionDb = async (query) => {
-    if (query.includes('FROM role_permissions')) return { rows: [{ code: 'records.create' }] };
+    if (query.includes('FROM role_permissions')) return { rows: [{ code: 'workflow.execute' }, { code: 'records.create' }] };
     calls++;
     throw Object.assign(new Error(calls === 1 ? 'null value in column name violates not-null constraint' : 'current transaction is aborted'), { code: calls === 1 ? '23502' : '25P02' });
   };
