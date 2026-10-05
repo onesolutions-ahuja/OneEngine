@@ -678,7 +678,6 @@ export default function createSalesRouter({
           req,
           input: {
             hasShortfall: insufficientStockLines.length > 0,
-            allowNegativeStock: negativeBillingAllowed,
           },
           storeId: req.user.storeId || null,
           tillId: session.rows[0].terminal_id || null,
