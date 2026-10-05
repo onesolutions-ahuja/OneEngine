@@ -434,7 +434,7 @@ export function apiRequest(path, options = {}) {
   const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
   const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
   const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
-  const canDedupe = method === 'GET' && options.dedupe !== false && !options.signal && !options.body
+  const canDedupe = method === 'GET' && options.dedupe !== false && !options.signal && !options.body && !options.headers
   if (!canDedupe) return apiRequestCore(path, options, token)
 
   const key = apiRequestDedupeKey(path, token)
