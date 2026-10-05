@@ -357,7 +357,7 @@ export const oneAssistantManifest = {
               scope: "one_assistant",
               subflowCapability: "assistant.payment.router",
               actions: [
-                { id: "payment_provider", key: "RUN_ASSISTANT_SUBFLOW", capability: "assistant.payment", required: false }
+                { id: "payment_provider", key: "RUN_SUBFLOW", subflowApiName: "assistant.payment", required: false }
               ]
             },
             active: false,
@@ -372,7 +372,7 @@ export const oneAssistantManifest = {
               scope: "one_assistant",
               subflowCapability: "assistant.confirmation",
               actions: [
-                { id: "confirmation_channel", key: "RUN_ASSISTANT_SUBFLOW", capability: "assistant.confirmation", channel: { path: "channel" }, required: false }
+                { id: "confirmation_channel", key: "RUN_SUBFLOW", subflowApiName: "assistant.confirmation", inputMappings: { channel: { path: "channel" } }, required: false }
               ]
             },
             active: false,
