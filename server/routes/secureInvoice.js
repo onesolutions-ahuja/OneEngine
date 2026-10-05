@@ -24,13 +24,12 @@ import {
   SECURE_LINK_DEFAULT_EXPIRY_DAYS,
 } from "../services/secureInvoiceLinks.js";
 import {
-  createTemporaryReceiptDownload,
   validateTemporaryReceiptDownload,
   markTemporaryReceiptDownloaded,
   buildReceiptPdfBytes,
-  buildReceiptQrDownloadUrl,
   loadPublicReceiptData,
 } from "../services/receiptQr.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const GENERIC_404 = { success: false, message: "This link is invalid, has expired, or has been revoked." };
 
@@ -285,38 +284,39 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
     async (req, res) => {
       try {
         const expiryMinutes = Number.isFinite(Number(req.body?.expiryMinutes)) ? Number(req.body.expiryMinutes) : 5;
-        const result = await createTemporaryReceiptDownload({
+        const execution = await executeSystemWorkflow({
           db,
           companyId: req.user.companyId,
-          storeId: req.user.storeId ?? null,
-          tillId: req.user.tillId ?? null,
-          saleId: req.params.saleId,
-          expiryMinutes,
+          userId: req.user.id || null,
+          systemKey: "flow:till.receipt.qr",
+          req,
+          input: {
+            saleId: req.params.saleId,
+            expiryMinutes,
+            baseUrl: req.protocol === "https" ? `https://${req.get("host")}` : `http://${req.get("host")}`,
+          },
+          storeId: req.user.storeId || null,
+          tillId: req.user.tillId || null,
+          source: {
+            type: "api",
+            method: req.method,
+            path: req.originalUrl || req.path,
+            capability: "till.receipt.qr",
+          },
         });
-
-        if (!result.ok) {
-          return res.status(result.status || 500).json({ success: false, message: result.message || "Unable to create receipt QR" });
+        const result = execution?.result?.receipt || null;
+        if (!result?.id || !result?.url) {
+          return res.status(503).json({ success: false, message: "Receipt QR Flow did not return a receipt link" });
         }
 
-        const publicUrl = buildReceiptQrDownloadUrl(result.token, req.protocol === "https" ? `https://${req.get("host")}` : `http://${req.get("host")}`);
         await writeAudit?.(req.user.companyId, req.user.id, "temporary_receipt_qr_created", "temporary_receipt_download", result.id, {
           saleId: req.params.saleId,
           expiresAt: result.expiresAt,
-          downloadUrl: publicUrl,
+          downloadUrl: result.url,
+          workflowRunId: execution.runId || null,
         });
 
-        res.status(201).json({
-          success: true,
-          data: {
-            id: result.id,
-            token: result.token,
-            url: publicUrl,
-            qrcodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicUrl)}`,
-            expiresAt: result.expiresAt,
-            expiresMinutes: expiryMinutes,
-            saleId: req.params.saleId,
-          },
-        });
+        res.status(201).json({ success: true, data: result });
       } catch (error) {
         console.error("Create receipt QR error:", error);
         res.status(500).json({ success: false, message: "Unable to create receipt QR link" });
