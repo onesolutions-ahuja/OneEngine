@@ -173,3 +173,13 @@ test("pricing promotions and combos keep runtime pricing but remove legacy admin
   assert.match(metadata, /key: "price_list"/);
   assert.match(pricingEngine, /export function resolvePrice/);
 });
+
+
+test("sales route no longer depends on deleted legacy loyalty helpers", async () => {
+  const route = await readFile(new URL("../server/routes/sales.js", import.meta.url), "utf8");
+  assert.equal(route.includes("../src/utils/loyaltyPoints.js"), false);
+  assert.equal(route.includes("validateRedeemConfig"), false);
+  assert.equal(route.includes("validateRedeemablePoints"), false);
+  assert.equal(route.includes("customer_loyalty_transactions"), false);
+  assert.equal(route.includes("customer_loyalty_balances"), false);
+});
