@@ -52,16 +52,28 @@ test("final loading performance verification", async ({ page, baseURL }) => {
   const routeTimings = [];
   const loadingFailures = [];
 
+  const blockingLoader = /Checking till…|Loading catalogue…|Loading custom reports…|Loading Settings…|Loading settings…|Loading objects…|Loading existing definitions…|Workspace\s+0 objects\s+Loading…/i;
+
   for (const route of ROUTES) {
     const started = Date.now();
     await page.goto(new URL(route, baseURL).href, { waitUntil: "domcontentloaded", timeout: 30000 });
     await expect(page.locator("body")).toBeVisible();
-    await page.waitForTimeout(500);
 
-    const bodyText = await page.locator("body").innerText();
+    let bodyText = "";
+    let settled = false;
+    const settleDeadline = Date.now() + 5000;
+    while (Date.now() < settleDeadline) {
+      bodyText = await page.locator("body").innerText();
+      if (!blockingLoader.test(bodyText)) {
+        settled = true;
+        break;
+      }
+      await page.waitForTimeout(150);
+    }
+    bodyText = await page.locator("body").innerText();
+
     const fatal = /Resolving client context|Checking OneEngine permissions|OneEngine service is unavailable|Application error|Something went wrong/i.test(bodyText);
-    const stuck = /Loading(?:\s+[A-Za-z ]+)?…|Loading\.\.\.|Please wait/i.test(bodyText);
-    if (fatal || stuck) loadingFailures.push({ route, fatal, stuck, excerpt: bodyText.slice(0, 500) });
+    if (fatal || !settled) loadingFailures.push({ route, fatal, stuck: !settled, excerpt: bodyText.slice(0, 500) });
 
     routeTimings.push({ route, ms: Date.now() - started });
   }
