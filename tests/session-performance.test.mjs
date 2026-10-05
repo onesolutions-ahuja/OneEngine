@@ -357,7 +357,7 @@ test('final loading verification waits for backend readiness before live login',
 
 
 test('workspace app routes use cached metadata instead of forcing a blocking refresh', async () => {
-  const source = await read('../src/pages/workspace/WorkspacePage.jsx')
+  const source = await read('../src/platform/workspace/WorkspacePage.jsx')
   const start = source.indexOf("cachedGet('/api/platform/objects'")
   const end = source.indexOf('.then((objectResponse)', start)
   const block = source.slice(start, end)
