@@ -316,36 +316,6 @@ export default function createCustomersRouter({
     }
   });
 
-  router.get("/customer-segments", authenticate, authorize("customer.view"), async (req, res) => {
-    try {
-      const result = await db(
-        `SELECT s.id, s.company_id, s.name, s.description, s.active,
-          COUNT(m.customer_id)::int AS member_count
-         FROM customer_segments s
-         LEFT JOIN customer_segment_members m ON m.segment_id = s.id
-         WHERE s.company_id = $1
-         GROUP BY s.id
-         ORDER BY s.name`,
-        [req.user.companyId]
-      );
-      res.json({ success: true, data: result.rows });
-    } catch (error) {
-      console.error("List customer segments error:", error);
-      res.status(500).json({ success: false, message: "Unable to load customer segments" });
-    }
-  });
-
-  router.get("/customer-segments/:id/members", authenticate, authorize("customer.view"), async (req, res) => {
-    const result = await db(
-      `SELECT c.id, c.name, c.phone, c.email, c.active, m.created_at AS member_since
-       FROM customer_segment_members m
-       INNER JOIN customers c ON c.id = m.customer_id
-       WHERE m.segment_id = $1 AND m.company_id = $2
-       ORDER BY c.name`,
-      [req.params.id, req.user.companyId]
-    );
-    res.json({ success: true, data: { members: result.rows } });
-  });
 
 
   
