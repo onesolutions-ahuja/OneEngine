@@ -87,3 +87,20 @@ test('login timing accumulator remains declared after identity parallelization',
   const source = await read('../server/server.js')
   assert.match(source, /let stepStartedAt = Date\.now\(\);\n\s*const validPassword/)
 })
+
+
+test('login security preflight is bundled into one database read', async () => {
+  const server = await read('../server/server.js')
+  const security = await read('../server/services/identitySecurity.js')
+  assert.match(server, /loadLoginSecurityContext\(loginDb/)
+  assert.match(server, /security_preflight_ms/)
+  assert.match(security, /export async function loadLoginSecurityContext/)
+})
+
+test('successful login finalization avoids a second session assurance update', async () => {
+  const server = await read('../server/server.js')
+  const security = await read('../server/services/identitySecurity.js')
+  assert.match(server, /assuranceLevel: effectiveAssurance\.passwordAssurance/)
+  assert.equal(server.includes('UPDATE identity_sessions SET assurance_level=$2'), false)
+  assert.match(security, /INSERT INTO identity_sessions\(id,company_id,user_id,expires_at,ip_address,user_agent,auth_method,origin_host,assurance_level,assurance_verified_at\)/)
+})
