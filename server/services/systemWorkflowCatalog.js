@@ -495,9 +495,12 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
     key: "till.payment.validate",
     name: "Validate Payment Method",
     inputs: [
-      creditInput("paymentMethod", "text", { required: true }),
+      creditInput("paymentMode", "text", { required: true }),
+      creditInput("paymentKind", "text", { required: true }),
       creditInput("online", "boolean", { required: true }),
-      creditInput("cardAvailable", "boolean", { required: true }),
+      creditInput("allowOffline", "boolean", { required: true }),
+      creditInput("requiresConnector", "boolean", { required: true }),
+      creditInput("connectorAvailable", "boolean", { required: true }),
       creditInput("customerSelected", "boolean", { required: true }),
       creditInput("hasGiftCardCode", "boolean", { required: true }),
       creditInput("cashReceived", "number", { required: true }),
@@ -507,21 +510,34 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
       { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
     ],
     actions: [
-      creditFormula(
-        "payment_allowed",
-        "allowed",
-        "boolean",
-        "(paymentMethod == \"cash\" || online) && (paymentMethod != \"card\" || cardAvailable) && (paymentMethod != \"customer_credit\" || customerSelected) && (paymentMethod != \"gift_card\" || hasGiftCardCode) && (paymentMethod != \"cash\" || cashReceived >= total)",
-        {
-          paymentMethod: { path: "variables.paymentMethod" },
-          online: { path: "variables.online" },
-          cardAvailable: { path: "variables.cardAvailable" },
-          customerSelected: { path: "variables.customerSelected" },
-          hasGiftCardCode: { path: "variables.hasGiftCardCode" },
-          cashReceived: { path: "variables.cashReceived" },
-          total: { path: "variables.total" },
-        }
-      ),
+      creditFormula("payment_connection_allowed", "connectionAllowed", "boolean", "online || allowOffline", {
+        online: { path: "variables.online" },
+        allowOffline: { path: "variables.allowOffline" },
+      }),
+      creditFormula("payment_connector_allowed", "connectorAllowed", "boolean", "!requiresConnector || connectorAvailable", {
+        requiresConnector: { path: "variables.requiresConnector" },
+        connectorAvailable: { path: "variables.connectorAvailable" },
+      }),
+      creditFormula("payment_customer_allowed", "customerAllowed", "boolean", 'paymentKind != "CREDIT" || customerSelected', {
+        paymentKind: { path: "variables.paymentKind" },
+        customerSelected: { path: "variables.customerSelected" },
+      }),
+      creditFormula("payment_gift_allowed", "giftAllowed", "boolean", 'paymentKind != "GIFT_CARD" || hasGiftCardCode', {
+        paymentKind: { path: "variables.paymentKind" },
+        hasGiftCardCode: { path: "variables.hasGiftCardCode" },
+      }),
+      creditFormula("payment_cash_allowed", "cashAllowed", "boolean", 'paymentKind != "CASH" || cashReceived >= total', {
+        paymentKind: { path: "variables.paymentKind" },
+        cashReceived: { path: "variables.cashReceived" },
+        total: { path: "variables.total" },
+      }),
+      creditFormula("payment_allowed", "allowed", "boolean", "connectionAllowed && connectorAllowed && customerAllowed && giftAllowed && cashAllowed", {
+        connectionAllowed: { path: "variables.connectionAllowed" },
+        connectorAllowed: { path: "variables.connectorAllowed" },
+        customerAllowed: { path: "variables.customerAllowed" },
+        giftAllowed: { path: "variables.giftAllowed" },
+        cashAllowed: { path: "variables.cashAllowed" },
+      }),
     ],
   }),
   tillFlow({
