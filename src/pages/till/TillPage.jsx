@@ -169,7 +169,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const applyBootstrap = (catalogue, settingsResponse, buttonRows, paymentRows = []) => {
     const payload = catalogue?.data || catalogue || {}
-    const rows = Array.isArray(payload.products) ? payload.products.map(normaliseProduct).filter((product) => product.active) : []
+    const sourceRows = Array.isArray(payload.products) ? payload.products : Array.isArray(payload.records) ? payload.records : Array.isArray(payload.data) ? payload.data : []
+    const rows = sourceRows.map(normaliseProduct).filter((product) => product.active)
     setProducts(rows)
     setCategories(['All', ...new Set(rows.map((product) => product.category).filter(Boolean))])
     setSettings(settingsResponse?.data || settingsResponse || null)
@@ -213,8 +214,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     try {
       const cachedVersion = usableCached?.catalogue?.data?.version || usableCached?.catalogue?.version || ''
       const catalogueQuery = new URLSearchParams()
-      if (cachedVersion) catalogueQuery.set('since', cachedVersion)
-      if (cachedScope) catalogueQuery.set('scope', cachedScope)
+      catalogueQuery.set('active', 'true')
       const cataloguePath = `/api/platform/objects/product/records${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
       const tillPromise = loadTill()
       const [catalogueDelta, settingsResponse, buttonResponse, paymentResponse, permissionResponse] = await Promise.all([
