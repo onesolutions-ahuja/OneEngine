@@ -9,7 +9,7 @@ import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } 
 import { resolvePrice } from "../services/pricingEngine.js";
 import { getRequestPool } from "../services/tenantDatabase.js";
 import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
-import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes } from "../services/paymentMethods.js";
+import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes, listPaymentMethods } from "../services/paymentMethods.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { evaluateValidationRules } from "../services/platformValidation.js";
 
@@ -423,6 +423,8 @@ export default function createSalesRouter({
          *     pre-commit debits its points against the full total).
          */
         const allowedPaymentMethods = await getAllowedPaymentMethodCodes(db, req.user.companyId, { storeId: req.user.storeId, tillId: req.user.tillId });
+        const paymentMethodDefinitions = await listPaymentMethods(db, req.user.companyId, { activeOnly: true });
+        const paymentMethodByCode = new Map(paymentMethodDefinitions.map((method) => [String(method.code || "").trim(), method]));
         const rawPayments = Array.isArray(req.body.payments) ? req.body.payments : [];
         let paymentLines = rawPayments.length ? rawPayments : null;
         if (!rawPayments.length && paymentMethod === "split") {
@@ -1167,7 +1169,9 @@ export default function createSalesRouter({
           }));
         }
 
-        const receivedAmount = paymentMethod === "cash"
+        const selectedPaymentDefinition = paymentMethodByCode.get(String(paymentMethod || "").trim()) || null;
+        const selectedPaymentKind = String(selectedPaymentDefinition?.kind || "").toUpperCase();
+        const receivedAmount = selectedPaymentKind === "CASH"
           ? Number(cashReceived == null || cashReceived === "" ? total : cashReceived)
           : total;
         const paymentValidation = await executeSystemWorkflow({
@@ -1177,9 +1181,12 @@ export default function createSalesRouter({
           systemKey: "flow:till.payment.validate",
           req,
           input: {
-            paymentMethod: String(paymentMethod || ""),
+            paymentMode: String(paymentMethod || ""),
+            paymentKind: selectedPaymentKind,
             online: true,
-            cardAvailable: paymentMethod !== "card" || Boolean(connectorDrivers),
+            allowOffline: selectedPaymentDefinition?.allowOffline === true,
+            requiresConnector: selectedPaymentDefinition?.requiresConnector === true,
+            connectorAvailable: selectedPaymentDefinition?.requiresConnector !== true || Boolean(connectorDrivers),
             customerSelected: Boolean(customerId),
             hasGiftCardCode: Boolean(normaliseGiftCardCode(giftCardCode)),
             cashReceived: Number.isFinite(receivedAmount) ? receivedAmount : 0,
@@ -1232,99 +1239,129 @@ export default function createSalesRouter({
           });
         }
 
-        const cardTender = paymentLines?.find((line) => line.method === "card");
-        const cardAmount = cardTender
-          ? Number(cardTender.amount)
-          : paymentMethod === "card" ? payableAfterLoyalty : null;
-        let connectorPayment = null;
-        if (cardAmount !== null && cardAmount > 0) {
+        const connectorPayments = new Map();
+        const connectorTenders = paymentLines
+          ? paymentLines.filter((line) => paymentMethodByCode.get(String(line.method || ""))?.requiresConnector === true)
+          : selectedPaymentDefinition?.requiresConnector === true && payableAfterLoyalty > 0
+            ? [{ method: String(paymentMethod || ""), amount: payableAfterLoyalty }]
+            : [];
+
+        for (const tender of connectorTenders) {
+          const methodCode = String(tender.method || "").trim();
+          const methodDefinition = paymentMethodByCode.get(methodCode);
+          const amount = roundCurrency(Number(tender.amount || 0));
+          if (!methodDefinition || amount <= 0) continue;
           if (!clientRequestId) {
             await client.query("ROLLBACK");
-            return res.status(400).json({ success: false, code: "IDEMPOTENCY_REQUIRED", message: "Card payments require a stable clientRequestId" });
-          }
-          if (connectorDrivers) {
-            const idempotencyKey = `${req.user.companyId}:${clientRequestId.toLowerCase()}:payment.card`;
-            const paymentExecution = await executeSystemWorkflow({
-              db,
-              companyId: req.user.companyId,
-              userId: req.user.id || null,
-              systemKey: "action:PAYMENT_START",
-              req,
-              input: {
-                amount: roundCurrency(cardAmount),
-                currency: String(session.rows[0]?.currency || "GBP").toUpperCase(),
-                idempotencyKey,
-                reference: clientRequestId,
-                terminalId: session.rows[0].terminal_id,
-                connectorInstanceId: kioskContext?.connector_instance_id || null,
-                selfCheckout: typeof selfCheckoutMode === "function" && selfCheckoutMode(req),
-              },
-              storeId: req.user.storeId,
-              tillId: session.rows[0].terminal_id,
-              connectorDrivers,
-              writeAudit,
-              source: {
-                type: "api",
-                method: req.method,
-                path: req.originalUrl || req.path,
-                capability: "payment.sale",
-                connectorInstanceId: kioskContext?.connector_instance_id || null,
-                appName: kioskContext ? "OneKiosk" : null,
-              },
+            return res.status(400).json({
+              success: false,
+              code: "IDEMPOTENCY_REQUIRED",
+              message: `${methodDefinition.label || methodCode} payments require a stable clientRequestId`,
             });
-            const workflowPayment = paymentExecution.result || {};
-            connectorPayment = workflowPayment.success === true
-              ? { available: true, ...workflowPayment, workflowRunId: paymentExecution.runId }
-              : { available: false, ...workflowPayment, workflowRunId: paymentExecution.runId };
-            const paymentResult = connectorPayment.result;
-            const cardConnectorCode = paymentResult?.status || connectorPayment.code || null;
-            const paymentGatewayUnavailable = ["CONNECTOR_UNAVAILABLE", "PROVIDER_NOT_CONFIGURED", "PROVIDER_NOT_SUPPORTED"].includes(cardConnectorCode);
-            if (connectorPayment.available && paymentResult?.status !== "APPROVED") {
+          }
+          if (!connectorDrivers) {
+            await client.query("ROLLBACK");
+            return res.status(503).json({
+              success: false,
+              code: "CONNECTOR_UNAVAILABLE",
+              message: `${methodDefinition.label || methodCode} payment connector is unavailable`,
+            });
+          }
+
+          const configuredPackageKey = String(methodDefinition?.config?.connectorPackageKey || "").trim();
+          let connectorInstanceId = kioskContext?.connector_instance_id || null;
+          if (!connectorInstanceId && configuredPackageKey) {
+            const instance = await client.query(
+              `SELECT id
+                 FROM integration_connections
+                WHERE company_id=$1
+                  AND connector_package_key=$2
+                  AND enabled=TRUE
+                  AND UPPER(COALESCE(connection_status,''))='CONNECTED'
+                  AND (store_id IS NULL OR store_id=$3)
+                  AND (till_id IS NULL OR till_id=$4)
+                ORDER BY (till_id IS NOT NULL) DESC,(store_id IS NOT NULL) DESC,fallback_order ASC,updated_at DESC
+                LIMIT 1`,
+              [req.user.companyId, configuredPackageKey, req.user.storeId, session.rows[0].terminal_id]
+            );
+            connectorInstanceId = instance.rows[0]?.id || null;
+            if (!connectorInstanceId) {
               await client.query("ROLLBACK");
-              const code = paymentResult?.status || connectorPayment.code || "CONNECTOR_UNAVAILABLE";
-              const statusCode = code === "DECLINED" ? 402 : code === "TIMEOUT" ? 504 : 503;
-              await writeAudit?.(req.user.companyId, req.user.id, "payment.connector.failed", "connector", connectorPayment.connectorInstanceId || null, {
-                code,
-                amount: roundCurrency(cardAmount),
-                clientRequestId,
-              });
-              return res.status(statusCode).json({
+              return res.status(503).json({
                 success: false,
-                code,
-                message: code === "DECLINED" ? "Card payment was declined" : "Card payment could not be confirmed",
-              });
-            }
-            if (!connectorPayment.available && paymentGatewayUnavailable) {
-              await writeAudit?.(req.user.companyId, req.user.id, "payment.connector.skipped", "connector", connectorPayment.connectorInstanceId || null, {
-                code: cardConnectorCode,
-                amount: roundCurrency(cardAmount),
-                clientRequestId,
-              });
-              connectorPayment = null;
-            } else if (!connectorPayment.available) {
-              await client.query("ROLLBACK");
-              const code = cardConnectorCode || "CONNECTOR_UNAVAILABLE";
-              const statusCode = code === "DECLINED" ? 402 : code === "TIMEOUT" ? 504 : 503;
-              await writeAudit?.(req.user.companyId, req.user.id, "payment.connector.failed", "connector", connectorPayment.connectorInstanceId || null, {
-                code,
-                amount: roundCurrency(cardAmount),
-                clientRequestId,
-              });
-              return res.status(statusCode).json({
-                success: false,
-                code,
-                message: code === "DECLINED" ? "Card payment was declined" : "Card payment could not be confirmed",
-              });
-            }
-            if (connectorPayment?.available && paymentResult?.status === "APPROVED") {
-              await writeAudit?.(req.user.companyId, req.user.id, "payment.connector.approved", "connector", connectorPayment.connectorInstanceId, {
-                amount: roundCurrency(cardAmount),
-                providerTransactionId: paymentResult.providerTransactionId || null,
-                terminalId: paymentResult.terminalId || null,
-                clientRequestId,
+                code: "CONNECTOR_UNAVAILABLE",
+                message: `${methodDefinition.label || methodCode} connector is not configured and available for this till`,
               });
             }
           }
+
+          const idempotencyKey = `${req.user.companyId}:${clientRequestId.toLowerCase()}:payment.${methodCode}`;
+          const paymentExecution = await executeSystemWorkflow({
+            db,
+            companyId: req.user.companyId,
+            userId: req.user.id || null,
+            systemKey: "action:PAYMENT_START",
+            req,
+            input: {
+              amount,
+              currency: String(session.rows[0]?.currency || "GBP").toUpperCase(),
+              idempotencyKey,
+              reference: clientRequestId,
+              terminalId: session.rows[0].terminal_id,
+              paymentMode: methodCode,
+              connectorInstanceId,
+              selfCheckout: typeof selfCheckoutMode === "function" && selfCheckoutMode(req),
+            },
+            storeId: req.user.storeId,
+            tillId: session.rows[0].terminal_id,
+            connectorDrivers,
+            writeAudit,
+            source: {
+              type: "api",
+              method: req.method,
+              path: req.originalUrl || req.path,
+              capability: "payment.sale",
+              connectorInstanceId,
+              paymentMode: methodCode,
+              appName: kioskContext ? "OneKiosk" : null,
+            },
+          });
+
+          const workflowPayment = paymentExecution.result || {};
+          const connectorPayment = workflowPayment.success === true
+            ? { available: true, ...workflowPayment, workflowRunId: paymentExecution.runId }
+            : { available: false, ...workflowPayment, workflowRunId: paymentExecution.runId };
+          const paymentResult = connectorPayment.result;
+          const code = paymentResult?.status || connectorPayment.code || "CONNECTOR_UNAVAILABLE";
+          if (!connectorPayment.available || paymentResult?.status !== "APPROVED") {
+            await client.query("ROLLBACK");
+            const statusCode = code === "DECLINED" ? 402 : code === "TIMEOUT" ? 504 : 503;
+            await writeAudit?.(req.user.companyId, req.user.id, "payment.connector.failed", "connector", connectorPayment.connectorInstanceId || connectorInstanceId || null, {
+              paymentMode: methodCode,
+              code,
+              amount,
+              clientRequestId,
+            });
+            return res.status(statusCode).json({
+              success: false,
+              code,
+              message: code === "DECLINED"
+                ? `${methodDefinition.label || methodCode} payment was declined`
+                : `${methodDefinition.label || methodCode} payment could not be confirmed`,
+            });
+          }
+
+          connectorPayments.set(methodCode, {
+            ...connectorPayment,
+            idempotencyKey,
+          });
+          await writeAudit?.(req.user.companyId, req.user.id, "payment.connector.approved", "connector", connectorPayment.connectorInstanceId || connectorInstanceId || null, {
+            paymentMode: methodCode,
+            amount,
+            providerTransactionId: paymentResult?.providerTransactionId || null,
+            terminalId: paymentResult?.terminalId || null,
+            clientRequestId,
+          });
         }
 
         /*
@@ -1627,8 +1664,8 @@ export default function createSalesRouter({
               ]
             : [[saleId, paymentMethod, Number(total) || 0]];
         for (const [tSaleId, tMethod, tAmount] of tenderRows) {
-          const isConnectorCardTender = tMethod === "card" && connectorPayment?.result?.status === "APPROVED";
-          const paymentResult = isConnectorCardTender ? connectorPayment.result : null;
+          const connectorPayment = connectorPayments.get(String(tMethod || "")) || null;
+          const paymentResult = connectorPayment?.result?.status === "APPROVED" ? connectorPayment.result : null;
           await client.query(
             `
             INSERT INTO payments (
@@ -1650,7 +1687,7 @@ export default function createSalesRouter({
               paymentResult ? connectorPayment.connectorPackageKey : null,
               paymentResult?.terminalId || (paymentResult ? session.rows[0].terminal_id : null),
               paymentResult?.providerTransactionId || null,
-              paymentResult ? `${req.user.companyId}:${clientRequestId.toLowerCase()}:payment.card` : null,
+              paymentResult ? connectorPayment.idempotencyKey : null,
             ]
           );
         }
