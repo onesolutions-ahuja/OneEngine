@@ -2,10 +2,11 @@ import express from "express";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing.js";
-import { globalProductProviderConfigKeys, globalProductProviderDefaults } from "../services/globalProductLookup.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
-const PROVIDER_KEYS = Object.freeze(Object.keys(globalProductProviderConfigKeys));
+const PRODUCT_PROVIDER_ENTRIES = Object.freeze(internalAppCatalog.filter((entry) => entry.providerConnector?.globalProductLookup));
+const PROVIDER_KEYS = Object.freeze(PRODUCT_PROVIDER_ENTRIES.map((entry) => entry.providerConnector.globalProductLookup.providerKey).filter(Boolean));
+const PROVIDER_CONFIG_KEYS = Object.freeze(PRODUCT_PROVIDER_ENTRIES.map((entry) => entry.providerConnector.globalProductLookup.configKey).filter(Boolean));
 const PROVIDER_HOSTS = Object.freeze({
   open_food_facts: "openfoodfacts.org",
   upcitemdb: "upcitemdb.com",
@@ -78,7 +79,7 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
   const router = express.Router();
 
   async function providerRows(companyId) {
-    const appEntries = internalAppCatalog.filter((entry) => entry.providerConnector?.globalProductLookup);
+    const appEntries = PRODUCT_PROVIDER_ENTRIES;
     const packageKeys = appEntries.map((entry) => entry.key);
     const [packages, settings, connections, entitlements] = await Promise.all([
       db(
@@ -89,7 +90,7 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
           WHERE p.package_key=ANY($2::text[])`,
         [companyId, packageKeys]
       ),
-      db("SELECT provider,configuration,active FROM integrations WHERE company_id=$1 AND provider=ANY($2::text[])", [companyId, [...Object.values(globalProductProviderConfigKeys), "global_product_lookup_preferences"]]),
+      db("SELECT provider,configuration,active FROM integrations WHERE company_id=$1 AND provider=ANY($2::text[])", [companyId, [...PROVIDER_CONFIG_KEYS, "global_product_lookup_preferences"]]),
       db("SELECT provider_name,credentials_encrypted IS NOT NULL AS has_credentials,last_connected_at,last_error FROM integration_connections WHERE company_id=$1 AND provider_name=ANY($2::text[]) AND store_id IS NULL ORDER BY updated_at DESC", [companyId, ["go_upc","upcitemdb","barcode_nest"]]),
       getCompanyEntitlements(db, companyId),
     ]);
@@ -105,7 +106,7 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
       const manifestConnector = metadata.providerConnector?.globalProductLookup || entry.providerConnector.globalProductLookup;
       const configKey = manifestConnector.configKey;
       const stored = configByKey.get(configKey);
-      const config = { ...globalProductProviderDefaults, ...manifestConnector, ...parseObject(stored?.configuration) };
+      const config = { ...manifestConnector, ...parseObject(manifestConnector.settings), ...parseObject(stored?.configuration) };
       const installed = definition?.installation_status === "active" && definition.suspended_by_entitlement !== true && definition.deactivated_by_user !== true;
       const licensed = Boolean(definition && isPackageLicensed(entitlements, {
         package_key: entry.key,
@@ -122,8 +123,8 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
         installed,
         licensed,
         enabled: stored?.active !== false && config.enabled !== false,
-        priority: Number.isFinite(Number(config.priority)) ? Number(config.priority) : globalProductProviderDefaults.priority,
-        timeoutMs: Number(config.timeoutMs) || globalProductProviderDefaults.timeoutMs,
+        priority: Number.isFinite(Number(config.priority)) ? Number(config.priority) : Number.MAX_SAFE_INTEGER,
+        timeoutMs: Number(config.timeoutMs) || 5000,
         fallbackEnabled: config.fallbackEnabled !== false,
         cacheTtlSeconds: Number(config.cacheTtlSeconds) || 0,
         baseUrl: config.baseUrl || manifestConnector.baseUrl,
@@ -234,7 +235,7 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
       const connector = internalAppCatalog.find((entry) => entry.providerConnector?.globalProductLookup?.providerKey === providerKey)?.providerConnector;
       const configKey = connector.globalProductLookup.configKey;
       const currentResult = await db("SELECT configuration FROM integrations WHERE company_id=$1 AND provider=$2", [req.user.companyId, configKey]);
-      const current = { ...globalProductProviderDefaults, ...connector.globalProductLookup, ...parseObject(currentResult.rows?.[0]?.configuration) };
+      const current = { ...connector.globalProductLookup, ...parseObject(connector.globalProductLookup.settings), ...parseObject(currentResult.rows?.[0]?.configuration) };
       const next = sanitizeSettings(req.body || {}, providerKey, current);
       const publicFields = Object.keys(req.body || {}).filter((key) => key !== "apiKey");
       await db(
