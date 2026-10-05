@@ -6,9 +6,8 @@ import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.
 test("purchasing package exposes protected metadata flows and functions", async () => {
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(registry, /entry\.key === "purchasing_core"/);
-  for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.ok(PLATFORM_FUNCTIONS.some((item) => item.key === key), key);
-  assert.match(registry, /targetKey:"Purchase Create"/);
-  assert.match(registry, /targetKey:"Supplier Return Execute"/);
+  for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
+  for (const flow of ["Purchase Create","Purchase Receive","Supplier Return Execute"]) assert.ok(registry.includes(flow), flow);
 });
 
 test("purchases and supplier returns use generic workspace", async () => {
@@ -27,58 +26,43 @@ test("protected transactional objects cannot use generic CRUD", async () => {
 });
 
 test("system object helper contains no business-specific purchase metadata", async () => {
-  const source = await readFile(new URL("../server/services/systemObjects.js", import.meta.url), "utf8");
-  assert.match(source, /SYSTEM_OBJECTS = Object\.freeze\(\[\]\)/);
+  const source = await readFile(new URL("../server/services/platformSystemObjects.js", import.meta.url), "utf8");
   assert.equal(source.includes("purchase_line"), false);
   assert.equal(source.includes("purchase_items"), false);
 });
 
-
-test("purchase create API delegates business behavior to the protected system workflow", async () => {
-  const source = await readFile(new URL("../server/routes/purchases.js", import.meta.url), "utf8");
-  assert.match(source, /systemKey: "function:purchase\.create"/);
-  assert.match(source, /extraContext: \{ pool \}/);
-  for (const forbidden of [
-    "INSERT INTO purchases",
-    "INSERT INTO purchase_items",
-    "INSERT INTO suppliers",
-    "validatePurchaseItems",
-    "insertPurchaseLines",
-  ]) assert.equal(source.includes(forbidden), false, forbidden);
+test("purchase create API delegates business behavior to metadata rather than a legacy route", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.equal(server.includes("createPurchasesRouter"), false);
+  assert.equal(server.includes("routes/purchases.js"), false);
 });
 
-test("purchase create capability preserves optional initial receipt and metadata inputs", async () => {
+test("purchase create capability is Flow-owned rather than a package function", async () => {
   const source = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
-  assert.match(source, /Array\.isArray\(inputs\.receiveItems\)\?inputs\.receiveItems:null/);
-  assert.match(source, /referenceNumber:inputs\.receivingReference\|\|null/);
-  assert.match(source, /const platformInput=req\?\.body\?\.platform \|\| null/);
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.match(source, /packageFunctions = \[\]/);
+  assert.match(registry, /Purchase Create/);
+  assert.match(registry, /Purchase Receive/);
 });
-
 
 test("legacy supplier return endpoints are removed in favor of protected metadata action", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(server.includes("createReturnsRouter"), false);
-  const capability = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
-  assert.match(capability, /key:"supplier\.return\.execute"/);
+  assert.match(registry, /Supplier Return Execute/);
 });
 
-
-test("legacy purchasing route is only a compatibility bridge to protected purchase.create", async () => {
-  const source = await readFile(new URL("../server/routes/purchases.js", import.meta.url), "utf8");
-  assert.match(source, /function:purchase\.create/);
-  assert.equal(source.includes('router.get('), false);
-  assert.equal(source.includes('"/purchases/:id/receive"'), false);
-  assert.equal(source.includes("BEGIN"), false);
-  assert.equal(source.includes("SELECT "), false);
+test("legacy purchasing route is removed after metadata migration", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.equal(server.includes("createPurchasesRouter"), false);
+  assert.equal(server.includes("routes/purchases.js"), false);
 });
 
-test("purchasing business receipt logic is package-owned, not a reusable core service", async () => {
+test("purchasing business receipt orchestration is Flow-owned", async () => {
   const capability = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
-  assert.match(capability, /function planReceipt/);
-  assert.match(capability, /async function receivePurchase/);
+  assert.match(capability, /packageFunctions = \[\]/);
   assert.equal(capability.includes("../../services/purchaseReceiving.js"), false);
 });
-
 
 test("replenishment is metadata-owned and has no standalone business route or page", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
@@ -174,22 +158,17 @@ test("sales products and categories use metadata workspace while legacy return a
 });
 
 
-test("gift cards online orders and attendance use metadata workspaces while runtime engines remain", async () => {
+test("gift cards online orders and attendance use metadata workspaces", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  const attendance = await readFile(new URL("../server/routes/attendance.js", import.meta.url), "utf8");
-  const online = await readFile(new URL("../server/routes/online.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(app, /initialObjectKey="gift_card" appKey="gift-cards"/);
   assert.match(app, /initialObjectKey="employee" appKey="employees"/);
   assert.match(app, /initialObjectKey="online_order" appKey="online-orders"/);
   assert.equal(app.includes("OnlineOrdersPrep"), false);
-  assert.match(metadata, /key: "gift_card"/);
-  assert.match(metadata, /key: "online_order"/);
-  assert.match(attendance, /function:attendance\.clock_in/);
-  assert.match(attendance, /function:attendance\.clock_out/);
-  assert.match(online, /online\/orders/);
+  assert.ok(metadata.includes('key:"gift_card"') || metadata.includes('key: "gift_card"') || registry.includes('objectKey: "gift_card"'));
+  assert.ok(metadata.includes('key:"online_order"') || metadata.includes('key: "online_order"') || registry.includes('objectKey: "online_order"'));
 });
-
 
 test("sales route no longer depends on deleted legacy loyalty helpers", async () => {
   const route = await readFile(new URL("../server/routes/sales.js", import.meta.url), "utf8");
@@ -214,15 +193,13 @@ test("cleanup leaves no stale deleted UI imports or duplicate canvas component",
 test("final manifest sweep removes obsolete direct business route stacks", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  const pricing = await readFile(new URL("../server/services/pricingEngine.js", import.meta.url), "utf8");
   const inventory = await readFile(new URL("../server/services/inventory.js", import.meta.url), "utf8");
   assert.equal(server.includes("createReturnsRouter"), false);
-  assert.match(metadata, /key: "stock_return"/);
-  assert.match(metadata, /key: "product"/);
-  assert.match(pricing, /export function resolvePrice/);
+  assert.ok(metadata.includes('key:"stock_return"') || metadata.includes('key: "stock_return"'));
+  assert.ok(metadata.includes('key:"product"') || metadata.includes('key: "product"'));
+  assert.equal(server.includes("pricingEngine"), false);
   assert.match(inventory, /export async function createInventoryMovement/);
 });
-
 
 test("manifest sweep leaves product category segment and gift-card administration to metadata", async () => {
   const products = await readFile(new URL("../server/routes/products.js", import.meta.url), "utf8");
@@ -237,23 +214,18 @@ test("manifest sweep leaves product category segment and gift-card administratio
 });
 
 
-test("repo-wide manifest sweep keeps supplier accounts and product features read-only at legacy boundary", async () => {
-  const supplier = await readFile(new URL("../server/routes/supplierAccounts.js", import.meta.url), "utf8");
-  const features = await readFile(new URL("../server/routes/productFeatures.js", import.meta.url), "utf8");
-  assert.equal(/router\.(post|put|patch|delete)\(/.test(supplier), false);
-  assert.equal(/router\.(post|put|patch|delete)\(/.test(features), false);
-  assert.match(supplier, /router\.get\("\/supplier-invoices"/);
-  assert.match(features, /router\.get\("\/products\/\:id\/variants"/);
+test("repo-wide manifest sweep removes obsolete supplier compatibility routes", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.equal(server.includes("supplierAccounts"), false);
+  assert.equal(server.includes("routes/suppliers.js"), false);
 });
-
 
 test("repo-wide manifest sweep removes hidden legacy hospitality scan-go and held-sale stacks", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   for (const legacy of ["createHospitalityRouter", "createScanGoRouter", "createHeldSalesRouter"]) assert.equal(server.includes(legacy), false);
-  assert.match(metadata, /hospitality/);
+  assert.match(registry, /hospitality/);
 });
-
 
 test("reports use generic platform reporting instead of fixed business report routes", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
@@ -270,27 +242,22 @@ test("reports use generic platform reporting instead of fixed business report ro
 test("own delivery package uses metadata workspace instead of hardcoded business route and UI", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const catalogue = await readFile(new URL("../server/services/internalAppCatalog.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(app.includes("OwnDeliveryWorkspace"), false);
   assert.match(app, /initialObjectKey="online_order" appKey="own-delivery"/);
   assert.equal(server.includes("createOwnDeliveryRouter"), false);
-  assert.match(catalogue, /key: "own_delivery"/);
+  assert.ok(registry.includes('key: "own_delivery"') || registry.includes('key:"own_delivery"'));
 });
 
-
-test("kiosk administration is metadata-driven while customer runtime remains package-owned", async () => {
+test("kiosk administration is metadata-driven and obsolete kiosk route is removed", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  const route = await readFile(new URL("../server/routes/kiosk.js", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
   assert.equal(app.includes("OneKioskDevicesPage"), false);
   assert.match(app, /initialObjectKey="kiosk_device" appKey="one_kiosk"/);
-  assert.match(metadata, /key: "kiosk_device"[\s\S]*table: "kiosk_devices"/);
-  for (const legacy of ["/kiosk/devices/:id/settings", "/kiosk/devices/:id/age-approve", "/kiosk/devices/:id/assistance-clear", "/kiosk/orders/search", "/kiosk/printer-connectors", "/kiosk/payment-connectors"]) assert.equal(route.includes(legacy), false, legacy);
-  assert.match(route, /\/kiosk\/catalogue/);
-  assert.match(route, /\/kiosk\/devices\/register/);
-  assert.match(route, /\/kiosk\/devices\/\:id\/heartbeat/);
+  assert.ok(metadata.includes('key:"kiosk_device"') || metadata.includes('key: "kiosk_device"'));
+  assert.equal(server.includes("createKioskRouter"), false);
 });
-
 
 test("store and till administration use metadata while operational till runtime remains", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
