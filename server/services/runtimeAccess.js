@@ -4,32 +4,30 @@ export const DEVICE_PROFILES = Object.freeze({
   TILL: "till",
 });
 
-const DESTINATIONS = Object.freeze({
-  pos: { path: "/app", moduleKey: "retail_pos", permission: "sale.view" },
-  dashboard: { path: "/app/dashboard", moduleKey: null, requiresAnyPermission: true },
-});
-
 export function normalizeDeviceProfile(value) {
   const profile = String(value || "").trim().toLowerCase();
   return profile === DEVICE_PROFILES.TILL ? DEVICE_PROFILES.TILL : DEVICE_PROFILES.ADMIN;
 }
 
-export function destinationFor(value) {
-  const key = String(value || "").trim().toLowerCase();
-  if (DESTINATIONS[key]) return { key, ...DESTINATIONS[key] };
-  const destination = Object.values(DESTINATIONS).find((entry) => entry.path === value);
-  return destination ? { key: Object.keys(DESTINATIONS).find((name) => DESTINATIONS[name] === destination), ...destination } : null;
+export function destinationFor(value, destinations = []) {
+  const key = String(value || "").trim();
+  if (!key) return null;
+  const list = Array.isArray(destinations) ? destinations : [];
+  const found = list.find((entry) => entry?.key === key || entry?.path === key);
+  return found ? { ...found } : null;
 }
 
-export const isValidLandingPage = (value) => Boolean(destinationFor(value));
+export const isValidLandingPage = (value, destinations = []) => Boolean(destinationFor(value, destinations));
 
-export function canAccessDestination(value, { enabledModules = new Set(), permissions = [] } = {}) {
-  const destination = destinationFor(value);
+export function canAccessDestination(value, { destinations = [], enabledModules = new Set(), permissions = [] } = {}) {
+  const destination = destinationFor(value, destinations);
   if (!destination) return false;
-  /* Company module activation applies to every caller. */
   if (destination.moduleKey && !enabledModules.has(destination.moduleKey)) return false;
-  return (destination.requiresAnyPermission ? permissions.length > 0 : true)
-    && (!destination.permission || permissions.includes(destination.permission));
+  const required = Array.isArray(destination.permissions)
+    ? destination.permissions
+    : destination.permission ? [destination.permission] : [];
+  return (!destination.requiresAnyPermission || permissions.length > 0)
+    && (!required.length || required.some((permission) => permissions.includes(permission)));
 }
 
 export function resolveLandingPage({
@@ -37,15 +35,13 @@ export function resolveLandingPage({
   roleDefault,
   profileDefault,
   companyDefault,
-  deviceProfile = DEVICE_PROFILES.ADMIN,
+  destinations = [],
   enabledModules = new Set(),
   permissions = [],
 } = {}) {
-  const profile = normalizeDeviceProfile(deviceProfile);
-  const profileFallback = profileDefault || (profile === DEVICE_PROFILES.TILL ? "pos" : "dashboard");
-  const candidates = [userOverride, roleDefault, profileFallback, companyDefault, "dashboard", "pos"];
-  const selected = candidates.find((candidate) => canAccessDestination(candidate, { enabledModules, permissions }));
-  return destinationFor(selected)?.path || null;
+  const candidates = [userOverride, roleDefault, profileDefault, companyDefault].filter(Boolean);
+  const selected = candidates.find((candidate) => canAccessDestination(candidate, { destinations, enabledModules, permissions }));
+  return destinationFor(selected, destinations)?.path || null;
 }
 
 export function permittedCatalogEntries({ catalog = [], enabledModules = new Set(), permissions = [] } = {}) {
