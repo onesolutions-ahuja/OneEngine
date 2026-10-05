@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 
 const uid = () => globalThis.crypto?.randomUUID?.() || `cf-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 
 export const COLLECTION_FILTER_DEFAULTS = Object.freeze({
   collection: '',
