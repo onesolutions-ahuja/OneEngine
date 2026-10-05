@@ -1256,7 +1256,7 @@ const operationalObjects = [
     ["debit", "Debit", "currency", "debit", false], ["credit", "Credit", "currency", "credit", false],
     ["amount", "Amount", "currency", "amount", true], ["net_amount", "Net", "currency", "net_amount", false],
     ["vat_amount", "VAT / Tax", "currency", "vat_amount", false], ["reference", "Reference", "text", "reference", false],
-    ["status", "Status", "select", "status", false], ["description", "Description", "text", "description", false],
+    ["status", "Status", "text", "status", false], ["description", "Description", "text", "description", false],
     ["created_at", "Created", "datetime", "created_at", false],
   ] },
   { key: "inventory", label: "Inventory", plural: "Inventory", table: "product_store_stock", fields: [
@@ -1278,7 +1278,7 @@ const operationalObjects = [
     ["updated_at", "Updated", "datetime", "updated_at", false],
   ] },
   { key: "purchase", label: "Purchase", plural: "Purchases", table: "purchases", fields: [
-    ["reference_number", "Reference", "text", "reference_number", false], ["supplier_id", "Supplier", "lookup", "supplier_id", false], ["store_id", "Store", "lookup", "store_id", false], ["purchase_date", "Purchase Date", "date", "purchase_date", false], ["notes", "Notes", "text", "notes", false], ["status", "Status", "text", "status", false], ["total", "Total", "currency", "total", false],
+    ["reference_number", "Reference", "text", "reference_number", false], ["supplier_id", "Supplier", "lookup", "supplier_id", false], ["store_id", "Store", "lookup", "store_id", false], ["purchase_date", "Purchase Date", "date", "purchase_date", false], ["notes", "Notes", "text", "notes", false], ["status", "Status", "picklist", "status", false], ["total", "Total", "currency", "total", false],
   ] },
   { key: "purchase_receipt", label: "Purchase Receipt", plural: "Purchase Receipts", table: "purchase_receipts", fields: [
     ["purchase_id", "Purchase", "lookup", "purchase_id", false], ["reference_number", "Reference", "text", "reference_number", false], ["received_at", "Received", "datetime", "received_at", false], ["notes", "Notes", "text", "notes", false],
