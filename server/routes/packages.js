@@ -484,6 +484,14 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
 
 
   async function runTenantAppLifecycleFlow(req, packageKey, buttonKey) {
+    const trustedPackageResult = await db(
+      "SELECT package_key,manifest,version FROM package_registry WHERE package_key=$1 AND active=TRUE LIMIT 1",
+      [packageKey]
+    );
+    const trustedPackage = trustedPackageResult.rows[0];
+    if (!trustedPackage) throw Object.assign(new Error("Package is unavailable"), { status: 404 });
+    assertTrustedPackageManifest(trustedPackage.package_key, trustedPackage.manifest || {}, trustedPackage.version);
+
     const tenantResult = await db(
       `SELECT ta.*,osa.app_key
          FROM tenant_apps ta
