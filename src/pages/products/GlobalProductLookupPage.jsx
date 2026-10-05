@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Barcode, Check, ChevronRight, Globe2, KeyRound, LoaderCircle, PackageSearch, Plus, Search, Settings2, Wifi, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
-import { ProductEditor } from './ProductsPage'
+import MetadataRecordFormModal from '../../components/MetadataRecordFormModal'
 
 const DEFAULT_PROVIDER={enabled:true,priority:100,timeoutMs:5000,fallbackEnabled:true,cacheTtlSeconds:5}
 
@@ -121,11 +121,11 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
       name:product.name||'',
       barcode:product.barcode||'',
       description:product.description||'',
-      categoryId:category?.id||'',
-      imageUrl:product.imageUrl||'',
+      category_id:category?.id||'',
+      image_url:product.imageUrl||'',
       brand:product.brand||'',
       quantity:product.quantity||'',
-      sourceProvider:product.sourceProvider,
+      source_provider:product.sourceProvider||'',
     })
   }
 
@@ -314,6 +314,6 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
       </article>
     </div>:null}
 
-    {preset?<ProductEditor mode="create" product={null} preset={preset} categories={categories} onClose={()=>setPreset(null)} onSaved={()=>{setPreset(null);setNotice('Product added to your company catalogue.')}}/>:null}
+    {preset?<MetadataRecordFormModal objectKey="product" mode="create" record={preset} title="Add Product to Catalogue" onClose={()=>setPreset(null)} onSaved={()=>{setPreset(null);setNotice('Product added to your company catalogue.')}}/>:null}
   </section>
 }
