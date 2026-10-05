@@ -1241,9 +1241,12 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         u.active,
         u.must_change_password,
         r.name AS role_name,
-        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
+        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page,
+        s.code AS store_code,
+        s.name AS store_name
       FROM users u
       LEFT JOIN roles r ON r.id = u.role_id
+      LEFT JOIN stores s ON s.id = u.store_id AND s.company_id = u.company_id AND s.active = true
       WHERE LOWER(BTRIM(u.email)) = LOWER(BTRIM($1))
          OR (u.email IS NULL AND LOWER(u.username) = LOWER(BTRIM($1)))
       LIMIT 1
@@ -1506,6 +1509,14 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       permissions: {
         permissions: effectivePermissions,
       },
+      stores: user.store_id ? [{
+        id: user.store_id,
+        code: user.store_code || null,
+        name: user.store_name || null,
+        active: true,
+        is_primary: true,
+        companyId: user.company_id || null,
+      }] : [],
       user: {
         id: user.id,
         username: user.username,
@@ -1695,6 +1706,13 @@ app.get("/api/auth/bootstrap", authenticate, async (req, res) => {
     }
 
     const user = result.rows[0];
+    let permissions = req.user.roleId ? await getRolePermissionCodes(req.user.roleId, req) : [];
+    const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
+    permissions = [...new Set([
+      ...permissions,
+      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+    ])];
+
     res.json({
       success: true,
       user: {
@@ -1708,6 +1726,7 @@ app.get("/api/auth/bootstrap", authenticate, async (req, res) => {
         mustChangePassword: user.must_change_password === true,
       },
       stores: Array.isArray(user.stores) ? user.stores : [],
+      permissions: { permissions },
     });
   } catch (error) {
     console.error("Session bootstrap error:", error);
