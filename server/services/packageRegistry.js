@@ -3308,12 +3308,7 @@ export function packageDefinition(entry) {
         workflows: [
           {objectKey:"purchase",name:"Purchase Create",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[{id:"purchase_create",label:"Purchase Create",key:"RUN_SUBFLOW",subflowApiName:"PURCHASE_CREATE",inputAssignments:{supplierId:{path:"record.supplierId"},supplierName:{path:"record.supplierName"},referenceNumber:{path:"record.referenceNumber"},purchaseDate:{path:"record.purchaseDate"},notes:{path:"record.notes"},items:{path:"record.items"}}}]},
           {objectKey:"purchase",name:"Purchase Receive",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[{id:"purchase_receive",label:"Purchase Receive",key:"RUN_SUBFLOW",subflowApiName:"PURCHASE_RECEIVE",inputAssignments:{purchaseId:{path:"record.id"},receivingReference:{path:"record.receivingReference"},receivingNotes:{path:"record.receivingNotes"},now:{path:"record.now"},userId:{path:"record.userId"}}}]},
-          {objectKey:"purchase_line",name:"Supplier Return Execute",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[
-            {id:"supplier_return",label:"Return Stock",key:"CALL_FUNCTION",functionKey:"supplier.return.execute",inputs:{
-              purchaseItemId:{path:"record.id"},purchaseId:{path:"record.purchase_id"},productId:{path:"record.product_id"},
-              quantity:{path:"record.quantityToReturn"},reason:{path:"record.reason"},requestKey:{path:"record.requestKey"}
-            }}
-          ]},
+          {objectKey:"purchase_line",name:"Supplier Return Execute",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[{id:"supplier_return",label:"Return Stock",key:"RUN_SUBFLOW",subflowApiName:"SUPPLIER_RETURN_EXECUTE",inputAssignments:{purchaseItemId:{path:"record.id"},purchaseId:{path:"record.purchase_id"},productId:{path:"record.product_id"},quantity:{path:"record.quantityToReturn"},reason:{path:"record.reason"},returnNumber:{path:"record.returnNumber"},supplierId:{path:"record.supplierId"},unitCost:{path:"record.unit_cost"},userId:{path:"record.userId"}}}]},
         ],
         buttons: [
           {objectKey:"purchase",buttonKey:"purchase_create",label:"New Purchase",targetType:"workflow",targetKey:"Purchase Create",placement:"list",variant:"primary",
