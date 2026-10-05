@@ -1564,6 +1564,116 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       },
     },
     {
+      key: "0062_oneassistant_single_event_router",
+      version: "62",
+      name: "Keep exactly one OneAssistant communication event router per tenant",
+      up: async client => {
+        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
+        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+
+        const candidates = await client.query(
+          `SELECT id,company_id,name,action,created_at,updated_at
+             FROM platform_rules
+            WHERE company_id IS NOT NULL
+              AND trigger_key='communication_message_received'
+              AND action->>'type'='workflow'
+              AND (
+                action->>'apiName'='OneAssistant_Booking_Channel_Router'
+                OR name IN (
+                  'OneAssistant - Booking Channel Router',
+                  'OneAssistant - SMS Booking',
+                  'OneAssistant - WhatsApp Booking',
+                  'System · Action · Appointments - Process Conversation',
+                  'System · Action · Appointments - Send Conversation Reply',
+                  'System · Action · Appointments - Process Date Response',
+                  'System · Action · Appointments - Process Slot Response'
+                )
+              )
+            ORDER BY company_id,
+                     CASE WHEN name='OneAssistant - Booking Channel Router' THEN 0 ELSE 1 END,
+                     updated_at DESC,created_at DESC,id`
+        );
+
+        const byCompany = new Map();
+        for (const row of candidates.rows) {
+          if (!byCompany.has(row.company_id)) byCompany.set(row.company_id, []);
+          byCompany.get(row.company_id).push(row);
+        }
+
+        let deactivated = 0;
+        let canonicalCount = 0;
+        for (const [companyId, rows] of byCompany.entries()) {
+          const canonical = rows.find((row) => row.name === "OneAssistant - Booking Channel Router") || rows[0];
+          if (!canonical) continue;
+
+          const disabled = await client.query(
+            `UPDATE platform_rules
+                SET active=FALSE,lifecycle_status='INACTIVE',updated_at=NOW()
+              WHERE company_id=$1
+                AND id<>$2
+                AND trigger_key='communication_message_received'
+                AND action->>'type'='workflow'
+                AND (
+                  action->>'apiName'='OneAssistant_Booking_Channel_Router'
+                  OR name IN (
+                    'OneAssistant - SMS Booking',
+                    'OneAssistant - WhatsApp Booking',
+                    'System · Action · Appointments - Process Conversation',
+                    'System · Action · Appointments - Send Conversation Reply',
+                    'System · Action · Appointments - Process Date Response',
+                    'System · Action · Appointments - Process Slot Response'
+                  )
+                )`,
+            [companyId, canonical.id]
+          );
+          deactivated += disabled.rowCount || 0;
+
+          await client.query(
+            `UPDATE platform_rules
+                SET name='OneAssistant - Booking Channel Router',
+                    trigger_key=$1,
+                    conditions=$2::jsonb,
+                    action=$3::jsonb,
+                    active=TRUE,
+                    lifecycle_status='ACTIVE',
+                    updated_at=NOW()
+              WHERE id=$4 AND company_id=$5`,
+            [router.triggerKey, JSON.stringify(router.conditions || []), JSON.stringify(router.action), canonical.id, companyId]
+          );
+          canonicalCount += 1;
+        }
+
+        const expired = await client.query(
+          `UPDATE appointment_booking_cases
+              SET status='EXPIRED',
+                  state=COALESCE(state,'{}'::jsonb)||'{"step":"EXPIRED","waitToken":null}'::jsonb,
+                  updated_at=NOW()
+            WHERE status NOT IN ('CONFIRMED','CANCELLED','EXPIRED')
+            RETURNING id`
+        );
+
+        const duplicates = await client.query(
+          `SELECT company_id,COUNT(*)::int count
+             FROM platform_rules
+            WHERE active=TRUE
+              AND COALESCE(lifecycle_status,'ACTIVE')='ACTIVE'
+              AND trigger_key='communication_message_received'
+              AND action->>'type'='workflow'
+              AND action->>'apiName'='OneAssistant_Booking_Channel_Router'
+            GROUP BY company_id
+           HAVING COUNT(*)<>1`
+        );
+        if (duplicates.rows.length) throw new Error("OneAssistant event router dedupe verification failed");
+
+        console.log("onePOS: OneAssistant single event router enforced", {
+          tenants: canonicalCount,
+          deactivatedRouters: deactivated,
+          expiredOpenBookingSessions: expired.rowCount,
+        });
+      },
+    },
+    {
       key: "0063_workflow_step_identifier_text",
       version: "63",
       name: "Allow deeply nested workflow execution paths",
