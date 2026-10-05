@@ -3499,6 +3499,34 @@ export function packageDefinition(entry) {
               {apiName:"received_at",label:"Received",fieldType:"datetime",sourceColumn:"received_at",writable:true},
             ],
           },
+          {
+            objectKey:"stock_return",label:"Stock Return",pluralLabel:"Stock Returns",sourceTable:"stock_returns",metadataScope:"global",storeScoped:true,required:true,config:{flowWritesOnly:true},
+            fields:[
+              {apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:true},
+              {apiName:"return_type",label:"Return Type",fieldType:"picklist",sourceColumn:"return_type",writable:true,options:["CUSTOMER","SUPPLIER"]},
+              {apiName:"return_number",label:"Return Number",fieldType:"text",sourceColumn:"return_number",writable:true},
+              {apiName:"sale_id",label:"Sale",fieldType:"lookup",sourceColumn:"sale_id",writable:true},
+              {apiName:"purchase_id",label:"Purchase",fieldType:"lookup",sourceColumn:"purchase_id",writable:true},
+              {apiName:"supplier_id",label:"Supplier",fieldType:"lookup",sourceColumn:"supplier_id",writable:true},
+              {apiName:"request_key",label:"Request Key",fieldType:"text",sourceColumn:"request_key",writable:true},
+              {apiName:"status",label:"Status",fieldType:"picklist",sourceColumn:"status",writable:true,options:["COMPLETED","CANCELLED"]},
+              {apiName:"refund_amount",label:"Refund Amount",fieldType:"currency",sourceColumn:"refund_amount",writable:true},
+              {apiName:"refund_method",label:"Refund Method",fieldType:"text",sourceColumn:"refund_method",writable:true},
+              {apiName:"reason",label:"Reason",fieldType:"text",sourceColumn:"reason",writable:true},
+              {apiName:"created_by",label:"Created By",fieldType:"lookup",sourceColumn:"created_by",writable:true}
+            ]
+          },
+          {
+            objectKey:"stock_return_line",label:"Stock Return Line",pluralLabel:"Stock Return Lines",sourceTable:"stock_return_items",metadataScope:"global",required:true,config:{flowWritesOnly:true},
+            fields:[
+              {apiName:"return_id",label:"Return",fieldType:"lookup",sourceColumn:"return_id",writable:true},
+              {apiName:"product_id",label:"Product",fieldType:"lookup",sourceColumn:"product_id",writable:true},
+              {apiName:"sale_item_id",label:"Sale Item",fieldType:"lookup",sourceColumn:"sale_item_id",writable:true},
+              {apiName:"purchase_item_id",label:"Purchase Line",fieldType:"lookup",sourceColumn:"purchase_item_id",writable:true},
+              {apiName:"quantity",label:"Quantity",fieldType:"decimal",sourceColumn:"quantity",writable:true},
+              {apiName:"reason",label:"Reason",fieldType:"text",sourceColumn:"reason",writable:true}
+            ]
+          },
         ],
         relationships: [
           {parentObjectKey:"supplier",childObjectKey:"purchase",relationshipKey:"purchases",relationshipType:"one_to_many",childFieldApiName:"supplier_id"},
@@ -3506,6 +3534,7 @@ export function packageDefinition(entry) {
           {parentObjectKey:"purchase_line",childObjectKey:"product",relationshipKey:"product",relationshipType:"lookup",parentFieldApiName:"product_id"},
           {parentObjectKey:"purchase",childObjectKey:"purchase_receipt",relationshipKey:"receipts",relationshipType:"one_to_many",childFieldApiName:"purchase_id"},
           {parentObjectKey:"purchase_line",childObjectKey:"stock_return_line",relationshipKey:"return_lines",relationshipType:"one_to_many",childFieldApiName:"purchase_item_id"},
+          {parentObjectKey:"stock_return",childObjectKey:"stock_return_line",relationshipKey:"lines",relationshipType:"one_to_many",childFieldApiName:"return_id",required:true},
         ],
         listViews: [
           {objectKey:"purchase",viewKey:"all",label:"Purchases",columns:["reference_number","supplier_name","purchase_date","status","total","created_at"],sort:{field:"purchase_date",direction:"desc"},isDefault:true},
