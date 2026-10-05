@@ -1285,8 +1285,13 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const loginDb = (sql, params = []) => loginPool.query(sql, params);
     const requestIp = clientIp(req);
     const requestUserAgent = req.get("user-agent") || null;
-    const securitySettings = user.company_id ? await loadSecuritySettings(loginDb, user.company_id) : null;
-    const state = await loginState(loginDb, user.id);
+    const [securitySettings, state, googleRuntime] = await Promise.all([
+      user.company_id ? loadSecuritySettings(loginDb, user.company_id) : Promise.resolve(null),
+      loginState(loginDb, user.id),
+      user.company_id
+        ? getGoogleConnectRuntime((query, params = []) => loginPool.query(query, params), user.company_id)
+        : Promise.resolve(null),
+    ]);
     if (state?.locked_indefinitely === true || (state?.locked_until && new Date(state.locked_until).getTime() > Date.now())) {
       await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: "ACCOUNT_LOCKED", ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({
@@ -1305,18 +1310,12 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    if (user.company_id) {
-      const googleRuntime = await getGoogleConnectRuntime(
-        (query, params = []) => loginPool.query(query, params),
-        user.company_id
-      );
-      if (googleRuntime.ready && googleRuntime.config?.allowPasswordLogin === false) {
-        return res.status(403).json({
-          success: false,
-          code: "GOOGLE_SSO_REQUIRED",
-          message: "This company requires Google SSO. Use Continue with Google.",
-        });
-      }
+    if (googleRuntime?.ready && googleRuntime.config?.allowPasswordLogin === false) {
+      return res.status(403).json({
+        success: false,
+        code: "GOOGLE_SSO_REQUIRED",
+        message: "This company requires Google SSO. Use Continue with Google.",
+      });
     }
 
     stepStartedAt = Date.now();
@@ -1365,17 +1364,52 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    const access = await accessDecision(loginDb, {
-      companyId: user.company_id,
-      userId: user.id,
-      roleId: user.role_id,
-      ip: requestIp,
-    });
+    const loginPermissionUser = {
+      id: user.id,
+      companyId: user.company_id || null,
+    };
+    const authorizationStartedAt = Date.now();
+    const [access, rolePermissionResult, permissionSets, assurancePolicy, trustedDevice] = await Promise.all([
+      accessDecision(loginDb, {
+        companyId: user.company_id,
+        userId: user.id,
+        roleId: user.role_id,
+        ip: requestIp,
+      }),
+      user.role_id
+        ? loginPool.query(
+            `SELECT p.code
+               FROM role_permissions rp
+               JOIN permissions p ON p.id=rp.permission_id
+              WHERE rp.role_id=$1`,
+            [user.role_id]
+          )
+        : Promise.resolve({ rows: [] }),
+      loadEffectivePermissionSets(loginDb, loginPermissionUser),
+      user.company_id
+        ? loadEffectiveAssurance(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
+        : Promise.resolve(null),
+      user.company_id
+        ? findTrustedDevice(loginDb, {
+            companyId: user.company_id,
+            userId: user.id,
+            token: req.body?.deviceToken,
+            ip: requestIp,
+          })
+        : Promise.resolve(null),
+    ]);
+    loginTimings.authorization_bundle_ms = Date.now() - authorizationStartedAt;
+    loginTimings.permissions_ms = loginTimings.authorization_bundle_ms;
+
     if (!access.allowed) {
       await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: access.code, ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({ success: false, code: access.code, message: access.reason });
     }
-    await clearFailedLogin(loginDb, user);
+
+    const effectivePermissions = [...new Set([
+      ...rolePermissionResult.rows.map((row) => row.code),
+      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
+    ])];
 
     let passwordExpired = false;
     if (securitySettings && Number(securitySettings.password_expiry_days || 0) > 0) {
@@ -1388,57 +1422,24 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     }
 
     stepStartedAt = Date.now();
-    await loginPool.query(
-      `
-      UPDATE users
-      SET last_login_at = NOW()
-      WHERE id = $1
-      `,
-      [user.id]
-    );
+    await Promise.all([
+      clearFailedLogin(loginDb, user),
+      loginPool.query(
+        `
+        UPDATE users
+        SET last_login_at = NOW()
+        WHERE id = $1
+        `,
+        [user.id]
+      ),
+    ]);
     markLoginTiming("last_login_update_ms", stepStartedAt);
 
     // Login always keeps the authenticated company binding. OneDeveloper
     // selects a target company separately, and only through oneengine.manage.
     const actingCompanyId = null;
 
-    /*
-     * Return the effective RBAC permission set with the login response so the
-     * client can build its UI from one authenticated bootstrap. This avoids
-     * every page re-fetching /auth/me/permissions. Runtime endpoints still
-     * enforce authorization independently.
-     */
-    stepStartedAt = Date.now();
-    const rolePermissionResult = user.role_id
-      ? await loginPool.query(
-          `SELECT p.code
-             FROM role_permissions rp
-             JOIN permissions p ON p.id=rp.permission_id
-            WHERE rp.role_id=$1`,
-          [user.role_id]
-        )
-      : { rows: [] };
-    const loginPermissionUser = {
-      id: user.id,
-      companyId: user.company_id || null,
-    };
-    const permissionSets = await loadEffectivePermissionSets(loginDb, loginPermissionUser);
-    const effectivePermissions = [...new Set([
-      ...rolePermissionResult.rows.map((row) => row.code),
-      ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
-    ])];
-    markLoginTiming("permissions_ms", stepStartedAt);
-
-    const assurancePolicy = user.company_id
-      ? await loadEffectiveAssurance(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
-      : null;
     const effectiveAssurance = assurancePolicy?.effective || { mfaRequired: false, phishingResistantRequired: false, requiredLoginAssurance: "STANDARD", passwordAssurance: "STANDARD" };
-    const trustedDevice = user.company_id ? await findTrustedDevice(loginDb, {
-      companyId: user.company_id,
-      userId: user.id,
-      token: req.body?.deviceToken,
-      ip: requestIp,
-    }) : null;
     const activationSatisfied = !effectiveAssurance.deviceActivationRequired
       || Boolean(trustedDevice)
       || (effectiveAssurance.skipDeviceActivationOnTrustedNetwork && access.trustedNetwork === true);
