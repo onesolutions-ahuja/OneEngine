@@ -1316,3 +1316,23 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 15 closes Builder and resource gaps', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  assert.match(page, /Collection Filter Criteria/)
+  assert.match(page, /collection_filter_criteria/)
+  assert.match(page, /sourceCollection/)
+  assert.match(page, /Condition Requirements/)
+  assert.equal(page.includes('<option value="apex">Apex-Defined<\/option>'), false)
+  assert.match(page, /endPosition:/)
+  assert.match(page, /afterElementId/)
+  assert.match(page, /Flow Label is required/)
+  assert.match(page, /Flow Label is too long/)
+  assert.match(page, /Flow API Name is required/)
+  assert.match(page, /Create Records is missing required field values/)
+  assert.match(page, /Fix the flow errors before saving/)
+  assert.match(page, /Incoming Go To Connections/)
+  assert.match(page, /Outputs/)
+  assert.match(page, /Usage/)
+})
