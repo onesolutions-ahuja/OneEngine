@@ -10,6 +10,8 @@ function cacheKeyFor(path, cacheKey) {
   return cacheKey || String(path || '')
 }
 
+const refreshInFlight = new Map()
+
 function persistWhenIdle(key, value) {
   const run = () => void writeLazyCache(key, value)
   if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 })
@@ -30,14 +32,23 @@ export async function cachedGet(path, {
   const usableCached = cached && age <= maxStaleMs
 
   const refresh = async () => {
-    const fresh = await apiRequest(path)
-    // Cache persistence is deliberately deferred until the browser is idle.
-    // JSON serialization/encryption must never compete with rendering.
-    persistWhenIdle(key, fresh)
-    if (typeof onFresh === 'function') {
-      try { onFresh(fresh) } catch {}
-    }
-    return fresh
+    const existing = refreshInFlight.get(key)
+    if (existing) return existing
+    const request = apiRequest(path)
+      .then((fresh) => {
+        // Cache persistence is deliberately deferred until the browser is idle.
+        // JSON serialization/encryption must never compete with rendering.
+        persistWhenIdle(key, fresh)
+        if (typeof onFresh === 'function') {
+          try { onFresh(fresh) } catch {}
+        }
+        return fresh
+      })
+      .finally(() => {
+        if (refreshInFlight.get(key) === request) refreshInFlight.delete(key)
+      })
+    refreshInFlight.set(key, request)
+    return request
   }
 
   if (forceRefresh || !usableCached) {
