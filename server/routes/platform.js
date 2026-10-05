@@ -4596,6 +4596,20 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({ success: true, data });
   });
 
+  router.get("/platform/rules/:ruleId", ...manage, async (req, res) => {
+    const result = await db(
+      `SELECT r.*, o.object_key, o.label AS object_label
+         FROM platform_rules r
+         LEFT JOIN platform_objects o
+           ON o.id=COALESCE(NULLIF(r.draft_definition->>'object_id','')::uuid,r.object_id)
+        WHERE r.id=$1 AND (r.company_id IS NULL OR r.company_id=$2)
+        LIMIT 1`,
+      [req.params.ruleId, req.user.companyId]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Workflow not found" });
+    return res.json({ success: true, data: workflowAuthoringRow(result.rows[0]) });
+  });
+
   async function assignmentTargetExists(companyId, targetType, targetId) {
     if (!companyId || !targetId) return false;
     if (targetType === "USER") {
