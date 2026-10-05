@@ -8,7 +8,7 @@ export const PACKAGE_RUNTIME_FLOWS=[
  flow("flow:attendance.clock_in","Attendance · Clock In",[input("userId"),input("storeId"),input("now","text")],[output("recordId"),output("alreadyOpen","boolean")],[
   {id:"find_open",label:"Find Open Attendance",key:"GET_RECORDS",objectKey:"attendance",filters:[{field:"user_id",operator:"equals",value:{path:"$record.userId"}},{field:"status",operator:"equals",value:"open"}],limit:1,store:"first"},
   {id:"open_exists",label:"Open Attendance Exists?",key:"CONDITION",outcomes:[{id:"yes",label:"Already Open",condition:{match:"all",conditions:[{field:"steps.find_open.record.id",operator:"is_not_blank"}]},branch:["set_existing_id","set_already_open"]}],defaultLabel:"Create Attendance",defaultBranch:["create_attendance","set_created_id","set_not_already_open"]},
-  {id:"create_attendance",label:"Create Attendance",key:"CREATE_RECORD",objectKey:"attendance",fieldValues:{user_id:{path:"$record.userId"},store_id:{path:"$record.storeId"},status:"open",clock_in:{path:"$record.now"}}},
+  {id:"create_attendance",label:"Create Attendance",key:"CREATE_RECORD",objectKey:"attendance",fieldValues:{user_id:{path:"$record.userId"},status:"open",clock_in:{path:"$record.now"}}},
   {id:"set_existing_id",label:"Return Existing Record",key:"ASSIGNMENT",variableName:"recordId",variableType:"text",operator:"set",value:{path:"steps.find_open.record.id"}},
   {id:"set_created_id",label:"Return Created Record",key:"ASSIGNMENT",variableName:"recordId",variableType:"text",operator:"set",value:{path:"steps.create_attendance.record.id"}},
   {id:"set_already_open",label:"Already Open",key:"ASSIGNMENT",variableName:"alreadyOpen",variableType:"boolean",operator:"set",value:true},
@@ -16,8 +16,9 @@ export const PACKAGE_RUNTIME_FLOWS=[
  ]),
  flow("flow:attendance.clock_out","Attendance · Clock Out",[input("userId"),input("now","text")],[output("recordId"),output("closed","boolean")],[
   {id:"find_open",label:"Find Open Attendance",key:"GET_RECORDS",objectKey:"attendance",filters:[{field:"user_id",operator:"equals",value:{path:"$record.userId"}},{field:"status",operator:"equals",value:"open"}],limit:1,store:"first"},
-  {id:"open_exists",label:"Open Attendance Exists?",key:"CONDITION",outcomes:[{id:"yes",label:"Close Attendance",condition:{match:"all",conditions:[{field:"steps.find_open.record.id",operator:"is_not_blank"}]},branch:["close_attendance","set_closed_id","set_closed"]}],defaultLabel:"Nothing Open",defaultBranch:["set_not_closed"]},
-  {id:"close_attendance",label:"Close Attendance",key:"UPDATE_RECORD",objectKey:"attendance",recordId:{path:"steps.find_open.record.id"},fieldValues:{status:"closed",clock_out:{path:"$record.now"}}},
+  {id:"open_exists",label:"Open Attendance Exists?",key:"CONDITION",outcomes:[{id:"yes",label:"Close Attendance",condition:{match:"all",conditions:[{field:"steps.find_open.record.id",operator:"is_not_blank"}]},branch:["worked_minutes","close_attendance","set_closed_id","set_closed"]}],defaultLabel:"Nothing Open",defaultBranch:["set_not_closed"]},
+  {id:"worked_minutes",label:"Calculate Worked Minutes",key:"FORMULA",resourceName:"workedMinutes",resultType:"number",expression:"MINUTESBETWEEN(clockIn, clockOut)",inputs:{clockIn:{path:"steps.find_open.record.clock_in"},clockOut:{path:"$record.now"}}},
+  {id:"close_attendance",label:"Close Attendance",key:"UPDATE_RECORD",objectKey:"attendance",recordId:{path:"steps.find_open.record.id"},fieldValues:{status:"closed",clock_out:{path:"$record.now"},worked_minutes:{path:"variables.workedMinutes"}}},
   {id:"set_closed_id",label:"Return Closed Record",key:"ASSIGNMENT",variableName:"recordId",variableType:"text",operator:"set",value:{path:"steps.find_open.record.id"}},
   {id:"set_closed",label:"Closed",key:"ASSIGNMENT",variableName:"closed",variableType:"boolean",operator:"set",value:true},
   {id:"set_not_closed",label:"Not Closed",key:"ASSIGNMENT",variableName:"closed",variableType:"boolean",operator:"set",value:false}
