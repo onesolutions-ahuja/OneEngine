@@ -54,6 +54,7 @@ export function decisionConfigErrors(config = {}, flowType = '') {
 }
 
 const configuredValue = (row) => row.valueMode === 'resource' ? { path: row.value } : row.value
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? 'variables.' + resource.apiName : '')
 
 export function decisionRuntimeAction(instance) {
   const c = normalizeDecisionConfig(instance?.config)
@@ -85,7 +86,7 @@ export function decisionRuntimeAction(instance) {
 function ResourcePicker({ resources, value, onChange }) {
   return <select value={value || ''} onChange={(event) => onChange(event.target.value)}>
     <option value="">Select a resource</option>
-    {resources.map((item) => <option key={item.id || item.apiName} value={`variables.${item.apiName}`}>{item.label || item.apiName}</option>)}
+    {resources.map((item) => <option key={item.id || item.apiName} value={resourcePath(item)}>{item.label || item.apiName}</option>)}
   </select>
 }
 
