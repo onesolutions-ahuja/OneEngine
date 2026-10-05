@@ -238,5 +238,3 @@ export function createGlobalProductLookupService({ fetchImpl = globalThis.fetch,
   return { lookup, search };
 }
 
-export const globalProductProviderConfigKeys = CONFIG_KEYS;
-export const globalProductProviderDefaults = DEFAULT_CONFIG;
