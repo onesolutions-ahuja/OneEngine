@@ -81,3 +81,9 @@ test('Google Connect login readiness uses one parallel read bundle', async () =>
   const source = await read('../server/services/googleConnect.js')
   assert.match(source, /const \[packageResult, entitlements, connectionResult\] = await Promise\.all/)
 })
+
+
+test('login timing accumulator remains declared after identity parallelization', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /let stepStartedAt = Date\.now\(\);\n\s*const validPassword/)
+})
