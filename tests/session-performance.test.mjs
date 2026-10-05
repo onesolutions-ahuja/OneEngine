@@ -107,3 +107,9 @@ test('successful login finalization avoids a second session assurance update', a
   assert.equal(loginSource.includes('UPDATE identity_sessions SET assurance_level=$2'), false)
   assert.match(security, /INSERT INTO identity_sessions\(id,company_id,user_id,expires_at,ip_address,user_agent,auth_method,origin_host,assurance_level,assurance_verified_at\)/)
 })
+
+
+test('tracked session assurance parameter is explicitly typed for PostgreSQL', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  assert.match(source, /\$9::text,CASE WHEN \$9::text IS NULL/)
+})
