@@ -125,6 +125,42 @@ const CORE_PLATFORM_FUNCTIONS = Object.freeze([
       }),
   },
   {
+    key: "account.lifecycle.token.issue",
+    category: "SECURITY",
+    description: "Issue a tenant-scoped account lifecycle token. Flow owns lifecycle decisions, recipient selection, templates and communication sequencing.",
+    inputs: { type: "object", required: ["userId", "purpose"] },
+    outputs: { type: "object" },
+    permissions: ["user.manage"],
+    handler: async ({ inputs = {}, db, companyId, req }) => {
+      const tenantId = companyId || req?.user?.companyId;
+      const userId = String(inputs.userId || "").trim();
+      const purpose = String(inputs.purpose || "").trim().toUpperCase();
+      if (!tenantId || !userId) throw new Error("Account token requires tenant and user context");
+      if (!["PASSWORD_RESET", "REGISTRATION"].includes(purpose)) throw new Error("Unsupported account token purpose");
+      const result = await db(
+        `SELECT u.id,u.email,u.active,c.user_email_domain,cs.domain_users_only
+           FROM users u
+           JOIN companies c ON c.id=u.company_id
+           JOIN company_settings cs ON cs.company_id=u.company_id
+          WHERE u.id=$1 AND u.company_id=$2 LIMIT 1`,
+        [userId, tenantId]
+      );
+      const user = result.rows?.[0];
+      if (!user) throw new Error("User not found");
+      if (purpose === "PASSWORD_RESET" && !user.active) throw new Error("Password reset cannot be issued for an inactive user");
+      if (purpose === "REGISTRATION" && user.domain_users_only) {
+        const email = String(user.email || "").trim().toLowerCase();
+        const domain = String(user.user_email_domain || "").trim().toLowerCase().replace(/^@/, "");
+        if (!email || !domain || !email.endsWith(`@${domain}`)) throw new Error("User email is outside the allowed company domain");
+      }
+      const fallback = purpose === "PASSWORD_RESET" ? 60 : 1440;
+      const requested = Number(inputs.expiresMinutes);
+      const expiresMinutes = Number.isFinite(requested) && requested > 0 ? Math.min(Math.floor(requested), 10080) : fallback;
+      const token = await issueAccountToken(db, { companyId: tenantId, userId: user.id, purpose, expiresMinutes });
+      return { token, userId: user.id, purpose, expiresMinutes };
+    },
+  },
+  {
     key: "account.registration.token.issue",
     category: "SECURITY",
     description: "Issue a registration token; retained temporarily for the active account lifecycle route.",
