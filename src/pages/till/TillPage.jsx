@@ -841,6 +841,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         storeId: till?.store_id || settings?.store?.id || getStoredUser()?.storeId || null,
         terminalId: till?.terminal_id || null,
         tillSessionId: till?.id || null,
+        online,
         userId: getStoredUser()?.id || getStoredUser()?.userId || null,
         customerId: selectedCustomer?.id || null,
         online,
