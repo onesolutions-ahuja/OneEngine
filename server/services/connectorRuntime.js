@@ -351,6 +351,7 @@ export async function resolvePersistedConnectorCapability({
   storeId,
   tillId,
   capabilityKey,
+  packageKey = null,
   selfCheckout = false,
   payload = null,
   writeAudit = null,
@@ -358,6 +359,7 @@ export async function resolvePersistedConnectorCapability({
 }) {
   const instances = await loadPersistedCandidates({ db, companyId, storeId, tillId });
   const eligible = instances.filter((instance) => {
+    if (packageKey && String(instance.connector_package_key) !== String(packageKey)) return false;
     const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
     const capability = capabilityDefinition(manifest, capabilityKey);
     if (!capability) return false;
