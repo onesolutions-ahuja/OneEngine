@@ -25,8 +25,8 @@ export default function CustomPageRuntimePage({ pageKey }) {
   const [navigationContext,setNavigationContext]=useState(null);
   useEffect(()=>{
     let live=true;setError("");
-    Promise.all([apiRequest(`/api/platform/runtime/pages/${encodeURIComponent(pageKey||"")}`),loadSessionPermissions().catch(()=>null),apiRequest("/api/platform/runtime/navigation-targets").catch(()=>null)])
-      .then(([pageResponse,permissionState,targetResponse])=>{if(!live)return;if(!pageResponse?.success)throw new Error(pageResponse?.message||"Page not found");setPage(pageResponse.data);setNavigationContext(buildNavigationContext({permissionState,objectPages:targetResponse?.success?targetResponse.data?.objectPages||[]:[],customPages:targetResponse?.success?targetResponse.data?.customPages||[]:[]}));})
+    apiRequest(`/api/platform/runtime/pages/${encodeURIComponent(pageKey||"")}`)
+      .then((pageResponse)=>{if(!live)return;if(!pageResponse?.success)throw new Error(pageResponse?.message||"Page not found");setPage(pageResponse.data);void Promise.all([loadSessionPermissions().catch(()=>null),apiRequest("/api/platform/runtime/navigation-targets").catch(()=>null)]).then(([permissionState,targetResponse])=>{if(!live)return;setNavigationContext(buildNavigationContext({permissionState,objectPages:targetResponse?.success?targetResponse.data?.objectPages||[]:[],customPages:targetResponse?.success?targetResponse.data?.customPages||[]}));});})
       .catch((err)=>{if(live)setError(err?.message||"Unable to load page");});
     return()=>{live=false;};
   },[pageKey]);
