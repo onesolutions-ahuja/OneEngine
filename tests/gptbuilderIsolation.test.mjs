@@ -132,6 +132,56 @@ test('GPT Builder Run Debug Test and version restore use the intended saved defi
   assert.match(platform, /lifecycle_status: "DRAFT"/)
 })
 
+test('GPT Builder phase 3 registers a real property editor and runtime mapping for every supported element', async () => {
+  const elementsSource = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const properties = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
+  const elementKeys = [...elementsSource.matchAll(/\{ key: '([^']+)', label:/g)].map((match) => match[1])
+  const runtimeOnly = new Set(['group'])
+  for (const key of elementKeys) {
+    assert.match(page, new RegExp(`activeElement\\.key === '${key}'`), `missing property editor for ${key}`)
+    if (!runtimeOnly.has(key)) {
+      assert.match(page, new RegExp(`element\\.key === '${key}'`), `missing runtime mapping for ${key}`)
+    }
+  }
+  assert.doesNotMatch(elementsSource, /PendingElementEditor/)
+  assert.doesNotMatch(elementsSource, /full Salesforce property editor for this element is implemented in the next properties phase/)
+  assert.doesNotMatch(properties, /Element-specific configuration is added in its dedicated parity phase/)
+  assert.match(properties, /This element has no registered property editor/)
+})
+
+test('GPT Builder phase 3 element modules expose validation and runtime contracts', async () => {
+  const modules = [
+    ['GPTBuilderAction.jsx','actionConfigErrors','actionRuntimeAction'],
+    ['GPTBuilderRunAgent.jsx','runAgentConfigErrors','runAgentRuntimeAction'],
+    ['GPTBuilderScreen.jsx','screenConfigErrors','screenRuntimeAction'],
+    ['GPTBuilderSubflow.jsx','subflowConfigErrors','subflowRuntimeAction'],
+    ['GPTBuilderAssignment.jsx','assignmentConfigErrors','assignmentRuntimeAction'],
+    ['GPTBuilderDecision.jsx','decisionConfigErrors','decisionRuntimeAction'],
+    ['GPTBuilderLoop.jsx','loopConfigErrors','loopRuntimeAction'],
+    ['GPTBuilderCollectionFilter.jsx','collectionFilterConfigErrors','collectionFilterRuntimeAction'],
+    ['GPTBuilderCollectionSort.jsx','collectionSortConfigErrors','collectionSortRuntimeAction'],
+    ['GPTBuilderTransform.jsx','transformConfigErrors','transformRuntimeAction'],
+    ['GPTBuilderWaitDuration.jsx','waitDurationConfigErrors','waitDurationRuntimeAction'],
+    ['GPTBuilderWaitConditions.jsx','waitConditionsConfigErrors','waitConditionsRuntimeAction'],
+    ['GPTBuilderWaitUntilDate.jsx','waitUntilDateConfigErrors','waitUntilDateRuntimeAction'],
+    ['GPTBuilderCustomError.jsx','customErrorConfigErrors','customErrorRuntimeAction'],
+    ['GPTBuilderGetRecords.jsx','getRecordsConfigErrors','getRecordsRuntimeAction'],
+    ['GPTBuilderCreateRecords.jsx','createRecordsConfigErrors','createRecordsRuntimeAction'],
+    ['GPTBuilderUpdateRecords.jsx','updateRecordsConfigErrors','updateRecordsRuntimeAction'],
+    ['GPTBuilderDeleteRecords.jsx','deleteRecordsConfigErrors','deleteRecordsRuntimeAction'],
+  ]
+  for (const [file, validation, runtime] of modules) {
+    const source = await readFile(new URL(`../src/pages/developer/gptbuilder/${file}`, import.meta.url), 'utf8')
+    assert.match(source, new RegExp(`export function ${validation}\\b`), `missing validation contract in ${file}`)
+    assert.match(source, new RegExp(`export function ${runtime}\\b`), `missing runtime contract in ${file}`)
+    assert.match(source, /onConfiguredChange/, `editor does not report configuration state in ${file}`)
+  }
+  const group = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderGroup.jsx', import.meta.url), 'utf8')
+  assert.match(group, /export function groupConfigErrors\b/)
+  assert.match(group, /onConfiguredChange/)
+})
+
 test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection and reopen persistence', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /Ctrl\/Cmd \+ Alt\/Option \+ \+ \/ − or Ctrl\/Cmd \+ mouse wheel/)
