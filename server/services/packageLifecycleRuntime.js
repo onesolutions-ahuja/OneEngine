@@ -95,6 +95,41 @@ export async function applyPackageLifecycle({ db, companyId, userId = null, tena
     }
   }
 
+  if (requested === "TRIAL") {
+    const existing = await db(
+      "SELECT activated_at,expires_at FROM company_package_trials WHERE company_id=$1 AND package_id=$2 LIMIT 1",
+      [companyId, row.package_id]
+    );
+    if (existing.rows[0]) {
+      const error = new Error("The free trial for this app has already been used");
+      error.code = "TRIAL_ALREADY_USED";
+      throw error;
+    }
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const trialResult = await db(
+      `INSERT INTO company_package_trials
+         (company_id,package_id,activated_by,activated_at,expires_at)
+       VALUES ($1,$2,$3,NOW(),$4)
+       RETURNING activated_at,expires_at`,
+      [companyId, row.package_id, userId || null, expiresAt]
+    );
+    await db(
+      `INSERT INTO company_package_entitlement_sources
+         (company_id,package_id,source_type,source_key,active,starts_at,expires_at,metadata)
+       VALUES ($1,$2,'DIRECT_LICENCE',$3,true,NOW(),$4,$5::jsonb)
+       ON CONFLICT (company_id,package_id,source_type,source_key)
+       DO UPDATE SET active=true,starts_at=NOW(),expires_at=EXCLUDED.expires_at,metadata=EXCLUDED.metadata`,
+      [
+        companyId,
+        row.package_id,
+        `trial:${companyId}:${packageKey}`,
+        expiresAt,
+        JSON.stringify({ trial: true, days: 7, activatedBy: userId || null }),
+      ]
+    );
+    return { success: true, operation: requested, packageKey, ...trialResult.rows[0] };
+  }
+
   if (requested === "INSTALL") {
     for (const entry of plan) {
       await installEntry(db, {
