@@ -74,9 +74,9 @@ test("provider-specific adapters stay removed in favor of metadata workflows", (
 });
 
 test("internal adapters do not get generated System workflows", () => {
-  const systemKeys = new Set(systemWorkflowDefinitions().map((item) => item.systemKey));
+  const capabilityKeys = new Set(systemWorkflowDefinitions().filter((item) => item.action?.capabilityType === "action").map((item) => item.action?.capabilityKey));
   for (const key of INTERNAL) {
-    assert.equal(systemKeys.has("action:" + key), false, key + " must not generate a System Action workflow");
+    assert.equal(capabilityKeys.has(key), false, key + " must not generate a capability Flow");
   }
   for (const key of ["CREATE_RECORD","SEND_COMMUNICATION","CALL_CONNECTOR"]) {
     assert.ok(systemKeys.has("action:" + key), key + " should remain a visible System Action workflow");
