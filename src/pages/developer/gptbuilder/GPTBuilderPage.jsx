@@ -34,7 +34,7 @@ import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
 import {
-  GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
+  GPTBuilderCompareVersionsPanel, GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
 } from './GPTBuilderSaveHistory'
 import './GPTBuilderPage.css'
 
@@ -369,6 +369,8 @@ const MANAGER_RESOURCE_TYPES = [
   ['Record Choice Set', 'record_choice_set'],
   ['Picklist Choice Set', 'picklist_choice_set'],
   ['Stage', 'stage'],
+  ['Value Map', 'value_map'],
+  ['Collection Filter Criteria', 'collection_filter_criteria'],
 ]
 
 function ManagerNewResource({ resources, onCreate, onClose }) {
@@ -392,7 +394,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       apiName: apiName.trim(),
       label: apiName.trim(),
       description: description.trim(),
-      dataType: supportsDataType ? dataType : resourceType === 'text_template' ? 'text' : 'choice',
+      dataType: supportsDataType ? dataType : resourceType === 'text_template' ? 'text' : ['value_map','collection_filter_criteria'].includes(resourceType) ? 'object' : 'choice',
       value: resourceType === 'constant' ? value : undefined,
       formula: resourceType === 'formula' ? formula : undefined,
       text: resourceType === 'text_template' ? value : undefined,
@@ -424,23 +426,22 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
 
 function ManagerPanel({ elements, resources, goToConnections, onNewResource, onOpenElement }) {
   const [query, setQuery] = useState('')
+  const [showUnusedOnly, setShowUnusedOnly] = useState(false)
   const [selected, setSelected] = useState(null)
   const needle = query.trim().toLowerCase()
   const elementRows = elements.filter((element) => !needle || `${element.label} ${element.apiName} ${element.key}`.toLowerCase().includes(needle))
-  const resourceRows = resources.filter((resource) => !needle || `${resource.label || ''} ${resource.apiName || ''} ${resource.resourceType || resource.source || ''}`.toLowerCase().includes(needle))
+  const resourceUsage = (resource) => {
+    const api = String(resource.apiName || '')
+    if (!api) return []
+    const needles = [`variables.${api}`, `{!${api}}`, api]
+    return elements.filter((element) => needles.some((value) => JSON.stringify(element.config || {}).includes(value))).map((element) => element.label || element.apiName || element.key)
+  }
+  const resourceRows = resources.filter((resource) => (!needle || `${resource.label || ''} ${resource.apiName || ''} ${resource.resourceType || resource.source || ''}`.toLowerCase().includes(needle)) && (!showUnusedOnly || resourceUsage(resource).length === 0))
   const typeLabel = (resource) => {
     const key = resource.resourceType || resource.source || 'variable'
     return MANAGER_RESOURCE_TYPES.find(([,value]) => value === key)?.[0] || (resource.isCollection ? 'Collection' : 'Resource')
   }
-  const usageForResource = (resource) => {
-    const api = String(resource.apiName || '')
-    if (!api) return []
-    const needles = [`variables.${api}`, `{!${api}}`, api]
-    return elements.filter((element) => {
-      const serialized = JSON.stringify(element.config || {})
-      return needles.some((needle) => serialized.includes(needle))
-    }).map((element) => element.label || element.apiName || element.key)
-  }
+  const usageForResource = resourceUsage
   const incomingForElement = (element) => (goToConnections || [])
     .filter((edge) => String(edge.targetId) === String(element.id))
     .map((edge) => edge.sourceId === 'start' ? 'Start' : (elements.find((item) => item.id === edge.sourceId)?.label || edge.sourceId))
@@ -455,7 +456,7 @@ function ManagerPanel({ elements, resources, goToConnections, onNewResource, onO
   }
   return <div className="gptb-manager">
     <div className="gptb-manager-actions"><button className="gptb-button is-brand" onClick={onNewResource}><Plus size={13}/> New Resource</button></div>
-    <label className="gptb-manager-search"><Search size={13}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this flow…"/></label>
+    <label className="gptb-manager-search"><Search size={13}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this flow…"/></label><label className="gptb-properties-check"><input type="checkbox" checked={showUnusedOnly} onChange={(event)=>setShowUnusedOnly(event.target.checked)}/><span>Unused Resources Only</span></label>
     {selected ? <div className="gptb-manager-detail">
       <button className="gptb-manager-back" onClick={() => setSelected(null)}><ChevronLeft size={13}/> Back</button>
       <h3>{selected.kind === 'element' ? selected.row.label : (selected.row.label || selected.row.apiName)}</h3>
@@ -515,12 +516,25 @@ function AutoDecisionCard({ decision, elements, onOpenDecision, onOpenMember, on
   </div>
 }
 
+function GPTBuilderAnalyticsPanel({ runs, days, onDaysChange, elements, onClose }) {
+  const cutoff=Date.now()-(Number(days)||30)*86400000
+  const filtered=runs.filter((run)=>new Date(run.started_at||run.created_at||0).getTime()>=cutoff)
+  const durations=filtered.map((run)=>run.completed_at&&run.started_at?Math.max(0,new Date(run.completed_at)-new Date(run.started_at)):null).filter((value)=>Number.isFinite(value))
+  const average=durations.length?Math.round(durations.reduce((sum,value)=>sum+value,0)/durations.length):0
+  const statuses=filtered.reduce((acc,run)=>{const key=String(run.status||'UNKNOWN').toUpperCase();acc[key]=(acc[key]||0)+1;return acc},{})
+  const elementRuns=new Map(elements.map((element)=>[String(element.id),{label:element.label||element.apiName||element.id,count:0}]))
+  filtered.forEach((run)=>{const visited=run.metadata?.visitedElementIds||run.metadata?.visitedElements||[];(Array.isArray(visited)?visited:[]).forEach((id)=>{const row=elementRuns.get(String(id));if(row)row.count+=1})})
+  return <aside className="gptb-config-panel gptb-analytics-panel" aria-label="Flow Analytics"><header><div><strong>Analytics</strong><small>Runtime metrics for this flow.</small></div><button className="gptb-icon-button" aria-label="Close Analytics" onClick={onClose}><X size={16}/></button></header><div className="gptb-config-body"><label><span>Date Range</span><select value={days} onChange={(event)=>onDaysChange(Number(event.target.value))}><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option></select></label><div className="gptb-analytics-kpis"><div><b>{filtered.length}</b><span>Total Runs</span></div><div><b>{average} ms</b><span>Average Duration</span></div></div><section><h3>Run Statuses</h3>{Object.entries(statuses).map(([status,count])=><div className="gptb-analytics-row" key={status}><span>{status}</span><b>{count}</b></div>)}</section><section><h3>Element Analytics</h3>{[...elementRuns.values()].map((row)=><div className="gptb-analytics-row" key={row.label}><span>{row.label}</span><b>{row.count} runs</b></div>)}</section></div></aside>
+}
+
 function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, inputContract = [], resources = [], elements = [], onClose }) {
   const [records, setRecords] = useState([])
   const [recordSearch, setRecordSearch] = useState('')
   const [recordId, setRecordId] = useState('')
   const [inputs, setInputs] = useState({})
   const [rollback, setRollback] = useState(mode === 'test')
+  const [runAsUser, setRunAsUser] = useState('')
+  const [resultSearch, setResultSearch] = useState('')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
@@ -573,6 +587,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
       setRecordId(saved.recordId || '')
       setInputs(saved.inputs && typeof saved.inputs === 'object' ? saved.inputs : {})
       setRollback(mode === 'test' && flowType === 'record' ? true : saved.rollback ?? (mode === 'test'))
+      setRunAsUser(saved.runAsUser || '')
       setSelectedTestId(saved.selectedTestId || '')
       setAutomationEnabled(saved.automationEnabled === true)
       setAssertions(Array.isArray(saved.assertions) ? saved.assertions : [])
@@ -585,15 +600,17 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   useEffect(() => {
     if (!workflowId) return
     try {
-      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, selectedTestId, automationEnabled, assertions, skipStartConditions, debugWaitBehavior, debugWaitPaths }))
+      sessionStorage.setItem(executionStorageKey, JSON.stringify({ recordId, inputs, rollback, runAsUser, selectedTestId, automationEnabled, assertions, skipStartConditions, debugWaitBehavior, debugWaitPaths }))
     } catch {}
-  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions, debugWaitBehavior, JSON.stringify(debugWaitPaths)])
+  }, [executionStorageKey, workflowId, recordId, JSON.stringify(inputs), rollback, runAsUser, selectedTestId, automationEnabled, JSON.stringify(assertions), skipStartConditions, debugWaitBehavior, JSON.stringify(debugWaitPaths)])
 
   const resetExecutionSettings = () => {
     setRecordId('')
     setRecordSearch('')
     setInputs({})
     setRollback(mode === 'test')
+    setRunAsUser('')
+    setResultSearch('')
     setSelectedTestId('')
     setAutomationEnabled(false)
     setAssertions([])
@@ -679,7 +696,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         body: JSON.stringify({
           ...(recordId ? { recordId } : {}),
           inputs,
-          ...(mode === 'debug' ? { mode: 'debug', rollback } : {}),
+          ...(mode === 'debug' ? { mode: 'debug', rollback, ...(runAsUser ? { runAsUser } : {}), debugWaitElementBehavior: debugWaitBehavior, debugWaitPaths: debugWaitBehavior ? debugWaitPaths : {} } : {}),
           ...(mode === 'test' ? { mode: 'test', rollback: (flowType === 'record' || automationEnabled) ? true : rollback, skipStartConditionRequirements: flowType === 'record' ? skipStartConditions : false, debugWaitElementBehavior: flowType === 'autolaunched' ? debugWaitBehavior : false, debugWaitPaths: flowType === 'autolaunched' && debugWaitBehavior ? debugWaitPaths : {}, assertions: automationEnabled ? assertions.map(serializeAssertion) : [] } : {}),
         }),
       })
@@ -783,9 +800,9 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
           {invalidAssertions ? <p className="gptb-execution-error" role="alert">Complete every assertion before saving or running the scenario.</p> : null}
         </> : null}
       </section> : null}
-      {mode !== 'run' ? <section><h3>Select Run Options</h3>
+      {mode !== 'run' ? <section><h3>Select Run Options</h3>{mode === 'debug'?<label><span>Run as another user</span><input value={runAsUser} onChange={(event)=>setRunAsUser(event.target.value)} placeholder="User ID or username"/></label>:null}
         {mode === 'test' && flowType === 'record' ? <label className="gptb-properties-check"><input type="checkbox" checked={skipStartConditions} onChange={(event) => setSkipStartConditions(event.target.checked)}/><span>Skip start condition requirements</span></label> : null}
-        {mode === 'test' && flowType === 'autolaunched' && waitElements.length ? <>
+        {(mode === 'test' || mode === 'debug') && flowType === 'autolaunched' && waitElements.length ? <>
           <label className="gptb-properties-check"><input type="checkbox" checked={debugWaitBehavior} onChange={(event) => setDebugWaitBehavior(event.target.checked)}/><span>Debug wait element behavior</span></label>
           {debugWaitBehavior ? <div className="gptb-debug-wait-paths">{waitElements.map((element) => {
             const options = element.key === 'wait_conditions'
@@ -799,7 +816,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
         {mode === 'test' && automationEnabled && flowType !== 'record' ? <p className="gptb-help-text">Rollback is required when Scenario Testing Automation and assertions are enabled.</p> : null}
       </section> : null}
       {error ? <div className="gptb-execution-error" role="alert">{error}</div> : null}
-      {result ? <section className="gptb-execution-result"><h3>Details</h3><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
+      {result ? <section className="gptb-execution-result"><h3>Details</h3><label><span>Search debug output</span><span className="gptb-execution-search"><Search size={13}/><input value={resultSearch} onChange={(event)=>setResultSearch(event.target.value)} placeholder="Search output…"/></span></label><div className="gptb-debug-result-actions"><button type="button" className="gptb-inline-action" onClick={()=>navigator.clipboard?.writeText(JSON.stringify(result,null,2))}>Copy Log</button>{mode==='debug'?<><button type="button" className="gptb-inline-action" disabled={running} onClick={()=>void execute()}>Debug Again</button><button type="button" className="gptb-inline-action" onClick={()=>{setSelectedTestId('');setScenarioName(`Debug ${new Date().toLocaleString()}`);setAutomationEnabled(true)}}>Convert to Test</button></>:null}</div><pre className="gptb-debug-output">{JSON.stringify(result,null,2).split('\n').filter((line)=>!resultSearch.trim()||line.toLowerCase().includes(resultSearch.trim().toLowerCase())).join('\n')}</pre><dl><div><dt>Status</dt><dd>{result.status || result.run?.status || 'Completed'}</dd></div>{result.runId || result.run?.id ? <div><dt>Run ID</dt><dd>{result.runId || result.run?.id}</dd></div> : null}{Array.isArray(result.steps) ? <div><dt>Steps</dt><dd>{result.steps.length}</dd></div> : null}{mode === 'test' && result.testPassed !== null && result.testPassed !== undefined ? <div><dt>Test Result</dt><dd>{result.testPassed ? 'Passed' : 'Failed'}</dd></div> : null}</dl>{mode === 'test' && Array.isArray(result.assertionResult?.checks) && result.assertionResult.checks.length ? <div className="gptb-expected-results"><h4>Expected Results</h4>{result.assertionResult.checks.map((check) => <details key={check.index} open={!check.passed}><summary><span>{check.passed ? 'Passed' : 'Failed'}</span><b>{check.resource || check.label || `Assertion ${check.index + 1}`}</b></summary><dl><div><dt>Operator</dt><dd>{check.operator || 'equals'}</dd></div><div><dt>Expected</dt><dd>{String(check.expected ?? '')}</dd></div><div><dt>Actual</dt><dd>{typeof check.actual === 'object' ? JSON.stringify(check.actual) : String(check.actual ?? '')}</dd></div></dl></details>)}</div> : null}</section> : null}
     </div>
     <footer><button className="gptb-button" onClick={onClose}>Close</button>{mode !== 'run' ? <button className="gptb-button" onClick={resetExecutionSettings}>Reset Settings</button> : null}<button className="gptb-button is-brand" disabled={running || (needsRecord && !recordId) || invalidAssertions} onClick={() => void execute()}>{running ? 'Running…' : mode === 'test' ? 'Run Scenario' : 'Run'}</button></footer>
   </aside>
@@ -859,9 +876,23 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [providerResources, setProviderResources] = useState([])
   // Keep the resource list safe during the first render of every flow type. Provider
   // metadata arrives asynchronously and must never make Builder creation depend on it.
+  const automaticResources = useMemo(() => {
+    const common = [
+      { id:'auto-user-id', apiName:'$User.Id', path:'$User.Id', label:'Current User ID', dataType:'text', resourceType:'automatic', writable:false },
+      { id:'auto-current-datetime', apiName:'$Flow.CurrentDateTime', path:'$Flow.CurrentDateTime', label:'Current Date/Time', dataType:'datetime', resourceType:'automatic', writable:false },
+      { id:'auto-current-date', apiName:'$Flow.CurrentDate', path:'$Flow.CurrentDate', label:'Current Date', dataType:'date', resourceType:'automatic', writable:false },
+      { id:'auto-current-stage', apiName:'$Flow.CurrentStage', path:'$Flow.CurrentStage', label:'Current Stage', dataType:'text', resourceType:'automatic', writable:false },
+    ]
+    if (flow.key === 'record') common.push(
+      { id:'auto-record', apiName:'$Record', path:'$Record', label:'Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:true },
+      { id:'auto-record-prior', apiName:'$Record__Prior', path:'$Record__Prior', label:'Prior Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:false },
+    )
+    if (flow.key === 'platform_event') common.push({ id:'auto-event-record', apiName:'$Record', path:'$Record', label:'Platform Event Record', dataType:'record', resourceType:'automatic', writable:false })
+    return common
+  }, [flow.key, startConfig.objectKey])
   const availableResources = useMemo(
-    () => [...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])],
-    [resources, providerResources],
+    () => [...automaticResources, ...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])],
+    [automaticResources, resources, providerResources],
   )
   const applyResourceChanges = (next) => {
     setResources((Array.isArray(next) ? next : []).filter((resource) => resource?.providerResource !== true))
@@ -892,6 +923,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [editHistoryEntries, setEditHistoryEntries] = useState([])
   const [editHistoryLoading, setEditHistoryLoading] = useState(false)
   const [editHistoryVersion, setEditHistoryVersion] = useState(null)
+  const [compareVersionsOpen, setCompareVersionsOpen] = useState(false)
+  const [analyticsOpen, setAnalyticsOpen] = useState(false)
+  const [analyticsDays, setAnalyticsDays] = useState(30)
+  const [analyticsRuns, setAnalyticsRuns] = useState([])
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [executionMode, setExecutionMode] = useState(null)
   const [groupDeleteTarget, setGroupDeleteTarget] = useState(null)
 
@@ -1157,6 +1193,26 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     } finally {
       setEditHistoryLoading(false)
     }
+  }
+
+  const openCompareVersions = async () => {
+    setSaveAsOpen(false)
+    if (dirty) { setSaveError('Save changes before comparing versions.'); return }
+    await loadEditHistory()
+    setEditHistoryOpen(false)
+    setCompareVersionsOpen(true)
+  }
+
+  const openAnalytics = async () => {
+    if (!workflowId) return
+    setAnalyticsLoading(true); setSaveError('')
+    try {
+      const response = await apiRequest('/api/platform/workflow-runs?limit=200')
+      const rows = Array.isArray(response?.data) ? response.data : []
+      setAnalyticsRuns(rows.filter((run) => String(run.workflow_id || '') === String(workflowId)))
+      setAnalyticsOpen(true)
+    } catch (error) { setSaveError(error?.message || 'Unable to load flow analytics') }
+    finally { setAnalyticsLoading(false) }
   }
 
   const openEditHistory = async () => {
@@ -1760,7 +1816,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'Run the most recent saved version.' : 'Save the flow before running it.'} onClick={() => setExecutionMode('run')}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'View and run tests for the most recent saved version.' : 'Save the flow before testing it.'} onClick={() => setExecutionMode('test')}><Eye size={14}/> View Tests</button> : <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'Debug the most recent saved version.' : 'Save the flow before debugging it.'} onClick={() => setExecutionMode('debug')}><Eye size={14}/> Debug</button>}
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={handleSaveRequest}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
-        {editHistorySupported ? <button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button> : null}
+        {editHistorySupported ? <><button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button><button className="gptb-text-tool" disabled={!workflowId || saving} onClick={() => void openCompareVersions()}>Compare Versions</button><button className="gptb-text-tool" disabled={!workflowId || analyticsLoading} onClick={() => void openAnalytics()}>{analyticsLoading?'Loading…':'Analytics'}</button></> : null}
         <button className="gptb-text-tool is-brand" disabled={saving || !workflowId || dirty || (!activeStatus && issues.some((issue) => issue.level === 'error'))} onClick={() => void setFlowActivation(!activeStatus)}>{activeStatus ? 'Deactivate' : 'Activate'}</button>
       </div>
     </header>
@@ -1845,6 +1901,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (target) openElement(target)
       }}/> : null}
       {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={availableResources} elements={elements} onClose={() => setExecutionMode(null)}/> : null}
+      {compareVersionsOpen ? <GPTBuilderCompareVersionsPanel entries={editHistoryEntries} onClose={()=>setCompareVersionsOpen(false)}/> : null}
+      {analyticsOpen ? <GPTBuilderAnalyticsPanel runs={analyticsRuns} days={analyticsDays} onDaysChange={setAnalyticsDays} elements={elements} onClose={()=>setAnalyticsOpen(false)}/> : null}
       {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
       {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}

@@ -11,6 +11,7 @@ const apiNameFromLabel = (label, fallback = 'Outcome') => {
 
 export const DECISION_DEFAULTS = Object.freeze({
   logicMode: 'manual',
+  splitResource: '',
   outcomes: [],
   defaultLabel: 'Default Outcome',
   defaultBranch: [],
@@ -27,6 +28,8 @@ export function normalizeDecisionConfig(config = {}) {
 export function decisionConfigErrors(config = {}, flowType = '') {
   const c = normalizeDecisionConfig(config)
   const errors = []
+  if (!['manual','date','field_value'].includes(c.logicMode)) errors.push('Select a Decision mode.')
+  if (c.logicMode !== 'manual' && !c.splitResource) errors.push('Select the resource to split on.')
   if (!c.outcomes.length) errors.push('Add at least one outcome.')
   const apiNames = new Set()
   c.outcomes.forEach((outcome,index) => {
@@ -35,7 +38,9 @@ export function decisionConfigErrors(config = {}, flowType = '') {
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(apiName) || apiName.endsWith('_') || apiName.includes('__')) errors.push(`Outcome ${index + 1}: enter a valid API Name.`)
     if (apiNames.has(apiName.toLowerCase())) errors.push(`Outcome ${index + 1}: API Name must be unique.`)
     apiNames.add(apiName.toLowerCase())
-    {
+    if (c.logicMode !== 'manual') {
+      if (outcome.splitValue === '' || outcome.splitValue == null) errors.push(`Outcome ${index + 1}: enter a split value.`)
+    } else {
       if (!outcome.conditions?.length) errors.push(`Outcome ${index + 1}: add at least one condition.`)
       if (outcome.conditionLogic === 'custom' && !String(outcome.customConditionLogic || '').trim()) errors.push(`Outcome ${index + 1}: enter custom condition logic.`)
       ;(outcome.conditions || []).forEach((row,rowIndex) => {
@@ -77,17 +82,19 @@ export function decisionRuntimeAction(instance) {
     label: instance.label,
     apiName: instance.apiName,
     description: instance.description || '',
-    decisionLogic: 'manual',
+    decisionLogic: c.logicMode,
+    splitResource: c.logicMode === 'manual' ? undefined : c.splitResource,
     outcomes: c.outcomes.map((outcome,index) => ({
       id: outcome.id || `outcome-${index + 1}`,
       label: outcome.label || `Outcome ${index + 1}`,
       apiName: outcome.apiName || apiNameFromLabel(outcome.label || `Outcome ${index + 1}`, `Outcome_${index + 1}`),
       branch: Array.isArray(outcome.branch) ? outcome.branch : [],
-      condition: {
+      splitValue: c.logicMode === 'manual' ? undefined : outcome.splitValue,
+      condition: c.logicMode === 'manual' ? {
         match: outcome.conditionLogic === 'any' ? 'any' : 'all',
         customConditionLogic: outcome.conditionLogic === 'custom' ? outcome.customConditionLogic : undefined,
         conditions: (outcome.conditions || []).map((row) => ({ field: row.resource, operator: row.operator, value: configuredValue(row) })),
-      },
+      } : undefined,
     })),
     defaultLabel: c.defaultLabel || 'Default Outcome',
     defaultBranch: Array.isArray(c.defaultBranch) ? c.defaultBranch : [],
@@ -120,7 +127,13 @@ export default function GPTBuilderDecision({ draft, updateConfig, resources, flo
     patch({ outcomes: [...config.outcomes, { id: uid(), label: `Outcome ${number}`, apiName: `Outcome_${number}`, conditionLogic: 'all', customConditionLogic: '', conditions: [], branch: [] }] })
   }
 
+  const splitCandidates = resources.filter((resource) => !resource?.isCollection && (config.logicMode !== 'date' || ['date','datetime'].includes(resourceType(resource))))
+
   return <div className="gptb-gr gptb-decision">
+    <section><h3>Decision Mode</h3>
+      <label><span>How to Determine Outcomes</span><select value={config.logicMode || 'manual'} onChange={(event) => patch({logicMode:event.target.value,splitResource:'',outcomes:config.outcomes.map((outcome)=>({...outcome,splitValue:''}))})}><option value="manual">Conditions</option><option value="date">Split by Date</option><option value="field_value">Split by Field Value</option></select></label>
+      {config.logicMode !== 'manual' ? <label><span>{config.logicMode === 'date' ? 'Date / Date-Time Resource' : 'Resource'} <b>*</b></span><ResourcePicker resources={resources} allowedResources={splitCandidates} value={config.splitResource} onChange={(splitResource)=>patch({splitResource})}/></label> : null}
+    </section>
     <section><h3>Outcome Order</h3>
       <div className="gptb-decision-outcomes">
         {config.outcomes.map((outcome,index) => <fieldset key={outcome.id}>
@@ -130,12 +143,12 @@ export default function GPTBuilderDecision({ draft, updateConfig, resources, flo
             patchOutcome(outcome.id,{ label, apiName: outcome.apiNameSource === 'manual' ? outcome.apiName : apiNameFromLabel(label,`Outcome_${index+1}`) })
           }}/></label>
           <label><span>Outcome API Name <b>*</b></span><input value={outcome.apiName || ''} onChange={(event) => patchOutcome(outcome.id,{apiName:event.target.value,apiNameSource:'manual'})}/></label>
-          <>
+          {config.logicMode !== 'manual' ? <label><span>{config.logicMode === 'date' ? 'Date / Date-Time Value' : 'Value'} <b>*</b></span><input type={config.logicMode === 'date' ? 'datetime-local' : 'text'} value={outcome.splitValue ?? ''} onChange={(event)=>patchOutcome(outcome.id,{splitValue:event.target.value})}/></label> : <>
             <label><span>Condition Requirements</span><select value={outcome.conditionLogic || 'all'} onChange={(event) => patchOutcome(outcome.id,{conditionLogic:event.target.value,customConditionLogic:event.target.value === 'custom' ? outcome.customConditionLogic : ''})}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option></select></label>
             <div className="gptb-gr-field-assignments">{(outcome.conditions || []).map((row,rowIndex) => <div key={row.id}><span>{rowIndex+1}</span>{(() => { const selectedResource = resources.find((item) => resourcePath(item) === row.resource); const ops = decisionOperators(resourceType(selectedResource)); return <><ResourcePicker resources={resources} value={row.resource} onChange={(resource) => patchOutcome(outcome.id,{conditions:outcome.conditions.map((item)=>item.id===row.id?{...item,resource,operator:'equals',value:'',valueMode:'literal'}:item)})}/><select value={row.operator || 'equals'} onChange={(event) => patchOutcome(outcome.id,{conditions:outcome.conditions.map((item)=>item.id===row.id?{...item,operator:event.target.value,value:event.target.value==='is_null'?true:'',valueMode:'literal'}:item)})}>{ops.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select>{row.operator === 'is_null' ? <select value={String(row.value ?? true)} onChange={(event) => patchOutcome(outcome.id,{conditions:outcome.conditions.map((item)=>item.id===row.id?{...item,value:event.target.value==='true'}:item)})}><option value="true">True</option><option value="false">False</option></select> : <div className="gptb-gr-value"><button type="button" onClick={() => patchOutcome(outcome.id,{conditions:outcome.conditions.map((item)=>item.id===row.id?{...item,valueMode:item.valueMode==='resource'?'literal':'resource',value:''}:item)})}>{row.valueMode === 'resource' ? 'Resource' : 'Value'}</button>{row.valueMode === 'resource' ? <ResourcePicker resources={resources} allowedResources={compatibleResources(resources, selectedResource)} value={row.value} onChange={(value) => patchOutcome(outcome.id,{conditions:outcome.conditions.map((item)=>item.id===row.id?{...item,value}:item)})}/> : <input value={row.value ?? ''} onChange={(event) => patchOutcome(outcome.id,{conditions:outcome.conditions.map((item)=>item.id===row.id?{...item,value:event.target.value}:item)})}/>}</div>}</> })()}<button type="button" aria-label={`Remove outcome ${index+1} condition ${rowIndex+1}`} onClick={() => patchOutcome(outcome.id,{conditions:outcome.conditions.filter((item)=>item.id!==row.id)})}><Trash2 size={13}/></button></div>)}</div>
             <button type="button" className="gptb-inline-action" onClick={() => patchOutcome(outcome.id,{conditions:[...(outcome.conditions||[]),{id:uid(),resource:'',operator:'equals',valueMode:'literal',value:''}]})}><Plus size={13}/> Add Condition</button>
             {outcome.conditionLogic === 'custom' ? <label><span>Condition Logic <b>*</b></span><input maxLength={1000} value={outcome.customConditionLogic || ''} onChange={(event) => patchOutcome(outcome.id,{customConditionLogic:event.target.value})} placeholder="Example: 1 AND NOT(2 OR 3)"/></label> : null}
-          </>
+          </>}
         </fieldset>)}
       </div>
       <button type="button" className="gptb-inline-action" onClick={addOutcome}><Plus size={13}/> New Outcome</button>

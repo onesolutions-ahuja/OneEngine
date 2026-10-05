@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, Clock3, RotateCcw, Save, X } from 'lucide-react'
+import { ChevronDown, Clock3, GitCompareArrows, RotateCcw, Save, X } from 'lucide-react'
 
 function apiNameFromLabel(label, fallback = 'New_Flow') {
   let value = String(label || '').trim().replace(/[^A-Za-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '')
@@ -83,4 +83,23 @@ export function GPTBuilderEditHistoryPanel({ entries, loading, selectedVersion, 
       <div className="gptb-edit-history-actions"><button className="gptb-button" onClick={() => onRestore(selected)}><RotateCcw size={13}/> Restore</button><button className="gptb-button" onClick={() => onSaveAsVersion(selected)}><Save size={13}/> Save as New Version</button><button className="gptb-button" onClick={() => onSaveAsFlow(selected)}>Save as New Flow</button></div>
     </div> : null}
   </aside>
+}
+
+function versionElements(entry){return Array.isArray(entry?.definition?.action?.gptBuilderElements)?entry.definition.action.gptBuilderElements:[]}
+function versionConnections(entry){return Array.isArray(entry?.definition?.action?.goToConnections)?entry.definition.action.goToConnections:[]}
+export function GPTBuilderCompareVersionsPanel({ entries, onClose }) {
+  const [left,setLeft]=useState(entries[1]?.version ?? entries[0]?.version ?? '')
+  const [right,setRight]=useState(entries[0]?.version ?? '')
+  const comparison=useMemo(()=>{
+    const a=entries.find((entry)=>Number(entry.version)===Number(left)),b=entries.find((entry)=>Number(entry.version)===Number(right))
+    if(!a||!b)return []
+    const ae=versionElements(a),be=versionElements(b),am=new Map(ae.map((x)=>[String(x.id||x.apiName),x])),bm=new Map(be.map((x)=>[String(x.id||x.apiName),x]))
+    const rows=[]
+    for(const [id,item] of bm) if(!am.has(id)) rows.push({kind:'Added',label:item.label||item.apiName||id})
+    for(const [id,item] of am) if(!bm.has(id)) rows.push({kind:'Removed',label:item.label||item.apiName||id})
+    for(const [id,item] of bm) if(am.has(id)&&JSON.stringify(am.get(id))!==JSON.stringify(item)) rows.push({kind:'Updated',label:item.label||item.apiName||id})
+    if(JSON.stringify(versionConnections(a))!==JSON.stringify(versionConnections(b))) rows.push({kind:'Connector Changed',label:'Flow connectors'})
+    return rows
+  },[entries,left,right])
+  return <aside className="gptb-edit-history" aria-label="Compare Flow Versions"><header><div><GitCompareArrows size={16}/><span><strong>Compare Flow Versions</strong><small>Added, removed, updated, and connector changes.</small></span></div><button className="gptb-icon-button" aria-label="Close Compare Versions" onClick={onClose}><X size={16}/></button></header><div className="gptb-edit-history-detail"><div className="gptb-version-compare-selectors"><label><span>From</span><select value={left} onChange={(e)=>setLeft(e.target.value)}>{entries.map((entry)=><option key={entry.version} value={entry.version}>Version {entry.version}</option>)}</select></label><label><span>To</span><select value={right} onChange={(e)=>setRight(e.target.value)}>{entries.map((entry)=><option key={entry.version} value={entry.version}>Version {entry.version}</option>)}</select></label></div>{comparison.length?<div className="gptb-version-diff">{comparison.map((row,index)=><div key={index}><b>{row.kind}</b><span>{row.label}</span></div>)}</div>:<div className="gptb-edit-history-empty">No differences between these versions.</div>}</div></aside>
 }
