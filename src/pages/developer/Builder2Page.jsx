@@ -274,16 +274,21 @@ const builderNodeToRuntimeAction=(node,resources=[])=>{
   const p=node.config||{}
   if(node.type==='DECISION'){
     return {...base,key:'CONDITION',
+      decisionType:p.decisionType||'conditions',
+      splitResource:p.splitResource||undefined,
       outcomes:(p.outcomes||[]).map((outcome,index)=>({
         id:outcome.id||`outcome-${index+1}`,
         label:outcome.label||`Outcome ${index+1}`,
         apiName:outcome.apiName||apiNameFromLabel(outcome.label||`Outcome ${index+1}`,`Outcome_${index+1}`),
-        condition:{match:outcome.conditionLogic||'all',conditions:(outcome.conditions||[]).map(runtimeCondition)},
+        ...(p.decisionType&&p.decisionType!=='conditions'?{splitValue:outcome.splitValue}:{condition:{match:outcome.conditionLogic||'all',conditions:(outcome.conditions||[]).map(runtimeCondition)}}),
         branch:Array.isArray(outcome.branch)?outcome.branch:[],
       })),
       defaultLabel:p.defaultOutcomeLabel||'Default Outcome',
       defaultBranch:Array.isArray(p.defaultBranch)?p.defaultBranch:[],
     }
+  }
+  if(['WAIT','TRANSFORM','CUSTOM_ERROR','COLLECTION_FILTER','COLLECTION_SORT','LOOP','SUBFLOW','SCREEN'].includes(node.type)){
+    return {...base,key:node.type,config:p}
   }
   if(node.type==='FORMULA'){
     return {...base,key:'FORMULA',
