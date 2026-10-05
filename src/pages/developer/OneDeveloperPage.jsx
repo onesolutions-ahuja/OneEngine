@@ -21,7 +21,6 @@ import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
-  { key: 'workflow-builder', label: 'Workflow Builder', icon: Workflow },
   { key: 'gptbuilder', label: 'GPT Builder', icon: Workflow },
   { key: 'canvas-ux-test', label: 'Canvas UX Test', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
@@ -40,7 +39,7 @@ const DEVELOPER_ITEMS = [
 
 function normalizeSection(value) {
   const raw = String(value || '').trim().toLowerCase()
-  const migrated = raw
+  const migrated = raw === 'workflow-builder' || raw === 'builder-2' ? 'gptbuilder' : raw
   return DEVELOPER_ITEMS.some((item) => item.key === migrated) ? migrated : 'objects'
 }
 
@@ -206,7 +205,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
           {current.key === 'objects' ? <ObjectsSettingsPane />
-            : current.key === 'workflow-builder' ? <OneBuilder initialTab="workflow" singleBuilder initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('workflow-builder', { workflowId })} onWorkflowClose={() => onSectionChange?.('workflow-builder', { workflowId: '' })} />
             : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
