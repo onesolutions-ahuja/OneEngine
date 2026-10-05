@@ -130,63 +130,67 @@ export default function createCustomersRouter({
    */
   router.get("/customers/:id", authenticate, authorize("customer.view"), async (req, res) => {
     try {
-      const companyAdmin = await canViewCompanyCustomers(req.user);
-      const result = await db(
-        `
-        SELECT c.id, c.company_id, c.name, c.phone, c.email, c.address, c.postcode,
-          c.loyalty_number, c.notes, c.active, c.created_at, c.updated_at,
-          COALESCE(json_agg(json_build_object(
-            'storeId', cs.store_id,
-            'storeName', st.name,
-            'active', cs.active,
-            'lastPurchaseAt', cs.last_purchase_at
-          ) ORDER BY cs.store_id) FILTER (WHERE cs.id IS NOT NULL), '[]') AS stores
-        FROM customers c
-        LEFT JOIN customer_stores cs ON cs.customer_id = c.id
-        LEFT JOIN stores st ON st.id = cs.store_id
-        WHERE c.id = $1 AND c.company_id = $2
-        GROUP BY c.id
-        `,
-        [req.params.id, req.user.companyId]
-      );
+      const [companyAdmin, result] = await Promise.all([
+        canViewCompanyCustomers(req.user),
+        db(
+          `
+          SELECT c.id, c.company_id, c.name, c.phone, c.email, c.address, c.postcode,
+            c.loyalty_number, c.notes, c.active, c.created_at, c.updated_at,
+            COALESCE(json_agg(json_build_object(
+              'storeId', cs.store_id,
+              'storeName', st.name,
+              'active', cs.active,
+              'lastPurchaseAt', cs.last_purchase_at
+            ) ORDER BY cs.store_id) FILTER (WHERE cs.id IS NOT NULL), '[]') AS stores
+          FROM customers c
+          LEFT JOIN customer_stores cs ON cs.customer_id = c.id
+          LEFT JOIN stores st ON st.id = cs.store_id
+          WHERE c.id = $1 AND c.company_id = $2
+          GROUP BY c.id
+          `,
+          [req.params.id, req.user.companyId]
+        ),
+      ]);
       if (!result.rows.length)
         return res
           .status(404)
           .json({ success: false, message: "Customer not found" });
 
-      if (!companyAdmin) {
-        const visible = await db(
-          `SELECT 1 FROM customer_stores WHERE customer_id = $1 AND store_id = $2 AND active = true`,
-          [req.params.id, req.user.storeId]
-        );
-        if (!visible.rows.length)
-          return res
-            .status(404)
-            .json({ success: false, message: "Customer not found" });
-      }
-      const sales = await db(
-        `
-        SELECT s.id, s.receipt_number, s.store_id, st.name AS store_name,
-          s.total, s.status, s.created_at,
-          COALESCE(
-            (SELECT p.payment_method
-             FROM payments p
-             WHERE p.sale_id = s.id AND p.status = 'completed'
-             ORDER BY p.created_at DESC
-             LIMIT 1),
-            NULL
-          ) AS payment_method
-        FROM sales s
-        LEFT JOIN stores st ON st.id = s.store_id
-        WHERE s.customer_id = $1
-          AND s.company_id = $2
-          AND NOT (s.offline_created = true AND s.sync_status <> 'synced')
-        ORDER BY s.created_at DESC
-        LIMIT 100
-        `,
-        [req.params.id, req.user.companyId]
-      );
+      const [visible, sales] = await Promise.all([
+        companyAdmin
+          ? Promise.resolve({ rows: [{ visible: true }] })
+          : db(
+              `SELECT 1 FROM customer_stores WHERE customer_id = $1 AND store_id = $2 AND active = true`,
+              [req.params.id, req.user.storeId]
+            ),
+        db(
+          `
+          SELECT s.id, s.receipt_number, s.store_id, st.name AS store_name,
+            s.total, s.status, s.created_at,
+            COALESCE(
+              (SELECT p.payment_method
+               FROM payments p
+               WHERE p.sale_id = s.id AND p.status = 'completed'
+               ORDER BY p.created_at DESC
+               LIMIT 1),
+              NULL
+            ) AS payment_method
+          FROM sales s
+          LEFT JOIN stores st ON st.id = s.store_id
+          WHERE s.customer_id = $1
+            AND s.company_id = $2
+            AND NOT (s.offline_created = true AND s.sync_status <> 'synced')
+          ORDER BY s.created_at DESC
+          LIMIT 100
+          `,
+          [req.params.id, req.user.companyId]
+        ),
+      ]);
 
+      if (!visible.rows.length)
+        return res
+          .status(404)
+          .json({ success: false, message: "Customer not found" });
 
       res.json({
         success: true,
