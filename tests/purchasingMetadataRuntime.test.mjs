@@ -215,3 +215,13 @@ test("sales route no longer depends on deleted legacy loyalty helpers", async ()
   assert.equal(route.includes("customer_loyalty_transactions"), false);
   assert.equal(route.includes("customer_loyalty_balances"), false);
 });
+
+
+test("cleanup leaves no stale deleted UI imports or duplicate canvas component", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const lookup = await readFile(new URL("../src/pages/products/GlobalProductLookupPage.jsx", import.meta.url), "utf8");
+  const canvas = await readFile(new URL("../src/pages/developer/ReactFlowCanvasUXTest.jsx", import.meta.url), "utf8");
+  assert.equal(app.includes("./pages/returns/ReturnsAdmin"), false);
+  assert.equal(lookup.includes("./ProductsPage"), false);
+  assert.equal((canvas.match(/export default function ReactFlowCanvasUXTest/g) || []).length, 1);
+});
