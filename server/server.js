@@ -2494,13 +2494,12 @@ async function startServer() {
         const workflowVerification = await db(
           `SELECT r.id,r.active,COALESCE(r.lifecycle_status,'ACTIVE') AS lifecycle_status
              FROM platform_rules r
-             JOIN platform_objects o ON o.id=r.object_id
             WHERE r.company_id=$1
-              AND o.object_key='communication_event'
-              AND r.action->>'apiName'='OneAssistant_Booking_Channel_Router'
+              AND r.source_package_id=$2
+              AND r.action->>'type'='workflow'
             ORDER BY r.updated_at DESC NULLS LAST,r.created_at DESC
             LIMIT 1`,
-          [companyId]
+          [companyId, pkg.id]
         );
         const bookingWorkflow = workflowVerification.rows[0];
         if (!bookingWorkflow || bookingWorkflow.active !== true || bookingWorkflow.lifecycle_status !== 'ACTIVE') {
@@ -3811,7 +3810,7 @@ async function startServer() {
                 db,
                 companyId: job.company_id,
                 userId: payload.actorUserId || null,
-                systemKey: `action:${actionKey}`,
+                capabilityType: "action", capabilityKey: actionKey,
                 req: { method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
                 input: { ...payload, _executeFromJob: true },
                 storeId: payload.storeId || null,
@@ -3833,7 +3832,7 @@ async function startServer() {
               db,
               companyId: job.company_id,
               userId: payload.actorUserId || null,
-              systemKey: `action:${actionKey}`,
+              capabilityType: "action", capabilityKey: actionKey,
               req: { method: "JOB", path: job.kind, user: { companyId: job.company_id, id: payload.actorUserId || null, roleId: payload._roleId || null } },
               input: { ...payload, _executeFromJob: true },
               writeAudit,
