@@ -2401,17 +2401,16 @@ export function packageDefinition(entry) {
                 {name:"items",type:"collection",required:true},
                 {name:"payments",type:"collection",required:true}
               ],
-              outputContract:[{name:"saleId",type:"text",source:"variables.saleId"}],
+              outputContract:[{name:"sale",type:"record",source:"variables.sale"}],
               resources:[
                 {value:"variables.sale",apiName:"sale",label:"Sale",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:false,objectKey:"sale"},
                 {value:"variables.items",apiName:"items",label:"Sale Items",type:"Variable",dataType:"Collection",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"sale_item"},
                 {value:"variables.payments",apiName:"payments",label:"Payments",type:"Variable",dataType:"Collection",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"payment"},
-                {value:"variables.saleId",apiName:"saleId",label:"Sale ID",type:"Variable",dataType:"Text",defaultValue:"",isCollection:false,availableInput:false,availableOutput:true,objectKey:""}
+                {value:"variables.sale",apiName:"sale",label:"Created Sale",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:true,objectKey:"sale"}
               ],
               actions:[
                 {id:"create_sale",label:"1. Create Sale",apiName:"create_sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"variables.sale"},store:"record"},
-                {id:"set_sale_id",label:"2. Store Sale ID",apiName:"set_sale_id",key:"ASSIGNMENT",variableName:"saleId",variableType:"text",operator:"set",value:{path:"steps.create_sale.created.id"}},
-                {id:"create_items",label:"3. Create Sale Items",apiName:"create_items",key:"CREATE_RECORD",objectKey:"sale_item",recordCollectionResource:{path:"variables.items"},commonFieldValues:{sale_id:{path:"variables.saleId"}}},
+                {id:"create_items",label:"3. Create Sale Items",apiName:"create_items",key:"CREATE_RECORD",objectKey:"sale_item",recordCollectionResource:{path:"variables.items"},commonFieldValues:{sale_id:{path:"variables.sale.id"}}},
                 {id:"create_payments",label:"4. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"},commonFieldValues:{sale_id:{path:"variables.saleId"}}}
               ]
             }
