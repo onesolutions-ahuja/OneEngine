@@ -134,3 +134,19 @@ test("customer administration is metadata-owned while runtime customer services 
   assert.match(route, /"\/customer-lookup"/);
   assert.match(route, /"\/customers\/:id\/credit"/);
 });
+
+
+test("customer credit and loyalty administration has no legacy route-local writes", async () => {
+  const route = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const workflows = await readFile(new URL("../server/services/systemWorkflowCatalog.js", import.meta.url), "utf8");
+  assert.equal(route.includes("/loyalty/adjust"), false);
+  assert.equal(route.includes("/credit/payment"), false);
+  assert.equal(route.includes("/credit/adjustment"), false);
+  assert.equal(route.includes("/credit/statement"), false);
+  assert.match(registry, /objectKey: "customer_credit_account"/);
+  assert.match(registry, /objectKey: "customer_credit_ledger"/);
+  assert.match(registry, /objectKey: "loyalty_account"/);
+  assert.match(registry, /objectKey: "loyalty_activity"/);
+  assert.match(workflows, /customer\.credit\.limit\.check/);
+});
