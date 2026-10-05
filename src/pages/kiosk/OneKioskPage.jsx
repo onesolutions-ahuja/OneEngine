@@ -943,6 +943,7 @@ export default function OneKioskPage({ publicMode = false }) {
         tax: 0,
         discount: 0,
         total: Number(total || 0),
+        line_count: Number(basket.length),
         status: "COMPLETED",
         offline_created: false,
         sync_status: "SYNCED",
