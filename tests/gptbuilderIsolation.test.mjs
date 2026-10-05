@@ -1316,3 +1316,19 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 19 preserves keyboard parity and dense Cosmos interactions', async () => {
+ const page=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx',import.meta.url),'utf8')
+ const css=await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css',import.meta.url),'utf8')
+ assert.match(page,/event\.key === 'F6'/)
+ assert.match(page,/event\.key\.toLowerCase\(\) === 'k'/)
+ assert.match(page,/primary && event\.altKey/)
+ assert.match(page,/aria-label="End"/)
+ assert.doesNotMatch(page,/gptb-end-node"><span>■<\/span><strong>End<\/strong>/)
+ assert.match(css,/Salesforce Sans/)
+ assert.match(css,/focus-visible/)
+ assert.match(css,/scrollbar-gutter:stable/)
+ assert.match(css,/\.gptb-buttonbar\{height:48px/)
+ assert.match(css,/\.gptb-end-node\{width:22px;height:22px/)
+})
