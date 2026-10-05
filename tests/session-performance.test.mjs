@@ -375,3 +375,28 @@ test('Settings loads values only for the active metadata section', async () => {
   assert.match(source, /rowsLoaded === true/)
   assert.match(source, /void loadSectionedRows\(current\.object\)/)
 })
+
+
+test('login security preflight avoids nested lateral planner spikes', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  const start = source.indexOf('export async function loadLoginSecurityContext')
+  const end = source.indexOf('export async function registerFailedLogin', start)
+  const block = source.slice(start, end)
+  assert.notEqual(start, -1)
+  assert.notEqual(end, -1)
+  assert.equal(block.includes('LEFT JOIN LATERAL'), false)
+  assert.match(block, /const \[baseResult, policy\] = await Promise\.all/)
+  assert.match(block, /identity_security_ip_ranges/)
+})
+
+test('login access policy precedence uses indexed exact-scope branches', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  const start = source.indexOf('export async function resolveAccessPolicy')
+  const end = source.indexOf('function zonedParts', start)
+  const block = source.slice(start, end)
+  assert.match(block, /UNION ALL/)
+  assert.match(block, /scope_type='USER'/)
+  assert.match(block, /scope_type='ROLE'/)
+  assert.match(block, /scope_type='COMPANY'/)
+  assert.equal(block.includes("OR (scope_type='ROLE'"), false)
+})
