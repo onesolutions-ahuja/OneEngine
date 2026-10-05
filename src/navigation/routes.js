@@ -3,7 +3,7 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'assignment-rules',
   'sharing-rules',
   'platform',
-  'workflow-builder',
+  'gptbuilder',
   'approval-builder',
   'page-builder',
   'dashboard-builder',
@@ -34,13 +34,17 @@ export function readRoute() {
   const parts = routePath.split('/').filter(Boolean)
   if (parts[0] === 'settings') {
     const section = !parts[1] || parts[1] === 'general' ? 'company' : parts[1]
-    if (DEVELOPER_SETTINGS_KEYS.has(section)) return { app: 'developer', section: section === 'platform' ? 'workflow-builder' : section }
+    if (DEVELOPER_SETTINGS_KEYS.has(section)) {
+      const developerSection = section === 'platform' || section === 'workflow-builder' ? 'gptbuilder' : section
+      return { app: 'developer', section: developerSection }
+    }
     return { app: 'settings', section }
   }
   if (parts[0] === 'developer') {
-    const section = parts[1] || 'objects'
+    const requestedSection = parts[1] || 'objects'
+    const section = requestedSection === 'workflow-builder' || requestedSection === 'builder-2' ? 'gptbuilder' : requestedSection
     const params = new URLSearchParams(window.location.search || '')
-    const workflowId = section === 'workflow-builder'
+    const workflowId = section === 'gptbuilder'
       ? decodeURIComponent(parts[2] || params.get('workflowId') || '')
       : ''
     return { app: 'developer', section, workflowId }
@@ -75,7 +79,7 @@ export function setRoute(app, section = null, options = {}) {
   const next = app === 'settings'
     ? `${base}/settings${section && section !== 'general' ? `/${section}` : ''}`
     : app === 'developer'
-      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}${section === 'workflow-builder' && options?.workflowId ? `?workflowId=${encodeURIComponent(options.workflowId)}` : ''}`
+      ? `${base}/developer${section && section !== 'objects' ? `/${section}` : ''}${section === 'gptbuilder' && options?.workflowId ? `?workflowId=${encodeURIComponent(options.workflowId)}` : ''}`
     : app === 'dashboard'
       ? `${base}/dashboard`
     : app === 'till'
