@@ -128,9 +128,9 @@ test("layaway uses metadata ownership", async () => {
   const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(app.includes("LayawayPage"), false);
   assert.equal(server.includes("createLayawaysRouter"), false);
-  assert.ok(metadata.includes('key:"layaway"') || metadata.includes('key: "layaway"'));
-  assert.ok(metadata.includes('key:"layaway_line"') || metadata.includes('key: "layaway_line"'));
-  assert.ok(metadata.includes('key:"layaway_payment"') || metadata.includes('key: "layaway_payment"'));
+  assert.ok(metadata.includes('objectKey:"layaway"') || metadata.includes('objectKey: "layaway"'));
+  assert.ok(metadata.includes('objectKey:"layaway_line"') || metadata.includes('objectKey: "layaway_line"'));
+  assert.ok(metadata.includes('objectKey:"layaway_payment"') || metadata.includes('objectKey: "layaway_payment"'));
 });
 
 
@@ -138,8 +138,8 @@ test("pricing promotions and combos remain metadata-owned without legacy adminis
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(server.includes("createPricingRouter"), false);
-  assert.ok(metadata.includes('key:"promotion"') || metadata.includes('key: "promotion"'));
-  assert.ok(metadata.includes('key:"price_list"') || metadata.includes('key: "price_list"'));
+  assert.ok(metadata.includes('objectKey:"promotion"') || metadata.includes('objectKey: "promotion"'));
+  assert.ok(metadata.includes('objectKey:"price_list"') || metadata.includes('objectKey: "price_list"'));
 });
 
 
@@ -195,7 +195,7 @@ test("final manifest sweep removes obsolete direct business route stacks", async
   const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   const inventory = await readFile(new URL("../server/services/inventory.js", import.meta.url), "utf8");
   assert.equal(server.includes("createReturnsRouter"), false);
-  assert.ok(metadata.includes('key:"stock_return"') || metadata.includes('key: "stock_return"'));
+  assert.ok(metadata.includes('objectKey:"stock_return"') || metadata.includes('objectKey: "stock_return"'));
   assert.ok(metadata.includes('objectKey:"product"') || metadata.includes('objectKey: "product"'));
   assert.equal(server.includes("pricingEngine"), false);
   assert.match(inventory, /export async function createInventoryMovement/);
