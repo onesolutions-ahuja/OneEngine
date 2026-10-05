@@ -166,9 +166,9 @@ export default function OnlineOrdersAdmin() {
   });
   useEffect(() => {
     const timer = setInterval(() => {
-      if (Object.keys(busyRef.current).length || completeTargetRef.current) return;
+      if (document.hidden || Object.keys(busyRef.current).length || completeTargetRef.current) return;
       loadAllOrders().catch((err) => console.error("Online orders refresh:", err));
-    }, 20000);
+    }, 60000);
     return () => clearInterval(timer);
   }, [loadAllOrders]);
 
