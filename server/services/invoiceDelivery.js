@@ -27,7 +27,6 @@
  *    can never emit anything
  */
 import { createInvoiceDeliveryLink, buildInvoiceDeliveryMessage } from "./secureInvoiceLinks.js";
-import { normalizeWhatsAppPhone } from "./whatsappDelivery.js";
 import {
   decryptSecret,
   maskEmail,
@@ -40,6 +39,18 @@ const DEFAULT_SMS_TEMPLATE = "Thank you for your purchase. Your invoice{number}:
 const DEFAULT_EMAIL_SUBJECT = "Your invoice from {company}";
 const DEFAULT_EMAIL_BODY =
   "Thank you for your purchase.\n\nYour invoice{number} is available here: {link}\n\nThis link is valid for a limited time.";
+
+function normalizePhone(rawPhone, defaultCountryCode = null) {
+  const raw = String(rawPhone || "").trim();
+  if (!raw) return null;
+  const hasPlus = raw.startsWith("+");
+  let digits = raw.replace(/\D/g, "");
+  if (!hasPlus && digits.startsWith("00")) digits = digits.slice(2);
+  const countryCode = String(defaultCountryCode || "").replace(/\D/g, "");
+  if (countryCode && digits.startsWith("0")) digits = countryCode + digits.slice(1);
+  else if (countryCode && !hasPlus && digits.length <= 10 && !digits.startsWith(countryCode)) digits = countryCode + digits;
+  return /^\d{8,15}$/.test(digits) ? digits : null;
+}
 
 function round2(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
@@ -395,11 +406,11 @@ export async function resendInvoiceByChannel({ db, channel, saleId, companyId, s
       // Test-send path: the admin-supplied demo recipient, validated but not
       // required to exist on the customer record.
       recipient = channel === "sms"
-        ? normalizeWhatsAppPhone(overrideRecipient, config.configuration.default_country_code || null)
+        ? normalizePhone(overrideRecipient, config.configuration.default_country_code || null)
         : isEmailUsable(overrideRecipient);
       if (!recipient) return { ok: false, outcome: "skipped", reason: "invalid_recipient" };
     } else if (channel === "sms") {
-      recipient = normalizeWhatsAppPhone(saleData.customer?.phone, config.configuration.default_country_code || null);
+      recipient = normalizePhone(saleData.customer?.phone, config.configuration.default_country_code || null);
       if (!recipient) {
         await logDeliveryOutcome(db, { companyId, userId, saleId, action: "sms_invoice_delivery", deliveryType, trigger: "manual_resend", outcome: "skipped", reason: "no_customer_phone" });
         return { ok: false, outcome: "skipped", reason: "no_customer_phone" };
