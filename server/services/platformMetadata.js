@@ -1862,6 +1862,31 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     if (saleObjectId) {
       const tillWorkflowDefinitions = [
         {
+          name: "OneTill - Hold Sale",
+          apiName: "ONETILL_HOLD_SALE",
+          inputContract: [
+            { name: "userId", label: "User", type: "text", required: false },
+            { name: "customerId", label: "Customer", type: "text", required: false },
+            { name: "items", label: "Items", type: "object", required: true },
+            { name: "discountType", label: "Discount Type", type: "text", required: false },
+            { name: "discountValue", label: "Discount Value", type: "number", required: false },
+          ],
+          outputContract: [],
+          actions: [
+            { id: "create_held_sale", label: "Create Held Sale", apiName: "create_held_sale", key: "CREATE_RECORD", objectKey: "held_sale",
+              fieldValues: { user_id: { path: "$record.userId" }, customer_id: { path: "$record.customerId" }, items: { path: "$record.items" }, discount_type: { path: "$record.discountType" }, discount_value: { path: "$record.discountValue" } } },
+          ],
+        },
+        {
+          name: "OneTill - Consume Held Sale",
+          apiName: "ONETILL_CONSUME_HELD_SALE",
+          inputContract: [{ name: "heldSaleId", label: "Held Sale", type: "text", required: true }],
+          outputContract: [],
+          actions: [
+            { id: "delete_held_sale", label: "Delete Held Sale", apiName: "delete_held_sale", key: "DELETE_RECORD", objectKey: "held_sale", recordId: { path: "$record.heldSaleId" } },
+          ],
+        },
+        {
           name: "OneTill - Open Till Session",
           apiName: "ONETILL_OPEN_SESSION",
           inputContract: [
@@ -2332,8 +2357,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       const targetUpdates = [
         ["till_session","modal","till", { modal: "till" }],
         ["till_customer","modal","customer", { modal: "customer" }],
-        ["till_hold","crud","held_sale", { operation: "create", uiHandler: "hold_sale" }],
-        ["till_resume","crud","held_sale", { operation: "list_resume", uiHandler: "resume_sale" }],
+        ["till_hold","workflow",tillWorkflowIds.get("ONETILL_HOLD_SALE"), {}],
+        ["till_resume","modal","held", { modal: "held", consumeButtonKey: "till_resume_consume" }],
         ["till_returns","navigation","returns", { route: "returns" }],
         ["till_exchange","navigation","exchange", { route: "exchange" }],
         ["till_layaway","navigation","layaway", { route: "layaway" }],
@@ -2372,6 +2397,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       ).catch(() => {});
 
       const internalWorkflowButtons = [
+        ["till_resume_consume","Consume Held Sale",tillWorkflowIds.get("ONETILL_CONSUME_HELD_SALE"),"sale.hold"],
         ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
         ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("ONETILL_CHECKOUT_AGE_PREFLIGHT"),"sale.create"],
         ["till_payment_process","Select Payment Mode",tillWorkflowIds.get("ONETILL_PAYMENT_MODE"),"sale.create"],
