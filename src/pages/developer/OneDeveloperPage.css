@@ -229,20 +229,10 @@
 }
 
 
-/* OneDeveloper occupies only the viewport between the app top bar and fixed dock. */
+/* OneDeveloper inherits the base .settings-page top/bottom bounds.
+   Do not add a second viewport-height calculation here. */
 @media (min-width: 681px) {
-  .onedeveloper-page {
-    height: calc(100dvh - 36px - var(--onepos-dock-clearance, 74px));
-    max-height: calc(100dvh - 36px - var(--onepos-dock-clearance, 74px));
-  }
-
-  .onedeveloper-page > .settings-sidebar,
-  .onedeveloper-page > .settings-content {
-    height: 100%;
-    max-height: 100%;
-  }
-
   .onedeveloper-page > .settings-sidebar .settings-nav {
-    padding-bottom: 8px;
+    padding-bottom: var(--onepos-dock-clearance, 74px);
   }
 }
