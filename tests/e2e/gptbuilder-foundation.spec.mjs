@@ -25,6 +25,15 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
     await expect(page.getByLabel('Start')).toBeVisible()
+
+    // Regression: the floating New Automation link must stay below overlays
+    // and never intercept actions rendered by configuration/diagnostic panels.
+    const newAutomationLink = page.getByRole('button', { name: /^New Automation$/ })
+    await expect(newAutomationLink).toBeVisible()
+    await page.getByLabel('Start').click()
+    const doneButton = page.getByRole('button', { name: /^Done$/ })
+    await expect(doneButton).toBeVisible()
+    await doneButton.click()
     const saveButton = page.getByRole('button', { name: /^Save$/ })
     await expect(saveButton).toBeEnabled()
 
