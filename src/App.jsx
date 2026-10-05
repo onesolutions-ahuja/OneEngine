@@ -118,7 +118,7 @@ const CategoriesPage = lazyWithRecovery(() => import('./pages/products/Categorie
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
 const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
 const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
-const CustomersPage = lazyWithRecovery(() => import('./pages/customers/CustomersPage'))
+const CustomersPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
 const GiftCardsPage = lazyWithRecovery(() => import('./pages/customers/GiftCardsPage'))
 const AttendancePage = lazyWithRecovery(() => import('./pages/employees/AttendancePage'))
 const StoresPage = lazyWithRecovery(() => import('./pages/stores/StoresPage'))
@@ -2469,7 +2469,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'suppliers' ? (
           <SuppliersPage />
         ) : activeApp === 'customers' ? (
-          <CustomersPage onOpenGiftCards={() => openItem('gift-cards')} />
+          <CustomersPage initialObjectKey="customer" appKey="customers" />
         ) : activeApp === 'gift-cards' ? (
           <GiftCardsPage onBack={() => openItem('customers')} />
         ) : activeApp === 'employees' ? (

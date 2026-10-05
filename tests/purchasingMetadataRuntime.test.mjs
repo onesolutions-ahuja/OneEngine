@@ -115,3 +115,22 @@ test("inventory business UI and routes are removed while core stock primitives r
   assert.equal(primitive.includes("export async function allocateBatchConsumption"), true);
   assert.equal(platform.includes("executeInventoryPlatformAction"), true);
 });
+
+
+test("customer administration is metadata-owned while runtime customer services remain compatible", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const route = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.match(app, /CustomersPage initialObjectKey="customer" appKey="customers"/);
+  assert.equal(app.includes("pages/customers/CustomersPage"), false);
+  assert.equal(route.includes('router.post("/customers"'), false);
+  assert.equal(route.includes('router.put("/customers/:id"'), false);
+  assert.equal(route.includes('router.patch("/customers/:id/status"'), false);
+  assert.equal(route.includes('"/customers/import"'), false);
+  assert.equal(route.includes('"/customers/export"'), false);
+  assert.match(registry, /objectKey: "customer"/);
+  assert.match(registry, /parentObjectKey: "customer", childObjectKey: "contact"/);
+  assert.match(registry, /parentObjectKey: "customer", childObjectKey: "address"/);
+  assert.match(route, /"\/customer-lookup"/);
+  assert.match(route, /"\/customers\/:id\/credit"/);
+});
