@@ -337,3 +337,23 @@ test('login timing keeps permission and authorization phases separate', async ()
   assert.match(source, /loginTimings\.authorization_bundle_ms = Date\.now\(\) - authorizationStartedAt/)
   assert.equal(source.includes('loginTimings.permissions_ms = loginTimings.authorization_bundle_ms'), false)
 })
+
+
+test('primary PostgreSQL pool retains warm connections for the login critical path', async () => {
+  const server = await read('../server/server.js')
+  assert.match(server, /PG_POOL_MIN \|\| "3"/)
+  assert.match(server, /PG_POOL_IDLE_MS \|\| "300000"/)
+  assert.match(server, /Array\.from\(\{ length: Math\.min\(3, pool\.options\?\.max \|\| 3\) \}/)
+})
+
+test('deployment smoke does not expect static GitHub Pages files for SPA deep routes', async () => {
+  const source = await read('../.github/workflows/deployment-smoke.yml')
+  assert.equal(source.includes('/developer/workflow-builder?workflowId=smoke-test'), false)
+})
+
+test('final loading verifier always measures a fresh login on retry', async () => {
+  const helper = await read('../tests/e2e/helpers.mjs')
+  const verifier = await read('../tests/e2e/final-loading-verification.spec.mjs')
+  assert.match(helper, /loginIfConfigured\(page, \{ forceFresh = false \} = \{\}\)/)
+  assert.match(verifier, /loginIfConfigured\(page, \{ forceFresh: true \}\)/)
+})
