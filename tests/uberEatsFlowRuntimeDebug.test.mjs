@@ -22,8 +22,14 @@ function runtime({ products = [], response = { ok: true, status: 200, body: { ok
     if (s.includes("FROM platform_objects")) return { rows: [productObject] };
     if (s.includes("FROM platform_fields")) return { rows: productFields };
     if (s.includes('FROM "products"')) return { rows: products };
-    if (s.includes("FROM platform_connector_definitions")) return { rows: [{ id: "connector-uber", connector_key: "uber_eats", base_url: "https://api.uber.test", auth_type: "none", timeout_ms: 15000, status: "ACTIVE", operations: [] }] };
-    if (s.includes("FROM integration_connections")) return { rows: [] };
+    if (s.includes("FROM platform_connector_definitions")) return { rows: [] };
+    if (s.includes("FROM integration_connections")) return { rows: [{
+      id: "connection-uber",
+      base_url: "https://api.uber.test",
+      auth_type: "none",
+      credentials_encrypted: null,
+      connector_configuration: {},
+    }] };
     if (s.includes("platform_workflow_step_runs") || s.includes("platform_workflow_runs")) return { rows: [] };
     return { rows: [] };
   };

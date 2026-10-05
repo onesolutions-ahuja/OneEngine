@@ -27,12 +27,12 @@ test('record and collection create modes compile to supported core actions', () 
 test('failed database action keeps the original error when execution transaction is aborted', async () => {
   let calls = 0;
   const executionDb = async (query) => {
-    if (query.includes('FROM role_permissions')) return { rows: [{ code: 'records.create' }] };
+    if (query.includes('FROM role_permissions')) return { rows: [{ code: 'workflow.execute' }, { code: 'records.create' }] };
     calls++;
     throw Object.assign(new Error(calls === 1 ? 'null value in column name violates not-null constraint' : 'current transaction is aborted'), { code: calls === 1 ? '23502' : '25P02' });
   };
   const traces = [];
   const traceDb = async (query, params) => { traces.push([query, params]); return { rows: [{ id: 'step-run' }] }; };
-  await assert.rejects(executeWorkflowActions({ actions: [{ id: 'create', key: 'CREATE_RECORD', objectKey: 'product', fieldValues: { name: null } }], db: executionDb, traceDb, runId: 'run', companyId: 'company', req: { user: { companyId: 'company', roleId: 'role' }, _workflowEffectivePermissionSets: [] }, debugMode: true }), /null value in column name/);
+  await assert.rejects(executeWorkflowActions({ actions: [{ id: 'create', key: 'CREATE_RECORD', objectKey: 'product', fieldValues: { name: null } }], db: executionDb, traceDb, runId: 'run', companyId: 'company', req: { user: { companyId: 'company', roleId: 'role', permissions: ['workflow.execute'] }, _workflowEffectivePermissionSets: [] }, debugMode: true }), /null value in column name/);
   assert.ok(traces.some(([query]) => query.includes("status='FAILED'")));
 });

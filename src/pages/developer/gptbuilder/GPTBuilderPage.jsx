@@ -979,7 +979,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         secure: field.secure === true,
         previewValue: field.secure === true ? '********' : field.value,
         resourceType: 'provider_field',
-      })))
+      }))))
     })
     return () => { live = false }
   }, [])

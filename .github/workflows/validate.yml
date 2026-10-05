@@ -20,16 +20,18 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:unit
-      - run: npm run audit:trusted
-      - run: npm run audit:apps
-      - run: npm run audit:workflow-coverage:enforce
+      # Build first so deploy-blocking syntax/audit failures are always visible,
+      # even when unrelated unit tests on main are already failing.
       - run: npm run build
       # server has its own package.json but no package-lock.json, so npm ci is invalid here.
       - run: npm install --ignore-scripts --no-audit --no-fund
         working-directory: server
       - run: npm run build
         working-directory: server
+      - run: npm run test:unit
+      - run: npm run audit:trusted
+      - run: npm run audit:apps
+      - run: npm run audit:workflow-coverage:enforce
 
   playwright-smoke:
     runs-on: ubuntu-latest
