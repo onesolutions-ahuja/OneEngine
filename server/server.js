@@ -87,7 +87,7 @@ import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
 import createDataProtectionRouter from "./routes/dataProtection.js";
-import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
+import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, loadSecuritySettings, loginState, registerFailedLogin, resolveAccessPolicy, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
@@ -1293,13 +1293,20 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const loginDb = (sql, params = []) => loginPool.query(sql, params);
     const requestIp = clientIp(req);
     const requestUserAgent = req.get("user-agent") || null;
-    const [securitySettings, state, googleRuntime] = await Promise.all([
+    const [securitySettings, state, googleRuntime, accessPolicy, companyTimezoneResult] = await Promise.all([
       user.company_id ? loadSecuritySettings(loginDb, user.company_id) : Promise.resolve(null),
       loginState(loginDb, user.id),
       user.company_id
         ? getGoogleConnectRuntime((query, params = []) => loginPool.query(query, params), user.company_id)
         : Promise.resolve(null),
+      user.company_id
+        ? resolveAccessPolicy(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
+        : Promise.resolve(null),
+      user.company_id
+        ? loginDb("SELECT timezone FROM companies WHERE id=$1", [user.company_id])
+        : Promise.resolve({ rows: [] }),
     ]);
+    const companyTimezone = companyTimezoneResult?.rows?.[0]?.timezone || null;
     if (state?.locked_indefinitely === true || (state?.locked_until && new Date(state.locked_until).getTime() > Date.now())) {
       await writeLoginHistory(loginDb, { user, identifier: email, status: "BLOCKED", reason: "ACCOUNT_LOCKED", ip: requestIp, userAgent: requestUserAgent, req });
       return res.status(403).json({
@@ -1383,6 +1390,9 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         userId: user.id,
         roleId: user.role_id,
         ip: requestIp,
+        settingsOverride: securitySettings,
+        policyOverride: accessPolicy,
+        companyTimezoneOverride: companyTimezone,
       }),
       user.role_id
         ? loginPool.query(
@@ -1395,7 +1405,11 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
         : Promise.resolve({ rows: [] }),
       loadEffectivePermissionSets(loginDb, loginPermissionUser),
       user.company_id
-        ? loadEffectiveAssurance(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
+        ? loadEffectiveAssurance(
+            loginDb,
+            { companyId: user.company_id, userId: user.id, roleId: user.role_id },
+            { settings: securitySettings, policy: accessPolicy }
+          )
         : Promise.resolve(null),
       user.company_id
         ? findTrustedDevice(loginDb, {
