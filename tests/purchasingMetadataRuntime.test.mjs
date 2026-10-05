@@ -22,7 +22,7 @@ test("purchases and supplier returns use generic workspace", async () => {
 test("protected transactional objects cannot use generic CRUD", async () => {
   const route = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
   assert.match(route, /config\?\.protectedWrites === true/);
-  const workspace = await readFile(new URL("../src/pages/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
+  const workspace = await readFile(new URL("../src/platform/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
   assert.match(workspace, /protectedWrites/);
 });
 

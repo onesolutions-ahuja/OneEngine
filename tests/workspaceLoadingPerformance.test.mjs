@@ -7,13 +7,13 @@ import test from 'node:test'
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8')
 
 test('metadata workspace renders cached rows before background record synchronization completes', async () => {
-  const source = await read('../src/pages/workspace/WorkspacePage.jsx')
+  const source = await read('../src/platform/workspace/WorkspacePage.jsx')
   assert.match(source, /hasCachedSnapshot/)
   assert.match(source, /applyRows\(cachedRows\)[\s\S]*setLoadingRows\(false\)[\s\S]*void syncWorkspaceRecordCache/)
 })
 
 test('record history loads only after the History tab is selected', async () => {
-  const source = await read('../src/pages/workspace/WorkspacePage.jsx')
+  const source = await read('../src/platform/workspace/WorkspacePage.jsx')
   assert.match(source, /detailTab !== 'history'/)
   assert.match(source, /\[selectedId, selectedKey, detailTab\]/)
 })

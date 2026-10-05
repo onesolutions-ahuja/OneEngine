@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 test("workspace renders generic metadata action forms", async () => {
-  const source = await readFile(new URL("../src/pages/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/platform/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
   assert.match(source, /MetadataActionButtons/);
   assert.equal(source.includes("runMetadataButton"), false);
 });
