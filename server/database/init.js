@@ -2377,6 +2377,27 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         console.log("onePOS: communication_message_received platform event trigger registered");
       },
+    },
+    {
+      key: "0065_login_lookup_indexes",
+      version: "65",
+      name: "Index password-login identity and security-policy lookups",
+      up: async client => {
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS ix_users_login_email_normalized
+            ON users (LOWER(BTRIM(email)))
+            WHERE email IS NOT NULL;
+          CREATE INDEX IF NOT EXISTS ix_users_login_username_normalized
+            ON users (LOWER(username))
+            WHERE email IS NULL;
+          CREATE INDEX IF NOT EXISTS ix_identity_access_policy_login_lookup
+            ON identity_access_policies(company_id,scope_type,scope_id,priority,updated_at DESC)
+            WHERE active=TRUE;
+          CREATE INDEX IF NOT EXISTS ix_identity_ip_ranges_login_lookup
+            ON identity_security_ip_ranges(company_id,range_type,policy_id,active);
+        `);
+        console.log("onePOS: login identity/security lookup indexes ready");
+      },
     }  ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
