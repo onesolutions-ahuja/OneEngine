@@ -46,9 +46,14 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
   }
 
   for (const key of INTERNAL) {
-    assert.ok(all.has(key), key + " must remain executable for compatibility/runtime callers");
-    assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
-    assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
+    if (key === "ONLINE_ORDER_TRANSITION") {
+      assert.equal(all.has(key), false, key + " must stay removed after metadata/subflow migration");
+      assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as a hidden business executor");
+    } else {
+      assert.ok(all.has(key), key + " must remain executable for compatibility/runtime callers");
+      assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
+      assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
+    }
   }
 });
 
