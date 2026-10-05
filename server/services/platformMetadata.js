@@ -293,7 +293,10 @@ export const platformSchema = `
   ALTER TABLE platform_buttons ADD COLUMN IF NOT EXISTS package_required BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE platform_buttons ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE platform_buttons ALTER COLUMN action_key DROP NOT NULL;
-  ALTER TABLE platform_buttons ADD COLUMN IF NOT EXISTS target_type VARCHAR(20) NOT NULL DEFAULT 'action' CHECK (target_type IN ('action','workflow'));
+  ALTER TABLE platform_buttons ADD COLUMN IF NOT EXISTS target_type VARCHAR(20) NOT NULL DEFAULT 'action';
+  ALTER TABLE platform_buttons DROP CONSTRAINT IF EXISTS platform_buttons_target_type_check;
+  ALTER TABLE platform_buttons ADD CONSTRAINT platform_buttons_target_type_check
+    CHECK (target_type IN ('action','workflow','modal','crud','navigation','command'));
   ALTER TABLE platform_buttons ADD COLUMN IF NOT EXISTS target_key VARCHAR(140);
   ALTER TABLE platform_buttons ADD COLUMN IF NOT EXISTS variant VARCHAR(30) NOT NULL DEFAULT 'primary';
   ALTER TABLE platform_buttons ADD COLUMN IF NOT EXISTS required_permission VARCHAR(140);
