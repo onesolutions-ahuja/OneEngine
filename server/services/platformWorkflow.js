@@ -5057,6 +5057,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const tenantId = companyId || req?.user?.companyId;
       if (!runId) throw new Error("Screen requires a persisted workflow run");
       const rawScreen = action.screen || {};
+      const selectedRecordIds = Array.isArray(workflowVariables.variables?.selectedRecordIds) ? workflowVariables.variables.selectedRecordIds : Array.isArray(workflowVariables.input?.selectedRecordIds) ? workflowVariables.input.selectedRecordIds : [];
+      workflowVariables.variables = workflowVariables.variables || {};
+      workflowVariables.variables.selectedRecordIds = selectedRecordIds;
+      workflowVariables.variables.recordIds = selectedRecordIds;
+      workflowVariables.variables.selectedRecordCount = selectedRecordIds.length;
       const resolveScreenResource = (value) => resolveConfiguredResource(value, { req, workflowVariables }, { preserveMissing: false });
       const components = (Array.isArray(rawScreen.components) ? rawScreen.components : []).map((component) => {
         const next = { ...component };
@@ -5117,6 +5122,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (currentStage) workflowVariables.variables.__flowCurrentStage = currentStage;
       const screen = {
         ...rawScreen,
+        context: { ...(rawScreen.context || {}), selectedRecordIds, recordIds: selectedRecordIds, selectedRecordCount: selectedRecordIds.length },
         components,
         stages,
         currentStage,
