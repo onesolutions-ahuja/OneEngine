@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
 
 const uid = (prefix='wc') => globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 const resourceLabel = (resource) => resource?.label || resource?.apiName || ''
 
 export const WAIT_CONDITIONS_DEFAULTS = Object.freeze({ configurations: [] })
