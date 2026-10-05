@@ -3,7 +3,7 @@ const DB_VERSION = 1
 const STORE = 'responses'
 
 export const LAZY_CACHE_DEFAULT_TTL_MS = 2 * 60 * 1000
-export const LAZY_CACHE_MAX_STALE_MS = 24 * 60 * 60 * 1000
+export const LAZY_CACHE_MAX_STALE_MS = 30 * 24 * 60 * 60 * 1000
 export const LAZY_CACHE_MAX_BYTES = 20 * 1024 * 1024
 export const LAZY_CACHE_MAX_ENTRIES = 200
 
