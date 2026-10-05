@@ -316,7 +316,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         unitPrice: Number(line.price || 0),
         quantity: Number(line.quantity || 0),
         vatApplicable: Number(line.vatRate || 0) > 0,
-        vatRate: Number(line.vatRate || 0),
+        vatRate: Number(line.vatRate || 0) * 100,
       })),
     ]
     apiRequest(`/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`, {
@@ -570,7 +570,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       const splitButton = buttons.find((row) => row.button_key === 'till_split_payment_validate')
       if (!splitButton) return setError('Split Payment Flow is not configured.')
       try {
-        const splitResponse = await executeMetadataButton(splitButton, { payments: payments || [], total })
+        const splitResponse = await executeMetadataButton(splitButton, {
+          payments: payments || [],
+          total,
+          allowedMethodsText: `|${paymentMethods.filter((method) => method.active !== false).map((method) => method.code).join('|')}|`,
+        })
         const allowed = deepFind(splitResponse?.data, 'allowed') === true
         if (!allowed) {
           const remaining = Number(deepFind(splitResponse?.data, 'remaining') || 0)
