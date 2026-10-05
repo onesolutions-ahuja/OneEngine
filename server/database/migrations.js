@@ -254,15 +254,30 @@ export async function runMigrations(database, migrations) {
       ...BUILT_IN_DATABASE_MIGRATIONS.filter(migration => !requestedKeys.has(migration.key)),
     ];
 
+    // Read applied migration keys once. The previous implementation performed
+    // BEGIN + advisory lock + SELECT + COMMIT for every already-applied
+    // migration on every process start. With a remote PostgreSQL service that
+    // turns a warm schema check into dozens of network round trips and can add
+    // tens of seconds to every Render cold start.
+    const appliedRows = await client.query("SELECT migration_key FROM schema_migrations");
+    const appliedKeys = new Set(appliedRows.rows.map((row) => String(row.migration_key)));
+
     for (const migration of migrationPlan) {
+      if (appliedKeys.has(migration.key)) continue;
+
       await client.query("BEGIN");
       try {
         await client.query("SELECT pg_advisory_xact_lock(1936683890, 1)");
+
+        // Another instance may have completed this migration while this process
+        // was waiting for the lock. Re-check only pending migrations inside the
+        // locked transaction; already-applied migrations never pay this cost.
         const applied = await client.query(
           "SELECT migration_key FROM schema_migrations WHERE migration_key=$1",
           [migration.key]
         );
         if (applied.rows[0]) {
+          appliedKeys.add(migration.key);
           await client.query("COMMIT");
           continue;
         }
@@ -273,6 +288,7 @@ export async function runMigrations(database, migrations) {
            VALUES ($1, $2, $3)`,
           [migration.key, migration.version, migration.name]
         );
+        appliedKeys.add(migration.key);
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK").catch(() => {});
