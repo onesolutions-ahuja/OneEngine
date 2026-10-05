@@ -826,7 +826,7 @@ function SettingsPage({ onOpenProfile }) {
   const initial = profileName.trim().charAt(0).toUpperCase() || 'U'
 
   return (
-    <section className={`settings-page ${mobileSettingsDetail ? 'is-mobile-detail' : 'is-mobile-list'}`}>
+    <section className={`settings-page ${mobileSettingsDetail ? 'is-mobile-detail' : 'is-mobile-list'}`} data-oneengine-route="settings" data-oneengine-section={current?.key || active}>
       <aside className="settings-sidebar">
         <div className="settings-window-title">Settings</div>
 
@@ -2214,7 +2214,7 @@ function Desktop({ onLock, onSignOut }) {
   }
 
   return (
-    <main className="screen desktop-screen">
+    <main className="screen desktop-screen" data-oneengine-route={activeApp} data-oneengine-section={routeState?.section || ""} data-oneengine-object={routeState?.objectKey || ""} data-oneengine-page={routeState?.pageKey || ""}>
       <header className="demo-menubar" ref={topbarPanelRef}>
         <div className="menubar-left">
           <button
@@ -2509,16 +2509,16 @@ function Desktop({ onLock, onSignOut }) {
 export default function App() {
   const route = readRoute()
   if (route.app === 'customer-display') {
-    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary>
+    return <div data-oneengine-route="customer-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary></div>
   }
   if (route.app === 'flow-runtime') {
-    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary>
+    return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
   }
   if (route.app === 'kiosk-runtime') {
-    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading kiosk…</div>}><OneKioskPage publicMode /></Suspense></LazyLoadBoundary>
+    return <div data-oneengine-route="kiosk-runtime"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading kiosk…</div>}><OneKioskPage publicMode /></Suspense></LazyLoadBoundary></div>
   }
   if (route.app === 'kiosk-display') {
-    return <LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading collection display…</div>}><OneKioskDisplayPage /></Suspense></LazyLoadBoundary>
+    return <div data-oneengine-route="kiosk-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading collection display…</div>}><OneKioskDisplayPage /></Suspense></LazyLoadBoundary></div>
   }
 
   // A browser refresh should restore an authenticated session, not behave like
