@@ -267,3 +267,15 @@ test("repo-wide manifest sweep removes hidden legacy hospitality scan-go and hel
   for (const legacy of ["createHospitalityRouter", "createScanGoRouter", "createHeldSalesRouter"]) assert.equal(server.includes(legacy), false);
   assert.match(metadata, /hospitality/);
 });
+
+
+test("reports use generic platform reporting instead of fixed business report routes", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const route = await readFile(new URL("../server/routes/reports.js", import.meta.url), "utf8");
+  assert.equal(app.includes("pages/reports/ReportsPage"), false);
+  for (const legacy of ["/reports/summary", "/reports/sales\"", "/reports/products", "/reports/payments", "/reports/customers", "/reports/inventory-overview", "/reports/inventory-movements", "/reports/till", "/reports/vat"]) {
+    assert.equal(route.includes(legacy), false, legacy);
+  }
+  assert.match(route, /\/reports\/custom\/capabilities/);
+  assert.match(route, /\/reports\/custom\/preview/);
+});
