@@ -2220,8 +2220,6 @@ function Desktop({ onLock, onSignOut }) {
 
   return (
     <main className="screen desktop-screen">
-      <div className="wallpaper wallpaper--desktop" />
-
       <header className="demo-menubar" ref={topbarPanelRef}>
         <div className="menubar-left">
           <button
