@@ -1268,7 +1268,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       : (req.tenantPool || tenantPoolManager.getPoolForRequest(req) || pool);
 
     stepStartedAt = Date.now();
-    const result = isPlatformIdentity
+    const result = isPlatformIdentity || loginPool === pool
       ? centralIdentity
       : await loginPool.query(identitySql, [email]);
     markLoginTiming("tenant_identity_ms", stepStartedAt);
@@ -1483,10 +1483,12 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       settings: securitySettings,
       originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null,
     });
-    await loginDb("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW() WHERE id=$1", [sessionId, effectiveAssurance.passwordAssurance]);
     user.session_id = sessionId;
     const token = createToken(user);
-    await writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req });
+    await Promise.all([
+      loginDb("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW() WHERE id=$1", [sessionId, effectiveAssurance.passwordAssurance]),
+      writeLoginHistory(loginDb, { user, identifier: email, status: "SUCCESS", reason: passwordExpired ? "PASSWORD_EXPIRED" : null, ip: requestIp, userAgent: requestUserAgent, sessionId, req }),
+    ]);
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
       ...loginTimings,
