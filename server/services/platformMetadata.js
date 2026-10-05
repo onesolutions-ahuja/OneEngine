@@ -132,6 +132,9 @@ export const platformSchema = `
   ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ;
   ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMPTZ;
   ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS update_status VARCHAR(20) NOT NULL DEFAULT 'CURRENT';
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS is_installed BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS launchable BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE tenant_apps ADD COLUMN IF NOT EXISTS storefront_state VARCHAR(30) NOT NULL DEFAULT 'AVAILABLE';
   CREATE INDEX IF NOT EXISTS idx_tenant_apps_company_status ON tenant_apps(company_id,status);
   ALTER TABLE roles ADD COLUMN IF NOT EXISTS parent_role_id UUID REFERENCES roles(id) ON DELETE SET NULL;
   CREATE INDEX IF NOT EXISTS idx_roles_company_parent ON roles(company_id,parent_role_id);
@@ -1583,6 +1586,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["trial_started_at", "Trial Started At", "datetime", "trial_started_at", false],
         ["trial_expires_at", "Trial Expires At", "datetime", "trial_expires_at", false],
         ["update_status", "Update Status", "select", "update_status", false],
+        ["is_installed", "Installed", "boolean", "is_installed", false],
+        ["launchable", "Launchable", "boolean", "launchable", false],
+        ["storefront_state", "Storefront State", "select", "storefront_state", false],
         ["installed_at", "Installed At", "datetime", "installed_at", false],
         ["activated_at", "Activated At", "datetime", "activated_at", false],
         ["updated_at", "Updated At", "datetime", "updated_at", false],
@@ -1666,7 +1672,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
     await pool.query(`
       INSERT INTO tenant_apps
-        (company_id,onestore_app_id,status,installed_version,available_version,licence_required,trial_eligible,licence_status,update_status,installed_at,activated_at,updated_at)
+        (company_id,onestore_app_id,status,installed_version,available_version,licence_required,trial_eligible,licence_status,update_status,is_installed,launchable,storefront_state,installed_at,activated_at,updated_at)
       SELECT
         c.id,
         a.id,
@@ -1689,6 +1695,13 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           WHEN COALESCE(i.installed_version,i.version) IS NOT NULL
            AND COALESCE(i.installed_version,i.version) <> a.version THEN 'UPDATE_AVAILABLE'
           ELSE 'CURRENT'
+        END,
+        i.id IS NOT NULL,
+        CASE WHEN i.status='active' AND i.deactivated_by_user=FALSE AND i.suspended_by_entitlement=FALSE THEN TRUE ELSE FALSE END,
+        CASE
+          WHEN i.id IS NULL THEN 'AVAILABLE'
+          WHEN i.status='inactive' THEN 'INACTIVE'
+          ELSE 'INSTALLED'
         END,
         i.installed_at,
         CASE WHEN i.status='active' AND i.deactivated_by_user=FALSE AND i.suspended_by_entitlement=FALSE THEN COALESCE(i.updated_at,i.installed_at) ELSE NULL END,
@@ -1762,6 +1775,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         );
         await pool.query(
           `UPDATE platform_fields
+              SET options='["AVAILABLE","INSTALLED","INACTIVE","LICENCE_REQUIRED","NOT_INSTALLABLE","NOT_AVAILABLE"]'::jsonb
+            WHERE object_id=$1 AND api_name='storefront_state'`,
+          [result.rows[0].id]
+        );
+        await pool.query(
+          `UPDATE platform_fields
               SET config=COALESCE(config,'{}'::jsonb) || '{"relatedObjectKey":"onestore_app","relationshipKey":"tenant_apps"}'::jsonb
             WHERE object_id=$1 AND api_name='onestore_app_id'`,
           [result.rows[0].id]
@@ -1773,6 +1792,28 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (saleObjectForFormula.rows[0]?.id) {
+      await pool.query(
+        `INSERT INTO platform_fields
+           (object_id,api_name,label,field_type,source_column,required,writable,display_order,config,active)
+         VALUES
+           ($1,'line_count','Line Count','formula',NULL,FALSE,FALSE,5,'{"expression":"0","resultType":"number"}'::jsonb,TRUE),
+           ($1,'till_session_id','Till Session','formula',NULL,FALSE,FALSE,6,'{"expression":"NULL","resultType":"text"}'::jsonb,TRUE)
+         ON CONFLICT (object_id,api_name) WHERE company_id IS NULL DO UPDATE SET
+           field_type=EXCLUDED.field_type,source_column=NULL,writable=FALSE,active=TRUE`,
+        [saleObjectForFormula.rows[0].id]
+      ).catch(() => {});
+      await pool.query(
+        `INSERT INTO platform_rules
+           (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,company_id,managed,package_required,user_modified)
+         SELECT $1,'Open till session required','before_create',
+                '[{"field":"till_session_id","operator":"is_empty"}]'::jsonb,
+                '{"type":"validation","match":"all","message":"Open a till session before completing a sale"}'::jsonb,
+                TRUE,'ACTIVE',1,1,NULL,TRUE,FALSE,FALSE
+          WHERE NOT EXISTS (
+            SELECT 1 FROM platform_rules WHERE object_id=$1 AND company_id IS NULL AND name='Open till session required'
+          )`,
+        [saleObjectForFormula.rows[0].id]
+      ).catch(() => {});
       await pool.query(
         `INSERT INTO platform_rules
            (object_id,name,trigger_key,conditions,action,active,lifecycle_status,version,active_version,company_id,managed,package_required,user_modified)
@@ -1957,7 +1998,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           },
           actions: [
             { id: "deploy_package", label: "1. Install Package Runtime", apiName: "deploy_package", key: "PACKAGE_LIFECYCLE", operation: "INSTALL" },
-            { id: "install_app", label: "2. Update Tenant App Status", apiName: "install_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INSTALLED", installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
+            { id: "install_app", label: "2. Update Tenant App Status", apiName: "install_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INSTALLED", installed_version: { path: "record.available_version" }, update_status: "CURRENT", is_installed: true, launchable: false, storefront_state: "INSTALLED" } },
           ],
         },
         {
@@ -1967,7 +2008,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           visibility: { match: "any", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }, { field: "status", operator: "equals", value: "INACTIVE" }] },
           actions: [
             { id: "activate_package", label: "1. Activate Package Runtime", apiName: "activate_package", key: "PACKAGE_LIFECYCLE", operation: "ACTIVATE" },
-            { id: "activate_app", label: "2. Update Tenant App Status", apiName: "activate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "ACTIVE" } },
+            { id: "activate_app", label: "2. Update Tenant App Status", apiName: "activate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "ACTIVE", is_installed: true, launchable: true, storefront_state: "INSTALLED" } },
           ],
         },
         {
@@ -1977,7 +2018,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           visibility: { match: "all", conditions: [{ field: "status", operator: "equals", value: "ACTIVE" }] },
           actions: [
             { id: "deactivate_package", label: "1. Deactivate Package Runtime", apiName: "deactivate_package", key: "PACKAGE_LIFECYCLE", operation: "DEACTIVATE" },
-            { id: "deactivate_app", label: "2. Update Tenant App Status", apiName: "deactivate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INACTIVE" } },
+            { id: "deactivate_app", label: "2. Update Tenant App Status", apiName: "deactivate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INACTIVE", is_installed: true, launchable: false, storefront_state: "INACTIVE" } },
           ],
         },
         {
@@ -1987,7 +2028,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           visibility: { match: "any", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }, { field: "status", operator: "equals", value: "ACTIVE" }, { field: "status", operator: "equals", value: "INACTIVE" }] },
           actions: [
             { id: "uninstall_package", label: "1. Uninstall Package Runtime", apiName: "uninstall_package", key: "PACKAGE_LIFECYCLE", operation: "UNINSTALL" },
-            { id: "uninstall_app", label: "2. Update Tenant App Status", apiName: "uninstall_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "AVAILABLE", installed_version: null, activated_at: null, update_status: "CURRENT" } },
+            { id: "uninstall_app", label: "2. Update Tenant App Status", apiName: "uninstall_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "AVAILABLE", installed_version: null, activated_at: null, update_status: "CURRENT", is_installed: false, launchable: false, storefront_state: "AVAILABLE" } },
           ],
         },
         {
