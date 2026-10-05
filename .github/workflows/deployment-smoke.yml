@@ -14,14 +14,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for deployments
-        run: sleep 45
+        run: sleep 10
 
       - name: Test GitHub Pages shell and assets
         run: |
           set -euo pipefail
           PAGE="https://onesolutions-ahuja.github.io/OneEngine/"
           curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "$PAGE" -o /tmp/pages.html
-          DEPLOYED_SHA="$(curl --retry 12 --retry-all-errors --retry-delay 10 -fsSL "${PAGE}deploy-sha.txt")"
+          DEPLOYED_SHA=""
+          for attempt in {1..18}; do
+            DEPLOYED_SHA="$(curl -fsSL "${PAGE}deploy-sha.txt" 2>/dev/null || true)"
+            if [ "$DEPLOYED_SHA" = "$GITHUB_SHA" ]; then break; fi
+            sleep 10
+          done
           test "$DEPLOYED_SHA" = "$GITHUB_SHA"
           grep -q '/OneEngine/assets/' /tmp/pages.html
           ASSET="$(grep -oE '/OneEngine/assets/[^"]+\.js' /tmp/pages.html | head -1)"
