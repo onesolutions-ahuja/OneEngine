@@ -1,10 +1,9 @@
 import express from "express";
 import { createHash } from "node:crypto";
 import { allocateBatchConsumption } from "../services/inventory.js";
-import { computeBasketTotals, roundCurrency, resolveEffectivePrice } from "../src/utils/saleTotals.js";
+import { computeBasketTotals, roundCurrency } from "../src/utils/saleTotals.js";
 import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
-import { resolvePrice } from "../services/pricingEngine.js";
 import { getRequestPool } from "../services/tenantDatabase.js";
 import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes, listPaymentMethods } from "../services/paymentMethods.js";
@@ -874,14 +873,6 @@ export default function createSalesRouter({
           await client.query("ROLLBACK");
           return res.status(400).json({ success:false, code:"PRODUCT_NOT_FOUND", message:"One or more products are unavailable." });
         }
-        const customerPricing = req.body.customerId
-          ? await client.query(
-            `SELECT c.price_list_id, cg.price_list_id AS group_price_list_id
-               FROM customers c LEFT JOIN customer_groups cg ON cg.id=c.customer_group_id
-              WHERE c.id=$1 AND c.company_id=$2`,
-            [req.body.customerId, req.user.companyId]
-          )
-          : { rows: [] };
         const lineFeatures = await loadSaleLineFeatures(client, req.user.companyId, items);
 
         const basketForTotals = [];
@@ -897,78 +888,9 @@ export default function createSalesRouter({
           const vatRate = p ? Number(p.vat_rate || 0) / 100 : vatRateFromBody;
           const vatApplicable = p ? p.vat_applicable !== false : true;
 
-          /*
-            * T10-PRICE: manual price override. The catalogue price is the
-            * default and is used UNLESS the operator holds sale.price_change
-            * AND supplies a positive `priceOverride` on the line. Without the
-            * permission the client's proposed price is IGNORED — the catalogue
-            * price wins, so a user cannot raise or lower the selling price via
-            * a crafted request. The override never mutates the product master
-            * (only this sale's line is affected); original_unit_price stores
-            * the catalogue value for audit/receipts. Decision is delegated to
-            * the shared resolveEffectivePrice helper (src/utils/saleTotals.js)
-            * so it is unit-tested independently.
-            */
-          const customer = customerPricing.rows[0];
-          const pricingRows = await client.query(
-           `SELECT
-              (SELECT plp.price FROM price_list_prices plp WHERE plp.product_id=$1 AND plp.price_list_id=$2) AS customer_price,
-              (SELECT plp.price FROM price_list_prices plp WHERE plp.product_id=$1 AND plp.price_list_id=$3) AS group_price,
-              COALESCE((SELECT json_agg(spp) FROM scheduled_product_prices spp
-                WHERE spp.product_id=$1 AND spp.company_id=$4 AND spp.active=true), '[]') AS scheduled_prices,
-              COALESCE((SELECT json_agg(pr) FROM promotions pr
-                WHERE pr.company_id=$4 AND pr.active=true
-                  AND (pr.product_id=$1 OR pr.category_id=$5)), '[]') AS promotions`,
-           [item.productId, customer?.price_list_id || null, customer?.group_price_list_id || null,
-             req.user.companyId, p?.category_id || null]
-          );
-          const pricing = pricingRows.rows[0] || {};
-          const resolved = resolvePrice({
-            basePrice: masterPrice + modifierTotal / qty,
-            customerPrice: pricing.customer_price == null ? null : Number(pricing.customer_price),
-            groupPrice: pricing.group_price == null ? null : Number(pricing.group_price),
-            priceListPrice: null,
-            scheduledPrices: pricing.scheduled_prices || [],
-            promotions: pricing.promotions || [],
-            quantity: qty,
-            at: new Date(),
-          });
-          const priceResolution = resolveEffectivePrice({
-            cataloguePrice: resolved.unitPrice,
-            priceOverride: item.priceOverride ?? item.unitPrice,
-            canOverridePrice,
-          });
-          const price = priceResolution.price;
-          if (priceResolution.overridden && req.user.id) {
-            salePriceOverride.push({
-              itemIndex: items.indexOf(item),
-              productId: item.productId,
-              originalUnitPrice: priceResolution.originalUnitPrice,
-              overriddenUnitPrice: price,
-              userId: req.user.id,
-              reason: typeof item.priceOverrideReason === "string" ? item.priceOverrideReason.trim().slice(0, 255) || null : null,
-            });
-          }
-
-          const ldt = item.discountType;
-          const ldv = Number(item.discountValue ?? 0) || 0;
-          const quantityDiscount = roundCurrency(Math.max(0, (price * qty) - resolved.total));
-          const requestedDiscount = (ldt === "percent" || ldt === "fixed") && ldv > 0
-            ? ldt === "percent"
-              ? roundCurrency(Math.min(price * qty, (price * qty) * (ldv / 100)))
-              : roundCurrency(Math.min(price * qty, ldv))
-            : 0;
-          const ld = roundCurrency(Math.min(price * qty, quantityDiscount + requestedDiscount));
-
-          if (requestedDiscount > 0 && item.discountedBy) {
-            saleDiscountAudit.push({
-              itemIndex: items.indexOf(item),
-              discountType: ldt,
-              discountValue: ldv,
-              amount: requestedDiscount,
-              userId: item.discountedBy,
-            });
-          }
+          // Business pricing, promotions, discounts and overrides are metadata/Flow-owned.
+          const price = roundCurrency(masterPrice + modifierTotal / qty);
+          const ld = 0;
 
           basketForTotals.push({
             price,
