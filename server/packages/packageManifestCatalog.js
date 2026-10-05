@@ -1356,7 +1356,7 @@ const PACKAGE_CATALOG = [
         triggerKey: "appointment_payment_required",
         subflowCapability: "assistant.payment",
         activeByDefault: false,
-        description: "Resolve an installed payment-provider subflow. Provider-specific flows finish with Complete Appointment Payment."
+        description: "Resolve an installed payment-provider subflow through the generic subflow capability contract."
       },
       {
         key: "one_assistant_confirmation_router",
@@ -1371,8 +1371,8 @@ const PACKAGE_CATALOG = [
       communication: ["assistant.communication.EMAIL","assistant.communication.SMS","assistant.communication.WHATSAPP"],
       payment: "assistant.payment",
       confirmation: "assistant.confirmation",
-      paymentCompletionAction: "COMPLETE_APPOINTMENT_PAYMENT",
-      resolverAction: "RUN_ASSISTANT_SUBFLOW"
+      paymentCompletion: { type: "subflowCapability", capability: "assistant.payment" },
+      resolver: { type: "subflowCapability", capability: "assistant.communication" }
     }
   },
   {
