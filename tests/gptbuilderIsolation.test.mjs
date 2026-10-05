@@ -1316,3 +1316,20 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 1 defines a single Salesforce-style shell visual contract', async () => {
+  const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
+  for (const token of [
+    '--gptb-font:"Salesforce Sans",Arial,"Helvetica Neue",sans-serif',
+    '--gptb-brand:#0176d3',
+    '--gptb-focus:#1b96ff',
+    '--gptb-success:#2e844a',
+    '--gptb-error:#ba0517',
+    '.gptb-buttonbar{',
+    '.gptb-toolbar>button:focus-visible',
+    '.gptb-toolbox-tabs>button.is-active',
+  ]) assert.ok(css.includes(token), token)
+  assert.match(css, /\.gptb-buttonbar\{[\s\S]*?height:48px/)
+  assert.match(css, /\.gptb-toolbar>button,\.gptb-layout-button\{[\s\S]*?height:32px/)
+})
