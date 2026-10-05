@@ -116,7 +116,7 @@ import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegis
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { reconcileCompanyPackageEntitlements } from "./services/packageEntitlements.js";
 import { requireEntitlement } from "./services/licensing.js";
-import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
+import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, resolveGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
 import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
 import { createCanonicalRelatedTransaction, syncCanonicalSaleTransaction } from "./services/canonicalTransactions.js";
@@ -1301,14 +1301,17 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       return valid;
     })();
     const preflightStartedAt = Date.now();
-    const [securityContext, googleRuntime] = await Promise.all([
-      user.company_id
-        ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
-        : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null }),
-      user.company_id
-        ? getGoogleConnectPasswordLoginRuntime((query, params = []) => loginPool.query(query, params), user.company_id)
-        : Promise.resolve(null),
-    ]);
+    const securityContext = user.company_id
+      ? await loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id })
+      : { settings: null, state: null, policy: null, companyTimezone: null, googlePackage: null, googleConnection: null };
+    const googleRuntime = user.company_id
+      ? await resolveGoogleConnectPasswordLoginRuntime(
+          (query, params = []) => loginPool.query(query, params),
+          user.company_id,
+          securityContext.googlePackage,
+          securityContext.googleConnection
+        )
+      : null;
     const securitySettings = securityContext.settings;
     const state = securityContext.state;
     const accessPolicy = securityContext.policy;
