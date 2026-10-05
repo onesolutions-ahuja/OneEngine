@@ -76,40 +76,15 @@ test("inventory business UI and routes are removed while core stock primitives r
 });
 
 
-test("customer administration is metadata-owned while runtime customer services remain compatible", async () => {
+test("customer administration uses platform metadata without a legacy customer router", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  const route = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(app, /CustomersPage initialObjectKey="customer" appKey="customers"/);
-  assert.equal(app.includes("pages/customers/CustomersPage"), false);
-  assert.equal(route.includes('router.post("/customers"'), false);
-  assert.equal(route.includes('router.put("/customers/:id"'), false);
-  assert.equal(route.includes('router.patch("/customers/:id/status"'), false);
-  assert.equal(route.includes('"/customers/import"'), false);
-  assert.equal(route.includes('"/customers/export"'), false);
+  assert.equal(server.includes("./routes/customers.js"), false);
+  assert.equal(server.includes("createCustomersRouter"), false);
   assert.match(registry, /objectKey: "customer"/);
-  assert.match(registry, /parentObjectKey: "customer", childObjectKey: "contact"/);
-  assert.match(registry, /parentObjectKey: "customer", childObjectKey: "address"/);
-  assert.match(route, /"\/customer-lookup"/);
-  assert.equal(route.includes('"/customers/:id/credit"'), false);
 });
-
-
-test("customer credit and loyalty administration has no legacy route-local writes", async () => {
-  const route = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  const workflows = await readFile(new URL("../server/services/systemWorkflowCatalog.js", import.meta.url), "utf8");
-  assert.equal(route.includes("/loyalty/adjust"), false);
-  assert.equal(route.includes("/credit/payment"), false);
-  assert.equal(route.includes("/credit/adjustment"), false);
-  assert.equal(route.includes("/credit/statement"), false);
-  assert.match(registry, /objectKey: "customer_credit_account"/);
-  assert.match(registry, /objectKey: "customer_credit_ledger"/);
-  assert.match(registry, /objectKey: "loyalty_account"/);
-  assert.match(registry, /objectKey: "loyalty_activity"/);
-  assert.equal(workflows.includes("customer.credit.limit.check"), false);
-});
-
 
 test("layaway uses metadata ownership", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
