@@ -7,7 +7,6 @@ import { dispatchIntegrationEvent } from "./integrationDispatcher.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { clockInAttendance, clockOutAttendance } from "./attendanceActions.js";
 import { issueAccountToken } from "./accountPolicy.js";
-import { createTemporaryReceiptDownload, buildReceiptQrDownloadUrl } from "./receiptQr.js";
 import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveReceiptQrSettings, revokeTemporaryReceiptDownloadsForSale } from "./receiptQr.js";
 
 // Temporary compatibility registry.
