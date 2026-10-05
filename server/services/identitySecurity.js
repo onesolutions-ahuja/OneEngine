@@ -262,70 +262,93 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId, 
   if (!companyId || !userId) {
     return { settings: null, state: null, policy: null, companyTimezone: null };
   }
-  const result = await db(
-    `SELECT
-       row_to_json(s.*) AS settings,
-       row_to_json(us.*) AS state,
-       row_to_json(p.*) AS policy,
-       c.timezone AS company_timezone,
-       COALESCE(ipr.trusted_network, FALSE) AS trusted_network,
-       COALESCE(ipr.login_allowed_matches, FALSE) AS login_allowed_matches,
-       COALESCE(ipr.login_allowed_count, 0) AS login_allowed_count
-     FROM companies c
-     LEFT JOIN identity_security_settings s ON s.company_id=c.id
-     LEFT JOIN identity_user_security_state us ON us.user_id=$2
-     LEFT JOIN LATERAL (
-       SELECT *
-       FROM identity_access_policies ap
-       WHERE ap.company_id=$1 AND ap.active=TRUE
-         AND (
-           (ap.scope_type='USER' AND ap.scope_id=$2)
-           OR (ap.scope_type='ROLE' AND ap.scope_id=$3)
-           OR (ap.scope_type='COMPANY' AND ap.scope_id IS NULL)
-         )
-       ORDER BY CASE ap.scope_type WHEN 'USER' THEN 3 WHEN 'ROLE' THEN 2 ELSE 1 END DESC,
-                ap.priority ASC, ap.updated_at DESC
-       LIMIT 1
-     ) p ON TRUE
-     LEFT JOIN LATERAL (
-       SELECT
+
+  // Keep independently indexed security reads independent. PostgreSQL can
+  // execute these through separate pool clients instead of making login wait
+  // for one large lateral-join query to finish.
+  const [settingsResult, stateResult, policyResult] = await Promise.all([
+    db(
+      `SELECT row_to_json(s.*) AS settings, c.timezone AS company_timezone
+         FROM companies c
+         LEFT JOIN identity_security_settings s ON s.company_id=c.id
+        WHERE c.id=$1
+        LIMIT 1`,
+      [companyId]
+    ),
+    db(
+      `SELECT * FROM identity_user_security_state WHERE user_id=$1 LIMIT 1`,
+      [userId]
+    ),
+    db(
+      `SELECT
+         row_to_json(p.*) AS policy,
          EXISTS(
-           SELECT 1 FROM identity_security_ip_ranges r
-            WHERE r.company_id=$1 AND r.range_type='TRUSTED' AND r.active=TRUE
+           SELECT 1
+             FROM identity_security_ip_ranges r
+            WHERE r.company_id=$1
+              AND r.range_type='TRUSTED'
+              AND r.active=TRUE
               AND r.policy_id IS NULL
               AND $4::inet IS NOT NULL
               AND family(r.start_ip)=family($4::inet)
-              AND $4::inet >= r.start_ip AND $4::inet <= r.end_ip
+              AND $4::inet >= r.start_ip
+              AND $4::inet <= r.end_ip
          ) AS trusted_network,
          EXISTS(
-           SELECT 1 FROM identity_security_ip_ranges r
-            WHERE r.company_id=$1 AND r.range_type='LOGIN_ALLOWED' AND r.active=TRUE
+           SELECT 1
+             FROM identity_security_ip_ranges r
+            WHERE r.company_id=$1
+              AND r.range_type='LOGIN_ALLOWED'
+              AND r.active=TRUE
               AND r.policy_id=p.id
               AND $4::inet IS NOT NULL
               AND family(r.start_ip)=family($4::inet)
-              AND $4::inet >= r.start_ip AND $4::inet <= r.end_ip
+              AND $4::inet >= r.start_ip
+              AND $4::inet <= r.end_ip
          ) AS login_allowed_matches,
          (
-           SELECT COUNT(*)::int FROM identity_security_ip_ranges r
-            WHERE r.company_id=$1 AND r.range_type='LOGIN_ALLOWED' AND r.active=TRUE
+           SELECT COUNT(*)::int
+             FROM identity_security_ip_ranges r
+            WHERE r.company_id=$1
+              AND r.range_type='LOGIN_ALLOWED'
+              AND r.active=TRUE
               AND r.policy_id=p.id
          ) AS login_allowed_count
-     ) ipr ON TRUE
-     WHERE c.id=$1
-     LIMIT 1`,
-    [companyId, userId, roleId || null, ip]
-  );
-  const row = result.rows[0] || {};
-  let settings = row.settings || null;
+       FROM companies c
+       LEFT JOIN LATERAL (
+         SELECT *
+           FROM identity_access_policies ap
+          WHERE ap.company_id=$1
+            AND ap.active=TRUE
+            AND (
+              (ap.scope_type='USER' AND ap.scope_id=$2)
+              OR (ap.scope_type='ROLE' AND ap.scope_id=$3)
+              OR (ap.scope_type='COMPANY' AND ap.scope_id IS NULL)
+            )
+          ORDER BY CASE ap.scope_type WHEN 'USER' THEN 3 WHEN 'ROLE' THEN 2 ELSE 1 END DESC,
+                   ap.priority ASC,
+                   ap.updated_at DESC
+          LIMIT 1
+       ) p ON TRUE
+       WHERE c.id=$1
+       LIMIT 1`,
+      [companyId, userId, roleId || null, ip]
+    ),
+  ]);
+
+  const settingsRow = settingsResult.rows[0] || {};
+  const policyRow = policyResult.rows[0] || {};
+  let settings = settingsRow.settings || null;
   if (!settings) settings = await loadSecuritySettings(db, companyId);
+
   return {
     settings,
-    state: row.state || null,
-    policy: row.policy || null,
-    companyTimezone: row.company_timezone || null,
-    trustedNetwork: row.trusted_network === true,
-    loginAllowedMatches: row.login_allowed_matches === true,
-    loginAllowedCount: Number(row.login_allowed_count || 0),
+    state: stateResult.rows[0] || null,
+    policy: policyRow.policy || null,
+    companyTimezone: settingsRow.company_timezone || null,
+    trustedNetwork: policyRow.trusted_network === true,
+    loginAllowedMatches: policyRow.login_allowed_matches === true,
+    loginAllowedCount: Number(policyRow.login_allowed_count || 0),
   };
 }
 
