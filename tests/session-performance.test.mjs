@@ -375,3 +375,30 @@ test('Settings loads values only for the active metadata section', async () => {
   assert.match(source, /rowsLoaded === true/)
   assert.match(source, /void loadSectionedRows\(current\.object\)/)
 })
+
+
+test('Express route modules that instantiate Router import express explicitly', async () => {
+  const { readdir } = await import('node:fs/promises')
+  const { join } = await import('node:path')
+  const { fileURLToPath } = await import('node:url')
+  const routesDir = fileURLToPath(new URL('../server/routes/', import.meta.url))
+  for (const entry of await readdir(routesDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.js')) continue
+    const file = join(routesDir, entry.name)
+    const source = await readFile(file, 'utf8')
+    if (!/\\bexpress\\.Router\\s*\\(/.test(source)) continue
+    assert.match(source, /import\\s+express\\s+from\\s+["']express["']/, entry.name)
+  }
+})
+
+test('metadata workspace renders cached rows before background record synchronization completes', async () => {
+  const source = await read('../src/pages/workspace/WorkspacePage.jsx')
+  assert.match(source, /hasCachedSnapshot/)
+  assert.match(source, /applyRows\(cachedRows\)[\s\S]*setLoadingRows\(false\)[\s\S]*void syncWorkspaceRecordCache/)
+})
+
+test('record history is lazy and does not load on the default details tab', async () => {
+  const source = await read('../src/pages/workspace/WorkspacePage.jsx')
+  assert.match(source, /detailTab !== 'history'/)
+  assert.match(source, /\[selectedId, selectedKey, detailTab\]/)
+})
