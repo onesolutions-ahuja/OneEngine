@@ -2443,25 +2443,6 @@ async function startServer() {
   }
   startupAttempt += 1;
   try {
-    // Bind before database/bootstrap work so startup dependency failures remain
-    // diagnosable from the UI instead of appearing as an unreachable server.
-    if (!httpServer) {
-      console.log(`onePOS: binding HTTP listener on ${PORT}`);
-      httpServer = app.listen(PORT, "0.0.0.0");
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error(`HTTP listener did not bind on port ${PORT}`)), 10000);
-        httpServer.once("listening", () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-        httpServer.once("error", (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        });
-      });
-      console.log(`onePOS running on port ${PORT}`);
-    }
-
     const trustedRuntime = validateTrustedRuntime();
     const trustedPackages = validateTrustedPackageCatalogue();
     console.log(`OneEngine Trusted Runtime ${trustedRuntime.version.slice(0, 12)} (${trustedRuntime.count} capabilities; packages ${trustedPackages.digest.slice(0, 12)}/${trustedPackages.count})`);
@@ -2721,6 +2702,27 @@ async function startServer() {
       updatedAt: new Date().toISOString(),
     };
     startupAttempt = 0;
+
+    // Do not expose a rolling-deploy instance to Render traffic until its
+    // database, core schema and package catalogue are actually ready.
+    // Previously the port opened first, so Render could route users to an
+    // instance that still returned OESB01 for every authenticated API call.
+    if (!httpServer) {
+      console.log(`onePOS: binding ready HTTP listener on ${PORT}`);
+      httpServer = app.listen(PORT, "0.0.0.0");
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error(`HTTP listener did not bind on port ${PORT}`)), 10000);
+        httpServer.once("listening", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        httpServer.once("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+      console.log(`onePOS ready and running on port ${PORT}`);
+    }
 
     // Reconcile the canonical company-bound Superadmin immediately after the
     // core schema and listener are ready. This is intentionally before the
@@ -4098,20 +4100,29 @@ async function startServer() {
       technicalMessage: String(error?.message || error || ""),
       updatedAt: new Date().toISOString(),
     };
-    // If the HTTP listener itself could not bind there is no diagnostic surface
-    // to preserve, so fail normally. Dependency/bootstrap failures stay online
-    // in degraded mode and expose their OE code through /api/health.
-    if (!httpServer?.listening) process.exit(1);
-
-    // PostgreSQL poolers and TLS endpoints can briefly reset sockets during
-    // deploys, maintenance, cold starts, or network rebalancing. Previously a
-    // single ECONNRESET left OneEngine permanently degraded until the next
-    // Render deploy. Retry the complete idempotent bootstrap with bounded
-    // exponential backoff while keeping the diagnostic HTTP surface online.
+    // PostgreSQL endpoints can briefly reset during deploys or maintenance.
+    // Before the ready listener exists, retry a few times without exposing a
+    // half-started instance to Render. If the dependency does not recover,
+    // exit so the deploy fails instead of becoming a permanent OESB01 service.
     const transientCodes = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EPIPE", "ENETUNREACH", "EHOSTUNREACH"]);
     const transientDatabaseFailure =
       transientCodes.has(String(error?.code || "").toUpperCase()) ||
       /before secure TLS connection|connection terminated unexpectedly|timeout expired|server closed the connection/i.test(String(error?.message || ""));
+
+    if (!httpServer?.listening) {
+      if (transientDatabaseFailure && startupAttempt < 5) {
+        const retryDelayMs = Math.min(60_000, Math.max(3_000, 3_000 * (2 ** Math.min(startupAttempt - 1, 4))));
+        console.warn(`onePOS: transient database startup failure before readiness; retrying in ${retryDelayMs}ms (attempt ${startupAttempt})`);
+        startupRetryTimer = setTimeout(() => void startServer(), retryDelayMs);
+        startupRetryTimer.unref?.();
+        return;
+      }
+      process.exit(1);
+      return;
+    }
+
+    // Once the service is already serving, keep the diagnostic surface alive
+    // and retry transient dependency failures with bounded backoff.
     if (transientDatabaseFailure) {
       const retryDelayMs = startupAttempt <= 5
         ? Math.min(60_000, Math.max(3_000, 3_000 * (2 ** Math.min(startupAttempt - 1, 4))))
