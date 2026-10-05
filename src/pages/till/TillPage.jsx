@@ -123,7 +123,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const [till, setTill] = useState(null)
   const [tillStatusResolved, setTillStatusResolved] = useState(false)
   const [paymentMethods, setPaymentMethods] = useState([])
-  const [liveCredit, setLiveCredit] = useState(null)
   const billChannelRef = useRef(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -719,18 +718,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     } catch (err) { setError(err?.message || 'Unable to resume sale') }
   }
 
-  useEffect(() => {
-    const customerId = selectedCustomer?.id
-    if (!customerId || !online) {
-      setLiveCredit(null)
-      return
-    }
-    let active = true
-    apiRequest(`/api/platform/objects/customer_credit_account/records/${encodeURIComponent(customerId)}`)
-      .then((response) => { if (active) setLiveCredit(response?.record || response?.data || response || null) })
-      .catch(() => { if (active) setLiveCredit(null) })
-    return () => { active = false }
-  }, [selectedCustomer?.id, online])
+
 
   const searchCustomers = async (value) => {
     setCustomerSearch(value)
