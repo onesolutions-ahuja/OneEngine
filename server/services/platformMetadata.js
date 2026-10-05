@@ -1166,6 +1166,24 @@ const operationalObjects = [
     ["closed_at","Closed At","datetime","closed_at",false],
     ["closed_by","Closed By","lookup","closed_by",false],
   ] },
+  { key: "product_modifier_group", label: "Product Modifier Group", plural: "Product Modifier Groups", table: "product_modifier_groups", fields: [
+    ["company_id","Company","lookup","company_id",true],
+    ["product_id","Product","lookup","product_id",true],
+    ["name","Name","text","name",true],
+    ["required","Required","boolean","required",false],
+    ["max_selections","Maximum Selections","number","max_selections",true],
+    ["display_order","Display Order","number","display_order",false],
+    ["active","Active","boolean","active",false],
+  ] },
+  { key: "product_modifier_option", label: "Product Modifier Option", plural: "Product Modifier Options", table: "product_modifier_options", fields: [
+    ["group_id","Modifier Group","lookup","group_id",true],
+    ["name","Name","text","name",true],
+    ["price","Additional Price","currency","price",true],
+    ["track_stock","Track Stock","boolean","track_stock",false],
+    ["inventory_product_id","Inventory Product","lookup","inventory_product_id",false],
+    ["display_order","Display Order","number","display_order",false],
+    ["active","Active","boolean","active",false],
+  ] },
   { key: "held_sale", label: "Held Sale", plural: "Held Sales", table: "held_sales", fields: [
     ["company_id","Company","lookup","company_id",true],
     ["store_id","Store","lookup","store_id",true],
@@ -1707,7 +1725,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       if (object.key === "onestore_app") {
         await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
       }
-      if (object.key === "till_session" || object.key === "cash_ledger" || object.key === "held_sale") {
+      if (object.key === "till_session" || object.key === "cash_ledger" || object.key === "held_sale" || object.key === "product_modifier_group") {
         await pool.query("UPDATE platform_objects SET company_scoped=true,store_scoped=true WHERE id=$1", [result.rows[0].id]);
       }
       for (let index = 0; index < object.fields.length; index += 1) {
@@ -2099,6 +2117,90 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
+          name: "OneTill - Calculate Sale Pricing",
+          apiName: "ONETILL_CALCULATE_SALE_PRICING",
+          inputContract: [
+            { name: "lines", label: "Sale Lines", type: "collection", required: true },
+            { name: "discountType", label: "Discount Type", type: "text", required: false },
+            { name: "discountValue", label: "Discount Value", type: "currency", required: false },
+            { name: "vatEnabled", label: "VAT Enabled", type: "boolean", required: true },
+            { name: "defaultVatRate", label: "Default VAT Rate", type: "number", required: true },
+          ],
+          outputContract: [
+            { name: "grossSubtotal", label: "Gross Subtotal", type: "currency", source: "variables.grossSubtotal" },
+            { name: "discountAmount", label: "Discount Amount", type: "currency", source: "variables.discountAmount" },
+            { name: "subtotal", label: "Subtotal", type: "currency", source: "variables.subtotal" },
+            { name: "vat", label: "VAT", type: "currency", source: "variables.vat" },
+            { name: "total", label: "Total", type: "currency", source: "variables.total" },
+          ],
+          actions: [
+            { id:"start_gross",label:"1. Start Gross Subtotal",apiName:"start_gross",key:"ASSIGNMENT",variableName:"grossSubtotal",variableType:"currency",operator:"set",value:0 },
+            { id:"sum_lines",label:"2. Loop Through Sale Lines",apiName:"sum_lines",key:"LOOP",collection:"$record.lines",itemVariable:"currentLine",bodyBranch:["line_gross","add_line_gross"] },
+            { id:"line_gross",label:"3. Calculate Line Gross",apiName:"line_gross",key:"FORMULA",resourceName:"lineGross",resultType:"number",expression:"ROUND(unitPrice * quantity, 2)",inputs:{unitPrice:{path:"variables.currentLine.unitPrice"},quantity:{path:"variables.currentLine.quantity"}} },
+            { id:"add_line_gross",label:"4. Add Line To Gross Subtotal",apiName:"add_line_gross",key:"ASSIGNMENT",variableName:"grossSubtotal",variableType:"currency",operator:"add",value:{path:"variables.lineGross"} },
+            { id:"calculate_discount",label:"5. Calculate Discount",apiName:"calculate_discount",key:"FORMULA",resourceName:"discountAmount",resultType:"number",expression:'IF(discountType == "percent", ROUND(grossSubtotal * MAX(0, discountValue) / 100, 2), IF(discountType == "fixed", MIN(grossSubtotal, MAX(0, discountValue)), 0))',inputs:{discountType:{path:"$record.discountType"},discountValue:{path:"$record.discountValue"},grossSubtotal:{path:"variables.grossSubtotal"}} },
+            { id:"calculate_subtotal",label:"6. Calculate Discounted Subtotal",apiName:"calculate_subtotal",key:"FORMULA",resourceName:"subtotal",resultType:"number",expression:"MAX(0, ROUND(grossSubtotal - discountAmount, 2))",inputs:{grossSubtotal:{path:"variables.grossSubtotal"},discountAmount:{path:"variables.discountAmount"}} },
+            { id:"start_vat",label:"7. Start VAT Total",apiName:"start_vat",key:"ASSIGNMENT",variableName:"vat",variableType:"currency",operator:"set",value:0 },
+            { id:"vat_lines",label:"8. Loop Through Lines For VAT",apiName:"vat_lines",key:"LOOP",collection:"$record.lines",itemVariable:"vatLine",bodyBranch:["vat_line_gross","vat_discount_share","vat_line_net","vat_rate","vat_line_amount","add_vat"] },
+            { id:"vat_line_gross",label:"9. Calculate VAT Line Gross",apiName:"vat_line_gross",key:"FORMULA",resourceName:"vatLineGross",resultType:"number",expression:"ROUND(unitPrice * quantity, 2)",inputs:{unitPrice:{path:"variables.vatLine.unitPrice"},quantity:{path:"variables.vatLine.quantity"}} },
+            { id:"vat_discount_share",label:"10. Allocate Discount To Line",apiName:"vat_discount_share",key:"FORMULA",resourceName:"vatDiscountShare",resultType:"number",expression:"IF(grossSubtotal > 0, discountAmount * vatLineGross / grossSubtotal, 0)",inputs:{grossSubtotal:{path:"variables.grossSubtotal"},discountAmount:{path:"variables.discountAmount"},vatLineGross:{path:"variables.vatLineGross"}} },
+            { id:"vat_line_net",label:"11. Calculate VAT Line Net",apiName:"vat_line_net",key:"FORMULA",resourceName:"vatLineNet",resultType:"number",expression:"MAX(0, vatLineGross - vatDiscountShare)",inputs:{vatLineGross:{path:"variables.vatLineGross"},vatDiscountShare:{path:"variables.vatDiscountShare"}} },
+            { id:"vat_rate",label:"12. Resolve VAT Rate",apiName:"vat_rate",key:"FORMULA",resourceName:"resolvedVatRate",resultType:"number",expression:"IF(!vatEnabled || vatApplicable == false, 0, IF(lineVatRate > 0, lineVatRate / 100, defaultVatRate / 100))",inputs:{vatEnabled:{path:"$record.vatEnabled"},vatApplicable:{path:"variables.vatLine.vatApplicable"},lineVatRate:{path:"variables.vatLine.vatRate"},defaultVatRate:{path:"$record.defaultVatRate"}} },
+            { id:"vat_line_amount",label:"13. Calculate VAT Included In Line",apiName:"vat_line_amount",key:"FORMULA",resourceName:"vatLineAmount",resultType:"number",expression:"IF(resolvedVatRate > 0, vatLineNet - vatLineNet / (1 + resolvedVatRate), 0)",inputs:{resolvedVatRate:{path:"variables.resolvedVatRate"},vatLineNet:{path:"variables.vatLineNet"}} },
+            { id:"add_vat",label:"14. Add Line VAT",apiName:"add_vat",key:"ASSIGNMENT",variableName:"vat",variableType:"currency",operator:"add",value:{path:"variables.vatLineAmount"} },
+            { id:"final_total",label:"15. Set Final Total",apiName:"final_total",key:"ASSIGNMENT",variableName:"total",variableType:"currency",operator:"set",value:{path:"variables.subtotal"} },
+          ],
+        },
+        {
+          name: "OneTill - Validate Split Payment",
+          apiName: "ONETILL_VALIDATE_SPLIT_PAYMENT",
+          inputContract: [
+            { name: "payments", label: "Payment Lines", type: "collection", required: true },
+            { name: "total", label: "Sale Total", type: "currency", required: true },
+          ],
+          outputContract: [
+            { name: "paidTotal", label: "Paid Total", type: "currency", source: "variables.paidTotal" },
+            { name: "remaining", label: "Remaining", type: "currency", source: "variables.remaining" },
+            { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+          ],
+          actions: [
+            { id:"start_paid",label:"1. Start Paid Total",apiName:"start_paid",key:"ASSIGNMENT",variableName:"paidTotal",variableType:"currency",operator:"set",value:0 },
+            { id:"sum_payments",label:"2. Loop Through Payment Lines",apiName:"sum_payments",key:"LOOP",collection:"$record.payments",itemVariable:"paymentLine",bodyBranch:["normalize_payment","add_payment"] },
+            { id:"normalize_payment",label:"3. Round Payment Amount",apiName:"normalize_payment",key:"FORMULA",resourceName:"paymentAmount",resultType:"number",expression:"ROUND(MAX(0, amount), 2)",inputs:{amount:{path:"variables.paymentLine.amount"}} },
+            { id:"add_payment",label:"4. Add Payment To Paid Total",apiName:"add_payment",key:"ASSIGNMENT",variableName:"paidTotal",variableType:"currency",operator:"add",value:{path:"variables.paymentAmount"} },
+            { id:"calculate_remaining",label:"5. Calculate Remaining Balance",apiName:"calculate_remaining",key:"FORMULA",resourceName:"remaining",resultType:"number",expression:"ROUND(total - paidTotal, 2)",inputs:{total:{path:"$record.total"},paidTotal:{path:"variables.paidTotal"}} },
+            { id:"split_is_valid",label:"6. Check Split Reconciles",apiName:"split_is_valid",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"ABS(remaining) < 0.005 && paidTotal > 0",inputs:{remaining:{path:"variables.remaining"},paidTotal:{path:"variables.paidTotal"}} },
+          ],
+        },
+        {
+          name: "OneTill - Build Misc Sale Line",
+          apiName: "ONETILL_BUILD_MISC_LINE",
+          inputContract: [
+            { name: "description", label: "Description", type: "text", required: true },
+            { name: "price", label: "Entered Price", type: "currency", required: true },
+            { name: "quantity", label: "Quantity", type: "number", required: true },
+            { name: "vatRate", label: "VAT Rate", type: "number", required: true },
+          ],
+          outputContract: [
+            { name: "miscProductId", label: "Misc Product", type: "text", source: "variables.miscProductId" },
+            { name: "approvedPrice", label: "Approved Line Price", type: "currency", source: "variables.approvedPrice" },
+            { name: "approvedQuantity", label: "Approved Quantity", type: "number", source: "variables.approvedQuantity" },
+            { name: "approvedDescription", label: "Approved Description", type: "text", source: "variables.approvedDescription" },
+            { name: "approvedVatRate", label: "Approved VAT Rate", type: "number", source: "variables.approvedVatRate" },
+          ],
+          actions: [
+            { id:"get_misc_product",label:"1. Get Dedicated Misc Product",apiName:"get_misc_product",key:"GET_RECORDS",objectKey:"product",filters:[{field:"sku",operator:"equals",value:"MISC"}],limit:1,store:"first" },
+            { id:"validate_misc_price",label:"2. Validate Entered Price And Quantity",apiName:"validate_misc_price",key:"FORMULA",resourceName:"miscValid",resultType:"boolean",expression:"price > 0 && quantity > 0",inputs:{price:{path:"$record.price"},quantity:{path:"$record.quantity"}} },
+            { id:"misc_decision",label:"3. Is Misc Line Valid?",apiName:"misc_decision",key:"CONDITION",outcomes:[{id:"valid",label:"Valid Misc Line",condition:{match:"all",conditions:[{field:"variables.miscValid",operator:"equals",value:true}]},branch:["set_misc_product","set_misc_price","set_misc_qty","set_misc_desc","set_misc_vat"]}],defaultLabel:"Invalid Misc Line",defaultBranch:["misc_error"] },
+            { id:"set_misc_product",label:"4. Use Only The Misc Product",apiName:"set_misc_product",key:"ASSIGNMENT",variableName:"miscProductId",variableType:"text",operator:"set",value:{path:"steps.get_misc_product.record.id"} },
+            { id:"set_misc_price",label:"5. Apply Temporary Billing Price",apiName:"set_misc_price",key:"ASSIGNMENT",variableName:"approvedPrice",variableType:"currency",operator:"set",value:{path:"$record.price"} },
+            { id:"set_misc_qty",label:"6. Apply Quantity",apiName:"set_misc_qty",key:"ASSIGNMENT",variableName:"approvedQuantity",variableType:"number",operator:"set",value:{path:"$record.quantity"} },
+            { id:"set_misc_desc",label:"7. Apply Description",apiName:"set_misc_desc",key:"ASSIGNMENT",variableName:"approvedDescription",variableType:"text",operator:"set",value:{path:"$record.description"} },
+            { id:"set_misc_vat",label:"8. Apply VAT Rate",apiName:"set_misc_vat",key:"ASSIGNMENT",variableName:"approvedVatRate",variableType:"number",operator:"set",value:{path:"$record.vatRate"} },
+            { id:"misc_error",label:"Invalid Misc Line",apiName:"misc_error",key:"CUSTOM_ERROR",errorMessage:"Misc item price and quantity must be greater than zero",errorLocation:"record" },
+          ],
+        },
+        {
           name: "OneTill - Receipt QR",
           apiName: "ONETILL_RECEIPT_QR",
           inputContract: [
@@ -2305,6 +2407,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
       const internalWorkflowButtons = [
         ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
+        ["till_pricing_calculate","Calculate Sale Pricing",tillWorkflowIds.get("ONETILL_CALCULATE_SALE_PRICING"),"sale.create"],
+        ["till_split_payment_validate","Validate Split Payment",tillWorkflowIds.get("ONETILL_VALIDATE_SPLIT_PAYMENT"),"sale.create"],
+        ["till_misc_line_build","Build Misc Sale Line",tillWorkflowIds.get("ONETILL_BUILD_MISC_LINE"),"sale.create"],
         ["till_petty_cash_submit","Record Petty Cash",tillWorkflowIds.get("ONETILL_RECORD_PETTY_CASH"),"cash.payout"],
         ["till_receipt_qr_policy","Receipt QR Policy",tillWorkflowIds.get("ONETILL_RECEIPT_QR_POLICY"),"sale.view"],
         ["till_receipt_qr_revoke","Revoke Receipt QR",tillWorkflowIds.get("ONETILL_RECEIPT_QR_REVOKE"),"sale.view"],
