@@ -1803,7 +1803,6 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           type: "workflow",
           apiName: flow.buttonKey.toUpperCase(),
           flowType: "AUTOLAUNCHED",
-          builder2: true,
           description: flow.label,
           actions: flow.actions,
         };
@@ -2167,7 +2166,6 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           type: "workflow",
           apiName: flow.apiName,
           flowType: "AUTOLAUNCHED",
-          builder2: true,
           description: flow.name,
           inputContract: flow.inputContract || [],
           outputContract: flow.outputContract || [],
