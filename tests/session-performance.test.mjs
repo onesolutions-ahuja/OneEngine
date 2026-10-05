@@ -375,3 +375,40 @@ test('Settings loads values only for the active metadata section', async () => {
   assert.match(source, /rowsLoaded === true/)
   assert.match(source, /void loadSectionedRows\(current\.object\)/)
 })
+
+
+test('login security preflight avoids nested lateral planner spikes', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  const start = source.indexOf('export async function loadLoginSecurityContext')
+  const end = source.indexOf('export async function registerFailedLogin', start)
+  const block = source.slice(start, end)
+  assert.notEqual(start, -1)
+  assert.notEqual(end, -1)
+  assert.equal(block.includes('LEFT JOIN LATERAL'), false)
+  assert.match(block, /const \[baseResult, policy\] = await Promise\.all/)
+  assert.match(block, /identity_security_ip_ranges/)
+})
+
+test('login access policy precedence uses exact-scope UNION branches', async () => {
+  const source = await read('../server/services/identitySecurity.js')
+  const start = source.indexOf('export async function resolveAccessPolicy')
+  const end = source.indexOf('function zonedParts', start)
+  const block = source.slice(start, end)
+  assert.match(block, /UNION ALL/)
+  assert.match(block, /scope_type='USER'/)
+  assert.match(block, /scope_type='ROLE'/)
+  assert.match(block, /scope_type='COMPANY'/)
+})
+
+test('final live login verification proves five consecutive samples without exceeding the limiter', async () => {
+  const source = await read('../tests/e2e/final-loading-verification.spec.mjs')
+  assert.match(source, /for \(let attempt = 1; attempt <= 4; attempt \+= 1\)/)
+  assert.match(source, /loginTotals\.push\(loginServerTotal\)/)
+  assert.match(source, /toHaveLength\(5\)/)
+  assert.match(source, /ms > 1500/)
+})
+
+test('final live loading verification only runs for explicit perf verification commits', async () => {
+  const source = await read('../.github/workflows/final-loading-verification.yml')
+  assert.match(source, /if: contains\(github\.event\.head_commit\.message, '\[perf-verify\]'\)/)
+})
