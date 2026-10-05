@@ -368,6 +368,7 @@ const MANAGER_RESOURCE_TYPES = [
   ['Collection Choice Set', 'collection_choice_set'],
   ['Record Choice Set', 'record_choice_set'],
   ['Picklist Choice Set', 'picklist_choice_set'],
+  ['Collection Filter Criteria', 'collection_filter_criteria'],
   ['Stage', 'stage'],
 ]
 
@@ -382,8 +383,11 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
   const [availableForInput, setAvailableForInput] = useState(false)
   const [availableForOutput, setAvailableForOutput] = useState(false)
   const duplicate = resources.some((resource) => String(resource.apiName || '').toLowerCase() === apiName.trim().toLowerCase())
-  const validName = /^[A-Za-z][A-Za-z0-9_]*$/.test(apiName) && !apiName.endsWith('_') && !apiName.includes('__') && !duplicate
+  const validName = /^[A-Za-z][A-Za-z0-9_]*$/.test(apiName) && !apiName.endsWith('_') && !apiName.includes('__') && !duplicate && (resourceType !== 'collection_filter_criteria' || Boolean(sourceCollection))
   const supportsDataType = ['variable','constant','formula'].includes(resourceType)
+  const [sourceCollection, setSourceCollection] = useState('')
+  const [filterLogic, setFilterLogic] = useState('all')
+  const [criteria, setCriteria] = useState([{ field:'', operator:'eq', value:'' }])
   const create = () => {
     if (!validName) return
     onCreate({
@@ -400,6 +404,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       availableForInput: resourceType === 'variable' ? availableForInput : false,
       availableForOutput: resourceType === 'variable' ? availableForOutput : false,
       source: 'manager',
+      ...(resourceType === 'collection_filter_criteria' ? { sourceCollection, filterLogic, criteria } : {}),
     })
   }
   return <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-manager-resource-dialog" role="dialog" aria-modal="true" aria-label="New Resource">
@@ -408,7 +413,8 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       <label><span>Resource Type</span><select value={resourceType} onChange={(event) => setResourceType(event.target.value)}>{MANAGER_RESOURCE_TYPES.map(([label,key]) => <option key={key} value={key}>{label}</option>)}</select></label>
       <label><span>API Name <b>*</b></span><input autoFocus value={apiName} onChange={(event) => setApiName(event.target.value)}/>{duplicate ? <small className="gptb-manager-error">API Name must be unique in the flow.</small> : null}</label>
       <label><span>Description</span><textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)}/></label>
-      {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option><option value="apex">Apex-Defined</option></select></label> : null}
+      {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option></select></label> : null}
+      {resourceType === 'collection_filter_criteria' ? <section className="gptb-manager-filter-criteria"><label><span>Collection <b>*</b></span><select value={sourceCollection} onChange={(event)=>setSourceCollection(event.target.value)}><option value="">Select a collection</option>{resources.filter((resource)=>resource.isCollection).map((resource)=><option key={resource.id||resource.apiName} value={resource.apiName}>{resource.label||resource.apiName}</option>)}</select></label><label><span>Condition Requirements</span><select value={filterLogic} onChange={(event)=>setFilterLogic(event.target.value)}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option></select></label>{criteria.map((row,index)=><div className="gptb-manager-filter-row" key={index}><input aria-label={`Criterion ${index+1} Field`} placeholder="Field / resource path" value={row.field} onChange={(event)=>setCriteria((current)=>current.map((item,i)=>i===index?{...item,field:event.target.value}:item))}/><select aria-label={`Criterion ${index+1} Operator`} value={row.operator} onChange={(event)=>setCriteria((current)=>current.map((item,i)=>i===index?{...item,operator:event.target.value}:item))}><option value="eq">Equals</option><option value="neq">Does Not Equal</option><option value="contains">Contains</option><option value="gt">Greater Than</option><option value="gte">Greater Than or Equal</option><option value="lt">Less Than</option><option value="lte">Less Than or Equal</option><option value="is_null">Is Null</option></select><input aria-label={`Criterion ${index+1} Value`} placeholder="Value / resource" value={row.value} onChange={(event)=>setCriteria((current)=>current.map((item,i)=>i===index?{...item,value:event.target.value}:item))}/></div>)}<button type="button" className="gptb-inline-action" onClick={()=>setCriteria((current)=>[...current,{field:'',operator:'eq',value:''}])}>+ Add Condition</button></section> : null}
       {resourceType === 'constant' ? <label><span>Value</span><input value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
       {resourceType === 'formula' ? <label><span>Formula</span><textarea rows={5} value={formula} onChange={(event) => setFormula(event.target.value)}/></label> : null}
       {resourceType === 'text_template' ? <label><span>Body</span><textarea rows={7} value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
