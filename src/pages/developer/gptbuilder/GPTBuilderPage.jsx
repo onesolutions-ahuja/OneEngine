@@ -1805,7 +1805,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                 ? <AutoDecisionCard decision={element} elements={autoElements} onOpenDecision={()=>openElement(element)} onOpenMember={openElement} onAddElement={addElementToDecisionBranch} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length}/>
                 : <PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/>}</div>{addSlot(index + 1)}</React.Fragment>)}</>
           })()}
-          <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
+          <div className="gptb-connector"/><div className="gptb-end-node" role="img" aria-label="End" title="End"><span aria-hidden="true">■</span></div>
         </> : <>
           <svg className="gptb-free-connections" aria-hidden="true">
             {goToConnections.map((edge) => {
