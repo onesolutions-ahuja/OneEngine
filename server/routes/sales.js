@@ -11,6 +11,7 @@ import { getRequestPool } from "../services/tenantDatabase.js";
 import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes } from "../services/paymentMethods.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { evaluateValidationRules } from "../services/platformValidation.js";
 
 export const PAYMENT_METHODS = DEFAULT_PAYMENT_METHODS.map((method) => method.code);
 
@@ -429,16 +430,52 @@ export default function createSalesRouter({
           return res.status(400).json({ success: false, message: "Split payment requires a payments array" });
         }
 
-        /* Till Misc Item lines count as sale content (declared properly in
-           the MISC block below; guarded with a body check here). */
-        if ((!Array.isArray(items) || !items.length) &&
-            !(Array.isArray(req.body.miscLines) && req.body.miscLines.length)) {
-          await client.query("ROLLBACK");
-
-          return res.status(400).json({
-            success: false,
-            message: "Sale contains no items",
+        const saleLineCount = (Array.isArray(items) ? items.length : 0) + (Array.isArray(req.body.miscLines) ? req.body.miscLines.length : 0);
+        const saleValidationMeta = await client.query(
+          `SELECT o.id AS object_id
+             FROM platform_objects o
+            WHERE o.object_key='sale'
+              AND o.active=TRUE
+              AND (o.company_id IS NULL OR o.company_id=$1)
+            ORDER BY o.company_id NULLS FIRST
+            LIMIT 1`,
+          [req.user.companyId]
+        );
+        if (saleValidationMeta.rows[0]?.object_id) {
+          const objectId = saleValidationMeta.rows[0].object_id;
+          const [fieldResult, ruleResult] = await Promise.all([
+            client.query(
+              `SELECT *
+                 FROM platform_fields
+                WHERE object_id=$1
+                  AND active=TRUE
+                  AND (company_id IS NULL OR company_id=$2)`,
+              [objectId, req.user.companyId]
+            ),
+            client.query(
+              `SELECT *
+                 FROM platform_rules
+                WHERE object_id=$1
+                  AND active=TRUE
+                  AND (company_id IS NULL OR company_id=$2)
+                  AND trigger_key IN ('before_create','before_save')
+                  AND action->>'type'='validation'
+                ORDER BY id`,
+              [objectId, req.user.companyId]
+            ),
+          ]);
+          const validationErrors = evaluateValidationRules(ruleResult.rows, fieldResult.rows, {
+            line_count: saleLineCount,
           });
+          if (validationErrors.length) {
+            await client.query("ROLLBACK");
+            return res.status(422).json({
+              success: false,
+              code: "VALIDATION_RULE_FAILED",
+              message: validationErrors[0].message,
+              errors: validationErrors,
+            });
+          }
         }
 
         /*
@@ -1310,6 +1347,7 @@ export default function createSalesRouter({
             discount,
             total,
             cash_received,
+            line_count,
             status,
             offline_created,
             sync_status,
@@ -1318,7 +1356,7 @@ export default function createSalesRouter({
             completed_at
           )
           VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14,
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14,$15,
             $12,
             false,
             'synced',
@@ -1348,6 +1386,7 @@ export default function createSalesRouter({
             clientRequestFingerprint,
             saleStatus,
             paymentMethod === "cash" ? (Number.isFinite(receivedAmount) ? receivedAmount : Number(total) || 0) : null,
+            saleLineCount,
           ]
         );
 
