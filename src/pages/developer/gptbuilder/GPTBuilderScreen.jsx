@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Eye, GripVertical, Plus, Trash2 } from 'lucide-react'
 
 const uid=(prefix='cmp')=>globalThis.crypto?.randomUUID?.()||`${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const resourcePath=(resource)=>resource?`variables.${resource.apiName}`:''
+const resourcePath=(resource)=>resource?.path||(resource?.apiName?`variables.${resource.apiName}`:'')
 const COMPONENTS=[
   ['DISPLAY_TEXT','Display Text','display'],['TEXT','Text','input'],['LONG_TEXT','Long Text Area','input'],['NUMBER','Number','input'],['CURRENCY','Currency','input'],
   ['CHECKBOX','Checkbox','input'],['CHECKBOX_GROUP','Checkbox Group','input'],['PICKLIST','Picklist','input'],['MULTI_SELECT','Multi-Select Picklist','input'],['RADIO','Radio Buttons','input'],['DATE','Date','input'],['DATETIME','Date/Time','input'],
