@@ -375,6 +375,19 @@ test('Till starts till-session lookup alongside its bootstrap requests', async (
   assert.match(block, /Promise\.all\(\[/)
 })
 
+test('Dashboard startup reads are launched together instead of separate mount waterfalls', async () => {
+  const source = await read('../src/pages/dashboard/DashboardPage.jsx')
+  assert.match(source, /Promise\.all\(\[\s*apiRequest\('\/api\/settings'\)/)
+  assert.match(source, /apiRequest\('\/api\/dashboards'\)/)
+  assert.match(source, /loadSessionPermissions\(\)/)
+})
+
+test('Dashboard starts saved filter-state lookup before building the run request', async () => {
+  const source = await read('../src/pages/dashboard/DashboardPage.jsx')
+  assert.match(source, /const statePromise = value\?\.id/)
+  assert.match(source, /const state = await statePromise/)
+})
+
 test('Settings loads values only for the active metadata section', async () => {
   const source = await read('../src/pages/settings/MetadataSettingsPage.jsx')
   assert.equal(source.includes('const sectionedPairs = await Promise.all(sectioned.map'), false)
