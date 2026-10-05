@@ -337,3 +337,11 @@ test('login timing keeps permission and authorization phases separate', async ()
   assert.match(source, /loginTimings\.authorization_bundle_ms = Date\.now\(\) - authorizationStartedAt/)
   assert.equal(source.includes('loginTimings.permissions_ms = loginTimings.authorization_bundle_ms'), false)
 })
+
+
+test('final loading verification waits for backend readiness before live login', async () => {
+  const source = await read('../.github/workflows/final-loading-verification.yml')
+  assert.match(source, /Wait for backend readiness/)
+  assert.match(source, /\/api\/health/)
+  assert.match(source, /STATUS.*ready.*online/s)
+})
