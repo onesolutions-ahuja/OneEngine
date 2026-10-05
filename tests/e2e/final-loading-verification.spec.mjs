@@ -19,10 +19,28 @@ const ROUTES = [
   "developer/report-builder",
 ];
 
-test("final loading performance verification", async ({ page, baseURL }) => {
+test("final loading performance verification", async ({ page, baseURL, request }) => {
   test.skip(!(process.env.ONEPOS_E2E_USERNAME && process.env.ONEPOS_E2E_PASSWORD), "Authenticated QA credentials required.");
 
   let loginServerTotal = null;
+  const loginTotals = [];
+  const apiBase = String(process.env.ONEPOS_E2E_API_BASE_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "");
+  const username = process.env.ONEPOS_E2E_USERNAME || "";
+  const password = process.env.ONEPOS_E2E_PASSWORD || "";
+
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const response = await request.post(`${apiBase}/api/auth/login`, {
+      data: { username, password, actingCompanyId: null },
+      headers: { "Content-Type": "application/json" },
+      timeout: 30_000,
+    });
+    expect(response.ok(), `login attempt ${attempt} HTTP ${response.status()}`).toBe(true);
+    const serverTiming = response.headers()["server-timing"] || "";
+    const match = /(?:^|,\s*)total;dur=([0-9.]+)/i.exec(serverTiming);
+    expect(match, `login attempt ${attempt} missing total Server-Timing: ${serverTiming}`).not.toBeNull();
+    loginTotals.push(Number(match[1]));
+  }
+
   const contextCalls = [];
   const apiFailures = [];
   page.on("response", async (response) => {
@@ -30,7 +48,10 @@ test("final loading performance verification", async ({ page, baseURL }) => {
     if (url.includes("/api/auth/login")) {
       const serverTiming = response.headers()["server-timing"] || "";
       const match = /(?:^|,\s*)total;dur=([0-9.]+)/i.exec(serverTiming);
-      if (match) loginServerTotal = Number(match[1]);
+      if (match) {
+        loginServerTotal = Number(match[1]);
+        loginTotals.push(loginServerTotal);
+      }
     }
     if (
       url.includes("/api/auth/bootstrap")
@@ -68,6 +89,7 @@ test("final loading performance verification", async ({ page, baseURL }) => {
 
   console.log("FINAL_LOADING_PERF", JSON.stringify({
     loginServerTotal,
+    loginTotals,
     routeTimings,
     contextCalls,
     apiFailures,
@@ -81,6 +103,8 @@ test("final loading performance verification", async ({ page, baseURL }) => {
   const overLimit = routeTimings.filter((item) => item.ms > 5000);
   expect(overLimit, "no primary route should remain loading beyond 5s on a full deployed navigation").toEqual([]);
 
-  expect(loginServerTotal, "server-reported login duration").not.toBeNull();
-  expect(loginServerTotal, "login server duration must stay <= 1500ms").toBeLessThanOrEqual(1500);
+  expect(loginServerTotal, "server-reported browser login duration").not.toBeNull();
+  expect(loginTotals, "five consecutive live login timings").toHaveLength(5);
+  const slowLogins = loginTotals.filter((ms) => !Number.isFinite(ms) || ms > 1500);
+  expect(slowLogins, `all five logins must stay <=1500ms; observed ${loginTotals.join(", ")}ms`).toEqual([]);
 });
