@@ -191,7 +191,6 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
                   <div><span>Status</span><strong>{String(run.status || "—")}</strong></div>
                   <div><span>Version</span><strong>{run.workflow_version ?? 1}</strong></div>
                   <div><span>Trigger</span><strong>{run.trigger_key || "—"}</strong></div>
-                  <div><span>System key</span><strong>{run.metadata?.systemKey || "—"}</strong></div>
                   <div><span>Capability</span><strong>{run.metadata?.capabilityKey || run.metadata?.source?.capability || "—"}</strong></div>
                   <div><span>Capability type</span><strong>{run.metadata?.capabilityType || "—"}</strong></div>
                   <div><span>Retry count</span><strong>{run.metadata?.retryCount ?? run.retry_count ?? 0}</strong></div>
