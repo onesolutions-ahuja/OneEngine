@@ -95,3 +95,8 @@ export function setRoute(app, section = null, options = {}) {
       : app
         ? `${base}/${encodeURIComponent(app)}`
         : `${base}/`
+
+  try { sessionStorage.setItem('onepos.lastRoute', next) } catch {}
+  const current = `${window.location.pathname}${window.location.search}`
+  if (current !== next) window.history.pushState(null, '', next)
+}
