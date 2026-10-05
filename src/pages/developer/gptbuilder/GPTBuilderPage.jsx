@@ -394,7 +394,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       apiName: apiName.trim(),
       label: apiName.trim(),
       description: description.trim(),
-      dataType: supportsDataType ? dataType : resourceType === 'text_template' ? 'text' : 'choice',
+      dataType: supportsDataType ? dataType : resourceType === 'text_template' ? 'text' : ['value_map','collection_filter_criteria'].includes(resourceType) ? 'object' : 'choice',
       value: resourceType === 'constant' ? value : undefined,
       formula: resourceType === 'formula' ? formula : undefined,
       text: resourceType === 'text_template' ? value : undefined,
@@ -860,9 +860,23 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [providerResources, setProviderResources] = useState([])
   // Keep the resource list safe during the first render of every flow type. Provider
   // metadata arrives asynchronously and must never make Builder creation depend on it.
+  const automaticResources = useMemo(() => {
+    const common = [
+      { id:'auto-user-id', apiName:'$User.Id', path:'$User.Id', label:'Current User ID', dataType:'text', resourceType:'automatic', writable:false },
+      { id:'auto-current-datetime', apiName:'$Flow.CurrentDateTime', path:'$Flow.CurrentDateTime', label:'Current Date/Time', dataType:'datetime', resourceType:'automatic', writable:false },
+      { id:'auto-current-date', apiName:'$Flow.CurrentDate', path:'$Flow.CurrentDate', label:'Current Date', dataType:'date', resourceType:'automatic', writable:false },
+      { id:'auto-current-stage', apiName:'$Flow.CurrentStage', path:'$Flow.CurrentStage', label:'Current Stage', dataType:'text', resourceType:'automatic', writable:false },
+    ]
+    if (flow.key === 'record') common.push(
+      { id:'auto-record', apiName:'$Record', path:'$Record', label:'Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:true },
+      { id:'auto-record-prior', apiName:'$Record__Prior', path:'$Record__Prior', label:'Prior Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:false },
+    )
+    if (flow.key === 'platform_event') common.push({ id:'auto-event-record', apiName:'$Record', path:'$Record', label:'Platform Event Record', dataType:'record', resourceType:'automatic', writable:false })
+    return common
+  }, [flow.key, startConfig.objectKey])
   const availableResources = useMemo(
-    () => [...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])],
-    [resources, providerResources],
+    () => [...automaticResources, ...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])],
+    [automaticResources, resources, providerResources],
   )
   const applyResourceChanges = (next) => {
     setResources((Array.isArray(next) ? next : []).filter((resource) => resource?.providerResource !== true))
