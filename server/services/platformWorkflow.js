@@ -30,15 +30,6 @@ import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
-import {
-  holdAppointmentSlot,
-  releaseAppointmentHold,
-  confirmAppointmentFromHold,
-  listPaymentRequestProviders,
-  createAppointmentPaymentRequest,
-  calculateAppointmentPayment,
-} from "./oneAssistant.js";
-
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
