@@ -1,15 +1,11 @@
 import bcrypt from "bcryptjs";
-import { appointmentSlotGuardSql } from "./appointmentSlotGuard.js";
-import { bookingSessionMetadataSql } from "./bookingSessionMetadata.js";
 import { readFileSync } from "node:fs";
 import { runMigrations } from "./migrations.js";
 import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
 import { backfillLegacyRuleFieldReferences } from "../services/platformRuleReferences.js";
-import { oneAssistantSchema } from "../services/oneAssistant.js";
 import { packageDefinitions } from "../services/packageRegistry.js";
 import { platformSchema } from "../services/platformMetadata.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
-import { decryptSecret } from "../services/onlineOrders/platformConfig.js";
 
 export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
@@ -273,7 +269,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "12",
       name: "OneAssistant appointment and conversation foundation",
       up: async client => {
-        await client.query(oneAssistantSchema);
+
       },
     },
     {
@@ -281,7 +277,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "13",
       name: "OneAssistant channel subflows and public booking links",
       up: async client => {
-        await client.query(oneAssistantSchema);
+
       },
     },
     {
@@ -1838,9 +1834,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log("onePOS: refreshed " + (rows.rowCount || 0) + " booking routers with generic slot Flow");
       },
     }
-    ,{ key: "0048_appointment_atomic_slot_guard", version: "48", name: "Prevent overlapping appointments during ordinary record CRUD", up: client => client.query(appointmentSlotGuardSql) }
-    ,{ key: "0049_booking_session_crud_metadata", version: "49", name: "Expose booking session state through normal metadata CRUD", up: client => client.query(bookingSessionMetadataSql) }
-    ,{ key: "0050_resource_service_record_identity", version: "50", name: "Provide ordinary metadata CRUD identity for resource service records", up: client => client.query(`ALTER TABLE appointment_resource_services ADD COLUMN IF NOT EXISTS id UUID NOT NULL DEFAULT gen_random_uuid(); CREATE UNIQUE INDEX IF NOT EXISTS appointment_resource_services_id ON appointment_resource_services(id);`) },
+ CREATE UNIQUE INDEX IF NOT EXISTS appointment_resource_services_id ON appointment_resource_services(id);`) },
     {
       key: "0051_unify_send_communication",
       version: "51",
