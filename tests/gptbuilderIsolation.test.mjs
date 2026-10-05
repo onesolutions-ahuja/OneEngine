@@ -1296,3 +1296,11 @@ test('saved workflow Run casts status parameter consistently for PostgreSQL', as
   assert.match(platform, /SET status=\$1::varchar/)
   assert.match(platform, /CASE WHEN \$1::varchar='WAITING'/)
 })
+
+
+test('GPT Builder Toolbox never references an out-of-scope availableResources binding', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const toolbox = page.slice(page.indexOf('function Toolbox('), page.indexOf('function AutoDecisionCard('))
+  assert.match(toolbox, /const availableResources = Array\.isArray\(resources\) \? resources : \[\]/)
+  assert.match(toolbox, /resources=\{availableResources\}/)
+})
