@@ -34,7 +34,7 @@ import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
 import {
-  GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
+  GPTBuilderCompareVersionsPanel, GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
 } from './GPTBuilderSaveHistory'
 import './GPTBuilderPage.css'
 
@@ -888,6 +888,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [saveAsOpen, setSaveAsOpen] = useState(false)
   const [saveAsFlowOpen, setSaveAsFlowOpen] = useState(false)
   const [editHistoryOpen, setEditHistoryOpen] = useState(false)
+  const [compareVersionsOpen, setCompareVersionsOpen] = useState(false)
   const [editHistoryPending, setEditHistoryPending] = useState(false)
   const [editHistoryEntries, setEditHistoryEntries] = useState([])
   const [editHistoryLoading, setEditHistoryLoading] = useState(false)
@@ -1845,7 +1846,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       }}/> : null}
       {executionMode ? <GPTBuilderExecutionPanel mode={executionMode} workflowId={workflowId} flowType={flow.key} objectKey={startConfig.objectKey || ''} inputContract={Array.isArray(templateAction.inputContract) ? templateAction.inputContract : []} resources={availableResources} elements={elements} onClose={() => setExecutionMode(null)}/> : null}
       {editHistoryOpen ? <GPTBuilderEditHistoryPanel entries={editHistoryEntries} loading={editHistoryLoading} selectedVersion={editHistoryVersion} onSelect={setEditHistoryVersion} onRestore={(entry) => void restoreHistoryEntry(entry)} onSaveAsVersion={(entry) => void saveHistoryAsNewVersion(entry)} onSaveAsFlow={saveHistoryAsNewFlow} onClose={() => setEditHistoryOpen(false)}/> : null}
-      {activeElement ? <GPTBuilderElementProperties
+
+      {compareVersionsOpen ? <GPTBuilderCompareVersionsPanel entries={editHistoryEntries} onClose={()=>setCompareVersionsOpen(false)} onNavigateElement={(elementId)=>{setCompareVersionsOpen(false);const target=elements.find((element)=>String(element.id)===String(elementId));if(target)openElement(target)}}/> : null}      {activeElement ? <GPTBuilderElementProperties
         instance={activeElement}
         elements={elements}
         layout={layout}
