@@ -30,6 +30,48 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     return loadPlatformReportContext(db, req, objectId, relationshipPlan);
   }
 
+  const canManageReports = async (req) => (
+    hasSystemPermission ? hasSystemPermission(req, "reports.custom.manage") : false
+  );
+
+  const canManageReportTypes = async (req) => (
+    hasSystemPermission ? hasSystemPermission(req, "platform.metadata.manage") : false
+  );
+
+  const reportTypeIsVisible = async (req, row) => {
+    const status = String(
+      row?.definition?.experience?.status
+      || row?.definition?.status
+      || row?.status
+      || "IN_DEVELOPMENT"
+    ).toUpperCase();
+    return status === "DEPLOYED" || (await canManageReportTypes(req));
+  };
+
+  async function visibleFolder(req, folderId, minimum = "VIEW") {
+    if (!folderId) return null;
+    const result = await db("SELECT * FROM report_folders WHERE id=$1 AND company_id=$2", [folderId, req.user.companyId]);
+    const folder = result.rows[0];
+    if (!folder) return null;
+    return await resolveAnalyticsPrincipalAccess(db, folder.access, folder.created_by, req.user, minimum) ? folder : null;
+  }
+
+  async function filterReportsByFolderAccess(req, rows = []) {
+    if (await canManageReports(req)) return rows;
+    const cache = new Map();
+    const visible = [];
+    for (const row of rows) {
+      if (!row.folder_id) {
+        visible.push(row);
+        continue;
+      }
+      const key = String(row.folder_id);
+      if (!cache.has(key)) cache.set(key, Boolean(await visibleFolder(req, row.folder_id, "VIEW")));
+      if (cache.get(key)) visible.push(row);
+    }
+    return visible;
+  }
+
   router.get("/reports/custom/capabilities", authenticate, authorize("reports.custom.view"), (_req, res) => {
     res.json({ success: true, data: reportCapabilities() });
   });
