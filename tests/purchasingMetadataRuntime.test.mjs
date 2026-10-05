@@ -154,7 +154,7 @@ test("sales products and categories use metadata workspace while legacy return a
   assert.equal(app.includes("const ExchangePage ="), false);
   assert.ok(metadata.includes('objectKey:"stock_return"') || metadata.includes('objectKey: "stock_return"'));
   assert.match(productsRoute, /\/products\/catalogue/);
-  assert.match(productsRoute, /\/products\/misc-line/);
+  assert.equal(productsRoute.includes("/products/misc-line"), false);
 });
 
 
@@ -206,7 +206,7 @@ test("manifest sweep leaves product category segment and gift-card administratio
   const customers = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
   assert.equal(/router\.(post|put|delete)\("\/categories/.test(products), false);
   assert.equal(/router\.(post|put|delete)\("\/products(?:\/import|\/:id|")/.test(products), false);
-  assert.match(products, /router\.post\("\/products\/misc-line"/);
+  assert.equal(products.includes("/products/misc-line"), false);
   assert.match(products, /router\.get\("\/products\/catalogue"/);
   assert.equal(/router\.(post|put|delete)\("\/customer-segments/.test(customers), false);
   assert.equal(/router\.post\("\/gift-cards(?:\/\:id\/topup|\/\:id\/block|")/.test(customers), false);
