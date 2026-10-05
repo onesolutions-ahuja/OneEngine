@@ -87,7 +87,7 @@ import createIdentityAssuranceRouter from "./routes/identityAssurance.js";
 import createIdentityProviderLoginRouter from "./routes/identityProviderLogin.js";
 import createSecurityGovernanceRouter from "./routes/securityGovernance.js";
 import createDataProtectionRouter from "./routes/dataProtection.js";
-import { accessDecision, clientIp, createTrackedSession, enforceTrackedSession, finalizeSuccessfulLogin, loadLoginSecurityContext, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
+import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enforceTrackedSession, finalizeSuccessfulLogin, loadLoginSecurityContext, registerFailedLogin, writeLoginHistory } from "./services/identitySecurity.js";
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createHospitalityRouter from "./routes/hospitality.js";
 import { createClientWebShopRouter } from "./routes/clientWebShop.js";
