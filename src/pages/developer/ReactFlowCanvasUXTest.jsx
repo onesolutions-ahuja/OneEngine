@@ -300,7 +300,7 @@ export default function ReactFlowCanvasUXTest() {
               setNodes((current) => computeLayout(current, edges))
               requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-                  flowInstance?.fitView({ padding: 0.24, duration: 350, minZoom: 0.25, maxZoom: 1.5 })
+                  flowInstance?.setViewport({ x: 140, y: 24, zoom: 0.8 }, { duration: 250 })
                 })
               })
             }}
@@ -324,8 +324,7 @@ export default function ReactFlowCanvasUXTest() {
               onConnect={onConnect}
               onNodeClick={(_, node) => setSelectedId(node.id)}
               onPaneClick={() => setSelectedId('')}
-              fitView
-              fitViewOptions={{ padding: 0.24 }}
+              defaultViewport={{ x: 140, y: 24, zoom: 0.8 }}
               minZoom={0.25}
               maxZoom={2}
               connectionMode={ConnectionMode.Loose}
