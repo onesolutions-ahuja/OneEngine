@@ -2282,14 +2282,13 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { id:"amount_allowed",label:"7. Check Received Amount Requirement",apiName:"amount_allowed",key:"FORMULA",resourceName:"amountAllowed",resultType:"boolean",expression:"!requiresAmount || received >= total",inputs:{requiresAmount:{path:"steps.get_payment_method.record.config.requiresCashReceived"},received:{path:"$record.cashReceived"},total:{path:"$record.total"}} },
             { id:"connector_required",label:"8. Read Connector Requirement",apiName:"connector_required",key:"FORMULA",resourceName:"connectorRequired",resultType:"boolean",expression:'requiresConnector == true || COALESCE(connectorPackageKey,"") != ""',inputs:{requiresConnector:{path:"steps.get_payment_method.record.config.requiresConnector"},connectorPackageKey:{path:"steps.get_payment_method.record.config.connectorPackageKey"}} },
             { id:"precheck_allowed",label:"9. Validate Payment Method",apiName:"precheck_allowed",key:"FORMULA",resourceName:"precheckAllowed",resultType:"boolean",expression:"methodFound && connectionAllowed && customerAllowed && codeAllowed && amountAllowed",inputs:{methodFound:{path:"variables.methodFound"},connectionAllowed:{path:"variables.connectionAllowed"},customerAllowed:{path:"variables.customerAllowed"},codeAllowed:{path:"variables.codeAllowed"},amountAllowed:{path:"variables.amountAllowed"}} },
-            { id:"connector_decision",label:"10. Does This Payment Need A Connector?",apiName:"connector_decision",key:"CONDITION",
+            { id:"connector_needed",label:"10. Decide Whether To Execute Connector",apiName:"connector_needed",key:"FORMULA",resourceName:"connectorNeeded",resultType:"boolean",expression:"precheckAllowed && connectorRequired && executeConnector",inputs:{precheckAllowed:{path:"variables.precheckAllowed"},connectorRequired:{path:"variables.connectorRequired"},executeConnector:{path:"$record.executeConnector"}} },
+            { id:"connector_decision",label:"11. Connector Execution Path",apiName:"connector_decision",key:"CONDITION",
               outcomes:[{id:"execute",label:"Execute Connector",condition:{match:"all",conditions:[
-                {field:"variables.precheckAllowed",operator:"equals",value:true},
-                {field:"variables.connectorRequired",operator:"equals",value:true},
-                {field:"executeConnector",operator:"equals",value:true}
+                {field:"variables.connectorNeeded",operator:"equals",value:true}
               ]},branch:["call_payment_connector","connector_status","set_connector_result"]}],
               defaultLabel:"No Connector Call",defaultBranch:["skip_connector"] },
-            { id:"call_payment_connector",label:"11. Call Payment Connector",apiName:"call_payment_connector",key:"CALL_CONNECTOR_CAPABILITY",
+            { id:"call_payment_connector",label:"12. Call Payment Connector",apiName:"call_payment_connector",key:"CALL_CONNECTOR_CAPABILITY",
               packageKey:{path:"steps.get_payment_method.record.config.connectorPackageKey"},capability:"payment.sale",
               input:{
                 amount:{path:"$record.total"},
@@ -2300,10 +2299,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
                 paymentMode:{path:"$record.paymentMode"},
                 selfCheckout:{path:"$record.selfCheckout"}
               } },
-            { id:"connector_status",label:"12. Check Connector Approval",apiName:"connector_status",key:"FORMULA",resourceName:"connectorWasApproved",resultType:"boolean",expression:'available == true && status == "APPROVED"',inputs:{available:{path:"steps.call_payment_connector.available"},status:{path:"steps.call_payment_connector.result.status"}} },
-            { id:"set_connector_result",label:"13. Save Connector Approval",apiName:"set_connector_result",key:"ASSIGNMENT",variableName:"connectorApproved",variableType:"boolean",operator:"set",value:{path:"variables.connectorWasApproved"} },
-            { id:"skip_connector",label:"11A. Connector Call Not Required Yet",apiName:"skip_connector",key:"ASSIGNMENT",variableName:"connectorApproved",variableType:"boolean",operator:"set",value:true },
-            { id:"final_payment_allowed",label:"14. Final Payment Decision",apiName:"final_payment_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"precheckAllowed && connectorApproved",inputs:{precheckAllowed:{path:"variables.precheckAllowed"},connectorApproved:{path:"variables.connectorApproved"}} },
+            { id:"connector_status",label:"13. Check Connector Approval",apiName:"connector_status",key:"FORMULA",resourceName:"connectorWasApproved",resultType:"boolean",expression:'available == true && status == "APPROVED"',inputs:{available:{path:"steps.call_payment_connector.available"},status:{path:"steps.call_payment_connector.result.status"}} },
+            { id:"set_connector_result",label:"14. Save Connector Approval",apiName:"set_connector_result",key:"ASSIGNMENT",variableName:"connectorApproved",variableType:"boolean",operator:"set",value:{path:"variables.connectorWasApproved"} },
+            { id:"skip_connector",label:"12A. Connector Call Not Required Yet",apiName:"skip_connector",key:"ASSIGNMENT",variableName:"connectorApproved",variableType:"boolean",operator:"set",value:true },
+            { id:"final_payment_allowed",label:"15. Final Payment Decision",apiName:"final_payment_allowed",key:"FORMULA",resourceName:"allowed",resultType:"boolean",expression:"precheckAllowed && connectorApproved",inputs:{precheckAllowed:{path:"variables.precheckAllowed"},connectorApproved:{path:"variables.connectorApproved"}} },
           ],
         },
         {
