@@ -500,27 +500,72 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     setAgeVerified(false)
   }
 
-  const buildSalePayload = (paymentMethod, verifiedOverride = false, options = {}) => ({
-    clientRequestId: crypto.randomUUID(),
-    items: basket.map((item) => ({
-      productId: item.id,
-      quantity: item.quantity,
-      ...(Array.isArray(item.modifiers) && item.modifiers.length ? { modifiers: item.modifiers } : {}),
-      ...(item.priceOverride ? { priceOverride: item.priceOverride, priceOverrideReason: item.priceOverrideReason || null } : {}),
-    })),
-    customerId: selectedCustomer?.id || null,
-    workflowLines: miscLines.map((line) => ({ buttonKey: line.buttonKey, input: line.input })),
-    vatEnabled,
-    vatRate: defaultVatRate,
-    paymentMethod,
-    cashReceived: options.cashReceived == null ? null : Number(options.cashReceived),
-    paymentInputs: options.paymentInputs || {},
-    ...(Array.isArray(options.payments) && options.payments.length ? { payments: options.payments } : {}),
-    ...(options.paymentInputs?.giftCardCode ? { giftCardCode: options.paymentInputs.giftCardCode } : {}),
-    discountType: discount.type,
-    discountValue: discount.value,
-    ageVerified: ageVerified || verifiedOverride,
-  })
+  const buildSalePayload = (paymentMethod, verifiedOverride = false, options = {}) => {
+    const clientRequestId = crypto.randomUUID()
+    const sale = {
+      store_id: till?.store_id || settings?.store?.id || getStoredUser()?.storeId || null,
+      terminal_id: till?.terminal_id || null,
+      user_id: getStoredUser()?.id || getStoredUser()?.userId || null,
+      customer_id: selectedCustomer?.id || null,
+      subtotal: Number(subtotal || 0),
+      tax: Number(vat || 0),
+      discount: Number(discountAmount || 0),
+      total: Number(total || 0),
+      status: 'COMPLETED',
+      offline_created: false,
+      sync_status: 'SYNCED',
+      client_request_id: clientRequestId,
+      completed_at: new Date().toISOString(),
+    }
+    const items = [
+      ...basket.map((item) => ({
+        product_id: item.id,
+        product_name: item.name,
+        quantity: Number(item.quantity || 0),
+        unit_price: Number(item.price || 0),
+        discount: Number(item.lineDiscount || 0),
+        tax: Number(item.tax || 0),
+        total: Number(item.total ?? (Number(item.price || 0) * Number(item.quantity || 0))),
+        item_type: item.itemType || 'PRODUCT',
+        modifier_data: Array.isArray(item.modifiers) ? item.modifiers : [],
+        bundle_components: Array.isArray(item.bundleComponents) ? item.bundleComponents : [],
+      })),
+      ...miscLines.map((line) => ({
+        product_id: line.productId || line.product_id || null,
+        product_name: line.description || 'Misc Item',
+        quantity: Number(line.quantity || 0),
+        unit_price: Number(line.price || 0),
+        discount: 0,
+        tax: 0,
+        total: Number(line.price || 0) * Number(line.quantity || 0),
+        item_type: 'MISC',
+        modifier_data: [],
+        bundle_components: [],
+      })),
+    ]
+    const paymentRows = Array.isArray(options.payments) && options.payments.length
+      ? options.payments.map((row) => ({
+          customer_id: selectedCustomer?.id || null,
+          direction: 'IN',
+          payment_method: row.method || row.paymentMethod || paymentMethod,
+          amount: Number(row.amount || 0),
+          provider: row.provider || null,
+          terminal_id: till?.terminal_id || null,
+          provider_transaction_id: row.providerTransactionId || row.provider_transaction_id || null,
+          idempotency_key: row.idempotencyKey || row.idempotency_key || clientRequestId,
+          status: row.status || 'COMPLETED',
+        }))
+      : [{
+          customer_id: selectedCustomer?.id || null,
+          direction: 'IN',
+          payment_method: paymentMethod,
+          amount: Number(total || 0),
+          terminal_id: till?.terminal_id || null,
+          idempotency_key: clientRequestId,
+          status: 'COMPLETED',
+        }]
+    return { clientRequestId, sale, items, payments: paymentRows, ageVerified: ageVerified || verifiedOverride, paymentInputs: options.paymentInputs || {} }
+  }
 
   const maybeShowReceiptQr = async (sale) => {
     if (!sale?.id) return
@@ -625,9 +670,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         await refreshOfflineCount()
         return
       }
-      const response = await apiRequest('/api/sales', { method: 'POST', body: JSON.stringify(payload) })
-      if (!response?.success || !response?.sale?.id) throw new Error(response?.message || 'Sale could not be confirmed')
-      const sale = response.sale
+      const completeButton = buttons.find((row) => row.button_key === 'till_complete_sale')
+      if (!completeButton) throw new Error('Complete Sale Flow is not configured.')
+      const response = await executeMetadataButton(completeButton, { sale: payload.sale, items: payload.items, payments: payload.payments })
+      const saleId = deepFind(response?.data, 'saleId') || deepFind(response?.data, 'created')?.id
+      if (!response?.success || !saleId) throw new Error(response?.message || 'Sale could not be confirmed')
+      const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`)
+      const sale = savedResponse?.record || savedResponse?.data || { id: saleId, total: payload.sale.total }
       if (durableCashEntry) await removeOfflineCashSale(durableCashEntry.id)
       setLastSale(sale)
       clearSale()
