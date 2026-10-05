@@ -229,7 +229,8 @@ test('manual Playwright workflow does not perform a duplicate pre-suite login', 
 test('page components never perform their own session bootstrap or store-context discovery', async () => {
   const { readdir } = await import('node:fs/promises')
   const { join } = await import('node:path')
-  const root = new URL('../src/pages/', import.meta.url)
+  const { fileURLToPath } = await import('node:url')
+  const root = fileURLToPath(new URL('../src/pages/', import.meta.url))
   async function collect(dir) {
     const entries = await readdir(dir, { withFileTypes: true })
     const files = []
