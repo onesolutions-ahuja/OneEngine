@@ -267,7 +267,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   useEffect(() => {
     void load()
-    const stopMonitor = startConnectivityMonitoring({ intervalMs: 30000 })
+    const stopMonitor = startConnectivityMonitoring({ intervalMs: 120000 })
     const unsubscribe = subscribeConnectivity(async (next) => {
       setConnectivity(next)
       const serverOnline = next.server === SERVER_STATES.CONNECTED
@@ -421,9 +421,9 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
           scannerUnavailable = true
         }
       }
-      if (!stopped && !scannerUnavailable) timer = window.setTimeout(poll, 1500)
+      if (!stopped && !scannerUnavailable) timer = window.setTimeout(poll, 10000)
     }
-    void poll()
+    if (!document.hidden) void poll()
     return () => {
       stopped = true
       window.clearTimeout(timer)
@@ -446,7 +446,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       } catch {}
     }
     void loadOrders()
-    const timer = window.setInterval(loadOrders, 15000)
+    const timer = window.setInterval(() => { if (!document.hidden) void loadOrders() }, 60000)
     return () => {
       stopped = true
       window.clearInterval(timer)
