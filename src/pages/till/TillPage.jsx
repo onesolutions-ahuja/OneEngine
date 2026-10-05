@@ -117,6 +117,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const [miscLines, setMiscLines] = useState([])
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [discount, setDiscount] = useState({ type: null, value: 0 })
+  const [pricing, setPricing] = useState({ grossSubtotal: 0, discountAmount: 0, subtotal: 0, vat: 0, total: 0 })
   const [settings, setSettings] = useState(null)
   const [buttons, setButtons] = useState([])
   const [till, setTill] = useState(null)
@@ -291,23 +292,56 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     })
   }, [products, category, search])
 
-  const grossSubtotal = basket.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
-    + miscLines.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
-  const discountAmount = discount.type === 'percent'
-    ? grossSubtotal * Math.max(0, Number(discount.value || 0)) / 100
-    : discount.type === 'fixed' ? Math.max(0, Number(discount.value || 0)) : 0
-  const subtotal = Math.max(0, grossSubtotal - discountAmount)
+  const grossSubtotal = Number(pricing.grossSubtotal || 0)
+  const discountAmount = Number(pricing.discountAmount || 0)
+  const subtotal = Number(pricing.subtotal || 0)
+  const vat = Number(pricing.vat || 0)
+  const total = Number(pricing.total || 0)
   const vatEnabled = settings?.tax?.vatEnabled !== false
-  const defaultVatRate = Number(settings?.tax?.defaultVatRate ?? 0) / 100
-  const vat = vatEnabled ? basket.reduce((sum, item) => {
-    const line = Number(item.price) * item.quantity
-    const share = grossSubtotal ? discountAmount * (line / grossSubtotal) : 0
-    const net = Math.max(0, line - share)
-    const rate = item.vatApplicable === false ? 0 : Number(item.vatRate || defaultVatRate * 100) / 100
-    return sum + (rate > 0 ? net - net / (1 + rate) : 0)
-  }, 0) : 0
-  const total = subtotal
+  const defaultVatRate = Number(settings?.tax?.defaultVatRate ?? 0)
   const hasAgeRestricted = basket.some((item) => item.ageRestricted)
+
+  useEffect(() => {
+    const button = buttons.find((row) => row.button_key === 'till_pricing_calculate')
+    if (!button) return
+    let cancelled = false
+    const lines = [
+      ...basket.map((item) => ({
+        unitPrice: Number(item.price || 0),
+        quantity: Number(item.quantity || 0),
+        vatApplicable: item.vatApplicable !== false,
+        vatRate: Number(item.vatRate || 0),
+      })),
+      ...miscLines.map((line) => ({
+        unitPrice: Number(line.price || 0),
+        quantity: Number(line.quantity || 0),
+        vatApplicable: Number(line.vatRate || 0) > 0,
+        vatRate: Number(line.vatRate || 0),
+      })),
+    ]
+    apiRequest(`/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({ context: {
+        lines,
+        discountType: discount.type,
+        discountValue: Number(discount.value || 0),
+        vatEnabled,
+        defaultVatRate,
+      } }),
+    }).then((response) => {
+      if (cancelled || response?.success === false) return
+      const data = response?.data || {}
+      const numberOf = (key) => Number(deepFind(data, key) || 0)
+      setPricing({
+        grossSubtotal: numberOf('grossSubtotal'),
+        discountAmount: numberOf('discountAmount'),
+        subtotal: numberOf('subtotal'),
+        vat: numberOf('vat'),
+        total: numberOf('total'),
+      })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [basket, miscLines, discount.type, discount.value, vatEnabled, defaultVatRate, buttons])
 
   useEffect(() => {
     if (!billChannelRef.current) return undefined
