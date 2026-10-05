@@ -68,7 +68,7 @@ async function applyAuth(headers, authType, credentials, { connectionId = null, 
   throw new Error(`Unsupported provider auth type: ${authType}`);
 }
 
-export async function oneHttpRequest({ db, companyId, storeId = null, providerKey, method = "GET", endpoint = "/", headers = {}, body = null, query = {}, variables = {}, timeoutMs = null }) {
+export async function oneHttpRequest({ db, companyId, storeId = null, providerKey, connectionId = null, method = "GET", endpoint = "/", headers = {}, body = null, query = {}, variables = {}, timeoutMs = null }) {
   if (!db || typeof db !== "function") throw new Error("ONE_HTTP_REQUEST requires database context");
   if (!companyId) throw new Error("ONE_HTTP_REQUEST requires company context");
   if (!providerKey) throw new Error("ONE_HTTP_REQUEST requires providerKey");
@@ -81,9 +81,10 @@ export async function oneHttpRequest({ db, companyId, storeId = null, providerKe
       WHERE company_id=$1 AND enabled=true
         AND LOWER(provider_name)=LOWER($2)
         AND (store_id IS NULL OR store_id=$3)
-      ORDER BY (store_id IS NULL),updated_at DESC
+        AND ($4::uuid IS NULL OR id=$4)
+      ORDER BY CASE WHEN id=$4 THEN 0 ELSE 1 END,(store_id IS NULL),updated_at DESC
       LIMIT 1`,
-    [companyId, providerKey, storeId]
+    [companyId, providerKey, storeId, connectionId]
   );
   const connection = connectionResult.rows?.[0] || null;
   if (!connection) throw new Error(`API connection metadata not found: ${providerKey}`);
@@ -169,6 +170,7 @@ export function oneHttpRequestDefinition() {
       type: "object",
       properties: {
         providerKey: { type: "string", title: "Provider" },
+        connectionId: { type: "string", title: "Connection ID" },
         method: { type: "string", title: "Method", enum: ["GET","POST","PUT","PATCH","DELETE"] },
         endpoint: { type: "string", title: "Endpoint" },
         headers: { type: "object", title: "Headers" },
@@ -193,6 +195,7 @@ export function oneHttpRequestDefinition() {
       companyId: companyId || req?.user?.companyId,
       storeId: storeId || req?.user?.storeId || null,
       providerKey: action.providerKey,
+      connectionId: action.connectionId || null,
       method: action.method,
       endpoint: action.endpoint,
       headers: action.headers || {},
