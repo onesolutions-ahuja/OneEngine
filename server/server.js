@@ -39,7 +39,6 @@ import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
-import createPurchasesRouter from "./routes/purchases.js";
 
 import createSalesRouter from "./routes/sales.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
@@ -2103,33 +2102,6 @@ app.use(
     authorize,
     db,
     pool,
-  })
-);
-
-/*
-|--------------------------------------------------------------------------
-| PURCHASES / GOODS RECEIVED
-|--------------------------------------------------------------------------
-|
-| Purchase and receive routes are registered via routes/purchases.js,
-| receiving the existing authenticate, authorize, db, pool and
-| createInventoryMovement functions so behaviour is unchanged.
-|
-| Route ordering preserved:
-|   GET  /api/purchases              (inventory.view)
-|   GET  /api/purchases/:id          (inventory.view)
-|   POST /api/purchases              (inventory.adjust)
-|   POST /api/purchases/:id/receive  (inventory.adjust)
-*/
-app.use(
-  "/api",
-  createPurchasesRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    createInventoryMovement,
-    savePlatformRecord: saveDomainConfiguration,
   })
 );
 
