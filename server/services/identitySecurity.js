@@ -132,6 +132,8 @@ export async function accessDecision(db, {
   settingsOverride = undefined,
   policyOverride = undefined,
   companyTimezoneOverride = undefined,
+  trustedNetworkOverride = undefined,
+  loginAllowedOverride = undefined,
 }) {
   if (!companyId) return { allowed: true, settings: null, policy: null, trustedNetwork: false };
   const [settings, policy, company] = await Promise.all([
@@ -146,7 +148,9 @@ export async function accessDecision(db, {
     return { allowed: false, code: "LOGIN_HOURS_RESTRICTED", reason: "Login is not permitted at this time", settings, policy };
   }
   if (policy?.enforce_login_ip) {
-    const range = await ipMatchesRanges(db, { companyId, policyId: policy.id, type: "LOGIN_ALLOWED", ip });
+    const range = loginAllowedOverride !== undefined
+      ? loginAllowedOverride
+      : await ipMatchesRanges(db, { companyId, policyId: policy.id, type: "LOGIN_ALLOWED", ip });
     if (range.count === 0) {
       return { allowed: false, code: "LOGIN_IP_POLICY_EMPTY", reason: "Login IP policy has no allowed ranges", settings, policy };
     }
@@ -156,6 +160,9 @@ export async function accessDecision(db, {
   }
   if (!includeTrustedNetwork) {
     return { allowed: true, settings, policy, trustedNetwork: false };
+  }
+  if (trustedNetworkOverride !== undefined) {
+    return { allowed: true, settings, policy, trustedNetwork: trustedNetworkOverride === true };
   }
   const trusted = await ipMatchesRanges(db, { companyId, policyId: null, type: "TRUSTED", ip });
   return { allowed: true, settings, policy, trustedNetwork: trusted.matches };
@@ -251,7 +258,7 @@ export async function loginState(db, userId) {
   return result.rows[0] || null;
 }
 
-export async function loadLoginSecurityContext(db, { companyId, userId, roleId }) {
+export async function loadLoginSecurityContext(db, { companyId, userId, roleId, ip = null }) {
   if (!companyId || !userId) {
     return { settings: null, state: null, policy: null, companyTimezone: null };
   }
@@ -262,7 +269,11 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId }
        row_to_json(p.*) AS policy,
        c.timezone AS company_timezone,
        row_to_json(gp.*) AS google_package,
-       row_to_json(gc.*) AS google_connection
+       row_to_json(gc.*) AS google_connection,
+       COALESCE(authz.permission_codes, '[]'::jsonb) AS permission_codes,
+       COALESCE(ipr.trusted_network, FALSE) AS trusted_network,
+       COALESCE(ipr.login_allowed_matches, FALSE) AS login_allowed_matches,
+       COALESCE(ipr.login_allowed_count, 0) AS login_allowed_count
      FROM companies c
      LEFT JOIN identity_security_settings s ON s.company_id=c.id
      LEFT JOIN identity_user_security_state us ON us.user_id=$2
@@ -299,9 +310,71 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId }
        ORDER BY ic.updated_at DESC
        LIMIT 1
      ) gc ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT COALESCE(jsonb_agg(DISTINCT codes.code) FILTER (WHERE codes.code IS NOT NULL), '[]'::jsonb) AS permission_codes
+       FROM (
+         SELECT perm.code
+           FROM role_permissions rp
+           JOIN permissions perm ON perm.id=rp.permission_id
+          WHERE rp.role_id=$3
+         UNION ALL
+         SELECT jsonb_array_elements_text(COALESCE(ps.system_permissions, '[]'::jsonb)) AS code
+           FROM platform_permission_sets ps
+          WHERE ps.company_id=$1 AND ps.active=true
+            AND (ps.package_required=false OR EXISTS (
+              SELECT 1 FROM company_package_installations i
+               WHERE i.company_id=$1 AND i.package_id=ps.source_package_id
+                 AND i.status='active' AND i.suspended_by_entitlement=false AND i.deactivated_by_user=false
+            ))
+            AND (
+              EXISTS (
+                SELECT 1 FROM platform_permission_set_assignments a
+                 WHERE a.permission_set_id=ps.id AND a.user_id=$2 AND a.company_id=$1
+                   AND a.active=true
+                   AND (a.effective_from IS NULL OR a.effective_from <= NOW())
+                   AND (a.effective_until IS NULL OR a.effective_until > NOW())
+              )
+              OR EXISTS (
+                SELECT 1
+                  FROM platform_permission_set_group_members m
+                  JOIN platform_permission_set_groups g
+                    ON g.id=m.group_id AND g.company_id=$1 AND g.active=true
+                  JOIN platform_permission_set_group_assignments a
+                    ON a.group_id=g.id AND a.company_id=$1 AND a.user_id=$2 AND a.active=true
+                 WHERE m.permission_set_id=ps.id AND m.company_id=$1
+                   AND (a.effective_from IS NULL OR a.effective_from <= NOW())
+                   AND (a.effective_until IS NULL OR a.effective_until > NOW())
+              )
+            )
+       ) codes
+     ) authz ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT
+         EXISTS(
+           SELECT 1 FROM identity_security_ip_ranges r
+            WHERE r.company_id=$1 AND r.range_type='TRUSTED' AND r.active=TRUE
+              AND r.policy_id IS NULL
+              AND $4::inet IS NOT NULL
+              AND family(r.start_ip)=family($4::inet)
+              AND $4::inet >= r.start_ip AND $4::inet <= r.end_ip
+         ) AS trusted_network,
+         EXISTS(
+           SELECT 1 FROM identity_security_ip_ranges r
+            WHERE r.company_id=$1 AND r.range_type='LOGIN_ALLOWED' AND r.active=TRUE
+              AND r.policy_id=p.id
+              AND $4::inet IS NOT NULL
+              AND family(r.start_ip)=family($4::inet)
+              AND $4::inet >= r.start_ip AND $4::inet <= r.end_ip
+         ) AS login_allowed_matches,
+         (
+           SELECT COUNT(*)::int FROM identity_security_ip_ranges r
+            WHERE r.company_id=$1 AND r.range_type='LOGIN_ALLOWED' AND r.active=TRUE
+              AND r.policy_id=p.id
+         ) AS login_allowed_count
+     ) ipr ON TRUE
      WHERE c.id=$1
      LIMIT 1`,
-    [companyId, userId, roleId || null]
+    [companyId, userId, roleId || null, ip]
   );
   const row = result.rows[0] || {};
   let settings = row.settings || null;
@@ -313,6 +386,10 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId }
     companyTimezone: row.company_timezone || null,
     googlePackage: row.google_package || null,
     googleConnection: row.google_connection || null,
+    permissionCodes: Array.isArray(row.permission_codes) ? row.permission_codes : [],
+    trustedNetwork: row.trusted_network === true,
+    loginAllowedMatches: row.login_allowed_matches === true,
+    loginAllowedCount: Number(row.login_allowed_count || 0),
   };
 }
 
