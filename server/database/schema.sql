@@ -229,6 +229,11 @@ CREATE TABLE IF NOT EXISTS payment_terminals (
 CREATE INDEX IF NOT EXISTS idx_payment_terminals_company
 ON payment_terminals(company_id, store_id);
 
+ALTER TABLE payment_terminals
+  ADD COLUMN IF NOT EXISTS device_key VARCHAR(120) NOT NULL DEFAULT 'legacy-unassigned';
+CREATE INDEX IF NOT EXISTS idx_payment_terminals_device
+  ON payment_terminals(company_id, store_id, device_key, active);
+
 -- ============================================================
 -- HARDWARE CONFIGURATION
 -- ============================================================
@@ -255,6 +260,9 @@ CREATE TABLE IF NOT EXISTS hardware_configurations (
 
 CREATE INDEX IF NOT EXISTS idx_hardware_configurations_store
 ON hardware_configurations(company_id, store_id);
+
+ALTER TABLE hardware_configurations
+  ADD COLUMN IF NOT EXISTS device_key VARCHAR(120) NOT NULL DEFAULT 'legacy-unassigned';
 
 CREATE TABLE IF NOT EXISTS server_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -3596,6 +3604,11 @@ DO $$ BEGIN
       FOREIGN KEY (scope_object_id) REFERENCES platform_objects(id) ON DELETE CASCADE;
   END IF;
 END $$;
+
+-- Canonical loyalty compatibility columns required by Platform metadata.
+ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS loyalty_min_sale_total NUMERIC(12,2) NULL;
+ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS loyalty_redeem_value_per_point NUMERIC(12,4) NULL;
+ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS loyalty_min_points_redeem INTEGER NULL;
 
 -- Batch 7: account onboarding, policy acceptance and per-user licensing
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS user_email_domain VARCHAR(255);

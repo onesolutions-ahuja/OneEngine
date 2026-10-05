@@ -3344,7 +3344,7 @@ export function packageDefinition(entry) {
             fields: [
               { apiName: "company_id", label: "Company", fieldType: "lookup", sourceColumn: "company_id", writable: false },
               { apiName: "provider", label: "Provider", fieldType: "text", sourceColumn: "provider", readable: true, writable: false },
-              { apiName: "enabled", label: "Enabled", fieldType: "boolean", sourceColumn: "enabled", writable: true },
+              { apiName: "enabled", label: "Enabled", fieldType: "boolean", sourceColumn: "active", writable: true },
               { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false },
               { apiName: "updated_at", label: "Updated", fieldType: "datetime", sourceColumn: "updated_at", writable: false }
             ],

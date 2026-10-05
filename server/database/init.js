@@ -16,27 +16,48 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
   console.log("onePOS: checking database...");
   const coreSchema = readFileSync(new URL("./schema.sql", import.meta.url), "utf8");
   const platformFoundation = readFileSync(new URL("./baseFoundation.sql", import.meta.url), "utf8");
+  const dataEmailSecuritySchema = readFileSync(new URL("./migrations/0037_data_email_delegated_admin.sql", import.meta.url), "utf8");
 
   // Recover safely from partial restores/schema drift where schema_migrations says
-  // the core migration ran but canonical core tables are physically missing.
-  // schema.sql is idempotent (CREATE/ALTER ... IF [NOT] EXISTS), so replaying it
-  // restores only missing structure and preserves existing tenant data.
-  const coreTableHealth = await pool.query(
-    `SELECT
-       to_regclass('public.companies') AS companies,
-       to_regclass('public.users') AS users,
-       to_regclass('public.stores') AS stores,
-       to_regclass('public.products') AS products,
-       to_regclass('public.sales') AS sales,
-       to_regclass('public.till_sessions') AS till_sessions,
-       to_regclass('public.purchases') AS purchases,
-       to_regclass('public.payment_terminals') AS payment_terminals`
-  );
-  const missingCoreTables = Object.entries(coreTableHealth.rows[0] || {})
-    .filter(([, value]) => !value)
-    .map(([table]) => table);
-  if (missingCoreTables.length) {
-    console.warn(`onePOS: core schema drift detected; repairing missing tables: ${missingCoreTables.join(", ")}`);
+  // a migration ran but canonical tables or compatibility columns are missing.
+  // The canonical schema is idempotent, so reconciliation preserves existing data.
+  const coreHealth = await pool.query(`
+    SELECT
+      to_regclass('public.companies') AS companies,
+      to_regclass('public.users') AS users,
+      to_regclass('public.stores') AS stores,
+      to_regclass('public.products') AS products,
+      to_regclass('public.sales') AS sales,
+      to_regclass('public.till_sessions') AS till_sessions,
+      to_regclass('public.purchases') AS purchases,
+      to_regclass('public.payment_terminals') AS payment_terminals,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema='public' AND table_name='payment_terminals' AND column_name='device_key'
+      ) AS payment_terminals_device_key,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema='public' AND table_name='hardware_configurations' AND column_name='device_key'
+      ) AS hardware_device_key,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema='public' AND table_name='company_settings' AND column_name='loyalty_min_sale_total'
+      ) AS loyalty_min_sale_total,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema='public' AND table_name='company_settings' AND column_name='loyalty_redeem_value_per_point'
+      ) AS loyalty_redeem_value_per_point,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema='public' AND table_name='company_settings' AND column_name='loyalty_min_points_redeem'
+      ) AS loyalty_min_points_redeem
+  `);
+  const unhealthyCore = Object.entries(coreHealth.rows[0] || {})
+    .filter(([, value]) => value === null || value === false)
+    .map(([key]) => key);
+
+  if (unhealthyCore.length) {
+    console.warn(`onePOS: core schema drift detected; repairing: ${unhealthyCore.join(", ")}`);
     const repairClient = await pool.connect();
     try {
       await repairClient.query("BEGIN");
@@ -47,6 +68,38 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
     } catch (error) {
       await repairClient.query("ROLLBACK").catch(() => {});
       console.error("onePOS: core schema drift repair failed", error);
+      throw error;
+    } finally {
+      repairClient.release();
+    }
+  }
+
+  const securityHealth = await pool.query(`
+    SELECT
+      to_regclass('public.data_export_settings') AS data_export_settings,
+      to_regclass('public.data_retention_policies') AS data_retention_policies,
+      to_regclass('public.email_deliverability_settings') AS email_deliverability_settings,
+      to_regclass('public.email_sending_domains') AS email_sending_domains,
+      to_regclass('public.organization_email_addresses') AS organization_email_addresses,
+      to_regclass('public.organization_email_role_access') AS organization_email_role_access,
+      to_regclass('public.delegated_admin_groups') AS delegated_admin_groups
+  `);
+  const missingSecuritySchema = Object.entries(securityHealth.rows[0] || {})
+    .filter(([, value]) => !value)
+    .map(([table]) => table);
+
+  if (missingSecuritySchema.length) {
+    console.warn(`onePOS: security/email schema drift detected; repairing: ${missingSecuritySchema.join(", ")}`);
+    const repairClient = await pool.connect();
+    try {
+      await repairClient.query("BEGIN");
+      await repairClient.query("SELECT pg_advisory_xact_lock(1936683890, 2)");
+      await repairClient.query(dataEmailSecuritySchema);
+      await repairClient.query("COMMIT");
+      console.log("onePOS: security/email schema drift repair complete");
+    } catch (error) {
+      await repairClient.query("ROLLBACK").catch(() => {});
+      console.error("onePOS: security/email schema drift repair failed", error);
       throw error;
     } finally {
       repairClient.release();
