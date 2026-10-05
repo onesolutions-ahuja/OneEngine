@@ -343,7 +343,8 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       }
     }
 
-    const timer = window.setInterval(() => { void refreshVisibleRows() }, 3000)
+    // Do not poll large record lists. Refresh when the user returns to the app
+    // or makes the tab visible; explicit CRUD actions also reload their data.
     const onFocus = () => { void refreshVisibleRows() }
     const onVisibility = () => {
       if (!document.hidden) void refreshVisibleRows()
@@ -353,7 +354,6 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
     return () => {
       cancelled = true
-      window.clearInterval(timer)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
     }
