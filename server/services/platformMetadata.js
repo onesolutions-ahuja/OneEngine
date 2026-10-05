@@ -1737,7 +1737,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         updated_at=NOW()
     `);
 
-    for (const object of additionalStandardObjects) {
+    for (const object of [...additionalStandardObjects, ...operationalObjects]) {
       const result = await pool.query(
         `INSERT INTO platform_objects (module_id,object_key,label,plural_label,source_table)
          VALUES ($1,$2,$3,$4,$5)
