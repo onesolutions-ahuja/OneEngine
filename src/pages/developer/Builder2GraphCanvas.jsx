@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { ReactFlow, Background, Controls, Handle, Position, addEdge, useEdgesState, useNodesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { validateGraphConnection } from './builder2Model'
 
 function FlowNode({data}) {
   return <div className={`b2-rf-node ${data.selected?'is-selected':''}`} onDoubleClick={data.onOpen}>
@@ -16,7 +17,7 @@ function FlowNode({data}) {
 
 const nodeTypes={flowNode:FlowNode}
 
-export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,onEdgesChangeExternal,onSelect,onOpen}) {
+export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,onEdgesChangeExternal,onInvalidConnection,onSelect,onOpen}) {
   const initialNodes=useMemo(()=>nodes.map((n,i)=>({
     id:n.id,
     type:'flowNode',
@@ -29,9 +30,16 @@ export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,o
   useEffect(()=>{setRfEdges(edges.map(e=>({...e,type:'smoothstep',label:e.label||'',animated:e.kind==='fault'})))},[edges,setRfEdges])
   const connect=useCallback(params=>{
     const kind=params.sourceHandle==='fault'?'fault':params.sourceHandle==='outcome'?'outcome':'normal'
-    const edge={...params,id:`${params.source}:${params.sourceHandle||'default'}:${params.target}:${Date.now()}`,kind,label:kind==='fault'?'Fault':kind==='outcome'?'Outcome':''}
-    setRfEdges(es=>{const next=addEdge({...edge,type:'smoothstep'},es);onEdgesChangeExternal?.(next.map(({id,source,target,sourceHandle,targetHandle,kind,label})=>({id,source,target,sourceHandle,targetHandle,kind,label})));return next})
-  },[setRfEdges,onEdgesChangeExternal])
+    setRfEdges(es=>{
+      const candidate={...params,kind}
+      const issue=validateGraphConnection(nodes,es,candidate)
+      if(issue){onInvalidConnection?.(issue);return es}
+      const edge={...params,id:`${params.source}:${params.sourceHandle||'default'}:${params.target}:${Date.now()}`,kind,label:kind==='fault'?'Fault':kind==='outcome'?'Outcome':''}
+      const next=addEdge({...edge,type:'smoothstep'},es)
+      onEdgesChangeExternal?.(next.map(({id,source,target,sourceHandle,targetHandle,kind,label})=>({id,source,target,sourceHandle,targetHandle,kind,label})))
+      return next
+    })
+  },[nodes,setRfEdges,onEdgesChangeExternal,onInvalidConnection])
   const nodeChange=useCallback(changes=>{
     onNodesChange(changes)
     queueMicrotask(()=>{

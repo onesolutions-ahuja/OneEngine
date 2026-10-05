@@ -3365,7 +3365,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           companyId: req.user.companyId,
           workflowId: workflow.id,
           workflowName: workflow.name,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+        workflowVersion: authoringVersion,
           objectId: object?.id || null,
           recordId: recordIsPersisted ? (record?.id || null) : null,
           triggerKey: "page_interaction",
@@ -4638,6 +4638,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     };
   }
 
+  function workflowAuthoringVersion(row) {
+    return Number(row?.draft_version || row?.version || row?.active_version || 1);
+  }
+
   router.get("/platform/rules", ...manage, async (req, res) => {
     await ensureSystemWorkflowCatalog({ db, companyId: req.user.companyId, userId: req.user.id || null });
     const result = await db(
@@ -5621,6 +5625,11 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     try {
       const definition = req.body?.definition && typeof req.body.definition === "object" ? req.body.definition : null;
       let workflow = null;
+      let storedAuthoringVersion = null;
+      if (definition && workflowId) {
+        const storedVersionResult = await db("SELECT version,draft_version,active_version FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1", [workflowId, req.user.companyId]);
+        if (storedVersionResult.rows[0]) storedAuthoringVersion = workflowAuthoringVersion(storedVersionResult.rows[0]);
+      }
       if (definition) {
         const resolvedObject = definition.objectId || definition.objectKey
           ? await getObject(definition.objectId || definition.objectKey, req)
@@ -5635,7 +5644,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           trigger_key: String(definition.triggerKey || "manual"),
           conditions: Array.isArray(definition.conditions) ? definition.conditions : [],
           action: definition.action || {},
-          version: Number(definition.version || 1),
+          version: Number(definition.version || storedAuthoringVersion || 1),
+          draft_version: Number(definition.draftVersion || storedAuthoringVersion || definition.version || 1),
         };
         const draftError = await checkRule(req, {
           object_id: workflow.object_id,
@@ -5661,6 +5671,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
       if (!actions.length) return res.status(422).json({ success: false, message: "Workflow contains no executable steps" });
+      const authoringVersion = workflowAuthoringVersion(workflow);
       const flowType = String(workflow.action?.flowType || "");
       const requestedRollback = req.body?.rollback ?? req.body?.debugOptions?.rollbackMode;
       const rollbackMode = executionMode === "TEST"
@@ -5736,7 +5747,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         companyId: req.user.companyId,
         workflowId: workflow.id || null,
         workflowName: workflow.name,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
+          workflowVersion: authoringVersion,
         objectId: object?.id || null,
         recordId: record?.id || null,
         triggerKey: executionMode,
@@ -5750,6 +5761,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           rolledBack: false,
           actorUserId: req.user.id || null,
           recordSource: recordOverride ? "override" : req.body?.recordId ? "selected" : object ? "latest" : "none",
+          executionVersion: authoringVersion,
         },
       });
 
@@ -5770,7 +5782,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$1::jsonb,updated_at=NOW() WHERE id=$2 AND company_id=$3",
             [JSON.stringify({ debug: executionMode === "DEBUG", test: executionMode === "TEST", dryRun: rollbackMode, rollbackMode, rolledBack: rollbackMode, startMatched: false, friendlyError: friendly }), run.id, req.user.companyId]
           );
-          const notStartedData = { status: "NOT_STARTED", run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: rollbackMode, externalActionsSimulated: rollbackMode, variables: { variables: {}, steps: {} } };
+          const notStartedData = { status: "NOT_STARTED", executionVersion: authoringVersion, run, steps: [], results: [], record: { id: record.id }, friendlyError: friendly, rolledBack: rollbackMode, externalActionsSimulated: rollbackMode, variables: { variables: {}, steps: {} } };
           const assertions = Array.isArray(req.body?.assertions) ? req.body.assertions : [];
           const assertionResult = evaluateWorkflowAssertions(notStartedData, assertions, { record, user: req.user });
           const testPassed = executionMode === "TEST" && assertions.length ? assertionResult.passed : null;
@@ -5812,7 +5824,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           recordId: record?.id || null,
           companyId: req.user.companyId,
           runId: run?.id || null,
-          workflowVersion: Number(workflow.draft_version || workflow.version || workflow.active_version || 1),
+          workflowVersion: authoringVersion,
           trigger: executionMode,
           debugMode: rollbackMode,
           debugWaitElementBehavior: executionMode === "TEST" && req.body?.debugWaitElementBehavior === true,
@@ -5868,6 +5880,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }));
       const debugData = {
         status: finalStatus,
+        executionVersion: authoringVersion,
         run: runResult.rows[0] || run,
         steps: stepResult.rows || [],
         results,
@@ -6481,7 +6494,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         if (value !== undefined) inputVariables[name] = value;
       }
       const workflowVariables = { variables: inputVariables, steps: {} };
-      const pinnedVersion = Number(workflow.draft_version || workflow.version || stored.active_version || stored.version || 1);
+      const pinnedVersion = workflowAuthoringVersion(workflow);
 
       run = await createWorkflowRun({
         db,
@@ -6499,6 +6512,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           storeId: req.user.storeId || null,
           tillId: req.user.tillId || null,
           initialVariables: workflowVariables,
+          executionVersion: pinnedVersion,
         },
       });
 

@@ -1393,3 +1393,51 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('Builder2 Phase 4 provides complete resource manager parity', async () => {
+  const page = await readFile(new URL('../src/pages/developer/Builder2Page.jsx', import.meta.url), 'utf8')
+  assert.match(page, /resourceApiIssue/)
+  assert.match(page, /A resource with this API Name already exists/)
+  assert.match(page, /resourceUsage/)
+  assert.match(page, /replaceResourceReference/)
+  assert.match(page, /Delete Resource/)
+  assert.match(page, /Remove those references before deleting it/)
+  for (const type of ['Choice','Collection Choice Set','Record Choice Set','Picklist Choice Set','Stage']) assert.ok(page.includes(type), type)
+  assert.match(page, /Stage Order must be a positive whole number/)
+  assert.match(page, /resources=\{resources\}/)
+  assert.match(page, /setResources\(Array\.isArray\(action\.resources\)\?action\.resources:\[\]\)/)
+})
+
+
+test('Builder2 Phase 5 rejects ambiguous and cyclic Free-Form graph topology', async () => {
+  const model = await readFile(new URL('../src/pages/developer/builder2Model.js', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/Builder2GraphCanvas.jsx', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/Builder2Page.jsx', import.meta.url), 'utf8')
+  assert.match(model, /GRAPH_MULTIPLE_OUTGOING/)
+  assert.match(model, /GRAPH_MULTIPLE_INCOMING/)
+  assert.match(model, /GRAPH_CYCLE/)
+  assert.match(model, /validateGraphConnection/)
+  assert.match(canvas, /validateGraphConnection\(nodes,es,candidate\)/)
+  assert.match(canvas, /onInvalidConnection/)
+  assert.match(page, /builderLayout:\{mode:layoutMode==='free'\?'FREE_FORM':'AUTO'/)
+  assert.match(page, /setEdges\(Array\.isArray\(layout\.edges\)\?layout\.edges:\[\]\)/)
+})
+
+
+test('Builder2 Phase 6 pins Run Debug and Test to the intended authoring version while production stays active-version pinned', async () => {
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  const page = await readFile(new URL('../src/pages/developer/Builder2Page.jsx', import.meta.url), 'utf8')
+  const automation = await readFile(new URL('../server/services/platformAutomation.js', import.meta.url), 'utf8')
+  assert.match(platform, /function workflowAuthoringVersion\(row\)/)
+  assert.match(platform, /row\?\.draft_version \|\| row\?\.version \|\| row\?\.active_version/)
+  assert.match(platform, /const authoringVersion = workflowAuthoringVersion\(workflow\)/)
+  assert.match(platform, /workflowVersion: authoringVersion/)
+  assert.match(platform, /executionVersion: authoringVersion/)
+  assert.doesNotMatch(platform, /workflowVersion: Number\(workflow\.active_version \|\| workflow\.version \|\| 1\)/)
+  assert.match(page, /\/api\/platform\/rules\/\$\{workflowId\}\/run/)
+  assert.match(page, /Run v\$\{data\?\.executionVersion/)
+  assert.match(page, /Debug v\$\{data\?\.executionVersion/)
+  assert.match(page, /Test v\$\{data\?\.executionVersion/)
+  assert.match(automation, /workflowVersion: Number\(rule\.active_version \|\| rule\.version \|\| 1\)/)
+})
