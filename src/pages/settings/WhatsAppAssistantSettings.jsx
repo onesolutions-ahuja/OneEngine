@@ -17,8 +17,10 @@ export default function WhatsAppAssistantSettings() {
     try {
       setLoading(true)
       setError('')
-      const response = await apiRequest('/api/whatsapp/settings')
-      const data = response?.data || {}
+      const response = await apiRequest('/api/integrations')
+      const connection = (response?.data || []).find((row) => String(row.providerName || row.provider_name || '').toLowerCase() === 'whatsapp')
+      const responseData = connection ? { data: { enabled: connection.enabled === true, configuration: { connection_id: connection.id, phone_number_id: connection.connectorConfiguration?.phoneNumberId || connection.connector_configuration?.phoneNumberId || '', business_account_id: connection.connectorConfiguration?.businessAccountId || connection.connector_configuration?.businessAccountId || '', default_country_code: connection.connectorConfiguration?.defaultCountryCode || connection.connector_configuration?.defaultCountryCode || '', access_token_configured: connection.hasCredentials === true } } } : { data: {} }
+      const data = responseData?.data || {}
       setEnabled(data.enabled === true)
       setConfiguration(data.configuration || {})
     } catch (err) {
@@ -58,14 +60,8 @@ export default function WhatsAppAssistantSettings() {
       setTesting(true)
       setError('')
       setMessage('')
-      const response = await apiRequest('/api/whatsapp/test-connection', {
-        method: 'POST',
-        body: JSON.stringify({
-          phoneNumberId: configuration.phone_number_id || '',
-          ...(secrets.accessToken ? { accessToken: secrets.accessToken } : {}),
-          ...(secrets.webhookVerifyToken ? { webhookVerifyToken: secrets.webhookVerifyToken } : {}),
-        }),
-      })
+      if (!configuration.connection_id) throw new Error('Save the WhatsApp connection before testing it.')
+      const response = await apiRequest(`/api/integrations/${encodeURIComponent(configuration.connection_id)}/test-connection`, { method: 'POST' })
       if (response?.success === false) {
         throw new Error(response?.data?.error || response?.message || 'Connection test failed.')
       }
