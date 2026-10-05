@@ -49,6 +49,9 @@ function permissionDb({ products = [], inserted = [] } = {}) {
     }
     if (s.includes("information_schema.columns")) return { rows: [] };
     if (s.includes("platform_workflow_step_runs") || s.includes("platform_workflow_runs")) return { rows: [{ id:"trace" }] };
+    if (s.includes("INSERT INTO platform_events")) return { rows: [{ id:"event-1", company_id:params[0], event_type:params[1], payload:JSON.parse(params[2]), actor_user_id:params[3], created_at:new Date() }] };
+    if (s.includes("INSERT INTO platform_webhook_deliveries")) return { rows: [] };
+    if (s.includes("FROM platform_rules")) return { rows: [] };
     return { rows: [] };
   };
 }
