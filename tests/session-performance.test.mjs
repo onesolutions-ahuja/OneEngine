@@ -59,16 +59,14 @@ test('per-request session security skips unused trusted-network lookup and paral
   assert.match(source, /const \[sessionResult, state\] = await Promise\.all/)
 })
 
-test('login RBAC permission codes are bundled into the security preflight', async () => {
+test('login RBAC permission reads run concurrently with security and Google preflight', async () => {
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
-  assert.match(security, /AS permission_codes/)
-  assert.match(security, /platform_permission_set_assignments/)
-  assert.match(server, /securityContext\.permissionCodes/)
-  const loginStart = server.indexOf('app.post("/api/auth/login"')
-  const loginEnd = server.indexOf('| CURRENT USER', loginStart)
-  const loginSource = server.slice(loginStart, loginEnd > loginStart ? loginEnd : undefined)
-  assert.equal(loginSource.includes('SELECT p.code'), false)
+  assert.match(server, /const permissionsPromise = \(async \(\) =>/)
+  assert.match(server, /const \[securityContext, googleRuntime, permissionBundle\] = await Promise\.all/)
+  assert.match(server, /loadEffectivePermissionSets\(loginDb/)
+  assert.match(server, /SELECT p\.code/)
+  assert.equal(security.includes('AS permission_codes'), false)
 })
 
 
@@ -91,22 +89,27 @@ test('Google Connect login readiness can reuse the bundled login preflight rows'
 })
 
 
-test('password verification runs alongside the bundled login preflight and records its own duration', async () => {
+test('password verification runs alongside all login preflight reads and records its own duration', async () => {
   const source = await read('../server/server.js')
   assert.match(source, /const passwordCheckPromise = \(async \(\) =>/)
-  assert.match(source, /const securityContext = user\.company_id/)
-  assert.match(source, /resolveGoogleConnectPasswordLoginRuntime/)
+  assert.match(source, /const \[securityContext, googleRuntime, permissionBundle\] = await Promise\.all/)
+  assert.match(source, /getGoogleConnectPasswordLoginRuntime\(loginDb/)
   assert.match(source, /const validPassword = await passwordCheckPromise/)
   assert.match(source, /loginTimings\.bcrypt_ms = bcryptDurationMs/)
 })
 
 
-test('login security preflight is bundled into one database read', async () => {
+test('login security preflight keeps the security-policy read compact', async () => {
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
   assert.match(server, /loadLoginSecurityContext\(loginDb/)
   assert.match(server, /security_preflight_ms/)
   assert.match(security, /export async function loadLoginSecurityContext/)
+  const start = security.indexOf('export async function loadLoginSecurityContext')
+  const end = security.indexOf('export async function registerFailedLogin', start)
+  const preflight = security.slice(start, end)
+  assert.equal(preflight.includes('package_registry'), false)
+  assert.equal(preflight.includes('platform_permission_set_assignments'), false)
 })
 
 test('successful login finalization avoids a second session assurance update', async () => {
@@ -179,7 +182,7 @@ test('successful password login finalizes session, security state, last-login an
 test('password login skips full Google entitlement resolution unless SSO could be authoritative', async () => {
   const server = await read('../server/server.js')
   const google = await read('../server/services/googleConnect.js')
-  assert.match(server, /resolveGoogleConnectPasswordLoginRuntime/)
+  assert.match(server, /getGoogleConnectPasswordLoginRuntime\(loginDb/)
   assert.match(google, /export async function resolveGoogleConnectPasswordLoginRuntime/)
   assert.match(google, /if \(!packageRow \|\| !installed \|\| !enabled \|\| !configured\)/)
   const fastPath = google.slice(
@@ -271,14 +274,13 @@ test('OneEngine Manager resolves permission and client discovery concurrently', 
 })
 
 
-test('normal password login preflight uses one bundled database query before optional Google entitlement work', async () => {
+test('normal password login runs security, Google readiness and permissions concurrently', async () => {
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
-  assert.match(security, /row_to_json\(gp\.\*\) AS google_package/)
-  assert.match(security, /row_to_json\(gc\.\*\) AS google_connection/)
-  assert.match(server, /securityContext\.googlePackage/)
-  assert.match(server, /securityContext\.googleConnection/)
-  assert.equal(server.includes('getGoogleConnectPasswordLoginRuntime((query'), false)
+  assert.match(server, /const \[securityContext, googleRuntime, permissionBundle\] = await Promise\.all/)
+  assert.match(server, /getGoogleConnectPasswordLoginRuntime\(loginDb/)
+  assert.equal(security.includes('row_to_json(gp.*) AS google_package'), false)
+  assert.equal(security.includes('row_to_json(gc.*) AS google_connection'), false)
 })
 
 
@@ -326,4 +328,12 @@ test('login network policy uses the preloaded preflight result instead of anothe
   assert.match(security, /login_allowed_matches/)
   assert.match(server, /trustedNetworkOverride: securityContext\.trustedNetwork/)
   assert.match(server, /matches: securityContext\.loginAllowedMatches/)
+})
+
+
+test('login timing keeps permission and authorization phases separate', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /loginTimings\.permissions_ms = permissionDurationMs/)
+  assert.match(source, /loginTimings\.authorization_bundle_ms = Date\.now\(\) - authorizationStartedAt/)
+  assert.equal(source.includes('loginTimings.permissions_ms = loginTimings.authorization_bundle_ms'), false)
 })
