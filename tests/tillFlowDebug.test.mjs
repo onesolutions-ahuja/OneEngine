@@ -105,13 +105,15 @@ test("Till age Flow debug covers required and verified paths", async () => {
 test("Till payment Flow debug is metadata-driven for cash, connector, credit and gift-card modes", async () => {
   const base = {
     paymentMode:"cash",
-    paymentKind:"CASH",
     online:true,
     allowOffline:true,
     requiresConnector:false,
     connectorAvailable:true,
+    requiresCustomer:false,
     customerSelected:true,
+    requiresGiftCardCode:false,
     hasGiftCardCode:true,
+    requiresCashReceived:true,
     cashReceived:20,
     total:10,
   };
@@ -124,38 +126,40 @@ test("Till payment Flow debug is metadata-driven for cash, connector, credit and
   run = await debugSystem("flow:till.payment.validate", {
     ...base,
     paymentMode:"card",
-    paymentKind:"CARD",
     allowOffline:false,
     requiresConnector:true,
     connectorAvailable:false,
+    requiresCashReceived:false,
   });
   assert.equal(run.workflowVariables.variables.allowed, false);
 
   run = await debugSystem("flow:till.payment.validate", {
     ...base,
     paymentMode:"paypal",
-    paymentKind:"ONLINE",
     allowOffline:false,
     requiresConnector:true,
     connectorAvailable:true,
+    requiresCashReceived:false,
   });
   assert.equal(run.workflowVariables.variables.allowed, true);
 
   run = await debugSystem("flow:till.payment.validate", {
     ...base,
     paymentMode:"customer_credit",
-    paymentKind:"CREDIT",
     allowOffline:false,
+    requiresCustomer:true,
     customerSelected:false,
+    requiresCashReceived:false,
   });
   assert.equal(run.workflowVariables.variables.allowed, false);
 
   run = await debugSystem("flow:till.payment.validate", {
     ...base,
     paymentMode:"gift_card",
-    paymentKind:"GIFT_CARD",
     allowOffline:false,
+    requiresGiftCardCode:true,
     hasGiftCardCode:false,
+    requiresCashReceived:false,
   });
   assert.equal(run.workflowVariables.variables.allowed, false);
 });
