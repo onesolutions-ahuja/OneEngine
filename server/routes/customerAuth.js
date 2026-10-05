@@ -315,44 +315,5 @@ router.get("/customer-auth/me", async (req, res) => {
   }
 });
 
-/*
- * GET /api/settings/public
- * Public settings endpoint (no auth) for Scan & Go entry screen
- * Returns only scan_go_enabled and online_ordering_enabled for the company
- */
-router.get("/settings/public/:companyId", async (req, res) => {
-  const { pool } = req.app.locals;
-  if (!pool) {
-    return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-  }
-
-  try {
-    const { companyId } = req.params;
-    const result = await pool.query(
-      `SELECT scan_go_enabled, online_ordering_enabled, online_payment_methods
-       FROM company_settings WHERE company_id = $1`,
-      [companyId]
-    );
-
-    if (!result.rows.length) {
-      return res.status(404).json({ success: false, message: "Company not found" });
-    }
-
-    const settings = result.rows[0];
-    res.json({
-      success: true,
-      data: {
-        scanGoEnabled: settings.scan_go_enabled === true,
-        onlineOrderingEnabled: settings.online_ordering_enabled === true,
-        onlinePaymentMethods: Array.isArray(settings.online_payment_methods) 
-          ? settings.online_payment_methods 
-          : ["card", "cash", "cod"]
-      }
-    });
-  } catch (error) {
-    console.error("Load public settings error:", error);
-    res.status(500).json({ success: false, message: "Unable to load settings" });
-  }
-});
 
 export default router;
