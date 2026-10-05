@@ -288,3 +288,11 @@ test('all production-facing live E2E workflows are manual-only', async () => {
     assert.equal(source.includes('\n  workflow_run:'), false, path)
   }
 })
+
+
+test('Render shutdown cannot hang indefinitely on keep-alive sockets', async () => {
+  const source = await read('../server/server.js')
+  assert.match(source, /closeIdleConnections/)
+  assert.match(source, /closeAllConnections/)
+  assert.match(source, /setTimeout\(\(\) => process\.exit\(0\), 5_000\)/)
+})
