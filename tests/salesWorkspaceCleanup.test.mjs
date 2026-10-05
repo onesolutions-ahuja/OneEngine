@@ -3,20 +3,15 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 test("Sales app list surface uses generic sale Workspace runtime", async () => {
-  const source = await readFile(new URL("../src/pages/sales/SalesPage.jsx", import.meta.url), "utf8");
-  assert.match(source, /WorkspacePage/);
-  assert.match(source, /initialObjectKey="sale"/);
-  assert.match(source, /appKey="sales"/);
-  assert.equal(source.includes("cachedGet('/api/sales'"), false);
-  assert.equal(source.includes("RecordListView"), false);
-  assert.equal(source.includes("columnsFor"), false);
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(app, /const SalesPage = lazyWithRecovery\(\(\) => import\('\.\/pages\/workspace\/WorkspacePage'\)\)/);
+  assert.match(app, /<SalesPage initialObjectKey="sale" appKey="sales" \/>/);
+  assert.equal(app.includes("./pages/sales/SalesPage"), false);
 });
 
-test("Sales cleanup preserves return navigation and shared detail export", async () => {
-  const source = await readFile(new URL("../src/pages/sales/SalesPage.jsx", import.meta.url), "utf8");
-  assert.match(source, /Customer Returns/);
-  assert.match(source, /Supplier Returns/);
-  assert.match(source, /export function SaleDetail/);
-  assert.match(source, /invoice-delivery/);
-  assert.match(source, /whatsapp\/resend-invoice/);
+test("Sales cleanup removes legacy page-owned return and delivery actions", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.equal(app.includes("const ReturnsPage ="), false);
+  assert.equal(app.includes("const ExchangePage ="), false);
+  assert.equal(app.includes("./pages/sales/SalesPage"), false);
 });
