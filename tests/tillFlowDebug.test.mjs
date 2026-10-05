@@ -5,7 +5,7 @@ import { executeWorkflowActions, getWorkflowActionDefinition } from "../server/s
 
 const systemFlows = new Map(
   systemWorkflowDefinitions()
-    .filter((flow) => String(flow?.systemKey || "").startsWith("flow:till."))
+    .filter((flow) => ["flow:till.", "flow:sale."].some((prefix) => String(flow?.systemKey || "").startsWith(prefix)))
     .map((flow) => [flow.systemKey, flow.action])
 );
 
@@ -80,7 +80,7 @@ async function debugSystem(systemKey, inputs) {
 }
 
 test("Till system Flows are present and validate", () => {
-  for (const key of ["flow:till.stock.validate","flow:till.age.verify","flow:till.payment.validate","flow:till.split.payment.validate","flow:till.receipt.qr"]) {
+  for (const key of ["flow:till.stock.validate","flow:till.age.verify","flow:till.payment.validate","flow:till.split.payment.validate","flow:till.cash.position","flow:till.receipt.qr","flow:sale.totals.calculate"]) {
     const flow = systemFlows.get(key);
     assert.ok(flow, key + " missing");
     for (const action of flow.actions) {
@@ -89,6 +89,37 @@ test("Till system Flows are present and validate", () => {
       definition.validation?.(action);
     }
   }
+});
+
+test("Sale totals Flow replaces hardcoded basket VAT and discount math", async () => {
+  const run = await debugSystem("flow:sale.totals.calculate", {
+    basket: [{ price:10, quantity:2, vatApplicable:true, vatRate:20, discountType:null, discountValue:0 }],
+    vatEnabled:true,
+    defaultVatRate:0.2,
+    discountType:"percent",
+    discountValue:10,
+  });
+  assert.equal(run.workflowVariables.variables.grossSubtotal, 20);
+  assert.equal(run.workflowVariables.variables.orderDiscount, 2);
+  assert.equal(run.workflowVariables.variables.discountAmount, 2);
+  assert.equal(run.workflowVariables.variables.subtotal, 18);
+  assert.equal(run.workflowVariables.variables.vat, 3.6);
+  assert.equal(run.workflowVariables.variables.total, 21.6);
+});
+
+test("Till cash position Flow owns drawer policy", async () => {
+  const run = await debugSystem("flow:till.cash.position", {
+    openingCash:100,
+    cashIn:10,
+    cashOut:20,
+    cashSales:50,
+    cashRefunds:5,
+    countedCash:132,
+    requestedCashOut:136,
+  });
+  assert.equal(run.workflowVariables.variables.currentCash, 135);
+  assert.equal(run.workflowVariables.variables.cashDifference, -3);
+  assert.equal(run.workflowVariables.variables.cashOutAllowed, false);
 });
 
 test("Till stock Flow debug blocks shortfalls and allows available stock", async () => {
