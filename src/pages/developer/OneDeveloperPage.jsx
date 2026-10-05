@@ -158,7 +158,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
   const contentKey = `${current.key}:${selectedClient || "self"}`
 
   return (
-    <section className="settings-page onedeveloper-page">
+    <section className="settings-page onedeveloper-page" data-oneengine-route="developer" data-oneengine-section={current.key}>
       <aside className="settings-sidebar">
         {canManageEngine ? (
           <div className="oneengine-client-selector">

@@ -55,5 +55,11 @@ jobs:
           echo "::error::OneEngine API did not reach ready state for commit $GITHUB_SHA"
           exit 1
 
+      - name: Require authenticated QA credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ONEPOS_E2E_USERNAME:-}" || { echo "::error::ONEPOS_PLAYWRIGHT_USERNAME repository variable is required"; exit 1; }
+          test -n "${ONEPOS_E2E_PASSWORD:-}" || { echo "::error::ONEPOS_PLAYWRIGHT_PASSWORD repository variable is required"; exit 1; }
       - name: Run final loading verification
         run: npx playwright test tests/e2e/final-loading-verification.spec.mjs --project=desktop-chromium --workers=1
