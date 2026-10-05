@@ -1994,6 +1994,16 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         {
           name: "OneTill - Validate Price Override",
           apiName: "ONETILL_VALIDATE_PRICE_OVERRIDE",
+          inputContract: [
+            { name: "productId", label: "Product", type: "text", required: true },
+            { name: "originalPrice", label: "Original Price", type: "currency", required: true },
+            { name: "requestedPrice", label: "Requested Price", type: "currency", required: true },
+            { name: "reason", label: "Reason", type: "text", required: false },
+          ],
+          outputContract: [
+            { name: "approvedPrice", label: "Approved Price", type: "currency", source: "variables.approvedPrice" },
+            { name: "approvedReason", label: "Approved Reason", type: "text", source: "variables.approvedReason" },
+          ],
           actions: [
             { id: "get_product", label: "Get Product", apiName: "get_product", key: "GET_RECORDS", objectKey: "product",
               filters: [{ field: "id", operator: "equals", value: { path: "record.productId" } }], limit: 1, store: "first" },
@@ -2016,6 +2026,13 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         {
           name: "OneTill - Record Petty Cash",
           apiName: "ONETILL_RECORD_PETTY_CASH",
+          inputContract: [
+            { name: "tillSessionId", label: "Till Session", type: "text", required: true },
+            { name: "userId", label: "User", type: "text", required: true },
+            { name: "amount", label: "Amount", type: "currency", required: true },
+            { name: "reason", label: "Reason", type: "text", required: false },
+          ],
+          outputContract: [],
           actions: [
             { id: "amount_is_valid", label: "Petty Cash Amount Is Valid", apiName: "amount_is_valid", key: "FORMULA",
               resourceName: "amountIsValid", resultType: "boolean", expression: "amount > 0",
@@ -2040,6 +2057,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         {
           name: "OneTill - Receipt QR",
           apiName: "ONETILL_RECEIPT_QR",
+          inputContract: [
+            { name: "expiryMinutes", label: "Expiry Minutes", type: "number", required: true },
+            { name: "baseUrl", label: "Public Base URL", type: "text", required: false },
+          ],
+          outputContract: [],
           actions: [
             { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "CALL_FUNCTION",
               functionKey: "temporary.receipt.download.create",
@@ -2053,17 +2075,40 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         {
           name: "OneTill - Receipt QR Policy",
           apiName: "ONETILL_RECEIPT_QR_POLICY",
+          inputContract: [
+            { name: "event", label: "Policy Event", type: "text", required: true },
+            { name: "mode", label: "Auto Show Mode", type: "text", required: true },
+            { name: "printerAvailable", label: "Printer Available", type: "boolean", required: true },
+            { name: "allowManual", label: "Allow Manual QR", type: "boolean", required: true },
+            { name: "allowRegenerate", label: "Allow Regenerate", type: "boolean", required: true },
+            { name: "autoClose", label: "Auto Close On New Sale", type: "boolean", required: true },
+          ],
+          outputContract: [
+            { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+          ],
           actions: [
             { id: "policy_allowed", label: "Evaluate Receipt QR Policy", apiName: "policy_allowed", key: "FORMULA",
               resourceName: "allowed", resultType: "boolean",
-              expression: "(event == \"AUTO\" && (mode == \"ALWAYS\" || (mode == \"ONLY_WHEN_PRINTER_UNAVAILABLE\" && !printerAvailable))) || (event == \"MANUAL\" && allowManual) || (event == \"REGENERATE\" && allowRegenerate)",
+              expression: "(event == \"AUTO\" && (mode == \"ALWAYS\" || (mode == \"ONLY_WHEN_PRINTER_UNAVAILABLE\" && !printerAvailable))) || (event == \"MANUAL\" && allowManual) || (event == \"REGENERATE\" && allowRegenerate) || (event == \"NEW_SALE\" && autoClose)",
               inputs: {
                 event: { path: "record.event" },
                 mode: { path: "record.mode" },
                 printerAvailable: { path: "record.printerAvailable" },
                 allowManual: { path: "record.allowManual" },
-                allowRegenerate: { path: "record.allowRegenerate" }
+                allowRegenerate: { path: "record.allowRegenerate" },
+                autoClose: { path: "record.autoClose" }
               } },
+          ],
+        },
+        {
+          name: "OneTill - Revoke Receipt QR",
+          apiName: "ONETILL_RECEIPT_QR_REVOKE",
+          inputContract: [],
+          outputContract: [],
+          actions: [
+            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "CALL_FUNCTION",
+              functionKey: "temporary.receipt.download.revoke_for_sale",
+              inputs: { saleId: { path: "record.id" } } },
           ],
         },
       ];
@@ -2076,6 +2121,30 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           flowType: "AUTOLAUNCHED",
           builder2: true,
           description: flow.name,
+          inputContract: flow.inputContract || [],
+          outputContract: flow.outputContract || [],
+          resources: [
+            ...(flow.inputContract || []).map((input) => ({
+              value: `record.${input.name}`,
+              apiName: input.name,
+              label: input.label || input.name,
+              type: "Variable",
+              dataType: input.type === "boolean" ? "Boolean" : input.type === "number" ? "Number" : input.type === "currency" ? "Currency" : "Text",
+              availableInput: true,
+              availableOutput: false,
+              isCollection: false,
+            })),
+            ...(flow.outputContract || []).map((output) => ({
+              value: `variables.${output.name}`,
+              apiName: output.name,
+              label: output.label || output.name,
+              type: "Variable",
+              dataType: output.type === "boolean" ? "Boolean" : output.type === "number" ? "Number" : output.type === "currency" ? "Currency" : "Text",
+              availableInput: false,
+              availableOutput: true,
+              isCollection: false,
+            })),
+          ],
           actions: flow.actions,
         };
         const existing = await pool.query(
@@ -2194,6 +2263,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
         ["till_petty_cash_submit","Record Petty Cash",tillWorkflowIds.get("ONETILL_RECORD_PETTY_CASH"),"cash.payout"],
         ["till_receipt_qr_policy","Receipt QR Policy",tillWorkflowIds.get("ONETILL_RECEIPT_QR_POLICY"),"sale.view"],
+        ["till_receipt_qr_revoke","Revoke Receipt QR",tillWorkflowIds.get("ONETILL_RECEIPT_QR_REVOKE"),"sale.view"],
       ];
       for (const [buttonKey,label,workflowId,permission] of internalWorkflowButtons) {
         if (!workflowId) continue;
