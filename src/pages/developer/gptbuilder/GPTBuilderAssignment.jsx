@@ -9,6 +9,9 @@ export function normalizeAssignmentConfig(config = {}) {
   return { ...ASSIGNMENT_DEFAULTS, ...config, assignments: Array.isArray(config.assignments) ? config.assignments : [] }
 }
 
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? 'variables.' + resource.apiName : '')
+const isWritable = (resource) => resource?.writable !== false && resource?.providerResource !== true
+
 function resourceType(resource) {
   if (resource?.isCollection) return 'collection'
   return String(resource?.dataType || 'text').toLowerCase()
@@ -37,7 +40,7 @@ export function assignmentConfigErrors(config = {}, resources = []) {
   const errors = []
   if (!c.assignments.length) errors.push('Add at least one assignment.')
   c.assignments.forEach((row,index) => {
-    const resource = resources.find((item) => `variables.${item.apiName}` === row.variable)
+    const resource = resources.find((item) => resourcePath(item) === row.variable)
     if (!row.variable) errors.push(`Assignment ${index + 1}: select a variable.`)
     if (row.variable && !resource) errors.push(`Assignment ${index + 1}: selected variable is unavailable.`)
     const type = resourceType(resource)
@@ -58,7 +61,7 @@ export function assignmentRuntimeAction(instance, resources = []) {
     apiName: instance.apiName,
     description: instance.description || '',
     assignments: c.assignments.map((row) => {
-      const resource = resources.find((item) => `variables.${item.apiName}` === row.variable)
+      const resource = resources.find((item) => resourcePath(item) === row.variable)
       return {
         variable: row.variable,
         variableType: resourceType(resource),
@@ -82,18 +85,18 @@ export default function GPTBuilderAssignment({ draft, updateConfig, resources, o
       <p className="gptb-help-text">Assignments run in the order shown.</p>
       <div className="gptb-gr-field-assignments">
         {config.assignments.map((row,index) => {
-          const resource = resources.find((item) => `variables.${item.apiName}` === row.variable)
+          const resource = resources.find((item) => resourcePath(item) === row.variable)
           const type = resourceType(resource)
           return <div key={row.id}>
             <span>{index + 1}</span>
             <select value={row.variable || ''} onChange={(event) => {
               const variable = event.target.value
-              const selected = resources.find((item) => `variables.${item.apiName}` === variable)
+              const selected = resources.find((item) => resourcePath(item) === variable)
               const operators = assignmentOperators(resourceType(selected))
               patchRow(row.id,{variable,operator:operators[0]?.[0] || 'set',value:'',valueMode:'literal'})
             }}>
               <option value="">Select a variable</option>
-              {resources.map((item) => <option key={item.id || item.apiName} value={`variables.${item.apiName}`}>{item.label || item.apiName}{item.isCollection ? ' — Collection' : ''}</option>)}
+              {resources.filter(isWritable).map((item) => <option key={item.id || item.apiName} value={resourcePath(item)}>{item.label || item.apiName}{item.isCollection ? ' — Collection' : ''}</option>)}
             </select>
             <select value={row.operator || 'set'} onChange={(event) => patchRow(row.id,{operator:event.target.value,value:''})}>
               {assignmentOperators(type).map(([key,label]) => <option key={key} value={key}>{label}</option>)}
@@ -101,7 +104,7 @@ export default function GPTBuilderAssignment({ draft, updateConfig, resources, o
             <div className="gptb-gr-value">
               <button type="button" onClick={() => patchRow(row.id,{valueMode:row.valueMode === 'resource' ? 'literal' : 'resource',value:''})}>{row.valueMode === 'resource' ? 'Resource' : 'Value'}</button>
               {row.valueMode === 'resource'
-                ? <select value={row.value || ''} onChange={(event) => patchRow(row.id,{value:event.target.value})}><option value="">Select a resource</option>{resources.map((item) => <option key={item.id || item.apiName} value={`variables.${item.apiName}`}>{item.label || item.apiName}</option>)}</select>
+                ? <select value={row.value || ''} onChange={(event) => patchRow(row.id,{value:event.target.value})}><option value="">Select a resource</option>{resources.map((item) => <option key={item.id || item.apiName} value={resourcePath(item)}>{item.label || item.apiName}</option>)}</select>
                 : <input value={row.value ?? ''} placeholder={row.operator === 'remove_position' ? 'Position' : 'Enter value'} onChange={(event) => patchRow(row.id,{value:event.target.value})}/>}
             </div>
             <button type="button" aria-label={`Remove assignment ${index + 1}`} onClick={() => patch({ assignments: config.assignments.filter((item) => item.id !== row.id) })}><Trash2 size={13}/></button>
