@@ -556,7 +556,9 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
           "split_method_duplicate",
           "split_line_valid",
           "split_update_valid",
+          "split_set_valid",
           "split_add_paid",
+          "split_next_methods",
           "split_add_method",
         ],
       },
@@ -591,13 +593,11 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
         ...assignment("split_add_paid", "5. Add Payment To Paid Total", "paidTotal", "number", { path: "variables.paymentAmount" }),
         operator: "add",
       },
-      assignment("split_add_method", "6. Remember Used Method", "usedMethods", "text", {
-        formula: 'CONCAT(usedMethods, methodToken)',
-        inputs: {
-          usedMethods: { path: "variables.usedMethods" },
-          methodToken: { path: "variables.methodToken" },
-        },
+      creditFormula("split_next_methods", "nextUsedMethods", "text", 'CONCAT(usedMethods, methodToken)', {
+        usedMethods: { path: "variables.usedMethods" },
+        methodToken: { path: "variables.methodToken" },
       }),
+      assignment("split_add_method", "6. Remember Used Method", "usedMethods", "text", { path: "variables.nextUsedMethods" }),
       creditFormula("split_remaining", "remaining", "number", "ROUND(total - paidTotal, 2)", {
         total: { path: "variables.total" },
         paidTotal: { path: "variables.paidTotal" },
