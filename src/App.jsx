@@ -1951,11 +1951,6 @@ function Desktop({ onLock, onSignOut }) {
     return () => { live = false }
   }, [])
 
-  useEffect(() => {
-    if (storeApps.length) return
-    void refreshStoreApps({ silent: true })
-  }, [])
-
   const refreshStoreApps = async ({ silent = false, allowCacheFallback = true } = {}) => {
     if (storeRefreshInFlightRef.current) return storeRefreshInFlightRef.current
     const request = (async () => {
