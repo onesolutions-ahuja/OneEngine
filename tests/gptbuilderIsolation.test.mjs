@@ -1316,3 +1316,16 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 5 Decision supports standard, date, and field-value split modes', async () => {
+  const decision = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDecision.jsx', import.meta.url), 'utf8')
+  assert.match(decision, /splitMode: 'standard'/)
+  assert.match(decision, /Split by Date/)
+  assert.match(decision, /Split by Field Value/)
+  assert.match(decision, /Date Resource/)
+  assert.match(decision, /splitResource/)
+  assert.match(decision, /splitValue/)
+  assert.match(decision, /c\.splitMode === 'standard'/)
+  assert.match(decision, /splitMode: c\.splitMode \|\| 'standard'/)
+})
