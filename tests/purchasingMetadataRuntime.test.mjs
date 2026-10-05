@@ -185,13 +185,10 @@ test("gift cards online orders and attendance use metadata workspaces while runt
 });
 
 
-test("sales route no longer depends on deleted legacy loyalty helpers", async () => {
-  const route = await readFile(new URL("../server/routes/sales.js", import.meta.url), "utf8");
-  assert.equal(route.includes("../src/utils/loyaltyPoints.js"), false);
-  assert.equal(route.includes("validateRedeemConfig"), false);
-  assert.equal(route.includes("validateRedeemablePoints"), false);
-  assert.equal(route.includes("customer_loyalty_transactions"), false);
-  assert.equal(route.includes("customer_loyalty_balances"), false);
+test("legacy sales route is removed in favor of metadata runtime", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.equal(server.includes("./routes/sales.js"), false);
+  assert.equal(server.includes("createSalesRouter("), false);
 });
 
 
