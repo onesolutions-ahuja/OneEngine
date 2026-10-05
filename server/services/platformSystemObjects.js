@@ -3,7 +3,6 @@
 const definitions = [
   ["product", "products", "product.view", "/app/products"],
   ["customer", "customers", "customer.view", "/app/customers"],
-  ["supplier", "suppliers", "inventory.view", "/app/suppliers"],
   ["category", "categories", "product.view", "/app/products"],
   ["price_list", "price_lists", "customer.view", "/app/customers"],
   ["employee", "users", "user.view", "/app/employees"],
