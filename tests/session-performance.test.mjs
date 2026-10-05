@@ -59,9 +59,16 @@ test('per-request session security skips unused trusted-network lookup and paral
   assert.match(source, /const \[sessionResult, state\] = await Promise\.all/)
 })
 
-test('RBAC role and permission-set reads run in parallel', async () => {
-  const source = await read('../server/server.js')
-  assert.match(source, /const \[codes, permissionSets\] = await Promise\.all/)
+test('login RBAC permission codes are bundled into the security preflight', async () => {
+  const server = await read('../server/server.js')
+  const security = await read('../server/services/identitySecurity.js')
+  assert.match(security, /AS permission_codes/)
+  assert.match(security, /platform_permission_set_assignments/)
+  assert.match(server, /securityContext\.permissionCodes/)
+  const loginStart = server.indexOf('app.post("/api/auth/login"')
+  const loginEnd = server.indexOf('| CURRENT USER', loginStart)
+  const loginSource = server.slice(loginStart, loginEnd > loginStart ? loginEnd : undefined)
+  assert.equal(loginSource.includes('SELECT p.code'), false)
 })
 
 
@@ -309,4 +316,14 @@ test('trusted runtime accepts package functions protected by permissionsAny', as
   assert.match(source, /alternativePermissions/)
   assert.match(source, /fn\?\.permissionsAny/)
   assert.match(source, /!requiredPermissions\.length && !alternativePermissions\.length/)
+})
+
+
+test('login network policy uses the preloaded preflight result instead of another database round trip', async () => {
+  const server = await read('../server/server.js')
+  const security = await read('../server/services/identitySecurity.js')
+  assert.match(security, /trusted_network/)
+  assert.match(security, /login_allowed_matches/)
+  assert.match(server, /trustedNetworkOverride: securityContext\.trustedNetwork/)
+  assert.match(server, /matches: securityContext\.loginAllowedMatches/)
 })
