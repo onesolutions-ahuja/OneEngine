@@ -1,4 +1,3 @@
-const HIDDEN_PACKAGE_TYPES = new Set(["FOUNDATION"]);
 const PROVIDER_BRANDS = new Map([
   ["uber_eats", "uber-eats"],
   ["deliveroo", "deliveroo"],
@@ -32,9 +31,6 @@ const PROVIDER_BRANDS = new Map([
 export function isStorefrontPackage(item) {
   if (!item || item.visible !== true || item.system_only === true) return false;
   if (item.publication_state && item.publication_state !== "PUBLISHED") return false;
-  if (HIDDEN_PACKAGE_TYPES.has(String(item.package_type || "").toUpperCase())) {
-    return item.visible === true && item.system_only === false;
-  }
   return true;
 }
 
@@ -43,9 +39,9 @@ export function storefrontStatus(item) {
 }
 
 export function installedPackageVersionState(item) {
-  const installedVersion = item?.tenant_app_installed_version || item?.installed_version || item?.version || "0.0.0";
-  const latestVersion = item?.tenant_app_available_version || item?.available_version || item?.version || installedVersion;
-  const state = String(item?.update_display_status || item?.tenant_app_update_status || "CURRENT").toUpperCase();
+  const installedVersion = item?.tenant_app_installed_version || "—";
+  const latestVersion = item?.tenant_app_available_version || item?.version || installedVersion;
+  const updateStatus = String(item?.tenant_app_update_status || "CURRENT").toUpperCase();
   const labels = {
     CURRENT: "Current",
     UPDATE_AVAILABLE: "Update available",
@@ -59,10 +55,10 @@ export function installedPackageVersionState(item) {
   return {
     installedVersion,
     latestVersion,
-    updateStatus: state,
-    label: labels[state] || state,
-    forced: item?.forced_update === true,
-    canUpdate: item?.can_update === true,
+    updateStatus,
+    label: labels[updateStatus] || updateStatus,
+    forced: item?.tenant_app_force_update === true,
+    canUpdate: item?.tenant_app_can_update === true,
   };
 }
 
