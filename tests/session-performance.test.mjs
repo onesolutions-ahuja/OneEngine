@@ -339,6 +339,7 @@ test('login timing keeps permission and authorization phases separate', async ()
 })
 
 
+// Common email login must stay on the normalized-email index.
 test('email login uses indexed normalized-email lookup without OR on the common path', async () => {
   const source = await read('../server/server.js')
   assert.match(source, /const looksLikeEmail = normalizedIdentifier\.includes\("@"/)
