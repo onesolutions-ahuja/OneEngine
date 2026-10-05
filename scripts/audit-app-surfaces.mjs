@@ -36,14 +36,10 @@ assert(store.includes('Retry'), 'oneStore must expose retry after catalogue fail
 assert(exists('public/icons/apps/default-app.svg'), 'Missing public default app icon')
 assert(exists('public/icons/apps/onestore.svg'), 'Missing oneStore icon')
 
-const aliasMatch = shared.match(/const ICON_ALIASES = Object\.freeze\(\{([\s\S]*?)\}\)/)
-assert(Boolean(aliasMatch), 'Unable to inspect ICON_ALIASES')
-if (aliasMatch) {
-  const assets = [...aliasMatch[1].matchAll(/:\s*'([a-z0-9-]+)'/g)].map((match) => match[1])
-  for (const asset of new Set(assets)) {
-    assert(exists(`public/icons/apps/${asset}.svg`), `ICON_ALIASES points to missing asset: ${asset}.svg`)
-  }
-}
+// App icons are metadata-owned. The shared marketplace helper must not
+// reintroduce a hardcoded package/icon alias table; explicit manifest assets
+// and the default icon are validated below through source references.
+assert(!shared.includes('ICON_ALIASES'), 'appMarketplace must not contain hardcoded ICON_ALIASES')
 
 const supportedRoutes = new Set([...app.matchAll(/activeApp\s*===\s*'([^']+)'/g)].map((m) => m[1]))
 supportedRoutes.add('settings')
