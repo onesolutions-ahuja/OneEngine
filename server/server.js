@@ -817,62 +817,28 @@ async function canAccessStore(user, storeId) {
 |--------------------------------------------------------------------------
 */
 
-app.get("/api/health", async (req, res) => {
-  let database = "not configured";
-  let bootstrap = { current: false, fingerprint: null };
-  let packageRegistry = { healthy: false, expectedCount: 0, actualCount: 0, missing: [], stale: [] };
-  let healthError = null;
-
-  if (pool) {
-    try {
-      await db("SELECT NOW()");
-      database = "connected";
-      bootstrap = await platformBootstrapIsCurrent();
-      packageRegistry = await verifyPublicPackageRegistry(db);
-    } catch (error) {
-      console.error("Database/platform health check failed:", error.message);
-      database = database === "connected" ? "connected" : "error";
-      healthError = error.message;
-    }
-  }
-
-  const healthy =
-    database === "connected" &&
-    bootstrap.current === true &&
-    packageRegistry.healthy === true &&
-    !healthError;
-
-  const classifiedHealthCode = healthError
-    ? classifyDebugCode({ message: healthError }, 503)
-    : null;
-  const oeCode = healthy
-    ? null
-    : classifiedHealthCode && classifiedHealthCode !== "OEAA01" && classifiedHealthCode !== "OEAE01"
-      ? classifiedHealthCode
-      : runtimeReadiness.oeCode && runtimeReadiness.oeCode !== "OEAA01" && runtimeReadiness.oeCode !== "OEAE01"
-        ? runtimeReadiness.oeCode
-        : "OENH01";
+app.get("/api/health", (req, res) => {
+  // Keep routine connectivity probes memory-only. The previous health route
+  // queried PostgreSQL, bootstrap metadata, and the package registry on every
+  // browser poll, which prevented idle databases from ever becoming idle and
+  // multiplied bandwidth across every open client.
+  const ready = runtimeReadiness.state === "ready";
+  const oeCode = ready ? null : (runtimeReadiness.oeCode || "OESB01");
   const definition = oeCode ? (builtinDebugCode(oeCode) || builtinDebugCode("OEAA01")) : null;
 
-  res.status(healthy ? 200 : 503).json({
-    success: healthy,
+  res.status(ready ? 200 : 503).json({
+    success: ready,
     app: "OneEngine",
-    status: healthy ? "online" : runtimeReadiness.state,
+    status: runtimeReadiness.state,
     version: "0.2.0",
-    database,
-    platformBootstrap: {
-      current: bootstrap.current === true,
-      fingerprint: bootstrap.fingerprint || null,
+    database: ready ? "connected" : (runtimeReadiness.state === "degraded" ? "unavailable" : "unknown"),
+    readiness: {
+      state: runtimeReadiness.state,
+      updatedAt: runtimeReadiness.updatedAt,
     },
-    packageRegistry,
     diagnostics: {
       serviceUrl: process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_API_URL || null,
       buildCommit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
-      allowedCorsOrigins: [...defaultCorsOrigins],
-      allowedCorsHeaders: [
-        "Authorization","Content-Type","X-Acting-Company-Id","X-Store-Id",
-        "X-One-Device-Key","X-OneEngine-Capability","X-OneEngine-Runtime","X-Requested-With",
-      ],
     },
     ...(definition ? {
       code: definition.code,
@@ -883,6 +849,48 @@ app.get("/api/health", async (req, res) => {
     } : {}),
     time: new Date().toISOString(),
   });
+});
+
+// Deep health is intentionally explicit and protected by normal API readiness.
+// It is for diagnostics, not browser connectivity polling.
+app.get("/api/health/deep", async (req, res) => {
+  if (runtimeReadiness.state !== "ready") {
+    const definition = builtinDebugCode(runtimeReadiness.oeCode) || builtinDebugCode("OESB01");
+    return res.status(503).json({
+      success: false,
+      code: definition.code,
+      oeCode: definition.code,
+      message: definition.userMessage,
+      database: "unavailable",
+    });
+  }
+
+  try {
+    await db("SELECT 1");
+    const [bootstrap, packageRegistry] = await Promise.all([
+      platformBootstrapIsCurrent(),
+      verifyPublicPackageRegistry(db),
+    ]);
+    const healthy = bootstrap.current === true && packageRegistry.healthy === true;
+    return res.status(healthy ? 200 : 503).json({
+      success: healthy,
+      database: "connected",
+      platformBootstrap: bootstrap,
+      packageRegistry,
+      time: new Date().toISOString(),
+    });
+  } catch (error) {
+    const code = classifyDebugCode(error, 503);
+    const definition = builtinDebugCode(code) || builtinDebugCode("OENH01");
+    return res.status(503).json({
+      success: false,
+      code: definition.code,
+      oeCode: definition.code,
+      message: definition.userMessage,
+      database: "unavailable",
+      time: new Date().toISOString(),
+    });
+  }
 });
 
 /*
@@ -4059,7 +4067,11 @@ async function startServer() {
       void drain();
     }
 
-    const workerTimer = workerEnabled ? setInterval(drain, 5000) : null;
+    const workerPollMs = Math.min(
+      15 * 60_000,
+      Math.max(30_000, Number(process.env.PLATFORM_JOB_POLL_MS || 60_000))
+    );
+    const workerTimer = workerEnabled ? setInterval(drain, workerPollMs) : null;
     if (workerTimer?.unref) workerTimer.unref();
     const shutdown = () => {
       if (workerTimer) clearInterval(workerTimer);
@@ -4093,7 +4105,9 @@ async function startServer() {
       transientCodes.has(String(error?.code || "").toUpperCase()) ||
       /before secure TLS connection|connection terminated unexpectedly|timeout expired|server closed the connection/i.test(String(error?.message || ""));
     if (transientDatabaseFailure) {
-      const retryDelayMs = Math.min(60_000, Math.max(3_000, 3_000 * (2 ** Math.min(startupAttempt - 1, 4))));
+      const retryDelayMs = startupAttempt <= 5
+        ? Math.min(60_000, Math.max(3_000, 3_000 * (2 ** Math.min(startupAttempt - 1, 4))))
+        : Math.min(15 * 60_000, 60_000 * (2 ** Math.min(startupAttempt - 5, 4)));
       console.warn(`onePOS: transient database startup failure; retrying in ${retryDelayMs}ms (attempt ${startupAttempt})`);
       startupRetryTimer = setTimeout(() => void startServer(), retryDelayMs);
       startupRetryTimer.unref?.();
