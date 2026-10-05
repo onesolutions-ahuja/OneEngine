@@ -25,16 +25,23 @@ export default function Builder2GraphCanvas({nodes,edges,onNodesChangeExternal,o
     data:{label:n.label,type:n.type,selected:false,onOpen:()=>onOpen?.(n.id),canFault:['GET_RECORDS','CREATE_RECORDS','UPDATE_RECORDS','DELETE_RECORDS','ACTION','SUBFLOW'].includes(n.type)}
   })),[nodes,onOpen])
   const [rfNodes,setRfNodes,onNodesChange]=useNodesState(initialNodes)
-  const [rfEdges,setRfEdges,onEdgesChange]=useEdgesState(edges.map(e=>({...e,type:'smoothstep',label:e.label||'',animated:e.kind==='fault'})))
+  const [rfEdges,setRfEdges,onEdgesChange]=useEdgesState(edges.map(e=>({...e,type:'smoothstep',label:e.label||'',animated:['fault','goto'].includes(e.kind)})))
   useEffect(()=>{setRfNodes(initialNodes)},[initialNodes,setRfNodes])
   useEffect(()=>{setRfEdges(edges.map(e=>({...e,type:'smoothstep',label:e.label||'',animated:e.kind==='fault'})))},[edges,setRfEdges])
   const connect=useCallback(params=>{
-    const kind=params.sourceHandle==='fault'?'fault':params.sourceHandle==='outcome'?'outcome':'normal'
+    const hasIncoming=es.some(edge=>edge.target===params.target&&!['fault','goto'].includes(edge.kind))
+    const reachesSource=(start,seen=new Set())=>{
+      if(start===params.source)return true
+      if(seen.has(start))return false
+      seen.add(start)
+      return es.filter(edge=>edge.source===start&&edge.kind!=='fault').some(edge=>reachesSource(edge.target,seen))
+    }
+    const kind=params.sourceHandle==='fault'?'fault':(hasIncoming||reachesSource(params.target))?'goto':params.sourceHandle==='outcome'?'outcome':'normal'
     setRfEdges(es=>{
       const candidate={...params,kind}
       const issue=validateGraphConnection(nodes,es,candidate)
       if(issue){onInvalidConnection?.(issue);return es}
-      const edge={...params,id:`${params.source}:${params.sourceHandle||'default'}:${params.target}:${Date.now()}`,kind,label:kind==='fault'?'Fault':kind==='outcome'?'Outcome':''}
+      const edge={...params,id:`${params.source}:${params.sourceHandle||'default'}:${params.target}:${Date.now()}`,kind,label:kind==='fault'?'Fault':kind==='goto'?'Go To':kind==='outcome'?'Outcome':''}
       const next=addEdge({...edge,type:'smoothstep'},es)
       onEdgesChangeExternal?.(next.map(({id,source,target,sourceHandle,targetHandle,kind,label})=>({id,source,target,sourceHandle,targetHandle,kind,label})))
       return next
