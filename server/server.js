@@ -2022,7 +2022,7 @@ app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool,
 | CATEGORIES & PRODUCTS
 |--------------------------------------------------------------------------
 |
-| Product and category routes are registered via routes/products.js,
+| Product and category records are served by the generic platform object runtime.
 | receiving the existing authenticate, authorize, db, pool and
 | createInventoryMovement functions so behaviour is unchanged.
 |
