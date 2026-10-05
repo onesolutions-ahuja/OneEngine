@@ -1140,6 +1140,18 @@ const retailObjects = [
     ],
   },
   {
+    key: "terminal", label: "Till", plural: "Tills", table: "terminals",
+    fields: [
+      ["store_id", "Store", "lookup", "store_id", true],
+      ["name", "Name", "text", "name", true],
+      ["terminal_number", "Terminal Number", "text", "terminal_number", false],
+      ["device_identifier", "Device Identifier", "text", "device_identifier", false],
+      ["active", "Active", "boolean", "active", false],
+      ["created_at", "Created", "datetime", "created_at", false],
+      ["updated_at", "Updated", "datetime", "updated_at", false],
+    ],
+  },
+  {
     key: "employee", label: "Staff Member", plural: "Staff", table: "users", moduleKey: "staff",
     config: { settingsHost: true, settingsGroup: "Users", settingsLabel: "Users", settingsOrder: 200, settingsAllowCreate: false, settingsAllowDelete: false },
     fields: [

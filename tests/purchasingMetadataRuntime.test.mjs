@@ -304,3 +304,20 @@ test("kiosk administration is metadata-driven while customer runtime remains pac
   assert.match(route, /\/kiosk\/devices\/register/);
   assert.match(route, /\/kiosk\/devices\/\:id\/heartbeat/);
 });
+
+
+test("store and till administration use metadata while operational till runtime remains", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const admin = await readFile(new URL("../server/routes/admin.js", import.meta.url), "utf8");
+  const till = await readFile(new URL("../server/routes/till.js", import.meta.url), "utf8");
+  const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const settingsPage = await readFile(new URL("../src/pages/settings/StoreTillSettingsPage.jsx", import.meta.url), "utf8");
+  assert.equal(app.includes("pages/stores/StoresPage"), false);
+  assert.match(app, /initialObjectKey="store" appKey="stores"/);
+  assert.match(metadata, /key: "store"[\s\S]*table: "stores"/);
+  assert.match(metadata, /key: "terminal"[\s\S]*table: "terminals"/);
+  assert.equal(admin.includes('router.put("/admin/stores/:id"'), false);
+  assert.equal(admin.includes('router.put("/admin/tills/:id"'), false);
+  assert.equal(settingsPage.includes("/api/admin/tills/"), false);
+  assert.match(till, /\/till\/sessions\/current/);
+});

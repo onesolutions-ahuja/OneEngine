@@ -509,20 +509,6 @@ export default function createAdminRouter({
   /*
    * PUT /api/admin/stores/:id
    */
-  router.put("/admin/stores/:id", authenticate, authorize("store.edit"), async (req, res) => {
-    try { const result = await withDomainSave({ pool, db, savePlatformRecord, key: "store", req, id: req.params.id, write: (db) => db("UPDATE stores SET name=$1, code=$2, address_line1=$3, city=$4, postcode=$5, phone=$6, active=$7, updated_at=NOW() WHERE id=$8 AND company_id=$9 RETURNING id,name,code,address_line1,city,postcode,phone,active", [req.body.name, req.body.code || null, req.body.addressLine1 || null, req.body.city || null, req.body.postcode || null, req.body.phone || null, req.body.active !== false, req.params.id, req.user.companyId]) }); if (!result.rows.length) return res.status(404).json({ success: false, message: "Store not found" }); res.json({ success: true, data: result.rows[0] }); } catch (error) { if (error.code === "PLATFORM_RECORD_INVALID") return res.status(error.status).json({ success: false, code: error.code, message: error.message }); res.status(500).json({ success: false, message: "Unable to update store" }); }
-  });
-
-  /*
-   * POST /api/admin/stores/:id/self-checkout-key
-   *
-   * Generate (or regenerate) the Self-Checkout device key for a store. The
-   * raw key is shown ONCE for pairing the Self-Checkout device; only a
-   * bcrypt hash is stored. Sending { clear: true } un-pairs the store
-   * (existing device sessions simply run out when their short-lived mode
-   * token expires — nothing else is affected).
-   * Permission-gated company administration, like till management.
-   */
   router.post("/admin/stores/:id/self-checkout-key", authenticate, authorize("store.edit"), async (req, res) => {
     if (!(await hasCompanyAdminAccess(req))) return res.status(403).json({ success: false, message: "Administrator permission required" });
     try {
@@ -548,14 +534,6 @@ export default function createAdminRouter({
 
   /*
    * PUT /api/admin/tills/:id
-   */
-  router.put("/admin/tills/:id", authenticate, authorize("store.edit"), async (req, res) => {
-    if (!(await hasCompanyAdminAccess(req))) return res.status(403).json({ success: false, message: "Administrator permission required" });
-    try { const result = await db("UPDATE terminals t SET name=$1, terminal_number=$2, device_identifier=$3, active=$4 FROM stores s WHERE t.id=$5 AND t.store_id=s.id AND s.company_id=$6 RETURNING t.id,t.name,t.terminal_number,t.device_identifier,t.active", [req.body.name, req.body.terminalNumber || null, req.body.deviceIdentifier || null, req.body.active !== false, req.params.id, req.user.companyId]); if (!result.rows.length) return res.status(404).json({ success: false, message: "Till not found" }); res.json({ success: true, data: result.rows[0] }); } catch (error) { res.status(500).json({ success: false, message: "Unable to update till" }); }
-  });
-
-  /*
-   * POST /api/admin/users
    */
   router.post("/admin/users", authenticate, authorize("user.create"), async (req, res) => {
     if (!(await hasCompanyAdminAccess(req))) return res.status(403).json({ success: false, message: "Administrator permission required" });

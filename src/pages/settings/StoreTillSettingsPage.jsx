@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Copy, Hash, LayoutGrid, Monitor, Plus, ReceiptText, ScanLine, Store, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Copy, Hash, LayoutGrid, Monitor, Plus, ReceiptText, ScanLine, Store } from 'lucide-react'
 import { apiRequest } from '../../services/api'
 import { patchSettings } from '../../services/settings'
-import MetadataRecordFormModal from '../../components/MetadataRecordFormModal'
 
 const DOCK_MAX=8
 const DOCK_PAGE_OPTIONS=[
@@ -17,8 +16,6 @@ export default function StoreTillSettingsPage({settings,onSettingsChanged}){
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
   const [message,setMessage]=useState('')
-  const [storeEditor,setStoreEditor]=useState(null)
-  const [tillEditor,setTillEditor]=useState(null)
   const [prefixes,setPrefixes]=useState({till:'TO',delivery:'DEL',selfCheckout:'SC'})
   const [productView,setProductView]=useState('image')
   const [negative,setNegative]=useState(false)
@@ -61,24 +58,6 @@ export default function StoreTillSettingsPage({settings,onSettingsChanged}){
       await onSettingsChanged?.()
       return true
     }catch(err){setError(err?.message||'Unable to save settings');return false}
-    finally{setBusy('')}
-  }
-
-  const saveTill=async(form)=>{
-    try{
-      setBusy(`till-${form.id}`);setError('')
-      const r=await apiRequest(`/api/admin/tills/${encodeURIComponent(form.id)}`,{
-        method:'PUT',
-        body:JSON.stringify({
-          name:form.name,
-          terminalNumber:form.terminalNumber||null,
-          deviceIdentifier:form.deviceIdentifier||null,
-          active:form.active!==false,
-        })
-      })
-      if(!r?.success)throw new Error(r?.message||'Unable to update till')
-      setTillEditor(null);setMessage('Till updated.');await load()
-    }catch(err){setError(err?.message||'Unable to update till')}
     finally{setBusy('')}
   }
 
@@ -160,9 +139,9 @@ export default function StoreTillSettingsPage({settings,onSettingsChanged}){
         {stores.map(store=><article key={store.id}>
           <div className="store-till-store-head">
             <div><strong>{store.name}</strong><span>{store.code||'No code'} · {store.active===false?'Inactive':'Active'}</span></div>
-            <button onClick={()=>setStoreEditor(store)}>Edit store</button>
+            <button>Edit store</button>
           </div>
-          {(store.tills||[]).length?<div className="store-till-terminals">{store.tills.map(till=><button key={till.id} onClick={()=>setTillEditor({...till,storeName:store.name,deviceIdentifier:till.deviceIdentifier||''})}>
+          {(store.tills||[]).length?<div className="store-till-terminals">{store.tills.map(till=><button key={till.id}>
             <Monitor size={14}/><span><strong>{till.name||'Till'}</strong><small>{till.terminalNumber||'No terminal number'} · {till.active===false?'Inactive':'Active'}</small></span>
           </button>)}</div>:<div className="module-state compact">No tills configured for this store.</div>}
         </article>)}
@@ -211,8 +190,6 @@ export default function StoreTillSettingsPage({settings,onSettingsChanged}){
       </div>)}</div>
     </section>
 
-    {storeEditor?<MetadataRecordFormModal objectKey="store" record={storeEditor} mode="edit" title="Edit Store" onClose={()=>setStoreEditor(null)} onSaved={async()=>{setStoreEditor(null);setMessage('Store updated.');await load()}}/>:null}
-    {tillEditor?<TillEditor till={tillEditor} busy={busy===`till-${tillEditor.id}`} onClose={()=>setTillEditor(null)} onSave={saveTill}/>:null}
   </div>
 }
 

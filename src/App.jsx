@@ -116,7 +116,6 @@ const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/
 const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
 const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
 const CustomersPage = lazyWithRecovery(() => import('./pages/workspace/WorkspacePage'))
-const StoresPage = lazyWithRecovery(() => import('./pages/stores/StoresPage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
@@ -2450,7 +2449,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'employees' ? (
           <WorkspacePage initialObjectKey="attendance" appKey="employees" />
         ) : activeApp === 'stores' ? (
-          <StoresPage />
+          <WorkspacePage initialObjectKey="store" appKey="stores" />
         ) : activeApp === 'reports' ? (
           <ReportsPage />
         ) : activeApp === 'custom-reports' ? (
