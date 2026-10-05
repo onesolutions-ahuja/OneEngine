@@ -171,12 +171,7 @@ function infer(node, resolve, depth = 0) {
   if (["PARSEDATE", "TRIM", "UPPER"].includes(node.name)) { requireType(types[0], "string"); return "string"; }
   if (node.name === "MINUTESBETWEEN") { requireType(types[0], "string"); requireType(types[1], "string"); return "number"; }
   if (["TODAY", "NOW", "ADDDAYS"].includes(node.name)) {
-    if (node.name === "MINUTESBETWEEN") {
-    const start = new Date(args[0]), end = new Date(args[1]);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-    return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
-  }
-  if (node.name === "ADDDAYS") {
+    if (node.name === "ADDDAYS") {
       requireType(types[0], "string");
       requireType(types[1], "number");
     }
@@ -237,6 +232,11 @@ function evaluate(node, get) {
     const iso = `${match[3]}-${match[2]}-${match[1]}`;
     const date = new Date(`${iso}T00:00:00.000Z`);
     return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== iso ? null : iso;
+  }
+  if (node.name === "MINUTESBETWEEN") {
+    const start = new Date(args[0]), end = new Date(args[1]);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
   }
   if (node.name === "ADDDAYS") {
     if (args.includes(null) || !Number.isFinite(Number(args[1]))) return null;
