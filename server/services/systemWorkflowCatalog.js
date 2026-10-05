@@ -438,6 +438,120 @@ const CUSTOMER_CREDIT_SYSTEM_WORKFLOWS = [
   }),
 ];
 
+
+const tillFlow = (spec) => {
+  const flow = creditFlow(spec);
+  return { ...flow, name: `OneTill - ${spec.name}` };
+};
+
+const TILL_SYSTEM_WORKFLOWS = Object.freeze([
+  tillFlow({
+    key: "till.stock.validate",
+    name: "Validate Stock",
+    inputs: [
+      creditInput("hasShortfall", "boolean", { required: true }),
+      creditInput("allowNegativeStock", "boolean", { required: true }),
+    ],
+    outputs: [
+      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+    ],
+    actions: [
+      creditFormula(
+        "stock_allowed",
+        "allowed",
+        "boolean",
+        "!hasShortfall || allowNegativeStock",
+        {
+          hasShortfall: { path: "variables.hasShortfall" },
+          allowNegativeStock: { path: "variables.allowNegativeStock" },
+        }
+      ),
+    ],
+  }),
+  tillFlow({
+    key: "till.age.verify",
+    name: "Age Verification",
+    inputs: [
+      creditInput("requiresAgeVerification", "boolean", { required: true }),
+      creditInput("ageVerified", "boolean", { required: true }),
+    ],
+    outputs: [
+      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+    ],
+    actions: [
+      creditFormula(
+        "age_allowed",
+        "allowed",
+        "boolean",
+        "!requiresAgeVerification || ageVerified",
+        {
+          requiresAgeVerification: { path: "variables.requiresAgeVerification" },
+          ageVerified: { path: "variables.ageVerified" },
+        }
+      ),
+    ],
+  }),
+  tillFlow({
+    key: "till.payment.validate",
+    name: "Validate Payment Method",
+    inputs: [
+      creditInput("paymentMethod", "text", { required: true }),
+      creditInput("online", "boolean", { required: true }),
+      creditInput("cardAvailable", "boolean", { required: true }),
+      creditInput("customerSelected", "boolean", { required: true }),
+      creditInput("hasGiftCardCode", "boolean", { required: true }),
+      creditInput("cashReceived", "number", { required: true }),
+      creditInput("total", "number", { required: true }),
+    ],
+    outputs: [
+      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
+    ],
+    actions: [
+      creditFormula(
+        "payment_allowed",
+        "allowed",
+        "boolean",
+        "(paymentMethod == \"cash\" || online) && (paymentMethod != \"card\" || cardAvailable) && (paymentMethod != \"customer_credit\" || customerSelected) && (paymentMethod != \"gift_card\" || hasGiftCardCode) && (paymentMethod != \"cash\" || cashReceived >= total)",
+        {
+          paymentMethod: { path: "variables.paymentMethod" },
+          online: { path: "variables.online" },
+          cardAvailable: { path: "variables.cardAvailable" },
+          customerSelected: { path: "variables.customerSelected" },
+          hasGiftCardCode: { path: "variables.hasGiftCardCode" },
+          cashReceived: { path: "variables.cashReceived" },
+          total: { path: "variables.total" },
+        }
+      ),
+    ],
+  }),
+  tillFlow({
+    key: "till.receipt.qr",
+    name: "Create Receipt QR",
+    inputs: [
+      creditInput("saleId", "text", { required: true }),
+      creditInput("expiryMinutes", "number", { required: true }),
+      creditInput("baseUrl", "text"),
+    ],
+    outputs: [
+      { name: "receipt", label: "Receipt QR", type: "object", source: "steps.create_receipt" },
+    ],
+    actions: [
+      {
+        id: "create_receipt",
+        label: "Create Temporary Receipt Download",
+        apiName: "create_receipt",
+        key: "CALL_FUNCTION",
+        functionKey: "temporary.receipt.download.create",
+        inputs: {
+          saleId: { path: "variables.saleId" },
+          expiryMinutes: { path: "variables.expiryMinutes" },
+          baseUrl: { path: "variables.baseUrl" },
+        },
+      },
+    ],
+  }),
+]);
+
 const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
   {
     systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
@@ -733,7 +847,7 @@ export function systemWorkflowDefinitions() {
     .filter((item) => item?.key && item.key !== "WORKFLOW" && item.systemVisible !== false)
     .map(actionWorkflow);
   const jobs = TRUSTED_JOB_KINDS.map(jobWorkflow);
-  return [...functions, ...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS];
+  return [...functions, ...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS];
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {
