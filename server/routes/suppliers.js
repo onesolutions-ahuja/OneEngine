@@ -110,50 +110,6 @@ export default function createSuppliersRouter({ authenticate, authorize, db }) {
     }
   );
 
-  router.post("/suppliers/:id/products", authenticate, authorize("inventory.adjust"), async (req, res) => {
-    try {
-      const cost = Number(req.body?.costPrice);
-      if (!req.body?.productId || !Number.isFinite(cost) || cost < 0) {
-        return res.status(400).json({ success: false, message: "Product and a valid non-negative cost are required" });
-      }
-      const result = await db(
-        `WITH target_product AS (
-           SELECT id FROM products WHERE id=$3 AND company_id=$1 FOR UPDATE
-         ), demoted_preferred AS (
-           UPDATE supplier_products sp
-              SET preferred=false, updated_at=NOW()
-             FROM target_product p
-            WHERE sp.company_id=$1 AND sp.product_id=p.id
-              AND sp.preferred=true AND sp.active=true AND $9::boolean=true
-              AND (sp.supplier_id<>$2 OR sp.effective_from IS DISTINCT FROM COALESCE($7::date,CURRENT_DATE))
-              AND EXISTS (SELECT 1 FROM suppliers WHERE id=$2 AND company_id=$1)
-            RETURNING sp.id
-         )
-         INSERT INTO supplier_products
-          (company_id, supplier_id, product_id, supplier_sku, supplier_description,
-           cost_price, effective_from, effective_to, preferred, active)
-         SELECT $1,$2,$3,$4,$5,$6,COALESCE($7::date,CURRENT_DATE),$8,$9,$10
-          FROM target_product
-          WHERE EXISTS (SELECT 1 FROM suppliers WHERE id=$2 AND company_id=$1)
-            AND (SELECT COUNT(*) FROM demoted_preferred) >= 0
-         ON CONFLICT (company_id, supplier_id, product_id, effective_from)
-         DO UPDATE SET supplier_sku=EXCLUDED.supplier_sku,
-           supplier_description=EXCLUDED.supplier_description, cost_price=EXCLUDED.cost_price,
-           effective_to=EXCLUDED.effective_to, preferred=EXCLUDED.preferred,
-           active=EXCLUDED.active, updated_at=NOW()
-         RETURNING *`,
-        [req.user.companyId, req.params.id, req.body?.productId,
-          req.body?.supplierSku || null, req.body?.supplierDescription || null,
-          cost, req.body?.effectiveFrom || null,
-          req.body?.effectiveTo || null, req.body?.preferred === true, req.body?.active !== false]
-      );
-      if (!result.rows.length) return res.status(404).json({ success: false, message: "Supplier or product not found" });
-      res.status(201).json({ success: true, data: result.rows[0] });
-    } catch (error) {
-      console.error("Set supplier product error:", error);
-      res.status(400).json({ success: false, message: error.message || "Unable to save supplier product" });
-    }
-  });
 
   router.get("/products/:productId/suppliers", authenticate, authorize("inventory.view"), async (req, res) => {
     try {

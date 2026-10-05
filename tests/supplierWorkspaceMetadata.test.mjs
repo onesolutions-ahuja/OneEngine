@@ -30,6 +30,17 @@ test("legacy supplier route is read/compatibility only; master writes use generi
   assert.equal(source.includes('"/suppliers/:id/status"'), false);
   assert.match(source, /"\/suppliers"/);
   assert.match(source, /"\/suppliers\/:id"/);
-  assert.match(source, /"\/suppliers\/:id\/products"/);
   assert.match(source, /"\/products\/:productId\/suppliers"/);
+});
+
+
+test("supplier product writes use metadata CRUD; legacy supplier route is read-only", async () => {
+  const source = await readFile(new URL("../server/routes/suppliers.js", import.meta.url), "utf8");
+  assert.equal(source.includes('router.post("/suppliers/:id/products"'), false);
+  assert.equal(source.includes("INSERT INTO supplier_products"), false);
+  assert.equal(source.includes("UPDATE supplier_products"), false);
+  assert.match(source, /"\/products\/:productId\/suppliers"/);
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.match(registry, /objectKey: "supplier_product"/);
+  assert.match(registry, /parentObjectKey: "supplier", childObjectKey: "supplier_product", relationshipKey: "products"/);
 });

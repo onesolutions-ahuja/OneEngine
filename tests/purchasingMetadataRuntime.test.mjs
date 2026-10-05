@@ -65,3 +65,13 @@ test("supplier feed preview stays neutral and does not prescribe business endpoi
   }
   assert.equal(matcher.includes("purchaseLine"), false);
 });
+
+
+test("legacy supplier return endpoints are removed in favor of protected metadata action", async () => {
+  const route = await readFile(new URL("../server/routes/returns.js", import.meta.url), "utf8");
+  assert.equal(route.includes('"/returns/supplier"'), false);
+  assert.equal(route.includes('"/supplier-returns/available"'), false);
+  assert.equal(route.includes("INSERT INTO supplier_ledger_entries"), false);
+  const capability = await readFile(new URL("../server/packages/purchasing_core/functions.js", import.meta.url), "utf8");
+  assert.match(capability, /key:"supplier\.return\.execute"/);
+});
