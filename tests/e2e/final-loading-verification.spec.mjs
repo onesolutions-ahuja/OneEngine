@@ -65,7 +65,7 @@ test("final loading performance verification", async ({ page, baseURL }) => {
     await page.waitForTimeout(500);
 
     const bodyText = await page.locator("body").innerText();
-    const fatal = /Resolving client context|Checking OneEngine permissions|OneEngine service is unavailable|Application error|Something went wrong/i.test(bodyText);
+    const fatal = /Resolving client context|Checking OneEngine permissions|OneEngine service is unavailable|This app is not available in this workspace|Application error|Something went wrong/i.test(bodyText);
     const stuck = /Loading(?:\s+[A-Za-z ]+)?…|Loading\.\.\.|Please wait/i.test(bodyText);
     if (fatal || stuck) loadingFailures.push({ route, fatal, stuck, excerpt: bodyText.slice(0, 500) });
 
