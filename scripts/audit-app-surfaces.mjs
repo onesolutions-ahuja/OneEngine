@@ -12,6 +12,7 @@ const assert = (condition, message) => { if (!condition) errors.push(message) }
 
 const app = read('src/App.jsx')
 const shell = read('src/components/shell/DesktopShell.jsx')
+const runtimeSurface = read('src/components/shell/DesktopRuntimeSurface.jsx')
 const store = read('src/pages/oneStore/OneStorePopover.jsx')
 const shared = read('src/utils/appMarketplace.js')
 
@@ -47,7 +48,7 @@ if (aliasMatch) {
   }
 }
 
-const supportedRoutes = new Set([...shell.matchAll(/activeApp\s*===\s*'([^']+)'/g)].map((m) => m[1]))
+const supportedRoutes = new Set([...runtimeSurface.matchAll(/activeApp\s*===\s*'([^']+)'/g)].map((m) => m[1]))
 supportedRoutes.add('settings')
 supportedRoutes.add('developer')
 supportedRoutes.add('integrations')
