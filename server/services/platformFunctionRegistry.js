@@ -7,6 +7,7 @@ import { dispatchIntegrationEvent } from "./integrationDispatcher.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { clockInAttendance, clockOutAttendance } from "./attendanceActions.js";
 import { issueAccountToken } from "./accountPolicy.js";
+import { createTemporaryReceiptDownload, buildReceiptQrDownloadUrl } from "./receiptQr.js";
 import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveReceiptQrSettings, revokeTemporaryReceiptDownloadsForSale } from "./receiptQr.js";
 
 // Temporary compatibility registry.
@@ -220,6 +221,35 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
         saleId: inputs.saleId,
       });
       return { status: "completed", saleId: inputs.saleId, revoked: result.revoked || 0 };
+    },
+  },
+  {
+    key: "temporary.receipt.download.create",
+    category: "DOCUMENT_RUNTIME",
+    description: "Create a short-lived receipt download token and public URL from supplied record context.",
+    inputs: { type: "object", required: ["saleId"] },
+    outputs: { type: "object" },
+    permissions: ["sale.view"],
+    handler: async ({ inputs = {}, db, companyId, req }) => {
+      const result = await createTemporaryReceiptDownload({
+        db,
+        companyId: companyId || req?.user?.companyId,
+        storeId: inputs.storeId || req?.user?.storeId || null,
+        tillId: inputs.tillId || req?.user?.tillId || null,
+        saleId: inputs.saleId,
+        expiryMinutes: Number(inputs.expiryMinutes || 5),
+      });
+      if (!result.ok) throw Object.assign(new Error(result.message || "Unable to create temporary receipt download"), { status: result.status || 500 });
+      const url = buildReceiptQrDownloadUrl(result.token, inputs.baseUrl || null);
+      return {
+        id: result.id,
+        saleId: result.saleId,
+        token: result.token,
+        url,
+        qrcodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`,
+        expiresAt: result.expiresAt,
+        expiresMinutes: Number(inputs.expiryMinutes || 5),
+      };
     },
   },
   {
