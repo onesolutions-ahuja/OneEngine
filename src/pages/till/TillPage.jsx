@@ -572,9 +572,9 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
     let selectedMethod = paymentMethods.find((method) => method.code === paymentMethod) || null
     let methodConfig = selectedMethod?.config || {}
-    const received = methodConfig.requiresCashReceived === true
-      ? Number(paymentInputs.cashReceivedOverride ?? total ?? 0)
-      : null
+    const received = paymentInputs.cashReceivedOverride == null || paymentInputs.cashReceivedOverride === ''
+      ? null
+      : Number(paymentInputs.cashReceivedOverride)
 
     if (paymentMethod !== 'split' && !paymentFlowValidated) {
       try {
@@ -883,24 +883,19 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
   }
 
-  const paymentFlowInputs = (paymentMode, options = {}) => {
-    const method = paymentMethods.find((row) => row.code === paymentMode) || {}
-    const config = method.config || {}
-    const received = Number(options.cashReceivedOverride ?? total ?? 0)
-    return {
-      paymentMode,
-      allowOffline: method.allowOffline === true,
-      online,
-      customerSelected: Boolean(selectedCustomer?.id),
-      hasGiftCardCode: Boolean(String(options.giftCardCode || '').trim()),
-      cashReceived: received,
-      total,
-      requiresConnector: method.requiresConnector === true,
-      requiresCustomer: config.requiresCustomer === true,
-      requiresGiftCardCode: config.requiresGiftCardCode === true,
-      requiresCashReceived: config.requiresCashReceived === true,
-    }
-  }
+  const paymentFlowInputs = (paymentMode, options = {}, { executeConnector = false, clientRequestId = '', terminalId = null } = {}) => ({
+    paymentMode,
+    online,
+    customerSelected: Boolean(selectedCustomer?.id),
+    hasGiftCardCode: Boolean(String(options.giftCardCode || '').trim()),
+    cashReceived: Number(options.cashReceivedOverride ?? total ?? 0),
+    total,
+    executeConnector,
+    currency,
+    clientRequestId,
+    terminalId: terminalId || till?.terminal_id || null,
+    selfCheckout: false,
+  })
 
   const startPaymentMethod = async (method) => {
     if (!method?.code) return
