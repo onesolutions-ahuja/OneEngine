@@ -5,6 +5,7 @@ import {
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor, RefreshCw, ArrowLeftRight,
 } from 'lucide-react'
 import { apiRequest, getStoredUser, loadSessionPermissions } from '../../services/api'
+import { executeObjectButton, executeRuntimeObjectButton } from '../../actions/metadata/executeObjectButton.js'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
@@ -754,11 +755,12 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const executeRecordButton = async (button, recordId) => {
     if (!button?.button_key || !recordId) throw new Error('A synced sale is required for this action.')
-    const response = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(recordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
-      method: 'POST',
-      body: JSON.stringify({}),
+    const response = await executeObjectButton({
+      request: apiRequest,
+      objectKey: 'sale',
+      recordId,
+      button,
     })
-    if (response?.success === false) throw new Error(response.message || 'Unable to execute Till action')
     return response?.data || response
   }
 
@@ -868,16 +870,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         ...contextOverride,
       }
 
-      const endpoint = useRecordScope && scopedRecordId
-        ? `/api/platform/objects/sale/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
-        : `/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`
-
-      const response = await apiRequest(endpoint, {
-        method: 'POST',
-        body: JSON.stringify(useRecordScope && scopedRecordId ? { inputs: context } : { context }),
+      return await executeRuntimeObjectButton({
+        request: apiRequest,
+        objectKey: 'sale',
+        button,
+        context,
+        recordId: useRecordScope ? scopedRecordId : null,
       })
-      if (response?.success === false) throw new Error(response?.message || 'Unable to run Till action')
-      return response
     } finally {
       setBusy(false)
     }

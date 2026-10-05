@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRuntimeExecutionQuery, executeObjectButton, executeObjectButtonForRecords } from "../src/actions/metadata/executeObjectButton.js";
+import { buildRuntimeExecutionQuery, executeObjectButton, executeObjectButtonForRecords, executeRuntimeObjectButton } from "../src/actions/metadata/executeObjectButton.js";
 
 test("object button execution builds one generic metadata endpoint", async () => {
   const calls = [];
@@ -16,6 +16,31 @@ test("object button execution builds one generic metadata endpoint", async () =>
   assert.equal(response.data.ok, true);
   assert.equal(calls[0][0], "/api/platform/objects/dynamic_object/records/record-1/buttons/button-9/execute?formFactor=desktop&appKey=app-2");
   assert.deepEqual(JSON.parse(calls[0][1].body), { inputs: { value: 4 } });
+});
+
+test("runtime object button execution uses metadata object and button identifiers", async () => {
+  const calls = [];
+  await executeRuntimeObjectButton({
+    request: async (...args) => { calls.push(args); return { success: true }; },
+    objectKey: "dynamic_object",
+    button: { button_key: "runtime-button" },
+    context: { amount: 12 },
+  });
+  assert.equal(calls[0][0], "/api/platform/runtime/objects/dynamic_object/buttons/runtime-button/execute");
+  assert.deepEqual(JSON.parse(calls[0][1].body), { context: { amount: 12 } });
+});
+
+test("runtime object button switches to record scope without page-specific endpoint code", async () => {
+  const calls = [];
+  await executeRuntimeObjectButton({
+    request: async (...args) => { calls.push(args); return { success: true }; },
+    objectKey: "dynamic_object",
+    recordId: "record-2",
+    button: { button_key: "runtime-button" },
+    context: { amount: 12 },
+  });
+  assert.equal(calls[0][0], "/api/platform/objects/dynamic_object/records/record-2/buttons/runtime-button/execute");
+  assert.deepEqual(JSON.parse(calls[0][1].body), { inputs: { amount: 12 } });
 });
 
 test("runtime query omits empty metadata", () => {

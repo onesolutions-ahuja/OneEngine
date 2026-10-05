@@ -29,6 +29,41 @@ export async function executeObjectButton({
   return response;
 }
 
+export async function executeRuntimeObjectButton({
+  request,
+  objectKey,
+  button,
+  context = {},
+  recordId = null,
+  formFactor = "",
+  appKey = "",
+}) {
+  if (recordId) {
+    return executeObjectButton({
+      request,
+      objectKey,
+      recordId,
+      button,
+      formFactor,
+      appKey,
+      body: { inputs: context || {} },
+    });
+  }
+
+  if (typeof request !== "function") throw new Error("A request function is required.");
+  if (!objectKey) throw new Error("Object metadata is incomplete.");
+  if (!button?.button_key) throw new Error("Button metadata is incomplete.");
+
+  const query = buildRuntimeExecutionQuery({ formFactor, appKey });
+  const endpoint = `/api/platform/runtime/objects/${encodeURIComponent(objectKey)}/buttons/${encodeURIComponent(button.button_key)}/execute${query ? `?${query}` : ""}`;
+  const response = await request(endpoint, {
+    method: "POST",
+    body: JSON.stringify({ context: context || {} }),
+  });
+  if (response?.success === false) throw new Error(response.message || "Unable to execute configured action.");
+  return response;
+}
+
 export async function executeObjectButtonForRecords(options, recordIds = []) {
   const responses = [];
   for (const recordId of recordIds) {
