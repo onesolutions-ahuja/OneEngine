@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
-const resourcePath = (resource) => resource ? `variables.${resource.apiName}` : ''
+const resourcePath = (resource) => resource?.path || (resource?.apiName ? `variables.${resource.apiName}` : '')
 const resourceLabel = (resource) => resource?.label || resource?.apiName || ''
 
 export const WAIT_UNTIL_DATE_DEFAULTS = Object.freeze({
