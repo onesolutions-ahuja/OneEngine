@@ -341,6 +341,20 @@ const primaryDatabaseUrl = process.env.DATABASE_URL
   ? normalizePrimaryDatabaseUrl(process.env.DATABASE_URL)
   : "";
 
+function normalizePemCertificate(value) {
+  const certificate = String(value || "").trim();
+  if (!certificate) return "";
+  return certificate.includes("\\n") ? certificate.replace(/\\n/g, "\n") : certificate;
+}
+
+const primaryDatabaseCaCertificate = normalizePemCertificate(process.env.DATABASE_CA_CERT);
+const primaryDatabaseSsl = primaryDatabaseCaCertificate
+  ? {
+      ca: primaryDatabaseCaCertificate,
+      rejectUnauthorized: true,
+    }
+  : undefined;
+
 function describeDatabaseTarget(connectionString) {
   try {
     const parsed = new URL(connectionString);
@@ -360,6 +374,7 @@ const primaryDatabaseTarget = primaryDatabaseUrl ? describeDatabaseTarget(primar
 const pool = primaryDatabaseUrl
   ? new Pool({
       connectionString: primaryDatabaseUrl,
+      ...(primaryDatabaseSsl ? { ssl: primaryDatabaseSsl } : {}),
       /*
        * Startup safety: without these bounds a single abandoned connection
        * (e.g. a transaction left "idle in transaction" while an outbound
