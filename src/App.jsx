@@ -2493,8 +2493,10 @@ function Desktop({ onLock, onSignOut }) {
               setRoute('workspace', null, { objectKey, recordId, appKey })
             }}
           />
-        ) : (
+        ) : activeApp === 'home' || activeApp === 'dashboard' ? (
           <DashboardPage />
+        ) : (
+          <div className="module-state" role="alert">This app is not available in this workspace.</div>
         )}
       </Suspense>
       </LazyLoadBoundary>
