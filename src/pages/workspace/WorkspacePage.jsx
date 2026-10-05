@@ -461,9 +461,10 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
 
   const columns = useMemo(() => makeColumns(fields, runtimeMeta.defaultListView), [fields, runtimeMeta.defaultListView])
   const searchKeys = useMemo(() => columns.map((column) => column.key), [columns])
-  const canCreate = permissions?.can_create === true
-  const canEdit = permissions?.can_edit === true
-  const canDelete = permissions?.can_delete === true
+  const protectedWrites = selectedObject?.config?.protectedWrites === true
+  const canCreate = permissions?.can_create === true && !protectedWrites
+  const canEdit = permissions?.can_edit === true && !protectedWrites
+  const canDelete = permissions?.can_delete === true && !protectedWrites
 
   const defaultRecordTypeId = runtimeMeta.recordTypes.find((item) => item.is_default === true)?.id || ''
 

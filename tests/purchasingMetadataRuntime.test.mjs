@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.js";
+
+test("purchasing package exposes protected metadata flows and functions", async () => {
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.match(registry, /entry\.key === "purchasing_core"/);
+  for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.ok(PLATFORM_FUNCTIONS.some((item) => item.key === key), key);
+  assert.match(registry, /targetKey:"Purchase Create"/);
+  assert.match(registry, /targetKey:"Supplier Return Execute"/);
+});
+
+test("purchases and supplier returns use generic workspace", async () => {
+  const purchase = await readFile(new URL("../src/pages/purchases/PurchasesPage.jsx", import.meta.url), "utf8");
+  const returns = await readFile(new URL("../src/pages/returns/SupplierReturnsPage.jsx", import.meta.url), "utf8");
+  assert.match(purchase, /initialObjectKey="purchase"/);
+  assert.match(returns, /initialObjectKey="purchase_line"/);
+  for (const source of [purchase,returns]) for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(source.includes(value),false,value);
+});
+
+test("protected transactional objects cannot use generic CRUD", async () => {
+  const route = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
+  assert.match(route, /config\?\.protectedWrites === true/);
+  const workspace = await readFile(new URL("../src/pages/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
+  assert.match(workspace, /protectedWrites/);
+});
+
+test("purchase line system metadata does not invent company scope", async () => {
+  const source = await readFile(new URL("../server/services/platformSystemObjects.js", import.meta.url), "utf8");
+  assert.match(source, /"purchase_line", "purchase_items".*companyScoped: false/);
+});

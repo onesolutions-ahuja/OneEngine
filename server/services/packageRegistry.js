@@ -1974,6 +1974,7 @@ export function packageDefinition(entry) {
     barcode_nest: "BarcodeNest Connector",
     go_upc: "Go-UPC Connector",
     supplier_core: "Supplier Core",
+    purchasing_core: "Purchasing Core",
     loyalty: "Loyalty Core",
     finance_core: "Finance Core",
     paypal_qr: "PayPal QR Payment",
@@ -2022,6 +2023,7 @@ export function packageDefinition(entry) {
     barcode_nest: "UPC, EAN and GTIN lookup through BarcodeNest using a customer API key.",
     go_upc: "Live product barcode lookup using a customer-provided Go-UPC API key.",
     supplier_core: "Canonical supplier identity and supplier-product sourcing metadata.",
+    purchasing_core: "Protected purchasing, receiving and supplier-return metadata foundation.",
     loyalty: "Canonical loyalty configuration, balances, activity and rules.",
     finance_core: "Reusable financial ledger and supplier-accounting foundation.",
     connector_core: "Hidden runtime, capability routing and hardware-service contracts for installable connector apps.",
@@ -2151,6 +2153,7 @@ export function packageDefinition(entry) {
       lifecycleState: entry.lifecycleState || "PUBLISHED",
       permissions: [...manifestPermissions],
       storeScoped: entry.storeScoped === true,
+      bootstrapFoundation: entry.bootstrapFoundation === true,
       dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : (dependencies[entry.key] || []),
       optionalDependencies: Array.isArray(entry.optionalDependencies) ? entry.optionalDependencies : [],
       versionConstraints: Object.fromEntries(
@@ -3608,6 +3611,130 @@ export function packageDefinition(entry) {
           disableBehavior: "deactivate-package-access-only",
         },
       } : {}),
+      ...(entry.key === "purchasing_core" ? {
+        objects: [
+          {
+            objectKey: "purchase", label: "Purchase", pluralLabel: "Purchases",
+            description: "Protected supplier purchase header.", sourceTable: "purchases",
+            metadataScope: "global", storeScoped: true, required: true,
+            adoptFromPackageKeys: ["retail_pos"], config: { protectedWrites: true, trackHistory: true },
+            fields: [
+              { apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false },
+              { apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:false },
+              { apiName:"supplier_id",label:"Supplier",fieldType:"lookup",sourceColumn:"supplier_id",writable:false,config:{relatedObjectKey:"supplier"} },
+              { apiName:"supplier_name",label:"Supplier Name",fieldType:"text",sourceColumn:"supplier_name",writable:false },
+              { apiName:"reference_number",label:"Reference",fieldType:"text",sourceColumn:"reference_number",writable:false },
+              { apiName:"purchase_date",label:"Purchase Date",fieldType:"date",sourceColumn:"purchase_date",writable:false },
+              { apiName:"notes",label:"Notes",fieldType:"text",sourceColumn:"notes",writable:false },
+              { apiName:"status",label:"Status",fieldType:"text",sourceColumn:"status",writable:false },
+              { apiName:"subtotal",label:"Subtotal",fieldType:"currency",sourceColumn:"subtotal",writable:false },
+              { apiName:"total",label:"Total",fieldType:"currency",sourceColumn:"total",writable:false },
+              { apiName:"created_by",label:"Created By",fieldType:"lookup",sourceColumn:"created_by",writable:false },
+              { apiName:"received_by",label:"Received By",fieldType:"lookup",sourceColumn:"received_by",writable:false },
+              { apiName:"received_at",label:"Received At",fieldType:"datetime",sourceColumn:"received_at",writable:false },
+              { apiName:"created_at",label:"Created",fieldType:"datetime",sourceColumn:"created_at",writable:false },
+              { apiName:"updated_at",label:"Updated",fieldType:"datetime",sourceColumn:"updated_at",writable:false },
+            ],
+          },
+          {
+            objectKey: "purchase_line", label: "Purchase Line", pluralLabel: "Purchase Lines",
+            description: "Protected purchase product lines.", sourceTable: "purchase_items",
+            metadataScope: "global", required: true, adoptFromPackageKeys: ["retail_pos"],
+            config: { protectedWrites: true },
+            fields: [
+              { apiName:"purchase_id",label:"Purchase",fieldType:"lookup",sourceColumn:"purchase_id",writable:false },
+              { apiName:"product_id",label:"Product",fieldType:"lookup",sourceColumn:"product_id",writable:false,config:{relatedObjectKey:"product"} },
+              { apiName:"quantity",label:"Ordered",fieldType:"decimal",sourceColumn:"quantity",writable:false },
+              { apiName:"received_quantity",label:"Received",fieldType:"decimal",sourceColumn:"received_quantity",writable:false },
+              { apiName:"unit_cost",label:"Unit Cost",fieldType:"currency",sourceColumn:"unit_cost",writable:false },
+              { apiName:"line_total",label:"Line Total",fieldType:"currency",sourceColumn:"line_total",writable:false },
+              { apiName:"batch_number",label:"Batch Number",fieldType:"text",sourceColumn:"batch_number",writable:false },
+              { apiName:"manufacturing_date",label:"Manufacturing Date",fieldType:"date",sourceColumn:"manufacturing_date",writable:false },
+              { apiName:"expiry_date",label:"Expiry Date",fieldType:"date",sourceColumn:"expiry_date",writable:false },
+              { apiName:"returned_quantity",label:"Returned",fieldType:"rollup",writable:false,config:{operation:"SUM",relationshipKey:"return_lines",field:"quantity",resultType:"decimal"} },
+              { apiName:"remaining_returnable",label:"Remaining Returnable",fieldType:"formula",writable:false,config:{expression:"MAX(received_quantity - returned_quantity, 0)",resultType:"decimal"} },
+            ],
+          },
+          {
+            objectKey:"purchase_receipt",label:"Purchase Receipt",pluralLabel:"Purchase Receipts",
+            sourceTable:"purchase_receipts",metadataScope:"global",storeScoped:true,required:true,
+            adoptFromPackageKeys:["retail_pos"],config:{protectedWrites:true},
+            fields:[
+              {apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false},
+              {apiName:"purchase_id",label:"Purchase",fieldType:"lookup",sourceColumn:"purchase_id",writable:false},
+              {apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:false},
+              {apiName:"reference_number",label:"Reference",fieldType:"text",sourceColumn:"reference_number",writable:false},
+              {apiName:"notes",label:"Notes",fieldType:"text",sourceColumn:"notes",writable:false},
+              {apiName:"received_by",label:"Received By",fieldType:"lookup",sourceColumn:"received_by",writable:false},
+              {apiName:"received_at",label:"Received",fieldType:"datetime",sourceColumn:"received_at",writable:false},
+            ],
+          },
+        ],
+        relationships: [
+          {parentObjectKey:"supplier",childObjectKey:"purchase",relationshipKey:"purchases",relationshipType:"one_to_many",childFieldApiName:"supplier_id"},
+          {parentObjectKey:"purchase",childObjectKey:"purchase_line",relationshipKey:"lines",relationshipType:"one_to_many",childFieldApiName:"purchase_id",required:true},
+          {parentObjectKey:"purchase_line",childObjectKey:"product",relationshipKey:"product",relationshipType:"lookup",parentFieldApiName:"product_id"},
+          {parentObjectKey:"purchase",childObjectKey:"purchase_receipt",relationshipKey:"receipts",relationshipType:"one_to_many",childFieldApiName:"purchase_id"},
+          {parentObjectKey:"purchase_line",childObjectKey:"stock_return_line",relationshipKey:"return_lines",relationshipType:"one_to_many",childFieldApiName:"purchase_item_id"},
+        ],
+        listViews: [
+          {objectKey:"purchase",viewKey:"all",label:"Purchases",columns:["reference_number","supplier_name","purchase_date","status","total","created_at"],sort:{field:"purchase_date",direction:"desc"},isDefault:true},
+          {objectKey:"purchase_line",viewKey:"returnable",label:"Supplier Returns",columns:["purchase_id","product_id","quantity","received_quantity","returned_quantity","remaining_returnable","unit_cost"],filterModel:{received_quantity:{operator:"greater_than",value:0}},isDefault:true},
+          {objectKey:"purchase_receipt",viewKey:"receipts",label:"Purchase Receipts",columns:["purchase_id","reference_number","received_at","received_by","notes"],sort:{field:"received_at",direction:"desc"},isDefault:true},
+        ],
+        workflows: [
+          {objectKey:"purchase",name:"Purchase Create",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[
+            {id:"purchase_create",label:"Create Purchase",key:"CALL_FUNCTION",functionKey:"purchase.create",inputs:{
+              supplierId:{path:"record.supplierId"},supplierName:{path:"record.supplierName"},referenceNumber:{path:"record.referenceNumber"},
+              purchaseDate:{path:"record.purchaseDate"},notes:{path:"record.notes"},items:{path:"record.items"},receiveNow:{path:"record.receiveNow"},
+              recordTypeId:{path:"record.recordTypeId"},customFields:{path:"record.customFields"}
+            }}
+          ]},
+          {objectKey:"purchase",name:"Purchase Receive",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[
+            {id:"purchase_receive",label:"Receive Purchase",key:"CALL_FUNCTION",functionKey:"purchase.receive",inputs:{
+              purchaseId:{path:"record.id"},receivingReference:{path:"record.receivingReference"},receivingNotes:{path:"record.receivingNotes"}
+            }}
+          ]},
+          {objectKey:"purchase_line",name:"Supplier Return Execute",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",actions:[
+            {id:"supplier_return",label:"Return Stock",key:"CALL_FUNCTION",functionKey:"supplier.return.execute",inputs:{
+              purchaseItemId:{path:"record.id"},purchaseId:{path:"record.purchase_id"},productId:{path:"record.product_id"},
+              quantity:{path:"record.quantityToReturn"},reason:{path:"record.reason"},requestKey:{path:"record.requestKey"}
+            }}
+          ]},
+        ],
+        buttons: [
+          {objectKey:"purchase",buttonKey:"purchase_create",label:"New Purchase",targetType:"workflow",targetKey:"Purchase Create",placement:"list",variant:"primary",
+            config:{order:10,requiredPermissionsAny:["purchase.create","inventory.adjust"],form:{submitLabel:"Create & Receive",includeMetadataFields:true,fields:[
+              {name:"supplierId",label:"Supplier",type:"related_select",required:true,optionsSource:{objectKey:"supplier",valueField:"id",labelFields:["name"],filter:{field:"active",operator:"equals",value:true}}},
+              {name:"supplierName",label:"Supplier name override",type:"text"},
+              {name:"referenceNumber",label:"Reference / invoice number",type:"text"},
+              {name:"purchaseDate",label:"Purchase date",type:"date",defaultValue:"today",required:true},
+              {name:"notes",label:"Notes",type:"textarea"},
+              {name:"items",label:"Product lines",type:"collection",minRows:1,defaultRows:1,fields:[
+                {name:"productId",label:"Product",type:"related_select",required:true,optionsSource:{objectKey:"product",valueField:"id",labelFields:["name","sku"]}},
+                {name:"quantity",label:"Quantity",type:"number",min:0.001,step:0.001,required:true,defaultValue:1},
+                {name:"unitCost",label:"Unit cost",type:"number",min:0,step:0.01,required:true,defaultValue:0},
+                {name:"batchNumber",label:"Batch",type:"text"},{name:"manufacturingDate",label:"MFG",type:"date"},{name:"expiryDate",label:"Expiry",type:"date"}
+              ]},
+              {name:"receiveNow",type:"hidden",defaultValue:true}
+            ]}}},
+          {objectKey:"purchase",buttonKey:"purchase_receive",label:"Receive Remaining",targetType:"workflow",targetKey:"Purchase Receive",placement:"record",variant:"primary",
+            visibilityRule:{match:"all",conditions:[{field:"status",operator:"not_in",value:["RECEIVED","CANCELLED"]}]},
+            config:{order:20,requiredPermissionsAny:["purchase.edit","inventory.adjust","purchases.receive"],form:{submitLabel:"Receive Remaining",fields:[
+              {name:"receivingReference",label:"Receipt reference",type:"text"},{name:"receivingNotes",label:"Receipt notes",type:"textarea"}
+            ]}}},
+          {objectKey:"purchase_line",buttonKey:"supplier_return",label:"Return Stock",targetType:"workflow",targetKey:"Supplier Return Execute",placement:"record",variant:"secondary",
+            visibilityRule:{match:"all",conditions:[{field:"remaining_returnable",operator:"greater_than",value:0}]},
+            config:{order:30,requiredPermissionsAny:["returns.create","sale.refund"],form:{submitLabel:"Confirm Return",fields:[
+              {name:"quantityToReturn",label:"Return quantity",type:"number",min:0.001,step:0.001,required:true},
+              {name:"reason",label:"Reason",type:"textarea"},{name:"requestKey",type:"uuid"}
+            ]}}},
+        ],
+        permissionDeclarations:[
+          {permission:"purchase.view",label:"View purchases"},{permission:"purchase.create",label:"Create purchases"},
+          {permission:"purchase.edit",label:"Receive purchases"},{permission:"returns.create",label:"Create supplier returns"}
+        ],
+      } : {}),
       ...(entry.key === "batch_expiry" ? {
         objects: [
           {
@@ -4789,14 +4916,15 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     }
     const registeredView = await db(
       `INSERT INTO platform_list_views
-       (object_id,company_id,view_key,label,description,columns,filters,sort,page_size,is_default,
+       (object_id,company_id,view_key,label,description,columns,filters,filter_model,sort,page_size,is_default,
         source_package_id,source_package_version,managed,package_required)
-       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,true,$13)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$13,true,$14)
        ON CONFLICT (object_id,company_id,view_key)
        DO UPDATE SET label=CASE WHEN platform_list_views.user_modified THEN platform_list_views.label ELSE EXCLUDED.label END,
          description=CASE WHEN platform_list_views.user_modified THEN platform_list_views.description ELSE EXCLUDED.description END,
          columns=CASE WHEN platform_list_views.user_modified THEN platform_list_views.columns ELSE EXCLUDED.columns END,
          filters=CASE WHEN platform_list_views.user_modified THEN platform_list_views.filters ELSE EXCLUDED.filters END,
+         filter_model=CASE WHEN platform_list_views.user_modified THEN platform_list_views.filter_model ELSE EXCLUDED.filter_model END,
          sort=CASE WHEN platform_list_views.user_modified THEN platform_list_views.sort ELSE EXCLUDED.sort END,
          page_size=CASE WHEN platform_list_views.user_modified THEN platform_list_views.page_size ELSE EXCLUDED.page_size END,
          is_default=CASE WHEN platform_list_views.user_modified THEN platform_list_views.is_default ELSE EXCLUDED.is_default END,
@@ -4813,6 +4941,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
         view.description || null,
         JSON.stringify(view.columns || []),
         JSON.stringify(view.filters || {}),
+        JSON.stringify(view.filterModel || view.filter_model || {}),
         JSON.stringify(view.sort || { field: null, direction: "asc" }),
         Number.isFinite(Number(view.pageSize)) ? Number(view.pageSize) : 50,
         view.isDefault === true,

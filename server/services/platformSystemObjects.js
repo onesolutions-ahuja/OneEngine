@@ -3,6 +3,7 @@
 const definitions = [
   ["product", "products", "product.view", "/app/products"],
   ["customer", "customers", "customer.view", "/app/customers"],
+  ["supplier", "suppliers", "inventory.view", "/app/suppliers"],
   ["category", "categories", "product.view", "/app/products"],
   ["price_list", "price_lists", "customer.view", "/app/customers"],
   ["employee", "users", "user.view", "/app/employees"],
@@ -17,7 +18,9 @@ const definitions = [
   ["customer_credit_ledger", "customer_credit_ledger", "customer.credit.view", "/app/customers"],
   ["inventory", "product_store_stock", "inventory.view", "/app/inventory"],
   ["purchase", "purchases", "purchase.view", "/app/purchases"],
+  ["purchase_line", "purchase_items", "purchase.view", "/app/purchases", { companyScoped: false }],
   ["purchase_receipt", "purchase_receipts", "purchase.view", "/app/purchases"],
+  ["purchase_receipt_line", "purchase_receipt_items", "purchase.view", "/app/purchases", { companyScoped: false }],
   ["supplier_invoice", "supplier_invoices", "purchase.view", "/app/suppliers"],
   ["online_order", "online_orders", "online_orders.view", "/app/online-orders"],
   ["system_settings", "company_settings", "settings.manage", "/app/settings"],
