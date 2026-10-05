@@ -42,7 +42,7 @@ import createEanLookupRouter from "./routes/eanLookup.js";
 
 import createSalesRouter from "./routes/sales.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
-import { createKioskModeGate } from "./routes/kiosk.js";
+import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReportsRouter from "./routes/reports.js";
 import createSecureInvoiceRouter from "./routes/secureInvoice.js";
@@ -284,7 +284,7 @@ app.use(express.json({ limit: "10mb" }));
  * self-checkout mode token is refused for privileged operations
  * server-side (never merely hidden in the UI). */
 app.use(createSelfCheckoutModeGate());
-app.use(createKioskModeGate());
+app.use(createRestrictedSessionGate());
 app.use(createTrustedRuntimeGate());
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
