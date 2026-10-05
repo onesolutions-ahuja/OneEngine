@@ -41,7 +41,6 @@ import createProductsRouter from "./routes/products.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
 
-import createSalesRouter from "./routes/sales.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
@@ -2076,8 +2075,6 @@ app.use(
     pool,
   })
 );
-
-app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
 
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
