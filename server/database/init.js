@@ -11,46 +11,12 @@ import { decryptSecret } from "../services/onlineOrders/platformConfig.js";
 export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
   console.log("onePOS: checking database...");
-  const coreSchema = readFileSync(new URL("./schema.sql", import.meta.url), "utf8");
   const platformFoundation = readFileSync(new URL("./baseFoundation.sql", import.meta.url), "utf8");
   const dataEmailSecuritySchema = readFileSync(new URL("./migrations/0037_data_email_delegated_admin.sql", import.meta.url), "utf8");
 
-  // Recover safely from partial restores/schema drift where schema_migrations says
-  // a migration ran but canonical tables or compatibility columns are missing.
-  // The canonical schema is idempotent, so reconciliation preserves existing data.
-  // Core drift checks cover platform identity/tenant infrastructure only.
-  // Business tables are package/domain-owned and must never trigger a monolithic
-  // schema replay from generic startup.
-  const coreHealth = await pool.query(`
-    SELECT
-      to_regclass('public.companies') AS companies,
-      to_regclass('public.users') AS users,
-      to_regclass('public.roles') AS roles,
-      to_regclass('public.permissions') AS permissions,
-      to_regclass('public.stores') AS stores,
-      to_regclass('public.schema_migrations') AS schema_migrations
-  `);
-  const unhealthyCore = Object.entries(coreHealth.rows[0] || {})
-    .filter(([, value]) => value === null || value === false)
-    .map(([key]) => key);
-
-  if (unhealthyCore.length) {
-    console.warn(`onePOS: core schema drift detected; repairing: ${unhealthyCore.join(", ")}`);
-    const repairClient = await pool.connect();
-    try {
-      await repairClient.query("BEGIN");
-      await repairClient.query("SELECT pg_advisory_xact_lock(1936683890, 0)");
-      await repairClient.query(coreSchema);
-      await repairClient.query("COMMIT");
-      console.log("onePOS: core schema drift repair complete");
-    } catch (error) {
-      await repairClient.query("ROLLBACK").catch(() => {});
-      console.error("onePOS: core schema drift repair failed", error);
-      throw error;
-    } finally {
-      repairClient.release();
-    }
-  }
+  // Legacy business/domain tables are migration-owned. Generic startup must not
+  // replay the monolithic POS schema or treat application tables as platform core.
+  // Existing tenant data remains untouched; package/domain migrations own future changes.
 
   const securityHealth = await pool.query(`
     SELECT
@@ -85,12 +51,6 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
   }
 
   await runMigrations(pool, [
-    {
-      key: "0001_core_schema",
-      version: "1",
-      name: "Legacy authoritative domain schema",
-      up: client => client.query(coreSchema),
-    },
     {
       key: "0002_platform_foundation",
       version: "2",
