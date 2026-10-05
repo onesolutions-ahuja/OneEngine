@@ -3584,7 +3584,7 @@ ALTER TABLE platform_record_associations ADD COLUMN IF NOT EXISTS custom_values 
 /* Product Availability is created with the commerce tables before Platform
    metadata tables exist. Add the scope-object foreign key here, after
    platform_objects is available, so clean bootstrap order remains valid. */
-DO $ BEGIN
+DO $$ BEGIN
   IF to_regclass('product_availability') IS NOT NULL
      AND NOT EXISTS (
        SELECT 1 FROM pg_constraint
@@ -3595,7 +3595,7 @@ DO $ BEGIN
       ADD CONSTRAINT product_availability_scope_object_id_fkey
       FOREIGN KEY (scope_object_id) REFERENCES platform_objects(id) ON DELETE CASCADE;
   END IF;
-END $;
+END $$;
 
 -- Batch 7: account onboarding, policy acceptance and per-user licensing
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS user_email_domain VARCHAR(255);
