@@ -314,14 +314,62 @@ export default function createSalesRouter({
           );
         }
 
-        if (!session.rows.length) {
+        if (!session.rows.length && kioskContext) {
           await client.query("ROLLBACK");
           return res.status(400).json({
             success: false,
-            message: kioskContext
-              ? "The kiosk payment terminal could not start its transaction session."
-              : "No open till session. Open a till before selling.",
+            message: "The kiosk payment terminal could not start its transaction session.",
           });
+        }
+
+        const saleLineCount = (Array.isArray(req.body?.items) ? req.body.items.length : 0)
+          + (Array.isArray(req.body?.miscLines) ? req.body.miscLines.length : 0);
+        const saleValidationMeta = await client.query(
+          `SELECT o.id AS object_id
+             FROM platform_objects o
+            WHERE o.object_key='sale'
+              AND o.active=TRUE
+              AND (o.company_id IS NULL OR o.company_id=$1)
+            ORDER BY o.company_id NULLS FIRST
+            LIMIT 1`,
+          [req.user.companyId]
+        );
+        if (saleValidationMeta.rows[0]?.object_id) {
+          const objectId = saleValidationMeta.rows[0].object_id;
+          const [fieldResult, ruleResult] = await Promise.all([
+            client.query(
+              `SELECT *
+                 FROM platform_fields
+                WHERE object_id=$1
+                  AND active=TRUE
+                  AND (company_id IS NULL OR company_id=$2)`,
+              [objectId, req.user.companyId]
+            ),
+            client.query(
+              `SELECT *
+                 FROM platform_rules
+                WHERE object_id=$1
+                  AND active=TRUE
+                  AND (company_id IS NULL OR company_id=$2)
+                  AND trigger_key IN ('before_create','before_save')
+                  AND action->>'type'='validation'
+                ORDER BY id`,
+              [objectId, req.user.companyId]
+            ),
+          ]);
+          const validationErrors = evaluateValidationRules(ruleResult.rows, fieldResult.rows, {
+            line_count: saleLineCount,
+            till_session_id: session.rows[0]?.id || null,
+          });
+          if (validationErrors.length) {
+            await client.query("ROLLBACK");
+            return res.status(422).json({
+              success: false,
+              code: "VALIDATION_RULE_FAILED",
+              message: validationErrors[0].message,
+              errors: validationErrors,
+            });
+          }
         }
 
         const {
@@ -432,53 +480,6 @@ export default function createSalesRouter({
           return res.status(400).json({ success: false, message: "Split payment requires a payments array" });
         }
 
-        const saleLineCount = (Array.isArray(items) ? items.length : 0) + (Array.isArray(req.body.miscLines) ? req.body.miscLines.length : 0);
-        const saleValidationMeta = await client.query(
-          `SELECT o.id AS object_id
-             FROM platform_objects o
-            WHERE o.object_key='sale'
-              AND o.active=TRUE
-              AND (o.company_id IS NULL OR o.company_id=$1)
-            ORDER BY o.company_id NULLS FIRST
-            LIMIT 1`,
-          [req.user.companyId]
-        );
-        if (saleValidationMeta.rows[0]?.object_id) {
-          const objectId = saleValidationMeta.rows[0].object_id;
-          const [fieldResult, ruleResult] = await Promise.all([
-            client.query(
-              `SELECT *
-                 FROM platform_fields
-                WHERE object_id=$1
-                  AND active=TRUE
-                  AND (company_id IS NULL OR company_id=$2)`,
-              [objectId, req.user.companyId]
-            ),
-            client.query(
-              `SELECT *
-                 FROM platform_rules
-                WHERE object_id=$1
-                  AND active=TRUE
-                  AND (company_id IS NULL OR company_id=$2)
-                  AND trigger_key IN ('before_create','before_save')
-                  AND action->>'type'='validation'
-                ORDER BY id`,
-              [objectId, req.user.companyId]
-            ),
-          ]);
-          const validationErrors = evaluateValidationRules(ruleResult.rows, fieldResult.rows, {
-            line_count: saleLineCount,
-          });
-          if (validationErrors.length) {
-            await client.query("ROLLBACK");
-            return res.status(422).json({
-              success: false,
-              code: "VALIDATION_RULE_FAILED",
-              message: validationErrors[0].message,
-              errors: validationErrors,
-            });
-          }
-        }
 
         /*
          * T10R: loyalty points redemption (authoritative, pre-commit).
