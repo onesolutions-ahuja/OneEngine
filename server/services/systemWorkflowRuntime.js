@@ -100,11 +100,12 @@ function systemFlowInputs(contract, supplied) {
   return variables;
 }
 
-export async function executeSystemWorkflow({
+export async function executeCapabilityWorkflow({
   db,
   companyId,
   userId = null,
-  systemKey,
+  capabilityType,
+  capabilityKey,
   req = null,
   input = {},
   object = null,
@@ -119,7 +120,7 @@ export async function executeSystemWorkflow({
 }) {
   if (!db || typeof db !== "function") throw new Error("System workflow requires database context");
   if (!companyId) throw new Error("System workflow requires company context");
-  if (!systemKey) throw new Error("System workflow key is required");
+  if (!capabilityType || !capabilityKey) throw new Error("Capability type and key are required");
 
   await ensureSystemWorkflowCatalog({ db, companyId, userId });
   const actor = await resolveSystemWorkflowActor({ db, companyId, userId, req });
@@ -138,17 +139,19 @@ export async function executeSystemWorkflow({
   const workflowResult = await db(
     `SELECT * FROM platform_rules
       WHERE company_id=$1
-        AND action->>'systemGenerated'='true'
-        AND action->>'systemKey'=$2
+        AND action->>'capabilityType'=$2
+        AND action->>'capabilityKey'=$3
+        AND action->>'type'='workflow'
         AND active=TRUE
         AND lifecycle_status='ACTIVE'
+      ORDER BY updated_at DESC,id
       LIMIT 1`,
-    [companyId, systemKey]
+    [companyId, capabilityType, capabilityKey]
   );
   const workflow = workflowResult.rows[0];
   if (!workflow) {
-    const error = new Error(`System workflow "${systemKey}" is unavailable or inactive`);
-    error.code = "SYSTEM_WORKFLOW_UNAVAILABLE";
+    const error = new Error(`Capability workflow "${capabilityType}:${capabilityKey}" is unavailable or inactive`);
+    error.code = "CAPABILITY_WORKFLOW_UNAVAILABLE";
     error.status = 409;
     throw error;
   }
@@ -160,8 +163,6 @@ export async function executeSystemWorkflow({
       || randomUUID()
   );
   const sourceInfo = safeSource(req, source);
-  const capabilityType = workflow.action?.capabilityType || null;
-  const capabilityKey = workflow.action?.capabilityKey || null;
   const actions = (workflow.action?.actions || []).map((action) =>
     runtimeAction(action, capabilityType, input)
   );
@@ -188,7 +189,6 @@ export async function executeSystemWorkflow({
     parentRunId: parentRunId || null,
     status: "RUNNING",
     metadata: {
-      systemKey,
       capabilityType,
       capabilityKey,
       actorUserId: actor.id,
