@@ -1,4 +1,3 @@
-import { internalAppCatalog } from "./internalAppCatalog.js";
 
 export const DEVICE_PROFILES = Object.freeze({
   ADMIN: "admin",
@@ -49,10 +48,10 @@ export function resolveLandingPage({
   return destinationFor(selected)?.path || null;
 }
 
-export function permittedCatalogEntries({ enabledModules = new Set(), permissions = [] } = {}) {
-  return internalAppCatalog.filter((entry) =>
+export function permittedCatalogEntries({ catalog = [], enabledModules = new Set(), permissions = [] } = {}) {
+  return (Array.isArray(catalog) ? catalog : []).filter((entry) =>
     enabledModules.has(entry.key)
-    && entry.permissions.some((permission) => permissions.includes(permission))
+    && (Array.isArray(entry.permissions) ? entry.permissions : []).some((permission) => permissions.includes(permission))
   );
 }
 
