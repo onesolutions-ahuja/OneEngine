@@ -132,7 +132,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const [heldSales, setHeldSales] = useState([])
   const [customerSearch, setCustomerSearch] = useState('')
   const [customers, setCustomers] = useState([])
-  const [cashReceived, setCashReceived] = useState('')
+  const [paymentModalMethod, setPaymentModalMethod] = useState('')
   const [busy, setBusy] = useState(false)
   const [lastSale, setLastSale] = useState(null)
   const [ageVerified, setAgeVerified] = useState(false)
@@ -498,7 +498,6 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     setSelectedCustomer(null)
     setDiscount({ type: null, value: 0 })
     setAgeVerified(false)
-    setCashReceived('')
   }
 
   const buildSalePayload = (paymentMethod, verifiedOverride = false, options = {}) => ({
@@ -881,7 +880,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const paymentFlowInputs = (paymentMode, options = {}) => {
     const method = paymentMethods.find((row) => row.code === paymentMode) || {}
-    const received = Number((options.cashReceivedOverride ?? cashReceived) || total || 0)
+    const config = method.config || {}
+    const received = Number(options.cashReceivedOverride ?? total ?? 0)
     return {
       paymentMode,
       paymentKind: String(method.kind || '').toUpperCase(),
@@ -892,6 +892,25 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       cashReceived: received,
       total,
       requiresConnector: method.requiresConnector === true,
+      requiresCustomer: config.requiresCustomer === true,
+      requiresGiftCardCode: config.requiresGiftCardCode === true,
+      requiresCashReceived: config.requiresCashReceived === true,
+    }
+  }
+
+  const startPaymentMethod = async (method) => {
+    if (!method?.code) return
+    const inputFields = Array.isArray(method?.config?.inputFields) ? method.config.inputFields : []
+    if (inputFields.length) {
+      setPaymentModalMethod(method.code)
+      setModal('payment')
+      return
+    }
+    try {
+      const selected = await runPaymentModeFlow(method.code, {})
+      await completeSale(selected.paymentMode, { paymentFlowValidated: true, paymentInputs: {} })
+    } catch (err) {
+      setError(err?.message || 'Payment method validation failed.')
     }
   }
 
