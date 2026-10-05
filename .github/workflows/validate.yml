@@ -93,7 +93,7 @@ jobs:
           ONEPOS_E2E_BASE_URL: http://127.0.0.1:4173/
           ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
           ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
-          ONEPOS_API_URL: https://oneengine.onrender.com
+          ONEPOS_API_URL: https://oneengine-6gas.onrender.com
       - name: Upload Workflow Builder visual evidence
         if: always()
         uses: actions/upload-artifact@v4

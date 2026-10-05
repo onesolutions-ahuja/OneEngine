@@ -17,7 +17,7 @@ export default {
     supportFile: false,
     specPattern: "cypress/e2e/**/*.cy.{js,mjs}",
     env: {
-      apiBaseUrl: process.env.ONEPOS_E2E_API_BASE_URL || "https://oneengine.onrender.com",
+      apiBaseUrl: process.env.ONEPOS_E2E_API_BASE_URL || "https://oneengine-6gas.onrender.com",
       username: process.env.ONEPOS_E2E_USERNAME || "",
       password: process.env.ONEPOS_E2E_PASSWORD || "",
     },

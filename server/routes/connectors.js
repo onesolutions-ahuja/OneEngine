@@ -345,7 +345,7 @@ export default function createConnectorsRouter({
     const publicBaseUrl = String(
       process.env.PUBLIC_API_URL ||
       process.env.RENDER_EXTERNAL_URL ||
-      "https://oneengine.onrender.com"
+      "https://oneengine-6gas.onrender.com"
     ).replace(/\/$/, "");
     const webhookUrl = `${publicBaseUrl}/api/smsgate/webhook/${current.id}/${webhookToken}`;
 

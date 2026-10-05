@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { loginIfConfigured } from "./helpers.mjs";
 
-const API_BASE = "https://oneengine.onrender.com";
+const API_BASE = "https://oneengine-6gas.onrender.com";
 
 async function proxyApiForLocalPreview(page) {
   await page.route(`${API_BASE}/**`, async (route) => {

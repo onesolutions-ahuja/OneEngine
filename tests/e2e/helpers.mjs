@@ -33,7 +33,7 @@ async function restoreBrowserSession(page) {
     for (const [key, value] of Object.entries(state.local || {})) localStorage.setItem(key, value);
   }, state);
   await page.goto("./");
-  const apiBaseUrl = String(process.env.ONEPOS_API_URL || "https://oneengine.onrender.com").replace(/\/$/, "");
+  const apiBaseUrl = String(process.env.ONEPOS_API_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "");
   if (!cachedBrowserSessionValidated) {
     const validation = await page.evaluate(async ({ apiBaseUrl }) => {
       const token = sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token");

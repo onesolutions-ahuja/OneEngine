@@ -26,7 +26,7 @@ jobs:
     env:
       ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
       ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
-      ONEPOS_API_URL: https://oneengine.onrender.com
+      ONEPOS_API_URL: https://oneengine-6gas.onrender.com
       ONEPOS_E2E_ORIGIN: https://onesolutions-ahuja.github.io
     steps:
       - uses: actions/checkout@v4

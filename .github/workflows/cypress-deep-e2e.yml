@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 35
     env:
       ONEPOS_E2E_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
-      ONEPOS_E2E_API_BASE_URL: https://oneengine.onrender.com
+      ONEPOS_E2E_API_BASE_URL: https://oneengine-6gas.onrender.com
       ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
       ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
       CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
