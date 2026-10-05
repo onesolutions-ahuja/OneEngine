@@ -375,6 +375,13 @@ test('Till starts till-session lookup alongside its bootstrap requests', async (
   assert.match(block, /Promise\.all\(\[/)
 })
 
+test('stale cache revalidation is deduped by cache key', async () => {
+  const source = await read('../src/services/cachedApi.js')
+  assert.match(source, /const refreshInFlight = new Map\(\)/)
+  assert.match(source, /const existing = refreshInFlight\.get\(key\)/)
+  assert.match(source, /refreshInFlight\.set\(key, request\)/)
+})
+
 test('Dashboard startup reads are launched together instead of separate mount waterfalls', async () => {
   const source = await read('../src/pages/dashboard/DashboardPage.jsx')
   assert.match(source, /Promise\.all\(\[\s*apiRequest\('\/api\/settings'\)/)
