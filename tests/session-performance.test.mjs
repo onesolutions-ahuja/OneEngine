@@ -69,11 +69,11 @@ test('login reuses one preloaded security context instead of re-querying setting
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
   const assurance = await read('../server/services/identityAssurance.js')
-  assert.match(server, /resolveAccessPolicy\(loginDb/)
+  assert.match(server, /loadLoginSecurityContext\(loginDb/)
   assert.match(server, /settingsOverride: securitySettings/)
   assert.match(server, /policyOverride: accessPolicy/)
   assert.match(server, /\{ settings: securitySettings, policy: accessPolicy \}/)
-  assert.match(security, /settingsOverride !== undefined/)
+  assert.match(security, /export async function loadLoginSecurityContext/)
   assert.match(assurance, /settingsOverride !== undefined/)
 })
 
