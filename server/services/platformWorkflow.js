@@ -26,6 +26,7 @@ import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platfo
 import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
+import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 import {
@@ -1633,7 +1634,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       if (action.value === undefined) throw new Error("Set Field requires a value");
     },
     async: false,
-    requiredPermissions: ["records.update"],
+    requiredPermissions: ["workflow.execute"],
     executor: async ({ action, object }) => ({ status: "completed", field: action.field, value: action.value, objectId: object?.id || null }),
   },
   {
@@ -2633,9 +2634,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
     },
     async: false,
-    requiredPermissions: ["records.view"],
+    requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, req, object, companyId, record, previousRecord, workflowVariables = {} }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "create" });
       const table = targetObject.source_table;
       const fieldResult = await db(
         "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
@@ -2880,7 +2882,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
     },
     async: false,
-    requiredPermissions: ["records.create"],
+    requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, req, object, companyId, fields, record, previousRecord, workflowVariables = {} }) => {
       const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
       const table = targetObject.source_table;
@@ -3092,6 +3094,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
       if (action.objectKey && Array.isArray(action.conditions)) {
         const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "edit" });
         const fieldResult = await db(
           "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
           [targetObject.id, runtimeCompanyId]
@@ -3293,7 +3296,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
     },
     async: false,
-    requiredPermissions: ["records.delete"],
+    requiredPermissions: ["workflow.execute"],
     executor: async ({ db, action, object, req, companyId, record, previousRecord, workflowVariables = {} }) => {
       const context = { record, previousRecord, req, object, workflowVariables };
       const runtimeCompanyId = req?.user?.companyId || companyId || null;
@@ -3342,6 +3345,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
       if (action.objectKey && Array.isArray(action.conditions) && action.conditions.length) {
         const targetObject = await resolveWorkflowTargetObject({ db, action, object, companyId, req });
+      await assertWorkflowObjectPermission({ db, req, object: targetObject, access: "delete" });
         const fieldResult = await db(
           "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)",
           [targetObject.id, runtimeCompanyId]
@@ -5948,6 +5952,17 @@ async function resolveWorkflowTargetObject({ db, action = {}, object = null, com
     throw new Error("Workflow target object is not permitted");
   }
   return target;
+}
+
+async function assertWorkflowObjectPermission({ db, req, object, access }) {
+  if (!req?.user) throw new Error("Workflow object authorization requires an authenticated user");
+  const allowed = await hasPlatformObjectPermission(db, req, object.id, access);
+  if (!allowed) {
+    const error = new Error(`Workflow user cannot ${access} ${object.label || object.object_key || "target object"}`);
+    error.status = 403;
+    error.code = "WORKFLOW_OBJECT_PERMISSION_DENIED";
+    throw error;
+  }
 }
 
 async function resolveWorkflowWritableFields({ db, object, entries, req = null }) {
