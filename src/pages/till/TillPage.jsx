@@ -215,7 +215,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       const catalogueQuery = new URLSearchParams()
       if (cachedVersion) catalogueQuery.set('since', cachedVersion)
       if (cachedScope) catalogueQuery.set('scope', cachedScope)
-      const cataloguePath = `/api/products/catalogue${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
+      const cataloguePath = `/api/platform/objects/product/records${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
       const tillPromise = loadTill()
       const [catalogueDelta, settingsResponse, buttonResponse, paymentResponse, permissionResponse] = await Promise.all([
         apiRequest(cataloguePath),
