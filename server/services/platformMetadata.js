@@ -1995,7 +1995,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { field: "licence_required", operator: "equals", value: true }
           ] },
           actions: [
-            { id: "request_licence", label: "Request Licence", apiName: "request_licence", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "REQUESTED" } },
+            { id: "create_licence_request", label: "1. Create Licence Request", apiName: "create_licence_request", key: "LICENCE_REQUEST_PACKAGE" },
+            { id: "request_licence", label: "2. Update Tenant App Licence Status", apiName: "request_licence", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "REQUESTED" } },
           ],
         },
         {
