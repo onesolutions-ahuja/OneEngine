@@ -1359,7 +1359,6 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log("onePOS: refreshed " + (rows.rowCount || 0) + " booking routers with generic slot Flow");
       },
     }
- CREATE UNIQUE INDEX IF NOT EXISTS appointment_resource_services_id ON appointment_resource_services(id);`) },
     {
       key: "0051_unify_send_communication",
       version: "51",
