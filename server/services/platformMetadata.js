@@ -1250,7 +1250,23 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
   const STANDARD_RELATIONSHIPS = [];
 
-  const additionalStandardObjects = [];
+  const additionalStandardObjects = [
+    {
+      key: "licence_request",
+      label: "Licence Request",
+      plural: "Licence Requests",
+      table: "platform_licence_requests",
+      fields: [
+        ["package_key", "Package Key", "text", "package_key", true],
+        ["package_name", "Package Name", "text", "package_name", true],
+        ["requesting_user_id", "Requesting User", "lookup", "requesting_user_id", false],
+        ["requesting_user_name", "Requesting User Name", "text", "requesting_user_name", false],
+        ["status", "Status", "picklist", "status", false],
+        ["created_at", "Created At", "datetime", "created_at", false],
+        ["updated_at", "Updated At", "datetime", "updated_at", false],
+      ],
+    },
+  ];
 
   function standardDefinition(fields) {
     return {
@@ -1408,6 +1424,14 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
              SET label=EXCLUDED.label,field_type=EXCLUDED.field_type,source_column=EXCLUDED.source_column,
                  required=EXCLUDED.required,writable=EXCLUDED.writable,display_order=EXCLUDED.display_order`,
           [result.rows[0].id, apiName, label, fieldType, sourceColumn, required, index, Boolean(sourceColumn)]
+        );
+      }
+      if (object.key === "licence_request") {
+        await pool.query(
+          `UPDATE platform_fields
+              SET options='["PENDING","APPROVED","REJECTED","CANCELLED"]'::jsonb
+            WHERE object_id=$1 AND api_name='status'`,
+          [result.rows[0].id]
         );
       }
       if (object.key === "tenant_app") {
@@ -1586,6 +1610,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     await grantObjectPermissionFromCodes("product_modifier_group", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("product_modifier_option", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("payment_method", ["sale.create"], { view: true });
+    await grantObjectPermissionFromCodes("licence_request", ["package.manage","settings.manage"], { view: true, create: true });
 
     await pool.query(
       `INSERT INTO role_permissions (role_id,permission_id)
@@ -1630,7 +1655,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
          SELECT $1,r.id,r.company_id,TRUE,FALSE,TRUE,FALSE
            FROM roles r
            JOIN role_permissions rp ON rp.role_id=r.id
-           JOIN permissions p ON p.id=rp.permission_id AND p.code='package.install'
+           JOIN permissions p ON p.id=rp.permission_id AND p.code=ANY(ARRAY['package.install','package.manage','settings.manage'])
           WHERE r.company_id IS NOT NULL
          ON CONFLICT (object_id,role_id,company_id) DO UPDATE SET
            can_view=TRUE,can_edit=TRUE`,
@@ -1713,8 +1738,52 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { field: "licence_required", operator: "equals", value: true }
           ] },
           actions: [
-            { id: "create_licence_request", label: "1. Create Licence Request", apiName: "create_licence_request", key: "LICENCE_REQUEST_PACKAGE" },
-            { id: "request_licence", label: "2. Update Tenant App Licence Status", apiName: "request_licence", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "REQUESTED" } },
+            {
+              id: "load_requested_package",
+              label: "1. Load Requested Package",
+              apiName: "load_requested_package",
+              key: "GET_RECORDS",
+              objectKey: "onestore_app",
+              filters: [{ field: "id", operator: "equals", value: { path: "record.onestore_app_id" } }],
+              limit: 1,
+              store: "first",
+              advancedAssignment: {
+                mode: "fields",
+                mappings: [
+                  { field: "app_key", resourceName: "requestedPackageKey" },
+                  { field: "name", resourceName: "requestedPackageName" },
+                ],
+              },
+            },
+            {
+              id: "create_licence_request",
+              label: "2. Create Licence Request",
+              apiName: "create_licence_request",
+              key: "CREATE_RECORD",
+              objectKey: "licence_request",
+              fieldValues: {
+                package_key: { path: "variables.requestedPackageKey" },
+                package_name: { path: "variables.requestedPackageName" },
+              },
+              checkMatchingRecords: true,
+              matchConditions: [
+                { field: "package_key", value: { path: "variables.requestedPackageKey" } },
+                { field: "status", value: "PENDING" },
+              ],
+              match: "all",
+              matchAction: "skip",
+            },
+            {
+              id: "notify_licence_request",
+              label: "3. Notify Platform Administrators",
+              apiName: "notify_licence_request",
+              key: "SEND_COMMUNICATION",
+              channel: "IN_APP",
+              recipient: "platform_superadmins",
+              title: "Licence request received",
+              message: "A package licence request is ready for review.",
+            },
+            { id: "request_licence", label: "4. Update Tenant App Licence Status", apiName: "request_licence", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "REQUESTED" } },
           ],
         },
         {
