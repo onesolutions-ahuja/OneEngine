@@ -1316,3 +1316,22 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
   assert.match(editor, /Array\.isArray\(resources\)/)
   assert.match(editor, /Array\.isArray\(providerResources\)/)
 })
+
+
+test('GPT Builder phase 16 closes generic runtime and integration gaps', async () => {
+  const specialized = await readFile(new URL('../server/services/gptBuilderSpecializedRuntime.js', import.meta.url), 'utf8')
+  const workflow = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
+  const http = await readFile(new URL('../server/services/oneCoreFunctions.js', import.meta.url), 'utf8')
+  assert.match(specialized, /compileApprovalDefinition/)
+  assert.match(specialized, /materializeApprovalFlow/)
+  assert.match(specialized, /compileOrchestrationDefinition/)
+  assert.match(specialized, /executeOrchestrationFlow/)
+  assert.match(workflow, /RETRYABLE_WORKFLOW_DB_CODES/)
+  assert.match(workflow, /40001/)
+  assert.match(workflow, /40P01/)
+  assert.match(workflow, /55P03/)
+  assert.match(workflow, /selectedRecordIds/)
+  assert.match(workflow, /selectedRecordCount/)
+  assert.match(http, /connectionId/)
+  assert.match(http, /AND \(\$4::uuid IS NULL OR id=\$4\)/)
+})
