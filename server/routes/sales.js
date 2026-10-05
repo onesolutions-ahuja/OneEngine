@@ -1104,18 +1104,26 @@ export default function createSalesRouter({
             }
           }
           for (const stockLine of stockLines) {
-            const movement = await createInventoryMovement(client, {
+            const movementExecution = await executeSystemWorkflow({
+              db: (sql, params = []) => client.query(sql, params),
               companyId: req.user.companyId,
-              productId: stockLine.productId,
+              userId: req.user.id || null,
+              systemKey: "flow:inventory.movement.create",
+              req,
+              input: {
+                productId: stockLine.productId,
+                storeId: inventoryStoreId,
+                movementType: "SALE",
+                quantityChange: -stockLine.quantity,
+                referenceType: "SALE",
+                referenceId: saleId,
+                createdBy: req.user.id || "",
+              },
               storeId: inventoryStoreId,
-              movementType: "SALE",
-              quantityChange: -stockLine.quantity,
-              referenceType: "SALE",
-              referenceId: saleId,
-              createdBy: req.user.id,
+              source: { type: "flow", capability: "inventory.movement.create" },
             });
 
-            if (stockLine.productId === item.productId) p.stock_quantity = movement.balance;
+            if (stockLine.productId === item.productId) p.stock_quantity = Number(movementExecution.result?.balance || 0);
 
             /*
              * Batch / expiry tracking: keep this store's batch rows in step
