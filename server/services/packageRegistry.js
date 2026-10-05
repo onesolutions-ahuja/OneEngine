@@ -3231,10 +3231,12 @@ export function packageDefinition(entry) {
           },
         ],
         actions: [
+          { actionKey:"employee.set_active_status",objectKey:"employee",label:"Set Active Status",handlerKey:"RUN_SUBFLOW",requiredPermission:"user.edit",config:{subflowApiName:"STAFF_SET_ACTIVE_STATUS"} },
           { actionKey:"employee.send_password_reset",objectKey:"employee",label:"Send Password Reset",handlerKey:"RUN_SUBFLOW",requiredPermission:"user.manage",config:{subflowApiName:"STAFF_SEND_PASSWORD_RESET"} },
           { actionKey:"employee.send_invitation",objectKey:"employee",label:"Send Invitation",handlerKey:"RUN_SUBFLOW",requiredPermission:"user.manage",config:{subflowApiName:"STAFF_SEND_INVITATION"} },
         ],
         buttons: [
+          { objectKey:"employee",buttonKey:"set_active_status",label:"Set Active Status",targetType:"action",targetKey:"employee.set_active_status",actionKey:"employee.set_active_status",placement:"record",variant:"secondary",requiredPermission:"user.edit",inputMappings:{active:{path:"context.active"}},config:{hidden:true} },
           { objectKey:"employee",buttonKey:"send_password_reset",label:"Send Password Reset",targetType:"action",targetKey:"employee.send_password_reset",actionKey:"employee.send_password_reset",placement:"record",variant:"secondary",requiredPermission:"user.manage",config:{icon:"key-round"} },
           { objectKey:"employee",buttonKey:"send_invitation",label:"Send Invitation",targetType:"action",targetKey:"employee.send_invitation",actionKey:"employee.send_invitation",placement:"record",variant:"secondary",requiredPermission:"user.manage",config:{icon:"mail-plus"} },
         ],
