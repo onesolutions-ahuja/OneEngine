@@ -244,168 +244,46 @@ export default function createProductsRouter({ authenticate, authorize, db: doma
   /*
    * GET /api/products/catalogue
    *
-   * Till/offline catalogue. When the active store has a metadata-driven
-   * Business Division lookup, only products mapped to that same division
-   * are returned.
+   * Generic till/offline product snapshot. Business availability and
+   * contextual pricing policy are Flow-owned, not route-owned.
    */
-router.get("/products/catalogue", authenticate, authorize("product.view"), async (req, res) => {
-  try {
-    const companyId = req.user.companyId;
-    const storeId = req.user.storeId || null;
-    const salesChannel = "till";
-
-    let businessDivisionId = null;
-    let businessDivisionObjectId = null;
-    if (storeId) {
-      const divisionScope = await db(
-        `SELECT association.custom_values->>division_field.api_name AS business_division_id,
-                division_object.id AS business_division_object_id
-           FROM platform_objects store_object
-           JOIN platform_record_associations association
-             ON association.object_id=store_object.id
-            AND association.record_id=$2
-            AND association.company_id=$1
-           JOIN platform_fields division_field
-             ON division_field.object_id=store_object.id
-            AND division_field.api_name='business_division_id'
-            AND division_field.active=TRUE
-            AND (division_field.company_id IS NULL OR division_field.company_id=$1)
-           LEFT JOIN platform_objects division_object
-             ON division_object.object_key=division_field.config->>'relatedObjectKey'
-            AND division_object.active=TRUE
-            AND (division_object.company_id IS NULL OR division_object.company_id=$1)
-          WHERE store_object.object_key='store'
-            AND store_object.active=TRUE
-            AND (store_object.company_id IS NULL OR store_object.company_id=$1)
-          ORDER BY (division_field.company_id IS NOT NULL) DESC,
-                   (store_object.company_id IS NOT NULL) DESC
-          LIMIT 1`,
+  router.get("/products/catalogue", authenticate, authorize("product.view"), async (req, res) => {
+    try {
+      const companyId = req.user.companyId;
+      const storeId = req.user.storeId || null;
+      const result = await db(
+        `SELECT p.id,p.name,p.sku,p.barcode,p.price,p.vat_rate,p.vat_applicable,
+                p.age_restricted,p.image_url,p.low_stock_level,p.track_stock,
+                p.category_id,p.active,c.name AS category_name,
+                COALESCE(ps.quantity,p.stock_quantity) AS stock,p.updated_at AS catalogue_updated_at
+           FROM products p
+           LEFT JOIN categories c ON c.id=p.category_id AND c.company_id=p.company_id
+           LEFT JOIN product_store_stock ps ON ps.product_id=p.id AND ps.company_id=p.company_id AND ps.store_id=$2
+          WHERE p.company_id=$1 AND p.active=TRUE AND p.sku IS DISTINCT FROM 'MISC'
+          ORDER BY p.name`,
         [companyId, storeId]
       );
-      businessDivisionId = divisionScope.rows[0]?.business_division_id || null;
-      businessDivisionObjectId = divisionScope.rows[0]?.business_division_object_id || null;
-      if (!businessDivisionObjectId) businessDivisionId = null;
+      const categories = await db(
+        `SELECT DISTINCT c.id,c.name,c.display_order,c.active,c.created_at
+           FROM categories c JOIN products p ON p.category_id=c.id AND p.company_id=c.company_id
+          WHERE c.company_id=$1 AND p.active=TRUE AND p.sku IS DISTINCT FROM 'MISC'
+          ORDER BY c.display_order,c.name`,
+        [companyId]
+      );
+      const versionResult = await db(
+        `SELECT GREATEST(
+           COALESCE((SELECT MAX(updated_at) FROM products WHERE company_id=$1),'epoch'::timestamptz),
+           COALESCE((SELECT MAX(created_at) FROM categories WHERE company_id=$1),'epoch'::timestamptz),
+           COALESCE((SELECT MAX(updated_at) FROM product_store_stock WHERE company_id=$1 AND store_id=$2),'epoch'::timestamptz)
+         ) AS version`,
+        [companyId, storeId]
+      );
+      res.json({ success:true, data:{ version:versionResult.rows[0]?.version || null, full:true, products:result.rows, categories:categories.rows } });
+    } catch (error) {
+      console.error("Catalogue load error:", error);
+      res.status(500).json({ success:false, message:"Unable to load POS catalogue" });
     }
-
-    const scopeKey = `${storeId || 'all'}:${businessDivisionObjectId || 'all'}:${businessDivisionId || 'all'}:${salesChannel}`;
-    const requestedScope = typeof req.query.scope === "string" ? req.query.scope : "";
-    const requestedSince = typeof req.query.since === "string" && req.query.since
-      ? req.query.since
-      : null;
-
-    // Availability changes can remove a product from the active context, so a
-    // scoped store receives a full snapshot rather than an unsafe delta.
-    const hasScopedCatalogue = Boolean(storeId || businessDivisionId);
-    const since = hasScopedCatalogue
-      ? null
-      : (requestedScope === scopeKey ? requestedSince : null);
-
-    const scopeParams = [companyId, storeId, businessDivisionObjectId, businessDivisionId, salesChannel];
-    const params = [...scopeParams];
-    const availabilityClause = `
-      AND (
-        NOT EXISTS (
-          SELECT 1
-            FROM product_availability pa_any
-           WHERE pa_any.company_id=p.company_id
-             AND pa_any.product_id=p.id
-        )
-        OR EXISTS (
-          SELECT 1
-            FROM product_availability pa
-           WHERE pa.company_id=p.company_id
-             AND pa.product_id=p.id
-             AND pa.active=TRUE
-             AND (pa.store_id IS NULL OR pa.store_id=$2)
-             AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$3)
-             AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$4)
-             AND pa.channel IN ($5,'all')
-        )
-      )`;
-
-    let sinceClause = "";
-    if (since) {
-      params.push(since);
-      sinceClause = `AND GREATEST(p.updated_at, COALESCE(ps.updated_at, p.updated_at), COALESCE(c.created_at, p.updated_at)) > $${params.length}::timestamptz`;
-    }
-
-    const catalogueProducts = await db(
-      `SELECT p.id, p.name, p.sku, p.barcode,
-              COALESCE(scoped_price.price, p.price) AS price,
-              p.vat_rate, p.vat_applicable,
-              p.age_restricted, p.image_url, p.low_stock_level, p.track_stock,
-              p.category_id, p.active, c.name AS category_name,
-              COALESCE(ps.quantity, p.stock_quantity) AS stock,
-              GREATEST(p.updated_at, COALESCE(ps.updated_at, p.updated_at), COALESCE(c.created_at, p.updated_at)) AS catalogue_updated_at
-       FROM products p
-       LEFT JOIN categories c ON c.id=p.category_id AND c.company_id=p.company_id
-       LEFT JOIN product_store_stock ps ON ps.product_id=p.id AND ps.company_id=p.company_id AND ps.store_id=$2
-       LEFT JOIN LATERAL (
-         SELECT plp.price
-           FROM product_availability pa
-           JOIN price_list_prices plp
-             ON plp.price_list_id=pa.price_list_id
-            AND plp.product_id=pa.product_id
-          WHERE pa.company_id=p.company_id
-            AND pa.product_id=p.id
-            AND pa.active=TRUE
-            AND (pa.store_id IS NULL OR pa.store_id=$2)
-            AND (pa.scope_object_id IS NULL OR pa.scope_object_id=$3)
-            AND (pa.scope_record_id IS NULL OR pa.scope_record_id=$4)
-            AND pa.channel IN ($5,'all')
-          ORDER BY (pa.store_id IS NOT NULL) DESC, pa.priority DESC, pa.updated_at DESC
-          LIMIT 1
-       ) scoped_price ON TRUE
-       WHERE p.company_id=$1
-         AND p.active=TRUE
-         AND p.sku IS DISTINCT FROM 'MISC'
-         ${availabilityClause}
-         ${sinceClause}
-       ORDER BY p.name`,
-      params
-    );
-
-    const categories = await db(
-      `SELECT DISTINCT c.id, c.name, c.display_order, c.active, c.created_at
-         FROM categories c
-         JOIN products p ON p.category_id=c.id AND p.company_id=c.company_id
-        WHERE c.company_id=$1
-          AND p.active=TRUE
-          AND p.sku IS DISTINCT FROM 'MISC'
-          ${availabilityClause}
-        ORDER BY c.display_order, c.name`,
-      scopeParams
-    );
-
-    const versionResult = await db(
-      `SELECT GREATEST(
-         COALESCE((SELECT MAX(updated_at) FROM products WHERE company_id=$1), 'epoch'::timestamptz),
-         COALESCE((SELECT MAX(created_at) FROM categories WHERE company_id=$1), 'epoch'::timestamptz),
-         COALESCE((SELECT MAX(updated_at) FROM product_store_stock WHERE company_id=$1 AND store_id=$2), 'epoch'::timestamptz),
-         COALESCE((SELECT MAX(updated_at) FROM platform_record_associations WHERE company_id=$1), 'epoch'::timestamptz),
-         COALESCE((SELECT MAX(updated_at) FROM product_availability WHERE company_id=$1), 'epoch'::timestamptz)
-       ) AS version`,
-      [companyId, storeId]
-    );
-
-    res.json({
-      success: true,
-      data: {
-        version: versionResult.rows[0]?.version || null,
-        scopeKey,
-        businessDivisionId,
-        businessDivisionObjectId,
-        salesChannel,
-        full: !since,
-        products: catalogueProducts.rows,
-        categories: categories.rows,
-      },
-    });
-  } catch (error) {
-    console.error("Catalogue load error:", error);
-    res.status(500).json({ success: false, message: "Unable to load POS catalogue" });
-  }
-});
+  });
 
   /*
    * GET /api/products/export
