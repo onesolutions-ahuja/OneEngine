@@ -2992,3 +2992,9 @@ button:focus-visible {
   text-transform: uppercase;
   letter-spacing: .04em;
 }
+
+
+/* Authenticated routes own their backgrounds; the desktop shell is a neutral substrate. */
+.desktop-screen {
+  background: #f5f5f6;
+}
