@@ -252,6 +252,20 @@ export const PLATFORM_FUNCTIONS = Object.freeze([
     },
   },
   {
+    key: "temporary.receipt.download.revoke_for_sale",
+    category: "DOCUMENT_RUNTIME",
+    description: "Revoke active temporary receipt downloads for a supplied sale record.",
+    inputs: { type: "object", required: ["saleId"] },
+    outputs: { type: "object" },
+    permissions: ["sale.view"],
+    handler: async ({ inputs = {}, db, companyId, req }) =>
+      revokeTemporaryReceiptDownloadsForSale({
+        db,
+        companyId: companyId || req?.user?.companyId,
+        saleId: inputs.saleId,
+      }),
+  },
+  {
     key: "account.registration.token.issue",
     category: "SECURITY",
     description: "Issue a registration token; retained temporarily for the active account lifecycle route.",
