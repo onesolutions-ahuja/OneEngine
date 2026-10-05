@@ -936,37 +936,56 @@ export default function OneKioskPage({ publicMode = false }) {
 
       const clientRequestId = checkoutRequestId || crypto.randomUUID();
       if (!checkoutRequestId) setCheckoutRequestId(clientRequestId);
-      const saleResponse = await apiRequest("/api/sales", {
+      const saleInput = {
+        store_id: fulfilmentDetails.storeId || null,
+        customer_id: customer?.id || null,
+        subtotal: Number(total || 0),
+        tax: 0,
+        discount: 0,
+        total: Number(total || 0),
+        status: "COMPLETED",
+        offline_created: false,
+        sync_status: "SYNCED",
+        client_request_id: clientRequestId,
+        completed_at: new Date().toISOString(),
+      };
+      const itemInputs = basket.map((line) => ({
+        product_id: line.id,
+        product_name: line.name,
+        quantity: Number(line.quantity) || 1,
+        unit_price: Number(line.price) || 0,
+        discount: 0,
+        tax: 0,
+        total: (Number(line.price) || 0) * (Number(line.quantity) || 1),
+        item_type: "PRODUCT",
+        modifier_data: Array.isArray(line.modifiers) ? line.modifiers : [],
+        bundle_components: [],
+      }));
+      const paymentInputs = [{
+        customer_id: customer?.id || null,
+        direction: "IN",
+        payment_method: "card",
+        amount: Number(total || 0),
+        provider: exactPayment.providerKey || exactPayment.provider || null,
+        terminal_id: exactPayment.terminalId || exactPayment.terminal_id || null,
+        idempotency_key: clientRequestId,
+        status: "COMPLETED",
+      }];
+      const saleResponse = await apiRequest("/api/platform/runtime/objects/sale/buttons/till_complete_sale/execute", {
         method: "POST",
         body: JSON.stringify({
-          clientRequestId,
-          items: basket.map((line) => ({
-            productId: line.id,
-            quantity: Number(line.quantity) || 1,
-            unitPrice: Number(line.price) || 0,
-            discount: 0,
-            tax: 0,
-            total: (Number(line.price) || 0) * (Number(line.quantity) || 1),
-            modifiers: Array.isArray(line.modifiers) ? line.modifiers : [],
-          })),
-          subtotal: total,
-          tax: 0,
-          discount: 0,
-          total,
-          paymentMethod: "card",
-          customerId: customer?.id || null,
-          redeemPoints: Number(redeemPoints || 0),
-          kioskDeviceKey: kioskDeviceKey(),
-          kioskFulfilmentStoreId: fulfilmentDetails.storeId || null,
+          context: { source: "KIOSK", kioskDeviceKey: kioskDeviceKey() },
+          inputs: { sale: saleInput, items: itemInputs, payments: paymentInputs },
         }),
       });
-
-      if (!saleResponse?.success || !saleResponse?.sale?.id) {
+      const saleId = saleResponse?.data?.results?.find?.((step) => step?.stepId === "set_sale_id")?.result?.value || saleResponse?.data?.saleId || null;
+      if (!saleResponse?.success || !saleId) {
         throw new Error(saleResponse?.message || "Card payment could not be completed");
       }
-
-      setPaidSale(saleResponse.sale);
-      await createFulfilmentFromPaidSale(saleResponse.sale);
+      const saved = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`);
+      const completedSale = saved?.record || saved?.data || { id: saleId, total };
+      setPaidSale(completedSale);
+      await createFulfilmentFromPaidSale(completedSale);
     } catch (reason) {
       const message = String(reason?.message || "Unable to complete payment");
       const friendly = /declin/i.test(message)
