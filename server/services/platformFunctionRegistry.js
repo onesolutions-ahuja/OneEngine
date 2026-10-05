@@ -1,10 +1,5 @@
 import { packageFunctions } from "../packages/functionsIndex.js";
-import { createInventoryMovement } from "./inventory.js";
-import { createGenericOrder, transitionGenericOrder } from "./onlineOrders/genericOrderService.js";
-import { createSaleForCompletedOrder } from "./onlineOrders/saleCreator.js";
 import { dispatchIntegrationEvent } from "./integrationDispatcher.js";
-import { publishPlatformEvent } from "./platformEvents.js";
-import { clockInAttendance, clockOutAttendance } from "./attendanceActions.js";
 import { issueAccountToken } from "./accountPolicy.js";
 import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveReceiptQrSettings, revokeTemporaryReceiptDownloadsForSale } from "./receiptQr.js";
 
@@ -14,106 +9,6 @@ import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveRecei
 // capabilities are migrated to visible metadata/Flow and removed from this
 // registry as their callers are converted to generic primitives.
 const CORE_PLATFORM_FUNCTIONS = Object.freeze([
-{
-    key: "online_order.create",
-    category: "ONLINE_ORDER",
-    description: "Compatibility capability while online-order creation is migrated to Flow.",
-    inputs: { type: "object", required: ["externalOrderId", "fulfilmentType", "items"] },
-    outputs: { type: "object" },
-    permissions: ["online_orders.manage"],
-    handler: async ({ inputs = {}, db, pool, companyId, userId, req }) => {
-      const tenantId = companyId || req?.user?.companyId;
-      return createGenericOrder({
-        db,
-        pool: pool || db,
-        companyId: tenantId,
-        userId: userId || req?.user?.id,
-        storeId: inputs.storeId || req?.user?.storeId,
-        externalOrderId: inputs.externalOrderId,
-        fulfilmentType: inputs.fulfilmentType,
-        items: inputs.items,
-        customer: inputs.customer || {},
-        notes: inputs.notes,
-        payment: inputs.payment,
-        createInventoryMovement,
-        publishEvent: ({ client, eventType, payload, actorUserId }) =>
-          publishPlatformEvent({
-            db: client.query.bind(client),
-            companyId: tenantId,
-            eventType,
-            payload,
-            actorUserId,
-          }),
-      });
-    },
-  },
-  {
-    key: "online_order.transition",
-    category: "ONLINE_ORDER",
-    description: "Compatibility capability while online-order transitions are migrated to Flow.",
-    inputs: { type: "object", required: ["orderId", "toStatus"] },
-    outputs: { type: "object" },
-    permissions: ["online_orders.manage"],
-    handler: async ({ inputs = {}, db, pool, companyId, userId, req }) => {
-      const tenantId = companyId || req?.user?.companyId;
-      return transitionGenericOrder({
-        pool: pool || db,
-        companyId: tenantId,
-        orderId: inputs.orderId,
-        userId: userId || req?.user?.id,
-        toStatus: inputs.toStatus,
-        reason: inputs.reason || null,
-        createSale: createSaleForCompletedOrder,
-        createInventoryMovement,
-        publishEvent: ({ client, eventType, payload, actorUserId }) =>
-          publishPlatformEvent({
-            db: client.query.bind(client),
-            companyId: tenantId,
-            eventType,
-            payload,
-            actorUserId,
-          }),
-      });
-    },
-  },
-  {
-    key: "inventory.movement.create",
-    category: "INVENTORY",
-    description: "Compatibility capability while inventory movement callers are migrated to generic record Flow.",
-    inputs: { type: "object" },
-    outputs: { type: "object" },
-    permissions: ["inventory.adjust"],
-    handler: async ({ inputs = {}, db }) => createInventoryMovement(db, inputs),
-  },
-  {
-    key: "attendance.clock_in",
-    category: "STAFF",
-    description: "Compatibility capability while attendance clock-in is migrated to Flow.",
-    inputs: { type: "object" },
-    outputs: { type: "object" },
-    permissions: ["attendance.use"],
-    handler: async ({ db, companyId, userId, req }) =>
-      clockInAttendance({
-        db,
-        companyId: companyId || req?.user?.companyId,
-        userId: userId || req?.user?.id,
-        storeId: req?.user?.storeId,
-      }),
-  },
-  {
-    key: "attendance.clock_out",
-    category: "STAFF",
-    description: "Compatibility capability while attendance clock-out is migrated to Flow.",
-    inputs: { type: "object" },
-    outputs: { type: "object" },
-    permissions: ["attendance.use"],
-    handler: async ({ db, companyId, userId, req }) =>
-      clockOutAttendance({
-        db,
-        companyId: companyId || req?.user?.companyId,
-        userId: userId || req?.user?.id,
-      }),
-  },
   {
     key: "integration.event.dispatch",
     category: "INTEGRATIONS",
