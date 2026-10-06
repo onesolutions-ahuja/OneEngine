@@ -128,7 +128,7 @@ export function FreeFormElements({ flowType, startConfig }) {
   </div>
 }
 
-export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen, selecting = false, selected = false, onSelectToggle, connecting = false, onConnectTarget, onFreeSelect, onFreeMoveStart, onConnectorStart, onConnectorEnd }) {
+export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen, onRemove, selecting = false, selected = false, onSelectToggle, connecting = false, onConnectTarget, onFreeSelect, onFreeMoveStart, onConnectorStart, onConnectorEnd }) {
   const key = instance?.key || elementKey
   const element = elementByKey(key)
   if (!element) return null
@@ -157,6 +157,21 @@ export function PendingElementCard({ elementKey, instance = null, free = false, 
     {free ? <span className="gptb-free-connector is-input" aria-hidden="true" onPointerUp={(event) => { event.stopPropagation(); onConnectorEnd?.(event) }}/>: null}
     {free ? <span className="gptb-free-connector is-output" aria-hidden="true" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); onConnectorStart?.(event) }}/>: null}
     {selecting ? <span className="gptb-select-element-node" aria-hidden="true">{selected ? '✓' : '+'}</span> : null}
+    {onRemove && !free && !selecting && !connecting ? <span
+      className="gptb-node-remove"
+      role="button"
+      tabIndex={0}
+      aria-label={`Remove ${label}`}
+      title="Remove"
+      onClick={(event) => { event.stopPropagation(); onRemove?.() }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          event.stopPropagation()
+          onRemove?.()
+        }
+      }}
+    >−</span> : null}
     <span className={`gptb-element-icon is-${element.category}`}><Icon size={16}/></span>
     <span><strong>{label}</strong><small>{instance?.configured ? element.label : `${element.label} · Not fully configured`}</small></span>
     {instance ? <span className="gptb-card-info" tabIndex={0} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
