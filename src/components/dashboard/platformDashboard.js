@@ -114,22 +114,7 @@ export const DASHBOARD_DATE_RANGES = Object.freeze([
   { key: "fiscal_year", label: "Fiscal year" },
 ]);
 
-export const DASHBOARD_SALES_FIELDS = Object.freeze([
-  { key: "date", label: "Date", groupable: true },
-  { key: "store", label: "Store", groupable: true },
-  { key: "user", label: "Operator", groupable: true },
-  { key: "product", label: "Product", groupable: true },
-  { key: "category", label: "Category", groupable: true },
-  { key: "method", label: "Payment method", groupable: true },
-  { key: "sku", label: "SKU", groupable: true },
-  { key: "quantity", label: "Quantity sold", aggregate: true },
-  { key: "gross_sales", label: "Gross sales", aggregate: true },
-  { key: "net_sales", label: "Net sales", aggregate: true },
-  { key: "total", label: "Total", aggregate: true },
-  { key: "vat", label: "VAT", aggregate: true },
-  { key: "discount", label: "Discounts", aggregate: true },
-  { key: "transactions", label: "Transactions", aggregate: true },
-]);
+
 
 export function getDashboardComponentSpec(key) {
   return DASHBOARD_COMPONENTS.find((component) => component.key === String(key || "")) || null;
@@ -139,7 +124,7 @@ export function getDashboardComponentSpec(key) {
  * The aggregation and condition vocabularies, mirrored from the reporting
  * engine so the Builder only ever offers combinations the server will accept:
  *   - services/reportableSources.js  (AGGREGATES, OPERATORS, numeric field types)
- *   - routes/reports.js              (CUSTOM_DATE_FILTERS, sales filter fields)
+ *   - routes/reports.js              (report metadata and supported filters)
  * Nothing here is dashboard-specific logic — it is the existing reporting
  * vocabulary, surfaced so the Builder can build the same conditions the
  * reporting engine already validates and executes.
@@ -148,12 +133,7 @@ export const AGGREGATES = Object.freeze(["COUNT", "SUM", "AVG", "MIN", "MAX"]);
 export const AGGREGATABLE_FIELD_TYPES = Object.freeze(["number", "decimal", "currency", "date", "datetime", "formula", "rollup"]);
 export const SUMMARY_COLUMN = (aggregate, field) => `${String(aggregate).toLowerCase()}_${field}`;
 
-export const DATE_FILTER_FIELDS = Object.freeze([
-  { key: "date", label: "Date", kind: "date" },
-  { key: "store", label: "Store", kind: "id" },
-  { key: "user", label: "Operator", kind: "id" },
-  { key: "product", label: "Product", kind: "id" },
-]);
+
 
 /* Field-type driven operator lists — the same rules the Custom Report builder
    already uses, so a condition authored here executes unchanged there. */
