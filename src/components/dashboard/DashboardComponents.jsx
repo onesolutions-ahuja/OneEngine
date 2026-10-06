@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
  * Dashboard Builder persisted. Swapping a component's report/field changes what
  * these renderers draw without changing this file.
  */
-import { DASHBOARD_COMPONENTS } from "./platformDashboard.js";
 import { formatDateValue } from "../../utils/dateFormat.js";
 import {
   ComboChart,
