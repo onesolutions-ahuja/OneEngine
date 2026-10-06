@@ -93,7 +93,7 @@ export const COMPONENT_ICONS = {
   calendar_widget: CalendarDays,
   weather_widget: CloudSun,
   kanban: KanbanSquare,
-  calendar: CalendarRange,
+  calendar: CalendarDays,
   scheduler: CalendarClock,
   gantt: ChartGantt,
   map: Map,
