@@ -2766,7 +2766,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           AND r.relationship_key='category' AND p.company_id IS NULL AND c.company_id IS NULL`
     );
 
-    const sale = byKey.get("sale");
+    const sale = byKey.get("sale_ledger");
     if (sale) {
       const transactionTypeField = await pool.query(
         "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='transaction_type' AND company_id IS NULL LIMIT 1",
