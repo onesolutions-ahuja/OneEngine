@@ -34,7 +34,7 @@ import {
 import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
-import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
+import { createWorkflowTraceGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 import createTillRouter from "./routes/till.js";
 import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
@@ -498,7 +498,7 @@ async function testPaymentTerminal(terminal) {
  * services/auditLog.js (unknown users are nulled to satisfy the FK; other
  * failures are logged and swallowed so a committed business action stands).
  */
-app.use("/api", createBusinessCommandGateway({ db }));
+app.use("/api", createWorkflowTraceGateway({ db }));
 
 const writeAudit = createAuditWriter({ db });
 app.locals.writeAudit = writeAudit;
