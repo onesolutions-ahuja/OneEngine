@@ -5,7 +5,7 @@ import { X } from "lucide-react";
  *
  * Extracted from the admin page so the admin view and the restricted
  * processing view share the IDENTICAL completion behaviour:
- *   - the OTP is verified by the PLATFORM (Uber / Deliveroo), never by onePOS;
+ *   - the OTP is verified by the configured external platform, never by onePOS;
  *   - the order is only marked completed after the platform confirms;
  *   - "Complete" is the ONLY action that can ever ask for an OTP.
  *
