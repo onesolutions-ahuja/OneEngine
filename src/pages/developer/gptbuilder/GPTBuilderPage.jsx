@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp,
-  Copy, Eye, History, LayoutPanelLeft, Play, Plus, Redo2, Save, Search,
+  Copy, Eye, History, LayoutPanelLeft, Pencil, Play, Plus, Redo2, Save, Search,
   Settings2, Sparkles, Trash2, Undo2, Workflow, X, Zap, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
@@ -2162,18 +2162,167 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   </section>
 }
 
+
+function inferExistingFlowType(rule = {}) {
+  const action = rule?.action || {}
+  const raw = String(action.flowType || action.flow_type || '').trim().toLowerCase()
+  const aliases = {
+    record_triggered: 'record',
+    record: 'record',
+    screen_flow: 'screen',
+    screen: 'screen',
+    schedule_triggered: 'schedule',
+    scheduled: 'schedule',
+    schedule: 'schedule',
+    platform_event_triggered: 'platform_event',
+    platform_event: 'platform_event',
+    autolaunched_flow: 'autolaunched',
+    autolaunched: 'autolaunched',
+  }
+  if (aliases[raw]) return aliases[raw]
+  if (FLOW_TYPES.some((item) => item.key === raw)) return raw
+  const trigger = String(rule?.trigger_key || rule?.triggerKey || rule?.trigger || action.triggerKey || action.trigger_key || '').toLowerCase()
+  if (trigger === 'scheduled' || trigger === 'schedule') return 'schedule'
+  if (trigger.includes('platform_event') || trigger === 'event') return 'platform_event'
+  if (/^(before|after)_(create|update|delete|save)$/.test(trigger)) return 'record'
+  if (rule?.object_key || rule?.objectKey || rule?.object || rule?.trigger_object) return 'record'
+  return 'autolaunched'
+}
+
+function existingStartConfig(rule = {}, flowType = 'autolaunched') {
+  const action = rule?.action || {}
+  if (action.start && typeof action.start === 'object') return structuredClone(action.start)
+  if (flowType === 'record') {
+    const triggerKey = String(rule?.trigger_key || rule?.triggerKey || rule?.trigger || action.triggerKey || action.trigger_key || '').toLowerCase()
+    const trigger =
+      triggerKey.includes('delete') ? 'deleted'
+        : triggerKey.includes('create') && !triggerKey.includes('update') ? 'created'
+          : triggerKey.includes('update') && !triggerKey.includes('create') ? 'updated'
+            : 'created_or_updated'
+    return {
+      ...initialStart('record'),
+      objectKey: String(rule?.object_key || rule?.objectKey || rule?.object || rule?.trigger_object || action.objectKey || action.object || ''),
+      trigger,
+      optimize: triggerKey.startsWith('before_') ? 'fast' : 'actions',
+      conditionMode: Array.isArray(rule?.conditions) && rule.conditions.length ? 'all' : 'none',
+      conditions: Array.isArray(rule?.conditions) ? structuredClone(rule.conditions) : [],
+      updateMode: String(action.entryTransition || '').toUpperCase() === 'UPDATED_TO_MEET' ? 'transition' : 'every_time',
+    }
+  }
+  if (flowType === 'schedule') return { ...initialStart('schedule'), ...(action.schedule && typeof action.schedule === 'object' ? structuredClone(action.schedule) : {}) }
+  if (flowType === 'platform_event') return { ...initialStart('platform_event'), eventKey: String(rule?.trigger_key || rule?.triggerKey || rule?.trigger || action.triggerKey || action.trigger_key || '') }
+  return initialStart(flowType)
+}
+
+function legacyRuntimeActionToBuilderElement(runtimeAction = {}, index = 0) {
+  const runtimeKey = String(runtimeAction?.key || runtimeAction?.actionKey || runtimeAction?.action_key || runtimeAction?.type || '').trim()
+  const id = String(runtimeAction?.id || `legacy-action-${index + 1}`)
+  const label = runtimeAction?.label || runtimeAction?.name || runtimeKey || `Action ${index + 1}`
+  const apiName = runtimeAction?.apiName || runtimeAction?.api_name || apiNameFromLabel(label, `Action_${index + 1}`)
+  const reserved = new Set(['id','key','actionKey','action_key','type','label','name','apiName','api_name','description','automaticOutputVariable','manualOutputMappings'])
+  const inputs = {}
+  const inputModes = {}
+  const inputIncluded = {}
+  const transforms = {}
+  for (const [name, value] of Object.entries(runtimeAction || {})) {
+    if (reserved.has(name) || value === undefined) continue
+    if (value && typeof value === 'object' && value.__flowInputMode === 'formula') {
+      inputs[name] = value.expression || ''
+      inputModes[name] = 'formula'
+    } else if (value && typeof value === 'object' && value.__flowInputMode === 'transform') {
+      inputs[name] = ''
+      inputModes[name] = 'transform'
+      transforms[name] = { source: value.source || '', mappings: Array.isArray(value.mappings) ? structuredClone(value.mappings) : [] }
+    } else if (value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.path === 'string') {
+      inputs[name] = value.path
+      inputModes[name] = 'resource'
+    } else {
+      inputs[name] = structuredClone(value)
+      inputModes[name] = 'value'
+    }
+    inputIncluded[name] = 'specified'
+  }
+  return {
+    id,
+    key: 'action',
+    label,
+    apiName,
+    description: runtimeAction?.description || '',
+    configured: Boolean(runtimeKey),
+    source: 'existing-runtime-action',
+    config: {
+      actionKey: runtimeKey,
+      inputs,
+      inputModes,
+      inputIncluded,
+      transforms,
+      outputMode: Array.isArray(runtimeAction?.manualOutputMappings) && runtimeAction.manualOutputMappings.length ? 'manual' : 'automatic',
+      manualOutputs: Array.isArray(runtimeAction?.manualOutputMappings) ? structuredClone(runtimeAction.manualOutputMappings) : [],
+    },
+  }
+}
+
+function normalizeExistingRuleForGPTBuilder(rule = {}) {
+  const action = rule?.action && typeof rule.action === 'object' ? structuredClone(rule.action) : {}
+  const flowType = inferExistingFlowType(rule)
+  if (!Array.isArray(action.gptBuilderElements)) {
+    action.gptBuilderElements = (Array.isArray(action.actions) ? action.actions : []).map(legacyRuntimeActionToBuilderElement)
+  }
+  action.gptBuilder = true
+  action.flowType = flowType
+  action.start = existingStartConfig(rule, flowType)
+  action.layout = action.layout && typeof action.layout === 'object' ? action.layout : { mode: 'AUTO' }
+  return { ...rule, action }
+}
+
+function flowTypeLabel(rule = {}) {
+  const key = inferExistingFlowType(rule)
+  return FLOW_TYPES.find((item) => item.key === key)?.label || 'Flow'
+}
+
+function flowStatusLabel(rule = {}) {
+  return rule?.runtime_active === true || rule?.active === true || String(rule?.lifecycle_status || '').toUpperCase() === 'ACTIVE'
+    ? 'Active'
+    : 'Draft'
+}
+
 export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen }) {
-  const [newOpen, setNewOpen] = useState(() => !initialWorkflowId)
+  const [newOpen, setNewOpen] = useState(false)
   const [flow, setFlow] = useState(null)
   const [initialRule, setInitialRule] = useState(null)
   const [loadingExisting, setLoadingExisting] = useState(Boolean(initialWorkflowId))
   const [openError, setOpenError] = useState('')
+  const [flows, setFlows] = useState([])
+  const [listLoading, setListLoading] = useState(true)
+  const [listError, setListError] = useState('')
+  const [listQuery, setListQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+
+  const loadFlows = () => {
+    setListLoading(true)
+    setListError('')
+    return apiRequest('/api/platform/rules')
+      .then((response) => {
+        const rows = Array.isArray(response?.data) ? response.data : []
+        setFlows(rows.filter((item) => String(item?.action?.type || '').toLowerCase() === 'workflow' || Array.isArray(item?.action?.actions)))
+        return rows
+      })
+      .catch((error) => {
+        setFlows([])
+        setListError(error?.message || 'Unable to load flows.')
+        return []
+      })
+      .finally(() => setListLoading(false))
+  }
+
+  useEffect(() => { void loadFlows() }, [])
 
   useEffect(() => {
     let live = true
     const id = String(initialWorkflowId || '')
     if (!id) {
       setInitialRule(null)
+      setFlow(null)
       setLoadingExisting(false)
       return () => { live = false }
     }
@@ -2184,29 +2333,101 @@ export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen 
         if (!live) return
         const rows = Array.isArray(response?.data) ? response.data : []
         const saved = rows.find((item) => String(item?.id || '') === id)
-        if (!saved) throw new Error('Saved GPT Builder flow not found.')
-        if (saved.action?.gptBuilder !== true) throw new Error('This workflow was not created by GPT Builder.')
-        const definition = FLOW_TYPES.find((item) => item.key === saved.action?.flowType)
-        if (!definition) throw new Error('This GPT Builder flow type is not supported.')
-        setInitialRule(saved)
+        if (!saved) throw new Error('Saved flow not found.')
+        const normalized = normalizeExistingRuleForGPTBuilder(saved)
+        const definition = FLOW_TYPES.find((item) => item.key === normalized.action?.flowType)
+        if (!definition) throw new Error('This flow type is not supported by GPT Builder.')
+        setInitialRule(normalized)
         setFlow(definition)
         setNewOpen(false)
       })
-      .catch((error) => { if (live) { setInitialRule(null); setFlow(null); setOpenError(error?.message || 'Unable to reopen flow.') } })
+      .catch((error) => {
+        if (live) {
+          setInitialRule(null)
+          setFlow(null)
+          setOpenError(error?.message || 'Unable to reopen flow.')
+        }
+      })
       .finally(() => { if (live) setLoadingExisting(false) })
     return () => { live = false }
   }, [initialWorkflowId])
 
+  const openExisting = (rule) => {
+    const normalized = normalizeExistingRuleForGPTBuilder(rule)
+    const definition = FLOW_TYPES.find((item) => item.key === normalized.action?.flowType)
+    if (!definition) {
+      setOpenError('This flow type is not supported by GPT Builder.')
+      return
+    }
+    setInitialRule(normalized)
+    setFlow(definition)
+    setNewOpen(false)
+    setOpenError('')
+    onWorkflowOpen?.(String(rule.id))
+  }
+
   const startNew = () => {
     setInitialRule(null)
+    setFlow(null)
     setNewOpen(true)
     onWorkflowOpen?.('')
   }
 
+  const filteredFlows = useMemo(() => {
+    const needle = listQuery.trim().toLowerCase()
+    return flows.filter((rule) => {
+      const type = inferExistingFlowType(rule)
+      if (typeFilter !== 'all' && type !== typeFilter) return false
+      if (!needle) return true
+      return `${rule?.name || ''} ${rule?.action?.apiName || ''} ${flowTypeLabel(rule)} ${flowStatusLabel(rule)}`.toLowerCase().includes(needle)
+    })
+  }, [flows, listQuery, typeFilter])
+
+  const filterOptions = [
+    ['all', 'All'],
+    ['record', 'Record'],
+    ['screen', 'Screen'],
+    ['schedule', 'Scheduled'],
+    ['platform_event', 'Platform Event'],
+    ['autolaunched', 'Autolaunched'],
+  ]
+
   return <section className="gptb-root" aria-label="GPT Builder">
     {loadingExisting ? <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1><p>Opening saved flow…</p></main>
-      : flow ? <FlowShell key={initialRule?.id || flow.key} flow={flow} initialRule={initialRule} onWorkflowSaved={onWorkflowOpen} onNew={startNew}/>
-      : <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1>{openError ? <p role="alert">{openError}</p> : <p>Create a Salesforce-style automation in the isolated GPT Builder workspace.</p>}<button className="gptb-button is-brand" onClick={() => setNewOpen(true)}><Plus size={15}/> New Automation</button></main>}
+      : flow ? <FlowShell key={initialRule?.id || flow.key} flow={flow} initialRule={initialRule} onWorkflowSaved={(id) => { onWorkflowOpen?.(id); void loadFlows() }} onNew={startNew}/>
+      : <main className="gptb-flow-list-view">
+          <header className="gptb-flow-list-head">
+            <div><h1>Flows</h1><p>Create and manage automation flows.</p></div>
+            <button className="gptb-button is-brand" onClick={startNew}><Plus size={15}/> New Flow</button>
+          </header>
+          <div className="gptb-flow-list-toolbar">
+            <label className="gptb-flow-list-search">
+              <Search size={14}/>
+              <input value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Search flows..." aria-label="Search flows"/>
+            </label>
+            <div className="gptb-flow-type-filters" role="group" aria-label="Filter by flow type">
+              {filterOptions.map(([key, label]) => <button key={key} type="button" className={typeFilter === key ? 'is-active' : ''} aria-pressed={typeFilter === key} onClick={() => setTypeFilter(key)}>{label}</button>)}
+            </div>
+          </div>
+          {openError ? <div className="gptb-flow-list-error" role="alert">{openError}</div> : null}
+          {listError ? <div className="gptb-flow-list-error" role="alert">{listError}</div> : null}
+          <div className="gptb-flow-table-wrap">
+            <table className="gptb-flow-table">
+              <thead><tr><th>Flow Label</th><th>API Name</th><th>Type</th><th>Status</th><th>Last Modified</th><th aria-label="Actions"></th></tr></thead>
+              <tbody>
+                {listLoading ? <tr><td colSpan="6" className="gptb-flow-table-empty">Loading flows…</td></tr>
+                  : filteredFlows.length ? filteredFlows.map((rule) => <tr key={rule.id}>
+                    <td><button type="button" className="gptb-flow-name-link" onClick={() => openExisting(rule)}>{rule.name || 'Untitled Flow'}</button></td>
+                    <td>{rule?.action?.apiName || '—'}</td>
+                    <td>{flowTypeLabel(rule)}</td>
+                    <td><span className={`gptb-flow-status ${flowStatusLabel(rule) === 'Active' ? 'is-active' : ''}`}>{flowStatusLabel(rule)}</span></td>
+                    <td>{rule.updated_at || rule.created_at ? new Date(rule.updated_at || rule.created_at).toLocaleString() : '—'}</td>
+                    <td className="gptb-flow-action-cell"><button type="button" className="gptb-flow-edit" aria-label={`Edit ${rule.name || 'flow'}`} title="Edit Flow" onClick={() => openExisting(rule)}><Pencil size={14}/></button></td>
+                  </tr>) : <tr><td colSpan="6" className="gptb-flow-table-empty">No flows match this view.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </main>}
     {newOpen ? <GPTBuilderNewAutomation flowTypes={FLOW_TYPES} onCreate={(definition) => { setInitialRule(null); setFlow(definition); setNewOpen(false); onWorkflowOpen?.('') }} onClose={() => setNewOpen(false)}/> : null}
   </section>
 }
