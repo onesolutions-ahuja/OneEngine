@@ -272,3 +272,41 @@ export function buildPortableArtifact(compiled = {}) {
     fingerprint: `${serialized.length}:${[...serialized].reduce((hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0, 2166136261).toString(16)}`,
   };
 }
+
+
+function portableIdentity(item = {}) {
+  return String(item.objectKey || item.object_key || item.apiName || item.api_name ||
+    item.relationshipKey || item.relationship_key || item.layoutKey || item.layout_key ||
+    item.viewKey || item.view_key || item.actionKey || item.action_key ||
+    item.buttonKey || item.button_key || item.connectorKey || item.connector_key ||
+    item.appKey || item.app_key || item.pageKey || item.page_key || item.key || item.id || "");
+}
+
+export function validatePortableArtifact(artifact = {}) {
+  const errors = [];
+  const warnings = [];
+  const manifest = artifact?.manifest;
+  if (!manifest || typeof manifest !== "object") errors.push("Portable manifest is missing.");
+  if (!artifact?.packageKey) errors.push("Package key is missing.");
+  if (!artifact?.version) errors.push("Package version is missing.");
+  if (!artifact?.fingerprint) errors.push("Artifact fingerprint is missing.");
+  if (manifest) {
+    try { scanSecrets(manifest, "artifact"); } catch (error) { errors.push(error.message); }
+    if (!Array.isArray(manifest.apps) || manifest.apps.length !== 1) errors.push("Exactly one app metadata record is required.");
+    if (!Array.isArray(manifest.pages) || manifest.pages.length < 1) errors.push("At least one page metadata record is required.");
+    const collections = Object.values(TYPE_TO_MANIFEST_COLLECTION);
+    for (const collection of collections) {
+      const rows = Array.isArray(manifest[collection]) ? manifest[collection] : [];
+      const seen = new Set();
+      for (const row of rows) {
+        const identity = portableIdentity(row);
+        if (!identity) warnings.push(`${collection} contains metadata without a portable identity.`);
+        else if (seen.has(identity)) errors.push(`Duplicate ${collection} metadata identity: ${identity}`);
+        else seen.add(identity);
+      }
+    }
+    const expected = buildPortableArtifact({ valid: true, unresolved: [], manifest }).fingerprint;
+    if (artifact.fingerprint !== expected) errors.push("Artifact fingerprint does not match its manifest.");
+  }
+  return { valid: errors.length === 0, errors, warnings };
+}
