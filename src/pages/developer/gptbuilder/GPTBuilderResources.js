@@ -1,12 +1,13 @@
 const fieldKey = (field) => String(field?.api_name || field?.apiName || field?.field_key || field?.key || field?.id || '')
 const fieldLabel = (field) => field?.label || field?.name || fieldKey(field)
 const fieldType = (field) => String(field?.data_type || field?.field_type || field?.type || 'text').toLowerCase()
+const uniqueByPath = (rows) => [...new Map(rows.map((row) => [row.path, row])).values()]
 
 export function platformEventRecordResources(eventTypes = [], eventKey = '') {
   if (!eventKey) return []
   const eventType = (Array.isArray(eventTypes) ? eventTypes : []).find((item) => String(item?.event_type || '') === String(eventKey))
   const fields = Array.isArray(eventType?.field_schema) ? eventType.field_schema : []
-  return fields
+  return uniqueByPath(fields
     .filter((field) => field?.active !== false && field?.readable !== false && fieldKey(field))
     .map((field) => {
       const key = fieldKey(field)
@@ -21,7 +22,7 @@ export function platformEventRecordResources(eventTypes = [], eventKey = '') {
         writable: false,
         automatic: true,
       }
-    })
+    }))
 }
 
 function relativeRecordPath(path, objectKey = '') {
@@ -68,5 +69,5 @@ export function recordPathResources(paths = [], objectKey = '', { includePrior =
       automatic: true,
     })
   }
-  return includePrior ? [...current, ...prior] : current
+  return uniqueByPath(includePrior ? [...current, ...prior] : current)
 }
