@@ -5,7 +5,7 @@ import {
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor, RefreshCw, ArrowLeftRight,
 } from 'lucide-react'
 import { apiRequest, getStoredUser, loadSessionPermissions } from '../../services/api'
-import { loadRuntimeSurface, mapRuntimePayload, mappedRecordValue, surfacePath } from '../../services/runtimeSurface'
+import { loadRuntimeSurface, mapRuntimePayload, mappedRecordValue, readCachedRuntimeSurface, surfacePath } from '../../services/runtimeSurface'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
@@ -151,7 +151,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const [onlineOrderCount, setOnlineOrderCount] = useState(0)
   const [onlineOrderToast, setOnlineOrderToast] = useState('')
   const [saleCompleteNotice, setSaleCompleteNotice] = useState(null)
-  const [runtimeSurface, setRuntimeSurface] = useState(null)
+  const [runtimeSurface, setRuntimeSurface] = useState(() => readCachedRuntimeSurface('till', 'till'))
 
   const surfaceObjects = runtimeSurface?.objects || {}
   const surfaceSettings = runtimeSurface?.settings || {}
@@ -184,10 +184,10 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
   }
 
-  const applyBootstrap = (catalogue, settingsResponse, buttonRows, paymentRows = []) => {
+  const applyBootstrap = (catalogue, settingsResponse, buttonRows, paymentRows = [], surface = runtimeSurface) => {
     const payload = catalogue?.data || catalogue || {}
     const sourceRows = Array.isArray(payload.products) ? payload.products : Array.isArray(payload.records) ? payload.records : Array.isArray(payload.data) ? payload.data : []
-    const catalogueMapping = runtimeSurface?.recordMappings?.catalogue || {}
+    const catalogueMapping = surface?.recordMappings?.catalogue || {}
     const rows = sourceRows.map((product) => normaliseProduct(product, catalogueMapping)).filter((product) => product.active)
     setProducts(rows)
     setCategories(['All', ...new Set(rows.map((product) => product.category).filter(Boolean))])
@@ -224,12 +224,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
     const cached = loadTillBootstrapCache()
     const usableCached = cached || null
-    if (usableCached) {
-      applyBootstrap(usableCached.catalogue, usableCached.settingsResponse, usableCached.buttons, usableCached.paymentMethods || [])
+    const cachedSurface = runtimeSurface || readCachedRuntimeSurface('till', 'till')
+    if (usableCached && cachedSurface) {
+      applyBootstrap(usableCached.catalogue, usableCached.settingsResponse, usableCached.buttons, usableCached.paymentMethods || [], cachedSurface)
       setLoading(false)
     }
     try {
-      const surface = await loadRuntimeSurface('till', 'till')
+      const surface = cachedSurface || await loadRuntimeSurface('till', 'till')
       setRuntimeSurface(surface)
       const catalogueObjectKey = String(surface?.objects?.catalogue || '')
       const transactionObjectKey = String(surface?.objects?.transaction || '')
@@ -250,14 +251,14 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       ])
       const catalogue = mergeCatalogueResponse(usableCached?.catalogue, catalogueDelta)
       const paymentRows = paymentResponse?.data || []
-      applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [], paymentRows)
+      applyBootstrap(catalogue, settingsResponse, buttonResponse?.data || [], paymentRows, surface)
       cacheTillBootstrap({ catalogue, settingsResponse, buttons: buttonResponse?.data || [], paymentMethods: paymentRows })
       setPermissions(permissionResponse?.permissions || [])
       setOnline(true)
       await tillPromise
     } catch (err) {
       if (usableCached) {
-        applyBootstrap(usableCached.catalogue, usableCached.settingsResponse, usableCached.buttons, usableCached.paymentMethods || [])
+        applyBootstrap(usableCached.catalogue, usableCached.settingsResponse, usableCached.buttons, usableCached.paymentMethods || [], runtimeSurface || cachedSurface)
         setOnline(false)
         setError('Server unavailable — cached Till loaded. Cash sales only.')
       } else {
