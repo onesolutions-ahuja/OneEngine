@@ -229,7 +229,7 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /position: element\.position/)
   assert.match(page, /goToConnections,/)
   assert.match(page, /initialWorkflowId = ''/)
-  assert.match(page, /Saved flow not found/)
+  assert.match(page, /Saved GPT Builder flow not found/)
   assert.match(page, /const \[newOpen, setNewOpen\] = useState\(false\)/)
   assert.match(page, /className="gptb-flow-list-view"/)
   assert.match(page, /> New Flow<\/button>/)
