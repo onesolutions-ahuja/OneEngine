@@ -2,7 +2,7 @@ import express from "express";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeSystemAction, executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 const PRODUCT_PROVIDER_ENTRIES = Object.freeze(internalAppCatalog.filter((entry) => entry.providerConnector?.globalProductLookup));
 const PROVIDER_KEYS = Object.freeze(PRODUCT_PROVIDER_ENTRIES.map((entry) => entry.providerConnector.globalProductLookup.providerKey).filter(Boolean));
@@ -336,11 +336,11 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
     if (!connectorInstanceId) {
       return res.status(400).json({ success: false, code: "NOT_CONFIGURED", message: "Configure this provider before testing the connection" });
     }
-    const execution = await executeSystemWorkflow({
+    const execution = await executeSystemAction({
       db,
       companyId: req.user.companyId,
       userId: req.user.id || null,
-      systemKey: "action:CONNECTOR_TEST_CONNECTION",
+      actionKey: "CONNECTOR_TEST_CONNECTION",
       req,
       input: { connectorInstanceId },
       connectorDrivers,
