@@ -700,6 +700,27 @@
           "fieldType": "json",
           "sourceColumn": "bundle_components",
           "writable": true
+        },
+        {
+          "apiName": "discount_type",
+          "label": "Discount Type",
+          "fieldType": "text",
+          "sourceColumn": "discount_type",
+          "writable": false
+        },
+        {
+          "apiName": "discount_value",
+          "label": "Discount Value",
+          "fieldType": "currency",
+          "sourceColumn": "discount_value",
+          "writable": false
+        },
+        {
+          "apiName": "original_unit_price",
+          "label": "Original Unit Price",
+          "fieldType": "currency",
+          "sourceColumn": "original_unit_price",
+          "writable": false
         }
       ]
     },
