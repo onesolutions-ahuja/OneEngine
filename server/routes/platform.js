@@ -6336,6 +6336,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
   async function runSavedWorkflowRequest(req, res, workflowId) {
     let run = null;
+    let client = null;
+    let screenTransactionActive = false;
     try {
       const workflowResult = await db(
         "SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",
@@ -6431,9 +6433,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         },
       });
 
+      const isScreenFlow = String(workflow.action?.flowType || "") === "screen";
+      if (isScreenFlow) {
+        client = await pool.connect();
+        await client.query("BEGIN");
+        screenTransactionActive = true;
+      }
+      const executionDb = isScreenFlow ? ((query, params = []) => client.query(query, params)) : db;
       const results = await executeWorkflowActions({
         actions,
-        db,
+        db: executionDb,
         pool,
         req,
         object,
@@ -6445,7 +6454,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         workflowVersion: pinnedVersion,
         trigger: "RUN",
         workflowVariables,
+        rollbackCurrentTransaction: isScreenFlow ? async () => {
+          if (!screenTransactionActive) return;
+          await client.query("ROLLBACK");
+          screenTransactionActive = false;
+        } : undefined,
       });
+      if (screenTransactionActive) {
+        await client.query("COMMIT");
+        screenTransactionActive = false;
+      }
       const waiting = workflowResultsContainStatus(results, "waiting");
       if (run?.id) {
         await db(
@@ -6460,6 +6478,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
       return res.json({ success: true, data: { status: waiting ? "WAITING" : "COMPLETED", runId: run?.id || null, results, variables: workflowVariables } });
     } catch (error) {
+      if (screenTransactionActive && client) {
+        await client.query("ROLLBACK").catch(() => {});
+        screenTransactionActive = false;
+      }
       if (run?.id) {
         await db(
           "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3",
@@ -6468,6 +6490,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
       console.error("Workflow run error:", error);
       return res.status(error.status || 500).json({ success: false, message: error.message || "Unable to run workflow" });
+    } finally {
+      client?.release?.();
     }
   }
 
