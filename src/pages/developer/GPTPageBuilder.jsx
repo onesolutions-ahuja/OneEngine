@@ -8,4 +8,4 @@ import CustomPageBuilder from "../settings/Platform/CustomPageBuilder.jsx";
  */
 export default function GPTPageBuilder(props) {
   return <CustomPageBuilder {...props} />;
-}\n\nexport default function GPTPageBuilder(){\n  return <ReactFlowProvider><GPTPageBuilderCanvas /></ReactFlowProvider>\n}\n
+}
