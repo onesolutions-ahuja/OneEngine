@@ -81,29 +81,6 @@ export function applyLayout(components = []) {
 export const layoutEquals = (a, b) =>
   a?.x === b?.x && a?.y === b?.y && a?.w === b?.w && a?.h === b?.h;
 
-/*
- * The component vocabulary mirrored for the client. The server stays
- * authoritative; this exists so the runtime and the Builder render and label
- * the same components without importing server code into the browser bundle.
- */
-export const DASHBOARD_COMPONENTS = Object.freeze([
-  { key: "kpi", label: "Metric / KPI", kind: "metric" },
-  { key: "pie", label: "Pie Chart", kind: "chart" },
-  { key: "donut", label: "Donut Chart", kind: "chart" },
-  { key: "bar", label: "Bar Chart", kind: "chart" },
-  { key: "line", label: "Line Chart", kind: "chart" },
-  { key: "gauge", label: "Gauge", kind: "chart" },
-  { key: "funnel", label: "Funnel", kind: "chart" },
-  { key: "scatter", label: "Scatter", kind: "chart" },
-  { key: "combo", label: "Combo Chart", kind: "chart" },
-  { key: "table", label: "Table / List", kind: "record" },
-  { key: "text", label: "Text", kind: "content" },
-  { key: "image", label: "Image", kind: "content" },
-  { key: "clock_widget", label: "Clock / Watch", kind: "content" },
-  { key: "calendar_widget", label: "Calendar", kind: "content" },
-  { key: "weather_widget", label: "Weather", kind: "content" },
-]);
-
 export const DASHBOARD_DATE_RANGES = Object.freeze([
   { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
@@ -114,26 +91,7 @@ export const DASHBOARD_DATE_RANGES = Object.freeze([
   { key: "fiscal_year", label: "Fiscal year" },
 ]);
 
-export const DASHBOARD_SALES_FIELDS = Object.freeze([
-  { key: "date", label: "Date", groupable: true },
-  { key: "store", label: "Store", groupable: true },
-  { key: "user", label: "Operator", groupable: true },
-  { key: "product", label: "Product", groupable: true },
-  { key: "category", label: "Category", groupable: true },
-  { key: "method", label: "Payment method", groupable: true },
-  { key: "sku", label: "SKU", groupable: true },
-  { key: "quantity", label: "Quantity sold", aggregate: true },
-  { key: "gross_sales", label: "Gross sales", aggregate: true },
-  { key: "net_sales", label: "Net sales", aggregate: true },
-  { key: "total", label: "Total", aggregate: true },
-  { key: "vat", label: "VAT", aggregate: true },
-  { key: "discount", label: "Discounts", aggregate: true },
-  { key: "transactions", label: "Transactions", aggregate: true },
-]);
 
-export function getDashboardComponentSpec(key) {
-  return DASHBOARD_COMPONENTS.find((component) => component.key === String(key || "")) || null;
-}
 
 /*
  * The aggregation and condition vocabularies, mirrored from the reporting
