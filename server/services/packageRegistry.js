@@ -1,4 +1,3 @@
-import { oneAssistantManifest } from "../packages/oneAssistantManifest.js";
 import { metadataManifestByPackageKey } from "./metadataManifestLoader.js";
 import { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 export { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
@@ -340,10 +339,6 @@ export function packageDefinition(entry) {
         }];
       })(),
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
-      
-      
-      ...(entry.key === "one_assistant" ? oneAssistantManifest : {}),
-      
       ...(metadataManifestByPackageKey(entry.key) || {}),
       
       
