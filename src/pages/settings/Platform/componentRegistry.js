@@ -223,6 +223,8 @@ export function normalizeComponent(component) {
   return {
     ...source,
     key,
+    api: String(source.api || source.componentApi || source.component_api || `${key}.v${Number(source.version) || 1}`).trim(),
+    version: Number(source.version) || 1,
     label,
     category: String(source.category || "other").toLowerCase(),
     kind: String(source.kind || source.category || "other").toLowerCase(),
@@ -253,7 +255,12 @@ export function normalizedRegistry(registry) {
 }
 
 export function componentByKey(registry, key) {
-  return normalizedRegistry(registry).find((component) => component.key === key) || null;
+  const target = String(key || "").trim();
+  return normalizedRegistry(registry).find((component) => component.key === target || component.api === target) || null;
+}
+
+export function componentApiForKey(registry, key) {
+  return componentByKey(registry, key)?.api || null;
 }
 
 /* ---------------------------------------------------------------------------
@@ -332,6 +339,7 @@ export function createRegisteredComponent(component, builder = "PAGE") {
     return {
       id,
       registryKey: spec.key,
+      componentApi: spec.api,
       type: spec.rendererKey || spec.key,
       title: defaults.title || spec.label,
       config: defaults.config || {},
@@ -341,6 +349,7 @@ export function createRegisteredComponent(component, builder = "PAGE") {
   return {
     id,
     componentKey: spec.key,
+    componentApi: spec.api,
     rendererKey: spec.rendererKey || spec.key,
     runtimeKind: spec.runtimeKind || null,
     label: spec.label,
