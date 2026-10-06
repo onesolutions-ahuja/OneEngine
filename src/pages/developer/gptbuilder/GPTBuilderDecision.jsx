@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronUp, ChevronDown, Plus, Search, Trash2 } from 'lucide-react'
-import { compatibleDecisionResources, decisionConfigErrors, decisionResourcePath, decisionResourceType, normalizeDecisionConfig } from './GPTBuilderDecisionLogic'
+import { compatibleDecisionResources, decisionConfigErrors, decisionOperators, decisionResourcePath, decisionResourceType, normalizeDecisionConfig } from './GPTBuilderDecisionLogic'
+export { DECISION_DEFAULTS, decisionConfigErrors, normalizeDecisionConfig } from './GPTBuilderDecisionLogic'
 
 const uid = () => globalThis.crypto?.randomUUID?.() || `dc-${Date.now()}-${Math.random().toString(36).slice(2)}`
 const apiNameFromLabel = (label, fallback = 'Outcome') => {
