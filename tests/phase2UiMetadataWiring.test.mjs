@@ -65,7 +65,9 @@ test("Phase 2 package metadata owns legacy business navigation aliases", async()
     "/app/objects/supplier?appKey=suppliers",
     "/app/objects/employee?appKey=staff",
     "/app/objects/online_order?appKey=own_delivery",
-    "/app/objects/kiosk_device?appKey=one_kiosk"
+    "/app/objects/kiosk_device?appKey=one_kiosk",
+    "/app/objects/store?appKey=retail_pos",
+    "/app/objects/online_order?appKey=online_orders"
   ]) assert.ok(catalog.includes(route),route);
 });
 
@@ -81,4 +83,15 @@ test("Phase 2 removes retired Online Orders bespoke UI stack", async()=>{
     "src/components/online/OnlineOrderSummary.jsx",
     "src/utils/onlineOrderPrint.js"
   ]) await assert.rejects(access(new URL("../"+path,import.meta.url)),path);
+});
+
+
+test("Phase 2 shell resolves hidden foundation navigation from the server-filtered package feed", async()=>{
+  const app=await read("src/App.jsx");
+  const packages=await read("server/routes/packages.js");
+  assert.match(app,/api\/packages\/runtime-navigation/);
+  assert.match(packages,/router\.get\("\/packages\/runtime-navigation"/);
+  assert.match(packages,/company_installation\?\.status/);
+  assert.match(packages,/permissionAllows/);
+  assert.match(packages,/isPackageLicensed/);
 });
