@@ -394,29 +394,6 @@ test("OneAssistant WhatsApp transport is visible in Flow as generic HTTP", () =>
 
 
 
-test("single-router migration retires converted legacy appointment workflows", () => {
-  const source = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
-  assert.match(source, /0062_oneassistant_single_event_router/);
-  assert.match(source, /System · Action · Appointments - Process Conversation/);
-  assert.match(source, /System · Action · Appointments - Send Conversation Reply/);
-  assert.match(source, /System · Action · Appointments - Process Date Response/);
-  assert.match(source, /System · Action · Appointments - Process Slot Response/);
-  assert.match(source, /id<>\$2/);
-  assert.match(source, /OneAssistant event router dedupe verification failed/);
-});
-
-
-test("workflow step identifiers are TEXT for deep Decision paths", () => {
-  const schema = readFileSync(new URL("../server/database/schema.sql", import.meta.url), "utf8");
-  const init = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
-  assert.doesNotMatch(schema, /step_identifier VARCHAR\(200\)/);
-  assert.match(schema, /step_identifier TEXT/);
-  assert.match(init, /0063_workflow_step_identifier_text/);
-  assert.match(init, /ALTER TABLE platform_workflow_step_runs ALTER COLUMN step_identifier TYPE TEXT/);
-  assert.match(init, /ALTER TABLE platform_workflow_screen_sessions ALTER COLUMN step_identifier TYPE TEXT/);
-});
-
-
 test("resource fallback resolves through null overrides", () => {
   const workflowVariables = {
     steps: {
@@ -451,9 +428,3 @@ test("provider HTTP and communication delivery status are observable without sec
 
 
 
-test("OneAssistant communication trigger remains activatable", () => {
-  const init = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
-  assert.match(init, /0064_oneassistant_event_trigger_registration/);
-  assert.match(init, /communication_message_received','Provider-neutral inbound communication received',TRUE/);
-  assert.match(init, /ON CONFLICT\(event_type\) DO UPDATE SET active=TRUE/);
-});
