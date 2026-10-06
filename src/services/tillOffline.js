@@ -1,3 +1,4 @@
+import { loadRuntimeSurface } from './runtimeSurface'
 const DB_NAME = 'onepos_smart_theme_offline'
 const DB_VERSION = 1
 const STORE = 'sales'
@@ -145,7 +146,11 @@ export async function syncOfflineCashSales(apiRequest) {
   for (const entry of rows) {
     if (entry.status === 'failed') continue
     try {
-      const response = await apiRequest('/api/platform/runtime/objects/sale/buttons/till_complete_sale/execute', { method: 'POST', body: JSON.stringify({ context: { source: 'OFFLINE_SYNC' }, inputs: { sale: { ...(entry.payload.sale || {}), offline_created: true, sync_status: 'SYNCED' }, items: entry.payload.items || [], payments: entry.payload.payments || [] } }) })
+      const surface = await loadRuntimeSurface('till', 'till')
+      const transactionObjectKey = String(surface?.objects?.transaction || '')
+      const completeSaleAction = String(surface?.actions?.completeSale || '')
+      if (!transactionObjectKey || !completeSaleAction) throw new Error('Offline Till runtime metadata is incomplete.')
+      const response = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(transactionObjectKey)}/buttons/${encodeURIComponent(completeSaleAction)}/execute`, { method: 'POST', body: JSON.stringify({ context: { source: 'OFFLINE_SYNC' }, inputs: { sale: { ...(entry.payload.sale || {}), offline_created: true, sync_status: 'SYNCED' }, items: entry.payload.items || [], payments: entry.payload.payments || [] } }) })
       const saleStep = response?.data?.results?.find?.((step) => step?.stepId === 'create_sale')?.result
       const saleId = saleStep?.created?.id || saleStep?.matched?.id || null
       if (!response?.success || !saleId) throw Object.assign(new Error(response?.message || 'Unconfirmed sale response'), { serverResponse: true })
