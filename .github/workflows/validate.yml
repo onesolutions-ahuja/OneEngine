@@ -2,7 +2,7 @@ name: Validate OneEngine
 
 on:
   push:
-    branches: [main, flow-object-migration-work]
+    branches: [main, flow-object-migration-work, metadata-phase1-runtime]
   pull_request:
   workflow_dispatch:
 
