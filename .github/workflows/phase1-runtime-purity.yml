@@ -1,0 +1,33 @@
+name: Phase 1 Runtime Purity
+
+on:
+  pull_request:
+    paths:
+      - 'server/**'
+      - 'tests/phase1*.test.mjs'
+      - 'tests/metadataPackageWorkflowRuntime.test.mjs'
+      - 'tests/workflowBuilderRegistryVisibility.test.mjs'
+      - '.github/workflows/phase1-runtime-purity.yml'
+  workflow_dispatch:
+
+jobs:
+  phase1-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm install --ignore-scripts --no-audit --no-fund
+        working-directory: server
+      - run: npm run build
+        working-directory: server
+      - name: Phase 1 regression tests
+        run: node --test tests/phase1RuntimePurity.test.mjs tests/phase1RetailMetadata.test.mjs tests/metadataPackageWorkflowRuntime.test.mjs tests/workflowBuilderRegistryVisibility.test.mjs
+      - name: Trusted runtime architecture audit
+        run: npm run audit:trusted
+      - name: Workflow coverage enforcement
+        run: npm run audit:workflow-coverage:enforce
