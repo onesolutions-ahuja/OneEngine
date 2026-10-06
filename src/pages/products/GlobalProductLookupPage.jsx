@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Barcode, Check, ChevronRight, Globe2, KeyRound, LoaderCircle, PackageSearch, Plus, Search, Settings2, Wifi, X } from 'lucide-react'
 import { apiRequest } from '../../services/api'
+import { loadRuntimeSurface, mapRuntimePayload, mappedRecordValue, runtimeEndpoint } from '../../services/runtimeSurface'
 import MetadataRecordFormModal from '../../platform/forms/MetadataRecordFormModal'
-
-const DEFAULT_PROVIDER={enabled:true,priority:100,timeoutMs:5000,fallbackEnabled:true,cacheTtlSeconds:5}
 
 export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const [providers,setProviders]=useState([])
@@ -24,11 +23,20 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const [preset,setPreset]=useState(null)
   const [manageProviders,setManageProviders]=useState(false)
   const [previewProduct,setPreviewProduct]=useState(null)
+  const [runtimeSurface,setRuntimeSurface]=useState(null)
 
   const loadSettings=async()=>{
     try{
       setSettingsLoading(true);setError('')
-      const [p,c]=await Promise.all([apiRequest('/api/global-products/providers'),apiRequest('/api/platform/objects/category/records?active=true')])
+      const surface=await loadRuntimeSurface('products','globalLookup')
+      setRuntimeSurface(surface)
+      const categoryObject=String(surface?.objects?.category||'')
+      const providersPath=runtimeEndpoint(surface,'providers')
+      if(!categoryObject||!providersPath)throw new Error('Product lookup runtime metadata is incomplete')
+      const [p,c]=await Promise.all([
+        apiRequest(providersPath),
+        apiRequest(`/api/platform/objects/${encodeURIComponent(categoryObject)}/records?active=true`)
+      ])
       if(!p?.success)throw new Error(p?.message||'Unable to load providers')
       setProviders(Array.isArray(p.data)?p.data:[])
       setCategories(Array.isArray(c?.data?.records)?c.data.records:Array.isArray(c?.records)?c.records:Array.isArray(c?.data)?c.data:[])
@@ -51,13 +59,13 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
       setLoading(true);setError('');setNotice('');setResult(null);setSearchResults([])
       if(lookupMode==='barcode'){
         if(!barcode.trim())return
-        const r=await apiRequest('/api/global-products/lookup',{method:'POST',body:JSON.stringify({barcode:barcode.trim(),providerKey:activeProvider?.providerKey||null})})
+        const r=await apiRequest(runtimeEndpoint(runtimeSurface,'lookup'),{method:'POST',body:JSON.stringify({barcode:barcode.trim(),providerKey:activeProvider?.providerKey||null})})
         if(!r?.success)throw new Error(r?.message||'Product lookup failed')
         setResult(r.data)
       }else{
         const q=searchText.trim()
         if(q.length<2)return
-        const r=await apiRequest(`/api/global-products/search?q=${encodeURIComponent(q)}&pageSize=24&providerKey=${encodeURIComponent(activeProvider?.providerKey||'')}`)
+        const searchPath=runtimeEndpoint(runtimeSurface,'search'); const r=await apiRequest(`${searchPath}?q=${encodeURIComponent(q)}&pageSize=24&providerKey=${encodeURIComponent(activeProvider?.providerKey||'')}`)
         if(!r?.success)throw new Error(r?.message||'Product search failed')
         setResult(r.data)
         setSearchResults(Array.isArray(r.data?.products)?r.data.products:[])
@@ -70,7 +78,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const saveProvider=async(provider)=>{
     try{
       setSavingProvider(provider.providerKey);setError('');setNotice('')
-      const r=await apiRequest(`/api/global-products/providers/${encodeURIComponent(provider.providerKey)}`,{
+      const r=await apiRequest(runtimeEndpoint(runtimeSurface,'provider',{providerKey:provider.providerKey}),{
         method:'PATCH',
         body:JSON.stringify({
           enabled:provider.enabled,
@@ -93,7 +101,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const makeDefaultProvider=async(providerKey)=>{
     try{
       setChangingDefault(true);setError('');setNotice('')
-      const r=await apiRequest('/api/global-products/default-provider',{
+      const r=await apiRequest(runtimeEndpoint(runtimeSurface,'defaultProvider'),{
         method:'PATCH',
         body:JSON.stringify({providerKey})
       })
@@ -108,7 +116,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const testProvider=async(provider)=>{
     try{
       setTestingProvider(provider.providerKey);setError('');setNotice('')
-      const r=await apiRequest(`/api/global-products/providers/${encodeURIComponent(provider.providerKey)}/test`,{method:'POST',body:'{}'})
+      const r=await apiRequest(runtimeEndpoint(runtimeSurface,'providerTest',{providerKey:provider.providerKey}),{method:'POST',body:'{}'})
       if(!r?.success)throw new Error(r?.message||'Provider connection test failed')
       setNotice(`${provider.displayName} connection succeeded.`)
     }catch(err){setError(err?.message||'Provider connection test failed')}
@@ -116,17 +124,21 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   }
 
   const addToCatalogue=(product)=>{
-    const category=categories.find(c=>String(c.name||'').toLowerCase()===String(product.category||'').toLowerCase())
-    setPreset({
+    const categoryMap=runtimeSurface?.recordMappings?.category||{}
+    const productMap=runtimeSurface?.recordMappings?.lookupProduct||{}
+    const categoryName=(row)=>mappedRecordValue(row,categoryMap,'name','')
+    const categoryId=(row)=>mappedRecordValue(row,categoryMap,'id','')
+    const category=categories.find(row=>String(categoryName(row)).toLowerCase()===String(product.category||'').toLowerCase())
+    setPreset(mapRuntimePayload(productMap,{
       name:product.name||'',
       barcode:product.barcode||'',
       description:product.description||'',
-      category_id:category?.id||'',
-      image_url:product.imageUrl||'',
+      category:categoryId(category)||'',
+      imageUrl:product.imageUrl||'',
       brand:product.brand||'',
       quantity:product.quantity||'',
-      source_provider:product.sourceProvider||'',
-    })
+      sourceProvider:product.sourceProvider||'',
+    }))
   }
 
   const availableProviders=providers.filter(p=>p.installed&&p.licensed&&p.enabled)
@@ -283,9 +295,9 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
         </div></div>
         <div className="global-provider-grid">
           <label className="global-provider-toggle"><span>Enabled</span><button type="button" className={`mac-switch ${provider.enabled?'is-on':''}`} onClick={()=>setProviderField(provider.providerKey,'enabled',!provider.enabled)}><span/></button></label>
-          <label className="module-input-label"><span>Priority</span><input type="number" min="1" max="9999" value={provider.priority??DEFAULT_PROVIDER.priority} onChange={e=>setProviderField(provider.providerKey,'priority',Number(e.target.value))}/></label>
-          <label className="module-input-label"><span>Timeout (ms)</span><input type="number" min="500" max="30000" step="500" value={provider.timeoutMs??DEFAULT_PROVIDER.timeoutMs} onChange={e=>setProviderField(provider.providerKey,'timeoutMs',Number(e.target.value))}/></label>
-          <label className="module-input-label"><span>Cache TTL</span><input type="number" min="0" max="86400" value={provider.cacheTtlSeconds??DEFAULT_PROVIDER.cacheTtlSeconds} onChange={e=>setProviderField(provider.providerKey,'cacheTtlSeconds',Number(e.target.value))}/></label>
+          <label className="module-input-label"><span>Priority</span><input type="number" min="1" max="9999" value={provider.priority??runtimeSurface?.providerDefaults?.priority??100} onChange={e=>setProviderField(provider.providerKey,'priority',Number(e.target.value))}/></label>
+          <label className="module-input-label"><span>Timeout (ms)</span><input type="number" min="500" max="30000" step="500" value={provider.timeoutMs??runtimeSurface?.providerDefaults?.timeoutMs??5000} onChange={e=>setProviderField(provider.providerKey,'timeoutMs',Number(e.target.value))}/></label>
+          <label className="module-input-label"><span>Cache TTL</span><input type="number" min="0" max="86400" value={provider.cacheTtlSeconds??runtimeSurface?.providerDefaults?.cacheTtlSeconds??5} onChange={e=>setProviderField(provider.providerKey,'cacheTtlSeconds',Number(e.target.value))}/></label>
           <label className="global-provider-toggle"><span>Fallback</span><button type="button" className={`mac-switch ${provider.fallbackEnabled!==false?'is-on':''}`} onClick={()=>setProviderField(provider.providerKey,'fallbackEnabled',provider.fallbackEnabled===false)}><span/></button></label>
         </div>
         {provider.configurableFields?.includes('baseUrl')?<label className="module-input-label"><span>API base URL</span><input value={provider.baseUrl||''} onChange={e=>setProviderField(provider.providerKey,'baseUrl',e.target.value)}/></label>:null}
@@ -314,6 +326,6 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
       </article>
     </div>:null}
 
-    {preset?<MetadataRecordFormModal objectKey="product" mode="create" record={preset} title="Add Product to Catalogue" onClose={()=>setPreset(null)} onSaved={()=>{setPreset(null);setNotice('Product added to your company catalogue.')}}/>:null}
+    {preset?<MetadataRecordFormModal objectKey={runtimeSurface?.objects?.catalogue||''} mode="create" record={preset} title="Add Product to Catalogue" onClose={()=>setPreset(null)} onSaved={()=>{setPreset(null);setNotice('Product added to your company catalogue.')}}/>:null}
   </section>
 }
