@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 import { apiRequest, loadSessionPermissions } from "../../../services/api.js";
-import WorkflowAdmin from "./WorkflowAdmin.jsx";
 import {
   NAVIGATION_TARGET_TYPES,
   describeNavigationTarget,
@@ -588,8 +587,8 @@ function WorkflowAdminOverlayHost({ contextObjectKey, baseline, onClose, onCreat
 /*
  * A minimal creation form over the SAME /api/platform/rules pipeline the
  * Workflow Builder uses. It creates the workflow shell (name + object +
- * manual trigger) with a Show-Form-Layout style first step the admin can
- * extend immediately in WorkflowAdmin; complex step authoring stays there.
+ * manual trigger). The shell contains no hardcoded business or UI step; the
+ * administrator authors every step in the metadata Flow Builder.
  * This guarantees: no navigation away, unsaved page state preserved, and the
  * new workflow auto-selected by UUID in the picker.
  */
@@ -597,8 +596,6 @@ function InlineNewWorkflowForm({ contextObjectKey, baseline, onCreated, onCancel
   const [name, setName] = useState("New Workflow");
   const [objectKey, setObjectKey] = useState(contextObjectKey || "");
   const [objects, setObjects] = useState([]);
-  const [layouts, setLayouts] = useState([]);
-  const [layoutId, setLayoutId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -606,9 +603,6 @@ function InlineNewWorkflowForm({ contextObjectKey, baseline, onCreated, onCancel
     apiRequest("/api/platform/objects")
       .then((response) => setObjects(Array.isArray(response?.data?.objects) ? response.data.objects : Array.isArray(response?.data) ? response.data : []))
       .catch(() => setObjects([]));
-    apiRequest("/api/platform/layouts")
-      .then((response) => setLayouts(Array.isArray(response?.data) ? response.data.filter((layout) => layout.active !== false) : []))
-      .catch(() => setLayouts([]));
   }, []);
 
   const create = async () => {
@@ -625,10 +619,7 @@ function InlineNewWorkflowForm({ contextObjectKey, baseline, onCreated, onCancel
         action: {
           type: "workflow",
           match: "all",
-          actions: [
-            /* UI invocation steps; extended later in the full Workflow Builder. */
-            { type: "SHOW_MESSAGE", message: `Opened ${name.trim()}` },
-          ],
+          actions: [],
         },
       };
       const response = await apiRequest("/api/platform/rules", { method: "POST", body: JSON.stringify(payload) });
