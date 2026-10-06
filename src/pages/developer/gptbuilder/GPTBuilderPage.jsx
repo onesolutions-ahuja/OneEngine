@@ -1024,6 +1024,23 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
 
   useEffect(() => {
     let live = true
+    if (flow.key !== 'record' || !startConfig.objectKey) {
+      setRecordPathMetadata([])
+      return () => { live = false }
+    }
+    const selectedObject = objects.find((item) => objectKey(item) === startConfig.objectKey)
+    if (!selectedObject?.id) {
+      setRecordPathMetadata([])
+      return () => { live = false }
+    }
+    apiRequest(`/api/platform/objects/${encodeURIComponent(selectedObject.id)}/record-paths?depth=4`)
+      .then((response) => { if (live) setRecordPathMetadata(Array.isArray(response?.data) ? response.data : []) })
+      .catch(() => { if (live) setRecordPathMetadata([]) })
+    return () => { live = false }
+  }, [flow.key, startConfig.objectKey, objects])
+
+  useEffect(() => {
+    let live = true
     Promise.all([
       apiRequest('/api/platform/objects').catch(() => ({ data: [] })),
       apiRequest('/api/platform/event-types').catch(() => ({ data: [] })),
