@@ -2398,6 +2398,14 @@ export function packageDefinition(entry) {
         ],
         workflows: [
           {
+            objectKey:"till_session",name:"Open Till Session",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
+            action:{type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"OPEN_TILL_SESSION",capabilityType:"workflow",capabilityKey:"till.open",systemGenerated:true,systemKey:"flow:till.open",inputContract:[{name:"session",type:"record",required:true}],outputContract:[{name:"session",type:"record",source:"variables.session"}],resources:[{value:"variables.session",apiName:"session",label:"Till Session",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:true,objectKey:"till_session"}],actions:[{id:"create_session",label:"Create Till Session",apiName:"create_session",key:"CREATE_RECORD",objectKey:"till_session",recordResource:{path:"variables.session"}}]}
+          },
+          {
+            objectKey:"cash_movement",name:"Record Cash Movement",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
+            action:{type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"RECORD_CASH_MOVEMENT",capabilityType:"workflow",capabilityKey:"till.cash.move",systemGenerated:true,systemKey:"flow:till.cash.move",inputContract:[{name:"movement",type:"record",required:true}],outputContract:[{name:"movement",type:"record",source:"variables.movement"}],resources:[{value:"variables.movement",apiName:"movement",label:"Cash Movement",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:true,objectKey:"cash_movement"}],actions:[{id:"create_movement",label:"Create Cash Movement",apiName:"create_movement",key:"CREATE_RECORD",objectKey:"cash_movement",recordResource:{path:"variables.movement"}}]}
+          },
+          {
             objectKey:"sale",name:"Complete Sale",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
             action:{
               type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"COMPLETE_SALE",capabilityType:"workflow",capabilityKey:"sale.complete",systemGenerated:true,systemKey:"flow:sale.complete",
