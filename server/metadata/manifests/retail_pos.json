@@ -2736,7 +2736,7 @@
             "key": "FORMULA",
             "resourceName": "hasReturnItems",
             "resultType": "boolean",
-            "expression": "!ISBLANK(items)",
+            "expression": "COUNT(items) > 0",
             "inputs": {
               "items": {
                 "path": "variables.items"
