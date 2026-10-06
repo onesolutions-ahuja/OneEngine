@@ -306,8 +306,8 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
 
         // Tenant scope check (company + store where applicable).
         const saleCheck = await db(
-          `SELECT id FROM sales
-           WHERE id = $1 AND company_id = $2
+          `SELECT id FROM sale_ledger
+           WHERE id = $1 AND company_id = $2 AND source_record_type='SALE_HEADER'
            ${req.user.storeId ? "AND store_id = $3" : ""}
            LIMIT 1`,
           req.user.storeId ? [saleId, req.user.companyId, req.user.storeId] : [saleId, req.user.companyId]
@@ -372,8 +372,8 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
           return res.status(400).json({ success: false, message: "A sale ID is required." });
         }
         const saleCheck = await db(
-          `SELECT id FROM sales
-           WHERE id = $1 AND company_id = $2
+          `SELECT id FROM sale_ledger
+           WHERE id = $1 AND company_id = $2 AND source_record_type='SALE_HEADER'
            ${req.user.storeId ? "AND store_id = $3" : ""}
            LIMIT 1`,
           req.user.storeId ? [saleId, req.user.companyId, req.user.storeId] : [saleId, req.user.companyId]
