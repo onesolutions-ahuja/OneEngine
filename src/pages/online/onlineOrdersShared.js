@@ -24,7 +24,7 @@ export const STATUS_BADGES = {
  * names/status presentation remain protocol-facing display helpers only. */
 
 export function platformLabel(platform) {
-  return platform === "uber" ? "Uber Eats" : platform === "deliveroo" ? "Deliveroo" : platform === "one_kiosk" ? "OneKiosk" : platform || "-";
+  return platform === "uber" ? "Uber Eats" : platform === "deliveroo" ? "Deliveroo" : platform || "-";
 }
 
 export function platformBadgeClass(platform) {
