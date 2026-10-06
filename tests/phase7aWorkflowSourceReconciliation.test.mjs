@@ -49,6 +49,13 @@ test("Phase 7A OneTill metadata seeds editable nodes for every runtime step", as
   const source = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
   assert.match(source, /gptBuilderElements: \(flow\.actions \|\| \[\]\)\.map/);
   assert.match(source, /importedRuntimeAction: step/);
+  const oneTillActionSource = source.slice(
+    source.lastIndexOf("const action = {", source.indexOf("gptBuilderElements: (flow.actions || []).map")),
+    source.indexOf("const existing", source.indexOf("gptBuilderElements: (flow.actions || []).map"))
+  );
+  assert.equal((oneTillActionSource.match(/gptBuilderElements:/g) || []).length, 1, "OneTill action must contain one Builder element source");
+  assert.equal((oneTillActionSource.match(/gptBuilder:\s*true/g) || []).length, 1, "OneTill action must contain one Builder flag");
+  assert.equal((oneTillActionSource.match(/layout:\s*\{\s*mode:\s*"AUTO"\s*\}/g) || []).length, 1, "OneTill action must contain one layout block");
   for (const id of [
     "validate_hold_items","hold_ready","hold_invalid",
     "get_held_sale","held_sale_found","held_sale_missing",
