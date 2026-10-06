@@ -212,7 +212,7 @@
           "sourceColumn": "sale_id",
           "writable": true,
           "config": {
-            "relatedObjectKey": "sale"
+            "relatedObjectKey": "sale_ledger"
           }
         },
         {
@@ -353,7 +353,10 @@
       "sourceTable": "refunds",
       "required": true,
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       },
       "fields": [
         {
@@ -364,7 +367,7 @@
           "writable": true,
           "required": true,
           "config": {
-            "relatedObjectKey": "sale"
+            "relatedObjectKey": "sale_ledger"
           }
         },
         {
@@ -414,12 +417,12 @@
       ]
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "metadataScope": "global",
-      "label": "Sale",
-      "pluralLabel": "Sales",
-      "description": "Canonical sales transaction header.",
-      "sourceTable": "sales",
+      "label": "Sale Ledger",
+      "pluralLabel": "Sale Ledger",
+      "description": "Canonical sales transaction ledger.",
+      "sourceTable": "sale_ledger",
       "storeScoped": true,
       "config": {
         "flowWritesOnly": true
@@ -555,7 +558,7 @@
           "sourceColumn": "original_transaction_id",
           "writable": true,
           "config": {
-            "relatedObjectKey": "sale"
+            "relatedObjectKey": "sale_ledger"
           }
         },
         {
@@ -589,7 +592,10 @@
       "description": "Canonical line item related to a Sale.",
       "sourceTable": "sale_items",
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       },
       "fields": [
         {
@@ -600,7 +606,7 @@
           "required": true,
           "writable": true,
           "config": {
-            "relatedObjectKey": "sale"
+            "relatedObjectKey": "sale_ledger"
           }
         },
         {
@@ -692,7 +698,10 @@
       "sourceTable": "payments",
       "storeScoped": true,
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       },
       "fields": [
         {
@@ -702,7 +711,7 @@
           "sourceColumn": "sale_id",
           "writable": true,
           "config": {
-            "relatedObjectKey": "sale"
+            "relatedObjectKey": "sale_ledger"
           }
         },
         {
@@ -733,7 +742,7 @@
           "sourceColumn": "transaction_id",
           "writable": true,
           "config": {
-            "relatedObjectKey": "sale"
+            "relatedObjectKey": "sale_ledger"
           }
         },
         {
@@ -850,7 +859,7 @@
           "required": true,
           "writable": true,
           "config": {
-            "relatedObjectKey": "sale"
+            "relatedObjectKey": "sale_ledger"
           }
         },
         {
@@ -926,35 +935,51 @@
       "childFieldApiName": "till_session_id"
     },
     {
-      "parentObjectKey": "sale",
+      "parentObjectKey": "sale_ledger",
       "childObjectKey": "sale_item",
       "relationshipKey": "items",
       "relationshipType": "one_to_many",
-      "childFieldApiName": "sale_id"
+      "childFieldApiName": "sale_id",
+      "config": {
+        "internal": true,
+        "childStorage": true
+      }
     },
     {
-      "parentObjectKey": "sale",
+      "parentObjectKey": "sale_ledger",
       "childObjectKey": "sale_item",
       "relationshipKey": "item_sale",
       "relationshipType": "lookup",
-      "childFieldApiName": "sale_id"
+      "childFieldApiName": "sale_id",
+      "config": {
+        "internal": true,
+        "childStorage": true
+      }
     },
     {
-      "parentObjectKey": "sale",
+      "parentObjectKey": "sale_ledger",
       "childObjectKey": "payment",
       "relationshipKey": "payments",
       "relationshipType": "one_to_many",
-      "childFieldApiName": "sale_id"
+      "childFieldApiName": "sale_id",
+      "config": {
+        "internal": true,
+        "childStorage": true
+      }
     },
     {
-      "parentObjectKey": "sale",
+      "parentObjectKey": "sale_ledger",
       "childObjectKey": "refund",
       "relationshipKey": "refunds",
       "relationshipType": "one_to_many",
-      "childFieldApiName": "sale_id"
+      "childFieldApiName": "sale_id",
+      "config": {
+        "internal": true,
+        "childStorage": true
+      }
     },
     {
-      "parentObjectKey": "sale",
+      "parentObjectKey": "sale_ledger",
       "childObjectKey": "stock_return",
       "relationshipKey": "returns",
       "relationshipType": "one_to_many",
@@ -968,11 +993,15 @@
       "childFieldApiName": "return_id"
     },
     {
-      "parentObjectKey": "sale",
+      "parentObjectKey": "sale_ledger",
       "childObjectKey": "payment",
       "relationshipKey": "payment_sale",
       "relationshipType": "lookup",
-      "childFieldApiName": "sale_id"
+      "childFieldApiName": "sale_id",
+      "config": {
+        "internal": true,
+        "childStorage": true
+      }
     }
   ],
   "rules": [
@@ -1061,7 +1090,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "Sale total cannot be negative",
       "triggerKey": "before_save",
       "conditions": [
@@ -1077,7 +1106,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "Sale must contain at least one line",
       "triggerKey": "before_save",
       "conditions": [
@@ -1093,7 +1122,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "Sale request key required",
       "triggerKey": "before_save",
       "conditions": [
@@ -1162,7 +1191,7 @@
       "inputMappings": {}
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "buttonKey": "till_open_drawer",
       "label": "Open Drawer",
       "targetType": "workflow",
@@ -1172,7 +1201,7 @@
       "inputMappings": {}
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "buttonKey": "till_petty_cash_submit",
       "label": "Petty Cash",
       "targetType": "workflow",
@@ -1182,7 +1211,7 @@
       "inputMappings": {}
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "buttonKey": "till_complete_sale",
       "label": "Complete Sale",
       "targetType": "workflow",
@@ -1192,7 +1221,7 @@
       "inputMappings": {}
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "buttonKey": "create_return",
       "label": "Return",
       "targetType": "workflow",
@@ -1202,7 +1231,7 @@
       "inputMappings": {}
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "buttonKey": "create_exchange",
       "label": "Exchange",
       "targetType": "workflow",
@@ -3284,7 +3313,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "Create Exchange",
       "triggerKey": "manual",
       "active": true,
@@ -3372,7 +3401,7 @@
             "isCollection": false,
             "availableInput": true,
             "availableOutput": true,
-            "objectKey": "sale"
+            "objectKey": "sale_ledger"
           },
           {
             "value": "variables.items",
@@ -3430,7 +3459,7 @@
             "label": "Create Replacement Sale",
             "apiName": "create_replacement_sale",
             "key": "CREATE_RECORD",
-            "objectKey": "sale",
+            "objectKey": "sale_ledger",
             "recordResource": {
               "path": "variables.sale"
             }
@@ -3561,7 +3590,7 @@
                 "label": "Create Replacement Sale",
                 "apiName": "create_replacement_sale",
                 "key": "CREATE_RECORD",
-                "objectKey": "sale",
+                "objectKey": "sale_ledger",
                 "recordResource": {
                   "path": "variables.sale"
                 }
@@ -3650,7 +3679,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "Complete Sale",
       "triggerKey": "manual",
       "active": true,
@@ -3699,7 +3728,7 @@
             "isCollection": false,
             "availableInput": true,
             "availableOutput": true,
-            "objectKey": "sale"
+            "objectKey": "sale_ledger"
           },
           {
             "value": "variables.items",
@@ -3732,7 +3761,7 @@
             "label": "1. Create Sale",
             "apiName": "create_sale",
             "key": "CREATE_RECORD",
-            "objectKey": "sale",
+            "objectKey": "sale_ledger",
             "recordResource": {
               "path": "variables.sale"
             },
@@ -3806,7 +3835,7 @@
                 "label": "1. Create Sale",
                 "apiName": "create_sale",
                 "key": "CREATE_RECORD",
-                "objectKey": "sale",
+                "objectKey": "sale_ledger",
                 "recordResource": {
                   "path": "variables.sale"
                 },
@@ -3907,7 +3936,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "OneTill - Validate Stock",
       "triggerKey": "manual",
       "active": true,
@@ -4037,7 +4066,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "OneTill - Age Verification",
       "triggerKey": "manual",
       "active": true,
@@ -4199,7 +4228,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "OneTill - Validate Payment Method",
       "triggerKey": "manual",
       "active": true,
@@ -4985,7 +5014,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "OneTill - Validate Split Payment",
       "triggerKey": "manual",
       "active": true,
@@ -6169,7 +6198,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "OneTill - Calculate Sale Totals",
       "triggerKey": "manual",
       "active": true,
@@ -7826,7 +7855,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "OneTill - Calculate Cash Position",
       "triggerKey": "manual",
       "active": true,
@@ -8286,7 +8315,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "OneTill - Create Receipt QR",
       "triggerKey": "manual",
       "active": true,
@@ -8706,7 +8735,7 @@
       }
     },
     {
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "name": "OneTill - Revoke Receipt QR",
       "triggerKey": "manual",
       "active": true,
