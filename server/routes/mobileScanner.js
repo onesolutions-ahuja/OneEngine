@@ -1,5 +1,6 @@
 import express from "express";
 import crypto from "crypto";
+import { selectMetadataRecords } from "../services/metadataRecordStore.js";
 
 const PAIRING_TTL_MINUTES = 5;
 const SESSION_TTL_HOURS = 12;
@@ -240,12 +241,14 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
     const terminalId = String(req.query.terminalId || "");
     if (!terminalId) return res.status(400).json({ success: false, message: "Till assignment required" });
     try {
-      const activeTill = await db(
-        `SELECT id FROM till_sessions WHERE company_id = $1 AND store_id = $2 AND terminal_id = $3
-         AND user_id = $4 AND status = 'open' LIMIT 1`,
-        [req.user.companyId, req.user.storeId, terminalId, req.user.id]
-      );
-      if (!activeTill.rows[0]) return res.status(403).json({ success: false, message: "Open the assigned till to receive scanner events" });
+      const activeTill = await selectMetadataRecords(db, {
+        objectKey: "till_session",
+        companyId: req.user.companyId,
+        filters: { store_id: req.user.storeId, terminal_id: terminalId, user_id: req.user.id, status: "open" },
+        columns: ["terminal_id"],
+        limit: 1,
+      });
+      if (!activeTill[0]) return res.status(403).json({ success: false, message: "Open the assigned till to receive scanner events" });
       const events = await db(
         `WITH pending AS (
            SELECT e.id FROM mobile_scanner_events e
