@@ -142,4 +142,9 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"create_transaction_ledger",label:"Create Transaction Ledger",key:"CREATE_RECORD",objectKey:"financial_ledger_entry",fieldValues:{company_id:{path:"$record.companyId"},store_id:{path:"$record.storeId"},transaction_id:{path:"$record.saleId"},customer_id:{path:"steps.get_sale.record.customer_id"},transaction_type:{path:"$record.transactionType"},amount:{path:"steps.get_sale.record.total"},net_amount:{path:"steps.get_sale.record.subtotal"},vat_amount:{path:"steps.get_sale.record.tax"},reference:{path:"steps.get_sale.record.receipt_number"},status:"POSTED"}},
   {id:"set_sale_id",label:"Return Sale",key:"ASSIGNMENT",variableName:"saleId",variableType:"text",operator:"set",value:{path:"$record.saleId"}}
  ])
+,
+ flow("flow:invoice.delivery.send","Invoice · Deliver",[input("saleId"),input("channel"),input("recipient"),input("subject","text",false),input("message"),input("invoiceUrl","text",false)],[output("status")],[
+  {id:"send_invoice",label:"Send Invoice Communication",key:"SEND_COMMUNICATION",channel:{path:"$record.channel"},recipient:{path:"$record.recipient"},subject:{path:"$record.subject"},message:{path:"$record.message"},templateContext:{sale_id:{path:"$record.saleId"},invoice_url:{path:"$record.invoiceUrl"}}},
+  {id:"set_status",label:"Return Status",key:"ASSIGNMENT",variableName:"status",variableType:"text",operator:"set",value:{path:"steps.send_invoice.status"}}
+ ])
 ];
