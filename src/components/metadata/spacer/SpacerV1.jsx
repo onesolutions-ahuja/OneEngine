@@ -1,0 +1,1 @@
+export default function SpacerV1({node}){return <div style={{height:16+(Number(node?.spacing)||3)*6}} aria-hidden="true"/>}
