@@ -21,7 +21,9 @@ const runtimeFiles=[
   ...walk(path.join(ROOT,"server","routes")),
   ...walk(path.join(ROOT,"server","services")),
   ...walk(path.join(ROOT,"server","packages")),
-];
+  path.join(ROOT,"server","server.js"),
+  ...walk(path.join(ROOT,"scripts")),
+].filter((file,index,all)=>fs.existsSync(file)&&all.indexOf(file)===index);
 const auditFiles=new Set(walk(path.join(ROOT,"scripts")).filter((file)=>/audit-.*\.mjs$/.test(file)).map((file)=>path.normalize(file)));
 
 const retiredFiles=[
@@ -56,7 +58,7 @@ const businessTables=new Set([
   "inventory_ledger","cash_movements","cash_ledger","gift_cards","gift_card_ledger",
   "customer_loyalty_transactions","customer_loyalty_ledger","customer_credit_ledger",
 ]);
-for(const file of runtimeFiles.filter((file)=>rel(file).startsWith("server/"))){
+for(const file of runtimeFiles.filter((file)=>rel(file).startsWith("server/")&&!rel(file).startsWith("server/metadata/"))){
   const text=fs.readFileSync(file,"utf8");
   for(const match of text.matchAll(/\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+["`]?(\w+)/gi)){
     const table=String(match[1]||"").toLowerCase();
