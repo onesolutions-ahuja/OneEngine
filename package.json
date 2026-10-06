@@ -17,7 +17,8 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
     "audit:gptbuilder-functional-contract": "node scripts/audit-gptbuilder-functional-contract.mjs",
-    "test:gptbuilder-contract": "node --test tests/gptbuilderFunctionalContract.test.mjs"
+    "test:gptbuilder-contract": "node --test tests/gptbuilderFunctionalContract.test.mjs",
+    "test:gptbuilder-negative": "node --test tests/gptbuilderNegativeRegression.test.mjs"
   },
   "dependencies": {
     "framer-motion": "^12.23.24",
