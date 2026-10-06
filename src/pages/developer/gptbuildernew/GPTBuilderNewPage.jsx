@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock, ChevronLeft, Copy, MousePointer2, Play, Plus, Redo2, Search, Trash2, Undo2, Workflow, X, Zap, ZoomIn, ZoomOut } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 import './GPTBuilderNewPage.css'
@@ -123,6 +123,35 @@ function CanvasPicker({onPick,onClose}) {
   </aside>
 }
 
+function ElementEditor({element,nodes,objects,onSave,onCancel}) {
+  const [draft,setDraft]=useState(()=>clone(element||{}))
+  if(!element)return null
+  const cfg=draft.config||{}
+  const patch=(changes)=>setDraft((row)=>({...row,...changes}))
+  const patchCfg=(changes)=>patch({config:{...cfg,...changes}})
+  const refs=nodes.filter((row)=>row.id!==element.id)
+  const logic=['assignment','decision','loop','transform','collection_sort','collection_filter','wait_conditions','wait_amount','wait_date'].includes(element.key)
+  return <aside className="gptbn-panel gptbn-element-editor">
+    <header><h3>{element.label}</h3><button aria-label="Close element" onClick={onCancel}><X size={17}/></button></header>
+    <div className="gptbn-panel-body">
+      <label><span>Label <b>*</b></span><input value={draft.label||''} onChange={(e)=>patch({label:e.target.value,apiName:apiFromElement(e.target.value)})}/></label>
+      <label><span>API Name <b>*</b></span><input value={draft.apiName||''} onChange={(e)=>patch({apiName:e.target.value})}/></label>
+      <label><span>Description</span><textarea rows="3" value={draft.description||''} onChange={(e)=>patch({description:e.target.value})}/></label>
+      {element.key==='assignment'?<><label><span>Variable</span><input value={cfg.variable||''} onChange={(e)=>patchCfg({variable:e.target.value})} placeholder="Resource API name"/></label><label><span>Operator</span><select value={cfg.operator||'assign'} onChange={(e)=>patchCfg({operator:e.target.value})}><option value="assign">Equals</option><option value="add">Add</option><option value="subtract">Subtract</option><option value="add_item">Add Item</option><option value="remove_item">Remove Item</option></select></label><label><span>Value</span><input value={cfg.value||''} onChange={(e)=>patchCfg({value:e.target.value})}/></label></>:null}
+      {element.key==='decision'?<><label><span>Outcome Label</span><input value={cfg.outcomeLabel||''} onChange={(e)=>patchCfg({outcomeLabel:e.target.value})}/></label><label><span>Condition Requirements</span><select value={cfg.match||'all'} onChange={(e)=>patchCfg({match:e.target.value})}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option></select></label><label><span>Resource</span><input value={cfg.resource||''} onChange={(e)=>patchCfg({resource:e.target.value})}/></label><label><span>Operator</span><select value={cfg.operator||'equals'} onChange={(e)=>patchCfg({operator:e.target.value})}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="contains">Contains</option><option value="is_null">Is Null</option></select></label><label><span>Value</span><input value={cfg.value||''} onChange={(e)=>patchCfg({value:e.target.value})}/></label><p className="gptbn-info">Default Outcome is used when no configured outcome matches.</p></>:null}
+      {element.key==='loop'?<><label><span>Collection Variable</span><input value={cfg.collection||''} onChange={(e)=>patchCfg({collection:e.target.value})}/></label><fieldset><legend>Direction</legend><label className="gptbn-radio"><input type="radio" checked={(cfg.direction||'first')==='first'} onChange={()=>patchCfg({direction:'first'})}/>First item to last item</label><label className="gptbn-radio"><input type="radio" checked={cfg.direction==='last'} onChange={()=>patchCfg({direction:'last'})}/>Last item to first item</label></fieldset></>:null}
+      {element.key==='transform'?<><label><span>Source Data</span><input value={cfg.source||''} onChange={(e)=>patchCfg({source:e.target.value})}/></label><label><span>Target Data Type</span><select value={cfg.targetType||'text'} onChange={(e)=>patchCfg({targetType:e.target.value})}><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="record">Record</option></select></label><label><span>Mapping</span><textarea rows="4" value={cfg.mapping||''} onChange={(e)=>patchCfg({mapping:e.target.value})} placeholder="Target field = source value"/></label></>:null}
+      {element.key==='collection_filter'?<><label><span>Collection</span><input value={cfg.collection||''} onChange={(e)=>patchCfg({collection:e.target.value})}/></label><label><span>Condition Requirements</span><select value={cfg.match||'all'} onChange={(e)=>patchCfg({match:e.target.value})}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option></select></label><label><span>Field / Resource</span><input value={cfg.resource||''} onChange={(e)=>patchCfg({resource:e.target.value})}/></label><label><span>Operator</span><select value={cfg.operator||'equals'} onChange={(e)=>patchCfg({operator:e.target.value})}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="contains">Contains</option><option value="is_null">Is Null</option></select></label><label><span>Value</span><input value={cfg.value||''} onChange={(e)=>patchCfg({value:e.target.value})}/></label></>:null}
+      {element.key==='collection_sort'?<><label><span>Collection Variable</span><input value={cfg.collection||''} onChange={(e)=>patchCfg({collection:e.target.value})}/></label><label><span>Sort Order</span><select value={cfg.order||'asc'} onChange={(e)=>patchCfg({order:e.target.value})}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label><label><span>Sort By</span><input value={cfg.field||''} onChange={(e)=>patchCfg({field:e.target.value})}/></label><label><span>Maximum Number of Items</span><input type="number" min="0" value={cfg.limit??''} onChange={(e)=>patchCfg({limit:e.target.value===''?null:Number(e.target.value)})}/></label></>:null}
+      {element.key==='wait_conditions'?<><label><span>Resume When</span><select value={cfg.match||'all'} onChange={(e)=>patchCfg({match:e.target.value})}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option></select></label><label><span>Resource</span><input value={cfg.resource||''} onChange={(e)=>patchCfg({resource:e.target.value})}/></label><label><span>Value</span><input value={cfg.value||''} onChange={(e)=>patchCfg({value:e.target.value})}/></label></>:null}
+      {element.key==='wait_amount'?<><label><span>Amount</span><input type="number" min="0" value={cfg.amount??''} onChange={(e)=>patchCfg({amount:Number(e.target.value)})}/></label><label><span>Unit</span><select value={cfg.unit||'hours'} onChange={(e)=>patchCfg({unit:e.target.value})}><option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days">Days</option></select></label></>:null}
+      {element.key==='wait_date'?<label><span>Date / Time Resource</span><input value={cfg.dateTime||''} onChange={(e)=>patchCfg({dateTime:e.target.value})}/></label>:null}
+      {logic?<label><span>Next Element</span><select value={cfg.nextId||''} onChange={(e)=>patchCfg({nextId:e.target.value})}><option value="">Use canvas connector</option>{refs.map((row)=><option key={row.id} value={row.id}>{row.label}</option>)}</select></label>:null}
+    </div>
+    <footer><button onClick={onCancel}>Cancel</button><button className="is-brand" disabled={!String(draft.label||'').trim()||!String(draft.apiName||'').trim()} onClick={()=>onSave(draft)}>Done</button></footer>
+  </aside>
+}
+
 function Builder({flow,onBack}) {
   const [objects,setObjects]=useState([])
   const [events,setEvents]=useState([])
@@ -143,8 +172,10 @@ function Builder({flow,onBack}) {
   const [future,setFuture]=useState([])
   const [clipboard,setClipboard]=useState([])
   const [connectFrom,setConnectFrom]=useState('')
+  const [editing,setEditing]=useState(null)
   const [dragging,setDragging]=useState(null)
-  const canvasRef=useState(()=>({current:null}))[0]
+  const canvasRef=useRef(null)
+  const dragOriginRef=useRef(null)
 
   useEffect(()=>{let live=true;Promise.all([
     apiRequest('/api/platform/objects').catch(()=>({data:[]})),
@@ -166,9 +197,10 @@ function Builder({flow,onBack}) {
         const previous=nodes.at(-1)?.id||'start'
         setEdges((rows)=>[...rows.filter((edge)=>edge.source!==previous),{id:uid(),source:previous,target:id}])
       }
-      setSelected([id]);setPicker(false)
+      setSelected([id]);setPicker(false);setEditing({id,isNew:true})
     })
   }
+  const saveElement=(draftElement)=>{mutate(()=>setNodes((rows)=>rows.map((node)=>node.id===draftElement.id?{...node,...draftElement,configured:true}:node)));setEditing(null)}
   const deleteSelected=()=>{
     if(!selected.length)return
     mutate(()=>{const removed=new Set(selected);setNodes((rows)=>rows.filter((node)=>!removed.has(node.id)));setEdges((rows)=>rows.filter((edge)=>!removed.has(edge.source)&&!removed.has(edge.target)));setSelected([])})
@@ -192,7 +224,9 @@ function Builder({flow,onBack}) {
     if(layout!=='free')return
     event.preventDefault();event.stopPropagation()
     const rect=canvasRef.current?.getBoundingClientRect()
-    setDragging({id:node.id,originX:event.clientX,originY:event.clientY,startX:node.position?.x||0,startY:node.position?.y||0,rect})
+    const origin={id:node.id,originX:event.clientX,originY:event.clientY,startX:node.position?.x||0,startY:node.position?.y||0,rect}
+    dragOriginRef.current=origin
+    setDragging(origin)
     if(!selected.includes(node.id))setSelected([node.id])
   }
   const moveDrag=(event)=>{
@@ -201,7 +235,7 @@ function Builder({flow,onBack}) {
     const dx=(event.clientX-dragging.originX)/scale,dy=(event.clientY-dragging.originY)/scale
     setNodes((rows)=>rows.map((node)=>node.id===dragging.id?{...node,position:{x:Math.max(20,dragging.startX+dx),y:Math.max(20,dragging.startY+dy)}}:node))
   }
-  const endDrag=()=>{if(dragging){setHistory((rows)=>[...rows.slice(-49),snapshot(nodes.map((node)=>node.id===dragging.id?{...node,position:{x:dragging.startX,y:dragging.startY}}:node),edges)]);setFuture([])}setDragging(null)}
+  const endDrag=()=>{const origin=dragOriginRef.current;if(origin){setHistory((rows)=>[...rows.slice(-49),snapshot(nodes.map((node)=>node.id===origin.id?{...node,position:{x:origin.startX,y:origin.startY}}:node),edges)]);setFuture([])}dragOriginRef.current=null;setDragging(null)}
 
   useEffect(()=>{
     const key=(event)=>{
@@ -248,7 +282,7 @@ function Builder({flow,onBack}) {
       <div className="gptbn-stage" style={{transform:`scale(${zoom/100})`,transformOrigin:'top left'}}>
         <svg className="gptbn-edges" width="1200" height="900" aria-hidden="true">{edges.map((edge)=>{const a=point(edge.source,true),b=point(edge.target,false);return <path key={edge.id} d={`M ${a.x} ${a.y} C ${a.x} ${a.y+45}, ${b.x} ${b.y-45}, ${b.x} ${b.y}`}/>})}</svg>
         <button className="gptbn-node start phase2-start" onClick={(e)=>{e.stopPropagation();setDraft({...start});setStartOpen(true)}}><span>▶</span><strong>Start</strong><small>{startValid?(start.objectKey||start.eventKey||start.startDate||'Ready'):'Configure Start'}</small></button>
-        {rendered.map((node)=><button key={node.id} className={`gptbn-node canvas-node ${selected.includes(node.id)?'is-selected':''}`} style={{left:node.position?.x,top:node.position?.y}} onMouseDown={(e)=>startDrag(node,e)} onClick={(e)=>{e.stopPropagation();toggleSelect(node.id,e)}} onDoubleClick={(e)=>beginConnect(node.id,e)} onMouseUp={(e)=>finishConnect(node.id,e)}><span>▣</span><strong>{node.label}</strong><small>{node.apiName}</small><i className="gptbn-port in" onMouseUp={(e)=>finishConnect(node.id,e)}/><i className="gptbn-port out" onMouseDown={(e)=>beginConnect(node.id,e)}/></button>)}
+        {rendered.map((node)=><button key={node.id} className={`gptbn-node canvas-node ${selected.includes(node.id)?'is-selected':''}`} style={{left:node.position?.x,top:node.position?.y}} onMouseDown={(e)=>startDrag(node,e)} onClick={(e)=>{e.stopPropagation();toggleSelect(node.id,e)}} onDoubleClick={(e)=>{e.stopPropagation();setEditing({id:node.id,isNew:false})}} onMouseUp={(e)=>finishConnect(node.id,e)}><span>▣</span><strong>{node.label}</strong><small>{node.apiName}</small><i className="gptbn-port in" onMouseUp={(e)=>finishConnect(node.id,e)}/><i className="gptbn-port out" onMouseDown={(e)=>beginConnect(node.id,e)}/></button>)}
         <div className="gptbn-node end phase2-end"><span>■</span><strong>End</strong></div>
         {layout==='auto'?<button className="gptbn-add phase2-add" aria-label="Add element" onClick={(e)=>{e.stopPropagation();setPicker(true)}}><Plus size={17}/></button>:null}
       </div>
@@ -256,6 +290,7 @@ function Builder({flow,onBack}) {
     </div>
     <div className="gptbn-flow-name"><label>Flow Label<input value={label} onChange={(e)=>setLabel(e.target.value)}/></label><label>API Name<input value={apiName(label)} readOnly/></label></div>
     {picker?<CanvasPicker onPick={(definition)=>addNode(definition)} onClose={()=>setPicker(false)}/>:null}
+    {editing?<ElementEditor element={nodes.find((node)=>node.id===editing.id)} nodes={nodes} objects={objects} onSave={saveElement} onCancel={()=>{if(editing.isNew){const id=editing.id;setNodes((rows)=>rows.filter((node)=>node.id!==id));setEdges((rows)=>rows.filter((edge)=>edge.source!==id&&edge.target!==id))}setEditing(null)}}/>:null}
     {startOpen?<StartEditor flow={flow} start={draft} setStart={setDraft} objects={objects} events={events} onCancel={()=>setStartOpen(false)} onDone={()=>{setStart({...draft});setStartOpen(false)}}/>:null}
   </section>
 }
