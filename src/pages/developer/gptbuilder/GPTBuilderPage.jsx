@@ -905,13 +905,19 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       { id:'auto-current-date', apiName:'$Flow.CurrentDate', path:'$Flow.CurrentDate', label:'Current Date', dataType:'date', resourceType:'automatic', writable:false },
       { id:'auto-current-stage', apiName:'$Flow.CurrentStage', path:'$Flow.CurrentStage', label:'Current Stage', dataType:'text', resourceType:'automatic', writable:false },
     ]
-    if (flow.key === 'record') common.push(
-      { id:'auto-record', apiName:'$Record', path:'$Record', label:'Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:true },
-      { id:'auto-record-prior', apiName:'$Record__Prior', path:'$Record__Prior', label:'Prior Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:false },
-    )
-    if (flow.key === 'platform_event') common.push({ id:'auto-event-record', apiName:'$Record', path:'$Record', label:'Platform Event Record', dataType:'record', resourceType:'automatic', writable:false })
+    if (flow.key === 'record') {
+      common.push(
+        { id:'auto-record', apiName:'$Record', path:'$Record', label:'Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:true },
+        { id:'auto-record-prior', apiName:'$Record__Prior', path:'$Record__Prior', label:'Prior Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:false },
+      )
+      common.push(...recordPathResources(recordPathMetadata, startConfig.objectKey || '', { includePrior: true }))
+    }
+    if (flow.key === 'platform_event') {
+      common.push({ id:'auto-event-record', apiName:'$Record', path:'$Record', label:'Platform Event Record', dataType:'record', resourceType:'automatic', writable:false })
+      common.push(...platformEventRecordResources(eventTypes, startConfig.eventKey || ''))
+    }
     return common
-  }, [flow.key, startConfig.objectKey])
+  }, [flow.key, startConfig.objectKey, startConfig.eventKey, eventTypes, recordPathMetadata])
   const availableResources = useMemo(
     () => [...automaticResources, ...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])],
     [automaticResources, resources, providerResources],
