@@ -1,0 +1,40 @@
+{
+  "connectors": [
+    {
+      "connectorKey": "quickbooks",
+      "name": "quickbooks Connection",
+      "description": "Metadata-driven connection for quickbooks.",
+      "publisher": "OneSolutions",
+      "authType": "bearer",
+      "baseUrl": "https://quickbooks.api.intuit.com",
+      "credentialsSchema": [
+        {
+          "key": "token",
+          "type": "secret",
+          "required": true,
+          "label": "OAuth access token"
+        }
+      ],
+      "operations": [
+        {
+          "key": "test_connection",
+          "name": "Test Connection",
+          "method": "GET",
+          "path": "/v3/company/{{input.realmId}}/companyinfo/{{input.realmId}}",
+          "request": {
+            "query": {
+              "minorversion": "75"
+            }
+          }
+        }
+      ],
+      "timeoutMs": 15000,
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "backoffMs": 0
+      },
+      "required": true
+    }
+  ],
+  "iconAssetKey": "quickbooks"
+}
