@@ -3965,14 +3965,26 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             const id = action.workflowId || action.subflowId;
             const runtimeCompanyId = companyId || req?.user?.companyId;
             if (id) return db(
-              `SELECT * FROM platform_rules
-                WHERE id=$1 AND company_id=$2
-                  AND action->>'type'='workflow'
-                  AND (active=true OR active_version IS NULL)
-                ORDER BY CASE WHEN active=true THEN 0 ELSE 1 END, version DESC
+              `SELECT r.*
+                 FROM platform_rules r
+                WHERE r.id=$1 AND r.company_id=$2
+                  AND r.action->>'type'='workflow'
                 LIMIT 1`,
               [id, runtimeCompanyId]
-            ).then((result) => result.rows[0] || null);
+            ).then(async (result) => {
+              const row = result.rows[0] || null;
+              if (!row) return null;
+              if (row.active === true) return row;
+              const latest = await db(
+                `SELECT definition
+                   FROM platform_workflow_versions
+                  WHERE company_id=$1 AND workflow_id=$2
+                  ORDER BY version DESC LIMIT 1`,
+                [runtimeCompanyId, id]
+              );
+              const snapshot = latest.rows[0]?.definition || null;
+              return snapshot ? { ...row, ...snapshot, id: row.id, company_id: row.company_id, active: false, active_version: null } : row;
+            });
             const apiName = action.subflowApiName || action.subflowCapability;
             if (!apiName) return null;
             return db(
@@ -3980,11 +3992,22 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
                 WHERE company_id=$1
                   AND action->>'type'='workflow'
                   AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2 OR action->>'subflowCapability'=$2)
-                  AND (active=true OR active_version IS NULL)
                 ORDER BY CASE WHEN active=true THEN 0 ELSE 1 END, version DESC, updated_at DESC
                 LIMIT 1`,
               [runtimeCompanyId, apiName]
-            ).then((result) => result.rows[0] || null);
+            ).then(async (result) => {
+              const row = result.rows[0] || null;
+              if (!row || row.active === true) return row;
+              const latest = await db(
+                `SELECT definition
+                   FROM platform_workflow_versions
+                  WHERE company_id=$1 AND workflow_id=$2
+                  ORDER BY version DESC LIMIT 1`,
+                [runtimeCompanyId, row.id]
+              );
+              const snapshot = latest.rows[0]?.definition || null;
+              return snapshot ? { ...row, ...snapshot, id: row.id, company_id: row.company_id, active: false, active_version: null } : row;
+            });
           })();
       const definition = await Promise.resolve(subflowDefinition);
       if (!definition) {
