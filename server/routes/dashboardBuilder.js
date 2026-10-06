@@ -5,7 +5,7 @@ import { normalizeDashboardSubscription } from "../services/analyticsManagement.
 import { resolveReportSubscriptionRecipients } from "../services/reportSubscriptionDelivery.js";
 import { assertDashboardSubscriptionCompatible } from "../services/dashboardSubscriptionCompatibility.js";
 
-import { toSafeApiName } from "../services/platformMetadata.js";
+import { toSafeApiName } from "../services/platformCoreMetadata.js";
 import { DEFAULT_DASHBOARD_DEFINITION, mergeDashboardFilters, normalizeDashboardIdentity, validateDashboardDefinition } from "../services/dashboardBuilder.js";
 import { resolveDashboardExecutionUser } from "../services/analyticsSecurity.js";
 import { dashboardAccessAtLeast, dashboardPrincipalExists, loadDashboardPrincipalContext, resolveDashboardAccess, resolveDefaultDashboard } from "../services/dashboardSecurity.js";
