@@ -153,4 +153,15 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"set_result",label:"Store Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.test_connector"}},
   {id:"set_status",label:"Set Status",key:"ASSIGNMENT",variableName:"status",variableType:"text",operator:"set",value:"connected"}
  ])
+,
+ flow("flow:sale.persist","Sale · Persist Transaction",[
+  input("sale","object"),input("items","collection"),input("discounts","collection",false),input("priceOverrides","collection",false),input("modifiers","collection",false)
+ ],[output("sale","object"),output("saleItems","collection")],[
+  {id:"create_sale",label:"Create Sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"$record.sale"}},
+  {id:"set_sale",label:"Store Sale",key:"ASSIGNMENT",variableName:"sale",variableType:"object",operator:"set",value:{path:"steps.create_sale.created"}},
+  {id:"prepare_items",label:"Attach Sale To Items",key:"LOOP",collection:{path:"$record.items"},itemVariable:"currentItem",bodyBranch:["create_sale_item"]},
+  {id:"create_sale_item",label:"Create Sale Item",key:"CREATE_RECORD",objectKey:"sale_item",fieldValues:{sale_id:{path:"steps.create_sale.created.id"},product_id:{path:"variables.currentItem.product_id"},product_name:{path:"variables.currentItem.product_name"},quantity:{path:"variables.currentItem.quantity"},unit_price:{path:"variables.currentItem.unit_price"},discount:{path:"variables.currentItem.discount"},tax:{path:"variables.currentItem.tax"},total:{path:"variables.currentItem.total"},item_type:{path:"variables.currentItem.item_type"},discount_type:{path:"variables.currentItem.discount_type"},discount_value:{path:"variables.currentItem.discount_value"},original_unit_price:{path:"variables.currentItem.original_unit_price"},original_tax:{path:"variables.currentItem.original_tax"},original_total:{path:"variables.currentItem.original_total"},discounted_by:{path:"variables.currentItem.discounted_by"},modifier_data:{path:"variables.currentItem.modifier_data"},bundle_components:{path:"variables.currentItem.bundle_components"}}},
+  {id:"get_items",label:"Load Sale Items",key:"GET_RECORDS",objectKey:"sale_item",filters:[{field:"sale_id",operator:"equals",value:{path:"steps.create_sale.created.id"}}],limit:500,store:"all"},
+  {id:"set_items",label:"Store Sale Items",key:"ASSIGNMENT",variableName:"saleItems",variableType:"collection",operator:"set",value:{path:"steps.get_items.records"}}
+ ])
 ];
