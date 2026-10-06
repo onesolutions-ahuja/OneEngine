@@ -48,9 +48,20 @@ export function platformFieldSql(field, object) {
 }
 
 export function appendSystemReadScope(object, req, clauses, params) {
+  const scope = object?.config?.readScope;
+  if (scope?.type === "junction") {
+    if (!req.user.storeId) throw Object.assign(new Error("A store session is required"), { status: 403 });
+    const identifiers = [scope.table, scope.recordColumn, scope.storeColumn, scope.companyColumn, scope.activeColumn].filter(Boolean);
+    if (identifiers.some((value) => !/^[a-z_][a-z0-9_]*$/.test(String(value)))) throw new Error("Invalid metadata read scope");
+    params.push(req.user.storeId, req.user.companyId);
+    const alias = "scope_link";
+    const active = scope.activeColumn ? ` AND ${alias}."${scope.activeColumn}"=true` : "";
+    clauses.push(`EXISTS (SELECT 1 FROM "${scope.table}" ${alias} WHERE ${alias}."${scope.recordColumn}"="${object.source_table}".id AND ${alias}."${scope.storeColumn}"=${params.length - 1} AND ${alias}."${scope.companyColumn}"=${params.length}${active})`);
+    return;
+  }
   if (object?.store_scoped === true) {
     if (!req.user.storeId) throw Object.assign(new Error("A store session is required"), { status: 403 });
     params.push(req.user.storeId);
-    clauses.push(`store_id=$${params.length}`);
+    clauses.push(`store_id=${params.length}`);
   }
 }
