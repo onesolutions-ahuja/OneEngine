@@ -22,14 +22,6 @@ export default function createEanLookupRouter({ authenticate, db, lookupService 
         barcode: ean,
       });
 
-      // Record valid attempts using the existing authenticated session context.
-      await db(
-        `INSERT INTO ean_lookup_usage (user_id, company_id, store_id, ean, lookup_result)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [req.user.id, req.user.companyId, req.user.storeId || null, ean,
-          result.status === "found" ? "FOUND" : result.status === "unavailable" ? "ERROR" : "NOT_FOUND"]
-      );
-
       if (result.status === "no_provider") {
         return res.status(503).json({
           success: false,
