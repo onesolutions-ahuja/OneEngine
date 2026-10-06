@@ -131,4 +131,60 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     expect(failures, failures.join('\n')).toEqual([])
   })
+  test('Record-triggered $Record and related fields come from record-path metadata', async ({ page }) => {
+    if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
+    const failures = watchRuntimeFailures(page)
+
+    await page.route('**/api/platform/objects', async (route) => {
+      if (!route.request().url().endsWith('/api/platform/objects')) return route.continue()
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [{ id: 'obj-contact', object_key: 'contact', label: 'Contact' }] }),
+      })
+    })
+    await page.route('**/api/platform/objects/obj-contact/record-paths?depth=4', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [
+          { kind: 'field', path: 'contact.name', label: 'Name', fieldType: 'text', readable: true, active: true },
+          { kind: 'field', path: 'contact.account.owner.email', label: 'Owner Email', fieldType: 'text', readable: true, active: true },
+        ] }),
+      })
+    })
+
+    await page.goto('developer/gptbuilder')
+    await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: /^New Flow$/ }).click()
+    await page.getByRole('button', { name: /Start From Scratch/i }).click()
+    await page.getByRole('button', { name: /^Next$/ }).click()
+    await page.getByLabel('Search automation types').fill('record')
+    await page.getByRole('button', { name: /Record-Triggered Flow/i }).click()
+    await page.getByRole('button', { name: /^Create$/ }).click()
+
+    const startPanel = page.getByLabel('Configure Start')
+    await expect(startPanel).toBeVisible()
+    await startPanel.getByText('Object', { exact: true }).locator('..').getByRole('combobox').selectOption('contact')
+    await startPanel.getByRole('button', { name: /^Done$/ }).click()
+
+    await page.getByRole('button', { name: 'Add after Start' }).click()
+    const add = page.getByRole('dialog', { name: 'Add Element' })
+    await expect(add).toBeVisible()
+    await add.getByRole('button', { name: /^Decision$/ }).click()
+    await page.getByRole('button', { name: /New Outcome/i }).click()
+    await page.getByRole('button', { name: /Add Condition/i }).click()
+
+    const search = page.getByLabel('Search resources and fields').first()
+    const resource = page.getByLabel('Resource').first()
+    await search.fill('Owner Email')
+    await expect(resource.getByRole('option', { name: /Triggering Record.*Owner Email.*\$Record\.account\.owner\.email/i })).toHaveCount(1)
+    await resource.selectOption('$Record.account.owner.email')
+    await expect(resource).toHaveValue('$Record.account.owner.email')
+
+    await search.fill('Prior Triggering Record')
+    await expect(resource.getByRole('option', { name: /Prior Triggering Record.*\$Record__Prior\./i })).toHaveCount(2)
+
+    expect(failures, failures.join('\n')).toEqual([])
+  })
 })
