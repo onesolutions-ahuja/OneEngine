@@ -1412,7 +1412,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       if (object.key === "onestore_app") {
         await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
       }
-      if (object.key === "till_session" || object.key === "cash_ledger" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
+      if (object.key === "till_session" || object.key === "cash_movement" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
         await pool.query("UPDATE platform_objects SET company_scoped=true,store_scoped=true WHERE id=$1", [result.rows[0].id]);
       }
       for (let index = 0; index < object.fields.length; index += 1) {
@@ -1533,7 +1533,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const cashLedgerValidationObject = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='cash_movement' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (cashLedgerValidationObject.rows[0]?.id) {
       await pool.query(
@@ -1563,7 +1563,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       );
     }
     const cashLedgerObjectForOptions = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='cash_movement' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (cashLedgerObjectForOptions.rows[0]?.id) {
       await pool.query(
@@ -1606,7 +1606,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
     await grantObjectPermissionFromCodes("held_sale", ["sale.hold"], { view: true, create: true, delete: true });
     await grantObjectPermissionFromCodes("till_session", ["till.open","till.close"], { view: true, create: true, edit: true });
-    await grantObjectPermissionFromCodes("cash_ledger", ["cash.adjustment","cash.payout"], { view: true, create: true });
+    await grantObjectPermissionFromCodes("cash_movement", ["cash.adjustment","cash.payout"], { view: true, create: true });
     await grantObjectPermissionFromCodes("product_modifier_group", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("product_modifier_option", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("payment_method", ["sale.create"], { view: true });
@@ -1994,9 +1994,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
               inputs: { amount: { path: "$record.amount" } } },
             { id: "validate_amount", label: "Validate Petty Cash", apiName: "validate_amount", key: "CONDITION",
               outcomes: [{ id: "valid", label: "Valid Amount", condition: { match: "all", conditions: [{ field: "variables.amountIsValid", operator: "equals", value: true }] },
-                branch: ["create_cash_ledger"] }],
+                branch: ["create_cash_movement"] }],
               defaultLabel: "Invalid Amount", defaultBranch: ["invalid_amount"] },
-            { id: "create_cash_ledger", label: "Create Cash Ledger Entry", apiName: "create_cash_ledger", key: "CREATE_RECORD",
+            { id: "create_cash_movement", label: "Create Cash Movement", apiName: "create_cash_movement", key: "CREATE_RECORD",
               objectKey: "cash_movement",
               fieldValues: {
                 till_session_id: { path: "$record.tillSessionId" },
