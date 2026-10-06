@@ -1,6 +1,20 @@
 import { test, expect } from '@playwright/test'
 import { loginIfConfigured, watchRuntimeFailures } from './helpers.mjs'
 
+async function mockBuilderReadEndpoints(page) {
+  const empty = JSON.stringify({ success: true, data: [] })
+  for (const pattern of [
+    '**/api/platform/developer/companies',
+    '**/api/platform/rules',
+    '**/api/packages/marketplace',
+    '**/api/platform/objects',
+    '**/api/platform/workflow-providers',
+    '**/api/platform/event-types',
+  ]) {
+    await page.route(pattern, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: empty }))
+  }
+}
+
 test.describe('GPT Builder Salesforce parity foundation', () => {
   test('New Automation, first-save properties, and layout save rules match the certified surface', async ({ page }) => {
     if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
@@ -64,6 +78,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
   test('Platform Event $Record fields come from field_schema and are selectable in Decision', async ({ page }) => {
     if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
     const failures = watchRuntimeFailures(page)
+    await mockBuilderReadEndpoints(page)
 
     await page.route('**/api/platform/event-types', async (route) => {
       await route.fulfill({
@@ -119,13 +134,13 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
   test('Record-triggered $Record and related fields come from record-path metadata', async ({ page }) => {
     if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
     const failures = watchRuntimeFailures(page)
+    await mockBuilderReadEndpoints(page)
 
     await page.route('**/api/platform/objects', async (route) => {
-      if (!route.request().url().endsWith('/api/platform/objects')) return route.continue()
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: [{ id: 'obj-contact', object_key: 'contact', label: 'Contact' }] }),
+        body: JSON.stringify({ success: true, data: { objects: [{ id: 'obj-contact', object_key: 'contact', label: 'Contact' }] } }),
       })
     })
     await page.route('**/api/platform/objects/obj-contact/record-paths?depth=4', async (route) => {
@@ -239,7 +254,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     await page.goto('developer/gptbuilder')
     await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByRole('button', { name: 'Contract Persistence Flow' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Contract Persistence Flow', exact: true })).toBeVisible()
     await page.getByRole('button', { name: /Edit Contract Persistence Flow/i }).click()
     await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
     await page.getByRole('button', { name: 'View Properties' }).click()
