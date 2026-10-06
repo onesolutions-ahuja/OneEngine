@@ -42,3 +42,14 @@ export function mapRuntimePayload(mapping, values = {}) {
   }
   return result
 }
+
+
+export function mappedRecordValue(record, mapping, semanticKey, fallback = undefined) {
+  const candidates = Array.isArray(mapping?.[semanticKey])
+    ? mapping[semanticKey]
+    : mapping?.[semanticKey] ? [mapping[semanticKey]] : []
+  for (const key of candidates) {
+    if (record?.[key] !== undefined && record?.[key] !== null) return record[key]
+  }
+  return fallback
+}
