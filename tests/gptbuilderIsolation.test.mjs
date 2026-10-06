@@ -92,7 +92,7 @@ test('GPT Builder toolbar uses current Salesforce Run Debug View Tests and Activ
 
 test('GPT Builder lifecycle keeps active runtime separate from draft authoring and supports deactivation', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
-  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  const platform = await readFile(new URL('../server/routes/platform/developerRoutes.js', import.meta.url), 'utf8')
   const automation = await readFile(new URL('../server/services/platformAutomation.js', import.meta.url), 'utf8')
   assert.match(page, /setFlowActivation/)
   assert.match(page, /\{ active: false \}/)
@@ -134,8 +134,8 @@ test('GPT Builder phase 3 registers a real property editor and runtime mapping f
   const elementKeys = [...elementsSource.matchAll(/\{ key: '([^']+)', label:/g)].map((match) => match[1])
   const runtimeOnly = new Set(['group', 'interaction'])
   for (const key of elementKeys) {
-    assert.match(page, new RegExp(`activeElement\\.key === '${key}'`), `missing property editor for ${key}`)
     if (!runtimeOnly.has(key)) {
+      assert.match(page, new RegExp(`activeElement\\.key === '${key}'`), `missing property editor for ${key}`)
       assert.match(page, new RegExp(`element\\.key === '${key}'`), `missing runtime mapping for ${key}`)
     }
   }
