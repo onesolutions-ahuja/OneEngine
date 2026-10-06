@@ -36,6 +36,7 @@ const legacyBusinessRuntime = new Set([
   "server/services/paypalQrConnector.js","server/services/integrationFieldResolver.js"
 ]);
 const businessTables=["sales","sale_items","customers","payments","products","suppliers","purchases","purchase_items","refunds"];
+const forbiddenUiBusinessTokens=["CREATE_CUSTOMER","CREATE_SALE","CREATE_PAYMENT","DASHBOARD_SALES_FIELDS"];
 const findings=[];
 
 for(const file of roots.flatMap(walk)){
@@ -58,6 +59,7 @@ for(const file of roots.flatMap(walk)){
   }
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
+  if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
 const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
