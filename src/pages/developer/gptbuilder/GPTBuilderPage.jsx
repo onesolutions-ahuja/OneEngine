@@ -35,6 +35,7 @@ import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
 import GPTBuilderReactFlowCanvas from './GPTBuilderReactFlowCanvas'
+import { platformEventRecordResources, recordPathResources } from './GPTBuilderResources'
 import {
   GPTBuilderCompareVersionsPanel, GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
 } from './GPTBuilderSaveHistory'
@@ -795,7 +796,14 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
                 <option value="DECISION_OUTCOME">Decision Outcome</option>
               </select>
               {type === 'RESOURCE_CONDITION' ? <>
-                <select value={assertion.resource || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, resource: event.target.value } : item))}><option value="">Select resource</option>{resources.filter((resource) => resource?.isCollection !== true).map((resource) => <option key={resource.id || resource.apiName} value={`variables.${resource.apiName}`}>{resource.label || resource.apiName}</option>)}</select>
+                <select value={assertion.resource || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, resource: event.target.value } : item))}>
+                  <option value="">Select resource</option>
+                  {resources.filter((resource) => resource?.isCollection !== true).map((resource) => {
+                    const apiName = String(resource.apiName || '')
+                    const path = resource.path || (apiName ? 'variables.' + apiName : '')
+                    return <option key={resource.id || resource.apiName || path} value={path}>{resource.label || resource.apiName}{resource.path ? ' · ' + resource.path : ''}</option>
+                  })}
+                </select>
                 <select value={assertion.operator || 'equals'} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, operator: event.target.value } : item))}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="greater_than_or_equal">Greater Than or Equal</option><option value="less_than">Less Than</option><option value="less_than_or_equal">Less Than or Equal</option><option value="is_empty">Is Empty</option><option value="is_not_empty">Is Not Empty</option></select>
                 {!['is_empty','is_not_empty'].includes(assertion.operator) ? <input value={assertion.value ?? ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} placeholder="Expected value"/> : <span/>}
               </> : type === 'RUN_STATUS' ? <>
@@ -894,6 +902,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
   const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
   const [providerResources, setProviderResources] = useState([])
+  const [recordPathMetadata, setRecordPathMetadata] = useState([])
   // Keep the resource list safe during the first render of every flow type. Provider
   // metadata arrives asynchronously and must never make Builder creation depend on it.
   const automaticResources = useMemo(() => {
@@ -903,13 +912,19 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       { id:'auto-current-date', apiName:'$Flow.CurrentDate', path:'$Flow.CurrentDate', label:'Current Date', dataType:'date', resourceType:'automatic', writable:false },
       { id:'auto-current-stage', apiName:'$Flow.CurrentStage', path:'$Flow.CurrentStage', label:'Current Stage', dataType:'text', resourceType:'automatic', writable:false },
     ]
-    if (flow.key === 'record') common.push(
-      { id:'auto-record', apiName:'$Record', path:'$Record', label:'Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:true },
-      { id:'auto-record-prior', apiName:'$Record__Prior', path:'$Record__Prior', label:'Prior Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:false },
-    )
-    if (flow.key === 'platform_event') common.push({ id:'auto-event-record', apiName:'$Record', path:'$Record', label:'Platform Event Record', dataType:'record', resourceType:'automatic', writable:false })
+    if (flow.key === 'record') {
+      common.push(
+        { id:'auto-record', apiName:'$Record', path:'$Record', label:'Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:true },
+        { id:'auto-record-prior', apiName:'$Record__Prior', path:'$Record__Prior', label:'Prior Triggering Record', dataType:'record', objectKey:startConfig.objectKey || '', resourceType:'automatic', writable:false },
+      )
+      common.push(...recordPathResources(recordPathMetadata, startConfig.objectKey || '', { includePrior: true }))
+    }
+    if (flow.key === 'platform_event') {
+      common.push({ id:'auto-event-record', apiName:'$Record', path:'$Record', label:'Platform Event Record', dataType:'record', resourceType:'automatic', writable:false })
+      common.push(...platformEventRecordResources(eventTypes, startConfig.eventKey || ''))
+    }
     return common
-  }, [flow.key, startConfig.objectKey])
+  }, [flow.key, startConfig.objectKey, startConfig.eventKey, eventTypes, recordPathMetadata])
   const availableResources = useMemo(
     () => [...automaticResources, ...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])],
     [automaticResources, resources, providerResources],
@@ -1013,6 +1028,23 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     applyHistorySnapshot(next)
     setHistoryRevision((value) => value + 1)
   }
+
+  useEffect(() => {
+    let live = true
+    if (flow.key !== 'record' || !startConfig.objectKey) {
+      setRecordPathMetadata([])
+      return () => { live = false }
+    }
+    const selectedObject = objects.find((item) => objectKey(item) === startConfig.objectKey)
+    if (!selectedObject?.id) {
+      setRecordPathMetadata([])
+      return () => { live = false }
+    }
+    apiRequest(`/api/platform/objects/${encodeURIComponent(selectedObject.id)}/record-paths?depth=4`)
+      .then((response) => { if (live) setRecordPathMetadata(Array.isArray(response?.data) ? response.data : []) })
+      .catch(() => { if (live) setRecordPathMetadata([]) })
+    return () => { live = false }
+  }, [flow.key, startConfig.objectKey, objects])
 
   useEffect(() => {
     let live = true
