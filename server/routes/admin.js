@@ -16,14 +16,14 @@ export default function createAdminRouter({
   authorize,
   db,
   pool,
-  canViewCompanyCustomers,
+  hasCompanyWideScope,
   bcrypt,
   savePlatformRecord = null,
   /*
    * Administrative authority is supplied by the canonical permission-driven
    * helper in server.js. No role name or identity is an authority source.
    */
-  hasCompanyAdminAccess = async (req) => canViewCompanyCustomers(req.user, req),
+  hasCompanyAdminAccess = async (req) => hasCompanyWideScope(req.user, req),
 }) {
   const router = express.Router();
 
