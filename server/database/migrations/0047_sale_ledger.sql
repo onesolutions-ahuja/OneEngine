@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS sale_ledger (
   client_request_id UUID,
   client_request_fingerprint TEXT,
   original_transaction_id UUID,
+  online_order_id UUID,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
@@ -86,7 +87,7 @@ INSERT INTO sale_ledger (
   sale_id, transaction_id, source_record_id, source_record_type,
   receipt_number, line_count, subtotal, tax, discount, total, net_amount,
   transaction_type, status, payment_data,
-  offline_created, sync_status, client_request_id, client_request_fingerprint, original_transaction_id,
+  offline_created, sync_status, client_request_id, client_request_fingerprint, original_transaction_id, online_order_id,
   created_at, completed_at, migrated_at
 )
 SELECT
@@ -108,7 +109,7 @@ SELECT
     FROM payments p
     WHERE p.sale_id=s.id OR p.transaction_id=s.id
   ), '[]'::jsonb),
-  COALESCE(s.offline_created,FALSE), s.sync_status, s.client_request_id, s.client_request_fingerprint, s.original_transaction_id,
+  COALESCE(s.offline_created,FALSE), s.sync_status, s.client_request_id, s.client_request_fingerprint, s.original_transaction_id, s.online_order_id,
   s.created_at, s.completed_at, NOW()
 FROM sales s
 ON CONFLICT (id) DO NOTHING;
