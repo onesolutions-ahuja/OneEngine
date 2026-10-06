@@ -31,6 +31,16 @@ const REMOVED_OBJECTS = new Set([
   "gift_card_activity",
 ]);
 
+function containsRemovedObjectReference(value) {
+  let removed = false;
+  JSON.stringify(value, (key, item) => {
+    if (["objectKey","relatedObjectKey","parentObjectKey","childObjectKey"].includes(key)
+        && REMOVED_OBJECTS.has(String(item || ""))) removed = true;
+    return item;
+  });
+  return removed;
+}
+
 function canonicalObjectKey(value) {
   const key = String(value || "");
   if (SALES_LEGACY_OBJECTS.has(key)) return "sale_ledger";
@@ -122,10 +132,13 @@ function canonicalizeObjectFamilies(manifest, { packageKey = "", purchaseSupplem
       .filter((relationship) => !REMOVED_OBJECTS.has(relationship?.parentObjectKey) && !REMOVED_OBJECTS.has(relationship?.childObjectKey))
       .map(rewriteCanonicalObjectReferences),
     rules: (source.rules || [])
-      .filter((rule) => !REMOVED_OBJECTS.has(rule?.objectKey))
+      .filter((rule) => !containsRemovedObjectReference(rule))
+      .map(rewriteCanonicalObjectReferences),
+    listViews: (source.listViews || [])
+      .filter((view) => !containsRemovedObjectReference(view))
       .map(rewriteCanonicalObjectReferences),
     workflows: (source.workflows || [])
-      .filter((workflow) => !REMOVED_OBJECTS.has(workflow?.objectKey))
+      .filter((workflow) => !containsRemovedObjectReference(workflow))
       .map(rewriteCanonicalObjectReferences),
   });
 }
