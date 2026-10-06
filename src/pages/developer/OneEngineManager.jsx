@@ -39,12 +39,12 @@ export default function OneEngineManager(){
       setError('')
       const cached=getStoredSessionPermissions()
       if(cached&&!cached?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required')
-      const [permissions,response]=await Promise.all([
+      const [permissions,r]=await Promise.all([
         cached?Promise.resolve(cached):loadSessionPermissions(),
         apiRequest('/api/platform/developer/companies'),
       ])
       if(!permissions?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required')
-      const rows=Array.isArray(response?.data)?response.data:[]
+      const rows=Array.isArray(r?.data)?r.data:[]
       setClients(rows)
       const current=getActingCompanyId()||selected
       if(rows.some(item=>String(item.id)===String(current)))setSelected(current)
