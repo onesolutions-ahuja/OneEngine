@@ -4793,5 +4793,6 @@
         ]
       }
     }
-  ]
+  ],
+  "defaultInstall": true
 }
