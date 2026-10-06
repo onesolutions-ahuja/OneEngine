@@ -140,7 +140,7 @@ export function platformFieldChoices(fields = []) {
   const usable = (fields || []).filter((field) => field && (field.api_name || field.key) && field.active !== false && field.readable !== false);
   /* Every list is normalised to { key, label, type } so the picker, the
      condition editor and the aggregate rules all read the same shape. */
-  const normalize = (field) => ({ key: field.api_name || field.key, label: field.label || field.api_name || field.key, type: field.field_type || field.type, field });
+  const normalize = (field) => ({ key: field.key || field.api_name, label: field.label || field.key || field.api_name, type: field.field_type || field.type, field });
   const all = usable.map(normalize);
   return {
     metricFields: all.filter((field) => isAggregatable(field.type)),
