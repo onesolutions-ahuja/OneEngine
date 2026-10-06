@@ -668,35 +668,6 @@ function resolveCommunicationWorkflowAction(action, record, object = null, workf
   };
 }
 
-export async function hasConfiguredCommunicationProvider({ db, companyId, providerKind }) {
-  if (!db || typeof db !== "function" || !companyId || !providerKind) return false;
-  const providerName = String(providerKind).trim().toUpperCase();
-  const providers = COMMUNICATION_PROVIDER_ALIASES[providerName] || [normalizeProviderName(providerKind)];
-  if (!providers.length) return false;
-
-  const result = await db(
-    `SELECT provider, active, configuration FROM integrations WHERE company_id = $1 AND lower(provider) = ANY($2::text[]) LIMIT 1`,
-    [companyId, providers]
-  );
-
-  if (!result.rows.length) return false;
-  const row = result.rows[0];
-  const config = row.configuration && typeof row.configuration === "object" ? row.configuration : {};
-  if (row.active !== true) return false;
-
-  const hasConfig = Object.keys(config).length > 0;
-  if (providerName === "EMAIL") {
-    return hasConfig && ["host", "server", "api_key", "auth_token", "username", "smtp_host", "from_email", "from", "sender"].some((key) => config[key] != null && String(config[key]).trim() !== "");
-  }
-  if (providerName === "SMS") {
-    return hasConfig && ["account_sid", "auth_token", "api_key", "from", "sender", "phone_number", "provider_key", "sid"].some((key) => config[key] != null && String(config[key]).trim() !== "");
-  }
-  if (providerName === "WHATSAPP") {
-    return hasConfig && ["phone_number_id", "app_id", "access_token", "webhook_verify_token", "business_account_id", "token"].some((key) => config[key] != null && String(config[key]).trim() !== "");
-  }
-  return hasConfig;
-}
-
 export async function updateWorkflowStepRunStatus({ db, stepRunId, status, errorText = null, metadata = {} }) {
   if (!db || typeof db !== "function" || !stepRunId) return null;
   const row = await db(
@@ -711,17 +682,6 @@ export async function updateWorkflowStepRunStatus({ db, stepRunId, status, error
     [String(status || "FAILED").toUpperCase(), errorText || null, JSON.stringify(metadata || {}), stepRunId]
   );
   return row.rows[0] || null;
-}
-
-export async function ensureCommunicationProvider({ db, companyId, providerKind, stepRunId = null }) {
-  const configured = await hasConfiguredCommunicationProvider({ db, companyId, providerKind });
-  if (configured) return { configured: true, providerKind };
-  const label = String(providerKind || "provider").toUpperCase();
-  const message = `${label} provider not configured`;
-  if (stepRunId) {
-    await updateWorkflowStepRunStatus({ db, stepRunId, status: "FAILED", errorText: message, metadata: { provider: label, providerConfigured: false } });
-  }
-  return { configured: false, providerKind: label, error: message };
 }
 
 /**
