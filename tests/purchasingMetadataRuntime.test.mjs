@@ -314,3 +314,18 @@ test("generic integration UI and route contain no provider-specific or fixed bus
   assert.equal(shared.includes('"sale", "purchase", "product", "customer"'), false);
   assert.match(route, /\/integrations\/\:id\/test-connection/);
 });
+
+test("retail transaction writes are metadata Flow owned", async () => {
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.match(registry, /objectKey:"till_session"/);
+  assert.match(registry, /objectKey:"cash_movement"/);
+  assert.match(registry, /objectKey:"stock_return"/);
+  assert.match(registry, /objectKey:"stock_return_line"/);
+  assert.match(registry, /name:"Complete Sale"/);
+  assert.match(registry, /name:"Create Customer Return"/);
+  assert.match(registry, /name:"Create Exchange"/);
+  assert.match(registry, /commonFieldValues:\{sale_id:/);
+  assert.equal(server.includes("./routes/sales.js"), false);
+  assert.equal(server.includes("./routes/till.js"), false);
+});
