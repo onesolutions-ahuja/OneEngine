@@ -52,7 +52,7 @@ export default function createShopifyWebhooksRouter({ db, writeAudit, isEntitled
       if (configuredShop !== shopDomain || !verifyShopifyWebhook(rawBody, signature, signingSecret)) {
         return res.status(401).json({ success: false, message: "Shopify webhook signature is invalid" });
       }
-      await req.ensureBusinessCommandRun?.({
+      await req.ensureWorkflowTraceRun?.({
         companyId: connection.company_id,
         userId: null,
         storeId: connection.store_id || null,
