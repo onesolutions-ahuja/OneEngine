@@ -9,7 +9,6 @@ import { evaluateValidationRules, validationRuleError } from "../services/platfo
 import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, workflowFormulaReferences } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
 import { executePlatformAutomations } from "../services/platformAutomation.js";
-import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
 import {
   createWorkflowRun,
   executeWorkflowAction,
@@ -5394,8 +5393,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     }
     if (rule.active) {
       for (const providerAction of actions.filter((action) => ["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP"].includes(action.type))) {
-        const configured = await hasConfiguredCommunicationProvider({ db, companyId: req.user.companyId, providerKind: providerAction.type.replace("SEND_", "") });
-        if (!configured) return `${providerAction.type.replace("SEND_", "")} provider is not configured; configure the company integration before activating this workflow`;
+        const providerKind = providerAction.type.replace("SEND_", "");
+        const configuredResult = await db(
+          `SELECT 1 FROM integration_connections WHERE company_id=$1 AND active=true AND UPPER(COALESCE(provider_name, connector_key, '')) LIKE $2 LIMIT 1`,
+          [req.user.companyId, `%${providerKind}%`]
+        );
+        if (!configuredResult.rows?.length) return `${providerKind} provider is not configured; configure the company integration before activating this workflow`;
       }
     }
     if (isWorkflow) {
