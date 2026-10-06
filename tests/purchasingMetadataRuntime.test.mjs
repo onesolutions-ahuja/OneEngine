@@ -12,8 +12,8 @@ test("purchasing package exposes protected metadata flows and functions", async 
 
 test("purchases and supplier returns route directly to generic workspace", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  assert.match(app, /WorkspacePage initialObjectKey="purchase" appKey="purchases"/);
-  assert.match(app, /WorkspacePage initialObjectKey="purchase_line" appKey="supplier-returns"/);
+  assert.match(app, /MetadataPageRuntime objectKey="purchase" appKey="purchases"/);
+  assert.match(app, /MetadataPageRuntime objectKey="purchase_line" appKey="supplier-returns"/);
   assert.equal(app.includes("PurchasesPage"), false);
   assert.equal(app.includes("SupplierReturnsPage"), false);
 });
@@ -91,7 +91,7 @@ test("customer administration is metadata-owned while runtime customer services 
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const route = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(app, /WorkspacePage initialObjectKey="customer" appKey="customers"/);
+  assert.match(app, /MetadataPageRuntime objectKey="customer" appKey="customers"/);
   assert.equal(app.includes("pages/customers/CustomersPage"), false);
   assert.equal(route.includes('router.post("/customers"'), false);
   assert.equal(route.includes('router.put("/customers/:id"'), false);
@@ -147,9 +147,9 @@ test("sales products and categories use metadata workspace while legacy return a
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   const productsRoute = await readFile(new URL("../server/routes/products.js", import.meta.url), "utf8");
-  assert.match(app, /WorkspacePage initialObjectKey="sale" appKey="sales"/);
-  assert.match(app, /WorkspacePage initialObjectKey="product" appKey="products"/);
-  assert.match(app, /WorkspacePage initialObjectKey="category" appKey="categories"/);
+  assert.match(app, /MetadataPageRuntime objectKey="sale" appKey="sales"/);
+  assert.match(app, /MetadataPageRuntime objectKey="product" appKey="products"/);
+  assert.match(app, /MetadataPageRuntime objectKey="category" appKey="categories"/);
   assert.equal(app.includes("const ReturnsPage ="), false);
   assert.equal(app.includes("const ExchangePage ="), false);
   assert.ok(metadata.includes('objectKey:"stock_return"') || metadata.includes('objectKey: "stock_return"'));
@@ -162,9 +162,9 @@ test("gift cards online orders and attendance use metadata workspaces", async ()
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(app, /initialObjectKey="gift_card" appKey="gift-cards"/);
-  assert.match(app, /initialObjectKey="employee" appKey="employees"/);
-  assert.match(app, /initialObjectKey="online_order" appKey="online-orders"/);
+  assert.match(app, /objectKey="gift_card" appKey="gift-cards"/);
+  assert.match(app, /objectKey="employee" appKey="employees"/);
+  assert.match(app, /objectKey="online_order" appKey="online-orders"/);
   assert.equal(app.includes("OnlineOrdersPrep"), false);
   assert.ok(registry.includes('objectKey:"gift_card"') || registry.includes('objectKey: "gift_card"'));
   assert.ok(registry.includes('objectKey:"online_order"') || registry.includes('objectKey: "online_order"'));
@@ -244,7 +244,7 @@ test("own delivery package uses metadata workspace instead of hardcoded business
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(app.includes("OwnDeliveryWorkspace"), false);
-  assert.match(app, /initialObjectKey="online_order" appKey="own-delivery"/);
+  assert.match(app, /objectKey="online_order" appKey="own-delivery"/);
   assert.equal(server.includes("createOwnDeliveryRouter"), false);
   const catalogue = await readFile(new URL("../server/packages/packageManifestCatalog.js", import.meta.url), "utf8");
   assert.ok(catalogue.includes('key: "own_delivery"') || catalogue.includes('key:"own_delivery"'));
@@ -255,7 +255,7 @@ test("kiosk administration is metadata-driven and obsolete kiosk route is remove
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.equal(app.includes("OneKioskDevicesPage"), false);
-  assert.match(app, /initialObjectKey="kiosk_device" appKey="one_kiosk"/);
+  assert.match(app, /objectKey="kiosk_device" appKey="one_kiosk"/);
   assert.ok(metadata.includes('objectKey:"kiosk_device"') || metadata.includes('objectKey: "kiosk_device"'));
   assert.equal(server.includes("createKioskRouter"), false);
 });
@@ -267,7 +267,7 @@ test("store and till administration use metadata while operational till runtime 
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
   const settingsPage = await readFile(new URL("../src/pages/settings/StoreTillSettingsPage.jsx", import.meta.url), "utf8");
   assert.equal(app.includes("pages/stores/StoresPage"), false);
-  assert.match(app, /initialObjectKey="store" appKey="stores"/);
+  assert.match(app, /objectKey="store" appKey="stores"/);
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.ok(registry.includes('objectKey:"store"') || registry.includes('objectKey: "store"'));
   assert.ok(registry.includes('objectKey:"terminal"') || registry.includes('objectKey: "terminal"'));
@@ -282,7 +282,7 @@ test("staff app is metadata-driven while identity and RBAC administration remain
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
   const admin = await readFile(new URL("../server/routes/admin.js", import.meta.url), "utf8");
-  assert.match(app, /initialObjectKey="employee" appKey="employees"/);
+  assert.match(app, /objectKey="employee" appKey="employees"/);
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.ok(registry.includes('objectKey:"employee"') || registry.includes('objectKey: "employee"'));
   assert.match(admin, /\/admin\/roles\/\:roleId\/permissions/);
