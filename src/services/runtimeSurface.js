@@ -11,6 +11,12 @@ export function runtimeSurfaceFromItem(item, surfaceKey) {
   return surfaces?.[surfaceKey] && typeof surfaces[surfaceKey] === 'object' ? surfaces[surfaceKey] : null
 }
 
+export function readCachedRuntimeSurface(navigationKey, surfaceKey = navigationKey) {
+  const rows = readMarketplaceCache()
+  const item = catalogAppForNavigation(rows, navigationKey)
+  return runtimeSurfaceFromItem(item, surfaceKey)
+}
+
 export async function loadRuntimeSurface(navigationKey, surfaceKey = navigationKey) {
   let rows = readMarketplaceCache()
   let item = catalogAppForNavigation(rows, navigationKey)
