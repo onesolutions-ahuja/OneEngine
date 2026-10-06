@@ -39,6 +39,23 @@ test("Phase 2 generic runtime surfaces contain no business object literals", asy
   }
 });
 
+test("Phase 2 Till and kiosk resolve business runtime contracts from metadata", async()=>{
+  for(const path of ["src/pages/till/TillPage.jsx","src/services/tillOffline.js","src/pages/kiosk/OneKioskPage.jsx"]){
+    const source=await read(path);
+    for(const token of [
+      "/api/platform/runtime/objects/sale/buttons",
+      "/api/platform/objects/sale/records",
+      "/api/platform/objects/product/records",
+      "/api/settings/payment-methods",
+      "/api/customer-lookup",
+      "/api/online/orders",
+      "till_complete_sale",
+      "till_receipt_qr"
+    ]) assert.equal(source.includes(token),false,path+" "+token);
+    assert.match(source,/loadRuntimeSurface|runtimeSurface/);
+  }
+});
+
 test("Phase 2 package metadata owns legacy business navigation aliases", async()=>{
   const catalog=await read("server/packages/packageManifestCatalog.js");
   for(const route of [
@@ -50,4 +67,18 @@ test("Phase 2 package metadata owns legacy business navigation aliases", async()
     "/app/objects/online_order?appKey=own_delivery",
     "/app/objects/kiosk_device?appKey=one_kiosk"
   ]) assert.ok(catalog.includes(route),route);
+});
+
+
+test("Phase 2 removes retired Online Orders bespoke UI stack", async()=>{
+  const { access } = await import("node:fs/promises");
+  for(const path of [
+    "src/pages/online/onlineOrdersShared.js",
+    "src/pages/online/useOnlineOrderActions.js",
+    "src/pages/online/useOnlineOrderMetadata.js",
+    "src/components/online/CompleteOrderModal.jsx",
+    "src/components/online/OnlineOrderCard.jsx",
+    "src/components/online/OnlineOrderSummary.jsx",
+    "src/utils/onlineOrderPrint.js"
+  ]) await assert.rejects(access(new URL("../"+path,import.meta.url)),path);
 });
