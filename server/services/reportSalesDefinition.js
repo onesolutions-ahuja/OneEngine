@@ -6,15 +6,15 @@ export const CUSTOM_REPORT_FIELDS = [
   { key: "user", label: "Operator", sql: "COALESCE(u.full_name, u.username, 'Unknown')", groupable: true },
   { key: "product", label: "Product", sql: "p.name", groupable: true },
   { key: "category", label: "Category", sql: "COALESCE(pc.name, 'Uncategorised')", groupable: true },
-  { key: "method", label: "Payment method", sql: "COALESCE(pay.payment_method, 'Unknown')", groupable: true },
+  { key: "method", label: "Payment method", sql: "COALESCE(s.payment_method, h.payment_data->0->>'method', 'Unknown')", groupable: true },
   { key: "sku", label: "SKU", sql: "p.sku", groupable: true },
-  { key: "quantity", label: "Quantity sold", sql: "COALESCE(SUM(si.quantity), 0)", aggregate: true },
-  { key: "gross_sales", label: "Gross sales", sql: "COALESCE(SUM(si.total), 0)", aggregate: true },
-  { key: "net_sales", label: "Net sales", sql: "COALESCE(SUM(si.total - si.tax), 0)", aggregate: true },
-  { key: "total", label: "Total", sql: "COALESCE(SUM(pay.amount), 0)", aggregate: true },
-  { key: "vat", label: "VAT", sql: "COALESCE(SUM(si.tax), 0)", aggregate: true },
-  { key: "discount", label: "Discounts", sql: "COALESCE(SUM(si.discount), 0)", aggregate: true },
-  { key: "transactions", label: "Transactions", sql: "COUNT(DISTINCT s.id)", aggregate: true },
+  { key: "quantity", label: "Quantity sold", sql: "COALESCE(SUM(s.quantity), 0)", aggregate: true },
+  { key: "gross_sales", label: "Gross sales", sql: "COALESCE(SUM(s.total), 0)", aggregate: true },
+  { key: "net_sales", label: "Net sales", sql: "COALESCE(SUM(s.total - s.tax), 0)", aggregate: true },
+  { key: "total", label: "Total", sql: "COALESCE(SUM(s.total), 0)", aggregate: true },
+  { key: "vat", label: "VAT", sql: "COALESCE(SUM(s.tax), 0)", aggregate: true },
+  { key: "discount", label: "Discounts", sql: "COALESCE(SUM(s.discount), 0)", aggregate: true },
+  { key: "transactions", label: "Transactions", sql: "COUNT(DISTINCT s.transaction_id)", aggregate: true },
 ];
 
 export const CUSTOM_DATE_FILTERS = [
@@ -101,7 +101,7 @@ export function buildCustomSalesQuery(definition, dateRange, storeIds, userIds) 
     if (!filter || filter.field === "date" || !["store", "user", "product"].includes(filter.field)) continue;
     const values = (Array.isArray(filter.value) ? filter.value : [filter.value]).filter(Boolean).map(String);
     if (!values.length) continue;
-    const column = filter.field === "store" ? "s.store_id" : filter.field === "user" ? "s.user_id" : "si.product_id";
+    const column = filter.field === "store" ? "s.store_id" : filter.field === "user" ? "s.user_id" : "s.product_id";
     filterClauses.push(`${column} ${filter.operator === "in" ? `= ANY($${next}::uuid[])` : `= $${next}`}`);
     params.push(filter.operator === "in" ? values : values[0]); next += 1;
   }
@@ -111,7 +111,6 @@ export function buildCustomSalesQuery(definition, dateRange, storeIds, userIds) 
     where.push(`(${logic})`);
   }
   const fields = definition.fields.map((key) => CUSTOM_FIELD_MAP.get(key));
-  const needsPayments = definition.fields.includes("method") || definition.fields.includes("total");
   const select = fields.map((field) => `${field.sql} AS "${field.key}"`);
   const explicitGroups = [...new Set([...(definition.rowGroups || definition.groupBy || []), ...(definition.columnGroups || [])])].map((key) => CUSTOM_FIELD_MAP.get(key).sql);
   const groupByExprs = new Set(explicitGroups);
@@ -119,15 +118,14 @@ export function buildCustomSalesQuery(definition, dateRange, storeIds, userIds) 
   const groups = [...groupByExprs];
   const order = (definition.sort.length ? definition.sort : [{ field: (definition.rowGroups || definition.groupBy || [])[0] || definition.fields[0], direction: "desc" }])
     .map((item) => `"${item.field}" ${item.direction === "asc" ? "ASC" : "DESC"}`).join(", ");
-  const sql = `SELECT ${select.join(", ")} FROM sales s
+  const sql = `SELECT ${select.join(", ")} FROM sale_ledger s
     INNER JOIN companies c ON c.id=s.company_id
-    INNER JOIN sale_items si ON si.sale_id=s.id
-    INNER JOIN products p ON p.id=si.product_id
+    INNER JOIN products p ON p.id=s.product_id
     LEFT JOIN categories pc ON pc.id=p.category_id
-    ${needsPayments ? "LEFT JOIN payments pay ON pay.sale_id=s.id AND pay.status='completed'" : ""}
+    LEFT JOIN sale_ledger h ON h.transaction_id=s.transaction_id AND h.source_record_type='SALE_HEADER'
     LEFT JOIN users u ON u.id=s.user_id
     INNER JOIN stores st ON st.id=s.store_id
-    WHERE ${where.join(" AND ")}
+    WHERE s.source_record_type='SALE_LINE' AND ${where.join(" AND ")}
     ${groups.length ? `GROUP BY ${groups.join(", ")}` : ""}
     ORDER BY ${order} LIMIT ${Math.min(Math.max(Number(definition.rowLimit || 1000),1),1000)}`;
   return { sql, params };
