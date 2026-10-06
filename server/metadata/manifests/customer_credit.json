@@ -59,7 +59,7 @@
           "apiName": "balance_after",
           "label": "Balance After",
           "fieldType": "currency",
-          "writable": true
+          "writable": false
         },
         {
           "apiName": "reference_type",
@@ -96,6 +96,12 @@
           "label": "Created",
           "fieldType": "datetime",
           "writable": false
+        },
+        {
+          "apiName": "idempotency_key",
+          "label": "Idempotency Key",
+          "fieldType": "text",
+          "writable": true
         },
         {
           "apiName": "idempotency_key",
@@ -216,6 +222,22 @@
         "type": "send_in_app_notification",
         "title": "Credit payment received"
       }
+    },
+    {
+      "objectKey": "customer_credit_ledger",
+      "name": "Credit ledger amount must be positive",
+      "triggerKey": "before_save",
+      "conditions": [
+        {
+          "field": "amount",
+          "operator": "less_than_or_equal",
+          "value": 0
+        }
+      ],
+      "action": {
+        "type": "validation",
+        "message": "Credit ledger amount must be positive"
+      }
     }
   ],
   "packageKey": "customer_credit",
@@ -265,15 +287,17 @@
         "actions": [
           {
             "id": "create_entry",
-            "label": "Create Credit Ledger Entry",
+            "label": "Create Customer Credit Ledger Entry",
             "apiName": "create_entry",
             "key": "CREATE_RECORD",
             "objectKey": "customer_credit_ledger",
-            "matching": {
-              "field": "idempotency_key",
-              "value": {
+            "idempotency": {
+              "key": {
                 "path": "variables.idempotencyKey"
               },
+              "matchFields": [
+                "idempotency_key"
+              ],
               "onMatch": "skip"
             },
             "fieldValues": {
