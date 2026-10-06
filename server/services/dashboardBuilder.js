@@ -14,7 +14,6 @@ export const VALUE_FORMATS = Object.freeze(["number", "currency", "percent"]);
 export const DATE_RANGES = Object.freeze([
   "all_time", "today", "yesterday", "this_week", "last_7_days", "this_month", "this_quarter", "fiscal_year",
 ]);
-export const FILTER_FIELDS = Object.freeze(["store", "date"]);
 export const DASHBOARD_PRINCIPAL_TYPES = Object.freeze(["USER", "ROLE", "PUBLIC_GROUP", "COMPANY"]);
 export const DASHBOARD_ACCESS_LEVELS = Object.freeze(["VIEW", "EDIT", "MANAGE"]);
 export const DASHBOARD_RUN_AS_MODES = Object.freeze(["VIEWER", "FIXED_USER"]);
@@ -203,9 +202,10 @@ export function validateDashboardDefinition(input = {}) {
   const packed=packLayout(normalized.map((entry)=>entry.layout));
   normalized.forEach((entry,index)=>{entry.layout=packed[index];});
   const filters=Array.isArray(input.filters)?input.filters.slice(0,20).map((filter)=>{
-    const field=String(filter?.field||"");
-    if(!FILTER_FIELDS.includes(field)) throw new Error("Invalid dashboard filter");
-    return {field,operator:String(filter.operator||"equals"),value:filter.value};
+    const field=String(filter?.field||"").trim();
+    const operator=String(filter?.operator||"equals").trim();
+    if(!field || !operator) throw new Error("Dashboard filters require a metadata field and operator");
+    return {field,operator,value:filter.value};
   }):[];
   return {
     name,
