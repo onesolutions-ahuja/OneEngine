@@ -577,7 +577,7 @@ export default function FieldEditor({
               onChange={(event) =>
                 update("label", event.target.value)
               }
-              placeholder="Customer Name"
+              placeholder="Field Label"
               required
             />
           </label>
@@ -588,7 +588,7 @@ export default function FieldEditor({
               type="text"
               value={form.apiName || ""}
               readOnly
-              placeholder="customer_name"
+              placeholder="field_key"
               required
             />
             <small>
@@ -880,7 +880,7 @@ export default function FieldEditor({
           {form.field_type === "rollup" && <fieldset className="platform-field-editor-wide">
             <legend>Rollup configuration</legend>
             <label><span>Aggregate</span><select value={form.rollupOperation || "COUNT"} onChange={event => update("rollupOperation", event.target.value)}>{["COUNT", "SUM", "MIN", "MAX", "AVG"].map(operation => <option key={operation} value={operation}>{operation}</option>)}</select></label>
-            <label><span>Relationship key</span><input value={form.rollupRelationshipKey || ""} onChange={event => update("rollupRelationshipKey", event.target.value)} placeholder="customer_orders" required /></label>
+            <label><span>Relationship key</span><input value={form.rollupRelationshipKey || ""} onChange={event => update("rollupRelationshipKey", event.target.value)} placeholder="related_records" required /></label>
             <label><span>Child numeric field</span><input value={form.rollupSourceField || ""} onChange={event => update("rollupSourceField", event.target.value)} placeholder="total" required={form.rollupOperation !== "COUNT"} /></label>
             <label><span>Result type</span><select value={form.rollupResultType || "number"} onChange={event => update("rollupResultType", event.target.value)}>{["number", "decimal", "currency"].map(type => <option key={type} value={type}>{type}</option>)}</select></label>
             <small>Values are calculated from related child records and cannot be written directly. Filters are configured through the existing condition format in metadata.</small>
