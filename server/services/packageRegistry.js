@@ -3,352 +3,90 @@ import { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, re
 export { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 import { packageManifestCatalog } from "../packages/packageManifestCatalog.js";
 
-const metadataManifestCache = new Map();
-function manifestForPackage(packageKey) {
-  if (!packageKey) return null;
-  return metadataManifestCache.get(packageKey) || null;
-}
-
 export function packageDefinition(entry) {
-  const iconAssetKeys = {
-    uber_eats: "uber-eats",
-    deliveroo: "deliveroo",
-    xero: "xero",
-    xero_accounting: "xero-accounting",
-    sage: "sage",
-    sage_accounting: "sage-business-cloud-accounting",
-    quickbooks: "quickbooks",
-    shopify: "shopify",
-    just_eat: "just-eat",
-    whatsapp: "whatsapp",
-    whatsapp_connector: "whatsapp",
-    whatsapp_assistant: "whatsapp",
-    open_food_facts: null,
-    upcitemdb: null,
-    barcode_nest: null,
-    go_upc: null,
-  };
-  const packageNames = {
-    retail_pos: "OneSales",
-    one_kiosk: "OneKiosk",
-    products: "Product Core",
-    inventory: "OneInventory",
-    batch_expiry: "OneBatchExpiry",
-    hospitality: "OneHospitality",
-    kds: "OneKDS",
-    customer_credit: "OneCustomerCredit",
-    suppliers: "OnePurchase",
-    customers: "OneCustomer",
-    staff: "Staff Core",
-    reports: "OneReport",
-    platform: "OneDeveloper",
-    online_orders: "OneOnline",
-    integrations: "OneIntegrations",
-    email_connector: "Email Connector",
-    sms_connector: "SMS Connector",
-    communication_core: "Communication Core",
-    one_connect_dojo: "One Connect - Dojo",
-    one_connect_sumup: "One Connect - SumUp",
-    one_connect_square: "One Connect - Square",
-    uber_eats: "Uber Eats",
-    quickbooks: "QuickBooks",
-    shopify: "Shopify",
-    client_web_shop: "Client Web Shop",
-    own_delivery: "Own Delivery",
-    whatsapp: "WhatsApp",
-    whatsapp_connector: "WhatsApp Connector",
-    whatsapp_assistant: "WhatsApp Assistant",
-    open_food_facts: "Open Food Facts Connector",
-    upcitemdb: "UPCitemdb Connector",
-    barcode_nest: "BarcodeNest Connector",
-    go_upc: "Go-UPC Connector",
-    supplier_core: "Supplier Core",
-    purchasing_core: "Purchasing Core",
-    loyalty: "Loyalty Core",
-    finance_core: "Finance Core",
-    paypal_qr: "PayPal QR Payment",
-    one_connect_google: "Google Connect",
-    smsgate_connector: "SMSGate",
-    one_assistant: "OneAssistant",
-    payment_reference: "Payment Reference",
-    payment_connector_template: "Payment Connector Template",
-    receipt_printer_connector_template: "Receipt Printer Connector Template",
-    kitchen_printer_connector_template: "Kitchen Printer Connector Template",
-    cash_drawer_connector_template: "Cash Drawer Connector Template",
-    mobile_scanner_connector: "Mobile Scanner Connector",
-    barcode_scanner_connector_template: "Barcode Scanner Connector Template",
-  };
-  const packageDescriptions = {
-    retail_pos: "Sales, payments, returns and order processing.",
-    one_kiosk: "Customer self-service ordering, payment handoff and collection-number workflow across food, retail and service environments.",
-    products: "Technical foundation for the canonical Product and Category objects.",
-    inventory: "Stock, replenishment and inventory movements.",
-    batch_expiry: "Batch stock, expiry tracking and FEFO inventory controls.",
-    hospitality: "Floor plans, tables and reservations.",
-    kds: "Kitchen display tickets and preparation status.",
-    customer_credit: "Customer credit accounts, payments and protected credit controls.",
-    suppliers: "Suppliers and purchasing operations.",
-    customers: "Customer records and customer activity.",
-    staff: "Reusable employee and attendance foundations over existing user identities.",
-    reports: "Operational and custom report administration.",
-    platform: "Developer workspace for configurable objects, metadata, apps and automation.",
-    online_orders: "Online order intake and preparation.",
-    integrations: "External delivery, payment and communication integrations.",
-    email_connector: "Reusable email communication provider over Communication Core.",
-    sms_connector: "Reusable SMS communication provider over Communication Core.",
-    one_connect_dojo: "Dojo EPOS payment connector for terminal-based card processing.",
-    one_connect_sumup: "SumUp terminal and cloud payment connector for store and till pairing.",
-    one_connect_square: "Square terminal payment connector for card sales, refunds and terminal management.",
-    uber_eats: "Uber Eats connection and online order integration.",
-    quickbooks: "QuickBooks accounting connection and mapped exports.",
-    shopify: "Shopify catalogue, inventory and online-order connection.",
-    client_web_shop: "Public storefront, cart, checkout and own-delivery commerce package for client web shops.",
-    own_delivery: "Driver assignment, route planning, delivery workspace and order tracking for fulfilled client orders.",
-    whatsapp: "WhatsApp Business messaging and customer invoice delivery.",
-    whatsapp_connector: "WhatsApp Business communication provider shared by licensed business apps through Communication Core.",
-    whatsapp_assistant: "Workflow-driven WhatsApp Business assistant for customer enquiries, customer matching, templates and governed AI or rule-based replies.",
-    open_food_facts: "Worldwide barcode and product-name lookup from Open Food Facts.",
-    upcitemdb: "Worldwide UPC, EAN and GTIN lookup through UPCitemdb.",
-    barcode_nest: "UPC, EAN and GTIN lookup through BarcodeNest using a customer API key.",
-    go_upc: "Live product barcode lookup using a customer-provided Go-UPC API key.",
-    supplier_core: "Canonical supplier identity and supplier-product sourcing metadata.",
-    purchasing_core: "Protected purchasing, receiving and supplier-return metadata foundation.",
-    loyalty: "Canonical loyalty configuration, balances, activity and rules.",
-    finance_core: "Reusable financial ledger and supplier-accounting foundation.",
-    connector_core: "Hidden runtime, capability routing and hardware-service contracts for installable connector apps.",
-    communication_core: "Provider-neutral communication events, templates, delivery tracking and workflow actions for Email, SMS and WhatsApp.",
-    mobile_scanner_connector: "Send-only phone barcode scanning paired to one store and till.",
-    paypal_qr: "Metadata-driven PayPal QR payment connector for transaction-specific checkout and verification.",
-    one_connect_google: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users.",
-    smsgate_connector: "SMSGate Android SMS provider for Communication Core.",
-    one_assistant: "Workflow-first appointment booking, calendar and communication automation.",
-    payment_reference: "Test-only reference payment simulator for connector validation.",
-    payment_connector_template: "Hidden payment connector package template.",
-    receipt_printer_connector_template: "Hidden receipt-printer connector package template.",
-    kitchen_printer_connector_template: "Hidden kitchen-printer connector package template.",
-    cash_drawer_connector_template: "Hidden cash-drawer connector package template.",
-    mobile_scanner_connector: "Phone barcode scanner connector paired to a store and till.",
-    barcode_scanner_connector_template: "Hidden barcode-scanner connector package template.",
-  };
-  const entitlementKeys = {
-    retail_pos: "pos", one_kiosk: "one_kiosk", products: "pos", inventory: "inventory", batch_expiry: "batch_expiry",
-    hospitality: "hospitality", kds: "kds", customer_credit: "credit_control", suppliers: "purchasing", customers: "customers", staff: "staff",
-    reports: "reports", online_orders: "online_orders", integrations: "integrations",
-    email_connector: "communications.email", sms_connector: "communications.sms",
-    one_connect_dojo: "one_connect_dojo",
-    one_connect_sumup: "one_connect_sumup",
-    one_connect_square: "one_connect_square",
-    uber_eats: "integrations", platform: "platform", loyalty: "loyalty",
-    quickbooks: "integrations", shopify: "integrations", client_web_shop: "client_web_shop", own_delivery: "delivery",
-    whatsapp: "integrations", whatsapp_connector: "integrations", whatsapp_assistant: "whatsapp_assistant",
-    open_food_facts: "open_food_facts_connector", upcitemdb: "upcitemdb_connector", barcode_nest: "barcode_nest_connector",
-    paypal_qr: "paypal_qr",
-    one_connect_google: "google_sso",
-    smsgate_connector: "communications.sms",
-    one_assistant: "one_assistant",
-  };
-  const dependencies = {
-    retail_pos: ["products"],
-    one_kiosk: ["products", "online_orders", "retail_pos"],
-    inventory: ["products"],
-    batch_expiry: ["inventory", "products"],
-    client_web_shop: ["products", "inventory", "online_orders", "retail_pos", "customers"],
-    own_delivery: ["client_web_shop", "online_orders", "staff"],
-    hospitality: ["retail_pos", "customers"],
-    kds: ["hospitality", "retail_pos"],
-    customer_credit: ["customers", "retail_pos"],
-    suppliers: ["supplier_core"],
-    supplier_core: ["products"],
-    reports: [],
-    platform: [],
-    uber_eats: ["integrations", "online_orders"],
-    whatsapp: ["integrations"],
-    whatsapp_connector: ["communication_core"],
-    whatsapp_assistant: ["communication_core", "customers", "platform"],
-    open_food_facts: ["products"],
-    upcitemdb: ["products"],
-    barcode_nest: ["products"],
-    go_upc: ["products"],
-    finance_core: ["suppliers"],
-    connector_core: [],
-    communication_core: ["platform"],
-    email_connector: ["communication_core"],
-    sms_connector: ["communication_core"],
-    mobile_scanner_connector: ["connector_core"],
-    loyalty: ["customers", "retail_pos"],
-    paypal_qr: ["connector_core"],
-    one_connect_dojo: ["connector_core"],
-    one_connect_sumup: ["connector_core"],
-    one_connect_square: ["connector_core"],
-    one_connect_google: ["connector_core"],
-    smsgate_connector: ["connector_core", "communication_core", "sms_connector"],
-    one_assistant: ["customers", "platform"],
-    payment_reference: ["connector_core"],
-    payment_connector_template: ["connector_core"],
-    receipt_printer_connector_template: ["connector_core"],
-    kitchen_printer_connector_template: ["connector_core"],
-    cash_drawer_connector_template: ["connector_core"],
-    barcode_scanner_connector_template: ["connector_core"],
-  };
-  const packageType = entry.packageType === "FOUNDATION" || entry.technical === true
-    ? "FOUNDATION"
-    : "APPLICATION";
-  const billable = packageType === "APPLICATION" && entry.billable !== false;
-  const licenceMode = entry.licenceMode || (packageType === "FOUNDATION" ? "TECHNICAL" : "COMMERCIAL");
-
-  // Connector package permissions are derived from the connector contract so
-  // a package cannot forget runtime permissions that its actions require.
-  // This keeps current and future connector packages aligned automatically.
-  const manifestPermissions = new Set(Array.isArray(entry.permissions) ? entry.permissions : []);
-  // Foundation package manifests must carry the same RBAC contract as their catalogue surface.
-  // Staff explicitly owns user/attendance capabilities and must never silently drop user.create.
-  if (entry.key === "staff") for (const permission of ["user.view","user.create","user.edit","attendance.view","attendance.use"]) manifestPermissions.add(permission);
-  if (entry.connectorApp && typeof entry.connectorApp === "object") {
-    manifestPermissions.add("connector.test");
-    manifestPermissions.add("connector.view");
-    manifestPermissions.add("connector.manage");
-    for (const capability of Array.isArray(entry.connectorApp.capabilities) ? entry.connectorApp.capabilities : []) {
-      if (!capability || typeof capability !== "object") continue;
-      for (const permission of Array.isArray(capability.requiredPermissions) ? capability.requiredPermissions : []) {
-        if (permission) manifestPermissions.add(permission);
+  const packageKey = entry.packageKey || entry.key;
+  const extracted = metadataManifestByPackageKey(packageKey) || {};
+  const packageType = extracted.packageType || entry.packageType || (entry.technical === true ? "FOUNDATION" : "APPLICATION");
+  const licenceMode = extracted.licenceMode || entry.licenceMode || (packageType === "FOUNDATION" ? "TECHNICAL" : "COMMERCIAL");
+  const dependencies = Array.isArray(extracted.dependencies)
+    ? extracted.dependencies
+    : (Array.isArray(entry.dependencies) ? entry.dependencies : []);
+  const permissions = new Set([
+    ...(Array.isArray(entry.permissions) ? entry.permissions : []),
+    ...(Array.isArray(extracted.permissions) ? extracted.permissions : []),
+  ]);
+  const connectorApp = extracted.connectorApp || entry.connectorApp || null;
+  if (connectorApp && typeof connectorApp === "object") {
+    permissions.add("connector.test");
+    permissions.add("connector.view");
+    permissions.add("connector.manage");
+    for (const capability of Array.isArray(connectorApp.capabilities) ? connectorApp.capabilities : []) {
+      for (const permission of Array.isArray(capability?.requiredPermissions) ? capability.requiredPermissions : []) {
+        if (permission) permissions.add(permission);
       }
     }
   }
-
-  const extractedManifest = manifestForPackage(entry.key || entry.packageKey);
-  return {
-    packageKey: entry.packageKey || entry.key,
-    name: packageNames[entry.key] || entry.name,
-    version: entry.version || "1.0.0",
-    description: packageDescriptions[entry.key] || entry.description,
-    dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : (dependencies[entry.key] || []),
-    moduleKey: entry.key,
-    manifest: {
-        ...(extractedManifest || {}),
-      packageKey: entry.packageKey || entry.key,
-      name: packageNames[entry.key] || entry.name,
-      version: entry.version || "1.0.0",
-      packageType,
-      publisher: entry.publisher || "OneSolutions",
-      category: entry.category || "Business",
-      description: packageDescriptions[entry.key] || entry.description,
-      route: entry.route,
-      entitlementKey: entry.entitlementKey || entitlementKeys[entry.key] || entry.key,
-      licenceMode,
-      licenceRequired: entry.licenceRequired !== false && licenceMode === "COMMERCIAL",
-      billable,
-      visibility: entry.visibility || (packageType === "FOUNDATION" ? "HIDDEN" : "PUBLIC"),
-      installable: entry.installable !== false,
-      systemOnly: entry.systemOnly === true || packageType === "FOUNDATION",
-      displayOrder: Number.isInteger(entry.displayOrder) ? entry.displayOrder : 0,
-      lifecycleState: entry.lifecycleState || "PUBLISHED",
-      permissions: [...manifestPermissions],
-      storeScoped: entry.storeScoped === true,
-      bootstrapFoundation: entry.bootstrapFoundation === true,
-      dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : (dependencies[entry.key] || []),
-      optionalDependencies: Array.isArray(entry.optionalDependencies) ? entry.optionalDependencies : [],
-      versionConstraints: Object.fromEntries(
-        (Array.isArray(entry.dependencies) ? entry.dependencies : (dependencies[entry.key] || []))
-          .filter((dependency) => dependency && typeof dependency === "object")
-          .map((dependency) => [
-            dependency.packageKey || dependency.package_key,
-            {
-              minVersion: dependency.minVersion || dependency.min_version || null,
-              maxVersion: dependency.maxVersion || dependency.max_version || null,
-              versionRange: dependency.versionRange || dependency.version_range || null,
-              optional: dependency.optional === true,
-            },
-          ])
-      ),
-      metadataOwnership: {
-        policy: "PACKAGE_MANAGED",
-        preserveUserModified: true,
-        requiredTypes: ["object", "field", "relationship", "form", "layout", "workflow", "action", "report", "permission", "connector", "template"],
-      },
-      optionalFeatures: Array.isArray(entry.optionalFeatures) ? entry.optionalFeatures : [],
-      capabilities: Array.isArray(entry.capabilities) ? entry.capabilities : [entry.key],
-      providerConnector: entry.providerConnector || null,
-      connectorApp: entry.connectorApp || null,
-      connectors: (() => {
-        const provider = entry.providerConnector || {};
-        const lookup = provider.globalProductLookup || {};
-        const definitions = {
-          open_food_facts: {
-            authType: "none",
-            baseUrl: lookup.baseUrl || "https://world.openfoodfacts.org",
-            credentialsSchema: [],
-            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: lookup.testEndpoint || "/api/v2/product/737628064502.json" }],
+  const name = extracted.name || entry.name || packageKey;
+  const description = extracted.description || entry.description || "";
+  const version = extracted.version || entry.version || "1.0.0";
+  const manifest = {
+    ...entry,
+    ...extracted,
+    packageKey,
+    name,
+    version,
+    packageType,
+    publisher: extracted.publisher || entry.publisher || "OneSolutions",
+    category: extracted.category || entry.category || "Business",
+    description,
+    route: extracted.route || entry.route || null,
+    entitlementKey: extracted.entitlementKey || entry.entitlementKey || packageKey,
+    licenceMode,
+    licenceRequired: (extracted.licenceRequired ?? entry.licenceRequired) !== false && licenceMode === "COMMERCIAL",
+    billable: (extracted.billable ?? entry.billable) !== false && packageType === "APPLICATION",
+    visibility: extracted.visibility || entry.visibility || (packageType === "FOUNDATION" ? "HIDDEN" : "PUBLIC"),
+    installable: (extracted.installable ?? entry.installable) !== false,
+    systemOnly: (extracted.systemOnly ?? entry.systemOnly) === true || packageType === "FOUNDATION",
+    displayOrder: Number.isInteger(extracted.displayOrder) ? extracted.displayOrder : (Number.isInteger(entry.displayOrder) ? entry.displayOrder : 0),
+    lifecycleState: extracted.lifecycleState || entry.lifecycleState || "PUBLISHED",
+    permissions: [...permissions],
+    storeScoped: (extracted.storeScoped ?? entry.storeScoped) === true,
+    bootstrapFoundation: (extracted.bootstrapFoundation ?? entry.bootstrapFoundation) === true,
+    dependencies,
+    optionalDependencies: Array.isArray(extracted.optionalDependencies) ? extracted.optionalDependencies : (Array.isArray(entry.optionalDependencies) ? entry.optionalDependencies : []),
+    versionConstraints: Object.fromEntries(
+      dependencies
+        .filter((dependency) => dependency && typeof dependency === "object")
+        .map((dependency) => [
+          dependency.packageKey || dependency.package_key,
+          {
+            minVersion: dependency.minVersion || dependency.min_version || null,
+            maxVersion: dependency.maxVersion || dependency.max_version || null,
+            versionRange: dependency.versionRange || dependency.version_range || null,
+            optional: dependency.optional === true,
           },
-          go_upc: {
-            authType: "bearer",
-            baseUrl: lookup.baseUrl || "https://go-upc.com",
-            credentialsSchema: [{ key: "token", type: "secret", required: true, label: "API key" }],
-            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: lookup.testEndpoint || "/api/v1/code/737628064502" }],
-          },
-          quickbooks: {
-            authType: "bearer",
-            baseUrl: "https://quickbooks.api.intuit.com",
-            credentialsSchema: [{ key: "token", type: "secret", required: true, label: "OAuth access token" }],
-            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/v3/company/{{input.realmId}}/companyinfo/{{input.realmId}}", request: { query: { minorversion: "75" } } }],
-          },
-          shopify: {
-            authType: "api_key",
-            baseUrl: "https://example.myshopify.com",
-            credentialsSchema: [{ key: "apiKey", type: "secret", required: true, label: "Admin API access token" }, { key: "headerName", type: "string", required: false, label: "Authentication header" }],
-            operations: [{ key: "test_connection", name: "Test Connection", method: "GET", path: "/admin/api/2025-01/shop.json" }],
-          },
-          uber_eats: {
-            authType: "oauth2_client_credentials",
-            baseUrl: "https://api.uber.com",
-            credentialsSchema: [
-              { key: "clientId", type: "string", required: true, label: "Client ID" },
-              { key: "clientSecret", type: "secret", required: true, label: "Client Secret" },
-            ],
-            operations: [
-              {
-                key: "oauth_client_credentials",
-                name: "OAuth Client Credentials",
-                method: "POST",
-                tokenUrls: {
-                  sandbox: "https://sandbox-login.uber.com/oauth/v2/token",
-                  production: "https://auth.uber.com/oauth/v2/token",
-                },
-                scope: "eats.store eats.order eats.pos_provisioning",
-              },
-              { key: "test_connection", name: "Test Connection", method: "GET", path: "/v1/eats/stores" },
-            ],
-          },
-          whatsapp: {
-            authType: "bearer",
-            baseUrl: "https://graph.facebook.com/v21.0",
-            credentialsSchema: [{ key: "token", type: "secret", required: true, label: "Meta access token" }],
-            operations: [{ key: "send_message", name: "Send WhatsApp Message", method: "POST", path: "/{{phoneNumberId}}/messages" }],
-          },
-        };
-        const definition = definitions[entry.key];
-        if (!definition) return [];
-        return [{
-          connectorKey: entry.packageKey || entry.key,
-          name: `${entry.name} Connection`,
-          description: `Metadata-driven connection for ${entry.name}.`,
-          publisher: entry.publisher || "OneSolutions",
-          ...definition,
-          timeoutMs: Number(lookup.timeoutMs) || 15000,
-          retryPolicy: { maxAttempts: 1, backoffMs: 0 },
-          required: true,
-        }];
-      })(),
-      iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
-      ...(metadataManifestByPackageKey(entry.key) || {}),
-      
-      
-      
-
-      
-      
-      
-
+        ])
+    ),
+    metadataOwnership: extracted.metadataOwnership || {
+      policy: "PACKAGE_MANAGED",
+      preserveUserModified: true,
+      requiredTypes: ["object", "field", "relationship", "form", "layout", "workflow", "action", "report", "permission", "connector", "template"],
     },
+    optionalFeatures: Array.isArray(extracted.optionalFeatures) ? extracted.optionalFeatures : (Array.isArray(entry.optionalFeatures) ? entry.optionalFeatures : []),
+    capabilities: Array.isArray(extracted.capabilities) ? extracted.capabilities : (Array.isArray(entry.capabilities) ? entry.capabilities : [packageKey]),
+    providerConnector: extracted.providerConnector || entry.providerConnector || null,
+    connectorApp,
+    connectors: Array.isArray(extracted.connectors) ? extracted.connectors : (Array.isArray(entry.connectors) ? entry.connectors : []),
+    iconAssetKey: extracted.iconAssetKey ?? entry.iconAssetKey ?? null,
+  };
+  return {
+    packageKey,
+    name,
+    version,
+    description,
+    dependencies,
+    moduleKey: entry.moduleKey || entry.key || packageKey,
+    manifest,
   };
 }
 
