@@ -1,8 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile, access } from "node:fs/promises";
-const root=new URL("../",import.meta.url);const read=p=>readFile(new URL(p,root),"utf8");const json=async p=>JSON.parse(await read(p));
-test("final metadata ownership",async()=>{const ms=await Promise.all(["customers","customer_credit","loyalty","gift_cards"].map(x=>json("server/metadata/manifests/"+x+".json")));for(const m of ms)for(const o of m.objects)assert.equal(o.config?.flowWritesOnly,true,o.objectKey);const l=ms[2];assert.ok(l.workflows.some(w=>w.action?.apiName==="LOYALTY_ADJUST"));assert.equal(l.actions.some(a=>a.handlerKey==="CUSTOMER_LOYALTY_ADJUST"),false);});
-test("online orders lifecycle is Flow owned",async()=>{const o=await json("server/metadata/manifests/online_orders.json");assert.deepEqual(o.objects.map(x=>x.objectKey).sort(),["online_order","online_order_line"]);assert.ok(o.workflows.some(w=>/Online Order Transition/i.test(w.name)));assert.ok(o.actions.every(a=>a.handlerKey==="RUN_SUBFLOW"));});
-test("provider-specific executors stay removed",async()=>{const c=await read("server/packages/packageManifestCatalog.js");for(const k of ["SHOPIFY_PROCESS_WEBHOOK","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_SYNC_INVENTORY","SHOPIFY_EXPORT_FULFILMENT","SHOPIFY_EXPORT_REFUND","SHOPIFY_RETRY_FAILED_SYNC","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET","BARCODENEST_LOOKUP_PRODUCT","GO_UPC_LOOKUP_PRODUCT","UPCITEMDB_LOOKUP_PRODUCT","WHATSAPP_SYNC_MESSAGE_STATUS"])assert.equal(c.includes(k),false,k);});
-test("legacy business engines stay deleted",async()=>{for(const p of ["server/routes/sales.js","server/routes/till.js","server/routes/customers.js","server/routes/whatsapp.js","server/services/inventory.js","server/services/inventoryPlatform.js","server/services/onlineOrders/index.js","server/services/onlineOrders/deliveroo.js","server/services/onlineOrders/uber.js","server/services/onlineOrders/uberClient.js","server/services/onlineOrders/uberMenuMapping.js"])await assert.rejects(access(new URL(p,root)));});
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
+
+const root=new URL("../",import.meta.url);
+const read=(p)=>readFile(new URL("../"+p,import.meta.url),"utf8");
+
+test("business metadata ownership is manifest based",async()=>{
+ const registry=await read("server/services/packageRegistry.js");
+ for(const key of ["products","batch_expiry","customer_credit","customers","loyalty","online_orders","uber_eats"]){
+   assert.equal(registry.includes(`entry.key === "${key}"`),false,key+" must not be inline package business metadata");
+ }
+});
+
+test("deleted legacy business engines stay deleted from server wiring",async()=>{
+ const server=await read("server/server.js");
+ for(const token of ["createInventoryMovement","services/inventory.js","routes/sales.js","routes/customers.js","routes/till.js","routes/whatsapp.js","quickbooksAdapter","shopifyAdapter"]){
+   assert.equal(server.includes(token),false,token);
+ }
+});
+
+test("phase manifests exist for migrated business domains",async()=>{
+ const dir=new URL("../server/metadata/manifests/",import.meta.url);
+ const names=new Set(await readdir(dir));
+ for(const name of ["retail_pos.json","purchasing_core.json","finance_core.json","products.json","inventory.json","batch_expiry.json","customers.json","customer_credit.json","loyalty.json","gift_cards.json","online_orders.json","uber_eats.json"]){
+   assert.ok(names.has(name),name);
+ }
+});
+
+test("migrated write-owned objects are Flow write only",async()=>{
+ for(const name of ["products.json","inventory.json","batch_expiry.json","customers.json","customer_credit.json","loyalty.json","gift_cards.json","online_orders.json"]){
+   const m=JSON.parse(await read("server/metadata/manifests/"+name));
+   for(const o of m.objects||[]) assert.equal(o.config?.flowWritesOnly,true,name+":"+o.objectKey);
+ }
+});
