@@ -375,6 +375,46 @@ function titleCase(value = "") {
     .trim();
 }
 
+function withBuilderMetadata(definition) {
+  const action = definition?.action || {};
+  const actions = Array.isArray(action.actions) ? action.actions : [];
+  if (!actions.length) return definition;
+  const nodes = Array.isArray(action.gptBuilderElements) && action.gptBuilderElements.length === actions.length
+    ? action.gptBuilderElements
+    : actions.map((step, index) => ({
+        id: step.id || `system-step-${index + 1}`,
+        key: "action",
+        label: step.label || step.apiName || step.key || `Step ${index + 1}`,
+        apiName: step.apiName || step.id || `System_Step_${index + 1}`,
+        description: step.description || "",
+        labelSource: "manual",
+        apiNameSource: "manual",
+        config: {
+          actionKey: step.key || step.type || "",
+          inputs: {},
+          inputModes: {},
+          inputIncluded: {},
+          transforms: {},
+          outputMode: "automatic",
+          manualOutputs: [],
+          importedRuntimeAction: step,
+          importedRuntimeActionText: "",
+        },
+        configured: true,
+        source: "runtime_import",
+        position: null,
+      }));
+  return {
+    ...definition,
+    action: {
+      ...action,
+      gptBuilder: true,
+      layout: action.layout || { mode: "AUTO" },
+      gptBuilderElements: nodes,
+    },
+  };
+}
+
 export function systemWorkflowDefinitions() {
   return [...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS].map(withBuilderMetadata);
 }
