@@ -73,10 +73,11 @@ function collectTypedReferences(value, output = []) {
   else if (value.objectKey) output.push({ type: "object", key: String(value.objectKey) });
 
   if (value.flowKey) output.push({ type: "workflow", key: String(value.flowKey) });
+  if (value.workflowUuid || value.workflowId || value.workflow_id) output.push({ type: "workflow", key: String(value.workflowUuid || value.workflowId || value.workflow_id) });
   if (value.actionKey) output.push({ type: "action", key: String(value.actionKey) });
   if (value.connectorKey || value.providerKey) output.push({ type: "connector", key: String(value.connectorKey || value.providerKey) });
   if (value.connectorOperationKey && (value.connectorKey || value.providerKey)) output.push({ type: "connector", key: String(value.connectorKey || value.providerKey) });
-  if (value.permissionKey) output.push({ type: "permission", key: String(value.permissionKey) });
+  if (value.permissionKey || value.requiredPermission || value.required_permission) output.push({ type: "permission", key: String(value.permissionKey || value.requiredPermission || value.required_permission) });
   if (value.packageKey) output.push({ type: "package", key: String(value.packageKey) });
 
   Object.values(value).forEach((item) => collectTypedReferences(item, output));
@@ -104,6 +105,7 @@ export function compileAppDependencyGraph(definition = {}) {
     }
   }
   for (const item of collectTypedReferences(definition.navigation || {})) add(reference(item.type, item.key));
+  for (const item of collectTypedReferences(definition.app || {})) add(reference(item.type, item.key));
   for (const item of collectTypedReferences(definition.dependencies || [])) add(reference(item.type, item.key));
 
   return {
@@ -240,5 +242,33 @@ export async function compilePortableAppManifest(definition = {}, resolver) {
       return { id, type: id.slice(0, split), key: id.slice(split + 1), dependsOn: [] };
     })]) },
     manifest,
+  };
+}
+
+
+export function stablePortableManifest(manifest = {}) {
+  const sortItems = (items = []) => [...items].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  const result = {};
+  for (const key of Object.keys(manifest).sort()) {
+    const value = manifest[key];
+    result[key] = Array.isArray(value) ? sortItems(value) : value;
+  }
+  return result;
+}
+
+export function buildPortableArtifact(compiled = {}) {
+  if (!compiled?.valid || (compiled.unresolved || []).length) {
+    const missing = (compiled?.unresolved || []).map((item) => `${item.type}:${item.key}`).join(", ");
+    throw new Error(`GPTAppBuilder build blocked by unresolved metadata${missing ? `: ${missing}` : ""}`);
+  }
+  const manifest = stablePortableManifest(compiled.manifest || {});
+  scanSecrets(manifest, "artifact");
+  const serialized = JSON.stringify(manifest);
+  return {
+    schemaVersion: GPT_APP_BUILDER_SCHEMA_VERSION,
+    packageKey: manifest.packageKey,
+    version: manifest.version,
+    manifest,
+    fingerprint: `${serialized.length}:${[...serialized].reduce((hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0, 2166136261).toString(16)}`,
   };
 }
