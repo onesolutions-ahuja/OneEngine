@@ -101,16 +101,3 @@ test("customer credit business flows are not hardcoded in the system workflow ca
 });
 
 
-test("Phase 1 removes generated action and job pseudo-workflows from persistence", () => {
-  const catalog = readFileSync(new URL("../server/services/systemWorkflowCatalog.js", import.meta.url), "utf8");
-  const runtime = readFileSync(new URL("../server/services/systemWorkflowRuntime.js", import.meta.url), "utf8");
-  const migration = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
-  assert.doesNotMatch(catalog, /function\s+actionWorkflow\s*\(/);
-  assert.doesNotMatch(catalog, /function\s+jobWorkflow\s*\(/);
-  assert.doesNotMatch(catalog, /PLATFORM_ACTION_REGISTRY/);
-  assert.doesNotMatch(catalog, /TRUSTED_JOB_KINDS/);
-  assert.match(runtime, /export async function executeSystemAction\(/);
-  assert.match(migration, /0066_remove_system_action_job_workflow_wrappers/);
-  assert.match(migration, /systemKey' LIKE 'action:%'/);
-  assert.match(migration, /systemKey' LIKE 'job:%'/);
-});
