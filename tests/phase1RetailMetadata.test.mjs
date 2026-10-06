@@ -7,7 +7,7 @@ const objects = new Map((manifest.objects || []).map((object) => [object.objectK
 const flows = new Map((manifest.workflows || []).map((flow) => [flow.action?.systemKey || flow.name, flow]));
 
 test("Phase 1 retail objects are metadata-backed and flow-write-only", () => {
-  for (const key of ["sale","sale_item","payment","till_session","cash_movement","refund","stock_return","stock_return_line"]) {
+  for (const key of ["sale","sale_item","payment","device_session","cash_ledger","refund","stock_return","stock_return_line"]) {
     assert.ok(objects.has(key), `missing metadata object ${key}`);
     assert.equal(objects.get(key).config?.flowWritesOnly, true, `${key} must write through Flow`);
   }
@@ -15,7 +15,7 @@ test("Phase 1 retail objects are metadata-backed and flow-write-only", () => {
 
 test("Phase 1 validations are metadata rules", () => {
   const rules = manifest.rules || [];
-  for (const objectKey of ["sale","sale_item","payment","till_session","cash_movement","refund","stock_return","stock_return_line"]) {
+  for (const objectKey of ["sale","sale_item","payment","device_session","cash_ledger","refund","stock_return","stock_return_line"]) {
     assert.ok(rules.some((rule) => rule.objectKey === objectKey), `missing validation metadata for ${objectKey}`);
   }
 });
