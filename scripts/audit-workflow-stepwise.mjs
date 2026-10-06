@@ -91,7 +91,8 @@ function countTopLevelActions(objectSource) {
   if (markerAt < 0) return 0;
   const arrayAt = objectSource.indexOf("[", markerAt);
   if (arrayAt < 0) return 0;
-  let objectDepth = 0, bracketDepth = 1, inString = null, escaped = false, count = 0;
+  let braceDepth = 0, bracketDepth = 1, parenDepth = 0;
+  let inString = null, escaped = false, hasElement = false, count = 0;
   for (let i = arrayAt + 1; i < objectSource.length; i += 1) {
     const ch = objectSource[i];
     if (inString) {
@@ -100,15 +101,39 @@ function countTopLevelActions(objectSource) {
       if (ch === inString) inString = null;
       continue;
     }
-    if (ch === "'" || ch === '"' || ch === "`") { inString = ch; continue; }
-    if (ch === "[") bracketDepth += 1;
-    else if (ch === "]") {
+    if (ch === "'" || ch === '"' || ch === "`") {
+      if (bracketDepth === 1 && braceDepth === 0 && parenDepth === 0) hasElement = true;
+      inString = ch;
+      continue;
+    }
+    if (ch === "{") {
+      if (bracketDepth === 1 && braceDepth === 0 && parenDepth === 0) hasElement = true;
+      braceDepth += 1;
+      continue;
+    }
+    if (ch === "}") { braceDepth -= 1; continue; }
+    if (ch === "(") {
+      if (bracketDepth === 1 && braceDepth === 0 && parenDepth === 0) hasElement = true;
+      parenDepth += 1;
+      continue;
+    }
+    if (ch === ")") { parenDepth -= 1; continue; }
+    if (ch === "[") { bracketDepth += 1; continue; }
+    if (ch === "]") {
       bracketDepth -= 1;
-      if (bracketDepth === 0) break;
-    } else if (ch === "{") {
-      if (objectDepth === 0 && bracketDepth === 1) count += 1;
-      objectDepth += 1;
-    } else if (ch === "}") objectDepth -= 1;
+      if (bracketDepth === 0) {
+        if (hasElement) count += 1;
+        break;
+      }
+      continue;
+    }
+    if (bracketDepth === 1 && braceDepth === 0 && parenDepth === 0) {
+      if (ch === ",") {
+        if (hasElement) { count += 1; hasElement = false; }
+      } else if (!/\s/.test(ch)) {
+        hasElement = true;
+      }
+    }
   }
   return count;
 }
