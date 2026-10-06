@@ -277,6 +277,7 @@ const md = [
 fs.writeFileSync(path.join(OUT, "workflow-coverage-audit.md"), md + "\n");
 
 console.log(JSON.stringify(report.summary, null, 2));
+if (hiddenFunctionReferences.length) console.log("HIDDEN_FUNCTION_REFERENCES=" + JSON.stringify(hiddenFunctionReferences));
 if (directRuntimeCalls.length) console.log("DIRECT_RUNTIME_CALLS=" + JSON.stringify(directRuntimeCalls));
 const bypassByFile = Object.entries(bypassRoutes.reduce((acc, route) => {
   acc[route.file] = (acc[route.file] || 0) + 1;
