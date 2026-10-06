@@ -20,7 +20,6 @@ import {
   duplicateNodeInSections,
   findNode,
   makeNodeId,
-  moveNodeInSections,
   multiContainerColumns,
   nodeLabel,
   normalizeCustomPageTree,
@@ -49,9 +48,7 @@ import {
  *   - builder-only controls (move/duplicate/delete) never reach runtime
  */
 
-const DRAG_MIME_NODE = "application/x-onepos-cpb-node";
 const DRAG_MIME_PALETTE = "application/x-onepos-cpb-palette";
-const DRAG_MIME_SECTION = "application/x-onepos-cpb-section";
 
 const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm";
 const labelClass = "block text-xs font-medium text-slate-500";
@@ -59,6 +56,8 @@ const labelClass = "block text-xs font-medium text-slate-500";
 const BUILDER_CSS = `
   .cpb-builder{display:flex;flex-direction:column;gap:10px;min-width:0;color:#17212b}
   .cpb-toolbar{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;padding:0 2px}
+  .cpb-back-button{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border:1px solid #d9dde2;border-radius:999px;background:#fff;color:#3f4a54;box-shadow:0 1px 2px rgba(15,23,42,.04);cursor:pointer}
+  .cpb-back-button:hover{background:#f5f7f7;border-color:#bcc6c8;color:#176f6a}
   .cpb-shell{
     display:grid;
     grid-template-columns:minmax(230px,260px) minmax(420px,1fr) minmax(280px,320px);
@@ -101,8 +100,15 @@ const BUILDER_CSS = `
   .cpb-canvas{
     min-width:0;min-height:0;height:100%;overflow:auto;
     border:1px solid #e2e5e9;border-radius:12px;background:#f7f8f9;padding:12px;
-    overscroll-behavior:contain;
+    overscroll-behavior:contain;cursor:grab;user-select:none;
   }
+  .cpb-canvas.is-panning{cursor:grabbing}
+  .cpb-canvas input,.cpb-canvas select,.cpb-canvas textarea,.cpb-canvas button,.cpb-canvas a{user-select:auto}
+  .cpb-node{position:relative;min-width:0;cursor:default}
+  .cpb-node-actions{position:absolute;top:-14px;right:8px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
+  .cpb-node-actions button{width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#53606a;cursor:pointer}
+  .cpb-node-actions button:hover{background:#f0f4f3;color:#176f6a}
+  .cpb-node-actions button.is-danger:hover{background:#fff1f2;color:#dc2626}
   .cpb-tree{min-height:100%;padding:2px}
   .cpb-canvas .onepos-card{border-color:#dfe3e7!important;box-shadow:none!important;background:#fff!important}
   .cpb-empty{display:grid;place-items:center;min-height:110px;border:1px dashed #cfd5da;border-radius:10px;background:#fbfcfc;color:#76808a;text-align:center;font-size:12px}
@@ -223,6 +229,9 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const skipHistoryRef = useRef(false);
+  const canvasViewportRef = useRef(null);
+  const panRef = useRef(null);
+  const [canvasPanning, setCanvasPanning] = useState(false);
 
   useEffect(() => {
     apiRequest("/api/platform/apps").then((response) => setApps(response.data || [])).catch((error) => onError?.(error.message));
@@ -438,19 +447,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
       setSelectedNodeId(node.id); setSelectedSectionId(null);
       return;
     }
-    if (payload.kind === "section") {
-      const fromIndex = draft.sections.findIndex((item) => item.id === payload.sectionId);
-      if (fromIndex >= 0 && index !== null) moveSection(fromIndex, fromIndex < index ? index - 1 : index);
-      return;
-    }
-    if (payload.kind === "node") {
-      /* Cross-parent move validated against the destination parent. */
-      const found = findNode(draft.sections, payload.nodeId);
-      if (!found) return;
-      if (!canDropNode({ parentComponentKey: null, droppedComponentKey: found.node.componentKey })) return;
-      applyDraft((current) => ({ ...current, sections: moveNodeInSections(current.sections, { nodeId: payload.nodeId, targetParentKey: "SECTION", targetIndex: index, targetSectionId: sectionId }) }));
-      setSelectedNodeId(payload.nodeId); setSelectedSectionId(null);
-    }
+    return;
   };
 
   const dropIntoNode = (parentNodeId, payload, index = null) => {
@@ -467,13 +464,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
       setSelectedNodeId(node.id);
       return;
     }
-    if (payload.kind === "node") {
-      const moving = findNode(draft.sections, payload.nodeId);
-      if (!moving || payload.nodeId === parentNodeId) return;
-      if (!canDropNode({ parentComponentKey: parentKey, droppedComponentKey: moving.node.componentKey })) return;
-      applyDraft((current) => ({ ...current, sections: moveNodeInSections(current.sections, { nodeId: payload.nodeId, targetParentKey: parentNodeId, targetIndex: index, targetSectionId: null }) }));
-      setSelectedNodeId(payload.nodeId);
-    }
+    return;
   };
 
   /* The customPageTree helpers return a SECTIONS ARRAY, so the draft object
@@ -499,6 +490,41 @@ const updateNode = (nodeId, changes) => {
   const duplicateSelectedNode = () => {
     if (!selectedNodeId) return;
     applyDraft((current) => ({ ...current, sections: duplicateNodeInSections(current.sections, selectedNodeId) }));
+  };
+
+  useEffect(() => {
+    const handleDeleteKey = (event) => {
+      if (!selectedNodeId || preview) return;
+      const tag = String(event.target?.tagName || "").toLowerCase();
+      if (["input", "textarea", "select"].includes(tag) || event.target?.isContentEditable) return;
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      event.preventDefault();
+      removeSelectedNode();
+    };
+    window.addEventListener("keydown", handleDeleteKey);
+    return () => window.removeEventListener("keydown", handleDeleteKey);
+  }, [selectedNodeId, preview]);
+
+  const beginCanvasPan = (event) => {
+    if (preview || event.button !== 0 || event.target !== event.currentTarget) return;
+    const viewport = canvasViewportRef.current;
+    if (!viewport) return;
+    panRef.current = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+    setCanvasPanning(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const moveCanvasPan = (event) => {
+    const viewport = canvasViewportRef.current;
+    const pan = panRef.current;
+    if (!viewport || !pan) return;
+    viewport.scrollLeft = pan.left - (event.clientX - pan.x);
+    viewport.scrollTop = pan.top - (event.clientY - pan.y);
+  };
+  const endCanvasPan = (event) => {
+    if (!panRef.current) return;
+    panRef.current = null;
+    setCanvasPanning(false);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
   /* ------------------------------- save ---------------------------------- */
@@ -659,10 +685,7 @@ const updateNode = (nodeId, changes) => {
     return (
       <div
         key={node.id}
-        className={`${preview ? "" : "cpb-node-selected"} ${selectedNodeId === node.id && !preview ? "cpb-node-selected" : ""}`}
-        style={{ minWidth: 0, position: "relative" }}
-        draggable={!preview}
-        onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.setData(DRAG_MIME_NODE, JSON.stringify({ kind: "node", nodeId: node.id })); }}
+        className={`cpb-node ${selectedNodeId === node.id && !preview ? "cpb-node-selected" : ""}`}
         onDragOver={(event) => { if (!preview) { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.add("cpb-dropzone"); } }}
         onDragLeave={(event) => event.currentTarget.classList.remove("cpb-dropzone")}
         onDrop={(event) => {
@@ -670,16 +693,11 @@ const updateNode = (nodeId, changes) => {
           event.preventDefault(); event.stopPropagation();
           event.currentTarget.classList.remove("cpb-dropzone");
           const paletteRaw = event.dataTransfer.getData(DRAG_MIME_PALETTE);
-          const nodeRaw = event.dataTransfer.getData(DRAG_MIME_NODE);
           if (paletteRaw) {
             const payload = JSON.parse(paletteRaw);
             if (acceptsChildren) dropIntoNode(node.id, payload);
             else if (parentNodeId) dropIntoNode(parentNodeId, payload, index);
             else dropIntoSection(node.sectionId, payload, index);
-          } else if (nodeRaw) {
-            const payload = JSON.parse(nodeRaw);
-            if (acceptsChildren) dropIntoNode(node.id, payload);
-            else if (parentNodeId) dropIntoNode(parentNodeId, payload, index);
           }
         }}
         onClick={(event) => {
@@ -689,9 +707,15 @@ const updateNode = (nodeId, changes) => {
         }}
       >
         {!preview && selectedNodeId === node.id ? (
-          <span className="cpb-chip" style={{ position: "absolute", top: -10, left: 6, zIndex: 2, background: "var(--primary-color, #176f6a)", color: "#fff" }}>
-            <GripVertical size={10} /> {nodeLabel(node)}
-          </span>
+          <>
+            <span className="cpb-chip" style={{ position: "absolute", top: -10, left: 6, zIndex: 7, background: "#147d70", color: "#fff" }}>
+              {nodeLabel(node)}
+            </span>
+            <span className="cpb-node-actions">
+              <button type="button" title="Duplicate component" aria-label="Duplicate component" onClick={(event) => { event.stopPropagation(); duplicateSelectedNode(); }}><Copy size={13}/></button>
+              <button type="button" className="is-danger" title="Delete component" aria-label="Delete component" onClick={(event) => { event.stopPropagation(); removeSelectedNode(); }}><Trash2 size={13}/></button>
+            </span>
+          </>
         ) : null}
         <CustomPageRenderer
           definition={{ sections: [{ id: node.id, width: "full", visible: true, children: [node] }] }}
@@ -705,9 +729,7 @@ const updateNode = (nodeId, changes) => {
             onDrop={(event) => {
               event.preventDefault(); event.stopPropagation();
               const paletteRaw = event.dataTransfer.getData(DRAG_MIME_PALETTE);
-              const nodeRaw = event.dataTransfer.getData(DRAG_MIME_NODE);
               if (paletteRaw) dropIntoNode(node.id, JSON.parse(paletteRaw));
-              else if (nodeRaw) dropIntoNode(node.id, JSON.parse(nodeRaw));
             }}
           >
             Drop components inside {nodeLabel(node)}
@@ -729,8 +751,7 @@ const updateNode = (nodeId, changes) => {
         key={section.id}
         className={`onepos-card p-4 cpb-section ${!preview && selectedSectionId === section.id ? "cpb-section-selected" : ""}`}
         style={{ flexBasis: widthMeta.basis, width: section.width === "full" ? "100%" : widthMeta.basis, minWidth: 0, position: "relative" }}
-        draggable={!preview}
-        onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.setData(DRAG_MIME_SECTION, JSON.stringify({ kind: "section", sectionId: section.id, index })); }}
+
         onDragOver={(event) => { if (!preview) { event.preventDefault(); event.currentTarget.classList.add("cpb-dropzone"); } }}
         onDragLeave={(event) => event.currentTarget.classList.remove("cpb-dropzone")}
         onDrop={(event) => {
@@ -738,18 +759,7 @@ const updateNode = (nodeId, changes) => {
           event.preventDefault(); event.stopPropagation();
           event.currentTarget.classList.remove("cpb-dropzone");
           const paletteRaw = event.dataTransfer.getData(DRAG_MIME_PALETTE);
-          const nodeRaw = event.dataTransfer.getData(DRAG_MIME_NODE);
-          const sectionRaw = event.dataTransfer.getData(DRAG_MIME_SECTION);
-          if (sectionRaw) {
-            const payload = JSON.parse(sectionRaw);
-            if (payload.sectionId !== section.id) {
-              const fromIndex = draft.sections.findIndex((item) => item.id === payload.sectionId);
-              moveSection(fromIndex, fromIndex < index ? index : index);
-            }
-            return;
-          }
-          const payload = paletteRaw ? JSON.parse(paletteRaw) : nodeRaw ? JSON.parse(nodeRaw) : null;
-          if (payload) dropIntoSection(section.id, payload);
+          if (paletteRaw) dropIntoSection(section.id, JSON.parse(paletteRaw));
         }}
         onClick={(event) => { if (preview) return; event.stopPropagation(); setSelectedSectionId(section.id); setSelectedNodeId(null); }}
       >
@@ -771,14 +781,7 @@ const updateNode = (nodeId, changes) => {
           onDrop={(event) => {
             event.preventDefault(); event.stopPropagation();
             const paletteRaw = event.dataTransfer.getData(DRAG_MIME_PALETTE);
-            const nodeRaw = event.dataTransfer.getData(DRAG_MIME_NODE);
-            const sectionRaw = event.dataTransfer.getData(DRAG_MIME_SECTION);
-            if (sectionRaw) return; /* handled by the section wrapper */
-            const payload = paletteRaw ? JSON.parse(paletteRaw) : nodeRaw ? JSON.parse(nodeRaw) : null;
-            if (payload) {
-              const targetIndex = payload.kind === "node" ? null : null;
-              dropIntoSection(section.id, payload, targetIndex);
-            }
+            if (paletteRaw) dropIntoSection(section.id, JSON.parse(paletteRaw));
           }}
         >
           {section.children.map((node, childIndex) => renderNode({ ...node, sectionId: section.id }, null, childIndex, null))}
@@ -999,7 +1002,7 @@ const updateNode = (nodeId, changes) => {
 
       {/* Toolbar — page name, device modes, preview, undo/redo, save. */}
       <div className="cpb-toolbar">
-        {onBack ? <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={onBack}><ArrowLeft size={13}/> Back</button> : null}
+        {onBack ? <button type="button" className="cpb-back-button" onClick={onBack} aria-label="Back to Settings" title="Back to Settings"><ArrowLeft size={17}/></button> : null}
         {context === "developer" ? <span className="cpb-chip">Developer Page Builder</span> : null}
         {!lockApp ? (
           <select className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" value={appId} onChange={(event) => { setAppId(event.target.value); setPageId(""); setPage(null); }} aria-label="App">
@@ -1110,8 +1113,13 @@ const updateNode = (nodeId, changes) => {
 
           {/* LIVE CANVAS — shared renderer with drop zones. */}
           <main
-            className="cpb-canvas"
-            onClick={() => { setSelectedNodeId(null); setSelectedSectionId(null); }}
+            ref={canvasViewportRef}
+            className={`cpb-canvas ${canvasPanning ? "is-panning" : ""}`}
+            onPointerDown={beginCanvasPan}
+            onPointerMove={moveCanvasPan}
+            onPointerUp={endCanvasPan}
+            onPointerCancel={endCanvasPan}
+            onClick={(event) => { if (event.target === event.currentTarget) { setSelectedNodeId(null); setSelectedSectionId(null); } }}
             onDragOver={onDragOver}
             onDrop={(event) => {
               event.preventDefault();

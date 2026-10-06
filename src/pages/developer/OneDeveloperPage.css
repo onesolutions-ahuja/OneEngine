@@ -227,3 +227,20 @@
     padding-bottom: var(--onepos-dock-clearance, 74px);
   }
 }
+
+
+/* Builder focus mode: maximise canvas space and restore sidebar automatically when leaving the builder route. */
+.onedeveloper-page.is-builder-focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+.onedeveloper-page.is-builder-focus > .settings-sidebar {
+  display: none;
+}
+.onedeveloper-page.is-builder-focus > .settings-content {
+  grid-column: 1;
+  width: 100%;
+}
+.onedeveloper-page.is-builder-focus > .settings-content > .settings-content-body {
+  padding-left: 12px;
+  padding-right: 12px;
+}

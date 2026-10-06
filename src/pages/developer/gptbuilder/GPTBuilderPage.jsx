@@ -863,7 +863,7 @@ function AutoGroupCard({ group, members, onOpenGroup, onOpenMember, onRemoveMemb
   </div>
 }
 
-function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
+function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved, onBack }) {
   const templateAction = initialRule?.action || flow.templateRule?.action || {}
   const [layout, setLayout] = useState(templateAction.layout?.mode === 'FREE_FORM' ? 'free' : 'auto')
   const [toolboxOpen, setToolboxOpen] = useState(true)
@@ -1875,6 +1875,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
 
   return <section className="gptb-builder" aria-label="GPT Builder workspace">
     <header className="gptb-buttonbar">
+      {onBack ? <button type="button" className="gptb-back-button" onClick={onBack} aria-label="Back to Settings" title="Back to Settings"><ChevronLeft size={18}/></button> : null}
       <div className="gptb-brand"><span className="gptb-brand-icon"><Workflow size={19}/></span><span><strong>Flow Builder</strong><small>{flowName}</small></span></div>
       <div className="gptb-status"><span className="gptb-status-dot"/>{activeStatus ? 'Active' : 'Inactive'} <i>·</i> {lastSavedAt ? (dirty ? 'Unsaved changes' : 'Saved') : 'Never saved'}</div>
       <div ref={toolbarRef} tabIndex="-1" className="gptb-toolbar" role="toolbar" aria-label="Flow Builder controls">
@@ -2337,7 +2338,7 @@ function flowStatusLabel(rule = {}) {
     : 'Draft'
 }
 
-export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen }) {
+export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen, onBack }) {
   const [newOpen, setNewOpen] = useState(false)
   const [flow, setFlow] = useState(null)
   const [initialRule, setInitialRule] = useState(null)
@@ -2445,10 +2446,13 @@ export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen 
 
   return <section className="gptb-root" aria-label="GPT Builder">
     {loadingExisting ? <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1><p>Opening saved flow…</p></main>
-      : flow ? <FlowShell key={initialRule?.id || flow.key} flow={flow} initialRule={initialRule} onWorkflowSaved={(id) => { onWorkflowOpen?.(id); void loadFlows() }} onNew={startNew}/>
+      : flow ? <FlowShell key={initialRule?.id || flow.key} flow={flow} initialRule={initialRule} onWorkflowSaved={(id) => { onWorkflowOpen?.(id); void loadFlows() }} onNew={startNew} onBack={onBack}/>
       : <main className="gptb-flow-list-view">
           <header className="gptb-flow-list-head">
-            <div><h1>Flows</h1><p>Create and manage automation flows.</p></div>
+            <div className="gptb-flow-list-title">
+              {onBack ? <button type="button" className="gptb-back-button" onClick={onBack} aria-label="Back to Settings" title="Back to Settings"><ChevronLeft size={18}/></button> : null}
+              <div><h1>Flows</h1><p>Create and manage automation flows.</p></div>
+            </div>
             <button className="gptb-button is-brand" onClick={startNew}><Plus size={15}/> New Flow</button>
           </header>
           <div className="gptb-flow-list-toolbar">
