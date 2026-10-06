@@ -125,7 +125,7 @@ export function validateDashboardDefinition(input = {}) {
     const modernComponents = new Set(["folder_card","avatar_group","modern_app_card","modern_kpi_card","modern_section_header","modern_data_card","icon_action_tile"]);
     const utilityComponents = new Set(["clock_widget","calendar_widget","weather_widget"]);
     const contentComponents = new Set(["text","image"]);
-    if (!modernComponents.has(type) && !utilityComponents.has(type) && !contentComponents.has(type) && !config.reportId && !config.report) throw new Error(`Component ${index + 1} must reference a report`);
+    if (!modernComponents.has(type) && !utilityComponents.has(type) && !contentComponents.has(type) && !config.reportId) throw new Error(`Component ${index + 1} must reference a saved report`);
     if (config.report) {
       if (!String(config.report.dataSource || "").trim()) throw new Error(`Component ${index + 1} must select a data source`);
       if (!Array.isArray(config.report.fields) || !config.report.fields.length) throw new Error(`Component ${index + 1} must select at least one field`);
@@ -243,15 +243,10 @@ export const DEFAULT_DASHBOARD_DEFINITION = Object.freeze({
 export function mergeDashboardFilters(reportDefinition, dashboardFilters = []) {
   const filters = Array.isArray(reportDefinition?.filters) ? [...reportDefinition.filters] : [];
   for (const filter of dashboardFilters) {
-    if (filter.field === "date") filters.push({ field: "date", operator: filter.operator || filter.value || "this_week" });
-    if (filter.field === "store" && filter.value) {
-      const values = Array.isArray(filter.value) ? filter.value.filter(Boolean) : [filter.value].filter(Boolean);
-      if (values.length) filters.push({
-        field: "store",
-        operator: values.length > 1 || filter.operator === "in" ? "in" : "equals",
-        value: values.length > 1 || filter.operator === "in" ? values : values[0],
-      });
-    }
+    const field = String(filter?.field || "").trim();
+    const operator = String(filter?.operator || "equals").trim();
+    if (!field || filter?.value === undefined || filter?.value === null || filter?.value === "") continue;
+    filters.push({ field, operator, value: filter.value });
   }
   return { ...reportDefinition, filters };
 }
