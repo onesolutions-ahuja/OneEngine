@@ -152,6 +152,7 @@ const IDENTITY_PROTOCOL_MUTATION_ROUTES = new Set([
   "/auth/passkey/login/verify",
   "/auth/provider/:key/callback",
   "/auth/provider/:key/saml/acs",
+  "/whatsapp/webhook",
 ]);
 
 const allMutationVerbRoutes = [];
