@@ -45,7 +45,7 @@ const PACKAGE_CATALOG = [
     key: "inventory",
     name: "Inventory",
     description: "Stock, replenishment and inventory movements.",
-    route: "/app/objects/inventory_movement?appKey=inventory",
+    route: "/app/objects/inventory_ledger?appKey=inventory",
     permissions: ["inventory.view"],
     storeScoped: true,
     category: "Catalogue & Supply",
