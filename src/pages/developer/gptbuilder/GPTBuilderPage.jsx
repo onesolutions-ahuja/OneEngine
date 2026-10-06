@@ -796,7 +796,14 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
                 <option value="DECISION_OUTCOME">Decision Outcome</option>
               </select>
               {type === 'RESOURCE_CONDITION' ? <>
-                <select value={assertion.resource || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, resource: event.target.value } : item))}><option value="">Select resource</option>{resources.filter((resource) => resource?.isCollection !== true).map((resource) => <option key={resource.id || resource.apiName} value={`variables.${resource.apiName}`}>{resource.label || resource.apiName}</option>)}</select>
+                <select value={assertion.resource || ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, resource: event.target.value } : item))}>
+                  <option value="">Select resource</option>
+                  {resources.filter((resource) => resource?.isCollection !== true).map((resource) => {
+                    const apiName = String(resource.apiName || '')
+                    const path = resource.path || (apiName ? 'variables.' + apiName : '')
+                    return <option key={resource.id || resource.apiName || path} value={path}>{resource.label || resource.apiName}{resource.path ? ' · ' + resource.path : ''}</option>
+                  })}
+                </select>
                 <select value={assertion.operator || 'equals'} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, operator: event.target.value } : item))}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="greater_than_or_equal">Greater Than or Equal</option><option value="less_than">Less Than</option><option value="less_than_or_equal">Less Than or Equal</option><option value="is_empty">Is Empty</option><option value="is_not_empty">Is Not Empty</option></select>
                 {!['is_empty','is_not_empty'].includes(assertion.operator) ? <input value={assertion.value ?? ''} onChange={(event) => setAssertions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} placeholder="Expected value"/> : <span/>}
               </> : type === 'RUN_STATUS' ? <>
