@@ -33,7 +33,7 @@ import { resolvePageLayout, resolveAssignedPageLayout } from "../services/platfo
 import { searchPlatformRecords } from "../services/platformSearch.js";
 import { PLATFORM_FIELD_TYPE_SET } from "../services/platformFieldTypes.js";
 import { listRegisteredPlatformActions } from "../services/platformActionRegistry.js";
-import { listPlatformComponents } from "../services/platformComponentRegistry.js";
+import { listPlatformComponents, resolvePlatformComponent } from "../services/platformComponentRegistry.js";
 import { BUTTON_VARIANTS, validateButtonDefinition } from "../services/platformButtonRegistry.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
 import { buildPlatformSharingScope } from "../services/platformSharing.js";
@@ -1426,8 +1426,73 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.get("/platform/component-registry", ...manage, (req, res) => {
-    res.json({ success: true, data: listPlatformComponents() });
+  async function componentReferences(db, component, companyId) {
+    const pages = await db(
+      `SELECT p.id,p.company_id,p.page_key,p.label AS page_label,a.app_key,a.label AS app_label
+         FROM platform_pages p
+         JOIN platform_apps a ON a.id=p.app_id
+        WHERE p.active=true AND p.company_id=$1
+          AND (
+            p.definition::text LIKE '%' || $2 || '%'
+            OR p.definition::text LIKE '%' || $3 || '%'
+            OR COALESCE(p.draft_definition,'{}'::jsonb)::text LIKE '%' || $2 || '%'
+            OR COALESCE(p.draft_definition,'{}'::jsonb)::text LIKE '%' || $3 || '%'
+          )
+        ORDER BY a.label,p.label`,
+      [companyId, component.id, component.key]
+    );
+    return pages.rows.map((page) => ({
+      type: "page", companyId: page.company_id,
+      appKey: page.app_key, appLabel: page.app_label,
+      pageId: page.id, pageKey: page.page_key, pageLabel: page.page_label,
+    }));
+  }
+
+  router.get("/platform/component-registry", ...manage, async (req, res) => {
+    const availability = await db(
+      "SELECT component_id,status FROM platform_component_availability WHERE company_id=$1",
+      [req.user.companyId]
+    );
+    const statusById = new Map(availability.rows.map((row) => [String(row.component_id), row.status]));
+    const data = listPlatformComponents()
+      .map((component) => ({ ...component, tenantStatus: statusById.get(component.id) || "ACTIVE" }))
+      .filter((component) => component.tenantStatus !== "REMOVED");
+    res.json({ success: true, data });
+  });
+
+  router.get("/platform/component-registry/:reference/usages", ...manage, async (req, res) => {
+    const component = resolvePlatformComponent(req.params.reference);
+    if (!component) return res.status(404).json({ success: false, message: "Component not found" });
+    const references = await componentReferences(db, component, req.user.companyId);
+    res.json({ success: true, data: { component, count: references.length, references } });
+  });
+
+  router.put("/platform/component-registry/:reference/availability", ...manage, async (req, res) => {
+    const component = resolvePlatformComponent(req.params.reference);
+    if (!component) return res.status(404).json({ success: false, message: "Component not found" });
+    const status = String(req.body?.status || "").toUpperCase();
+    if (!["ACTIVE","DEPRECATED","REMOVED"].includes(status)) {
+      return res.status(400).json({ success: false, message: "status must be ACTIVE, DEPRECATED or REMOVED" });
+    }
+    if (status === "REMOVED") {
+      const references = await componentReferences(db, component, req.user.companyId);
+      if (references.length) {
+        return res.status(409).json({
+          success: false, code: "COMPONENT_IN_USE",
+          message: "Component cannot be removed while it is used by tenant pages.",
+          data: { component, count: references.length, references },
+        });
+      }
+    }
+    const result = await db(
+      `INSERT INTO platform_component_availability (company_id,component_id,status,updated_by)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (company_id,component_id) DO UPDATE SET
+         status=EXCLUDED.status,updated_by=EXCLUDED.updated_by,updated_at=NOW()
+       RETURNING component_id,status,updated_at`,
+      [req.user.companyId, component.id, status, req.user.id || null]
+    );
+    res.json({ success: true, data: { ...component, tenantStatus: result.rows[0].status, updatedAt: result.rows[0].updated_at } });
   });
 
   router.get("/platform/action-registry", ...manage, async (req, res) => {
