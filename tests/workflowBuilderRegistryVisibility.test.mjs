@@ -62,7 +62,8 @@ test("staff lifecycle orchestration stays in editable Flow metadata", () => {
   const packages = readFileSync(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(packages, /apiName:\s*"STAFF_SEND_PASSWORD_RESET"/);
   assert.match(packages, /apiName:\s*"STAFF_SEND_INVITATION"/);
-  assert.match(packages, /functionKey:\s*"account\.lifecycle\.token\.issue"/);
+  assert.match(packages, /key:\s*"ACCOUNT_TOKEN_ISSUE"/);
+  assert.equal(packages.includes('functionKey:"account.lifecycle.token.issue"'), false);
   assert.match(packages, /handlerKey:\s*"RUN_SUBFLOW"/);
 });
 
