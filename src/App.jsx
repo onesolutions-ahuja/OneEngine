@@ -2323,11 +2323,6 @@ function Desktop({ onLock, onSignOut }) {
           <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
-        ) : activeApp ===  ? (
-          <TillPage
-            onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
-            onNavigate={openItem}
-          />
         ) : activeApp === 'sales' ? (
           <SalesPage initialObjectKey="sale" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
@@ -2369,10 +2364,6 @@ function Desktop({ onLock, onSignOut }) {
           <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
           <WorkspacePage initialObjectKey="online_order" appKey="own-delivery" />
-        ) : activeApp === 'kiosk-display' ? (
-          <OneKioskDisplayPage />
-        ) : activeApp === 'kiosk-devices' ? (
-          <WorkspacePage initialObjectKey="kiosk_device" appKey="one_kiosk" />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
