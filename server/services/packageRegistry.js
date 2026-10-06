@@ -2385,7 +2385,7 @@ export function packageDefinition(entry) {
         relationships: [
           { parentObjectKey:"till_session",childObjectKey:"cash_movement",relationshipKey:"cash_movements",relationshipType:"one_to_many",childFieldApiName:"till_session_id" },
           { parentObjectKey:"sale",childObjectKey:"sale_item",relationshipKey:"items",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
-          { parentObjectKey:"sale_item",childObjectKey:"sale",relationshipKey:"sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
+          { parentObjectKey:"sale",childObjectKey:"sale_item",relationshipKey:"item_sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
           { parentObjectKey:"sale",childObjectKey:"payment",relationshipKey:"payments",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
           { parentObjectKey:"sale",childObjectKey:"refund",relationshipKey:"refunds",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
           { parentObjectKey:"sale",childObjectKey:"stock_return",relationshipKey:"returns",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
