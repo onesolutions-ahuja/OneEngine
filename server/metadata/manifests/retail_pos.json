@@ -894,6 +894,23 @@
       },
       "fields": [
         {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false,
+          "config": {
+            "settingsHidden": true
+          }
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
           "apiName": "store_id",
           "label": "Store",
           "fieldType": "lookup",
