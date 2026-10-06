@@ -177,7 +177,7 @@ export function createAuthenticatedDatabaseMiddleware({ router, pool }) {
     /*
      * OneEngine Managers use an explicit RBAC-authorised acting-company header.
      * Resolve it ONCE here, before tenant DB routing, so every downstream
-     * company-scoped route (Settings, integrations, packages, WhatsApp, etc.)
+     * company-scoped route (Settings, integrations, packages and platform routes)
      * receives the same req.user.companyId instead of only Platform routes.
      */
     const actingCompanyId = String(req.headers?.["x-acting-company-id"] || "").trim();
@@ -254,13 +254,13 @@ export async function validateTenantSchema(pool) {
   try {
     const result = await pool.query(
       `SELECT to_regclass('public.companies') AS companies,
-              to_regclass('public.products') AS products,
-              to_regclass('public.sales') AS sales,
+              to_regclass('public.platform_modules') AS platform_modules,
+              to_regclass('public.platform_objects') AS platform_objects,
               to_regclass('public.schema_migrations') AS migrations`
     );
     const row = result.rows[0] || {};
-    if (!row.companies && !row.products && !row.sales) return TENANT_SCHEMA_STATES.UNINITIALIZED;
-    if (!row.companies || !row.products || !row.sales || !row.migrations) return TENANT_SCHEMA_STATES.MIGRATION_REQUIRED;
+    if (!row.companies && !row.platform_modules && !row.platform_objects) return TENANT_SCHEMA_STATES.UNINITIALIZED;
+    if (!row.companies || !row.platform_modules || !row.platform_objects || !row.migrations) return TENANT_SCHEMA_STATES.MIGRATION_REQUIRED;
     const migrationResult = await pool.query("SELECT migration_key FROM schema_migrations");
     const appliedMigrations = new Set(migrationResult.rows.map(migration => migration.migration_key));
     if (!CORE_DATABASE_MIGRATION_KEYS.every(key => appliedMigrations.has(key))) return TENANT_SCHEMA_STATES.MIGRATION_REQUIRED;
