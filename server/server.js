@@ -61,7 +61,6 @@ import createShopifyWebhooksRouter from "./routes/shopifyWebhooks.js";
 import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
-import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
 import createCustomerAuthRouter from "./routes/customerAuth.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
@@ -512,7 +511,6 @@ const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
 }).catch((error) => console.error("Workflow trace retention cleanup error:", error?.message || error));
 setTimeout(purgeWorkflowTraceBatch, 60_000).unref?.();
 setInterval(purgeWorkflowTraceBatch, 6 * 60 * 60 * 1000).unref?.();
-const globalProductLookupService = createGlobalProductLookupService();
 
 /*
 |--------------------------------------------------------------------------
@@ -1924,7 +1922,6 @@ app.use("/api", createGlobalProductLookupRouter({
   authorize,
   db,
   writeAudit,
-  lookupService: globalProductLookupService,
   connectorDrivers,
 }));
 
