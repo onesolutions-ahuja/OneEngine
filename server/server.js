@@ -34,25 +34,11 @@ import {
 import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemAction } from "./services/systemWorkflowRuntime.js";
-import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
-import createEanLookupRouter from "./routes/eanLookup.js";
 
-import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
-import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
-import createMobileScannerRouter from "./routes/mobileScanner.js";
-import createReportsRouter from "./routes/reports.js";
-import createSecureInvoiceRouter from "./routes/secureInvoice.js";
-import createSettingsRouter from "./routes/settings.js";
-import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
-import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
-import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
-import createIntegrationsRouter from "./routes/integrations.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
-import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
-import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
@@ -67,18 +53,11 @@ import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enfor
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
-import createPaypalQrRouter from "./routes/paypalQr.js";
-import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
-import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
-import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
-import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
-import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
 import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
 import createPlatformEventsRouter from "./routes/platformEvents.js";
-import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
 import createDebugCodesRouter from "./routes/debugCodes.js";
 import { buildDebugPayload, classifyDebugCode, builtinDebugCode, createDebugReference, normalizeDebugCode, writeDebugEvent } from "./services/debugCodes.js";
@@ -86,10 +65,7 @@ import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
 import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { reconcileCompanyPackageEntitlements } from "./services/packageEntitlements.js";
-import { requireEntitlement } from "./services/licensing.js";
-import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
-import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
 import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // JARVES V2 - licence gate
 import { companyAdministrativeAccess, permissionAllows } from "./services/authorization.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
@@ -218,26 +194,19 @@ app.use("/api", apiLimiter);
  * before the global JSON parser consumes the stream (express.raw sets
  * req.body to a Buffer; express.json then skips the already-parsed body).
  */
-app.use("/api/online/deliveroo/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 
 /*
  * Uber primary webhook is HMAC-signed (X-Uber-Signature) over the RAW body -
  * same raw-parsing mechanism as the Deliveroo webhook above.
  */
-app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/smsgate/webhook", express.raw({ type: "*/*", limit: "64kb" }));
-app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
 
 /* T10D: Self-Checkout mode gate — ahead of EVERY API router so a
  * self-checkout mode token is refused for privileged operations
  * server-side (never merely hidden in the UI). */
-app.use(createSelfCheckoutModeGate());
-app.use(createRestrictedSessionGate());
 app.use(createTrustedRuntimeGate());
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
@@ -449,11 +418,6 @@ app.use("/api", (req, res, next) => {
 
 const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
-connectorDrivers.register(createReferencePaymentDriver());
-connectorDrivers.register(createPaypalQrDriver());
-connectorDrivers.register(createSmsGateDriver());
-connectorDrivers.register(createBrevoDriver());
-connectorDrivers.register(createMailjetDriver());
 app.locals.connectorDrivers = connectorDrivers;
 
 async function testPaymentTerminal(terminal) {
@@ -487,7 +451,6 @@ const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
 }).catch((error) => console.error("Workflow trace retention cleanup error:", error?.message || error));
 setTimeout(purgeWorkflowTraceBatch, 60_000).unref?.();
 setInterval(purgeWorkflowTraceBatch, 6 * 60 * 60 * 1000).unref?.();
-const globalProductLookupService = createGlobalProductLookupService();
 
 /*
 |--------------------------------------------------------------------------
@@ -605,7 +568,7 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
  * db helper and admin-bypass helper - no new permission system, and the tool
  * runner only ever runs SELECTs scoped to the caller's verified company/store.
 */
-const jarvis = createJarvis({ tools: createJarvisTools({ db, canViewCompanyCustomers }) });
+const jarvis = createJarvis();
 const jarvesAccess = createJarvesAccessChecker({ db });
 // Shared, server-only AI service for authenticated Flow actions. No provider
 // credentials are exposed through app.locals; callers only receive ask().
