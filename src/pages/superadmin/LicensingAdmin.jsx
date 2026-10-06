@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { databaseConfigurationPayload } from "../../services/tenantDatabaseForm.js";
 
-const DEFAULT_KEYS = ["pos", "inventory", "purchasing", "customers", "reports", "loyalty", "jarvis"];
-
 export default function LicensingAdmin({ companyId = '', lockCompany = false }) {
   const [licences, setLicences] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -26,7 +24,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   const [companyTiers, setCompanyTiers] = useState([]);
   const [jarvesLicence, setJarvesLicence] = useState({ allowance: 0, enabledUsers: 0, seatsRemaining: 0 });
   const [jarvesAllowanceDraft, setJarvesAllowanceDraft] = useState("0");
-  const [entitlements, setEntitlements] = useState(Object.fromEntries(DEFAULT_KEYS.map((key) => [key, false])));
+  const [entitlements, setEntitlements] = useState({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [databaseCompany, setDatabaseCompany] = useState(companyId || "");
@@ -146,7 +144,10 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
       expiresAt: licence.expires_at ? new Date(licence.expires_at).toISOString().slice(0, 16) : "",
       active: licence.active === true,
     });
-    setEntitlements({ ...Object.fromEntries(DEFAULT_KEYS.map((key) => [key, false])), ...(licence.entitlements || {}) });
+    const declaredKeys = marketplacePackages
+      .map((item) => item.entitlement_key || item.entitlementKey || item.manifest?.entitlementKey || item.manifest?.entitlement_key)
+      .filter(Boolean);
+    setEntitlements({ ...Object.fromEntries(declaredKeys.map((key) => [key, false])), ...(licence.entitlements || {}) });
     setLicencePackages((licence.packages || []).map((item) => ({ ...item })));
   };
 
