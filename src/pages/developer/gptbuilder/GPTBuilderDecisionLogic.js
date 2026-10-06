@@ -20,7 +20,7 @@ export function decisionResourceType(resource) {
   if (resource?.isCollection) return 'collection'
   if (!resource?.dataType) return 'unknown'
   const type = String(resource.dataType).toLowerCase()
-  if (['integer','decimal'].includes(type)) return 'number'
+  if (['integer','decimal','currency','percent'].includes(type)) return 'number'
   if (['string','textarea','email','phone','url'].includes(type)) return 'text'
   return type
 }
