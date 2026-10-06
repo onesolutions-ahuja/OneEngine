@@ -7782,14 +7782,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         id: null,
         company_id: req.user.companyId || null,
         store_id: req.user.storeId || context.storeId || context.store_id || null,
-        terminal_id: context.terminalId || context.terminal_id || null,
-        customer_id: context.customerId || context.customer_id || null,
-        subtotal: Number(context.subtotal || 0),
-        tax: Number(context.tax || context.vat || 0),
-        discount: Number(context.discount || 0),
-        total: Number(context.total || 0),
-        basket: Array.isArray(context.basket) ? context.basket.slice(0, 500) : [],
-        source: context.source || "METADATA_RUNTIME",
       };
 
       if (button.target_type === "workflow") {
