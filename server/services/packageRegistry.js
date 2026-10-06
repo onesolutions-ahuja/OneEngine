@@ -31,7 +31,6 @@ export function packageDefinition(entry) {
   };
   const packageNames = {
     retail_pos: "OneSales",
-    one_kiosk: "OneKiosk",
     products: "Product Core",
     inventory: "OneInventory",
     batch_expiry: "OneBatchExpiry",
@@ -81,7 +80,6 @@ export function packageDefinition(entry) {
   };
   const packageDescriptions = {
     retail_pos: "Sales, payments, returns and order processing.",
-    one_kiosk: "Customer self-service ordering, payment handoff and collection-number workflow across food, retail and service environments.",
     products: "Technical foundation for the canonical Product and Category objects.",
     inventory: "Stock, replenishment and inventory movements.",
     batch_expiry: "Batch stock, expiry tracking and FEFO inventory controls.",
@@ -132,7 +130,7 @@ export function packageDefinition(entry) {
     barcode_scanner_connector_template: "Hidden barcode-scanner connector package template.",
   };
   const entitlementKeys = {
-    retail_pos: "pos", one_kiosk: "one_kiosk", products: "pos", inventory: "inventory", batch_expiry: "batch_expiry",
+    retail_pos: "pos", products: "pos", inventory: "inventory", batch_expiry: "batch_expiry",
     hospitality: "hospitality", kds: "kds", customer_credit: "credit_control", suppliers: "purchasing", customers: "customers", staff: "staff",
     reports: "reports", online_orders: "online_orders", integrations: "integrations",
     email_connector: "communications.email", sms_connector: "communications.sms",
@@ -150,7 +148,6 @@ export function packageDefinition(entry) {
   };
   const dependencies = {
     retail_pos: ["products"],
-    one_kiosk: ["products", "online_orders", "retail_pos"],
     inventory: ["products"],
     batch_expiry: ["inventory", "products"],
     client_web_shop: ["products", "inventory", "online_orders", "retail_pos", "customers"],
@@ -340,176 +337,6 @@ export function packageDefinition(entry) {
         }];
       })(),
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
-      ...(entry.key === "one_kiosk" ? {
-        workflows: [
-          {
-            objectKey: "product",
-            name: "OneKiosk - Case 1 Restaurant",
-            triggerKey: "kiosk_experience",
-            conditions: [],
-            action: {
-              type: "workflow",
-              scope: "one_kiosk",
-              flowType: "KIOSK_EXPERIENCE",
-              templateKey: "one_kiosk_case_1_restaurant",
-              defaultForNewDevices: true,
-              ui: {
-                schemaVersion: 1,
-                profile: "RESTAURANT",
-                startScreen: "catalogue",
-                theme: { density: "touch", productCard: "image", accentRole: "primary" },
-                languages: [{ key: "en", label: "English" }, { key: "es", label: "Español" }, { key: "fr", label: "Français" }],
-                translations: {
-                  es: {
-                    "screen.catalogue.title": "¿Qué te gustaría?",
-                    "screen.upsell.title": "Hazlo a tu gusto",
-                    "screen.fulfilment.title": "¿Cómo lo quieres?",
-                    "fulfilment.EAT_IN": "Comer aquí",
-                    "fulfilment.TAKEAWAY": "Para llevar",
-                    "fulfilment.COLLECT": "Recoger",
-                    "screen.loyalty.title": "Recompensas",
-                    "screen.payment.title": "Pago",
-                    "screen.confirmation.title": "Gracias",
-                    "confirmation.collectionLabel": "Tu número de recogida",
-                    "confirmation.doneLabel": "Nuevo pedido"
-                  },
-                  fr: {
-                    "screen.catalogue.title": "Que souhaitez-vous ?",
-                    "screen.upsell.title": "Personnalisez votre commande",
-                    "screen.fulfilment.title": "Comment souhaitez-vous votre commande ?",
-                    "fulfilment.EAT_IN": "Sur place",
-                    "fulfilment.TAKEAWAY": "À emporter",
-                    "fulfilment.COLLECT": "Retrait",
-                    "screen.loyalty.title": "Récompenses",
-                    "screen.payment.title": "Paiement",
-                    "screen.confirmation.title": "Merci",
-                    "confirmation.collectionLabel": "Votre numéro de retrait",
-                    "confirmation.doneLabel": "Nouvelle commande"
-                  }
-                },
-                orderDisplay: {
-                  title: "Order collection",
-                  activeLabel: "Preparing",
-                  readyLabel: "Ready to collect",
-                  activeStatuses: ["PREPARING","ACCEPTED"],
-                  readyStatuses: ["READY","READY_FOR_PICKUP"],
-                  activeEmpty: "No orders preparing",
-                  readyEmpty: "No orders ready"
-                },
-                screens: [
-                  { key: "catalogue", type: "CATALOGUE", title: "What would you like?", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
-                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, modifiers: true, nutrition: true, allergens: true, next: "upsell" },
-                  { key: "upsell", type: "RECOMMENDATIONS", source: "CROSS_SELL", title: "Make it yours", optional: true, next: "fulfilment" },
-                  { key: "fulfilment", type: "FULFILMENT", title: "How would you like it?", defaultOption: "EAT_IN", next: "service_details", options: [
-                    { key: "EAT_IN", label: "Eat in", canonicalType: "SELF_PICKUP" },
-                    { key: "TAKEAWAY", label: "Takeaway", canonicalType: "SELF_PICKUP" },
-                    { key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP" }
-                  ] },
-                  { key: "service_details", type: "FORM", title: "Order details", optional: true, next: "basket", showWhen: { path: "fulfilmentType", operator: "equals", value: "EAT_IN" }, fields: [
-                    { key: "tableNumber", label: "Table number", type: "text", required: false, placeholder: "Optional table number" }
-                  ] },
-                  { key: "basket", type: "BASKET", editable: true, promotions: true, next: "loyalty" },
-                  { key: "loyalty", type: "LOYALTY", title: "Rewards", subtitle: "Scan or enter your details to collect rewards, or continue as a guest.", optional: true, next: "payment" },
-                  { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & collect", next: "confirmation" },
-                  { key: "confirmation", type: "CONFIRMATION", title: "Thank you", subtitle: "Your order has been sent for preparation.", collectionNumber: true, collectionLabel: "Your collection number", helpText: "Keep this number and go to the collection counter. Your number will be shown when your order is ready.", doneLabel: "Start a new order", receipt: ["PRINT","QR"], resetAfterSeconds: 30 }
-                ],
-                features: {
-                  variants: false, modifiers: true, promotions: true, upsell: true, loyalty: true,
-                  stockPromise: false, compare: false, specifications: false, warranty: false,
-                  accessibility: true, language: true, audio: true, ageVerification: true, assistance: true, idleReset: true
-                }
-              },
-              actions: []
-            },
-            active: true,
-            lifecycleStatus: "ACTIVE"
-          },
-          {
-            objectKey: "product",
-            name: "OneKiosk - Case 2 Retail / Electronics",
-            triggerKey: "kiosk_experience",
-            conditions: [],
-            action: {
-              type: "workflow",
-              scope: "one_kiosk",
-              flowType: "KIOSK_EXPERIENCE",
-              templateKey: "one_kiosk_case_2_retail",
-              defaultForNewDevices: false,
-              ui: {
-                schemaVersion: 1,
-                profile: "RETAIL",
-                startScreen: "catalogue",
-                theme: { density: "touch", productCard: "image_specs", accentRole: "primary" },
-                languages: [{ key: "en", label: "English" }, { key: "es", label: "Español" }, { key: "fr", label: "Français" }],
-                translations: {
-                  es: {
-                    "screen.catalogue.title": "Encuentra tu producto",
-                    "screen.extras.title": "Accesorios y protección",
-                    "screen.fulfilment.title": "Elige la entrega",
-                    "fulfilment.COLLECT": "Recoger aquí",
-                    "fulfilment.OTHER_STORE": "Recoger en otra tienda",
-                    "fulfilment.DELIVERY": "Entrega a domicilio",
-                    "screen.loyalty.title": "Tus datos",
-                    "screen.payment.title": "Pago",
-                    "screen.confirmation.title": "Pedido confirmado",
-                    "confirmation.collectionLabel": "Número de pedido / recogida",
-                    "confirmation.doneLabel": "Hacer otro pedido"
-                  },
-                  fr: {
-                    "screen.catalogue.title": "Trouvez votre produit",
-                    "screen.extras.title": "Accessoires et protection",
-                    "screen.fulfilment.title": "Choisissez la livraison",
-                    "fulfilment.COLLECT": "Retrait ici",
-                    "fulfilment.OTHER_STORE": "Retrait dans un autre magasin",
-                    "fulfilment.DELIVERY": "Livraison à domicile",
-                    "screen.loyalty.title": "Vos coordonnées",
-                    "screen.payment.title": "Paiement",
-                    "screen.confirmation.title": "Commande confirmée",
-                    "confirmation.collectionLabel": "Numéro de commande / retrait",
-                    "confirmation.doneLabel": "Nouvelle commande"
-                  }
-                },
-                orderDisplay: {
-                  title: "Collection status",
-                  activeLabel: "Processing",
-                  readyLabel: "Ready for collection",
-                  activeStatuses: ["PREPARING","ACCEPTED"],
-                  readyStatuses: ["READY","READY_FOR_PICKUP"],
-                  activeEmpty: "No orders being processed",
-                  readyEmpty: "No orders ready for collection"
-                },
-                screens: [
-                  { key: "catalogue", type: "CATALOGUE", title: "Find your product", search: true, categories: true, productAction: "OPEN_DETAIL", next: "product" },
-                  { key: "product", type: "PRODUCT_DETAIL", imageGallery: true, description: true, variants: true, specifications: true, stockPromise: true, compare: true, warranty: true, next: "extras" },
-                  { key: "extras", type: "RECOMMENDATIONS", source: "ACCESSORY", title: "Accessories & protection", warranty: true, optional: true, next: "fulfilment" },
-                  { key: "fulfilment", type: "FULFILMENT", title: "Choose fulfilment", defaultOption: "COLLECT", next: "service_details", options: [
-                    { key: "COLLECT", label: "Collect here", canonicalType: "SELF_PICKUP", requires: [] },
-                    { key: "OTHER_STORE", label: "Collect another store", canonicalType: "SELF_PICKUP", requires: ["STORE"] },
-                    { key: "DELIVERY", label: "Home delivery", canonicalType: "DELIVERY", requires: ["ADDRESS","CONTACT"] }
-                  ], stockPromise: true },
-                  { key: "service_details", type: "FORM", title: "Extra order details", optional: true, next: "basket", fields: [
-                    { key: "preferredSlot", label: "Preferred collection / delivery slot", type: "select", required: false, options: ["As soon as possible","Morning","Afternoon","Evening"] },
-                    { key: "installationRequired", label: "Installation service", type: "select", required: false, options: ["No installation","Installation required"] },
-                    { key: "notes", label: "Order notes", type: "textarea", required: false, placeholder: "Optional instructions" }
-                  ] },
-                  { key: "basket", type: "BASKET", editable: true, promotions: true, next: "loyalty" },
-                  { key: "loyalty", type: "LOYALTY", title: "Your details", subtitle: "Enter your phone number or email for rewards and order updates, or continue as a guest.", optional: true, next: "payment" },
-                  { key: "payment", type: "PAYMENT", methods: ["CARD"], actionLabel: "Pay & order", next: "confirmation" },
-                  { key: "confirmation", type: "CONFIRMATION", title: "Order confirmed", subtitle: "Your order has been placed.", collectionNumber: true, collectionLabel: "Order / collection number", helpText: "Keep this reference. We will show when your order is ready for collection.", doneLabel: "Start another order", receipt: ["PRINT","QR","EMAIL"], collectionVerification: true, resetAfterSeconds: 30 }
-                ],
-                features: {
-                  variants: true, modifiers: false, promotions: true, upsell: true, loyalty: true,
-                  stockPromise: true, compare: true, specifications: true, warranty: true,
-                  accessibility: true, language: true, audio: true, ageVerification: true, assistance: true, idleReset: true
-                }
-              },
-              actions: []
-            },
-            active: true,
-            lifecycleStatus: "ACTIVE"
-          }
-        ]
-      } : {}),
       ...(entry.key === "communication_core" ? {
         packageKey: "communication_core",
         packageType: "FOUNDATION",
