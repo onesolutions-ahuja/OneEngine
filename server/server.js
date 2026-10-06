@@ -100,12 +100,6 @@ import { companyAdministrativeAccess, permissionAllows } from "./services/author
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
 import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname } from "./services/tenantResolver.js";
 import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool } from "./services/tenantDatabase.js";
-/* Inventory primitives live in services/inventory.js (shared with every
- * stock writer: POS sales, purchases, returns, adjustments). */
-import {
-  createInventoryMovement,
-  inventoryMovementTypes,
-} from "./services/inventory.js";
 
 const { Pool } = pg;
 
@@ -375,9 +369,6 @@ app.use((req, res, next) => {
   req.tenantPool = pool;
   next();
 });
-/* T10P: Scan & Go checkout deducts stock through the SAME inventory ledger
- * helper the till and online orders use (no second inventory mechanism). */
-app.locals.createInventoryMovement = createInventoryMovement;
 
 /*
  * A backend error on an idle pool connection (network blip, Postgres restart,
@@ -2017,8 +2008,7 @@ app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool,
 |--------------------------------------------------------------------------
 |
 | Product and category records are served by the generic platform object runtime.
-| receiving the existing authenticate, authorize, db, pool and
-| createInventoryMovement functions so behaviour is unchanged.
+| Product and category business writes are owned by metadata Objects and Flows.
 |
 | Route ordering preserved:
 |   GET  /api/categories            (product.view)
@@ -3636,7 +3626,6 @@ async function startServer() {
                   workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   trigger: payload.eventType || workflow.trigger_key,
                   writeAudit,
-                  createInventoryMovement,
                 });
                 const waiting = workflowEntriesContainStatus(results, "waiting");
                 if (run?.id) {
@@ -3693,7 +3682,7 @@ async function startServer() {
                 storeId: payload.storeId || null,
                 writeAudit,
                 source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
-                extraContext: { pool, createInventoryMovement },
+                extraContext: { pool },
               });
               const outcome = execution.result;
               if (outcome?.success === false) {
@@ -3738,7 +3727,7 @@ async function startServer() {
                 storeId: payload.storeId || null,
                 writeAudit,
                 source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool, createInventoryMovement },
+                extraContext: { pool },
               });
               const outcome = execution.result;
               if (outcome?.success === false) {
@@ -3759,7 +3748,7 @@ async function startServer() {
               input: { ...payload, _executeFromJob: true },
               writeAudit,
               source: { type: "job", method: "JOB", path: job.kind, capability: actionKey },
-              extraContext: { pool, createInventoryMovement },
+              extraContext: { pool },
             });
             const result = execution.result;
             if (payload._stepRunId) {
