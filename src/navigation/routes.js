@@ -53,6 +53,9 @@ export function readRoute() {
   if (parts[0] === 'customer-display') return { app: 'customer-display', section: null }
   if (parts[0] === 'flow' && parts[1]) return { app: 'flow-runtime', section: null, sessionId: decodeURIComponent(parts[1]) }
   if (parts[0] === 'profile') return { app: 'profile', section: null }
+  if (parts[0] === 'connector-settings' && parts[1]) {
+    return { app: 'connector-settings', section: null, packageKey: decodeURIComponent(parts[1]) }
+  }
   // Installed application slugs are metadata-owned; preserve the slug generically.
   if (parts[0] && !['workspace', 'objects'].includes(parts[0])) {
     return { app: decodeURIComponent(parts[0]), section: null }
@@ -87,6 +90,8 @@ export function setRoute(app, section = null, options = {}) {
         ? `${base}/flow/${encodeURIComponent(options?.sessionId || '')}`
       : app === 'profile'
         ? `${base}/profile`
+      : app === 'connector-settings'
+        ? `${base}/connector-settings/${encodeURIComponent(options?.packageKey || '')}`
       : app === 'custom-page-runtime'
         ? `${base}/workspace/pages/${encodeURIComponent(options?.pageKey || '')}`
       : app === 'workspace'
