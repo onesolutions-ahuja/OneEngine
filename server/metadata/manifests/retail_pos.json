@@ -1956,6 +1956,2548 @@
           }
         ]
       }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Validate Stock",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:till.stock.validate",
+        "scope": "system",
+        "capabilityType": "workflow",
+        "capabilityKey": "till.stock.validate",
+        "apiName": "till_stock_validate",
+        "flowType": "AUTOLAUNCHED",
+        "inputs": [
+          {
+            "name": "hasShortfall",
+            "label": "hasShortfall",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          }
+        ],
+        "outputs": [
+          "allowed"
+        ],
+        "inputContract": [
+          {
+            "name": "hasShortfall",
+            "label": "hasShortfall",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "allowed",
+            "label": "Allowed",
+            "type": "boolean",
+            "source": "variables.allowed"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.hasShortfall",
+            "apiName": "hasShortfall",
+            "label": "hasShortfall",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.allowed",
+            "apiName": "allowed",
+            "label": "allowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "stock_allowed",
+            "label": "allowed",
+            "apiName": "stock_allowed",
+            "key": "FORMULA",
+            "resourceName": "allowed",
+            "resultType": "boolean",
+            "expression": "!hasShortfall",
+            "inputs": {
+              "hasShortfall": {
+                "path": "variables.hasShortfall"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Age Verification",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:till.age.verify",
+        "scope": "system",
+        "capabilityType": "workflow",
+        "capabilityKey": "till.age.verify",
+        "apiName": "till_age_verify",
+        "flowType": "AUTOLAUNCHED",
+        "inputs": [
+          {
+            "name": "requiresAgeVerification",
+            "label": "requiresAgeVerification",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "ageVerified",
+            "label": "ageVerified",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          }
+        ],
+        "outputs": [
+          "allowed"
+        ],
+        "inputContract": [
+          {
+            "name": "requiresAgeVerification",
+            "label": "requiresAgeVerification",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "ageVerified",
+            "label": "ageVerified",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "allowed",
+            "label": "Allowed",
+            "type": "boolean",
+            "source": "variables.allowed"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.requiresAgeVerification",
+            "apiName": "requiresAgeVerification",
+            "label": "requiresAgeVerification",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.ageVerified",
+            "apiName": "ageVerified",
+            "label": "ageVerified",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.allowed",
+            "apiName": "allowed",
+            "label": "allowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "age_allowed",
+            "label": "allowed",
+            "apiName": "age_allowed",
+            "key": "FORMULA",
+            "resourceName": "allowed",
+            "resultType": "boolean",
+            "expression": "!requiresAgeVerification || ageVerified",
+            "inputs": {
+              "requiresAgeVerification": {
+                "path": "variables.requiresAgeVerification"
+              },
+              "ageVerified": {
+                "path": "variables.ageVerified"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Validate Payment Method",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:till.payment.validate",
+        "scope": "system",
+        "capabilityType": "workflow",
+        "capabilityKey": "till.payment.validate",
+        "apiName": "till_payment_validate",
+        "flowType": "AUTOLAUNCHED",
+        "inputs": [
+          {
+            "name": "paymentMode",
+            "label": "paymentMode",
+            "type": "text",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "online",
+            "label": "online",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "allowOffline",
+            "label": "allowOffline",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "requiresConnector",
+            "label": "requiresConnector",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "connectorAvailable",
+            "label": "connectorAvailable",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "requiresCustomer",
+            "label": "requiresCustomer",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "customerSelected",
+            "label": "customerSelected",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "requiresGiftCardCode",
+            "label": "requiresGiftCardCode",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "hasGiftCardCode",
+            "label": "hasGiftCardCode",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "requiresCashReceived",
+            "label": "requiresCashReceived",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashReceived",
+            "label": "cashReceived",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "total",
+            "label": "total",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          }
+        ],
+        "outputs": [
+          "allowed"
+        ],
+        "inputContract": [
+          {
+            "name": "paymentMode",
+            "label": "paymentMode",
+            "type": "text",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "online",
+            "label": "online",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "allowOffline",
+            "label": "allowOffline",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "requiresConnector",
+            "label": "requiresConnector",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "connectorAvailable",
+            "label": "connectorAvailable",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "requiresCustomer",
+            "label": "requiresCustomer",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "customerSelected",
+            "label": "customerSelected",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "requiresGiftCardCode",
+            "label": "requiresGiftCardCode",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "hasGiftCardCode",
+            "label": "hasGiftCardCode",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "requiresCashReceived",
+            "label": "requiresCashReceived",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashReceived",
+            "label": "cashReceived",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "total",
+            "label": "total",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "allowed",
+            "label": "Allowed",
+            "type": "boolean",
+            "source": "variables.allowed"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.paymentMode",
+            "apiName": "paymentMode",
+            "label": "paymentMode",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.online",
+            "apiName": "online",
+            "label": "online",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.allowOffline",
+            "apiName": "allowOffline",
+            "label": "allowOffline",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.requiresConnector",
+            "apiName": "requiresConnector",
+            "label": "requiresConnector",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.connectorAvailable",
+            "apiName": "connectorAvailable",
+            "label": "connectorAvailable",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.requiresCustomer",
+            "apiName": "requiresCustomer",
+            "label": "requiresCustomer",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.customerSelected",
+            "apiName": "customerSelected",
+            "label": "customerSelected",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.requiresGiftCardCode",
+            "apiName": "requiresGiftCardCode",
+            "label": "requiresGiftCardCode",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.hasGiftCardCode",
+            "apiName": "hasGiftCardCode",
+            "label": "hasGiftCardCode",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.requiresCashReceived",
+            "apiName": "requiresCashReceived",
+            "label": "requiresCashReceived",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.cashReceived",
+            "apiName": "cashReceived",
+            "label": "cashReceived",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.total",
+            "apiName": "total",
+            "label": "total",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.allowed",
+            "apiName": "allowed",
+            "label": "allowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.connectionAllowed",
+            "apiName": "connectionAllowed",
+            "label": "connectionAllowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.connectorAllowed",
+            "apiName": "connectorAllowed",
+            "label": "connectorAllowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.customerAllowed",
+            "apiName": "customerAllowed",
+            "label": "customerAllowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.giftAllowed",
+            "apiName": "giftAllowed",
+            "label": "giftAllowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.cashAllowed",
+            "apiName": "cashAllowed",
+            "label": "cashAllowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "payment_connection_allowed",
+            "label": "connectionAllowed",
+            "apiName": "payment_connection_allowed",
+            "key": "FORMULA",
+            "resourceName": "connectionAllowed",
+            "resultType": "boolean",
+            "expression": "online || allowOffline",
+            "inputs": {
+              "online": {
+                "path": "variables.online"
+              },
+              "allowOffline": {
+                "path": "variables.allowOffline"
+              }
+            }
+          },
+          {
+            "id": "payment_connector_allowed",
+            "label": "connectorAllowed",
+            "apiName": "payment_connector_allowed",
+            "key": "FORMULA",
+            "resourceName": "connectorAllowed",
+            "resultType": "boolean",
+            "expression": "!requiresConnector || connectorAvailable",
+            "inputs": {
+              "requiresConnector": {
+                "path": "variables.requiresConnector"
+              },
+              "connectorAvailable": {
+                "path": "variables.connectorAvailable"
+              }
+            }
+          },
+          {
+            "id": "payment_customer_allowed",
+            "label": "customerAllowed",
+            "apiName": "payment_customer_allowed",
+            "key": "FORMULA",
+            "resourceName": "customerAllowed",
+            "resultType": "boolean",
+            "expression": "!requiresCustomer || customerSelected",
+            "inputs": {
+              "requiresCustomer": {
+                "path": "variables.requiresCustomer"
+              },
+              "customerSelected": {
+                "path": "variables.customerSelected"
+              }
+            }
+          },
+          {
+            "id": "payment_gift_allowed",
+            "label": "giftAllowed",
+            "apiName": "payment_gift_allowed",
+            "key": "FORMULA",
+            "resourceName": "giftAllowed",
+            "resultType": "boolean",
+            "expression": "!requiresGiftCardCode || hasGiftCardCode",
+            "inputs": {
+              "requiresGiftCardCode": {
+                "path": "variables.requiresGiftCardCode"
+              },
+              "hasGiftCardCode": {
+                "path": "variables.hasGiftCardCode"
+              }
+            }
+          },
+          {
+            "id": "payment_cash_allowed",
+            "label": "cashAllowed",
+            "apiName": "payment_cash_allowed",
+            "key": "FORMULA",
+            "resourceName": "cashAllowed",
+            "resultType": "boolean",
+            "expression": "!requiresCashReceived || cashReceived >= total",
+            "inputs": {
+              "requiresCashReceived": {
+                "path": "variables.requiresCashReceived"
+              },
+              "cashReceived": {
+                "path": "variables.cashReceived"
+              },
+              "total": {
+                "path": "variables.total"
+              }
+            }
+          },
+          {
+            "id": "payment_allowed",
+            "label": "allowed",
+            "apiName": "payment_allowed",
+            "key": "FORMULA",
+            "resourceName": "allowed",
+            "resultType": "boolean",
+            "expression": "connectionAllowed && connectorAllowed && customerAllowed && giftAllowed && cashAllowed",
+            "inputs": {
+              "connectionAllowed": {
+                "path": "variables.connectionAllowed"
+              },
+              "connectorAllowed": {
+                "path": "variables.connectorAllowed"
+              },
+              "customerAllowed": {
+                "path": "variables.customerAllowed"
+              },
+              "giftAllowed": {
+                "path": "variables.giftAllowed"
+              },
+              "cashAllowed": {
+                "path": "variables.cashAllowed"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Validate Split Payment",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:till.split.payment.validate",
+        "scope": "system",
+        "capabilityType": "workflow",
+        "capabilityKey": "till.split.payment.validate",
+        "apiName": "till_split_payment_validate",
+        "flowType": "AUTOLAUNCHED",
+        "inputs": [
+          {
+            "name": "payments",
+            "label": "payments",
+            "type": "collection",
+            "required": true,
+            "defaultValue": []
+          },
+          {
+            "name": "total",
+            "label": "total",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "allowedMethodsText",
+            "label": "allowedMethodsText",
+            "type": "text",
+            "required": true,
+            "defaultValue": null
+          }
+        ],
+        "outputs": [
+          "paidTotal",
+          "remaining",
+          "allowed"
+        ],
+        "inputContract": [
+          {
+            "name": "payments",
+            "label": "payments",
+            "type": "collection",
+            "required": true,
+            "defaultValue": []
+          },
+          {
+            "name": "total",
+            "label": "total",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "allowedMethodsText",
+            "label": "allowedMethodsText",
+            "type": "text",
+            "required": true,
+            "defaultValue": null
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "paidTotal",
+            "label": "Paid Total",
+            "type": "number",
+            "source": "variables.paidTotal"
+          },
+          {
+            "name": "remaining",
+            "label": "Remaining",
+            "type": "number",
+            "source": "variables.remaining"
+          },
+          {
+            "name": "allowed",
+            "label": "Allowed",
+            "type": "boolean",
+            "source": "variables.allowed"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.payments",
+            "apiName": "payments",
+            "label": "payments",
+            "type": "Variable",
+            "dataType": "Collection",
+            "defaultValue": [],
+            "isCollection": true,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.total",
+            "apiName": "total",
+            "label": "total",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.allowedMethodsText",
+            "apiName": "allowedMethodsText",
+            "label": "allowedMethodsText",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.paidTotal",
+            "apiName": "paidTotal",
+            "label": "paidTotal",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.remaining",
+            "apiName": "remaining",
+            "label": "remaining",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.allowed",
+            "apiName": "allowed",
+            "label": "allowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.usedMethods",
+            "apiName": "usedMethods",
+            "label": "usedMethods",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.allLinesValid",
+            "apiName": "allLinesValid",
+            "label": "allLinesValid",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.paymentLine",
+            "apiName": "paymentLine",
+            "label": "paymentLine",
+            "type": "Variable",
+            "dataType": "Object",
+            "defaultValue": {},
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.paymentAmount",
+            "apiName": "paymentAmount",
+            "label": "paymentAmount",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.methodToken",
+            "apiName": "methodToken",
+            "label": "methodToken",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.amountValid",
+            "apiName": "amountValid",
+            "label": "amountValid",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.methodAllowed",
+            "apiName": "methodAllowed",
+            "label": "methodAllowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.methodDuplicate",
+            "apiName": "methodDuplicate",
+            "label": "methodDuplicate",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.lineValid",
+            "apiName": "lineValid",
+            "label": "lineValid",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.nextAllLinesValid",
+            "apiName": "nextAllLinesValid",
+            "label": "nextAllLinesValid",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.nextUsedMethods",
+            "apiName": "nextUsedMethods",
+            "label": "nextUsedMethods",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "split_start_paid",
+            "label": "1. Start Paid Total",
+            "apiName": "split_start_paid",
+            "key": "ASSIGNMENT",
+            "variableName": "paidTotal",
+            "variableType": "number",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "split_start_methods",
+            "label": "2. Start Used Methods",
+            "apiName": "split_start_methods",
+            "key": "ASSIGNMENT",
+            "variableName": "usedMethods",
+            "variableType": "text",
+            "operator": "set",
+            "value": ""
+          },
+          {
+            "id": "split_start_valid",
+            "label": "3. Start Validation",
+            "apiName": "split_start_valid",
+            "key": "ASSIGNMENT",
+            "variableName": "allLinesValid",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": true
+          },
+          {
+            "id": "split_loop",
+            "label": "4. Loop Through Payment Lines",
+            "apiName": "split_loop",
+            "key": "LOOP",
+            "collection": "variables.payments",
+            "itemVariable": "paymentLine",
+            "bodyBranch": [
+              "split_round_amount",
+              "split_method_token",
+              "split_amount_valid",
+              "split_method_allowed",
+              "split_method_duplicate",
+              "split_line_valid",
+              "split_update_valid",
+              "split_set_valid",
+              "split_add_paid",
+              "split_next_methods",
+              "split_add_method"
+            ]
+          },
+          {
+            "id": "split_round_amount",
+            "label": "paymentAmount",
+            "apiName": "split_round_amount",
+            "key": "FORMULA",
+            "resourceName": "paymentAmount",
+            "resultType": "number",
+            "expression": "ROUND(MAX(0, amount), 2)",
+            "inputs": {
+              "amount": {
+                "path": "variables.paymentLine.amount"
+              }
+            }
+          },
+          {
+            "id": "split_method_token",
+            "label": "methodToken",
+            "apiName": "split_method_token",
+            "key": "FORMULA",
+            "resourceName": "methodToken",
+            "resultType": "text",
+            "expression": "CONCAT(\"|\", paymentMethod, \"|\")",
+            "inputs": {
+              "paymentMethod": {
+                "path": "variables.paymentLine.paymentMethod"
+              }
+            }
+          },
+          {
+            "id": "split_amount_valid",
+            "label": "amountValid",
+            "apiName": "split_amount_valid",
+            "key": "FORMULA",
+            "resourceName": "amountValid",
+            "resultType": "boolean",
+            "expression": "paymentAmount > 0",
+            "inputs": {
+              "paymentAmount": {
+                "path": "variables.paymentAmount"
+              }
+            }
+          },
+          {
+            "id": "split_method_allowed",
+            "label": "methodAllowed",
+            "apiName": "split_method_allowed",
+            "key": "FORMULA",
+            "resourceName": "methodAllowed",
+            "resultType": "boolean",
+            "expression": "CONTAINS(allowedMethodsText, methodToken)",
+            "inputs": {
+              "allowedMethodsText": {
+                "path": "variables.allowedMethodsText"
+              },
+              "methodToken": {
+                "path": "variables.methodToken"
+              }
+            }
+          },
+          {
+            "id": "split_method_duplicate",
+            "label": "methodDuplicate",
+            "apiName": "split_method_duplicate",
+            "key": "FORMULA",
+            "resourceName": "methodDuplicate",
+            "resultType": "boolean",
+            "expression": "CONTAINS(usedMethods, methodToken)",
+            "inputs": {
+              "usedMethods": {
+                "path": "variables.usedMethods"
+              },
+              "methodToken": {
+                "path": "variables.methodToken"
+              }
+            }
+          },
+          {
+            "id": "split_line_valid",
+            "label": "lineValid",
+            "apiName": "split_line_valid",
+            "key": "FORMULA",
+            "resourceName": "lineValid",
+            "resultType": "boolean",
+            "expression": "amountValid && methodAllowed && !methodDuplicate",
+            "inputs": {
+              "amountValid": {
+                "path": "variables.amountValid"
+              },
+              "methodAllowed": {
+                "path": "variables.methodAllowed"
+              },
+              "methodDuplicate": {
+                "path": "variables.methodDuplicate"
+              }
+            }
+          },
+          {
+            "id": "split_update_valid",
+            "label": "nextAllLinesValid",
+            "apiName": "split_update_valid",
+            "key": "FORMULA",
+            "resourceName": "nextAllLinesValid",
+            "resultType": "boolean",
+            "expression": "allLinesValid && lineValid",
+            "inputs": {
+              "allLinesValid": {
+                "path": "variables.allLinesValid"
+              },
+              "lineValid": {
+                "path": "variables.lineValid"
+              }
+            }
+          },
+          {
+            "id": "split_set_valid",
+            "label": "Set Line Validation Result",
+            "apiName": "split_set_valid",
+            "key": "ASSIGNMENT",
+            "variableName": "allLinesValid",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": {
+              "path": "variables.nextAllLinesValid"
+            }
+          },
+          {
+            "id": "split_add_paid",
+            "label": "5. Add Payment To Paid Total",
+            "apiName": "split_add_paid",
+            "key": "ASSIGNMENT",
+            "variableName": "paidTotal",
+            "variableType": "number",
+            "operator": "add",
+            "value": {
+              "path": "variables.paymentAmount"
+            }
+          },
+          {
+            "id": "split_next_methods",
+            "label": "nextUsedMethods",
+            "apiName": "split_next_methods",
+            "key": "FORMULA",
+            "resourceName": "nextUsedMethods",
+            "resultType": "text",
+            "expression": "CONCAT(usedMethods, methodToken)",
+            "inputs": {
+              "usedMethods": {
+                "path": "variables.usedMethods"
+              },
+              "methodToken": {
+                "path": "variables.methodToken"
+              }
+            }
+          },
+          {
+            "id": "split_add_method",
+            "label": "6. Remember Used Method",
+            "apiName": "split_add_method",
+            "key": "ASSIGNMENT",
+            "variableName": "usedMethods",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "variables.nextUsedMethods"
+            }
+          },
+          {
+            "id": "split_remaining",
+            "label": "remaining",
+            "apiName": "split_remaining",
+            "key": "FORMULA",
+            "resourceName": "remaining",
+            "resultType": "number",
+            "expression": "ROUND(total - paidTotal, 2)",
+            "inputs": {
+              "total": {
+                "path": "variables.total"
+              },
+              "paidTotal": {
+                "path": "variables.paidTotal"
+              }
+            }
+          },
+          {
+            "id": "split_allowed",
+            "label": "allowed",
+            "apiName": "split_allowed",
+            "key": "FORMULA",
+            "resourceName": "allowed",
+            "resultType": "boolean",
+            "expression": "allLinesValid && paidTotal > 0 && ABS(remaining) < 0.005",
+            "inputs": {
+              "allLinesValid": {
+                "path": "variables.allLinesValid"
+              },
+              "paidTotal": {
+                "path": "variables.paidTotal"
+              },
+              "remaining": {
+                "path": "variables.remaining"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Calculate Sale Totals",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:sale.totals.calculate",
+        "scope": "system",
+        "capabilityType": "workflow",
+        "capabilityKey": "sale.totals.calculate",
+        "apiName": "sale_totals_calculate",
+        "flowType": "AUTOLAUNCHED",
+        "inputs": [
+          {
+            "name": "basket",
+            "label": "basket",
+            "type": "collection",
+            "required": true,
+            "defaultValue": []
+          },
+          {
+            "name": "vatEnabled",
+            "label": "vatEnabled",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "defaultVatRate",
+            "label": "defaultVatRate",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "discountType",
+            "label": "discountType",
+            "type": "text",
+            "required": false,
+            "defaultValue": null
+          },
+          {
+            "name": "discountValue",
+            "label": "discountValue",
+            "type": "number",
+            "required": false,
+            "defaultValue": 0
+          }
+        ],
+        "outputs": [
+          "grossSubtotal",
+          "orderDiscount",
+          "discountAmount",
+          "subtotal",
+          "vat",
+          "total"
+        ],
+        "inputContract": [
+          {
+            "name": "basket",
+            "label": "basket",
+            "type": "collection",
+            "required": true,
+            "defaultValue": []
+          },
+          {
+            "name": "vatEnabled",
+            "label": "vatEnabled",
+            "type": "boolean",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "defaultVatRate",
+            "label": "defaultVatRate",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "discountType",
+            "label": "discountType",
+            "type": "text",
+            "required": false,
+            "defaultValue": null
+          },
+          {
+            "name": "discountValue",
+            "label": "discountValue",
+            "type": "number",
+            "required": false,
+            "defaultValue": 0
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "grossSubtotal",
+            "label": "Gross Subtotal",
+            "type": "number",
+            "source": "variables.grossSubtotal"
+          },
+          {
+            "name": "orderDiscount",
+            "label": "Order Discount",
+            "type": "number",
+            "source": "variables.orderDiscount"
+          },
+          {
+            "name": "discountAmount",
+            "label": "Discount Amount",
+            "type": "number",
+            "source": "variables.discountAmount"
+          },
+          {
+            "name": "subtotal",
+            "label": "Subtotal",
+            "type": "number",
+            "source": "variables.subtotal"
+          },
+          {
+            "name": "vat",
+            "label": "VAT",
+            "type": "number",
+            "source": "variables.vat"
+          },
+          {
+            "name": "total",
+            "label": "Total",
+            "type": "number",
+            "source": "variables.total"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.basket",
+            "apiName": "basket",
+            "label": "basket",
+            "type": "Variable",
+            "dataType": "Collection",
+            "defaultValue": [],
+            "isCollection": true,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.vatEnabled",
+            "apiName": "vatEnabled",
+            "label": "vatEnabled",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.defaultVatRate",
+            "apiName": "defaultVatRate",
+            "label": "defaultVatRate",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.discountType",
+            "apiName": "discountType",
+            "label": "discountType",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.discountValue",
+            "apiName": "discountValue",
+            "label": "discountValue",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": 0,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.grossSubtotal",
+            "apiName": "grossSubtotal",
+            "label": "grossSubtotal",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.orderDiscount",
+            "apiName": "orderDiscount",
+            "label": "orderDiscount",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.discountAmount",
+            "apiName": "discountAmount",
+            "label": "discountAmount",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.subtotal",
+            "apiName": "subtotal",
+            "label": "subtotal",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.vat",
+            "apiName": "vat",
+            "label": "vat",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.total",
+            "apiName": "total",
+            "label": "total",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.totalLineDiscount",
+            "apiName": "totalLineDiscount",
+            "label": "totalLineDiscount",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.saleLine",
+            "apiName": "saleLine",
+            "label": "saleLine",
+            "type": "Variable",
+            "dataType": "Object",
+            "defaultValue": {},
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.lineGross",
+            "apiName": "lineGross",
+            "label": "lineGross",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.lineDiscount",
+            "apiName": "lineDiscount",
+            "label": "lineDiscount",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.netSubtotal",
+            "apiName": "netSubtotal",
+            "label": "netSubtotal",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.vatLine",
+            "apiName": "vatLine",
+            "label": "vatLine",
+            "type": "Variable",
+            "dataType": "Object",
+            "defaultValue": {},
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.vatLineGross",
+            "apiName": "vatLineGross",
+            "label": "vatLineGross",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.vatLineDiscount",
+            "apiName": "vatLineDiscount",
+            "label": "vatLineDiscount",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.vatLineNet",
+            "apiName": "vatLineNet",
+            "label": "vatLineNet",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.effectiveVatRate",
+            "apiName": "effectiveVatRate",
+            "label": "effectiveVatRate",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.discountedVatLine",
+            "apiName": "discountedVatLine",
+            "label": "discountedVatLine",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.lineVat",
+            "apiName": "lineVat",
+            "label": "lineVat",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "sale_totals_start_gross",
+            "label": "1. Start Gross Subtotal",
+            "apiName": "sale_totals_start_gross",
+            "key": "ASSIGNMENT",
+            "variableName": "grossSubtotal",
+            "variableType": "number",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "sale_totals_start_line_discount",
+            "label": "2. Start Line Discount",
+            "apiName": "sale_totals_start_line_discount",
+            "key": "ASSIGNMENT",
+            "variableName": "totalLineDiscount",
+            "variableType": "number",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "sale_totals_first_loop",
+            "label": "3. Sum Basket Lines",
+            "apiName": "sale_totals_first_loop",
+            "key": "LOOP",
+            "collection": "variables.basket",
+            "itemVariable": "saleLine",
+            "bodyBranch": [
+              "sale_totals_line_gross",
+              "sale_totals_line_discount",
+              "sale_totals_add_gross",
+              "sale_totals_add_line_discount"
+            ]
+          },
+          {
+            "id": "sale_totals_line_gross",
+            "label": "lineGross",
+            "apiName": "sale_totals_line_gross",
+            "key": "FORMULA",
+            "resourceName": "lineGross",
+            "resultType": "number",
+            "expression": "ROUND(MAX(0, price) * MAX(0, quantity), 2)",
+            "inputs": {
+              "price": {
+                "path": "variables.saleLine.price"
+              },
+              "quantity": {
+                "path": "variables.saleLine.quantity"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_line_discount",
+            "label": "lineDiscount",
+            "apiName": "sale_totals_line_discount",
+            "key": "FORMULA",
+            "resourceName": "lineDiscount",
+            "resultType": "number",
+            "expression": "ROUND(IF(discountTypeLine == \"percent\", MIN(lineGross, lineGross * (MAX(0, discountValueLine) / 100)), IF(discountTypeLine == \"fixed\", MIN(lineGross, MAX(0, discountValueLine)), 0)), 2)",
+            "inputs": {
+              "discountTypeLine": {
+                "path": "variables.saleLine.discountType"
+              },
+              "discountValueLine": {
+                "path": "variables.saleLine.discountValue"
+              },
+              "lineGross": {
+                "path": "variables.lineGross"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_add_gross",
+            "label": "4. Add Gross",
+            "apiName": "sale_totals_add_gross",
+            "key": "ASSIGNMENT",
+            "variableName": "grossSubtotal",
+            "variableType": "number",
+            "operator": "add",
+            "value": {
+              "path": "variables.lineGross"
+            }
+          },
+          {
+            "id": "sale_totals_add_line_discount",
+            "label": "5. Add Line Discount",
+            "apiName": "sale_totals_add_line_discount",
+            "key": "ASSIGNMENT",
+            "variableName": "totalLineDiscount",
+            "variableType": "number",
+            "operator": "add",
+            "value": {
+              "path": "variables.lineDiscount"
+            }
+          },
+          {
+            "id": "sale_totals_net_subtotal",
+            "label": "netSubtotal",
+            "apiName": "sale_totals_net_subtotal",
+            "key": "FORMULA",
+            "resourceName": "netSubtotal",
+            "resultType": "number",
+            "expression": "MAX(0, grossSubtotal - totalLineDiscount)",
+            "inputs": {
+              "grossSubtotal": {
+                "path": "variables.grossSubtotal"
+              },
+              "totalLineDiscount": {
+                "path": "variables.totalLineDiscount"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_order_discount",
+            "label": "orderDiscount",
+            "apiName": "sale_totals_order_discount",
+            "key": "FORMULA",
+            "resourceName": "orderDiscount",
+            "resultType": "number",
+            "expression": "ROUND(IF(discountType == \"percent\", MIN(netSubtotal, netSubtotal * (MAX(0, discountValue) / 100)), IF(discountType == \"fixed\", MIN(netSubtotal, MAX(0, discountValue)), 0)), 2)",
+            "inputs": {
+              "discountType": {
+                "path": "variables.discountType"
+              },
+              "discountValue": {
+                "path": "variables.discountValue"
+              },
+              "netSubtotal": {
+                "path": "variables.netSubtotal"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_start_vat",
+            "label": "6. Start VAT",
+            "apiName": "sale_totals_start_vat",
+            "key": "ASSIGNMENT",
+            "variableName": "vat",
+            "variableType": "number",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "sale_totals_second_loop",
+            "label": "7. Calculate VAT",
+            "apiName": "sale_totals_second_loop",
+            "key": "LOOP",
+            "collection": "variables.basket",
+            "itemVariable": "vatLine",
+            "bodyBranch": [
+              "sale_totals_vat_line_gross",
+              "sale_totals_vat_line_discount",
+              "sale_totals_vat_line_net",
+              "sale_totals_vat_rate",
+              "sale_totals_discounted_line",
+              "sale_totals_line_vat",
+              "sale_totals_add_vat"
+            ]
+          },
+          {
+            "id": "sale_totals_vat_line_gross",
+            "label": "vatLineGross",
+            "apiName": "sale_totals_vat_line_gross",
+            "key": "FORMULA",
+            "resourceName": "vatLineGross",
+            "resultType": "number",
+            "expression": "ROUND(MAX(0, price) * MAX(0, quantity), 2)",
+            "inputs": {
+              "price": {
+                "path": "variables.vatLine.price"
+              },
+              "quantity": {
+                "path": "variables.vatLine.quantity"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_vat_line_discount",
+            "label": "vatLineDiscount",
+            "apiName": "sale_totals_vat_line_discount",
+            "key": "FORMULA",
+            "resourceName": "vatLineDiscount",
+            "resultType": "number",
+            "expression": "ROUND(IF(discountTypeLine == \"percent\", MIN(vatLineGross, vatLineGross * (MAX(0, discountValueLine) / 100)), IF(discountTypeLine == \"fixed\", MIN(vatLineGross, MAX(0, discountValueLine)), 0)), 2)",
+            "inputs": {
+              "discountTypeLine": {
+                "path": "variables.vatLine.discountType"
+              },
+              "discountValueLine": {
+                "path": "variables.vatLine.discountValue"
+              },
+              "vatLineGross": {
+                "path": "variables.vatLineGross"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_vat_line_net",
+            "label": "vatLineNet",
+            "apiName": "sale_totals_vat_line_net",
+            "key": "FORMULA",
+            "resourceName": "vatLineNet",
+            "resultType": "number",
+            "expression": "MAX(0, vatLineGross - vatLineDiscount)",
+            "inputs": {
+              "vatLineGross": {
+                "path": "variables.vatLineGross"
+              },
+              "vatLineDiscount": {
+                "path": "variables.vatLineDiscount"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_vat_rate",
+            "label": "effectiveVatRate",
+            "apiName": "sale_totals_vat_rate",
+            "key": "FORMULA",
+            "resourceName": "effectiveVatRate",
+            "resultType": "number",
+            "expression": "IF(vatEnabled && vatApplicable, IF(ISBLANK(lineVatRate), defaultVatRate, lineVatRate / 100), 0)",
+            "inputs": {
+              "vatEnabled": {
+                "path": "variables.vatEnabled"
+              },
+              "vatApplicable": {
+                "path": "variables.vatLine.vatApplicable"
+              },
+              "lineVatRate": {
+                "path": "variables.vatLine.vatRate"
+              },
+              "defaultVatRate": {
+                "path": "variables.defaultVatRate"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_discounted_line",
+            "label": "discountedVatLine",
+            "apiName": "sale_totals_discounted_line",
+            "key": "FORMULA",
+            "resourceName": "discountedVatLine",
+            "resultType": "number",
+            "expression": "MAX(0, vatLineNet - IF(netSubtotal > 0, orderDiscount * (vatLineNet / netSubtotal), 0))",
+            "inputs": {
+              "vatLineNet": {
+                "path": "variables.vatLineNet"
+              },
+              "netSubtotal": {
+                "path": "variables.netSubtotal"
+              },
+              "orderDiscount": {
+                "path": "variables.orderDiscount"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_line_vat",
+            "label": "lineVat",
+            "apiName": "sale_totals_line_vat",
+            "key": "FORMULA",
+            "resourceName": "lineVat",
+            "resultType": "number",
+            "expression": "ROUND(discountedVatLine * effectiveVatRate, 2)",
+            "inputs": {
+              "discountedVatLine": {
+                "path": "variables.discountedVatLine"
+              },
+              "effectiveVatRate": {
+                "path": "variables.effectiveVatRate"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_add_vat",
+            "label": "8. Add VAT",
+            "apiName": "sale_totals_add_vat",
+            "key": "ASSIGNMENT",
+            "variableName": "vat",
+            "variableType": "number",
+            "operator": "add",
+            "value": {
+              "path": "variables.lineVat"
+            }
+          },
+          {
+            "id": "sale_totals_discount_amount",
+            "label": "discountAmount",
+            "apiName": "sale_totals_discount_amount",
+            "key": "FORMULA",
+            "resourceName": "discountAmount",
+            "resultType": "number",
+            "expression": "ROUND(totalLineDiscount + orderDiscount, 2)",
+            "inputs": {
+              "totalLineDiscount": {
+                "path": "variables.totalLineDiscount"
+              },
+              "orderDiscount": {
+                "path": "variables.orderDiscount"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_subtotal",
+            "label": "subtotal",
+            "apiName": "sale_totals_subtotal",
+            "key": "FORMULA",
+            "resourceName": "subtotal",
+            "resultType": "number",
+            "expression": "ROUND(MAX(0, grossSubtotal - discountAmount), 2)",
+            "inputs": {
+              "grossSubtotal": {
+                "path": "variables.grossSubtotal"
+              },
+              "discountAmount": {
+                "path": "variables.discountAmount"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_vat_round",
+            "label": "vat",
+            "apiName": "sale_totals_vat_round",
+            "key": "FORMULA",
+            "resourceName": "vat",
+            "resultType": "number",
+            "expression": "ROUND(vat, 2)",
+            "inputs": {
+              "vat": {
+                "path": "variables.vat"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_total",
+            "label": "total",
+            "apiName": "sale_totals_total",
+            "key": "FORMULA",
+            "resourceName": "total",
+            "resultType": "number",
+            "expression": "ROUND(subtotal + vat, 2)",
+            "inputs": {
+              "subtotal": {
+                "path": "variables.subtotal"
+              },
+              "vat": {
+                "path": "variables.vat"
+              }
+            }
+          },
+          {
+            "id": "sale_totals_gross_round",
+            "label": "grossSubtotal",
+            "apiName": "sale_totals_gross_round",
+            "key": "FORMULA",
+            "resourceName": "grossSubtotal",
+            "resultType": "number",
+            "expression": "ROUND(grossSubtotal, 2)",
+            "inputs": {
+              "grossSubtotal": {
+                "path": "variables.grossSubtotal"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Calculate Cash Position",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:till.cash.position",
+        "scope": "system",
+        "capabilityType": "workflow",
+        "capabilityKey": "till.cash.position",
+        "apiName": "till_cash_position",
+        "flowType": "AUTOLAUNCHED",
+        "inputs": [
+          {
+            "name": "openingCash",
+            "label": "openingCash",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashIn",
+            "label": "cashIn",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashOut",
+            "label": "cashOut",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashSales",
+            "label": "cashSales",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashRefunds",
+            "label": "cashRefunds",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "countedCash",
+            "label": "countedCash",
+            "type": "number",
+            "required": false,
+            "defaultValue": 0
+          },
+          {
+            "name": "requestedCashOut",
+            "label": "requestedCashOut",
+            "type": "number",
+            "required": false,
+            "defaultValue": 0
+          }
+        ],
+        "outputs": [
+          "currentCash",
+          "cashDifference",
+          "cashOutAllowed"
+        ],
+        "inputContract": [
+          {
+            "name": "openingCash",
+            "label": "openingCash",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashIn",
+            "label": "cashIn",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashOut",
+            "label": "cashOut",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashSales",
+            "label": "cashSales",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "cashRefunds",
+            "label": "cashRefunds",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "countedCash",
+            "label": "countedCash",
+            "type": "number",
+            "required": false,
+            "defaultValue": 0
+          },
+          {
+            "name": "requestedCashOut",
+            "label": "requestedCashOut",
+            "type": "number",
+            "required": false,
+            "defaultValue": 0
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "currentCash",
+            "label": "Current Cash",
+            "type": "number",
+            "source": "variables.currentCash"
+          },
+          {
+            "name": "cashDifference",
+            "label": "Cash Difference",
+            "type": "number",
+            "source": "variables.cashDifference"
+          },
+          {
+            "name": "cashOutAllowed",
+            "label": "Cash Out Allowed",
+            "type": "boolean",
+            "source": "variables.cashOutAllowed"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.openingCash",
+            "apiName": "openingCash",
+            "label": "openingCash",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.cashIn",
+            "apiName": "cashIn",
+            "label": "cashIn",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.cashOut",
+            "apiName": "cashOut",
+            "label": "cashOut",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.cashSales",
+            "apiName": "cashSales",
+            "label": "cashSales",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.cashRefunds",
+            "apiName": "cashRefunds",
+            "label": "cashRefunds",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.countedCash",
+            "apiName": "countedCash",
+            "label": "countedCash",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": 0,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.requestedCashOut",
+            "apiName": "requestedCashOut",
+            "label": "requestedCashOut",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": 0,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.currentCash",
+            "apiName": "currentCash",
+            "label": "currentCash",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.cashDifference",
+            "apiName": "cashDifference",
+            "label": "cashDifference",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.cashOutAllowed",
+            "apiName": "cashOutAllowed",
+            "label": "cashOutAllowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "cash_position_current",
+            "label": "currentCash",
+            "apiName": "cash_position_current",
+            "key": "FORMULA",
+            "resourceName": "currentCash",
+            "resultType": "number",
+            "expression": "ROUND(openingCash + cashIn + cashSales - cashOut - cashRefunds, 2)",
+            "inputs": {
+              "openingCash": {
+                "path": "variables.openingCash"
+              },
+              "cashIn": {
+                "path": "variables.cashIn"
+              },
+              "cashOut": {
+                "path": "variables.cashOut"
+              },
+              "cashSales": {
+                "path": "variables.cashSales"
+              },
+              "cashRefunds": {
+                "path": "variables.cashRefunds"
+              }
+            }
+          },
+          {
+            "id": "cash_position_difference",
+            "label": "cashDifference",
+            "apiName": "cash_position_difference",
+            "key": "FORMULA",
+            "resourceName": "cashDifference",
+            "resultType": "number",
+            "expression": "ROUND(countedCash - currentCash, 2)",
+            "inputs": {
+              "countedCash": {
+                "path": "variables.countedCash"
+              },
+              "currentCash": {
+                "path": "variables.currentCash"
+              }
+            }
+          },
+          {
+            "id": "cash_position_out_allowed",
+            "label": "cashOutAllowed",
+            "apiName": "cash_position_out_allowed",
+            "key": "FORMULA",
+            "resourceName": "cashOutAllowed",
+            "resultType": "boolean",
+            "expression": "requestedCashOut <= currentCash",
+            "inputs": {
+              "requestedCashOut": {
+                "path": "variables.requestedCashOut"
+              },
+              "currentCash": {
+                "path": "variables.currentCash"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Create Receipt QR",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:till.receipt.qr",
+        "scope": "system",
+        "capabilityType": "workflow",
+        "capabilityKey": "till.receipt.qr",
+        "apiName": "till_receipt_qr",
+        "flowType": "AUTOLAUNCHED",
+        "inputs": [
+          {
+            "name": "saleId",
+            "label": "saleId",
+            "type": "text",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "expiryMinutes",
+            "label": "expiryMinutes",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "baseUrl",
+            "label": "baseUrl",
+            "type": "text",
+            "required": false,
+            "defaultValue": null
+          }
+        ],
+        "outputs": [
+          "receipt"
+        ],
+        "inputContract": [
+          {
+            "name": "saleId",
+            "label": "saleId",
+            "type": "text",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "expiryMinutes",
+            "label": "expiryMinutes",
+            "type": "number",
+            "required": true,
+            "defaultValue": null
+          },
+          {
+            "name": "baseUrl",
+            "label": "baseUrl",
+            "type": "text",
+            "required": false,
+            "defaultValue": null
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "receipt",
+            "label": "Receipt QR",
+            "type": "object",
+            "source": "steps.create_receipt"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.saleId",
+            "apiName": "saleId",
+            "label": "saleId",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.expiryMinutes",
+            "apiName": "expiryMinutes",
+            "label": "expiryMinutes",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.baseUrl",
+            "apiName": "baseUrl",
+            "label": "baseUrl",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": null,
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": false,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.receipt",
+            "apiName": "receipt",
+            "label": "receipt",
+            "type": "Variable",
+            "dataType": "Object",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "create_receipt",
+            "label": "Create Temporary Receipt Download",
+            "apiName": "create_receipt",
+            "key": "CALL_FUNCTION",
+            "functionKey": "temporary.receipt.download.create",
+            "inputs": {
+              "saleId": {
+                "path": "variables.saleId"
+              },
+              "expiryMinutes": {
+                "path": "variables.expiryMinutes"
+              },
+              "baseUrl": {
+                "path": "variables.baseUrl"
+              }
+            }
+          }
+        ]
+      }
     }
   ]
 }
