@@ -6118,6 +6118,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
     router.post("/platform/flow-sessions/:sessionId/submit", ...workflowExecute, async (req, res) => {
     let processingClaimed = false;
+    let client = null;
+    let screenTransactionActive = false;
     try {
       const sessionResult = await db(
         "SELECT * FROM platform_workflow_screen_sessions WHERE id=$1 AND company_id=$2 AND (actor_user_id IS NULL OR actor_user_id=$3) LIMIT 1",
@@ -6268,10 +6270,14 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         });
       }
 
+      client = await pool.connect();
+      await client.query("BEGIN");
+      screenTransactionActive = true;
+      const executionDb = (query, params = []) => client.query(query, params);
       const results = await executeWorkflowActions({
         actions: runtime.actions,
         allActions: runtime.actions,
-        db,
+        db: executionDb,
         req,
         companyId: req.user.companyId,
         userId: req.user.id || null,
@@ -6286,7 +6292,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         workflowVersion: runtime.pinnedVersion,
         trigger: runtime.run.trigger_key || runtime.workflow.trigger_key,
         workflowVariables,
+        rollbackCurrentTransaction: async () => {
+          if (!screenTransactionActive) return;
+          await client.query("ROLLBACK");
+          screenTransactionActive = false;
+        },
       });
+      if (screenTransactionActive) {
+        await client.query("COMMIT");
+        screenTransactionActive = false;
+      }
 
       const waiting = workflowResultsContainStatus(results, "waiting");
       await db(
@@ -6323,6 +6338,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         },
       });
     } catch (error) {
+      if (screenTransactionActive && client) {
+        await client.query("ROLLBACK").catch(() => {});
+        screenTransactionActive = false;
+      }
       if (processingClaimed) {
         await db(
           "UPDATE platform_workflow_screen_sessions SET status='ACTIVE',updated_at=NOW() WHERE id=$1 AND company_id=$2 AND status='PROCESSING'",
@@ -6331,6 +6350,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
       console.error("Screen Flow submit error:", error);
       return res.status(error.status || 500).json({ success: false, message: error.message || "Unable to continue Screen Flow" });
+    } finally {
+      client?.release?.();
     }
   });
 
