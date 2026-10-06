@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
-import { SUMMARY_COLUMN, aggregatesForFieldType, platformFieldChoices } from "./platformDashboard.js";
+import { platformFieldChoices } from "./platformDashboard.js";
 import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";
 
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
@@ -49,30 +49,22 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const reportFieldKeys = new Set([...(report.fields || []), ...(report.rowGroups || report.groupBy || []), ...(report.columnGroups || [])].map(String));
   const reportFields = fields.filter((field) => reportFieldKeys.has(String(field.key || field.api_name)));
   const choices = platformFieldChoices(reportFields);
-  const metrics = choices.metricFields;
+  const summaryFields = (report.summaries || []).map((summary) => ({
+    key: summary.alias || `${String(summary.aggregate || "count").toLowerCase()}_${summary.field}`,
+    label: summary.alias || `${summary.aggregate || "COUNT"} ${choices.all.find((field) => field.key === summary.field)?.label || summary.field}`,
+    type: "number",
+  }));
+  const metrics = [...summaryFields, ...choices.metricFields];
   const groups = choices.groupFields;
-  const typeOf = (key) => choices.all.find((field) => field.key === key)?.type || "text";
-  const aggregates = aggregatesForFieldType(typeOf(config.valueField));
   const setConfig = (patch) => onChange({ ...component, config: { ...config, ...patch } });
-  const setReport = (patch) => onChange({ ...component, config: { ...config, report: { ...report, ...patch } } });
-  const selectSavedReport = (reportId) => { const selected = drillReports.find((item) => String(item.id) === String(reportId)); onChange({ ...component, config: { ...config, reportId: reportId || null, report: null, valueField: null, labelField: null, seriesField: null, yFields: [], secondaryAxisFields: [], aggregate: null } }); };
+  const selectSavedReport = (reportId) => { onChange({ ...component, config: { ...config, reportId: reportId || null, report: null, valueField: null, labelField: null, seriesField: null, yFields: [], secondaryAxisFields: [], aggregate: null } }); };
   const num = (patch) => (event) => setConfig({ [patch]: Number(event.target.value) });
   const layout = (patch) => (event) => onChange({ ...component, layout: { ...component.layout, [patch]: Number(event.target.value) } });
-  const selectGroup = (value) => { const metricFields = component.type === "combo" ? (config.yFields?.length ? config.yFields : [config.valueField]) : [config.valueField]; setConfig({ labelField: value || null }); setReport({ fields: [...new Set([...metricFields, value].filter(Boolean))], groupBy: value ? [value] : [] }); };
-  /* Keep the report definition valid: every selected metric must also be in
-     `fields`, and a Platform Object metric must carry its aggregate summary. */
-  const selectMetric = (value) => {
-    if (!value) { setConfig({ valueField: null, aggregate: null }); setReport({ fields: report.groupBy, summaries: [] }); return; }
-    const aggregate = isPlatform ? (aggregatesForFieldType(typeOf(value)).includes(config.aggregate) ? config.aggregate : (aggregatesForFieldType(typeOf(value))[0] || "COUNT")) : "SUM";
-    setConfig({ valueField: value, aggregate: isPlatform ? aggregate : null });
-    setReport({ fields: [...new Set([value, report.groupBy[0]].filter(Boolean))], summaries: isPlatform ? [{ aggregate, field: value }] : [] });
-  };
-  const selectAggregate = (value) => { setConfig({ aggregate: value }); if (config.valueField) setReport({ summaries: [{ aggregate: value, field: config.valueField }] }); };
+  const selectGroup = (value) => setConfig({ labelField: value || null });
+  const selectMetric = (value) => setConfig({ valueField: value || null, aggregate: null });
   const selectComboMetrics = (values) => {
     const yFields = [...new Set(values)].slice(0,4);
-    const summaries = isPlatform ? yFields.map((field) => ({ aggregate: aggregatesForFieldType(typeOf(field))[0] || "COUNT", field })) : [];
-    setConfig({ valueField: yFields[0] || null, yFields, secondaryAxisFields: (config.secondaryAxisFields || []).filter((field) => yFields.includes(field)) });
-    setReport({ fields: [...new Set([...yFields, ...(report.groupBy || [])])], summaries });
+    setConfig({ valueField: yFields[0] || null, yFields, secondaryAxisFields: (config.secondaryAxisFields || []).filter((field) => yFields.includes(field)), aggregate: null });
   };
   return <div className="mt-3 grid gap-3 md:grid-cols-2">
     <div className="md:col-span-2"><span className={LABEL}>Title</span><input className={FIELD} style={STYLE} value={component.title || ""} onChange={(event) => onChange({ ...component, title: event.target.value })} /></div>
@@ -105,7 +97,6 @@ export default function DashboardComponentProperties({ component, onChange }) {
     </> : <>
       <div className="md:col-span-2"><span className={LABEL}>Source report</span><select className={FIELD} style={STYLE} value={config.reportId || ""} onChange={(event) => selectSavedReport(event.target.value)}><option value="">{drillReports.length ? "Select a saved report" : "No saved reports available"}</option>{drillReports.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><p className="mt-1 text-xs" style={{ color: "var(--onepos-text-muted)" }}>Dashboard analytics widgets use saved Report Builder definitions. Edit objects, fields, relationships and filters in the source report.</p>{fieldsError ? <p className="text-xs" style={{ color: "#b91c1c" }}>{fieldsError}</p> : null}</div>
       {component.type === "combo" ? <><div><span className={LABEL}>Metric fields (up to 4)</span><select multiple data-testid="metric-fields" className={FIELD} style={STYLE} value={config.yFields?.length ? config.yFields : (config.valueField ? [config.valueField] : [])} onChange={(event) => selectComboMetrics(Array.from(event.target.selectedOptions).map((option) => option.value))}>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div><div><span className={LABEL}>Secondary axis</span><select multiple className={FIELD} style={STYLE} value={config.secondaryAxisFields || []} onChange={(event) => setConfig({ secondaryAxisFields: Array.from(event.target.selectedOptions).map((option) => option.value).filter((field) => (config.yFields || []).includes(field)) })}>{(config.yFields || []).map((field) => <option key={field} value={field}>{metrics.find((item) => item.key === field)?.label || field}</option>)}</select></div></> : <div><span className={LABEL}>Metric field</span><select data-testid="metric-field" className={FIELD} style={STYLE} value={config.valueField || ""} onChange={(event) => selectMetric(event.target.value)}><option value="">Select a metric</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select>{isPlatform && report.objectId && !loading && !metrics.length ? <p className="text-xs" style={{ color: "var(--onepos-text-muted)" }}>This Object has no aggregatable fields.</p> : null}</div>}
-      {isPlatform ? <div><span className={LABEL}>Aggregation</span><select data-testid="aggregate" className={FIELD} style={STYLE} value={config.aggregate || "COUNT"} onChange={(event) => selectAggregate(event.target.value)}>{aggregates.map((aggregate) => <option key={aggregate} value={aggregate}>{aggregate}</option>)}</select></div> : null}
       <div><span className={LABEL}>{isChart ? "Category / group field" : "Label field (optional)"}</span><select className={FIELD} style={STYLE} value={config.labelField || ""} onChange={(event) => selectGroup(event.target.value)}><option value="">None</option>{groups.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div>
       
       <div><span className={LABEL}>Format</span><select data-testid="format" className={FIELD} style={STYLE} value={config.format || "number"} onChange={(event) => setConfig({ format: event.target.value })}><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percentage</option></select></div>
@@ -128,7 +119,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
           onChange={(conditionalFormatting) => setConfig({ conditionalFormatting })}
           fields={[
             ...choices.all,
-            ...(config.valueField && config.aggregate ? [{ key: SUMMARY_COLUMN(config.aggregate, config.valueField), label: "Calculated metric" }] : []),
+            ...summaryFields,
           ]}
         />
       </div>
@@ -141,6 +132,6 @@ export default function DashboardComponentProperties({ component, onChange }) {
         />
       </div>
     </>}
-    <p className="md:col-span-2 text-xs" data-testid="value-column" style={{ color: "var(--onepos-text-muted)" }}>Value column: <code>{isPlatform && config.aggregate && config.valueField ? SUMMARY_COLUMN(config.aggregate, config.valueField) : config.valueField || "not selected"}</code></p>
+    <p className="md:col-span-2 text-xs" data-testid="value-column" style={{ color: "var(--onepos-text-muted)" }}>Value column: <code>{config.valueField || "not selected"}</code></p>
   </div>;
 }
