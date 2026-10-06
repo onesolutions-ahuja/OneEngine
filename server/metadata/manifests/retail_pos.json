@@ -12,6 +12,20 @@
       },
       "fields": [
         {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
           "apiName": "terminal_id",
           "label": "Terminal",
           "fieldType": "lookup",
