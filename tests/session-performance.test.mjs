@@ -367,7 +367,7 @@ test('workspace app routes use cached metadata instead of forcing a blocking ref
 
 test('Till starts till-session lookup alongside its bootstrap requests', async () => {
   const source = await read('../src/pages/till/TillPage.jsx')
-  const start = source.indexOf('const tillPromise = loadTill()')
+  const start = source.indexOf('const tillPromise = loadTill(surface)')
   const end = source.indexOf('await tillPromise', start)
   const block = source.slice(start, end)
   assert.notEqual(start, -1)
