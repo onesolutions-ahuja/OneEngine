@@ -8,10 +8,10 @@ function cleanPath(req) {
   return raw.slice(0, 500);
 }
 
-export function createBusinessCommandGateway({ db }) {
+export function createWorkflowTraceGateway({ db }) {
   if (!db || typeof db !== "function") throw new Error("Business command gateway requires db");
 
-  return function businessCommandGateway(req, res, next) {
+  return function workflowTraceGateway(req, res, next) {
     if (!MUTATION_METHODS.has(String(req.method || "").toUpperCase())) return next();
 
     const correlationId = String(
@@ -19,13 +19,13 @@ export function createBusinessCommandGateway({ db }) {
         || req.headers?.["x-correlation-id"]
         || randomUUID()
     );
-    req.businessCommandCorrelationId = correlationId;
-    req.businessCommandRunId = null;
+    req.workflowTraceCorrelationId = correlationId;
+    req.workflowTraceRunId = null;
     let creating = null;
     const startedAt = Date.now();
 
     req.ensureBusinessCommandRun = async ({ companyId = null, userId = null, storeId = null } = {}) => {
-      if (req.businessCommandRunId) return req.businessCommandRunId;
+      if (req.workflowTraceRunId) return req.workflowTraceRunId;
       if (creating) return creating;
       const tenantId = companyId || req.user?.companyId || null;
       if (!tenantId) return null;
@@ -48,8 +48,8 @@ export function createBusinessCommandGateway({ db }) {
           source: "api",
         },
       }).then((run) => {
-        req.businessCommandRunId = run?.id || null;
-        return req.businessCommandRunId;
+        req.workflowTraceRunId = run?.id || null;
+        return req.workflowTraceRunId;
       }).finally(() => {
         creating = null;
       });
@@ -64,14 +64,14 @@ export function createBusinessCommandGateway({ db }) {
       finalized = true;
       Promise.resolve()
         .then(async () => {
-          if (!req.businessCommandRunId && req.user?.companyId) {
+          if (!req.workflowTraceRunId && req.user?.companyId) {
             await req.ensureBusinessCommandRun({
               companyId: req.user.companyId,
               userId: req.user.id || null,
               storeId: req.user.storeId || null,
             });
           }
-          if (!req.businessCommandRunId) return;
+          if (!req.workflowTraceRunId) return;
 
           const statusCode = Number(res.statusCode || 500);
           const status = !aborted && statusCode < 400 ? "COMPLETED" : "FAILED";
@@ -93,7 +93,7 @@ export function createBusinessCommandGateway({ db }) {
                 storeId: req.user?.storeId || null,
                 connectionAborted: aborted === true,
               }),
-              req.businessCommandRunId,
+              req.workflowTraceRunId,
             ]
           );
         })
