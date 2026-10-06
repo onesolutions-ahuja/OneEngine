@@ -35,19 +35,19 @@ import renderDashboardComponent from "../../components/dashboard/DashboardCompon
 const fresh = () => ({
   name: "",
   description: "",
-  dataSource: "sales",
+  dataSource: "platform_object",
   reportTypeId: null,
   objectId: "",
   format: "tabular",
-  fields: ["date", "net_sales", "transactions"],
-  filters: [{ field: "date", operator: "this_week" }],
+  fields: [],
+  filters: [],
   filterLogic: "all",
   crossFilters: [],
-  rowGroups: ["date"],
+  rowGroups: [],
   columnGroups: [],
-  groupBy: ["date"],
+  groupBy: [],
   summaries: [],
-  sort: [{ field: "date", direction: "desc", nulls: "last" }],
+  sort: [],
   rowLimit: 1000,
   showDetails: true,
   showSubtotals: true,
@@ -144,7 +144,15 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     label:`${relationship.label||relationship.target_object_key||relationship.relationship_key||"Related"} · ${field.label||field.api_name||field.key}`,
     relationshipKey:relationship.relationship_key||relationship.key,
   }))),[platformRelationships]);
-  const availableFields=definition.dataSource==="platform_object"?[...platformFields,...relatedPlatformFields]:metadata.fields;
+  const selectedStandardSource=(metadata.sources||[]).find((source)=>String(source.key)===String(definition.dataSource));
+  const standardSourceFields=Array.isArray(selectedStandardSource?.fields)
+    ? selectedStandardSource.fields.map((entry)=>{
+        const key=typeof entry==="string"?entry:entry?.key;
+        const declared=(metadata.fields||[]).find((field)=>String(field.key)===String(key));
+        return declared||{key,label:typeof entry==="object"?(entry.label||key):String(key||"").replaceAll("_"," "),type:typeof entry==="object"?(entry.type||"text"):"text"};
+      }).filter((field)=>field.key)
+    : [];
+  const availableFields=definition.dataSource==="platform_object"?[...platformFields,...relatedPlatformFields]:standardSourceFields;
   const selectedFields=useMemo(()=>definition.fields.map((key)=>availableFields.find((field)=>field.key===key)).filter(Boolean),[definition.fields,availableFields]);
   const selectedObjectMeta=(metadata.platformObjects||[]).find((object)=>String(object.id)===String(definition.objectId||""));
   const historicalFieldKeys=selectedObjectMeta?.config?.historicalTrending?.enabled===true&&Array.isArray(selectedObjectMeta.config.historicalTrending.fields)?selectedObjectMeta.config.historicalTrending.fields:[];
@@ -160,8 +168,12 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     }catch(e){setError(errorMessage(e));}
   };
   const changeSource=(dataSource)=>{
-    if(dataSource==="sales")update({dataSource,reportTypeId:null,objectId:"",fields:["date","net_sales","transactions"],rowGroups:["date"],groupBy:["date"],columnGroups:[],summaries:[],filters:[{field:"date",operator:"this_week"}],crossFilters:[],sort:[{field:"date",direction:"desc",nulls:"last"}]});
-    else update({dataSource,reportTypeId:null,objectId:metadata.platformObjects?.[0]?.id||"",fields:[],rowGroups:[],groupBy:[],columnGroups:[],summaries:[],filters:[],crossFilters:[],sort:[]});
+    update({
+      dataSource,
+      reportTypeId:null,
+      objectId:dataSource==="platform_object"?(metadata.platformObjects?.[0]?.id||""):"",
+      fields:[],rowGroups:[],groupBy:[],columnGroups:[],summaries:[],filters:[],crossFilters:[],sort:[]
+    });
   };
   const changeReportType=(reportTypeId)=>{
     if(!reportTypeId)return update({reportTypeId:null});
@@ -239,7 +251,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       <PreviewControls value={definition.previewPreference||{autoPreview:true,sampleLimit:50}} onChange={(previewPreference)=>update({previewPreference})} onRefresh={preview} refreshing={running==="preview"}/>
       <div className="grid md:grid-cols-2 gap-3"><label className="onepos-label">Report name<input className="onepos-input mt-1" value={definition.name} onChange={(e)=>update({name:e.target.value})}/></label><label className="onepos-label">Description<input className="onepos-input mt-1" value={definition.description} onChange={(e)=>update({description:e.target.value})}/></label></div>
       <div className="grid md:grid-cols-3 gap-3">
-        <label className="onepos-label">Data source<select className="onepos-input mt-1" value={definition.dataSource} onChange={(e)=>changeSource(e.target.value)}><option value="sales">Sales</option><option value="platform_object">Platform Object</option></select></label>
+        <label className="onepos-label">Data source<select className="onepos-input mt-1" value={definition.dataSource} onChange={(e)=>changeSource(e.target.value)}><option value="platform_object">Platform Object</option>{(metadata.sources||[]).map((source)=><option key={source.key} value={source.key}>{source.label||source.key}</option>)}</select></label>
         {definition.dataSource==="platform_object"?<label className="onepos-label">Report type<select className="onepos-input mt-1" value={definition.reportTypeId||""} onChange={(e)=>changeReportType(e.target.value)}><option value="">Direct Object report</option>{(metadata.reportTypes||[]).map((item)=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>:null}
         {definition.dataSource==="platform_object"?<label className="onepos-label">Object<select className="onepos-input mt-1" disabled={Boolean(definition.reportTypeId)} value={definition.objectId||""} onChange={(e)=>changeObject(e.target.value)}><option value="">Select object</option>{metadata.platformObjects.map((object)=><option key={object.id} value={object.id}>{object.label||object.object_key}</option>)}</select></label>:null}
       </div>
