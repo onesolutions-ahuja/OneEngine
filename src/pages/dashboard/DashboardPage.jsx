@@ -230,8 +230,11 @@ export default function DashboardPage({ onOpenBuilder }) {
         if (!fallback?.success) throw new Error(fallback?.message || 'Unable to load dashboard')
         value = fallback.data
       }
-      const state = value?.id ? await apiRequest(`/api/dashboards/${encodeURIComponent(value.id)}/state`).catch(() => null) : null
+      const statePromise = value?.id
+        ? apiRequest(`/api/dashboards/${encodeURIComponent(value.id)}/state`).catch(() => null)
+        : Promise.resolve(null)
       setDefinition(value)
+      const state = await statePromise
       if (state?.success && Object.keys(filterValues || {}).length === 0) {
         filterValues = state.data?.filter_values || {}
         setGlobalFilterValues(filterValues)
