@@ -138,32 +138,6 @@ function countTopLevelActions(objectSource) {
   return count;
 }
 
-const platformSource = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-for (const [marker, sourceName] of [
-  ["const lifecycleFlows = [", "platform-onestore"],
-  ["const tillWorkflowDefinitions = [", "platform-onetill"],
-]) {
-  for (const objectSource of extractArrayObjects(platformSource, marker)) {
-    const name = objectSource.match(/\bname:\s*"([^"]+)"/)?.[1] || "(unnamed)";
-    const apiName = objectSource.match(/\bapiName:\s*"([^"]+)"/)?.[1] || null;
-    const steps = countTopLevelActions(objectSource);
-    const builderPersisted = sourceName === "platform-onestore"
-      ? platformSource.includes("gptBuilderElements: flow.actions.map")
-      : platformSource.includes("gptBuilderElements: (flow.actions || []).map");
-    rows.push({
-      source: sourceName,
-      packageKey: null,
-      name,
-      apiName,
-      runtime: true,
-      steps,
-      builderNodes: builderPersisted ? steps : 0,
-      builderRoundTrip: builderPersisted,
-      atomicAllowed: atomicAllowlist.has(name),
-    });
-  }
-}
-
 const runtimeRows = rows.filter((row) => row.runtime);
 const short = runtimeRows.filter((row) => row.steps <= 2);
 const invalidShort = short.filter((row) => !row.atomicAllowed);
