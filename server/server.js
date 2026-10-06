@@ -34,7 +34,7 @@ import {
 import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
-import { createWorkflowTraceGateway, purgeOldWorkflowTraceRuns } from "./services/businessCommandGateway.js";
+import { createWorkflowTraceGateway, purgeOldWorkflowTraceRuns } from "./services/workflowTraceGateway.js";
 import createTillRouter from "./routes/till.js";
 import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
