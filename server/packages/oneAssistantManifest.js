@@ -346,37 +346,7 @@ export const oneAssistantManifest = {
           { objectKey: "appointment_booking_case", viewKey: "recent", label: "Recent Booking Cases", columns: ["channel","sender","status","service_id","appointment_id","created_at"], sort: { field: "created_at", direction: "desc" }, pageSize: 50, isDefault: true }
         ],
         workflows: [
-          oneAssistantAppointmentRouterWorkflow(),
-          {
-            objectKey: "appointment_booking_case",
-            name: "OneAssistant - Payment Router",
-            triggerKey: "appointment_payment_required",
-            conditions: [],
-            action: {
-              type: "workflow",
-              scope: "one_assistant",
-              subflowCapability: "assistant.payment.router",
-              actions: [
-                { id: "payment_provider", key: "RUN_ASSISTANT_SUBFLOW", capability: "assistant.payment", required: false }
-              ]
-            },
-            active: false,
-          },
-          {
-            objectKey: "appointment_booking_case",
-            name: "OneAssistant - Confirmation Router",
-            triggerKey: "appointment_confirmed",
-            conditions: [],
-            action: {
-              type: "workflow",
-              scope: "one_assistant",
-              subflowCapability: "assistant.confirmation",
-              actions: [
-                { id: "confirmation_channel", key: "RUN_ASSISTANT_SUBFLOW", capability: "assistant.confirmation", channel: { path: "channel" }, required: false }
-              ]
-            },
-            active: false,
-          }
+          oneAssistantAppointmentRouterWorkflow()
         ],
         templates: [
           { apiKey: "assistant_email_booking_link", name: "OneAssistant Email - Booking Link", channel: "EMAIL", subject: "Choose your appointment time", body: "We received your appointment request. Choose an available time here: {{bookingUrl}}", required: false },
