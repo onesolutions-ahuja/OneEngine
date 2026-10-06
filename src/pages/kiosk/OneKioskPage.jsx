@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2, ArrowLeft, Accessibility, Languages, HelpCircle, QrCode, GitCompareArrows, Volume2, LogOut } from "lucide-react";
 import { apiRequest, KIOSK_TOKEN_STORAGE_KEY, lockToKioskMode } from "../../services/api.js";
-import { loadRuntimeSurface, mapRuntimePayload } from '../../services/runtimeSurface'
+import { loadRuntimeSurface, mapRuntimePayload, runtimeEndpoint } from '../../services/runtimeSurface'
 import "./oneKiosk.css";
 
 const ONE_KIOSK_DEVICE_KEY = "onepos_one_kiosk_device_key";
@@ -159,6 +159,10 @@ export default function OneKioskPage({ publicMode = false }) {
   const [journeyData, setJourneyData] = useState({});
   const [pendingAgeProduct, setPendingAgeProduct] = useState(null);
   const [ageApprovalBusy, setAgeApprovalBusy] = useState(false);
+  const [kioskSurface, setKioskSurface] = useState(null);
+  const kioskEndpoint = (key, params = {}) => runtimeEndpoint(kioskSurface, key, params);
+  const kioskValue = (key, fallback = undefined) => kioskSurface?.values?.[key] ?? fallback;
+
   const [fulfilmentDetails, setFulfilmentDetails] = useState({
     storeId: "",
     name: "",
@@ -195,11 +199,18 @@ export default function OneKioskPage({ publicMode = false }) {
       return undefined;
     }
     let live = true;
-    Promise.all([
-      apiRequest("/api/kiosk/catalogue"),
-      apiRequest("/api/settings").catch(() => null),
-    ])
-      .then(([productResponse, settingsResponse]) => {
+    (async () => {
+      try {
+        const surface = await loadRuntimeSurface('one_kiosk', 'kiosk');
+        if (!live) return;
+        setKioskSurface(surface);
+        const catalogueEndpoint = runtimeEndpoint(surface, 'catalogue');
+        const settingsEndpoint = runtimeEndpoint(surface, 'settings');
+        if (!catalogueEndpoint) throw new Error("OneKiosk catalogue metadata is unavailable");
+        const [productResponse, settingsResponse] = await Promise.all([
+          apiRequest(catalogueEndpoint),
+          settingsEndpoint ? apiRequest(settingsEndpoint).catch(() => null) : Promise.resolve(null),
+        ]);
         if (!live) return;
         if (!productResponse?.success) throw new Error(productResponse?.message || "Unable to load kiosk catalogue");
         const rows = (Array.isArray(productResponse.data) ? productResponse.data : [])
@@ -213,18 +224,19 @@ export default function OneKioskPage({ publicMode = false }) {
           }));
         setProducts(rows);
         setCurrency(settingsResponse?.data?.company?.currency || settingsResponse?.company?.currency || "GBP");
-      })
-      .catch((reason) => {
+      } catch (reason) {
         if (live) setError(reason?.message || "Unable to load OneKiosk");
-      })
-      .finally(() => {
+      } finally {
         if (live) setLoading(false);
-      });
+      }
+    })();
     return () => { live = false; };
   }, [demoMode, demoFlowKey, publicMode]);
 
   const loadExperience = async (deviceKey) => {
-    const response = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(deviceKey)}`, {
+    const runtimeUrl = kioskEndpoint('runtime', { deviceKey });
+    if (!runtimeUrl) throw new Error("OneKiosk runtime metadata is unavailable");
+    const response = await apiRequest(runtimeUrl, {
       timeoutMs: 8000,
       retryGet: true,
     });
@@ -245,7 +257,7 @@ export default function OneKioskPage({ publicMode = false }) {
   };
 
   useEffect(() => {
-    if (demoMode) return undefined;
+    if (demoMode || !kioskSurface) return undefined;
     let live = true;
     let timer = null;
     const key = kioskDeviceKey();
@@ -261,7 +273,7 @@ export default function OneKioskPage({ publicMode = false }) {
       let printerMessage = "";
 
       try {
-        const health = await apiRequest("/api/health", { timeoutMs: 6000, retryGet: false });
+        const health = await apiRequest(kioskEndpoint("health"), { timeoutMs: 6000, retryGet: false });
         serverStatus = health?.success === false ? "DEGRADED" : "ONLINE";
         serverMessage = health?.message || "";
       } catch (reason) {
@@ -270,7 +282,7 @@ export default function OneKioskPage({ publicMode = false }) {
       }
 
       try {
-        const runtime = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(key)}`, { timeoutMs: 6000, retryGet: false });
+        const runtime = await apiRequest(kioskEndpoint("runtime", { deviceKey: key }), { timeoutMs: 6000, retryGet: false });
         const payment = runtime?.data?.payment || null;
         paymentStatus = payment?.status || "NOT_CONFIGURED";
         paymentMessage = payment?.error || "";
@@ -281,7 +293,7 @@ export default function OneKioskPage({ publicMode = false }) {
       }
 
       try {
-        const runtime = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(key)}`, { timeoutMs: 6000, retryGet: false });
+        const runtime = await apiRequest(kioskEndpoint("runtime", { deviceKey: key }), { timeoutMs: 6000, retryGet: false });
         const printer = runtime?.data?.printer || printerRuntime || null;
         printerStatus = printer?.status || (printer?.name ? "UNKNOWN" : "NOT_CONFIGURED");
         printerMessage = printer?.name ? `${printer.name}${printer.address ? ` · ${printer.address}` : ""}` : "";
@@ -292,7 +304,7 @@ export default function OneKioskPage({ publicMode = false }) {
       }
 
       try {
-        const heartbeat = await apiRequest(`/api/kiosk/devices/${device.id}/heartbeat`, {
+        const heartbeat = await apiRequest(kioskEndpoint("heartbeat", { deviceId: device.id }), {
           method: "POST",
           body: JSON.stringify({
             internetStatus,
@@ -322,7 +334,7 @@ export default function OneKioskPage({ publicMode = false }) {
           const runtime = await loadExperience(key);
           device = runtime?.device || null;
         } else {
-          const response = await apiRequest("/api/kiosk/devices/register", {
+          const response = await apiRequest(kioskEndpoint("registerDevice"), {
             method: "POST",
             body: JSON.stringify({
               deviceKey: key,
@@ -333,7 +345,7 @@ export default function OneKioskPage({ publicMode = false }) {
           device = response.data;
 
           if (publicMode) {
-            const session = await apiRequest("/api/kiosk/device-session", {
+            const session = await apiRequest(kioskEndpoint("deviceSession"), {
               method: "POST",
               body: JSON.stringify({ deviceKey: key }),
             });
