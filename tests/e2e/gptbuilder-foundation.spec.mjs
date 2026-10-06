@@ -19,26 +19,21 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.getByRole('button', { name: /Screen Flow/i }).click()
 
     await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
-    await expect(page.getByLabel('Start')).toBeVisible()
+    await expect(page.locator('[data-gptb-element-id="start"]')).toBeVisible()
 
     // Regression: the floating New Automation link must stay below overlays
     // and never intercept actions rendered by configuration/diagnostic panels.
     const newAutomationLink = page.getByRole('button', { name: /^New Automation$/ })
     await expect(newAutomationLink).toBeVisible()
-    await page.getByLabel('Start').click()
-    const doneButton = page.getByRole('button', { name: /^Done$/ })
-    await expect(doneButton).toBeVisible()
-    await doneButton.click()
-    const saveButton = page.getByRole('button', { name: /^Save$/ })
     await expect(saveButton).toBeEnabled()
 
     await page.getByRole('button', { name: 'View Properties' }).click()
     const props = page.getByRole('dialog', { name: /Save the Flow/i })
     await expect(props).toBeVisible()
 
-    const label = props.getByText('Flow Label', { exact: true }).locator('..').getByRole('textbox')
-    const api = props.getByText('Flow API Name', { exact: true }).locator('..').getByRole('textbox')
-    const interview = props.getByText('Interview Label', { exact: true }).locator('..').getByRole('textbox')
+    const label = props.locator('label').filter({ hasText: 'Flow Label' }).locator('input')
+    const api = props.locator('label').filter({ hasText: 'Flow API Name' }).locator('input')
+    const interview = props.locator('label').filter({ hasText: 'Interview Label' }).locator('input')
     await expect(label).toHaveValue('')
     await expect(api).toHaveValue('')
 
@@ -95,7 +90,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     const startPanel = page.getByLabel('Configure Start')
     await expect(startPanel).toBeVisible()
-    await startPanel.getByText('Platform Event', { exact: true }).locator('..').getByRole('combobox').selectOption('contract_test_event')
+    await startPanel.locator('select').first().selectOption('contract_test_event')
     await startPanel.getByRole('button', { name: /^Done$/ }).click()
 
     await page.getByRole('button', { name: 'Add after Start' }).click()
@@ -147,11 +142,11 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: /^New Flow$/ }).click()
     await page.getByLabel('Search automations').fill('record')
-    await page.getByRole('button', { name: /Record-Triggered Flow/i }).click()
+    await page.locator('.gptb-type-card').filter({ has: page.getByText('Record-Triggered Flow', { exact: true }) }).click()
 
     const startPanel = page.getByLabel('Configure Start')
     await expect(startPanel).toBeVisible()
-    await startPanel.getByText('Object', { exact: true }).locator('..').getByRole('combobox').selectOption('contact')
+    await startPanel.locator('label').filter({ hasText: /^Object/ }).getByRole('combobox').selectOption('contact')
     await startPanel.getByRole('button', { name: /^Done$/ }).click()
 
     await page.getByRole('button', { name: 'Add after Start' }).click()
@@ -188,10 +183,10 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
       await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
       await page.getByRole('button', { name: /^New Flow$/ }).click()
       await page.getByLabel('Search automations').fill(label)
-      await page.getByRole('button', { name: new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).click()
+      await page.locator('.gptb-type-card').filter({ has: page.getByText(label, { exact: true }) }).click()
       await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
       if (needsStart) await expect(page.getByLabel('Configure Start')).toBeVisible()
-      else await expect(page.getByLabel('Start')).toBeVisible()
+    await expect(page.locator('[data-gptb-element-id="start"]')).toBeVisible()
     }
     expect(failures, failures.join('\n')).toEqual([])
   })
@@ -232,7 +227,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.getByRole('button', { name: /^Save$/ }).click()
     const props = page.getByRole('dialog', { name: /Save the Flow/i })
     await expect(props).toBeVisible()
-    await props.getByText('Flow Label', { exact: true }).locator('..').getByRole('textbox').fill('Contract Persistence Flow')
+    await props.locator('label').filter({ hasText: 'Flow Label' }).locator('input').fill('Contract Persistence Flow')
     await props.getByRole('button', { name: /^Save$/ }).click()
     await expect(page.getByText('Flow saved.', { exact: true })).toBeVisible()
     expect(savedRule?.action?.gptBuilder).toBe(true)
@@ -248,8 +243,8 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.getByRole('button', { name: 'View Properties' }).click()
     const reopened = page.getByRole('dialog', { name: /Flow Properties/i })
     await expect(reopened).toBeVisible()
-    await expect(reopened.getByText('Flow Label', { exact: true }).locator('..').getByRole('textbox')).toHaveValue('Contract Persistence Flow')
-    await expect(reopened.getByText('Flow API Name', { exact: true }).locator('..').getByRole('textbox')).toHaveValue('Contract_Persistence_Flow')
+    await expect(reopened.locator('label').filter({ hasText: 'Flow Label' }).locator('input')).toHaveValue('Contract Persistence Flow')
+    await expect(reopened.locator('label').filter({ hasText: 'Flow API Name' }).locator('input')).toHaveValue('Contract_Persistence_Flow')
 
     expect(failures, failures.join('\n')).toEqual([])
   })
@@ -289,7 +284,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
 
     await page.getByRole('button', { name: /^Run$/ }).click()
-    const runPanel = page.getByLabel('Run')
+    const runPanel = page.getByRole('complementary', { name: 'Run' })
     await expect(runPanel).toBeVisible()
     await runPanel.getByRole('button', { name: /^Run$/ }).click()
     await expect(runPanel.getByText('COMPLETED', { exact: true })).toBeVisible()
@@ -297,7 +292,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await runPanel.getByRole('button', { name: /^Close$/ }).click()
 
     await page.getByRole('button', { name: /^View Tests$/ }).click()
-    const testPanel = page.getByLabel('View Tests')
+    const testPanel = page.getByRole('complementary', { name: 'View Tests' })
     await expect(testPanel).toBeVisible()
     await testPanel.getByText('Saved Test', { exact: true }).locator('..').getByRole('combobox').selectOption('scenario-1')
     await testPanel.getByRole('button', { name: /^Run Scenario$/ }).click()
@@ -309,7 +304,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.goto('developer/gptbuilder')
     await page.getByRole('button', { name: /Edit Runtime Screen/i }).click()
     await page.getByRole('button', { name: /^Debug$/ }).click()
-    const debugPanel = page.getByLabel('Debug')
+    const debugPanel = page.getByRole('complementary', { name: 'Debug' })
     await expect(debugPanel).toBeVisible()
     await debugPanel.getByRole('button', { name: /^Run$/ }).click()
     await expect(debugPanel.getByText('debug-1', { exact: true })).toBeVisible()
