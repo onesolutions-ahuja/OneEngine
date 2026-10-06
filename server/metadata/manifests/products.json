@@ -45,9 +45,7 @@
   "objects": [
     {
       "objectKey": "product",
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "metadataScope": "global",
       "label": "Product",
       "pluralLabel": "Products",
