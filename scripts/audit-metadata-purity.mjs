@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EXECUTABLE_ROOTS = ["server", "src"];
-const IGNORE_PARTS = ["/docs/", "/database/migrations/", "/database/archive/", "/node_modules/"];
+const IGNORE_PARTS = ["/docs/", "/database/", "/node_modules/"];
 
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
