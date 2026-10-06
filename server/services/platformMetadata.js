@@ -2376,10 +2376,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_customer_action","modal","customer", { modal: "customer" }],
         ["till_discount","modal","discount", { modal: "discount" }],
         ["till_void","command","clear_sale", { command: "clear_sale" }],
-        ["till_misc_item","modal","misc", { modal: "misc" }],
+        ["till_misc_item","modal","misc", { modal: "misc", submitButtonKey: "till_misc_line_build" }],
         ["till_petty_cash","modal","petty", { modal: "petty", submitButtonKey: "till_petty_cash_submit" }],
         ["till_print","command","print_receipt", { command: "print_receipt", recordContext: "last_sale" }],
-        ["till_receipt_qr","workflow", tillWorkflowIds.get("ONETILL_RECEIPT_QR"), { recordContext: "last_sale", policyButtonKey: "till_receipt_qr_policy", policyEvent: "MANUAL" }],
+        ["till_receipt_qr","workflow", tillWorkflowIds.get("ONETILL_RECEIPT_QR"), { recordContext: "last_sale", policyButtonKey: "till_receipt_qr_policy", revokeButtonKey: "till_receipt_qr_revoke", policyEvent: "MANUAL" }],
         ["till_customer_display","command","customer_display", { command: "customer_display" }],
         ["till_open_drawer","workflow",tillWorkflowIds.get("ONETILL_OPEN_DRAWER"), {}],
         ["till_price_override","modal","price_override", { modal: "price_override", submitButtonKey: "till_price_override_apply" }],
@@ -2408,29 +2408,29 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       ).catch(() => {});
 
       const internalWorkflowButtons = [
-        ["till_resume_consume","Consume Held Sale",tillWorkflowIds.get("ONETILL_CONSUME_HELD_SALE"),"sale.hold"],
-        ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
-        ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("ONETILL_CHECKOUT_AGE_PREFLIGHT"),"sale.create"],
-        ["till_payment_process","Select Payment Mode",tillWorkflowIds.get("ONETILL_PAYMENT_MODE"),"sale.create"],
-        ["till_pricing_calculate","Calculate Sale Pricing",tillWorkflowIds.get("ONETILL_CALCULATE_SALE_PRICING"),"sale.create"],
-        ["till_split_payment_validate","Validate Split Payment",tillWorkflowIds.get("ONETILL_VALIDATE_SPLIT_PAYMENT"),"sale.create"],
-        ["till_misc_line_build","Build Misc Sale Line",tillWorkflowIds.get("ONETILL_BUILD_MISC_LINE"),"sale.create"],
-        ["till_petty_cash_submit","Record Petty Cash",tillWorkflowIds.get("ONETILL_RECORD_PETTY_CASH"),"cash.payout"],
-        ["till_receipt_qr_policy","Receipt QR Policy",tillWorkflowIds.get("ONETILL_RECEIPT_QR_POLICY"),"sale.view"],
-        ["till_receipt_qr_revoke","Revoke Receipt QR",tillWorkflowIds.get("ONETILL_RECEIPT_QR_REVOKE"),"sale.view"],
+        ["till_resume_consume","Consume Held Sale",tillWorkflowIds.get("ONETILL_CONSUME_HELD_SALE"),"sale.hold","resume_commit"],
+        ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change","price_override_submit"],
+        ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("ONETILL_CHECKOUT_AGE_PREFLIGHT"),"sale.create","checkout_preflight"],
+        ["till_payment_process","Select Payment Mode",tillWorkflowIds.get("ONETILL_PAYMENT_MODE"),"sale.create","payment_process"],
+        ["till_pricing_calculate","Calculate Sale Pricing",tillWorkflowIds.get("ONETILL_CALCULATE_SALE_PRICING"),"sale.create","pricing_calculate"],
+        ["till_split_payment_validate","Validate Split Payment",tillWorkflowIds.get("ONETILL_VALIDATE_SPLIT_PAYMENT"),"sale.create","split_validate"],
+        ["till_misc_line_build","Build Misc Sale Line",tillWorkflowIds.get("ONETILL_BUILD_MISC_LINE"),"sale.create","misc_submit"],
+        ["till_petty_cash_submit","Record Petty Cash",tillWorkflowIds.get("ONETILL_RECORD_PETTY_CASH"),"cash.payout","petty_submit"],
+        ["till_receipt_qr_policy","Receipt QR Policy",tillWorkflowIds.get("ONETILL_RECEIPT_QR_POLICY"),"sale.view","receipt_policy"],
+        ["till_receipt_qr_revoke","Revoke Receipt QR",tillWorkflowIds.get("ONETILL_RECEIPT_QR_REVOKE"),"sale.view","receipt_revoke"],
       ];
-      for (const [buttonKey,label,workflowId,permission] of internalWorkflowButtons) {
+      for (const [buttonKey,label,workflowId,permission,runtimeRole] of internalWorkflowButtons) {
         if (!workflowId) continue;
         await pool.query(
           `INSERT INTO platform_buttons
              (company_id,object_id,button_key,label,action_key,target_type,target_key,variant,placement,required_permission,visibility_rule,input_mappings,config,active,managed,user_modified)
-           VALUES (NULL,$1,$2,$3,$2,'workflow',$4,'secondary','till_internal',$5,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,TRUE,TRUE,FALSE)
+           VALUES (NULL,$1,$2,$3,$2,'workflow',$4,'secondary','till_internal',$5,'{}'::jsonb,'{}'::jsonb,$6::jsonb,TRUE,TRUE,FALSE)
            ON CONFLICT (button_key) WHERE company_id IS NULL DO UPDATE SET
              target_type=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_type ELSE 'workflow' END,
              target_key=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_key ELSE EXCLUDED.target_key END,
              required_permission=CASE WHEN platform_buttons.user_modified THEN platform_buttons.required_permission ELSE EXCLUDED.required_permission END,
              active=TRUE,managed=TRUE,updated_at=NOW()`,
-          [saleObjectId, buttonKey, label, String(workflowId), permission]
+          [saleObjectId, buttonKey, label, String(workflowId), permission, JSON.stringify({ runtimeRole })]
         );
       }
       await pool.query(
