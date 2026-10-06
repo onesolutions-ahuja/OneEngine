@@ -4554,7 +4554,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   }
 
   router.get("/platform/rules", ...manage, async (req, res) => {
-    await ensureSystemWorkflowCatalog({ db, companyId: req.user.companyId, userId: req.user.id || null });
+    // Keep the authoring read path read-only and fast. System workflow catalogue
+    // reconciliation belongs to platform bootstrap/package refresh, not every list load.
     const result = await db(
       `SELECT r.*, o.object_key, o.label AS object_label
          FROM platform_rules r
