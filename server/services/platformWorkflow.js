@@ -15,7 +15,6 @@ import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
 import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
-import { createShopifyAdapter } from "./shopifyAdapter.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
