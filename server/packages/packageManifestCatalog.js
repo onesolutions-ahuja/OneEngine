@@ -20,6 +20,7 @@ const PACKAGE_CATALOG = [
           modifierGroup: "product_modifier_group",
           modifierOption: "product_modifier_option",
           onlineOrder: "online_order",
+          customer: "customer",
         },
         settings: {
           source: "/api/settings",
