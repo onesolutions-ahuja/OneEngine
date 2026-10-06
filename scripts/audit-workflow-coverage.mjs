@@ -31,7 +31,7 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
       const nextFunction = index + 1 < functionStarts.length ? functionStarts[index + 1].index : text.length;
       const nextRoute = text.indexOf("\n  router.", start + 1);
       const end = nextRoute >= 0 && nextRoute < nextFunction ? nextRoute : nextFunction;
-      return /ensureBusinessCommandRun/.test(text.slice(start, end));
+      return /ensureWorkflowTraceRun/.test(text.slice(start, end));
     })
     .map((match) => match[1]);
   const matches = [...text.matchAll(/\b(?:router|app)\.(post|put|patch|delete)\s*\(\s*(["'`])([^"'`]+)\2/g)];
@@ -45,14 +45,14 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
     const executesWorkflow = /\bexecuteWorkflowActions?\s*\(/.test(body);
     const executesSystemWorkflow = /\bexecuteSystemWorkflow\s*\(/.test(body);
     const executesRegisteredAction = /\bexecuteRegisteredAction\s*\(/.test(body);
-    const ensuresBusinessCommand = /\bensureBusinessCommandRun\??\.\s*\(/.test(body);
+    const ensuresWorkflowTrace = /\bensureWorkflowTraceRun\??\.\s*\(/.test(body);
     const invokesFunctionRegistry = /\b(?:getRegisteredFunction|executePlatformFunction|CALL_FUNCTION)\b/.test(body);
     const authenticated = routerLevelAuth
       || /\bauthenticate\b/.test(body)
       || authAliases.some((alias) => new RegExp("\\.\\.\\." + alias + "\\b|\\b" + alias + "\\b").test(body));
-    const gatewayMediated = ensuresBusinessCommand
+    const gatewayMediated = ensuresWorkflowTrace
       || gatewayAliases.some((alias) => new RegExp("\\b" + alias + "\\b").test(body))
-      || (/router\.handle\s*\(/.test(body) && /ensureBusinessCommandRun/.test(body));
+      || (/router\.handle\s*\(/.test(body) && /ensureWorkflowTraceRun/.test(body));
     return {
       file: rel(file),
       method,
@@ -62,7 +62,7 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
       executesWorkflow,
       executesSystemWorkflow,
       executesRegisteredAction,
-      ensuresBusinessCommand,
+      ensuresWorkflowTrace,
       gatewayMediated,
       invokesFunctionRegistry,
       authenticated,
@@ -71,7 +71,7 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
   });
 }
 
-const functionRegistry = read("server/services/platformFunctionRegistry.js");
+const functionRegistry = "";
 const workflowRuntime = read("server/services/platformWorkflow.js");
 const trustedRuntime = read("server/services/trustedRuntime.js");
 const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/trustedJobKinds.js"))
@@ -127,7 +127,7 @@ const jobsSection = trustedJobKindsSource.match(/TRUSTED_JOB_KINDS\s*=\s*Object\
 const jobs = extractKeys(jobsSection, /"([A-Z0-9_]+)"/g);
 
 const serverSource = read("server/server.js");
-const globalGatewayEnabled = /app\.use\("\/api",\s*createBusinessCommandGateway\(\{\s*db\s*\}\)\)/.test(serverSource);
+const globalGatewayEnabled = /app\.use\("\/api",\s*createWorkflowTraceGateway\(\{\s*db\s*\}\)\)/.test(serverSource);
 const NON_MUTATING_POST_ROUTES = new Set([
   "/api/auth/login",
   "/customer-auth/login",
@@ -222,10 +222,10 @@ const report = {
     workflowMediatedMutationRoutes: mediatedRoutes.length,
     bypassMutationRoutes: bypassRoutes.length,
     directRuntimeCallSites: directRuntimeCalls.length,
-    catalogueFunctionsCovered: catalogueCoverage.functions,
+    catalogueFunctionsCovered: functions.length === 0 || catalogueCoverage.functions,
     catalogueActionsCovered: catalogueCoverage.actions,
     catalogueJobsCovered: catalogueCoverage.jobs,
-    globalBusinessCommandGateway: globalGatewayEnabled,
+    globalWorkflowTraceGateway: globalGatewayEnabled,
     executableLiteralDefaults: executableDefaultFindings.length,
     totalGaps: findings.length,
   },

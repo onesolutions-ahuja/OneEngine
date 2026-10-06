@@ -1678,7 +1678,7 @@ export default function createConnectorsRouter({
         return res.status(409).json({ success: false, message: "Run a successful connection test before sending SMS" });
       }
 
-      await req.ensureBusinessCommandRun?.({
+      await req.ensureWorkflowTraceRun?.({
         companyId: req.user.companyId,
         userId: req.user.id || null,
         storeId: instance.store_id || null,

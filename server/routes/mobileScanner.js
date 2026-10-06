@@ -28,7 +28,7 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
       );
       if (!result.rows[0]) return res.status(401).json({ success: false, message: "Scanner session expired or revoked" });
       req.mobileScanner = result.rows[0];
-      await req.ensureBusinessCommandRun?.({
+      await req.ensureWorkflowTraceRun?.({
         companyId: req.mobileScanner.company_id,
         userId: null,
         storeId: req.mobileScanner.store_id,
@@ -189,7 +189,7 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
         [hashToken(pairingToken), hashToken(sessionToken)]
       );
       if (!paired.rows[0]) return res.status(410).json({ success: false, message: "Pairing link expired or already used" });
-      await req.ensureBusinessCommandRun?.({
+      await req.ensureWorkflowTraceRun?.({
         companyId: paired.rows[0].company_id,
         userId: null,
         storeId: paired.rows[0].store_id,

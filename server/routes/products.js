@@ -1,5 +1,4 @@
 import express from "express";
-import { exportProductsCsv, validateCsvImport, previewCsvImport, parseCsv, executeCsvImport } from "../services/productImportExport.js";
 import { ean13IdentityError } from "../src/utils/barcodeValidation.js";
 
 export default function createProductsRouter({ authenticate, authorize, db: domainDb, pool, createInventoryMovement, writeAudit, canAccessStore, savePlatformRecord = null }) {
@@ -229,86 +228,6 @@ export default function createProductsRouter({ authenticate, authorize, db: doma
    * Store-scoped users can only export their own store; admins can
    * export all stores within the company.
    */
-  router.get("/products/export", authenticate, authorize("product.view"), async (req, res) => {
-    try {
-      const { storeId } = req.query;
-
-      if (storeId) {
-        const allowed =
-          req.user.storeId === storeId ||
-          (await canAccessStore(req.user, storeId));
-        if (!allowed) {
-          return res.status(403).json({
-            success: false,
-            message: "You do not have access to this store",
-          });
-        }
-      }
-
-      if (!pool) {
-        return res.status(500).json({
-          success: false,
-          message: "DATABASE_URL is not configured",
-        });
-      }
-
-      const client = await pool.connect();
-      let transactionStarted = false;
-
-      try {
-        await client.query("BEGIN");
-        transactionStarted = true;
-
-        const rows = await exportProductsCsv(client, req.user.companyId, storeId || null);
-
-        const headers = [
-          "product_id", "sku", "ean", "name", "description", "category",
-          "vat_rate", "cost_price", "price", "active",
-          "store_id", "store_code", "store_enabled", "store_price",
-          "reorder_level", "minimum_stock",
-        ];
-
-        const csvRows = [headers.join(",")];
-        for (const row of rows) {
-          const values = headers.map((h) => {
-            const v = row[h] ?? "";
-            const str = String(v ?? "");
-            if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-              return '"' + str.replace(/"/g, '""') + '"';
-            }
-            return str;
-          });
-          csvRows.push(values.join(","));
-        }
-
-        await client.query("COMMIT");
-
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", `attachment; filename="products-export-${new Date().toISOString().slice(0, 10)}.csv"`);
-        res.send(csvRows.join("\n"));
-      } catch (error) {
-        if (transactionStarted) {
-          await client.query("ROLLBACK");
-        }
-        console.error("Product export error:", error);
-        res.status(500).json({
-          success: false,
-          message: "Unable to export products",
-        });
-      } finally {
-        if (typeof client.release === "function") {
-          client.release();
-        }
-      }
-    } catch (error) {
-      console.error("Product export error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Unable to export products",
-      });
-    }
-  });
-
   /*
    * POST /api/products/import/validate
    *

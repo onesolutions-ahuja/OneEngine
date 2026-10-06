@@ -32,7 +32,7 @@ import {
   createInvoiceDeliveryLink,
   buildInvoiceDeliveryMessage,
 } from "../services/secureInvoiceLinks.js";
-import { sendWhatsAppTestInvoice, resendWhatsAppInvoice, sendWhatsAppTextMessage } from "../services/whatsappDelivery.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { getCompanyEntitlements, hasEntitlement } from "../services/licensing.js";
 import { createWorkflowRun, executeWorkflowActions } from "../services/platformWorkflow.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "../services/communicationCore.js";
@@ -622,15 +622,14 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
       }
       const resolvedSaleId = resolved.saleId;
 
-      const result = await sendWhatsAppTestInvoice({
-        db,
-        companyId: req.user.companyId,
-        storeId: req.user.storeId ?? null,
-        userId: req.user.id ?? null,
-        saleId: resolvedSaleId,
-        recipientPhone,
-        deliveryMode: deliveryMode === "pdf" || deliveryMode === "link" ? deliveryMode : null,
+      const execution = await executeSystemWorkflow({
+        db, companyId:req.user.companyId, userId:req.user.id || null,
+        systemKey:"flow:invoice.delivery.send", req,
+        input:{ saleId, channel:"whatsapp", recipient:recipientPhone, message:"Invoice available", invoiceUrl:null },
+        storeId:req.user.storeId || null, writeAudit,
+        source:{ type:"api", method:req.method, path:req.path, capability:"WHATSAPP_INVOICE_DELIVERY" },
       });
+      const result = { ok:true, outcome:"sent", ...(execution.result || {}) };
 
       await writeAudit(
         req.user.companyId,
@@ -684,12 +683,14 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
         return res.status(400).json({ success: false, message: "Recipient phone and message are required." });
       }
 
-      const result = await sendWhatsAppTextMessage({
-        db,
-        companyId: req.user.companyId,
-        to: recipientPhone,
-        body: message,
+      const execution = await executeSystemWorkflow({
+        db, companyId:req.user.companyId, userId:req.user.id || null,
+        systemKey:"flow:invoice.delivery.send", req,
+        input:{ saleId:null, channel:"whatsapp", recipient:to, message:body, invoiceUrl:null },
+        storeId:req.user.storeId || null, writeAudit,
+        source:{ type:"api", method:req.method, path:req.path, capability:"WHATSAPP_MESSAGE" },
       });
+      const result = { ok:true, ...(execution.result || {}) };
 
       await writeAudit(
         req.user.companyId,
@@ -809,13 +810,14 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
         return res.status(404).json({ success: false, message: "Sale not found in your company" });
       }
 
-      const result = await resendWhatsAppInvoice({
-        db,
-        saleId,
-        companyId: req.user.companyId,
-        storeId: req.user.storeId ?? null,
-        userId: req.user.id ?? null,
+      const execution = await executeSystemWorkflow({
+        db, companyId:req.user.companyId, userId:req.user.id || null,
+        systemKey:"flow:invoice.delivery.send", req,
+        input:{ saleId, channel:"whatsapp", recipient:null, message:"Invoice available", invoiceUrl:null },
+        storeId:req.user.storeId || null, writeAudit,
+        source:{ type:"api", method:req.method, path:req.path, capability:"WHATSAPP_INVOICE_DELIVERY" },
       });
+      const result = { ok:true, outcome:"sent", ...(execution.result || {}) };
 
       await writeAudit(
         req.user.companyId,
@@ -1048,18 +1050,12 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
           }
 
           if (!customer && configuration.create_customer_if_missing === true) {
-            const created = await db(
-              `INSERT INTO customers (company_id,name,phone,notes,active)
-               VALUES ($1,$2,$3,$4,true)
-               RETURNING id,name,phone,email`,
-              [
-                companyId,
-                contactName || `WhatsApp ${sender.slice(-4)}`,
-                `+${sender}`,
-                "Created automatically by WhatsApp Assistant",
-              ]
-            );
-            customer = created.rows[0] || null;
+            const creation = await executeSystemWorkflow({
+              db, companyId, userId:null, systemKey:"flow:customer.register", req,
+              input:{customer:{company_id:companyId,name:contactName || `WhatsApp ${sender.slice(-4)}`,phone:`+${sender}`,notes:"Created automatically by WhatsApp Assistant",active:true}},
+              source:{type:"webhook",method:req.method,path:req.originalUrl||req.path,capability:"customer.register"},
+            });
+            customer = creation.result?.customer || null;
           }
 
           const conversationResult = await db(

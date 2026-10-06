@@ -1,6 +1,6 @@
 import { normalizeDashboardSubscription } from "./analyticsManagement.js";
 import { createDashboardExecution } from "./dashboardExecution.js";
-import { executeMediatedRegisteredAction } from "./platformWorkflow.js";
+import { executeSystemWorkflow } from "./systemWorkflowRuntime.js";
 import { resolveReportSubscriptionRecipients } from "./reportSubscriptionDelivery.js";
 import { dashboardAccessAtLeast, loadDashboardPrincipalContext, resolveDashboardAccess } from "./dashboardSecurity.js";
 import { validateDashboardDefinition } from "./dashboardBuilder.js";
@@ -136,14 +136,10 @@ export async function processDashboardSubscriptionDeliveryJob({
     if(!ledger||ledger.status==="DELIVERED")continue;
     await db("UPDATE dashboard_subscription_deliveries SET status='RUNNING',last_error=NULL,updated_at=NOW() WHERE id=$1",[ledger.id]);
     try{
-      const outcome=await executeMediatedRegisteredAction({
-        db,companyId:row.company_id,userId:executionUser.id,
-        req:{user:{id:executionUser.id,companyId:row.company_id}},
-        action:{type:"SEND_EMAIL",recipient:recipient.email,subject:`Scheduled dashboard: ${dashboard.name}`,body},
-      });
-      if(!["SUCCESS","COMPLETED"].includes(String(outcome?.status||""))){
-        const error=new Error(outcome?.error?.message||outcome?.code||"Dashboard subscription email delivery failed");
-        error.retryable=outcome?.retryable===true;
+      const execution=await executeSystemWorkflow({db,companyId:row.company_id,userId:executionUser.id,systemKey:"flow:communication.send",req:{user:{id:executionUser.id,companyId:row.company_id}},input:{channel:"EMAIL",recipient:recipient.email,subject:`Scheduled dashboard: ${dashboard.name}`,message:body}});
+      if(!["SUCCESS","COMPLETED"].includes(String(execution?.result?.status||""))){
+        const error=new Error(execution?.result?.error?.message||execution?.result?.code||"Dashboard subscription email delivery failed");
+        error.retryable=execution?.result?.retryable===true;
         throw error;
       }
       await db("UPDATE dashboard_subscription_deliveries SET status='DELIVERED',last_error=NULL,delivered_at=NOW(),updated_at=NOW() WHERE id=$1",[ledger.id]);

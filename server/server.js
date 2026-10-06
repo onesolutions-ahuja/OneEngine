@@ -34,7 +34,7 @@ import {
 import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
-import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
+import { createWorkflowTraceGateway, purgeOldWorkflowTraceRuns } from "./services/workflowTraceGateway.js";
 import createTillRouter from "./routes/till.js";
 import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
@@ -61,7 +61,6 @@ import createShopifyWebhooksRouter from "./routes/shopifyWebhooks.js";
 import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
-import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
 import createCustomerAuthRouter from "./routes/customerAuth.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
@@ -102,7 +101,6 @@ import { requireEntitlement } from "./services/licensing.js";
 import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
 import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
-import { createCanonicalRelatedTransaction, syncCanonicalSaleTransaction } from "./services/canonicalTransactions.js";
 import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // JARVES V2 - licence gate
 import { companyAdministrativeAccess, permissionAllows } from "./services/authorization.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
@@ -110,10 +108,7 @@ import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname 
 import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool } from "./services/tenantDatabase.js";
 /* Inventory primitives live in services/inventory.js (shared with every
  * stock writer: POS sales, purchases, returns, adjustments). */
-import {
-  createInventoryMovement,
-  inventoryMovementTypes,
-} from "./services/inventory.js";
+
 
 const { Pool } = pg;
 
@@ -500,19 +495,18 @@ async function testPaymentTerminal(terminal) {
  * services/auditLog.js (unknown users are nulled to satisfy the FK; other
  * failures are logged and swallowed so a committed business action stands).
  */
-app.use("/api", createBusinessCommandGateway({ db }));
+app.use("/api", createWorkflowTraceGateway({ db }));
 
 const writeAudit = createAuditWriter({ db });
 app.locals.writeAudit = writeAudit;
 const workflowTraceRetentionDays = Math.max(7, Number(process.env.WORKFLOW_TRACE_RETENTION_DAYS || 90));
-const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
+const purgeWorkflowTraceBatch = () => purgeOldWorkflowTraceRuns({
   db,
   retentionDays: workflowTraceRetentionDays,
   batchSize: 5000,
 }).catch((error) => console.error("Workflow trace retention cleanup error:", error?.message || error));
 setTimeout(purgeWorkflowTraceBatch, 60_000).unref?.();
 setInterval(purgeWorkflowTraceBatch, 6 * 60 * 60 * 1000).unref?.();
-const globalProductLookupService = createGlobalProductLookupService();
 
 /*
 |--------------------------------------------------------------------------
@@ -600,7 +594,7 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
       }
       req.user = { ...req.user, storeId: requestedStoreId };
     }
-    await req.ensureBusinessCommandRun?.({
+    await req.ensureWorkflowTraceRun?.({
       companyId: req.user?.companyId || null,
       userId: req.user?.id || null,
       storeId: req.user?.storeId || null,
@@ -1901,7 +1895,7 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-app.use("/api", createEanLookupRouter({ authenticate, db, lookupService: globalProductLookupService }));
+app.use("/api", createEanLookupRouter({ authenticate, db }));
 
 /* T10D: Self-Checkout session routes (enter/exit the restricted mode). */
 app.use("/api", createSelfCheckoutRouter({
@@ -1924,7 +1918,6 @@ app.use("/api", createGlobalProductLookupRouter({
   authorize,
   db,
   writeAudit,
-  lookupService: globalProductLookupService,
   connectorDrivers,
 }));
 
@@ -2077,7 +2070,7 @@ app.use(
   })
 );
 
-app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
 
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
@@ -2891,13 +2884,6 @@ async function startServer() {
                   [subscriptionId, job.company_id]
                 );
               }
-            }
-            if (["QUICKBOOKS_PROVIDER_SYNC", "SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
-              await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
-                kind: job.kind,
-                status: failed?.status || "FAILED",
-                attempts: failed?.attempts || 0,
-              });
             }
           },
           handler: async (job) => {
@@ -3761,71 +3747,18 @@ async function startServer() {
               }
             }
             if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
-            if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
+            if (job.kind === "PLATFORM_FLOW_EXECUTION") {
+              const systemKey = String(payload.systemKey || "");
+              if (!systemKey.startsWith("flow:")) throw Object.assign(new Error("Generic flow job requires a metadata Flow system key"), { retryable:false });
+              const input = payload.input && typeof payload.input === "object" ? payload.input : {};
               const execution = await executeSystemWorkflow({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                systemKey: "action:SHOPIFY_PROCESS_WEBHOOK",
-                req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
-                extraContext: { pool, createInventoryMovement },
+                db, companyId:job.company_id, userId:payload.actorUserId||null, systemKey,
+                req:{method:"JOB",path:"PLATFORM_FLOW_EXECUTION",user:{companyId:job.company_id,storeId:payload.storeId||null,id:payload.actorUserId||null}},
+                input:{...input,_executeFromJob:true}, storeId:payload.storeId||null, writeAudit,
+                source:{type:"job",method:"JOB",path:"PLATFORM_FLOW_EXECUTION",capability:systemKey}, extraContext:{pool},
               });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
-                  retryable: outcome.retryable === true,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "QUICKBOOKS_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
-              if (!actionKey) throw Object.assign(new Error("QuickBooks provider job is missing an action key"), { retryable: false });
-              const execution = await executeSystemWorkflow({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                systemKey: `action:${actionKey}`,
-                req: { method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", user: { companyId: job.company_id, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || outcome.code || "QuickBooks sync failed"), {
-                  retryable: outcome.retryable !== false,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
-              if (!actionKey) throw Object.assign(new Error("Shopify provider job is missing an action key"), { retryable: false });
-              const execution = await executeSystemWorkflow({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                systemKey: `action:${actionKey}`,
-                req: { method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool, createInventoryMovement },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || outcome.code || "Shopify sync failed"), {
-                  retryable: outcome.retryable !== false,
-                });
-              }
-              return outcome;
+              if (execution.result?.success === false) throw Object.assign(new Error(execution.result.message || execution.result.code || "Metadata Flow job failed"), {retryable:execution.result.retryable!==false});
+              return execution.result;
             }
             const actionKey = String(payload.type || payload.key || "").toUpperCase();
             if (!actionKey) throw Object.assign(new Error("Platform action job is missing an action key"), { retryable: false });
@@ -3838,7 +3771,7 @@ async function startServer() {
               input: { ...payload, _executeFromJob: true },
               writeAudit,
               source: { type: "job", method: "JOB", path: job.kind, capability: actionKey },
-              extraContext: { pool, createInventoryMovement },
+              extraContext: { pool },
             });
             const result = execution.result;
             if (payload._stepRunId) {

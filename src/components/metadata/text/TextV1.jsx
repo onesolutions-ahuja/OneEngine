@@ -1,0 +1,1 @@
+export default function TextV1({node}){return <p className="text-sm" style={{color:"var(--text-secondary,#475569)"}}>{node?.text||node?.label||"Text"}</p>}

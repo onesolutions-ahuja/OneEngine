@@ -43,6 +43,23 @@ export const DEFAULT_OBJECT_NAV_ORDER = 100;
 /** Icon KEYS only — a safe default is applied for anything unknown. */
 export const DEFAULT_OBJECT_ICON_KEY = "box";
 
+/**
+ * Canonical empty Object Page definition. Builders add components/sections to
+ * this shape; runtimes consume the same shape. Object identity lives in
+ * metadata, never in a page-specific React module.
+ */
+export function defaultObjectPageDefinition(objectKey, overrides = {}) {
+  return normalizeObjectPageDefinition({
+    objectKey,
+    showInNavigation: true,
+    icon: DEFAULT_OBJECT_ICON_KEY,
+    order: DEFAULT_OBJECT_NAV_ORDER,
+    sections: [],
+    components: [],
+    ...overrides,
+  });
+}
+
 export const OBJECT_NAVIGATION_EXCLUSIONS = Object.freeze({
   NOT_ACTIVE: "page_inactive",
   APP_INACTIVE: "app_inactive",
@@ -129,9 +146,14 @@ export function normalizeObjectPageDefinition(value) {
       ? region.components.map((component) => ({ ...component, section_id: region.id }))
       : [])
     : [];
+  const normalizeComponentReference = (component) => {
+    if (!component || typeof component !== "object" || Array.isArray(component)) return component;
+    const componentApi = optionalString(component.componentApi ?? component.component_api, 120);
+    return componentApi ? { ...component, componentApi } : component;
+  };
   const definition = {
     sections: Array.isArray(source.sections) ? source.sections : builderSections,
-    components: Array.isArray(source.components) ? source.components : builderComponents,
+    components: (Array.isArray(source.components) ? source.components : builderComponents).map(normalizeComponentReference),
   };
 
   /* Custom Page Builder tree (nested sections.children). Sections/components

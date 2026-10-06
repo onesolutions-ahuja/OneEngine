@@ -52,7 +52,7 @@ export default function createShopifyWebhooksRouter({ db, writeAudit, isEntitled
       if (configuredShop !== shopDomain || !verifyShopifyWebhook(rawBody, signature, signingSecret)) {
         return res.status(401).json({ success: false, message: "Shopify webhook signature is invalid" });
       }
-      await req.ensureBusinessCommandRun?.({
+      await req.ensureWorkflowTraceRun?.({
         companyId: connection.company_id,
         userId: null,
         storeId: connection.store_id || null,
@@ -90,9 +90,9 @@ export default function createShopifyWebhooksRouter({ db, writeAudit, isEntitled
       const job = await enqueuePlatformJob({
         db,
         companyId: connection.company_id,
-        kind: "SHOPIFY_WEBHOOK_EVENT",
+        kind: "PLATFORM_FLOW_EXECUTION",
         idempotencyKey: key,
-        payload: { connectionId: connection.id, shopDomain, topic, deliveryId, eventId, payload },
+        payload: { systemKey: "flow:shopify.webhook.process", input: { connectionId: connection.id, shopDomain, topic, deliveryId, eventId, payload } },
       });
       if (typeof writeAudit === "function") {
         await writeAudit(connection.company_id, null, job ? "shopify_webhook_queued" : "shopify_webhook_duplicate", "integration_connection", connection.id, { topic, deliveryId, eventId });
