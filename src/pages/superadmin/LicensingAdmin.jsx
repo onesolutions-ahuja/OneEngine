@@ -465,7 +465,10 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
           <label className="text-sm flex gap-2 items-center"><input type="checkbox" checked={licenceForm.active} onChange={(event) => setLicenceForm((current) => ({ ...current, active: event.target.checked }))} />Active</label>
         </div>
         <div className="flex flex-wrap gap-4">
-          {DEFAULT_KEYS.map((key) => <label key={key} className="text-sm flex gap-2 items-center"><input type="checkbox" checked={entitlements[key] === true} onChange={(event) => setEntitlements((current) => ({ ...current, [key]: event.target.checked }))} />{key}</label>)}
+          {[...new Set([
+            ...Object.keys(entitlements || {}),
+            ...marketplacePackages.map((item) => item.entitlement_key || item.entitlementKey || item.manifest?.entitlementKey || item.manifest?.entitlement_key).filter(Boolean),
+          ])].sort().map((key) => <label key={key} className="text-sm flex gap-2 items-center"><input type="checkbox" checked={entitlements[key] === true} onChange={(event) => setEntitlements((current) => ({ ...current, [key]: event.target.checked }))} />{key}</label>)}
         </div>
         <div className="space-y-2">
           <h3 className="font-medium">Included packages and dependencies</h3>
