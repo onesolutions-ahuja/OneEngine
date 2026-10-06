@@ -5,6 +5,66 @@ export { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, re
 import { packageManifestCatalog } from "../packages/packageManifestCatalog.js";
 
 const metadataManifestCache = new Map();
+
+const withPackageBuilderMetadata = (workflow) => {
+  const action = workflow?.action || {};
+  let actions = Array.isArray(action.actions) ? action.actions : Array.isArray(workflow?.actions) ? workflow.actions : [];
+  if (action.flowType === "KIOSK_EXPERIENCE" && actions.length === 0 && Array.isArray(action.ui?.screens)) {
+    actions = action.ui.screens.map((screen, index) => ({
+      id: `kiosk_screen_${screen.key || index + 1}`,
+      apiName: `kiosk_screen_${screen.key || index + 1}`,
+      key: "SCREEN",
+      label: screen.title || screen.key || `Screen ${index + 1}`,
+      description: `Kiosk ${screen.type || "screen"} step`,
+      screen: {
+        label: screen.title || screen.key || `Screen ${index + 1}`,
+        apiName: String(screen.key || `screen_${index + 1}`),
+        showHeader: true,
+        style: "default",
+        components: [],
+        kioskDefinition: screen,
+      },
+      allowBack: index > 0,
+      allowNext: index < action.ui.screens.length - 1,
+      allowFinish: index === action.ui.screens.length - 1,
+    }));
+  }
+  const nodes = Array.isArray(action.gptBuilderElements) && action.gptBuilderElements.length === actions.length
+    ? action.gptBuilderElements
+    : actions.map((step, index) => ({
+        id: step.id || `package-step-${index + 1}`,
+        key: "action",
+        label: step.label || step.apiName || step.key || `Step ${index + 1}`,
+        apiName: step.apiName || step.id || `Package_Step_${index + 1}`,
+        description: step.description || "",
+        labelSource: "manual",
+        apiNameSource: "manual",
+        config: {
+          actionKey: step.key || step.type || "",
+          inputs: {},
+          inputModes: {},
+          inputIncluded: {},
+          transforms: {},
+          outputMode: "automatic",
+          manualOutputs: [],
+          importedRuntimeAction: step,
+          importedRuntimeActionText: "",
+        },
+        configured: true,
+        source: "runtime_import",
+        position: null,
+      }));
+  return {
+    ...workflow,
+    action: {
+      ...action,
+      actions,
+      gptBuilder: true,
+      layout: action.layout || { mode: "AUTO" },
+      gptBuilderElements: nodes,
+    },
+  };
+};
 function manifestForPackage(packageKey) {
   if (!packageKey) return null;
   return metadataManifestCache.get(packageKey) || null;
@@ -508,7 +568,7 @@ export function packageDefinition(entry) {
             active: true,
             lifecycleStatus: "ACTIVE"
           }
-        ]
+        ].map(withPackageBuilderMetadata)
       } : {}),
       ...(entry.key === "communication_core" ? {
         packageKey: "communication_core",
@@ -1162,7 +1222,7 @@ export function packageDefinition(entry) {
                 templateContext:{token:{path:"variables.inviteToken"},userId:{path:"$record.id"},expiresMinutes:{path:"variables.inviteExpiresMinutes"}} },
             ],
           },
-        ],
+        ].map(withPackageBuilderMetadata),
         actions: [
           { actionKey:"employee.set_active_status",objectKey:"employee",label:"Set Active Status",handlerKey:"RUN_SUBFLOW",requiredPermission:"user.edit",config:{subflowApiName:"STAFF_SET_ACTIVE_STATUS"} },
           { actionKey:"employee.send_password_reset",objectKey:"employee",label:"Send Password Reset",handlerKey:"RUN_SUBFLOW",requiredPermission:"user.manage",config:{subflowApiName:"STAFF_SEND_PASSWORD_RESET"} },
