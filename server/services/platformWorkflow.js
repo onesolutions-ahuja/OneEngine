@@ -1197,18 +1197,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: (context) => executeGlobalProductLookupAction(context),
   },
   {
-    key: "GO_UPC_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Go-UPC - Lookup Product",
-    description: "Look up a barcode using the installed Go-UPC connector and company credential.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
-  },
-  {
     key: "CALL_CONNECTOR_CAPABILITY",
     displayName: "Call Connector Capability",
     description: "Resolve an enabled tenant/store/till connector by package and capability, then execute it without provider-specific workflow code.",
