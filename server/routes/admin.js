@@ -696,17 +696,19 @@ export default function createAdminRouter({
           WHERE c.id = $1
         )
         SELECT
-          COALESCE((SELECT SUM(s.total) FROM sales s
+          COALESCE((SELECT SUM(s.total) FROM sale_ledger s
             INNER JOIN companies c ON c.id = s.company_id
             CROSS JOIN business_day d
             WHERE s.company_id = $1 AND s.store_id = $2
             AND s.status = 'completed'
+            AND s.source_record_type = 'SALE_HEADER'
             AND (s.created_at AT TIME ZONE c.timezone)::date = d.today), 0) AS today_sales,
-          (SELECT COUNT(*) FROM sales s
+          (SELECT COUNT(*) FROM sale_ledger s
             INNER JOIN companies c ON c.id = s.company_id
             CROSS JOIN business_day d
             WHERE s.company_id = $1 AND s.store_id = $2
             AND s.status = 'completed'
+            AND s.source_record_type = 'SALE_HEADER'
             AND (s.created_at AT TIME ZONE c.timezone)::date = d.today) AS today_transactions,
           (SELECT COUNT(*) FROM products p
             WHERE p.company_id = $1
