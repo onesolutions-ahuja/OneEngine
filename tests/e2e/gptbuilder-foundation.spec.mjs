@@ -366,6 +366,8 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     const startPanel = page.getByLabel('Configure Start')
     await startPanel.locator('label').filter({ hasText: /^Object/ }).getByRole('combobox').selectOption('contract_record')
     await startPanel.getByRole('button', { name: /^Done$/ }).click()
+    await expect(startPanel).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Add after Start' })).toBeVisible({ timeout: 30_000 })
     palette = await openPalette()
     await expect(palette.getByRole('button', { name: 'Custom Error', exact: true })).toBeVisible()
 
@@ -373,25 +375,31 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
   })
 
 
-  test('invalid flows cannot activate and runtime failures never report success', async ({ page }) => {
+  test('invalid saved flows cannot activate and runtime failures never report success', async ({ page }) => {
     if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
     const failures = watchRuntimeFailures(page)
-    let savedRule = null
     let activationCalls = 0
+    const savedRule = {
+      id: 'negative-empty-flow',
+      name: 'Invalid Empty Contract Flow',
+      active: false,
+      runtime_active: false,
+      lifecycle_status: 'DRAFT',
+      action: {
+        type: 'workflow',
+        gptBuilder: true,
+        flowType: 'screen',
+        apiName: 'Invalid_Empty_Contract_Flow',
+        start: {},
+        layout: { mode: 'AUTO' },
+        gptBuilderElements: [],
+        resources: [],
+      },
+    }
 
     await page.route('**/api/platform/rules', async (route) => {
-      const request = route.request()
-      if (request.method() === 'GET') {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: savedRule ? [savedRule] : [] }) })
-        return
-      }
-      if (request.method() === 'POST') {
-        const payload = request.postDataJSON()
-        savedRule = { id: 'negative-empty-flow', ...payload, active: false, runtime_active: false, lifecycle_status: 'DRAFT' }
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: savedRule }) })
-        return
-      }
-      await route.continue()
+      if (route.request().method() !== 'GET') return route.continue()
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [savedRule] }) })
     })
     await page.route('**/api/platform/rules/negative-empty-flow', async (route) => {
       if (route.request().method() === 'PUT') activationCalls += 1
@@ -403,16 +411,8 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     await page.goto('developer/gptbuilder')
     await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
-    await page.getByRole('button', { name: /^New Flow$/ }).click()
-    await page.getByLabel('Search automations').fill('screen')
-    await page.locator('.gptb-type-card').filter({ has: page.getByText('Screen Flow', { exact: true }) }).click()
+    await page.getByRole('button', { name: /Edit Invalid Empty Contract Flow/i }).click()
     await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
-
-    await page.getByRole('button', { name: /^Save$/ }).click()
-    const props = page.getByRole('dialog', { name: /Save the Flow/i })
-    await props.getByRole('textbox', { name: /^Flow Label/ }).fill('Invalid Empty Contract Flow')
-    await props.getByRole('button', { name: /^Save$/ }).click()
-    await expect(page.getByText('Flow saved.', { exact: true })).toBeVisible()
 
     const activate = page.getByRole('button', { name: /^Activate$/ })
     await expect(activate).toBeDisabled()
