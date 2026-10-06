@@ -1060,16 +1060,17 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
   console.log("onePOS: platform bootstrap step ready: package registry");
 
   /*
-   * Retail transaction storage is exposed through canonical metadata Objects:
-   * Sale, Sale Item, Payment, Refund, Till Session and Cash Movement.
-   * Remove only the obsolete legacy sale_line alias before package metadata is
-   * provisioned; the canonical sale_item object owns sale_items metadata.
+   * Sale Ledger is the only canonical retail sales metadata object.
+   * Remove legacy sales object identities before package provisioning so a
+   * restart cannot resurrect Sale/Sale Item/Payment/Refund as separate objects.
+   * Physical data is migrated separately by database migration 0047.
    */
-  const obsoleteSaleLine = await pool.query(
-    "SELECT id FROM platform_objects WHERE object_key='sale_line' AND source_table='sale_items' AND company_id IS NULL LIMIT 1"
+  const obsoleteSalesObjects = await pool.query(
+    "SELECT id FROM platform_objects WHERE object_key=ANY($1::text[]) AND company_id IS NULL",
+    [["sale_line", "sale", "sale_item", "payment", "refund"]]
   );
-  if (obsoleteSaleLine.rows[0]?.id) {
-    const obsoleteObjectId = obsoleteSaleLine.rows[0].id;
+  for (const obsolete of obsoleteSalesObjects.rows || []) {
+    const obsoleteObjectId = obsolete.id;
     const obsoleteMetadataIds = await pool.query(
       `SELECT id FROM platform_fields WHERE object_id=$1
        UNION ALL
@@ -1285,8 +1286,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
   export async function initializeStandardObjectEcosystem(pool) {
     await pool.query(`
-      ALTER TABLE sales ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2);
-      ALTER TABLE sales ADD COLUMN IF NOT EXISTS line_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2);
+      ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS line_count INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
       ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
       UPDATE cash_movements cm
@@ -1465,7 +1466,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const saleObjectForFormula = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='sale_ledger' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (saleObjectForFormula.rows[0]?.id) {
       await pool.query(
@@ -1852,7 +1853,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
        uiAction to the existing native POS implementation; labels, placement,
        visibility and permissions come from these Platform metadata rows. */
     const saleObjectResult = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=TRUE LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='sale_ledger' AND company_id IS NULL AND active=TRUE LIMIT 1"
     );
     const saleObjectId = saleObjectResult.rows[0]?.id || null;
     if (saleObjectId) {
