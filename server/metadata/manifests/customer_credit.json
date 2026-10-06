@@ -11,13 +11,13 @@
           "apiName": "credit_enabled",
           "label": "Credit Enabled",
           "fieldType": "boolean",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "credit_limit",
           "label": "Credit Limit",
           "fieldType": "currency",
-          "writable": false
+          "writable": true
         }
       ],
       "config": {
@@ -35,67 +35,73 @@
           "apiName": "customer_id",
           "label": "Customer",
           "fieldType": "lookup",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "store_id",
           "label": "Store",
           "fieldType": "lookup",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "transaction_type",
           "label": "Transaction Type",
           "fieldType": "text",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "amount",
           "label": "Amount",
           "fieldType": "currency",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "balance_after",
           "label": "Balance After",
           "fieldType": "currency",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "reference_type",
           "label": "Reference Type",
           "fieldType": "text",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "reference_id",
           "label": "Reference",
           "fieldType": "lookup",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "description",
           "label": "Description",
           "fieldType": "text",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "payment_method",
           "label": "Payment Method",
           "fieldType": "text",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "created_by",
           "label": "Operator",
           "fieldType": "lookup",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "created_at",
           "label": "Created",
           "fieldType": "datetime",
           "writable": false
+        },
+        {
+          "apiName": "idempotency_key",
+          "label": "Idempotency Key",
+          "fieldType": "text",
+          "writable": true
         }
       ],
       "config": {
@@ -212,5 +218,115 @@
       }
     }
   ],
-  "packageKey": "customer_credit"
+  "packageKey": "customer_credit",
+  "workflows": [
+    {
+      "name": "Post Customer Credit Entry",
+      "triggerKey": "manual",
+      "action": {
+        "type": "workflow",
+        "apiName": "CUSTOMER_CREDIT_POST",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": {
+          "customerId": {
+            "type": "text",
+            "required": true
+          },
+          "storeId": {
+            "type": "text"
+          },
+          "transactionType": {
+            "type": "text",
+            "required": true
+          },
+          "amount": {
+            "type": "number",
+            "required": true
+          },
+          "referenceType": {
+            "type": "text"
+          },
+          "referenceId": {
+            "type": "text"
+          },
+          "description": {
+            "type": "text"
+          },
+          "idempotencyKey": {
+            "type": "text",
+            "required": true
+          }
+        },
+        "outputContract": {
+          "entry": {
+            "type": "record"
+          }
+        },
+        "actions": [
+          {
+            "id": "create_entry",
+            "label": "Create Credit Ledger Entry",
+            "apiName": "create_entry",
+            "key": "CREATE_RECORD",
+            "objectKey": "customer_credit_ledger",
+            "matching": {
+              "field": "idempotency_key",
+              "value": {
+                "path": "variables.idempotencyKey"
+              },
+              "onMatch": "skip"
+            },
+            "fieldValues": {
+              "customer_id": {
+                "path": "variables.customerId"
+              },
+              "store_id": {
+                "path": "variables.storeId"
+              },
+              "transaction_type": {
+                "path": "variables.transactionType"
+              },
+              "amount": {
+                "path": "variables.amount"
+              },
+              "reference_type": {
+                "path": "variables.referenceType"
+              },
+              "reference_id": {
+                "path": "variables.referenceId"
+              },
+              "description": {
+                "path": "variables.description"
+              },
+              "idempotency_key": {
+                "path": "variables.idempotencyKey"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "actionKey": "customer_credit.post",
+      "objectKey": "customer_credit_account",
+      "label": "Post Credit Entry",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "customer.edit",
+      "config": {
+        "subflowApiName": "CUSTOMER_CREDIT_POST"
+      }
+    }
+  ],
+  "buttons": [
+    {
+      "buttonKey": "customer_credit_post",
+      "objectKey": "customer_credit_account",
+      "label": "Post Credit Entry",
+      "actionKey": "customer_credit.post",
+      "requiredPermission": "customer.edit",
+      "variant": "primary"
+    }
+  ]
 }
