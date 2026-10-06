@@ -306,6 +306,9 @@
       "metadataScope": "global",
       "storeScoped": true,
       "required": true,
+      "adoptFromPackageKeys": [
+        "retail_pos"
+      ],
       "config": {
         "flowWritesOnly": true
       },
