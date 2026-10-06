@@ -425,7 +425,101 @@
       "sourceTable": "sale_ledger",
       "storeScoped": true,
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "runtimeViews": {
+          "receipt_document": {
+            "fields": {
+              "companyId": "company_id",
+              "storeId": "store_id",
+              "userId": "user_id",
+              "customerId": "customer_id",
+              "receiptNumber": "receipt_number",
+              "subtotal": "subtotal",
+              "tax": "tax",
+              "discount": "discount",
+              "total": "total",
+              "status": "status",
+              "createdAt": "created_at",
+              "completedAt": "completed_at"
+            },
+            "lookups": [
+              {
+                "alias": "company",
+                "objectKey": "company",
+                "sourceAlias": "companyId",
+                "fields": {
+                  "name": "name",
+                  "email": "email",
+                  "phone": "phone",
+                  "currency": "currency",
+                  "timezone": "timezone"
+                }
+              },
+              {
+                "alias": "store",
+                "objectKey": "store",
+                "sourceAlias": "storeId",
+                "fields": {
+                  "name": "name",
+                  "addressLine1": "address_line1",
+                  "addressLine2": "address_line2",
+                  "city": "city",
+                  "postcode": "postcode",
+                  "phone": "phone"
+                }
+              },
+              {
+                "alias": "cashier",
+                "objectKey": "user",
+                "sourceAlias": "userId",
+                "fields": {
+                  "username": "username"
+                }
+              },
+              {
+                "alias": "customer",
+                "objectKey": "customer",
+                "sourceAlias": "customerId",
+                "fields": {
+                  "name": "name",
+                  "phone": "phone",
+                  "email": "email"
+                }
+              }
+            ],
+            "collections": [
+              {
+                "alias": "items",
+                "objectKey": "sale_item",
+                "foreignField": "sale_id",
+                "fields": {
+                  "name": "product_name",
+                  "quantity": "quantity",
+                  "unitPrice": "unit_price",
+                  "discount": "discount",
+                  "tax": "tax",
+                  "total": "total"
+                },
+                "limit": 500
+              },
+              {
+                "alias": "payments",
+                "objectKey": "payment",
+                "foreignField": "sale_id",
+                "fields": {
+                  "method": "payment_method",
+                  "amount": "amount",
+                  "status": "status"
+                },
+                "orderBy": {
+                  "field": "created_at",
+                  "direction": "asc"
+                },
+                "limit": 100
+              }
+            ]
+          }
+        }
       },
       "fields": [
         {
