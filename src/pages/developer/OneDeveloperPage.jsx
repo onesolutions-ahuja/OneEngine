@@ -214,9 +214,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             : current.key === 'report-types' ? <ReportTypeManager />
             : current.key === 'report-builder' ? <OneBuilder initialTab="report" singleBuilder />
             : current.key === 'workflow-runs' ? <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-            : current.key === 'work-items' ? <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-            : current.key === 'platform-apps' ? <PackageBuilderAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-            : current.key === 'deployments' ? <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'work-items' ? <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />            : current.key === 'deployments' ? <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'notifications' ? <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'value-sets' ? <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'debug' ? <DebugCodesAdmin onError={(value) => setError(value || '')} />
