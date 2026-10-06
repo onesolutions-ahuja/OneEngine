@@ -207,7 +207,6 @@ export async function loadPublicReceiptData({ db, companyId, saleId }) {
     const sale = view.record;
     const company = view.lookups?.company || {};
     const store = view.lookups?.store || {};
-    const customer = view.lookups?.customer || {};
     const cashier = view.lookups?.cashier || {};
     return {
       company: {
@@ -227,9 +226,6 @@ export async function loadPublicReceiptData({ db, companyId, saleId }) {
         receipt_number: sale.receiptNumber || sale.id,
         created_at: sale.createdAt,
         completed_at: sale.completedAt || sale.createdAt,
-        customer_name: customer.name || null,
-        customer_phone: customer.phone || null,
-        customer_email: customer.email || null,
         cashier: cashier.username || null,
         receiptNumber: sale.receiptNumber || sale.id,
         createdAt: sale.createdAt,
