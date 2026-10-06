@@ -18,7 +18,7 @@ test("supplier master data is not blocked from generic metadata CRUD", async () 
 
 test("supplier purchase history is a metadata relationship", async () => {
   const source = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
-  assert.match(source, /"parentObjectKey": "supplier"[\s\S]*"childObjectKey": "purchase"[\s\S]*"relationshipKey": "purchases"/);
+  assert.match(source, /"parentObjectKey": "supplier"[\s\S]*"childObjectKey": "purchase_ledger"[\s\S]*"relationshipKey": "purchases"/);
 });
 
 
