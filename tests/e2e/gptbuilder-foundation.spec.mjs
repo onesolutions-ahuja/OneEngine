@@ -195,4 +195,62 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     }
     expect(failures, failures.join('\n')).toEqual([])
   })
+  test('save, list reopen, and edit preserve the saved GPT Builder definition', async ({ page }) => {
+    if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
+    const failures = watchRuntimeFailures(page)
+    let savedRule = null
+
+    await page.route('**/api/platform/rules', async (route) => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: savedRule ? [savedRule] : [] }) })
+        return
+      }
+      if (request.method() === 'POST') {
+        const payload = request.postDataJSON()
+        savedRule = {
+          id: 'contract-saved-flow',
+          ...payload,
+          runtime_active: false,
+          lifecycle_status: 'DRAFT',
+          created_at: '2026-10-05T12:00:00.000Z',
+          updated_at: '2026-10-05T12:00:00.000Z',
+        }
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: savedRule }) })
+        return
+      }
+      await route.continue()
+    })
+
+    await page.goto('developer/gptbuilder')
+    await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: /^New Flow$/ }).click()
+    await page.getByLabel('Search automations').fill('screen')
+    await page.getByRole('button', { name: /Screen Flow/i }).click()
+    await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
+
+    await page.getByRole('button', { name: /^Save$/ }).click()
+    const props = page.getByRole('dialog', { name: /Save the Flow/i })
+    await expect(props).toBeVisible()
+    await props.getByText('Flow Label', { exact: true }).locator('..').getByRole('textbox').fill('Contract Persistence Flow')
+    await props.getByRole('button', { name: /^Save$/ }).click()
+    await expect(page.getByText('Flow saved.', { exact: true })).toBeVisible()
+    expect(savedRule?.action?.gptBuilder).toBe(true)
+    expect(savedRule?.action?.flowType).toBe('screen')
+    expect(savedRule?.action?.layout?.mode).toBe('AUTO')
+    expect(Array.isArray(savedRule?.action?.gptBuilderElements)).toBe(true)
+
+    await page.goto('developer/gptbuilder')
+    await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('button', { name: 'Contract Persistence Flow' })).toBeVisible()
+    await page.getByRole('button', { name: /Edit Contract Persistence Flow/i }).click()
+    await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
+    await page.getByRole('button', { name: 'View Properties' }).click()
+    const reopened = page.getByRole('dialog', { name: /Flow Properties/i })
+    await expect(reopened).toBeVisible()
+    await expect(reopened.getByText('Flow Label', { exact: true }).locator('..').getByRole('textbox')).toHaveValue('Contract Persistence Flow')
+    await expect(reopened.getByText('Flow API Name', { exact: true }).locator('..').getByRole('textbox')).toHaveValue('Contract_Persistence_Flow')
+
+    expect(failures, failures.join('\n')).toEqual([])
+  })
 })
