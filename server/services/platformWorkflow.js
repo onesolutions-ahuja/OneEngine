@@ -29,6 +29,8 @@ import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
+import { issueAccountToken } from "./accountPolicy.js";
+import { createTemporaryReceiptDownload, revokeTemporaryReceiptDownloadsForSale, buildReceiptQrDownloadUrl } from "./receiptQr.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
@@ -1341,6 +1343,53 @@ async function loadRelatedGetRecordsCollections({ db, relatedRecords, targetObje
 }
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
+  {
+    key: "ACCOUNT_TOKEN_ISSUE",
+    displayName: "Security - Issue Account Token",
+    description: "Issue a tenant-scoped account token. Flow metadata owns eligibility, purpose, timing, recipients and communication.",
+    validation: (action) => {
+      if (!action?.purpose) throw new Error("Account token issue requires a purpose");
+    },
+    async: false,
+    requiredPermissions: ["user.manage"],
+    executor: async ({ action, db, companyId, req, record, workflowVariables = {} }) => {
+      const context = { record, req, workflowVariables };
+      const userId = resolveConfiguredResource(action.userId || action.inputs?.userId || { path: "$record.id" }, context, { preserveMissing: false });
+      const purpose = String(resolveConfiguredResource(action.purpose || action.inputs?.purpose, context, { preserveMissing: false }) || "").toUpperCase();
+      if (!["PASSWORD_RESET","REGISTRATION"].includes(purpose)) throw new Error("Unsupported account token purpose");
+      const expiresRaw = resolveConfiguredResource(action.expiresMinutes || action.inputs?.expiresMinutes, context, { preserveMissing: false });
+      const expiresMinutes = Math.max(1, Math.min(Number(expiresRaw) || (purpose === "PASSWORD_RESET" ? 60 : 1440), 10080));
+      const token = await issueAccountToken(db, { companyId: companyId || req?.user?.companyId, userId, purpose, expiresMinutes });
+      return { token, userId, purpose, expiresMinutes };
+    },
+  },
+  {
+    key: "SECURE_RESOURCE_LINK_MANAGE",
+    displayName: "Security - Manage Secure Resource Link",
+    description: "Create or revoke a short-lived secure resource link. Flow metadata owns when and why the link is managed.",
+    validation: (action) => {
+      const operation = String(action?.operation || "").toUpperCase();
+      if (!["CREATE","REVOKE"].includes(operation)) throw new Error("Secure resource link requires CREATE or REVOKE");
+    },
+    async: false,
+    requiredPermissions: ["sale.view"],
+    executor: async ({ action, db, companyId, req, record, workflowVariables = {} }) => {
+      const context = { record, req, workflowVariables };
+      const operation = String(action.operation).toUpperCase();
+      const saleId = resolveConfiguredResource(action.saleId || action.inputs?.saleId || { path: "$record.id" }, context, { preserveMissing: false });
+      const tenantId = companyId || req?.user?.companyId;
+      if (operation === "REVOKE") return revokeTemporaryReceiptDownloadsForSale({ db, companyId: tenantId, saleId });
+      const expiryRaw = resolveConfiguredResource(action.expiryMinutes || action.inputs?.expiryMinutes, context, { preserveMissing: false });
+      const result = await createTemporaryReceiptDownload({
+        db, companyId: tenantId, storeId: req?.user?.storeId || null, tillId: req?.user?.tillId || null,
+        saleId, expiryMinutes: Math.max(1, Number(expiryRaw) || 5),
+      });
+      if (!result.ok) throw Object.assign(new Error(result.message || "Unable to create secure resource link"), { status: result.status || 500 });
+      const baseUrl = resolveConfiguredResource(action.baseUrl || action.inputs?.baseUrl, context, { preserveMissing: false }) || null;
+      const url = buildReceiptQrDownloadUrl(result.token, baseUrl);
+      return { ...result, url, qrcodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}` };
+    },
+  },
   {
     key: "PACKAGE_LIFECYCLE",
     displayName: "Package - Apply Lifecycle",
