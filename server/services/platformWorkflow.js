@@ -5683,6 +5683,20 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "ROLLBACK_RECORDS",
+    displayName: "Roll Back Records",
+    description: "Roll back record changes made by the current workflow transaction.",
+    schema: { type: "object", properties: {} },
+    validation: () => undefined,
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ transactionController }) => {
+      if (!transactionController?.rollbackRecords) throw new Error("Roll Back Records requires a transactional workflow context");
+      await transactionController.rollbackRecords();
+      return { status: "completed", rolledBackRecords: true };
+    },
+  },
+  {
     key: "STOP",
     displayName: "Stop",
     description: "Stop workflow execution cleanly and record the reason.",
@@ -6327,6 +6341,38 @@ async function hydrateWorkflowProviderResources(context, workflowVariables) {
 
 export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
+  const containsRollbackRecords = actions.some((action) => resolveWorkflowActionType(action) === "ROLLBACK_RECORDS");
+  if (containsRollbackRecords && context.transactionOwned !== true) {
+    if (!context.pool?.connect) throw new Error("Roll Back Records requires a database pool");
+    const client = await context.pool.connect();
+    const txDb = (query, params = []) => client.query(query, params);
+    let rolledBackRecords = false;
+    try {
+      await client.query("BEGIN");
+      await client.query("SAVEPOINT oneengine_flow_records");
+      const transactionController = {
+        rollbackRecords: async () => {
+          await client.query("ROLLBACK TO SAVEPOINT oneengine_flow_records");
+          rolledBackRecords = true;
+        },
+      };
+      const result = await executeWorkflowActions({
+        actions,
+        ...context,
+        db: txDb,
+        traceDb: context.traceDb || context.db,
+        transactionController,
+        transactionOwned: true,
+      });
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   const results = [];
   const completed = [];
   const workflowVariables = context.workflowVariables && typeof context.workflowVariables === "object"
