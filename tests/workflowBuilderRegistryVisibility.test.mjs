@@ -59,12 +59,12 @@ test("staff lifecycle orchestration stays in editable Flow metadata", () => {
     assert.equal(all.has(key), false, key + " must remain removed from hidden runtime actions");
     assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as a hidden executor");
   }
-  const packages = readFileSync(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(packages, /apiName:\s*"STAFF_SEND_PASSWORD_RESET"/);
-  assert.match(packages, /apiName:\s*"STAFF_SEND_INVITATION"/);
-  assert.match(packages, /key:"ONE_API_REQUEST".*path:"\/api\/platform\/runtime\/security\/tokens"/s);
-  assert.equal(packages.includes("CALL_FUNCTION"), false);
-  assert.match(packages, /handlerKey:\s*"RUN_SUBFLOW"/);
+  const staff = readFileSync(new URL("../server/metadata/manifests/staff.json", import.meta.url), "utf8");
+  assert.match(staff, /"apiName":\s*"STAFF_SEND_PASSWORD_RESET"/);
+  assert.match(staff, /"apiName":\s*"STAFF_SEND_INVITATION"/);
+  assert.match(staff, /"key":\s*"ONE_API_REQUEST"[\s\S]*?"path":\s*"\/api\/platform\/runtime\/security\/tokens"/);
+  assert.equal(staff.includes("CALL_FUNCTION"), false);
+  assert.match(staff, /"handlerKey":\s*"RUN_SUBFLOW"/);
 });
 
 test("provider-specific adapters stay removed in favor of metadata workflows", () => {
