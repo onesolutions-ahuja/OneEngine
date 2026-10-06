@@ -209,6 +209,12 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
       </aside>
 
       <div className="settings-content" key={contentKey}>
+        <label className="developer-compact-nav">
+          <span>Developer area</span>
+          <select value={current.key} onChange={(event) => select(event.target.value)} aria-label="Developer area">
+            {DEVELOPER_ITEMS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+        </label>
         <div className="settings-content-body">
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
