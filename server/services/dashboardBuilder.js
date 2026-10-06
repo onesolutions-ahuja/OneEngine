@@ -11,9 +11,7 @@ export const COMPONENT_TYPES = Object.freeze(["kpi", "chart", "pie", "donut", "b
 export const CHART_TYPES = Object.freeze(["bar", "line", "pie", "donut", "gauge", "funnel", "scatter", "combo"]);
 export const KPI_SIZES = Object.freeze(["small", "medium", "large"]);
 export const VALUE_FORMATS = Object.freeze(["number", "currency", "percent"]);
-export const DATE_RANGES = Object.freeze([
-  "all_time", "today", "yesterday", "this_week", "last_7_days", "this_month", "this_quarter", "fiscal_year",
-]);
+
 export const DASHBOARD_PRINCIPAL_TYPES = Object.freeze(["USER", "ROLE", "PUBLIC_GROUP", "COMPANY"]);
 export const DASHBOARD_ACCESS_LEVELS = Object.freeze(["VIEW", "EDIT", "MANAGE"]);
 export const DASHBOARD_RUN_AS_MODES = Object.freeze(["VIEWER", "FIXED_USER"]);
@@ -160,7 +158,6 @@ export function validateDashboardDefinition(input = {}) {
         maxCategories: Math.min(100,Math.max(2,Number(config.maxCategories)||6)),
         limit: Math.min(200,Math.max(1,Number(config.limit)||12)),
         sort: Array.isArray(config.sort) ? config.sort.slice(0,10).map((item)=>({field:String(item?.field||""),direction:item?.direction==="asc"?"asc":"desc"})) : null,
-        dateRange: DATE_RANGES.includes(config.dateRange) ? config.dateRange : null,
         orientation: config.orientation === "horizontal" ? "horizontal" : "vertical",
         stacked: config.stacked === true,
         normalizeToPercent: config.normalizeToPercent === true,
