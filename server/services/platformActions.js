@@ -1,6 +1,5 @@
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
 import { getCompanyEntitlements, hasEntitlement } from "./licensing.js";
-import { sendEmailViaProvider, sendSmsViaProvider, sendSmsViaTwilio } from "./invoiceDelivery.js";
 import { sendWhatsAppTextMessage } from "./whatsappDelivery.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationCore.js";
 import { decryptCredentials } from "./integrationCredentials.js";
@@ -192,45 +191,8 @@ export async function executeRegisteredAction({ db, action, req, companyId, user
   } else {
     const runtime = await provider(db, companyId, definition.provider);
     if (!runtime) return { status: "UNAVAILABLE", code: "PROVIDER_UNAVAILABLE", retryable: false };
-    for (const recipient of recipients.filter(Boolean)) {
-      results.push(type === "SEND_EMAIL"
-        ? await sendEmailViaProvider({
-            endpoint: runtime.endpoint,
-            apiKey: runtime.apiKey,
-            authScheme: runtime.authScheme,
-            from: runtime.config.from || runtime.config.from_email,
-            to: recipient,
-            subject: renderTemplate(action.subject || template?.subject || "onePOS notification", action.templateContext || {}),
-            body,
-            attachments: Array.isArray(action.attachments) ? action.attachments : [],
-          })
-        : runtime.provider === "smsgate"
-          ? await (async()=>{
-              try {
-                const adapter = createSmsGateDriver().createAdapter({ configuration: runtime.config });
-                const sent = await adapter.execute("sms.send", { recipient, text: body });
-                return { ok:true, httpStatus:200, reference: sent?.providerMessageId || null };
-              } catch (error) {
-                return { ok:false, httpStatus:0, errorText:String(error?.message || "SMSGate send failed") };
-              }
-            })()
-          : runtime.provider === "twilio"
-          ? await sendSmsViaTwilio({
-              accountSid: runtime.twilio.accountSid,
-              authToken: runtime.twilio.authToken,
-              from: runtime.twilio.from,
-              to: recipient,
-              body,
-            })
-          : await sendSmsViaProvider({
-              endpoint: runtime.endpoint,
-              apiKey: runtime.apiKey,
-              authScheme: runtime.authScheme,
-              senderId: runtime.config.sender || runtime.config.sender_id || runtime.config.from,
-              to: recipient,
-              body,
-            }));
-    }
+    return { status:"UNAVAILABLE", code:"CONNECTOR_FLOW_REQUIRED", retryable:false };
+
   }
   const result = results.find((item) => !item.ok) || results[0];
   if (!result.ok) {
