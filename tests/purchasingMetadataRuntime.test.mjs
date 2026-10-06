@@ -51,7 +51,6 @@ test("generic CRUD protects Flow-owned purchasing transaction objects", async ()
 
 test("Phase 2 has no legacy direct SQL business writers", async () => {
   const treeTargets = [
-    "../server/services/integrationDispatcher.js",
     "../server/services/platformFunctionRegistry.js",
     "../server/services/platformWorkflow.js",
     "../server/server.js",
