@@ -25,7 +25,6 @@ const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
@@ -1107,7 +1106,8 @@ function SettingsPage({ onOpenProfile }) {
               ) : current?.key === 'store-till' ? (
                 <>
                   <MetadataSettingsSection section="Store & Till" />
-                  <StoreTillSettingsPage />
+                  <MetadataPageRuntime objectKey="store" appKey="settings" />
+                  <MetadataPageRuntime objectKey="terminal" appKey="settings" />
                 </>
               ) : current?.key === 'client-web-shop' ? (
                 <MetadataSettingsSection section="Client Web Shop" />
