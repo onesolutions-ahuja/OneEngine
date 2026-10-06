@@ -1,0 +1,332 @@
+{
+  "packageKey": "inventory",
+  "packageType": "FOUNDATION",
+  "name": "Inventory Core",
+  "version": "1.0.0",
+  "description": "Canonical inventory ledger and store stock metadata.",
+  "objects": [
+    {
+      "objectKey": "inventory_movement",
+      "label": "Inventory Movement",
+      "pluralLabel": "Inventory Movements",
+      "sourceTable": "inventory_movements",
+      "config": {
+        "flowWritesOnly": true
+      },
+      "fields": [
+        {
+          "apiName": "product_id",
+          "label": "Product",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "product"
+          }
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "movement_type",
+          "label": "Movement Type",
+          "fieldType": "picklist",
+          "required": true,
+          "writable": true,
+          "options": [
+            "OPENING",
+            "PURCHASE",
+            "SALE",
+            "CUSTOMER_RETURN",
+            "SUPPLIER_RETURN",
+            "ADJUSTMENT_IN",
+            "ADJUSTMENT_OUT",
+            "RETURN_IN",
+            "RETURN_OUT",
+            "ONLINE_RESERVE",
+            "ONLINE_RELEASE",
+            "TRANSFER_OUT",
+            "TRANSFER_IN"
+          ]
+        },
+        {
+          "apiName": "quantity_change",
+          "label": "Quantity Change",
+          "fieldType": "decimal",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "balance_after",
+          "label": "Balance After",
+          "fieldType": "decimal",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "reference_type",
+          "label": "Reference Type",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "reference_id",
+          "label": "Reference",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "batch_id",
+          "label": "Batch",
+          "fieldType": "lookup",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "inventory_batch"
+          }
+        },
+        {
+          "apiName": "transaction_id",
+          "label": "Transaction",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "reason",
+          "label": "Reason",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "notes",
+          "label": "Notes",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "created_by",
+          "label": "Created By",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "store_stock",
+      "label": "Store Stock",
+      "pluralLabel": "Store Stock",
+      "sourceTable": "product_store_stock",
+      "config": {
+        "flowWritesOnly": true
+      },
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "product_id",
+          "label": "Product",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "product"
+          }
+        },
+        {
+          "apiName": "quantity",
+          "label": "Quantity",
+          "fieldType": "decimal",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "inventory_balance",
+      "label": "Inventory Balance",
+      "pluralLabel": "Inventory Balances",
+      "sourceTable": "inventory_balance_rollups",
+      "config": {
+        "flowWritesOnly": true
+      },
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "product_id",
+          "label": "Product",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "ledger_quantity",
+          "label": "Ledger Quantity",
+          "fieldType": "decimal",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "movement_count",
+          "label": "Movement Count",
+          "fieldType": "number",
+          "writable": true
+        },
+        {
+          "apiName": "last_movement_at",
+          "label": "Last Movement",
+          "fieldType": "datetime",
+          "writable": true
+        },
+        {
+          "apiName": "discrepancy",
+          "label": "Discrepancy",
+          "fieldType": "decimal",
+          "writable": true
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "product",
+      "childObjectKey": "inventory_movement",
+      "relationshipKey": "inventory_movements",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "product_id"
+    },
+    {
+      "parentObjectKey": "store",
+      "childObjectKey": "inventory_movement",
+      "relationshipKey": "inventory_movements",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "store_id"
+    },
+    {
+      "parentObjectKey": "product",
+      "childObjectKey": "store_stock",
+      "relationshipKey": "store_stock",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "product_id"
+    },
+    {
+      "parentObjectKey": "store",
+      "childObjectKey": "store_stock",
+      "relationshipKey": "product_stock",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "store_id"
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "inventory_movement",
+      "viewKey": "all",
+      "label": "Inventory Ledger",
+      "columns": [
+        "created_at",
+        "product_id",
+        "store_id",
+        "movement_type",
+        "quantity_change",
+        "balance_after",
+        "reference_type"
+      ],
+      "isDefault": true
+    },
+    {
+      "objectKey": "store_stock",
+      "viewKey": "all",
+      "label": "Stock by Store",
+      "columns": [
+        "store_id",
+        "product_id",
+        "quantity",
+        "updated_at"
+      ],
+      "isDefault": true
+    }
+  ],
+  "rules": [
+    {
+      "objectKey": "inventory_movement",
+      "name": "Inventory movement quantity cannot be zero",
+      "triggerKey": "before_save",
+      "conditions": [
+        {
+          "field": "quantity_change",
+          "operator": "equals",
+          "value": 0
+        }
+      ],
+      "action": {
+        "type": "validation",
+        "message": "Inventory movement quantity cannot be zero"
+      }
+    },
+    {
+      "objectKey": "store_stock",
+      "name": "Store stock identity requires store and product",
+      "triggerKey": "before_save",
+      "conditions": [
+        {
+          "field": "store_id",
+          "operator": "is_empty"
+        },
+        {
+          "field": "product_id",
+          "operator": "is_empty"
+        }
+      ],
+      "action": {
+        "type": "validation",
+        "message": "Store and product are required for store stock"
+      }
+    }
+  ],
+  "permissionDeclarations": [
+    {
+      "permission": "inventory.view",
+      "label": "View inventory"
+    },
+    {
+      "permission": "inventory.adjust",
+      "label": "Adjust inventory"
+    }
+  ]
+}
