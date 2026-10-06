@@ -5,7 +5,6 @@ import { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
 export { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
 
 const PRIVILEGED_ROUTES = Object.freeze([
-  { id: "appointments.manage", prefixes: ["/api/appointments"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "platform.developer.manage", prefixes: ["/api/platform/developer/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "platform.metadata.execute", prefixes: ["/api/platform/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "package.lifecycle", prefixes: ["/api/packages/", "/api/platform/packages/"], methods: ["POST","PUT","PATCH","DELETE"] },
