@@ -1,0 +1,1028 @@
+{
+  "objects": [
+    {
+      "objectKey": "purchase",
+      "label": "Purchase",
+      "pluralLabel": "Purchases",
+      "description": "Protected supplier purchase header.",
+      "sourceTable": "purchases",
+      "metadataScope": "global",
+      "storeScoped": true,
+      "required": true,
+      "adoptFromPackageKeys": [
+        "retail_pos"
+      ],
+      "config": {
+        "flowWritesOnly": true,
+        "trackHistory": true
+      },
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": true
+        },
+        {
+          "apiName": "supplier_id",
+          "label": "Supplier",
+          "fieldType": "lookup",
+          "sourceColumn": "supplier_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "supplier"
+          }
+        },
+        {
+          "apiName": "supplier_name",
+          "label": "Supplier Name",
+          "fieldType": "text",
+          "sourceColumn": "supplier_name",
+          "writable": true
+        },
+        {
+          "apiName": "reference_number",
+          "label": "Reference",
+          "fieldType": "text",
+          "sourceColumn": "reference_number",
+          "writable": true
+        },
+        {
+          "apiName": "purchase_date",
+          "label": "Purchase Date",
+          "fieldType": "date",
+          "sourceColumn": "purchase_date",
+          "writable": true
+        },
+        {
+          "apiName": "notes",
+          "label": "Notes",
+          "fieldType": "text",
+          "sourceColumn": "notes",
+          "writable": true
+        },
+        {
+          "apiName": "status",
+          "label": "Status",
+          "fieldType": "text",
+          "sourceColumn": "status",
+          "writable": true
+        },
+        {
+          "apiName": "subtotal",
+          "label": "Subtotal",
+          "fieldType": "currency",
+          "sourceColumn": "subtotal",
+          "writable": true
+        },
+        {
+          "apiName": "total",
+          "label": "Total",
+          "fieldType": "currency",
+          "sourceColumn": "total",
+          "writable": true
+        },
+        {
+          "apiName": "created_by",
+          "label": "Created By",
+          "fieldType": "lookup",
+          "sourceColumn": "created_by",
+          "writable": true
+        },
+        {
+          "apiName": "received_by",
+          "label": "Received By",
+          "fieldType": "lookup",
+          "sourceColumn": "received_by",
+          "writable": true
+        },
+        {
+          "apiName": "received_at",
+          "label": "Received At",
+          "fieldType": "datetime",
+          "sourceColumn": "received_at",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "purchase_line",
+      "label": "Purchase Line",
+      "pluralLabel": "Purchase Lines",
+      "description": "Protected purchase product lines.",
+      "sourceTable": "purchase_items",
+      "metadataScope": "global",
+      "required": true,
+      "adoptFromPackageKeys": [
+        "retail_pos"
+      ],
+      "config": {
+        "flowWritesOnly": true
+      },
+      "fields": [
+        {
+          "apiName": "purchase_id",
+          "label": "Purchase",
+          "fieldType": "lookup",
+          "sourceColumn": "purchase_id",
+          "writable": true
+        },
+        {
+          "apiName": "product_id",
+          "label": "Product",
+          "fieldType": "lookup",
+          "sourceColumn": "product_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "product"
+          }
+        },
+        {
+          "apiName": "quantity",
+          "label": "Ordered",
+          "fieldType": "decimal",
+          "sourceColumn": "quantity",
+          "writable": true
+        },
+        {
+          "apiName": "received_quantity",
+          "label": "Received",
+          "fieldType": "decimal",
+          "sourceColumn": "received_quantity",
+          "writable": true
+        },
+        {
+          "apiName": "unit_cost",
+          "label": "Unit Cost",
+          "fieldType": "currency",
+          "sourceColumn": "unit_cost",
+          "writable": true
+        },
+        {
+          "apiName": "line_total",
+          "label": "Line Total",
+          "fieldType": "currency",
+          "sourceColumn": "line_total",
+          "writable": true
+        },
+        {
+          "apiName": "batch_number",
+          "label": "Batch Number",
+          "fieldType": "text",
+          "sourceColumn": "batch_number",
+          "writable": true
+        },
+        {
+          "apiName": "manufacturing_date",
+          "label": "Manufacturing Date",
+          "fieldType": "date",
+          "sourceColumn": "manufacturing_date",
+          "writable": true
+        },
+        {
+          "apiName": "expiry_date",
+          "label": "Expiry Date",
+          "fieldType": "date",
+          "sourceColumn": "expiry_date",
+          "writable": true
+        },
+        {
+          "apiName": "returned_quantity",
+          "label": "Returned",
+          "fieldType": "rollup",
+          "writable": false,
+          "config": {
+            "operation": "SUM",
+            "relationshipKey": "return_lines",
+            "field": "quantity",
+            "resultType": "decimal"
+          }
+        },
+        {
+          "apiName": "remaining_returnable",
+          "label": "Remaining Returnable",
+          "fieldType": "formula",
+          "writable": false,
+          "config": {
+            "expression": "MAX(received_quantity - returned_quantity, 0)",
+            "resultType": "decimal"
+          }
+        }
+      ]
+    },
+    {
+      "objectKey": "purchase_receipt",
+      "label": "Purchase Receipt",
+      "pluralLabel": "Purchase Receipts",
+      "sourceTable": "purchase_receipts",
+      "metadataScope": "global",
+      "storeScoped": true,
+      "required": true,
+      "adoptFromPackageKeys": [
+        "retail_pos"
+      ],
+      "config": {
+        "flowWritesOnly": true
+      },
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "purchase_id",
+          "label": "Purchase",
+          "fieldType": "lookup",
+          "sourceColumn": "purchase_id",
+          "writable": true
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": true
+        },
+        {
+          "apiName": "reference_number",
+          "label": "Reference",
+          "fieldType": "text",
+          "sourceColumn": "reference_number",
+          "writable": true
+        },
+        {
+          "apiName": "notes",
+          "label": "Notes",
+          "fieldType": "text",
+          "sourceColumn": "notes",
+          "writable": true
+        },
+        {
+          "apiName": "received_by",
+          "label": "Received By",
+          "fieldType": "lookup",
+          "sourceColumn": "received_by",
+          "writable": true
+        },
+        {
+          "apiName": "received_at",
+          "label": "Received",
+          "fieldType": "datetime",
+          "sourceColumn": "received_at",
+          "writable": true
+        }
+      ]
+    },
+    {
+      "objectKey": "stock_return",
+      "label": "Stock Return",
+      "pluralLabel": "Stock Returns",
+      "sourceTable": "stock_returns",
+      "metadataScope": "global",
+      "storeScoped": true,
+      "required": true,
+      "config": {
+        "flowWritesOnly": true
+      },
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": true
+        },
+        {
+          "apiName": "return_type",
+          "label": "Return Type",
+          "fieldType": "picklist",
+          "sourceColumn": "return_type",
+          "writable": true,
+          "options": [
+            "CUSTOMER",
+            "SUPPLIER"
+          ]
+        },
+        {
+          "apiName": "return_number",
+          "label": "Return Number",
+          "fieldType": "text",
+          "sourceColumn": "return_number",
+          "writable": true
+        },
+        {
+          "apiName": "sale_id",
+          "label": "Sale",
+          "fieldType": "lookup",
+          "sourceColumn": "sale_id",
+          "writable": true
+        },
+        {
+          "apiName": "purchase_id",
+          "label": "Purchase",
+          "fieldType": "lookup",
+          "sourceColumn": "purchase_id",
+          "writable": true
+        },
+        {
+          "apiName": "supplier_id",
+          "label": "Supplier",
+          "fieldType": "lookup",
+          "sourceColumn": "supplier_id",
+          "writable": true
+        },
+        {
+          "apiName": "request_key",
+          "label": "Request Key",
+          "fieldType": "text",
+          "sourceColumn": "request_key",
+          "writable": true
+        },
+        {
+          "apiName": "status",
+          "label": "Status",
+          "fieldType": "picklist",
+          "sourceColumn": "status",
+          "writable": true,
+          "options": [
+            "COMPLETED",
+            "CANCELLED"
+          ]
+        },
+        {
+          "apiName": "refund_amount",
+          "label": "Refund Amount",
+          "fieldType": "currency",
+          "sourceColumn": "refund_amount",
+          "writable": true
+        },
+        {
+          "apiName": "refund_method",
+          "label": "Refund Method",
+          "fieldType": "text",
+          "sourceColumn": "refund_method",
+          "writable": true
+        },
+        {
+          "apiName": "reason",
+          "label": "Reason",
+          "fieldType": "text",
+          "sourceColumn": "reason",
+          "writable": true
+        },
+        {
+          "apiName": "created_by",
+          "label": "Created By",
+          "fieldType": "lookup",
+          "sourceColumn": "created_by",
+          "writable": true
+        }
+      ]
+    },
+    {
+      "objectKey": "stock_return_line",
+      "label": "Stock Return Line",
+      "pluralLabel": "Stock Return Lines",
+      "sourceTable": "stock_return_items",
+      "metadataScope": "global",
+      "required": true,
+      "config": {
+        "flowWritesOnly": true
+      },
+      "fields": [
+        {
+          "apiName": "return_id",
+          "label": "Return",
+          "fieldType": "lookup",
+          "sourceColumn": "return_id",
+          "writable": true
+        },
+        {
+          "apiName": "product_id",
+          "label": "Product",
+          "fieldType": "lookup",
+          "sourceColumn": "product_id",
+          "writable": true
+        },
+        {
+          "apiName": "sale_item_id",
+          "label": "Sale Item",
+          "fieldType": "lookup",
+          "sourceColumn": "sale_item_id",
+          "writable": true
+        },
+        {
+          "apiName": "purchase_item_id",
+          "label": "Purchase Line",
+          "fieldType": "lookup",
+          "sourceColumn": "purchase_item_id",
+          "writable": true
+        },
+        {
+          "apiName": "quantity",
+          "label": "Quantity",
+          "fieldType": "decimal",
+          "sourceColumn": "quantity",
+          "writable": true
+        },
+        {
+          "apiName": "reason",
+          "label": "Reason",
+          "fieldType": "text",
+          "sourceColumn": "reason",
+          "writable": true
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "supplier",
+      "childObjectKey": "purchase",
+      "relationshipKey": "purchases",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "supplier_id"
+    },
+    {
+      "parentObjectKey": "purchase",
+      "childObjectKey": "purchase_line",
+      "relationshipKey": "lines",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "purchase_id",
+      "required": true
+    },
+    {
+      "parentObjectKey": "purchase_line",
+      "childObjectKey": "product",
+      "relationshipKey": "product",
+      "relationshipType": "lookup",
+      "parentFieldApiName": "product_id"
+    },
+    {
+      "parentObjectKey": "purchase",
+      "childObjectKey": "purchase_receipt",
+      "relationshipKey": "receipts",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "purchase_id"
+    },
+    {
+      "parentObjectKey": "purchase_line",
+      "childObjectKey": "stock_return_line",
+      "relationshipKey": "return_lines",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "purchase_item_id"
+    },
+    {
+      "parentObjectKey": "stock_return",
+      "childObjectKey": "stock_return_line",
+      "relationshipKey": "lines",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "return_id",
+      "required": true
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "purchase",
+      "viewKey": "all",
+      "label": "Purchases",
+      "columns": [
+        "reference_number",
+        "supplier_name",
+        "purchase_date",
+        "status",
+        "total",
+        "created_at"
+      ],
+      "sort": {
+        "field": "purchase_date",
+        "direction": "desc"
+      },
+      "isDefault": true
+    },
+    {
+      "objectKey": "purchase_line",
+      "viewKey": "returnable",
+      "label": "Supplier Returns",
+      "columns": [
+        "purchase_id",
+        "product_id",
+        "quantity",
+        "received_quantity",
+        "returned_quantity",
+        "remaining_returnable",
+        "unit_cost"
+      ],
+      "filterModel": {
+        "received_quantity": {
+          "operator": "greater_than",
+          "value": 0
+        }
+      },
+      "isDefault": true
+    },
+    {
+      "objectKey": "purchase_receipt",
+      "viewKey": "receipts",
+      "label": "Purchase Receipts",
+      "columns": [
+        "purchase_id",
+        "reference_number",
+        "received_at",
+        "received_by",
+        "notes"
+      ],
+      "sort": {
+        "field": "received_at",
+        "direction": "desc"
+      },
+      "isDefault": true
+    }
+  ],
+  "workflows": [
+    {
+      "objectKey": "purchase",
+      "name": "Purchase Create",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "inputContract": [
+        {
+          "name": "purchase",
+          "type": "record",
+          "required": true
+        },
+        {
+          "name": "items",
+          "type": "record_collection",
+          "required": true
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "purchase",
+          "type": "record",
+          "source": "variables.purchase"
+        }
+      ],
+      "actions": [
+        {
+          "id": "create_purchase",
+          "label": "Create Purchase",
+          "key": "CREATE_RECORD",
+          "objectKey": "purchase",
+          "recordResource": {
+            "path": "variables.purchase"
+          }
+        },
+        {
+          "id": "create_purchase_lines",
+          "label": "Create Purchase Lines",
+          "key": "CREATE_RECORD",
+          "objectKey": "purchase_line",
+          "recordCollectionResource": {
+            "path": "variables.items"
+          },
+          "commonFieldValues": {
+            "purchase_id": {
+              "path": "steps.create_purchase.created.id"
+            }
+          }
+        }
+      ],
+      "variables": [
+        {
+          "value": "variables.purchase",
+          "apiName": "purchase",
+          "label": "Purchase",
+          "type": "Variable",
+          "dataType": "Record",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": true,
+          "objectKey": "purchase"
+        },
+        {
+          "value": "variables.items",
+          "apiName": "items",
+          "label": "Purchase Lines",
+          "type": "Variable",
+          "dataType": "Record",
+          "defaultValue": [],
+          "isCollection": true,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": "purchase_line"
+        }
+      ]
+    },
+    {
+      "objectKey": "purchase",
+      "name": "Purchase Receive",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "inputContract": [
+        {
+          "name": "receipt",
+          "type": "record",
+          "required": true
+        },
+        {
+          "name": "purchase",
+          "type": "record",
+          "required": true
+        }
+      ],
+      "actions": [
+        {
+          "id": "create_receipt",
+          "label": "Create Purchase Receipt",
+          "key": "CREATE_RECORD",
+          "objectKey": "purchase_receipt",
+          "recordResource": {
+            "path": "variables.receipt"
+          }
+        },
+        {
+          "id": "update_purchase",
+          "label": "Update Purchase Receipt Status",
+          "key": "UPDATE_RECORD",
+          "objectKey": "purchase",
+          "recordId": {
+            "path": "record.id"
+          },
+          "fieldValues": {
+            "status": {
+              "path": "variables.purchase.status"
+            },
+            "received_by": {
+              "path": "variables.purchase.received_by"
+            },
+            "received_at": {
+              "path": "variables.purchase.received_at"
+            }
+          }
+        }
+      ],
+      "variables": [
+        {
+          "value": "variables.receipt",
+          "apiName": "receipt",
+          "label": "Receipt",
+          "type": "Variable",
+          "dataType": "Record",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": true,
+          "objectKey": "purchase_receipt"
+        },
+        {
+          "value": "variables.purchase",
+          "apiName": "purchase",
+          "label": "Purchase Update",
+          "type": "Variable",
+          "dataType": "Record",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": "purchase"
+        }
+      ]
+    },
+    {
+      "objectKey": "purchase_line",
+      "name": "Supplier Return Execute",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "inputContract": [
+        {
+          "name": "return",
+          "type": "record",
+          "required": true
+        },
+        {
+          "name": "items",
+          "type": "record_collection",
+          "required": true
+        }
+      ],
+      "actions": [
+        {
+          "id": "create_return",
+          "label": "Create Supplier Return",
+          "key": "CREATE_RECORD",
+          "objectKey": "stock_return",
+          "recordResource": {
+            "path": "variables.return"
+          }
+        },
+        {
+          "id": "create_return_lines",
+          "label": "Create Return Lines",
+          "key": "CREATE_RECORD",
+          "objectKey": "stock_return_line",
+          "recordCollectionResource": {
+            "path": "variables.items"
+          },
+          "commonFieldValues": {
+            "return_id": {
+              "path": "steps.create_return.created.id"
+            }
+          }
+        }
+      ],
+      "variables": [
+        {
+          "value": "variables.return",
+          "apiName": "return",
+          "label": "Return",
+          "type": "Variable",
+          "dataType": "Record",
+          "defaultValue": null,
+          "isCollection": false,
+          "availableInput": true,
+          "availableOutput": true,
+          "objectKey": "stock_return"
+        },
+        {
+          "value": "variables.items",
+          "apiName": "items",
+          "label": "Return Lines",
+          "type": "Variable",
+          "dataType": "Record",
+          "defaultValue": [],
+          "isCollection": true,
+          "availableInput": true,
+          "availableOutput": false,
+          "objectKey": "stock_return_line"
+        }
+      ]
+    }
+  ],
+  "buttons": [
+    {
+      "objectKey": "purchase",
+      "buttonKey": "purchase_create",
+      "label": "New Purchase",
+      "targetType": "workflow",
+      "targetKey": "Purchase Create",
+      "placement": "list",
+      "variant": "primary",
+      "config": {
+        "order": 10,
+        "requiredPermissionsAny": [
+          "purchase.create",
+          "inventory.adjust"
+        ],
+        "form": {
+          "submitLabel": "Create & Receive",
+          "includeMetadataFields": true,
+          "fields": [
+            {
+              "name": "supplierId",
+              "label": "Supplier",
+              "type": "related_select",
+              "required": true,
+              "optionsSource": {
+                "objectKey": "supplier",
+                "valueField": "id",
+                "labelFields": [
+                  "name"
+                ],
+                "filter": {
+                  "field": "active",
+                  "operator": "equals",
+                  "value": true
+                }
+              }
+            },
+            {
+              "name": "supplierName",
+              "label": "Supplier name override",
+              "type": "text"
+            },
+            {
+              "name": "referenceNumber",
+              "label": "Reference / invoice number",
+              "type": "text"
+            },
+            {
+              "name": "purchaseDate",
+              "label": "Purchase date",
+              "type": "date",
+              "defaultValue": "today",
+              "required": true
+            },
+            {
+              "name": "notes",
+              "label": "Notes",
+              "type": "textarea"
+            },
+            {
+              "name": "items",
+              "label": "Product lines",
+              "type": "collection",
+              "minRows": 1,
+              "defaultRows": 1,
+              "fields": [
+                {
+                  "name": "productId",
+                  "label": "Product",
+                  "type": "related_select",
+                  "required": true,
+                  "optionsSource": {
+                    "objectKey": "product",
+                    "valueField": "id",
+                    "labelFields": [
+                      "name",
+                      "sku"
+                    ]
+                  }
+                },
+                {
+                  "name": "quantity",
+                  "label": "Quantity",
+                  "type": "number",
+                  "min": 0.001,
+                  "step": 0.001,
+                  "required": true,
+                  "defaultValue": 1
+                },
+                {
+                  "name": "unitCost",
+                  "label": "Unit cost",
+                  "type": "number",
+                  "min": 0,
+                  "step": 0.01,
+                  "required": true,
+                  "defaultValue": 0
+                },
+                {
+                  "name": "batchNumber",
+                  "label": "Batch",
+                  "type": "text"
+                },
+                {
+                  "name": "manufacturingDate",
+                  "label": "MFG",
+                  "type": "date"
+                },
+                {
+                  "name": "expiryDate",
+                  "label": "Expiry",
+                  "type": "date"
+                }
+              ]
+            },
+            {
+              "name": "receiveNow",
+              "type": "hidden",
+              "defaultValue": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "objectKey": "purchase",
+      "buttonKey": "purchase_receive",
+      "label": "Receive Remaining",
+      "targetType": "workflow",
+      "targetKey": "Purchase Receive",
+      "placement": "record",
+      "variant": "primary",
+      "visibilityRule": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "status",
+            "operator": "not_in",
+            "value": [
+              "RECEIVED",
+              "CANCELLED"
+            ]
+          }
+        ]
+      },
+      "config": {
+        "order": 20,
+        "requiredPermissionsAny": [
+          "purchase.edit",
+          "inventory.adjust",
+          "purchases.receive"
+        ],
+        "form": {
+          "submitLabel": "Receive Remaining",
+          "fields": [
+            {
+              "name": "receivingReference",
+              "label": "Receipt reference",
+              "type": "text"
+            },
+            {
+              "name": "receivingNotes",
+              "label": "Receipt notes",
+              "type": "textarea"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "objectKey": "purchase_line",
+      "buttonKey": "supplier_return",
+      "label": "Return Stock",
+      "targetType": "workflow",
+      "targetKey": "Supplier Return Execute",
+      "placement": "record",
+      "variant": "secondary",
+      "visibilityRule": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "remaining_returnable",
+            "operator": "greater_than",
+            "value": 0
+          }
+        ]
+      },
+      "config": {
+        "order": 30,
+        "requiredPermissionsAny": [
+          "returns.create",
+          "sale.refund"
+        ],
+        "form": {
+          "submitLabel": "Confirm Return",
+          "fields": [
+            {
+              "name": "quantityToReturn",
+              "label": "Return quantity",
+              "type": "number",
+              "min": 0.001,
+              "step": 0.001,
+              "required": true
+            },
+            {
+              "name": "reason",
+              "label": "Reason",
+              "type": "textarea"
+            },
+            {
+              "name": "requestKey",
+              "type": "uuid"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "permissionDeclarations": [
+    {
+      "permission": "purchase.view",
+      "label": "View purchases"
+    },
+    {
+      "permission": "purchase.create",
+      "label": "Create purchases"
+    },
+    {
+      "permission": "purchase.edit",
+      "label": "Receive purchases"
+    },
+    {
+      "permission": "returns.create",
+      "label": "Create supplier returns"
+    }
+  ]
+}
