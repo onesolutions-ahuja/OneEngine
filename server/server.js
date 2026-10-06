@@ -198,22 +198,7 @@ const apiLimiter = createFixedWindowRateLimiter({ windowMs: 60_000, max: 600, ke
 const loginLimiter = createFixedWindowRateLimiter({ windowMs: 15 * 60_000, max: 5, keyPrefix: "login" });
 app.use("/api", apiLimiter);
 
-/*
- * Deliveroo webhooks are HMAC-signed over the RAW request body - parse it
- * before the global JSON parser consumes the stream (express.raw sets
- * req.body to a Buffer; express.json then skips the already-parsed body).
- */
-app.use("/api/online/deliveroo/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-
-/*
- * Uber primary webhook is HMAC-signed (X-Uber-Signature) over the RAW body -
- * same raw-parsing mechanism as the Deliveroo webhook above.
- */
-app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
 
@@ -3452,72 +3437,9 @@ async function startServer() {
               }
             }
             if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
-            if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey: "SHOPIFY_PROCESS_WEBHOOK",
-                req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
-                  retryable: outcome.retryable === true,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "QUICKBOOKS_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
-              if (!actionKey) throw Object.assign(new Error("QuickBooks provider job is missing an action key"), { retryable: false });
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey,
-                req: { method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", user: { companyId: job.company_id, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || outcome.code || "QuickBooks sync failed"), {
-                  retryable: outcome.retryable !== false,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
-              if (!actionKey) throw Object.assign(new Error("Shopify provider job is missing an action key"), { retryable: false });
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey,
-                req: { method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || outcome.code || "Shopify sync failed"), {
-                  retryable: outcome.retryable !== false,
-                });
-              }
-              return outcome;
-            }
+
+
+
             const actionKey = String(payload.type || payload.key || "").toUpperCase();
             if (!actionKey) throw Object.assign(new Error("Platform action job is missing an action key"), { retryable: false });
             const execution = await executeSystemAction({
