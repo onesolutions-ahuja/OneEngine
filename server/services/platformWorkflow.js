@@ -17,9 +17,7 @@ import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
-import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
 import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
-import { createShopifyAdapter } from "./shopifyAdapter.js";
 import { exportShopifyFulfillment, exportShopifyRefund, syncShopifyInventory, syncShopifyProducts } from "./shopifySync.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
@@ -83,75 +81,6 @@ function errorDetails(error) {
     status,
     retryable: error?.retryable ?? null,
   });
-}
-
-async function loadProviderConnection(context, providerKey, requestedConnectionId = null) {
-  const requestCompanyId = context.req?.user?.companyId || null;
-  const companyId = context.companyId || requestCompanyId;
-  if (!context.db || typeof context.db !== "function" || !companyId) {
-    throw new Error(`${providerKey} action requires a company-scoped database context`);
-  }
-  if (requestCompanyId && String(requestCompanyId) !== String(companyId)) {
-    throw new Error(`${providerKey} action company context is invalid`);
-  }
-  const storeId = context.storeId || context.req?.user?.storeId || null;
-  const connectionPredicate = requestedConnectionId ? "AND id=$4" : "";
-  const values = [companyId, providerKey, storeId];
-  if (requestedConnectionId) values.push(requestedConnectionId);
-  const result = await context.db(
-    `SELECT id, company_id, store_id, base_url, credentials_encrypted
-       FROM integration_connections
-      WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND enabled=true
-        AND (store_id IS NULL OR store_id=$3)
-        ${connectionPredicate}
-      ORDER BY (store_id IS NULL), updated_at DESC
-      LIMIT 1`,
-    values
-  );
-  const connection = result.rows?.[0];
-  if (!connection?.credentials_encrypted) return null;
-  let credentials = decryptCredentials(connection.credentials_encrypted) || {};
-  const expiry = Date.parse(credentials.tokenExpiry || credentials.token_expiry || "");
-  if (Number.isFinite(expiry) && expiry <= Date.now() + 60_000) {
-    const clientId = credentials.clientId || credentials.client_id;
-    const clientSecret = credentials.clientSecret || credentials.client_secret;
-    let refreshed;
-    if (providerKey === "quickbooks") {
-      refreshed = await createQuickBooksAdapter().refreshAuthentication({
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
-        clientId,
-        clientSecret,
-      });
-    } else if (providerKey === "shopify") {
-      const shopDomain = credentials.shopDomain || credentials.shop_domain || connection.base_url;
-      refreshed = await createShopifyAdapter().refreshAuthentication({
-        shopDomain: String(shopDomain || "").replace(/^https?:\/\//i, "").replace(/\/$/, ""),
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
-        clientId,
-        clientSecret,
-      });
-    }
-    if (!refreshed) throw new Error(`${providerKey} token refresh is unavailable`);
-    credentials = {
-      ...credentials,
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000).toISOString(),
-      ...(refreshed.refreshTokenExpiresIn
-        ? { refreshTokenExpiry: new Date(Date.now() + refreshed.refreshTokenExpiresIn * 1000).toISOString() }
-        : {}),
-      ...(refreshed.scopes?.length ? { scopes: refreshed.scopes } : {}),
-    };
-    const saved = await context.db(
-      `UPDATE integration_connections
-          SET credentials_encrypted=$1, last_error=NULL, updated_at=NOW()
-        WHERE id=$2 AND company_id=$3 AND enabled=true
-        RETURNING id`,
-      [encryptCredentials(credentials), connection.id, companyId]
-    );
-    if (!saved.rows?.length) throw new Error(`${providerKey} connection changed during token refresh`);
-  }
-  return { connection, credentials };
 }
 
 async function shopifyPackageAvailability(db, companyId) {
