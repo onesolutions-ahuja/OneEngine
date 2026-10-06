@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const roots = ["server/routes", "server/services", "src"].map((item) => path.join(ROOT, item));
+const roots = ["server", "src", "scripts"].map((item) => path.join(ROOT, item));
 const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:true}).flatMap((entry)=>{
   const full=path.join(dir,entry.name);
   return entry.isDirectory()?walk(full):/\.(?:js|jsx|mjs|ts|tsx)$/.test(entry.name)?[full]:[];
@@ -13,12 +13,8 @@ const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 // These files are platform infrastructure or declarative metadata authorities.
 // Business names may legitimately occur here as metadata; they must not become
 // executable business persistence/query logic elsewhere.
-const exempt = new Set([
-  "server/services/platformMetadata.js",
-  "server/services/platformSystemObjects.js",
-  "server/services/tenantDatabase.js",
-]);
-const declarativePrefixes=["server/packages/","server/metadata/"];
+const exempt = new Set([]);
+const declarativePrefixes=["server/packages/","server/metadata/","server/docs/"];
 const retired = new Set(["server/routes/dashboard.js","server/services/reportSalesDefinition.js"]);
 // Temporary compatibility inventory: these adapters are allowed to touch the
 // authoritative POS tables, but every entry is named here so additions cannot
@@ -35,7 +31,7 @@ const hardcodedBusinessObjectKeys=[
   "purchase","purchase_ledger","purchase_line","purchase_receipt",
   "supplier_invoice","supplier_payment","sales_order","sales_order_line","stock_return"
 ];
-const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
+const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS","OneTill","till_session","sale_ledger"];
 const findings=[];
 
 for(const file of roots.flatMap(walk)){
@@ -46,7 +42,7 @@ for(const file of roots.flatMap(walk)){
     if(name==="server/services/reportSalesDefinition.js" && /dataSource\s*:\s*["']sales["']|FROM\s+sales/i.test(text)) findings.push({rule:"RETIRED_SALES_REPORT_ENGINE_STILL_IMPLEMENTED",file:name});
     continue;
   }
-  if(exempt.has(name)||declarativePrefixes.some((prefix)=>name.startsWith(prefix))) continue;
+  if(name==="scripts/audit-metadata-architecture.mjs"||exempt.has(name)||declarativePrefixes.some((prefix)=>name.startsWith(prefix))) continue;
   // Existing app/domain adapters are compatibility boundaries around authoritative
   // POS tables. They remain visible debt, but new generic platform/builders may
   // not introduce direct business SQL. Phase 7B validates these adapters through
@@ -63,6 +59,8 @@ for(const file of roots.flatMap(walk)){
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
+  if(/\b(?:SHOPIFY|WOOCOMMERCE|MAGENTO|PRESTASHOP|DELIVEROO|UBER_EATS|JUST_EAT|SUMUP|SQUARE|DOJO|QUICKBOOKS|XERO)\b/i.test(text)) findings.push({rule:"PROVIDER_SPECIFIC_EXECUTABLE",file:name});
+  if(/\b(?:CALL_FUNCTION|call_function)\b/.test(text)) findings.push({rule:"LEGACY_FUNCTION_EXECUTION",file:name});
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
 const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
