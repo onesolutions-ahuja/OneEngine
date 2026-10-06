@@ -19,7 +19,7 @@ export default function createWhatsAppSettingsRouter({db,authenticate,authorize}
   for(const path of ["/whatsapp/test-connection","/whatsapp/test-invoice","/whatsapp/test-send","/whatsapp/test-message","/whatsapp/resend-invoice"]){
     router.post(path,authenticate,authorize("settings.manage"),metadataRequired("WhatsApp business actions execute through metadata Actions/Flows and generic communication/HTTP primitives."));
   }
-  router.get("/whatsapp/delivery-history",authenticate,authorize("settings.manage"),async(req,res)=>{
+  // WhatsApp delivery status is exposed from generic communication events without secrets.\n  router.get("/whatsapp/delivery-history",authenticate,authorize("settings.manage"),async(req,res)=>{
     try{const limit=Math.min(Math.max(Number(req.query.limit)||20,1),100);const result=await db(`SELECT * FROM platform_communication_events WHERE company_id=$1 AND channel='WHATSAPP' ORDER BY created_at DESC LIMIT $2`,[req.user.companyId,limit]);return res.json({success:true,data:result.rows||[]});}
     catch(error){return res.status(500).json({success:false,message:"Unable to load WhatsApp delivery history"});}
   });
