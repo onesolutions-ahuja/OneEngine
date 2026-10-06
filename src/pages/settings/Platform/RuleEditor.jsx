@@ -12,18 +12,6 @@ const TRIGGERS = [
   { value: "after_delete", label: "After Delete" },
 ];
 
-const ACTIONS = [
-  { value: "validation", label: "Validation — block save when conditions match" },
-  { value: "validate", label: "Legacy Validate (configuration only)" },
-  { value: "set_field", label: "Set Field" },
-  { value: "show_message", label: "Show Message" },
-  { value: "SEND_EMAIL", label: "Send Email" },
-  { value: "SEND_SMS", label: "Send SMS" },
-  { value: "SEND_WHATSAPP", label: "Send WhatsApp" },
-  { value: "CALL_WEBHOOK", label: "Call Connector Webhook" },
-  { value: "restrict", label: "Restrict" },
-];
-
 const EMPTY_RULE = {
   name: "",
   rule_key: "",
@@ -54,7 +42,7 @@ export default function RuleEditor({
     ...(rule || {}),
     ...(isNew && initialObjectId ? { object_id: initialObjectId } : {}),
     trigger: rule?.trigger_key || rule?.trigger || "before_save",
-    action: rule?.action?.type || (typeof rule?.action === "string" ? rule.action : "validation"),
+    action: "validation",
     message: rule?.action?.message || "",
     match: rule?.action?.match || "all",
     bypassPermission: rule?.action?.bypassPermission || "",
@@ -293,12 +281,8 @@ export default function RuleEditor({
       </div>
 
       <div className="platform-rule-notice">
-        <strong>{form.action === "validation" ? "Validation rule" : "Configuration only"}</strong>
-        <span>
-          {form.action === "validation"
-            ? "An active rule blocks Platform record saves when its conditions match. Other entry points keep their existing business validation."
-            : "Workflow actions are stored as metadata and do not execute."}
-        </span>
+        <strong>Validation rule</strong>
+        <span>An active rule blocks metadata record saves when its conditions match. Automation belongs in GPT Builder Flows.</span>
       </div>
 
       {error ? (
@@ -326,7 +310,7 @@ export default function RuleEditor({
                 onChange={(event) =>
                   update("name", event.target.value)
                 }
-                placeholder="Customer Credit Validation"
+                placeholder="Record Validation"
                 required
               />
             </label>
@@ -378,31 +362,12 @@ export default function RuleEditor({
                   )
                 }
               >
-                {TRIGGERS.filter(trigger => form.action !== "validation" || ["before_save", "before_create", "before_update"].includes(trigger.value)).map((trigger) => (
+                {TRIGGERS.filter(trigger => ["before_save", "before_create", "before_update"].includes(trigger.value)).map((trigger) => (
                   <option
                     key={trigger.value}
                     value={trigger.value}
                   >
                     {trigger.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span>Action</span>
-              <select
-                value={
-                  form.action || "validate"
-                }
-                onChange={(event) => setForm(current => ({ ...current, action: event.target.value, ...(event.target.value === "validation" ? { trigger: "before_save" } : {}) }))}
-              >
-                {ACTIONS.map((action) => (
-                  <option
-                    key={action.value}
-                    value={action.value}
-                  >
-                    {action.label}
                   </option>
                 ))}
               </select>
@@ -433,7 +398,7 @@ export default function RuleEditor({
               </select>
             </label>
 
-            {form.action === "validation" && <label className="platform-rule-description">
+            {<label className="platform-rule-description">
               <span>Error message shown when save is blocked</span>
               <textarea
                 value={form.message || ""}
@@ -449,14 +414,14 @@ export default function RuleEditor({
                 rows={3}
               />
             </label>}
-            {form.action === "validation" && <label>
+            {<label>
               <span>Block save when</span>
               <select value={form.match} onChange={event => update("match", event.target.value)}>
                 <option value="all">All conditions match</option>
                 <option value="any">Any condition matches</option>
               </select>
             </label>}
-            {form.action === "validation" && <label>
+            {<label>
               <span>Bypass permission</span>
               <select value={form.bypassPermission || ""} onChange={event => update("bypassPermission", event.target.value)}>
                 <option value="">No bypass — applies to everyone</option>
@@ -464,7 +429,7 @@ export default function RuleEditor({
               </select>
               <small className="platform-muted">Users granted this system permission through their role or a Permission Set can save without this rule blocking them.</small>
             </label>}
-            {form.action === "validation" && <label>
+            {<label>
               <span>Error location</span>
               <select
                 value={form.errorLocation || "top"}
@@ -478,7 +443,7 @@ export default function RuleEditor({
                 <option value="field">Next to a field</option>
               </select>
             </label>}
-            {form.action === "validation" && form.errorLocation === "field" && <label>
+            {form.errorLocation === "field" && <label>
               <span>Error field</span>
               <select value={form.errorField || ""} required onChange={(event) => update("errorField", event.target.value)}>
                 <option value="">Select field</option>
