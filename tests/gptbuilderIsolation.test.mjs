@@ -21,6 +21,36 @@ test('GPT Builder phase 2 shell follows Salesforce flow-creation and canvas chro
   assert.match(page, />End</)
 })
 
+test('GPT Builder phase 1 exposes all 18 Salesforce automation type cards captured in the reference audit', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
+  const names = [
+    'Screen Flow',
+    'Record-Triggered Flow',
+    'Schedule-Triggered Flow',
+    'Platform Event-Triggered Flow',
+    'Autolaunched Flow (No Trigger)',
+    'Automation Event-Triggered Flow',
+    'User Provisioning Flow',
+    'Contact Request Flow',
+    'Cart Async Flow',
+    'Recommendation Strategy',
+    'Autolaunched Orchestration (No Trigger)',
+    'Record-Triggered Orchestration',
+    'Evaluation Flow',
+    'Flow Orchestration for CMS',
+    'Individual-Object Linking Flow',
+    'Autolaunched Flow Approval Process (No Trigger)',
+    'Record-Triggered Flow Approval Process',
+    'Identity User Registration Flow',
+  ]
+  for (const name of names) assert.ok(page.includes(name), name)
+  assert.equal(names.length, 18)
+  assert.match(automation, /category === 'scheduled'\) return flow\?\.category === 'scheduled'/)
+  assert.match(page, /pickerOnlyReference: true/)
+})
+
+
 test('GPT Builder keeps auto-layout and free-form toolbox behavior separate', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /layout === 'free' \? <button/)
