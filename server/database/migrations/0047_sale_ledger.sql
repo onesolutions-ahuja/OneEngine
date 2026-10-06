@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS sale_ledger (
   reason TEXT,
   modifier_data JSONB NOT NULL DEFAULT '[]'::jsonb,
   bundle_components JSONB NOT NULL DEFAULT '[]'::jsonb,
+  discount_audit JSONB NOT NULL DEFAULT '[]'::jsonb,
+  price_override_audit JSONB NOT NULL DEFAULT '[]'::jsonb,
 
   offline_created BOOLEAN NOT NULL DEFAULT FALSE,
   sync_status VARCHAR(50),
@@ -285,3 +287,30 @@ BEGIN
     ALTER TABLE hospitality_qr_orders ADD CONSTRAINT fk_hospitality_qr_sale_ledger FOREIGN KEY (sale_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
   END IF;
 END $$;
+
+
+-- Fold the remaining sales helper/audit tables into the canonical ledger.
+UPDATE sale_ledger line
+SET modifier_data = line.modifier_data || COALESCE((
+  SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id)
+  FROM sale_item_modifiers m
+  WHERE m.sale_item_id=line.id
+), '[]'::jsonb)
+WHERE line.source_record_type='SALE_LINE';
+
+UPDATE sale_ledger header
+SET discount_audit = COALESCE((
+  SELECT jsonb_agg(to_jsonb(d) ORDER BY d.created_at,d.id)
+  FROM sale_discounts d
+  WHERE d.sale_id=header.id
+), '[]'::jsonb)
+WHERE header.source_record_type='SALE_HEADER';
+
+UPDATE sale_ledger row
+SET price_override_audit = COALESCE((
+  SELECT jsonb_agg(to_jsonb(o) ORDER BY o.created_at,o.id)
+  FROM sale_price_overrides o
+  WHERE o.sale_id=row.transaction_id
+    AND (o.item_id IS NULL OR o.item_id=row.id)
+), '[]'::jsonb)
+WHERE row.source_record_type IN ('SALE_HEADER','SALE_LINE');
