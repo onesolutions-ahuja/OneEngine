@@ -14,8 +14,6 @@ import {
   createWorkflowRun,
   executeWorkflowAction,
   executeWorkflowActions,
-  getRegisteredFunction,
-  getRegisteredFunctionsRegistry,
   getWorkflowActionDefinition,
   getWorkflowActionRegistry,
   getWorkflowBuilderActionRegistry,
@@ -5072,11 +5070,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     });
   });
 
-  router.get("/platform/function-registry", ...manage, async (req, res) => {
-    res.json({
-      success: true,
-      data: getRegisteredFunctionsRegistry().map(({ handler, validation, ...definition }) => definition),
-    });
+  router.get("/platform/function-registry", ...manage, async (_req, res) => {
+    res.json({ success: true, data: [] });
   });
 
   router.get("/platform/workflow-triggers", ...manage, async (_req, res) => {
@@ -7819,27 +7814,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       validateWorkflowAction(workflowAction);
       const actionType = workflowAction.type || workflowAction.key;
       if (String(actionType || "").toUpperCase() === "CALL_FUNCTION") {
-        const functionKey = workflowAction.functionKey || workflowAction.function_key;
-        const functionDefinition = getRegisteredFunction(functionKey);
-        if (!functionDefinition) {
-          const error = new Error(`Function "${functionKey}" is not registered`);
-          error.status = 422;
-          throw error;
-        }
-        for (const permission of Array.isArray(functionDefinition.permissions) ? functionDefinition.permissions : []) {
-          if (!(await hasExecutionPermission(req, permission))) {
-            const error = new Error("You do not have permission to execute this function");
-            error.status = 403;
-            throw error;
-          }
-        }
-        const any = Array.isArray(functionDefinition.permissionsAny) ? functionDefinition.permissionsAny : [];
-        if (any.length && !(await Promise.all(any.map((permission) => hasExecutionPermission(req, permission)))).some(Boolean)) {
-          const error = new Error("You do not have permission to execute this function");
-          error.status = 403;
-          throw error;
-        }
-        continue;
+        const error = new Error("CALL_FUNCTION is no longer supported; use metadata-driven Flow actions and generic core primitives.");
+        error.status = 422;
+        throw error;
       }
       const definition = getWorkflowActionDefinition(actionType);
       for (const requiredPermission of definition?.requiredPermissions || []) {
@@ -8296,23 +8273,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (!(await hasExecutionPermission(req, permission))) return res.status(403).json({ success: false, message: "You do not have permission to execute this action" });
 
       if (action === "call_function") {
-        const functionKey = component.functionKey || component.function_key;
-        const definition = getRegisteredFunction(functionKey);
-        if (!definition) return res.status(422).json({ success: false, message: "Configured registered function is unavailable" });
-        const execution = await executeSystemWorkflow({
-          db,
-          companyId: req.user.companyId,
-          userId: req.user.id || null,
-          systemKey: `function:${functionKey}`,
-          req,
-          input: component.inputs || {},
-          object,
-          record,
-          recordId: req.params.recordId,
-          storeId: req.user.storeId || null,
-          source: { type: "record_component", method: req.method, path: req.originalUrl || req.path, capability: functionKey },
-        });
-        return res.json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
+        return res.status(422).json({ success: false, message: "CALL_FUNCTION is no longer supported; configure a metadata-driven Flow action instead" });
       }
 
       const workflowId = component.workflowId || component.workflow_id || component.ruleId || component.rule_id;
