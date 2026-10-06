@@ -2,7 +2,7 @@ name: Validate OneEngine
 
 on:
   push:
-    branches: [main]
+    branches: [main, final-architecture-completion]
   pull_request:
   workflow_dispatch:
 
