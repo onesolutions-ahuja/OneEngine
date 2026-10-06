@@ -1,4 +1,4 @@
-import { buildCustomSalesQuery, customDateRange, validateCustomReportDefinition } from "./reportSalesDefinition.js";
+import { normalizeAdvancedReportDefinition } from "./reportAnalyticsDefinition.js";
 import { buildPlatformObjectQuery } from "./reportableSources.js";
 import { DATE_RANGES, mergeDashboardFilters } from "./dashboardBuilder.js";
 import { applyDashboardGlobalFilters } from "./analyticsManagement.js";
@@ -28,11 +28,11 @@ export function createDashboardExecution({ db, canViewCompanyCustomers, canAcces
         );
         if (!accessResult.rows.length) throw new Error("Saved report unavailable");
       }
-      return mergeDashboardFilters(validateCustomReportDefinition(savedReport.definition), dashboardFilters);
+      return mergeDashboardFilters(normalizeAdvancedReportDefinition(savedReport.definition), dashboardFilters);
     }
 
     if (config.report && typeof config.report === "object") {
-      const definition = validateCustomReportDefinition(config.report);
+      const definition = normalizeAdvancedReportDefinition(config.report);
       const merged = mergeDashboardFilters(definition, dashboardFilters);
       if (
         config.dateRange &&
@@ -66,66 +66,33 @@ export function createDashboardExecution({ db, canViewCompanyCustomers, canAcces
       let built;
       let columns;
 
-      if (definition.dataSource === "platform_object") {
-        const context = await loadPlatformReportContext(db, req, definition.objectId);
-        if (!context.object) throw new Error("Data source unavailable");
-
-        const requestedStores = [...new Set([
-          ...(definition.storeIds || []),
-          ...definition.filters
-            .filter((filter) => filter.field === "store")
-            .flatMap((filter) => Array.isArray(filter.value) ? filter.value : [filter.value])
-            .filter(Boolean),
-        ].map(String))];
-
-        if (requestedStores.length > 1) throw new Error("Platform-object dashboard components support one active store at a time");
-        for (const storeId of requestedStores) {
-          if (!canAccessStore || !(await canAccessStore(req.user, storeId))) throw new Error("You do not have access to one or more stores");
-        }
-        const scopedStoreId = requestedStores[0] || (req.user.storeId ? String(req.user.storeId) : null);
-        if (!requestedStores.length && scopedStoreId && (!canAccessStore || !(await canAccessStore(req.user, scopedStoreId)))) {
-          throw new Error("You do not have access to the current store");
-        }
-        if (context.object.store_scoped === true && !scopedStoreId) throw new Error("A store assignment is required to run this dashboard");
-
-        const platformDefinition = {
-          ...definition,
-          filters: definition.filters.filter((filter) => filter.field !== "store"),
-        };
-        built = buildPlatformObjectQuery(platformDefinition, context.object, context.fields, req.user.companyId, 1000, {
+      if (definition.dataSource && definition.dataSource !== "platform_object") {
+        throw new Error("Dashboard report data source is not metadata-backed");
+      }
+      const context = await loadPlatformReportContext(db, req, definition.objectId);
+      if (!context.object) throw new Error("Data source unavailable");
+      const scopedStoreId = req.user.storeId ? String(req.user.storeId) : null;
+      if (context.object.store_scoped === true && !scopedStoreId) throw new Error("A store assignment is required to run this dashboard");
+      if (scopedStoreId && canAccessStore && !(await canAccessStore(req.user, scopedStoreId))) {
+        throw new Error("You do not have access to the current store");
+      }
+      built = buildPlatformObjectQuery(
+        { ...definition, dataSource:"platform_object" },
+        context.object,
+        context.fields,
+        req.user.companyId,
+        1000,
+        {
           storeId: scopedStoreId,
           visibilitySql: context.visibilitySql,
           visibilityParams: context.visibilityParams,
-        }, context.relationships);
-        columns = [
-          ...definition.fields,
-          ...definition.summaries.map((summary) => `${String(summary.aggregate).toLowerCase()}_${summary.field}`),
-        ];
-      } else {
-        if (!hasPermission || !(await hasPermission(req, "reports.custom.view"))) {
-          throw Object.assign(new Error("You do not have permission to view this dashboard data source"), { status: 403 });
-        }
-        const requestedStores = [...new Set([
-          ...(definition.storeIds || []),
-          ...definition.filters
-            .filter((filter) => filter.field === "store")
-            .flatMap((filter) => Array.isArray(filter.value) ? filter.value : [filter.value])
-            .filter(Boolean),
-        ].map(String))];
-        for (const storeId of requestedStores) {
-          if (!canAccessStore || !(await canAccessStore(req.user, storeId))) throw new Error("You do not have access to one or more stores");
-        }
-        if (!requestedStores.length && req.user.storeId && (!canAccessStore || !(await canAccessStore(req.user, String(req.user.storeId))))) {
-          throw new Error("You do not have access to the current store");
-        }
-        if (!requestedStores.length && !req.user.storeId && !(canViewCompanyCustomers && await canViewCompanyCustomers(req.user))) {
-          throw new Error("A store assignment is required to run this dashboard");
-        }
-        const stores = requestedStores.length ? requestedStores : (req.user.storeId ? [String(req.user.storeId)] : []);
-        built = buildCustomSalesQuery(definition, customDateRange(definition.filters), stores, definition.userIds || []);
-        built.params[2] = req.user.companyId;
-        columns = definition.fields;
-      }
+        },
+        context.relationships
+      );
+      columns = [
+        ...definition.fields,
+        ...definition.summaries.map((summary) => `${String(summary.aggregate).toLowerCase()}_${summary.field}`),
+      ];
 
       const result = await db(built.sql, built.params);
       return { id: component.id, type: component.type, data: { columns, rows: result.rows } };
