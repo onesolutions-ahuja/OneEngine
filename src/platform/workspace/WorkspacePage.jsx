@@ -325,7 +325,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       }
 
       // Render metadata and any cached rows immediately. Record synchronization
-      // must not keep Products/Customers/Sales/Purchases/etc. behind a loader
+      // must not keep metadata-backed workspaces behind a loader
       // when this device already has a usable list snapshot.
       setFields(nextFields)
       setRuntimeMeta(nextRuntimeMeta)
