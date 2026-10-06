@@ -1511,6 +1511,15 @@ const PACKAGE_CATALOG = [
     name: "OneDeveloper",
     description: "Developer workspace for configurable objects, metadata, apps and workflow administration.",
     route: "/app/developer",
+    runtimeSurfaces: {
+      presentation: {
+        settings: {
+          source: "/api/settings",
+          currencyPath: "company.currency",
+          dateFormatPath: "general.dateFormat",
+        },
+      },
+    },
     permissions: ["settings.manage"],
     storeScoped: false,
     category: "Administration",
