@@ -78,6 +78,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Start branch frontend preview
         shell: bash
+        env:
+          VITE_API_BASE: http://127.0.0.1:4173
+          ONEPOS_DEV_API_PROXY_TARGET: https://oneengine-6gas.onrender.com
+          ONEPOS_DEV_API_PROXY_ORIGIN: https://onesolutions-ahuja.github.io
         run: |
           set -euo pipefail
           VITE_BASE_PATH=/ npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/oneengine-vite.log 2>&1 &
@@ -96,7 +100,7 @@ jobs:
           ONEPOS_E2E_BASE_URL: http://127.0.0.1:4173/
           ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
           ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
-          ONEPOS_API_URL: https://oneengine-6gas.onrender.com
+          ONEPOS_API_URL: http://127.0.0.1:4173
       - name: Upload Workflow Builder visual evidence
         if: always()
         uses: actions/upload-artifact@v4
