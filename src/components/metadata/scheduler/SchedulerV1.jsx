@@ -1,0 +1,5 @@
+export default function SchedulerV1({ node, data = {}, builderMode = false, onRecordClick }) {
+  const config = node?.config || {}, groups = new Map(), field = config.startField || config.startDateField || "start_date";
+  for (const record of data.records || []) { const group = String(record[config.resourceField || "assignee_id"] || "Unassigned"); groups.set(group, [...(groups.get(group) || []), record]); }
+  return <div className="flex gap-3 overflow-x-auto">{[...groups].map(([group, rows]) => <section key={group} className="w-64 shrink-0 rounded-lg border p-2"><h4 className="mb-2 text-xs font-semibold">{group}</h4>{rows.sort((a,b)=>new Date(a[field])-new Date(b[field])).map((record,index)=><button type="button" key={record.id||index} disabled={builderMode} onClick={()=>!builderMode&&onRecordClick?.({record,node})} className="block w-full rounded border px-2 py-1.5 text-left"><span className="block text-[10px]">{String(record[field]||"")}</span><span className="block truncate text-xs font-medium">{record[config.titleField||"name"]||"Untitled"}</span></button>)}</section>)}</div>;
+}
