@@ -31,7 +31,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const AUTH_TYPES = ["none", "api_key", "bearer", "basic", "oauth2", "oauth2_client_credentials"];
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
-const ENTITY_TYPES = ["custom"];
+const EVENT_KEY_RE = /^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$/;
 const MAPPING_TYPES = ["direct", "constant", "template"];
 const LOG_BODY_LIMIT = 20000; // characters stored per log body field
 
@@ -474,9 +474,9 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
         if (!HTTP_METHODS.includes(String(method).toUpperCase())) {
           return res.status(400).json({ success: false, message: `method must be one of: ${HTTP_METHODS.join(", ")}` });
         }
-        const entity = entityType ?? entity_type ?? "sale";
-        if (!ENTITY_TYPES.includes(entity)) {
-          return res.status(400).json({ success: false, message: `entityType must be one of: ${ENTITY_TYPES.join(", ")}` });
+        const entity = String(entityType ?? entity_type ?? "custom").trim();
+        if (!EVENT_KEY_RE.test(entity)) {
+          return res.status(400).json({ success: false, message: "entityType must be a metadata-safe event key" });
         }
         const result = await db(
           `INSERT INTO integration_endpoints (integration_id, name, method, path, entity_type, enabled)
@@ -532,9 +532,9 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           set("path", String(path).trim());
         }
         if (entityType ?? entity_type) {
-          const entity = entityType ?? entity_type;
-          if (!ENTITY_TYPES.includes(entity)) {
-            return res.status(400).json({ success: false, message: `entityType must be one of: ${ENTITY_TYPES.join(", ")}` });
+          const entity = String(entityType ?? entity_type).trim();
+          if (!EVENT_KEY_RE.test(entity)) {
+            return res.status(400).json({ success: false, message: "entityType must be a metadata-safe event key" });
           }
           set("entity_type", entity);
         }
