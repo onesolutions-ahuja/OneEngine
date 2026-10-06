@@ -264,83 +264,21 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
 
   const newNodeFor = (componentKey) => {
     const meta = componentMeta(componentKey);
-    const componentApi = meta.api || `${componentKey}.v1`;
-    if (meta.runtimeKind === "analytics") return createRegisteredComponent(meta, "PAGE");
-    if (componentKey === "container") return { id: uid("container"), componentKey, label: meta.label, size: "medium", columns: 2, spacing: 3, children: [] };
-    if (componentKey === "multi_container") {
-      return {
-        id: uid("multi_container"), componentKey, label: meta.label, containerSize: "medium", spacing: 3, clickable: true,
-        collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [], titleField: "", subtitleField: "" },
-        interaction: { type: "none" },
-      };
-    }
-    if (componentKey === "table") {
-      /* Same Record Collection datasource as MultiContainer — configured by
-         the SAME properties groups, just without card sizing. */
-      return {
-        id: uid("table"), componentKey, label: meta.label, clickable: true,
-        collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
-        interaction: { type: "none" },
-      };
-    }
-    if (componentKey === "tree_view") {
-      return {
-        id: uid("tree_view"), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
-        config: {
-          parentField: "parent_id",
-          labelField: "name",
-          secondaryField: "status",
-          maxDepth: 3,
-          showCounts: true,
-          allowCollapse: true,
-          defaultExpandedDepth: 1,
-        },
-        interaction: { type: "none" },
-      };
-    }
-    if (componentKey === "process_path") {
-      return {
-        id: uid("process_path"),
-        componentKey,
-        label: meta.label,
-        collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 1, pagination: false, fields: [] },
-        config: {
-          statusField: "status",
-          titleField: "name",
-          stages: [],
-          allowStageChange: false,
-          keyFields: [],
-          guidance: {},
-        },
-        interaction: { type: "none" },
-      };
-    }
-    if (["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"].includes(componentKey)) {
-      const defaults = {
-        timeline: { dateField: "created_at", titleField: "name", secondaryField: "status", groupBy: "day", maxRecords: 10 },
-        kanban: { groupField: "status", titleField: "name", subtitleField: "status", maxRecords: 12, allowDragDrop: true },
-        calendar: { startField: "start_date", endField: "end_date", titleField: "name", subtitleField: "status", categoryField: "status", defaultView: "month" },
-        scheduler: { resourceField: "assignee_id", resourceLabelField: "name", startField: "start_at", endField: "end_at", titleField: "name", statusField: "status", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
-        gantt: { taskLabelField: "name", startField: "start_date", endField: "end_date", progressField: "progress", scale: "week" },
-        map: { locationMode: "latlng", latitudeField: "latitude", longitudeField: "longitude", labelField: "name", defaultZoom: 10 },
-        hierarchy_viewer: { parentField: "parent_id", titleField: "name", maxDepth: 3, orientation: "vertical" },
-        file_viewer: { displayMode: "grid", filenameField: "filename", typeField: "file_type", maxItems: 12 },
-        signature: { fieldKey: "signature", label: "Signature", displayMode: "capture", width: 320, height: 180 },
-      }[componentKey];
-      return {
-        id: uid(componentKey), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
-        config: { ...defaults },
-        interaction: { type: "none" },
-      };
-    }
-    if (componentKey === "button") return { id: uid("button"), componentKey, label: meta.label || "Button", variant: "primary", size: "medium", interaction: { type: "none" } };
-    if (componentKey === "header") return { id: uid("header"), componentKey, text: meta.label || "Heading" };
-    if (componentKey === "text") return { id: uid("text"), componentKey, text: meta.label || "Text" };
-    if (componentKey === "divider") return { id: uid("divider"), componentKey };
-    if (componentKey === "spacer") return { id: uid("spacer"), componentKey, spacing: 3 };
-    if (componentKey === "field_value") return { id: uid("field_value"), componentKey, field: "" };
-    if (componentKey === "related_list") return { id: uid("related_list"), componentKey, relationshipKey: "", limit: 10 };
-    return { id: uid(componentKey), componentKey, componentApi, label: meta.label };
+    const registered = createRegisteredComponent(meta, "PAGE");
+    // Component-specific presentation defaults belong to Component Registry
+    // metadata. The builder only adds generic page binding shells.
+    return {
+      ...registered,
+      id: registered.id || uid(componentKey),
+      componentKey: meta.key || componentKey,
+      componentApi: meta.api || `${componentKey}.v1`,
+      ...(meta.containsChildren ? { children: [] } : {}),
+      ...(meta.recordBound ? {
+        collection: registered.collection || { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
+        interaction: registered.interaction || { type: "none" },
+      } : {}),
+      ...(meta.kind === "action" ? { interaction: registered.interaction || { type: "none" } } : {}),
+    };
   };
 
   const dropIntoSection = (sectionId, payload, index = null) => {
