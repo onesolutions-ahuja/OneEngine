@@ -16,8 +16,6 @@ import { effectiveManifest, resolvePersistedConnectorCapability } from "./connec
 import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
-import { decryptSecret } from "./onlineOrders/platformConfig.js";
-import { hasEntitlement } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
@@ -3241,15 +3239,32 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "completed", channel: "IN_APP", recipients: recipientUserIds };
       }
 
-      // External communication providers are selected by metadata. The generic
-      // communication runtime delegates transport without provider-specific behavior.
-      const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS" }[channel] || null;
-      if (!legacyKey) {
-        return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
-      }
-      const transport = getWorkflowActionDefinition(legacyKey);
-      if (!transport?.executor) return { status: "failed", code: "COMMUNICATION_TRANSPORT_UNAVAILABLE", channel, retryable: false };
-      return transport.executor({ ...context, action: { ...forwarded, key: legacyKey, type: legacyKey } });
+      const capability = String(action.capability || action.connectorCapability || "communication.send").trim();
+      const operation = String(action.operation || capability).trim();
+      return executeMediatedRegisteredAction({
+        db,
+        companyId: tenantId,
+        userId: req?.user?.id || null,
+        req,
+        action: {
+          ...forwarded,
+          type: "SEND_COMMUNICATION",
+          capability,
+          operation,
+          input: {
+            channel,
+            recipient: forwarded.recipient || action.recipient || action.to || null,
+            subject: forwarded.subject || null,
+            title: forwarded.title || null,
+            message: forwarded.message || null,
+            body: forwarded.body || forwarded.message || null,
+            templateId: forwarded.templateId || null,
+            objectId: forwarded.objectId || null,
+            recordId: forwarded.recordId || null,
+            attachments: Array.isArray(action.attachments) ? action.attachments : [],
+          },
+        },
+      });
     },
   },
   {
