@@ -234,6 +234,8 @@ export function packageDefinition(entry) {
       category: entry.category || "Business",
       description: packageDescriptions[entry.key] || entry.description,
       route: entry.route,
+      navigationAliases: Array.isArray(entry.navigationAliases) ? entry.navigationAliases : [],
+      runtimeSurfaces: entry.runtimeSurfaces && typeof entry.runtimeSurfaces === "object" ? entry.runtimeSurfaces : {},
       entitlementKey: entry.entitlementKey || entitlementKeys[entry.key] || entry.key,
       licenceMode,
       licenceRequired: entry.licenceRequired !== false && licenceMode === "COMMERCIAL",
