@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-test("legacy package function registry stays retired", async () => { assert.equal(registry, ""); });
+test("legacy package function registry stays retired", async () => { await assert.rejects(readFile(new URL("../server/services/platformFunctionRegistry.js", import.meta.url), "utf8")); });
 
 test("package buttons support workflow targets", async () => {
   const source = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
