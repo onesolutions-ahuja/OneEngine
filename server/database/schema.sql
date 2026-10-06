@@ -1637,8 +1637,8 @@ ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS net_amount NUMERIC(12,2);
 ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS hospitality_service_charge_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS hospitality_service_charge_tax NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS idx_sales_transaction_type ON sales(company_id, transaction_type, created_at);
-CREATE INDEX IF NOT EXISTS idx_sales_original_transaction ON sales(original_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_sales_transaction_type ON sale_ledger(company_id, transaction_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_sales_original_transaction ON sale_ledger(original_transaction_id);
 
 ALTER TABLE sale_ledger
     ADD COLUMN IF NOT EXISTS client_request_id UUID;
@@ -1646,7 +1646,7 @@ ALTER TABLE sale_ledger
     ADD COLUMN IF NOT EXISTS client_request_fingerprint TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_client_request
-ON sales(company_id, client_request_id);
+ON sale_ledger(company_id, client_request_id);
 
 /*
  * Receipt numbers are authoritative and sequential per terminal per
@@ -1654,24 +1654,24 @@ ON sales(company_id, client_request_id);
  * (terminal_id IS NULL) are exempt from the pattern entirely.
  */
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_terminal_receipt
-ON sales(terminal_id, receipt_number)
+ON sale_ledger(terminal_id, receipt_number)
 WHERE terminal_id IS NOT NULL
   AND receipt_number LIKE '%-%-%';
 
 CREATE INDEX IF NOT EXISTS idx_sales_company
-ON sales(company_id);
+ON sale_ledger(company_id);
 
 CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date
-ON sales(company_id, store_id, status, created_at DESC);
+ON sale_ledger(company_id, store_id, status, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_sales_store
-ON sales(store_id);
+ON sale_ledger(store_id);
 
 CREATE INDEX IF NOT EXISTS idx_sales_created
-ON sales(created_at);
+ON sale_ledger(created_at);
 
 CREATE INDEX IF NOT EXISTS idx_sales_receipt
-ON sales(receipt_number);
+ON sale_ledger(receipt_number);
 
 -- ============================================================
 -- SALE ITEMS
@@ -2409,7 +2409,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_online_order ON payments(company_id,onli
  */
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_online_order
-ON sales(online_order_id);
+ON sale_ledger(online_order_id);
 
 DO $$
 BEGIN
