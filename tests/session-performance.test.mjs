@@ -384,7 +384,7 @@ test('stale cache revalidation is deduped by cache key', async () => {
 
 test('Dashboard startup reads are launched together instead of separate mount waterfalls', async () => {
   const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /Promise\.all\(\[\s*apiRequest\('\/api\/settings'\)/)
+  assert.match(source, /Promise\.all\(\[\s*loadRuntimeSurfaceSettings\('platform', 'presentation'\)/)
   assert.match(source, /apiRequest\('\/api\/dashboards'\)/)
   assert.match(source, /loadSessionPermissions\(\)/)
 })
