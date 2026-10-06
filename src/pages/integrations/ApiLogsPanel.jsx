@@ -9,11 +9,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
-import { ENTITY_TYPES, fmtDateTime } from "./shared.jsx";
+import { fmtDateTime } from "./shared.jsx";
 
 const LOG_PAGE_SIZE = 25;
 
 export default function ApiLogsPanel({ integration, endpoints }) {
+  const eventKeys = Array.from(new Set((endpoints || []).map((endpoint) => endpoint?.entity_type).filter(Boolean).map(String)));
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -67,7 +68,7 @@ export default function ApiLogsPanel({ integration, endpoints }) {
           </select>
           <select value={filters.entityType} onChange={(e) => setFilter({ entityType: e.target.value })} className="h-8 px-2 border border-slate-200 rounded-lg text-xs" aria-label="Filter by entity type">
             <option value="">All entities</option>
-            {ENTITY_TYPES.map((t) => <option key={t}>{t}</option>)}
+            {eventKeys.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           <input type="date" value={filters.since} onChange={(e) => setFilter({ since: e.target.value })} className="h-8 px-2 border border-slate-200 rounded-lg text-xs" aria-label="From date" />
           <input type="date" value={filters.until} onChange={(e) => setFilter({ until: e.target.value })} className="h-8 px-2 border border-slate-200 rounded-lg text-xs" aria-label="To date" />
