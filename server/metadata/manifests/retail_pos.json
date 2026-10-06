@@ -544,7 +544,17 @@
                 },
                 "limit": 100
               }
-            ]
+            ],
+            "recipients": {
+              "sms": {
+                "lookupAlias": "customer",
+                "fieldAlias": "phone"
+              },
+              "email": {
+                "lookupAlias": "customer",
+                "fieldAlias": "email"
+              }
+            }
           }
         },
         "aggregateViews": {
