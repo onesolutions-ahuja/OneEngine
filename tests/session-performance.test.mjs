@@ -358,16 +358,12 @@ test('workspace app routes use cached metadata instead of forcing a blocking ref
   assert.equal(block.includes('forceRefresh: true'), false)
 })
 
-test('Till starts till-session lookup alongside its bootstrap requests', async () => {
+test('Till delegates startup to the generic metadata page runtime', async () => {
   const source = await read('../src/pages/till/TillPage.jsx')
-  const start = source.indexOf('const tillPromise = loadTill()')
-  const end = source.indexOf('await tillPromise', start)
-  const block = source.slice(start, end)
-  assert.notEqual(start, -1)
-  assert.notEqual(end, -1)
-  assert.match(block, /Promise\.all\(\[/)
+  assert.match(source, /MetadataPageRuntime/)
+  assert.match(source, /pageKey=.*till/)
+  assert.equal(source.includes('loadTill()'), false)
 })
-
 test('stale cache revalidation is deduped by cache key', async () => {
   const source = await read('../src/services/cachedApi.js')
   assert.match(source, /const refreshInFlight = new Map\(\)/)

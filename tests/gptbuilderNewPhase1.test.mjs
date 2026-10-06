@@ -28,6 +28,6 @@ test('phase 1 wires Start to OneEngine metadata and draft persistence', () => {
   assert.match(page, /apiRequest\('\/api\/platform\/event-types'\)/)
   assert.match(page, /\/api\/platform\/rules/)
   assert.match(page, /gptBuilderNew:true/)
-  assert.match(page, /lifecycleStatus:active\?'ACTIVE':'DRAFT'/)
+  assert.match(page, /lifecycleStatus:'DRAFT'/)
   assert.match(page, /triggerKey:triggerKey/)
 })

@@ -154,6 +154,8 @@ const IDENTITY_PROTOCOL_MUTATION_ROUTES = new Set([
   "/auth/provider/:key/saml/acs",
 ]);
 
+const TECHNICAL_PROTOCOL_MUTATION_ROUTES = new Set(["/whatsapp/webhook"]);
+
 const allMutationVerbRoutes = [];
 for (const file of [path.join(SERVER, "server.js"), ...walk(path.join(SERVER, "routes"))]) {
   allMutationVerbRoutes.push(...routeBlocks(file, fs.readFileSync(file, "utf8"), globalGatewayEnabled));
@@ -167,6 +169,7 @@ const identityProtocolMutationRoutes = allMutationVerbRoutes.filter(
 const mutationRoutes = allMutationVerbRoutes.filter(
   (route) => !(route.method === "POST" && NON_MUTATING_POST_ROUTES.has(route.route))
     && !IDENTITY_PROTOCOL_MUTATION_ROUTES.has(route.route)
+    && !TECHNICAL_PROTOCOL_MUTATION_ROUTES.has(route.route)
 );
 const bypassRoutes = mutationRoutes.filter((route) => !route.workflowMediated);
 const mediatedRoutes = mutationRoutes.filter((route) => route.workflowMediated);

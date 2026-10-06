@@ -18,7 +18,6 @@ import DebugCodesAdmin from './DebugCodesAdmin'
 import GPTBuilderPage from './gptbuilder/GPTBuilderPage'
 import GPTBuilderNewPage from './gptbuildernew/GPTBuilderNewPage'
 import ReactFlowCanvasUXTest from './ReactFlowCanvasUXTest'
-import GPTPageBuilder from './GPTPageBuilder'
 import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
@@ -27,7 +26,6 @@ const DEVELOPER_ITEMS = [
   { key: 'gptbuildernew', label: 'GPT Builder New', icon: Workflow },
   { key: 'canvas-ux-test', label: 'Canvas UX Test', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
-  { key: 'gpt-page-builder', label: 'GPT Page Builder', icon: AppWindow },
   { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
   { key: 'dashboard-builder', label: 'Dashboard Builder', icon: LayoutDashboard },
   { key: 'report-types', label: 'Report Types', icon: ListChecks },
@@ -213,7 +211,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             : current.key === 'gptbuildernew' ? <GPTBuilderNewPage />
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
-            : current.key === 'gpt-page-builder' ? <GPTPageBuilder />
             : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
             : current.key === 'report-types' ? <ReportTypeManager />

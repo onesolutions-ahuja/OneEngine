@@ -637,7 +637,7 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
       return setError('Related record configuration is incomplete')
     }
     const actionKey = String(component?.id || component?.key || `${component?.action || 'action'}:${index}`)
-    if (!['run_workflow', 'call_function'].includes(String(component.action || '').toLowerCase())) {
+    if (String(component.action || '').toLowerCase() !== 'run_workflow') {
       return setError(`${component.label || component.action || 'Action'} is configured, but no safe executor is available.`)
     }
     setActionBusy(actionKey)

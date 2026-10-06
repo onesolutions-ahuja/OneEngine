@@ -47,7 +47,6 @@ import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReportsRouter from "./routes/reports.js";
 import createSecureInvoiceRouter from "./routes/secureInvoice.js";
-import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
 import createWhatsAppSettingsRouter from "./routes/whatsapp.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
@@ -76,7 +75,6 @@ import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enfor
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
-import createPaypalQrRouter from "./routes/paypalQr.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
@@ -163,11 +161,8 @@ app.use(cors({
     if (isAllowedOrigin(origin)) return callback(null, true);
     if (!origin) return callback(null, true);
     db("SELECT 1 FROM security_trusted_origins WHERE origin=$1 AND origin_type='CORS' AND active=TRUE LIMIT 1", [origin])
-      .then((result) => callback(null, result.rows.length > 0))
-      .catch((error) => {
-        console.warn("CORS trusted-origin lookup failed", { origin, message: error?.message || String(error) });
-        callback(null, false);
-      });
+      .then((result) => callback(result.rows.length ? null : new Error("CORS origin not allowed"), result.rows.length > 0))
+      .catch(() => callback(new Error("CORS origin not allowed"), false));
   },
   credentials: true,
   allowedHeaders: [
@@ -383,7 +378,7 @@ app.use((req, res, next) => {
 });
 /* T10P: Scan & Go checkout deducts stock through the SAME inventory ledger
  * helper the till and online orders use (no second inventory mechanism). */
-// Inventory mutations are handled by the metadata-driven runtime.
+app.locals.createInventoryMovement = createInventoryMovement;
 
 /*
  * A backend error on an idle pool connection (network blip, Postgres restart,
@@ -1957,7 +1952,6 @@ app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeA
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
-app.use("/api", createPaypalQrRouter({ authenticate, authorize, db, connectorDrivers, writeAudit }));
 app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
 app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
@@ -2012,19 +2006,6 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createSettingsRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  writeAudit,
-  testPaymentTerminal,
-  requireLoyaltyEntitlement: (req, res, next) => {
-    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
-    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
-    return requireEntitlement(db, "loyalty")(req, res, next);
-  },
-}));
 app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
 app.use("/api", createWhatsAppSettingsRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createSmsGateWebhookRouter({ pool }));
@@ -2057,6 +2038,7 @@ app.use(
     authorize,
     db,
     pool,
+    createInventoryMovement,
     writeAudit,
     canAccessStore,
     savePlatformRecord: saveDomainConfiguration,
@@ -2072,10 +2054,10 @@ app.use(
   })
 );
 
-app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers }));
 
 
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt }));
 
 /* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
 app.use(
@@ -3703,6 +3685,7 @@ async function startServer() {
                   workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   trigger: payload.eventType || workflow.trigger_key,
                   writeAudit,
+                  createInventoryMovement,
                 });
                 const waiting = workflowEntriesContainStatus(results, "waiting");
                 if (run?.id) {

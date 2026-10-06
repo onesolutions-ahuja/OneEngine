@@ -56,39 +56,8 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
     }
   });
 
-  router.get("/mobile-scanner/settings", authenticate, authorize("integration.manage"), async (req, res) => {
-    try {
-      const result = await db(
-        `SELECT connection_mode, wifi_mode, bluetooth_enabled
-         FROM mobile_scanner_settings WHERE company_id = $1 AND store_id = $2`,
-        [req.user.companyId, req.user.storeId]
-      );
-      return res.json({ success: true, data: result.rows[0] || { connection_mode: "WIFI_QR", wifi_mode: "LOCAL_ONLY", bluetooth_enabled: false } });
-    } catch (error) {
-      console.error("Load mobile scanner settings error:", error);
-      return res.status(500).json({ success: false, message: "Unable to load scanner settings" });
-    }
-  });
-
-  router.put("/mobile-scanner/settings", authenticate, authorize("integration.manage"), async (req, res) => {
-    const { connectionMode = "WIFI_QR", wifiMode = "LOCAL_ONLY", bluetoothEnabled = false } = req.body || {};
-    if (connectionMode !== "WIFI_QR" || !["LOCAL_ONLY", "SERVER_RELAY"].includes(wifiMode) || bluetoothEnabled !== false) {
-      return res.status(400).json({ success: false, message: "Bluetooth is not available through this browser connector; Wi-Fi / QR is the supported mode" });
-    }
-    try {
-      const result = await db(
-        `INSERT INTO mobile_scanner_settings (company_id, store_id, connection_mode, wifi_mode, bluetooth_enabled)
-         VALUES ($1, $2, $3, $4, FALSE)
-         ON CONFLICT (company_id, store_id) DO UPDATE SET connection_mode = $3, wifi_mode = $4, updated_at = NOW()
-         RETURNING connection_mode, wifi_mode, bluetooth_enabled`,
-        [req.user.companyId, req.user.storeId, connectionMode, wifiMode]
-      );
-      return res.json({ success: true, data: result.rows[0] });
-    } catch (error) {
-      console.error("Save mobile scanner settings error:", error);
-      return res.status(500).json({ success: false, message: "Unable to save scanner settings" });
-    }
-  });
+  // Scanner configuration is edited through generic metadata settings records.
+  // Pairing/session/event transport remains technical infrastructure.
 
   router.post("/mobile-scanner/pairings", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
@@ -96,12 +65,10 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
       if (!terminalId) {
         return res.status(400).json({ success: false, message: "A till is required" });
       }
-      const config = await db(
-        "SELECT connection_mode, wifi_mode FROM mobile_scanner_settings WHERE company_id = $1 AND store_id = $2",
-        [req.user.companyId, req.user.storeId]
-      );
-      const connectionMode = config.rows[0]?.connection_mode || "WIFI_QR";
-      const wifiMode = config.rows[0]?.wifi_mode || "LOCAL_ONLY";
+      // Connection policy is supplied by metadata/UI configuration; this transport
+      // validates protocol values but does not persist or own business settings.
+      const connectionMode = String(req.body?.connectionMode || "WIFI_QR").toUpperCase();
+      const wifiMode = String(req.body?.wifiMode || "LOCAL_ONLY").toUpperCase();
       if (connectionMode !== "WIFI_QR") return res.status(409).json({ success: false, message: "Selected scanner connection mode is not supported" });
       const allowed = await db(
         `SELECT t.id FROM terminals t INNER JOIN stores s ON s.id = t.store_id
@@ -240,12 +207,6 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
     const terminalId = String(req.query.terminalId || "");
     if (!terminalId) return res.status(400).json({ success: false, message: "Till assignment required" });
     try {
-      const activeTill = await db(
-        `SELECT id FROM till_sessions WHERE company_id = $1 AND store_id = $2 AND terminal_id = $3
-         AND user_id = $4 AND status = 'open' LIMIT 1`,
-        [req.user.companyId, req.user.storeId, terminalId, req.user.id]
-      );
-      if (!activeTill.rows[0]) return res.status(403).json({ success: false, message: "Open the assigned till to receive scanner events" });
       const events = await db(
         `WITH pending AS (
            SELECT e.id FROM mobile_scanner_events e
