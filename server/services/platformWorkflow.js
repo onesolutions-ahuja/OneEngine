@@ -31,7 +31,7 @@ import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
 import { issueAccountToken } from "./accountPolicy.js";
 import { createTemporaryReceiptDownload, revokeTemporaryReceiptDownloadsForSale, buildReceiptQrDownloadUrl } from "./receiptQr.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
 
@@ -1430,18 +1430,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["global_product.view"],
     executor: (context) => executeGlobalProductLookupAction(context),
-  },
-  {
-    key: "GO_UPC_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Go-UPC - Lookup Product",
-    description: "Look up a barcode using the installed Go-UPC connector and company credential.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
   },
   {
     key: "CALL_CONNECTOR_CAPABILITY",
@@ -3763,64 +3751,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
-  },
-  {
-    key: "SEND_EMAIL_BREVO",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send Email - Brevo",
-    description: "Send an email through the tenant's installed Brevo connector.",
-    schema: {
-      type: "object",
-      properties: {
-        recipient: { type: "string", title: "Recipient email" },
-        contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
-        templateId: { type: "string", title: "Message template" },
-        subject: { type: "string", title: "Subject" },
-        body: { type: "string", title: "Message body" },
-      },
-      required: ["recipient"],
-    },
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send Email - Brevo requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    executor: async (context) => executeProviderSpecificEmail({
-      ...context,
-      packageKey: "brevo_connector",
-      actionKey: "SEND_EMAIL_BREVO",
-    }),
-  },
-  {
-    key: "SEND_EMAIL_MAILJET",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send Email - Mailjet",
-    description: "Send an email through the tenant's installed Mailjet connector.",
-    schema: {
-      type: "object",
-      properties: {
-        recipient: { type: "string", title: "Recipient email" },
-        contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
-        templateId: { type: "string", title: "Message template" },
-        subject: { type: "string", title: "Subject" },
-        body: { type: "string", title: "Message body" },
-      },
-      required: ["recipient"],
-    },
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send Email - Mailjet requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    executor: async (context) => executeProviderSpecificEmail({
-      ...context,
-      packageKey: "mailjet_connector",
-      actionKey: "SEND_EMAIL_MAILJET",
-    }),
   },
   {
     key: "EMAIL_ALERT",
