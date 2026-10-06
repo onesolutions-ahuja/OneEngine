@@ -27,6 +27,7 @@
  *    can never emit anything
  */
 import { createInvoiceDeliveryLink, buildInvoiceDeliveryMessage } from "./secureInvoiceLinks.js";
+import { selectMetadataRecords } from "./metadataRecordStore.js";
 import {
   decryptSecret,
   maskEmail,
@@ -86,26 +87,26 @@ async function logDeliveryOutcome(db, entry) {
 
 /** Load the tenant-scoped sale + customer for delivery, mirroring WhatsApp's loader shape. */
 async function loadSaleForDelivery(db, { saleId, companyId, storeId }) {
-  const storeClause = storeId ? "AND s.store_id = $3" : "";
-  const params = storeId ? [saleId, companyId, storeId] : [saleId, companyId];
-  const saleResult = await db(
-    `SELECT s.id, s.receipt_number, s.total, s.created_at, s.completed_at, s.customer_id
-     FROM sales s
-     INNER JOIN companies c ON c.id = s.company_id
-     WHERE s.id = $1 AND s.company_id = $2 ${storeClause}
-     LIMIT 1`,
-    params
-  );
-  const sale = saleResult.rows[0];
+  const filters = { id: saleId };
+  if (storeId) filters.store_id = storeId;
+  const sale = (await selectMetadataRecords(db, {
+    objectKey: "sale",
+    companyId,
+    filters,
+    columns: ["id","receipt_number","total","created_at","completed_at","customer_id","store_id"],
+    limit: 1,
+  }))[0];
   if (!sale) return null;
 
   let customer = null;
   if (sale.customer_id) {
-    const customerResult = await db(
-      `SELECT name, phone, email FROM customers WHERE id = $1 AND company_id = $2 LIMIT 1`,
-      [sale.customer_id, companyId]
-    );
-    customer = customerResult.rows[0] || null;
+    customer = (await selectMetadataRecords(db, {
+      objectKey: "customer",
+      companyId,
+      filters: { id: sale.customer_id },
+      columns: ["name","phone","email"],
+      limit: 1,
+    }))[0] || null;
   }
   return { sale: { id: sale.id, receiptNumber: sale.receipt_number, total: Number(sale.total) || 0 }, customer, company: null };
 }
