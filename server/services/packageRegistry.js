@@ -136,7 +136,7 @@ export const packageRegistrySchema = `
 `;
 
 
-export export function packageDefinitions(){ return []; }
+export function packageDefinitions(){ return []; }
 
 
 const safeMetadataKey = (value) => typeof value === "string" && /^[a-z_][a-z0-9_]{0,99}$/.test(value);
