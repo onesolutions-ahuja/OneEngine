@@ -972,7 +972,7 @@ export default function OneKioskPage({ publicMode = false }) {
         idempotency_key: clientRequestId,
         status: "COMPLETED",
       }];
-      const saleResponse = await apiRequest("/api/platform/runtime/objects/sale/buttons/till_complete_sale/execute", {
+      const saleResponse = await apiRequest("/api/platform/runtime/objects/sale_ledger/buttons/till_complete_sale/execute", {
         method: "POST",
         body: JSON.stringify({
           context: { source: "KIOSK", kioskDeviceKey: kioskDeviceKey() },
@@ -983,7 +983,7 @@ export default function OneKioskPage({ publicMode = false }) {
       if (!saleResponse?.success || !saleId) {
         throw new Error(saleResponse?.message || "Card payment could not be completed");
       }
-      const saved = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`);
+      const saved = await apiRequest(`/api/platform/objects/sale_ledger/records/${encodeURIComponent(saleId)}`);
       const completedSale = saved?.record || saved?.data || { id: saleId, total };
       setPaidSale(completedSale);
       await createFulfilmentFromPaidSale(completedSale);
@@ -1119,7 +1119,7 @@ export default function OneKioskPage({ publicMode = false }) {
     const saleId = confirmation?.saleId || confirmation?.order?.platform_data?.saleId || confirmation?.order?.platform_data?.sale_id;
     if (!saleId) return setError("Receipt QR is not available for this order.");
     try {
-      const response = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}/buttons/till_receipt_qr/execute`, {
+      const response = await apiRequest(`/api/platform/objects/sale_ledger/records/${encodeURIComponent(saleId)}/buttons/till_receipt_qr/execute`, {
         method: "POST",
         body: JSON.stringify({ inputs: { expiryMinutes: Number(confirmationScreen.qrExpiryMinutes || 5), baseUrl: window.location.origin } }),
       });
