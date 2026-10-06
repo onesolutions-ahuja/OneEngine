@@ -4,7 +4,7 @@
  * Provider-agnostic CRUD for integration connections, endpoints and field
  * mappings, plus a filterable API log and a generic Test Connection /
  * Test Endpoint service that performs a real authenticated request using the
- * stored credentials. No provider (Xero/QuickBooks/Shopify/...) logic lives
+ * stored credentials. No provider-specific logic lives
  * here - that arrives in later tasks. No Sales/Purchases data is sent
  * anywhere by this module.
  *
