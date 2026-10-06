@@ -833,49 +833,6 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       },
     },
     {
-      key: "0036_onekiosk_runtime_schema",
-      version: "36",
-      name: "Ensure OneKiosk runtime device schema exists on upgraded databases",
-      up: async client => {
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS kiosk_devices (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-            store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
-            device_key VARCHAR(120) NOT NULL,
-            name VARCHAR(150) NOT NULL,
-            active BOOLEAN NOT NULL DEFAULT TRUE,
-            workflow_id UUID,
-            payment_terminal_id UUID REFERENCES payment_terminals(id) ON DELETE SET NULL,
-            payment_connector_id UUID REFERENCES integration_connections(id) ON DELETE SET NULL,
-            printer_connector_id UUID REFERENCES integration_connections(id) ON DELETE SET NULL,
-            printer_hardware_id UUID REFERENCES hardware_configurations(id) ON DELETE SET NULL,
-            printer_name VARCHAR(150),
-            printer_connection_type VARCHAR(50),
-            printer_connection_address VARCHAR(500),
-            printer_paper_width VARCHAR(20) NOT NULL DEFAULT '80mm',
-            printer_required BOOLEAN NOT NULL DEFAULT FALSE,
-            payment_required BOOLEAN NOT NULL DEFAULT TRUE,
-            internet_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-            server_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-            payment_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-            printer_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-            last_heartbeat_at TIMESTAMPTZ,
-            last_health_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-            assistance_requested_at TIMESTAMPTZ,
-            assistance_note VARCHAR(300),
-            age_approval_requested_at TIMESTAMPTZ,
-            age_approved_until TIMESTAMPTZ,
-            age_approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(company_id, device_key)
-          );
-          CREATE INDEX IF NOT EXISTS idx_kiosk_devices_store ON kiosk_devices(company_id,store_id,active);
-        `);
-      },
-    },
-    {
       key: "0037_workstation_hardware_assignments",
       version: "37",
       name: "Scope configured hardware and payment terminals to a workstation device key",
@@ -1895,47 +1852,7 @@ async function initializeLegacyDatabase(pool) {
     UPDATE company_settings SET platform_theme = 'theme2' WHERE platform_theme IS NULL OR platform_theme NOT IN ('theme2', 'theme3', 'theme4');
     ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_mfg_rule VARCHAR(20) NOT NULL DEFAULT 'none';
     ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_expiry_rule VARCHAR(20) NOT NULL DEFAULT 'none';
-    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_expiry_days INTEGER NOT NULL DEFAULT 365;
-
-    CREATE TABLE IF NOT EXISTS kiosk_devices (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-      store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
-      device_key VARCHAR(120) NOT NULL,
-      name VARCHAR(150) NOT NULL,
-      active BOOLEAN NOT NULL DEFAULT TRUE,
-      payment_terminal_id UUID,
-      printer_hardware_id UUID,
-      printer_name VARCHAR(150),
-      printer_connection_type VARCHAR(50),
-      printer_connection_address VARCHAR(500),
-      printer_paper_width VARCHAR(20) NOT NULL DEFAULT '80mm',
-      printer_required BOOLEAN NOT NULL DEFAULT FALSE,
-      payment_required BOOLEAN NOT NULL DEFAULT TRUE,
-      internet_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-      server_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-      payment_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-      printer_status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-      last_heartbeat_at TIMESTAMPTZ,
-      last_health_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(company_id, device_key)
-    );
-    CREATE INDEX IF NOT EXISTS idx_kiosk_devices_store
-      ON kiosk_devices(company_id, store_id, active);
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS workflow_id UUID;
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS payment_connector_id UUID;
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_connector_id UUID;
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_name VARCHAR(150);
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_connection_type VARCHAR(50);
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_connection_address VARCHAR(500);
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS printer_paper_width VARCHAR(20) NOT NULL DEFAULT '80mm';
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS assistance_requested_at TIMESTAMPTZ;
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS assistance_note VARCHAR(300);
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS age_approval_requested_at TIMESTAMPTZ;
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS age_approved_until TIMESTAMPTZ;
-    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS age_approved_by UUID REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_expiry_days INTEGER NOT NULL DEFAULT 365;    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS workflow_id UUID;
 
     CREATE TABLE IF NOT EXISTS payment_terminals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1978,16 +1895,6 @@ async function initializeLegacyDatabase(pool) {
 
     CREATE INDEX IF NOT EXISTS idx_hardware_configurations_store
     ON hardware_configurations(company_id, store_id);
-    ALTER TABLE kiosk_devices
-      DROP CONSTRAINT IF EXISTS kiosk_devices_payment_terminal_id_fkey;
-    ALTER TABLE kiosk_devices
-      ADD CONSTRAINT kiosk_devices_payment_terminal_id_fkey
-      FOREIGN KEY (payment_terminal_id) REFERENCES payment_terminals(id) ON DELETE SET NULL;
-    ALTER TABLE kiosk_devices
-      DROP CONSTRAINT IF EXISTS kiosk_devices_printer_hardware_id_fkey;
-    ALTER TABLE kiosk_devices
-      ADD CONSTRAINT kiosk_devices_printer_hardware_id_fkey
-      FOREIGN KEY (printer_hardware_id) REFERENCES hardware_configurations(id) ON DELETE SET NULL;
 
     CREATE TABLE IF NOT EXISTS server_settings (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2271,7 +2178,6 @@ async function initializeLegacyDatabase(pool) {
     );
 
     ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS kiosk_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
       ADD COLUMN IF NOT EXISTS web_shop_published BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS web_shop_publish_start TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS web_shop_publish_end TIMESTAMPTZ,
