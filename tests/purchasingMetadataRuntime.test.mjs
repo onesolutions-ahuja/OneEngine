@@ -147,6 +147,12 @@ test("retail transaction model is canonical metadata and Flow owned", async () =
   assert.match(workflow, /commonFieldValues/);
 });
 
+test("generic CRUD blocks Flow-owned transaction objects from direct writes", async () => {
+  const platform = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
+  assert.match(platform, /config\?\.flowWritesOnly === true/);
+  assert.match(platform, /SYSTEM_OBJECT_OPERATION_REQUIRED/);
+});
+
 test("legacy sales route is removed in favor of metadata runtime", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/sales.js"), false);
