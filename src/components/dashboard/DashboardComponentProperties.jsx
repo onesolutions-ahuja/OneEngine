@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
-import { DASHBOARD_DATE_RANGES, DASHBOARD_SALES_FIELDS, DATE_FILTER_FIELDS, SUMMARY_COLUMN, aggregatesForFieldType, operatorsForFieldType, platformFieldChoices } from "./platformDashboard.js";
+import { DASHBOARD_DATE_RANGES, SUMMARY_COLUMN, aggregatesForFieldType, operatorsForFieldType, platformFieldChoices, reportSourceFieldChoices } from "./platformDashboard.js";
 import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";
 
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
@@ -21,14 +21,16 @@ function useReports() {
   }, []);
   return state;
 }
-function useObjects() {
-  const [state, setState] = useState({ objects: [], error: "" });
+function useReportMetadata() {
+  const [state, setState] = useState({ objects: [], sources: [], error: "" });
   useEffect(() => {
     let alive = true;
     apiRequest("/api/reports/custom/metadata").then((response) => {
       if (!alive) return;
-      setState(response.success ? { objects: response.data?.platformObjects || [], error: "" } : { objects: [], error: response.message || "Unable to load Objects" });
-    }).catch((error) => alive && setState({ objects: [], error: error.message }));
+      setState(response.success
+        ? { objects: response.data?.platformObjects || [], sources: response.data?.sources || [], error: "" }
+        : { objects: [], sources: [], error: response.message || "Unable to load reporting metadata" });
+    }).catch((error) => alive && setState({ objects: [], sources: [], error: error.message }));
     return () => { alive = false; };
   }, []);
   return state;
@@ -49,11 +51,11 @@ function useFields(objectId) {
   return state;
 }
 
-function ConditionEditor({ component, onChange, fields }) {
+function ConditionEditor({ component, onChange, fields, standardFields = [] }) {
   const config = component.config || {};
   const report = config.report || {};
   const conditions = Array.isArray(report.filters) ? report.filters : [];
-  const available = report.dataSource === "platform_object" ? platformFieldChoices(fields).all : DATE_FILTER_FIELDS.map((field) => ({ key: field.key, label: field.label, type: field.kind === "date" ? "date" : "text" }));
+  const available = report.dataSource === "platform_object" ? platformFieldChoices(fields).all : standardFields;
   const setFilters = (filters) => onChange({ ...component, config: { ...config, report: { ...report, filters } } });
   const isDatePreset = (operator) => DASHBOARD_DATE_RANGES.some((range) => range.key === operator);
   return <div className="md:col-span-2 rounded-lg p-3" style={{ border: "1px solid var(--onepos-border)" }} data-testid="condition-editor">
@@ -88,12 +90,14 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const isChart = ["pie","donut","bar","line","gauge","funnel","scatter","combo","chart"].includes(component.type);
   const isUtility = ["clock_widget", "calendar_widget", "weather_widget"].includes(component.type);
   const isImage = component.type === "image";
-  const { objects, error: objectsError } = useObjects();
+  const { objects, sources, error: objectsError } = useReportMetadata();
   const { fields, loading, error: fieldsError } = useFields(isPlatform ? report.objectId : null);
   const choices = platformFieldChoices(fields);
-  const metrics = isPlatform ? choices.metricFields : DASHBOARD_SALES_FIELDS.filter((field) => field.aggregate);
-  const groups = isPlatform ? choices.groupFields : DASHBOARD_SALES_FIELDS.filter((field) => field.groupable);
-  const typeOf = (key) => (isPlatform ? choices.all.find((field) => field.key === key)?.type : DASHBOARD_SALES_FIELDS.find((field) => field.key === key)?.type) || "text";
+  const source = sources.find((item) => String(item.key) === String(report.dataSource));
+  const standardFields = reportSourceFieldChoices(source);
+  const metrics = isPlatform ? choices.metricFields : standardFields;
+  const groups = isPlatform ? choices.groupFields : standardFields;
+  const typeOf = (key) => (isPlatform ? choices.all.find((field) => field.key === key)?.type : standardFields.find((field) => field.key === key)?.type) || "text";
   const aggregates = isPlatform ? aggregatesForFieldType(typeOf(config.valueField)) : ["SUM"];
   const setConfig = (patch) => onChange({ ...component, config: { ...config, ...patch } });
   const setReport = (patch) => onChange({ ...component, config: { ...config, report: { ...report, ...patch } } });
@@ -144,7 +148,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
       <div><span className={LABEL}>Width (grid columns, 1–12)</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.w ?? 3} onChange={layout("w")} /></div>
       <div><span className={LABEL}>Height</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.h ?? 2} onChange={layout("h")} /></div>
     </> : <>
-      <div><span className={LABEL}>Data source</span><select className={FIELD} style={STYLE} value={report.dataSource || "sales"} onChange={(event) => setReport({ dataSource: event.target.value, objectId: null, fields: [], groupBy: [], filters: [] })}><option value="sales">Sales (reporting engine)</option><option value="platform_object">Platform Object</option></select></div>
+      <div><span className={LABEL}>Data source</span><select className={FIELD} style={STYLE} value={report.dataSource || ""} onChange={(event) => setReport({ dataSource: event.target.value, objectId: null, fields: [], groupBy: [], filters: [] })}><option value="">Select data source</option>{sources.map((item) => <option key={item.key} value={item.key}>{item.label || item.key}</option>)}<option value="platform_object">Platform Object</option></select></div>
       {isPlatform ? <div><span className={LABEL}>Object</span><select className={FIELD} style={STYLE} value={report.objectId || ""} onChange={(event) => setReport({ objectId: event.target.value, fields: [], groupBy: [], filters: [] })}><option value="">{objectsError || (loading ? "Loading fields…" : "Select an Object")}</option>{objects.map((object) => <option key={object.id} value={object.id}>{object.label || object.object_key}</option>)}</select>{fieldsError ? <p className="text-xs" style={{ color: "#b91c1c" }}>{fieldsError}</p> : null}</div> : null}
       {component.type === "combo" ? <><div><span className={LABEL}>Metric fields (up to 4)</span><select multiple data-testid="metric-fields" className={FIELD} style={STYLE} value={config.yFields?.length ? config.yFields : (config.valueField ? [config.valueField] : [])} onChange={(event) => selectComboMetrics(Array.from(event.target.selectedOptions).map((option) => option.value))}>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div><div><span className={LABEL}>Secondary axis</span><select multiple className={FIELD} style={STYLE} value={config.secondaryAxisFields || []} onChange={(event) => setConfig({ secondaryAxisFields: Array.from(event.target.selectedOptions).map((option) => option.value).filter((field) => (config.yFields || []).includes(field)) })}>{(config.yFields || []).map((field) => <option key={field} value={field}>{metrics.find((item) => item.key === field)?.label || field}</option>)}</select></div></> : <div><span className={LABEL}>Metric field</span><select data-testid="metric-field" className={FIELD} style={STYLE} value={config.valueField || ""} onChange={(event) => selectMetric(event.target.value)}><option value="">Select a metric</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select>{isPlatform && report.objectId && !loading && !metrics.length ? <p className="text-xs" style={{ color: "var(--onepos-text-muted)" }}>This Object has no aggregatable fields.</p> : null}</div>}
       {isPlatform ? <div><span className={LABEL}>Aggregation</span><select data-testid="aggregate" className={FIELD} style={STYLE} value={config.aggregate || "COUNT"} onChange={(event) => selectAggregate(event.target.value)}>{aggregates.map((aggregate) => <option key={aggregate} value={aggregate}>{aggregate}</option>)}</select></div> : null}
@@ -164,7 +168,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
           {config.targetMode === "field" ? <div><span className={LABEL}>Target field</span><select className={FIELD} style={STYLE} value={config.targetField || ""} onChange={(event) => setConfig({ targetField: event.target.value })}><option value="">Select field</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div> : <div><span className={LABEL}>Target value</span><input type="number" className={FIELD} style={STYLE} value={config.targetValue ?? 100} onChange={num("targetValue")} /></div>}
         </> : null}
       </> : null}
-      <ConditionEditor component={component} onChange={onChange} fields={fields} />
+      <ConditionEditor component={component} onChange={onChange} fields={fields} standardFields={standardFields} />
       <div className="md:col-span-2">
         <ConditionalFormattingEditor
           rules={config.conditionalFormatting || []}
