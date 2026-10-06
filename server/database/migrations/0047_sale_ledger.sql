@@ -31,6 +31,12 @@ CREATE TABLE IF NOT EXISTS sale_ledger (
 
   transaction_type VARCHAR(30) NOT NULL DEFAULT 'SALE',
   item_type VARCHAR(30),
+  discount_type VARCHAR(20),
+  discount_value NUMERIC(12,2),
+  original_unit_price NUMERIC(12,2),
+  original_tax NUMERIC(12,2),
+  original_total NUMERIC(12,2),
+  discounted_by UUID REFERENCES users(id) ON DELETE SET NULL,
   status VARCHAR(50),
 
   payment_method VARCHAR(50),
@@ -110,7 +116,7 @@ INSERT INTO sale_ledger (
   id, company_id, store_id, terminal_id, user_id, customer_id, product_id,
   sale_id, transaction_id, source_record_id, source_record_type,
   receipt_number, product_name, quantity, unit_price, tax, discount, total,
-  transaction_type, item_type, status,
+  transaction_type, item_type, discount_type, discount_value, original_unit_price, original_tax, original_total, discounted_by, status,
   modifier_data, bundle_components,
   offline_created, sync_status, original_transaction_id,
   created_at, completed_at, migrated_at
@@ -119,7 +125,7 @@ SELECT
   si.id, s.company_id, s.store_id, s.terminal_id, s.user_id, s.customer_id, si.product_id,
   s.id, s.id, si.id, 'SALE_LINE',
   s.receipt_number, si.product_name, si.quantity, si.unit_price, si.tax, si.discount, si.total,
-  COALESCE(s.transaction_type,'SALE'), si.item_type, s.status,
+  COALESCE(s.transaction_type,'SALE'), si.item_type, si.discount_type, si.discount_value, si.original_unit_price, si.original_tax, si.original_total, si.discounted_by, s.status,
   COALESCE(si.modifier_data,'[]'::jsonb), COALESCE(si.bundle_components,'[]'::jsonb),
   COALESCE(s.offline_created,FALSE), s.sync_status, s.original_transaction_id,
   s.created_at, s.completed_at, NOW()
