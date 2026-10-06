@@ -15,6 +15,7 @@ import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRe
 import GPTBuilderCreateRecords, { createRecordsRuntimeAction } from './GPTBuilderCreateRecords'
 import GPTBuilderUpdateRecords, { updateRecordsRuntimeAction } from './GPTBuilderUpdateRecords'
 import GPTBuilderDeleteRecords, { deleteRecordsRuntimeAction } from './GPTBuilderDeleteRecords'
+import GPTBuilderRollbackRecords, { rollbackRecordsRuntimeAction } from './GPTBuilderRollbackRecords'
 import GPTBuilderAssignment, { assignmentRuntimeAction } from './GPTBuilderAssignment'
 import GPTBuilderDecision, { decisionRuntimeAction } from './GPTBuilderDecision'
 import GPTBuilderLoop, { loopRuntimeAction } from './GPTBuilderLoop'
@@ -1105,6 +1106,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (element.key === 'create_records') return createRecordsRuntimeAction(element)
         if (element.key === 'update_records') return updateRecordsRuntimeAction(element)
         if (element.key === 'delete_records') return deleteRecordsRuntimeAction(element)
+        if (element.key === 'rollback_records') return rollbackRecordsRuntimeAction(element)
         if (element.key === 'assignment') return assignmentRuntimeAction(element, resources)
         if (element.key === 'decision') return decisionRuntimeAction(element)
         if (element.key === 'loop') return loopRuntimeAction(element, resources)
@@ -1970,6 +1972,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                   startConfig={startConfig}
                   onConfiguredChange={setConfigured}
                 />
+              : activeElement.key === 'rollback_records'
+                ? <GPTBuilderRollbackRecords onConfiguredChange={setConfigured}/>
               : activeElement.key === 'assignment'
                 ? <GPTBuilderAssignment
                     draft={draft}
