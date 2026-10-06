@@ -3801,16 +3801,8 @@ async function startServer() {
               return outcome;
             }
             if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
-              const flowByLegacyKey = {
-                SHOPIFY_SYNC_PRODUCTS: "flow:shopify.products.sync",
-                SHOPIFY_SYNC_INVENTORY: "flow:shopify.inventory.sync",
-                SHOPIFY_RETRY_FAILED_SYNC: "flow:shopify.sync.retry",
-                SHOPIFY_EXPORT_FULFILMENT: "flow:shopify.fulfilment.export",
-                SHOPIFY_EXPORT_REFUND: "flow:shopify.refund.export",
-              };
-              const legacyKey = String(payload.type || payload.key || "").toUpperCase();
-              const systemKey = flowByLegacyKey[legacyKey] || String(payload.flowSystemKey || "");
-              if (!systemKey.startsWith("flow:")) throw Object.assign(new Error("Shopify provider job is missing Flow metadata"), { retryable: false });
+              const systemKey = String(payload.flowSystemKey || "");
+              if (!systemKey.startsWith("flow:shopify.")) throw Object.assign(new Error("Shopify provider job requires a metadata Flow system key"), { retryable: false });
               const execution = await executeSystemWorkflow({
                 db,
                 companyId: job.company_id,
