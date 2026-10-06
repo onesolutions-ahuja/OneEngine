@@ -19,7 +19,7 @@ test('every Developer surface has a fixed direct route', async () => {
 
 test('legacy Developer aliases are published as fixed GitHub Pages routes', async () => {
   const buildRoutes = await readFile(new URL('../scripts/build-pages-routes.mjs', import.meta.url), 'utf8')
-  for (const alias of ['platform-apps', 'builder-2']) {
+  for (const alias of ['workflow-builder', 'platform-apps', 'builder-2']) {
     assert.match(buildRoutes, new RegExp(alias.replace('-', '\\-')))
   }
 })
