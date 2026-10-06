@@ -4,7 +4,7 @@ import { registerPlatformDeveloperRoutes } from "./platform/developerRoutes.js";
 import express from "express";
 import { createHash } from "node:crypto";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
-import { normalizeObjectPageDefinition, objectNavigationEntries, objectRuntimeRoute, DEFAULT_OBJECT_NAV_ORDER, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
+import { defaultObjectPageDefinition, normalizeObjectPageDefinition, objectNavigationEntries, objectRuntimeRoute, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
 import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, workflowFormulaReferences } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
@@ -2255,14 +2255,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
           "SELECT 1 FROM platform_pages WHERE page_key=$1 AND company_id=$2 LIMIT 1",
           [pageKeyBase, req.user.companyId]
         )).rows.length ? `${pageKeyBase}_${String(createdObject.id).replace(/-/g, "").slice(0, 8)}` : pageKeyBase;
-        const definition = normalizePageDefinition({
-          objectKey: createdObject.object_key,
-          showInNavigation: true,
-          icon: "box",
-          order: DEFAULT_OBJECT_NAV_ORDER,
-          sections: [],
-          components: [],
-        });
+        const definition = defaultObjectPageDefinition(createdObject.object_key);
         defaultPage = (await client.query(
           `INSERT INTO platform_pages
              (app_id,company_id,page_key,label,route_path,page_type,definition,draft_definition,active,lifecycle_status,version,draft_version,active_version)
