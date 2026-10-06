@@ -441,6 +441,7 @@ const updateNode = (nodeId, changes) => {
     try {
       const definition = definitionForSave();
       let saved = null;
+      let savedAppId = appId;
       if (pageId) {
         const response = await apiRequest(`/api/platform/pages/${encodeURIComponent(pageId)}`, { method: "PUT", body: JSON.stringify({ definition, label: draft.label }) });
         saved = response.data;
@@ -466,6 +467,7 @@ const updateNode = (nodeId, changes) => {
           body: JSON.stringify({ label: draft.label, pageKey, pageType: "object", definition }),
         });
         saved = response.data;
+        savedAppId = targetApp;
         setPage(saved); setPageId(saved.id); setAppId(targetApp);
         setPages((current) => [...current, saved]);
         await loadVersions(saved.id);
@@ -478,7 +480,7 @@ const updateNode = (nodeId, changes) => {
         // Re-open from the authoritative app page list. The platform exposes
         // page reads through the app-scoped collection, not a standalone
         // /pages/:id GET route.
-        const reopened = targetPageFromList(await apiRequest(`/api/platform/apps/${encodeURIComponent(saved.app_id || appId || targetApp)}/pages`), saved.id);
+        const reopened = targetPageFromList(await apiRequest(`/api/platform/apps/${encodeURIComponent(saved.app_id || savedAppId)}/pages`), saved.id);
         if (reopened) {
           saved = reopened;
           setPage(saved);
