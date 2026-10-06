@@ -1,15 +1,14 @@
+import MetadataSettingsSection from '../settings/MetadataSettingsSection'
 import { useEffect, useMemo, useState } from 'react'
 import { BadgeCheck, Building2, ChevronRight, CreditCard, HardDrive, Mail, MessageSquare, Rocket, Search, Settings2, ShieldCheck, ShoppingCart, Smartphone, Store, Users } from 'lucide-react'
 import { apiRequest, getStoredSessionPermissions, loadSessionPermissions, getActingCompanyId, setActingCompanyId } from '../../services/api'
 import { clearSettingsContextCache, createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole, updateUser } from '../../services/settings'
-import StoreTillSettingsPage from '../settings/StoreTillSettingsPage'
 import ClientWebShopSettings from '../settings/ClientWebShopSettings'
 import PaymentTerminalSettings from '../settings/PaymentTerminalSettings'
 import HardwareSettings from '../settings/HardwareSettings'
 import AiAssistantSettings from '../settings/AiAssistantSettings'
 import ConnectionsSettings from '../settings/ConnectionsSettings'
 import GoogleConnectSettings from '../settings/GoogleConnectSettings'
-import DeliverySettingsPage from '../settings/DeliverySettingsPage'
 import WhatsAppAssistantSettings from '../settings/WhatsAppAssistantSettings'
 import LicensingAdmin from '../superadmin/LicensingAdmin'
 import AppReleasesAdmin from '../superadmin/AppReleasesAdmin'
@@ -72,15 +71,15 @@ export default function OneEngineManager(){
     if(!selected)return <div className="settings-state-card">Select a client.</div>
     if(active==='company')return <CoreCompanySettings key={key} companyId={selected}/>
     if(active==='users')return <UsersRoles key={key} companyId={selected}/>
-    if(active==='store-till')return <StoreTillSettingsPage key={key}/>
+    if(active==='store-till')return <MetadataSettingsSection key={key} section="Store & Till"/>
     if(active==='web-shop')return <ClientWebShopSettings key={key}/>
     if(active==='payment-terminals')return <PaymentTerminalSettings key={key}/>
     if(active==='hardware')return <HardwareSettings key={key}/>
     if(active==='ai')return <AiAssistantSettings key={key}/>
     if(active==='connections')return <ConnectionsSettings key={key}/>
     if(active==='google')return <GoogleConnectSettings key={key}/>
-    if(active==='email')return <DeliverySettingsPage key={key} channel="email"/>
-    if(active==='sms')return <DeliverySettingsPage key={key} channel="sms"/>
+    if(active==='email')return <MetadataSettingsSection key={key} section="Email Delivery"/>
+    if(active==='sms')return <MetadataSettingsSection key={key} section="SMS Delivery"/>
     if(active==='whatsapp')return <WhatsAppAssistantSettings key={key}/>
     if(active==='licensing')return <div className="superadmin-theme"><LicensingAdmin key={key} companyId={selected} lockCompany/></div>
     if(active==='releases')return <div className="superadmin-theme"><AppReleasesAdmin key={key}/></div>
