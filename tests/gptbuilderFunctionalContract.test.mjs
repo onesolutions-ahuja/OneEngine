@@ -356,14 +356,18 @@ test('R001 R002 record contexts expose canonical automatic record resources', as
 
 test('R003 R004 R005 platform-event and record $Record child fields are metadata-expanded, not hard-coded', async () => {
   const page = await read('src/pages/developer/gptbuilder/GPTBuilderPage.jsx')
+  const resourceModule = await read('src/pages/developer/gptbuilder/GPTBuilderResources.js')
   const decision = await read('src/pages/developer/gptbuilder/GPTBuilderDecision.jsx')
   const routes = await read('server/routes/platformEvents.js')
   assert.match(routes, /SELECT event_type,description,source_package_id,field_schema/)
-  assert.match(page, /field_schema/)
-  assert.match(page, /startConfig\.eventKey/)
-  assert.match(page, /\$Record\./)
+  assert.match(page, /platformEventRecordResources\(eventTypes, startConfig\.eventKey/)
+  assert.match(page, /recordPathResources\(recordPathMetadata/)
+  assert.match(page, /record-paths\?depth=4/)
+  assert.match(resourceModule, /field_schema/)
+  assert.match(resourceModule, /\$Record\./)
+  assert.match(resourceModule, /\$Record__Prior\./)
   assert.match(decision, /resourcePath/)
-  assert.doesNotMatch(page, /\$Record\.(?:mode|channel|provider|direction|message_type)\b/, 'event fields must come from metadata, never a hard-coded business/event field list')
+  assert.doesNotMatch(resourceModule, /\b(?:mode|channel|provider|direction|message_type)\b/, 'event fields must come from metadata, never a hard-coded business/event field list')
 })
 
 test('R006 related/reference traversal uses metadata record paths', async () => {
