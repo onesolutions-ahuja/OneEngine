@@ -8,7 +8,7 @@ import { defaultObjectPageDefinition, normalizeObjectPageDefinition, objectNavig
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
 import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, workflowFormulaReferences } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
-import { executePlatformAutomations } from "../services/platformAutomation.js";
+import { executePlatformAutomations, normalizeStartFormula, startFormulaInputs } from "../services/platformAutomation.js";
 import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
 import {
   createWorkflowRun,
@@ -5775,13 +5775,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         },
       });
 
-      if (record && Array.isArray(workflow.conditions) && workflow.conditions.length && req.body?.skipStartConditionRequirements !== true) {
-        const startMatched = evaluateCondition(
-          { match: workflow.action?.match || "all", conditions: workflow.conditions },
-          fields,
-          record,
-          null
-        );
+      if (record && req.body?.skipStartConditionRequirements !== true) {
+        let startMatched = true;
+        if (workflow.action?.start?.conditionMode === "formula" && workflow.action?.startFormula) {
+          startMatched = evaluateWorkflowFormula(normalizeStartFormula(workflow.action.startFormula), startFormulaInputs(fields, record, null)) === true;
+        } else if (Array.isArray(workflow.conditions) && workflow.conditions.length) {
+          startMatched = evaluateCondition(
+            { match: workflow.action?.match || "all", conditionLogic: workflow.action?.customConditionLogic || "", conditions: workflow.conditions },
+            fields,
+            record,
+            null
+          );
+        }
         if (!startMatched) {
           const friendly = {
             title: "This record does not meet the Start conditions",
@@ -6480,13 +6485,21 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
-      if (record && Array.isArray(workflow.conditions) && workflow.conditions.length) {
-        const startMatched = evaluateCondition(
-          { match: workflow.action?.match || "all", conditionLogic: workflow.action?.conditionLogic || workflow.action?.customConditionLogic || "", conditions: workflow.conditions },
-          fields,
-          record,
-          null
-        );
+      if (record) {
+        let startMatched = true;
+        if (workflow.action?.start?.conditionMode === "formula" && workflow.action?.startFormula) {
+          startMatched = evaluateWorkflowFormula(
+            normalizeStartFormula(workflow.action.startFormula),
+            startFormulaInputs(fields, record, null)
+          ) === true;
+        } else if (Array.isArray(workflow.conditions) && workflow.conditions.length) {
+          startMatched = evaluateCondition(
+            { match: workflow.action?.match || "all", conditionLogic: workflow.action?.conditionLogic || workflow.action?.customConditionLogic || "", conditions: workflow.conditions },
+            fields,
+            record,
+            null
+          );
+        }
         if (!startMatched) return res.status(422).json({ success: false, message: "The selected record does not meet the flow Start conditions" });
       }
 

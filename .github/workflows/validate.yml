@@ -2,8 +2,9 @@ name: Validate OneEngine
 
 on:
   push:
-    branches: [main]
+    branches: [main, gptbuildernew-phase2-work]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -62,8 +63,9 @@ jobs:
           retention-days: 14
 
   workflow-visual:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/gptbuildernew-phase2-work'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: build-and-audit
     steps:
       - uses: actions/checkout@v4
@@ -88,7 +90,7 @@ jobs:
           cat /tmp/oneengine-vite.log || true
           exit 1
       - name: Run Workflow Builder visual gate
-        run: npx playwright test tests/e2e/gptbuilder-foundation.spec.mjs --project=desktop-chromium
+        run: npx playwright test tests/e2e/gptbuildernew-parity.spec.mjs --project=desktop-chromium
         env:
           ONEPOS_E2E_BASE_URL: http://127.0.0.1:4173/
           ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}

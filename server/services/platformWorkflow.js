@@ -3749,10 +3749,51 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         : (() => {
             if (!db || typeof db !== "function") return null;
             const id = action.workflowId || action.subflowId;
-            if (id) return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
+            const runtimeCompanyId = companyId || req?.user?.companyId;
+            if (id) return db(
+              `SELECT r.*
+                 FROM platform_rules r
+                WHERE r.id=$1 AND r.company_id=$2
+                  AND r.action->>'type'='workflow'
+                LIMIT 1`,
+              [id, runtimeCompanyId]
+            ).then(async (result) => {
+              const row = result.rows[0] || null;
+              if (!row) return null;
+              if (row.active === true) return row;
+              const latest = await db(
+                `SELECT definition
+                   FROM platform_workflow_versions
+                  WHERE company_id=$1 AND workflow_id=$2
+                  ORDER BY version DESC LIMIT 1`,
+                [runtimeCompanyId, id]
+              );
+              const snapshot = latest.rows[0]?.definition || null;
+              return snapshot ? { ...row, ...snapshot, id: row.id, company_id: row.company_id, active: false, active_version: null } : row;
+            });
             const apiName = action.subflowApiName || action.subflowCapability;
             if (!apiName) return null;
-            return db(`SELECT * FROM platform_rules WHERE company_id=$1 AND active=true AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2 OR action->>'subflowCapability'=$2) ORDER BY updated_at DESC LIMIT 1`, [companyId || req?.user?.companyId, apiName]).then((result) => result.rows[0] || null);
+            return db(
+              `SELECT * FROM platform_rules
+                WHERE company_id=$1
+                  AND action->>'type'='workflow'
+                  AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2 OR action->>'subflowCapability'=$2)
+                ORDER BY CASE WHEN active=true THEN 0 ELSE 1 END, version DESC, updated_at DESC
+                LIMIT 1`,
+              [runtimeCompanyId, apiName]
+            ).then(async (result) => {
+              const row = result.rows[0] || null;
+              if (!row || row.active === true) return row;
+              const latest = await db(
+                `SELECT definition
+                   FROM platform_workflow_versions
+                  WHERE company_id=$1 AND workflow_id=$2
+                  ORDER BY version DESC LIMIT 1`,
+                [runtimeCompanyId, row.id]
+              );
+              const snapshot = latest.rows[0]?.definition || null;
+              return snapshot ? { ...row, ...snapshot, id: row.id, company_id: row.company_id, active: false, active_version: null } : row;
+            });
           })();
       const definition = await Promise.resolve(subflowDefinition);
       if (!definition) {
@@ -5322,6 +5363,20 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "ROLLBACK_RECORDS",
+    displayName: "Roll Back Records",
+    description: "Roll back record changes made by the current workflow transaction.",
+    schema: { type: "object", properties: {} },
+    validation: () => undefined,
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ transactionController }) => {
+      if (!transactionController?.rollbackRecords) throw new Error("Roll Back Records requires a transactional workflow context");
+      await transactionController.rollbackRecords();
+      return { status: "completed", rolledBackRecords: true };
+    },
+  },
+  {
     key: "STOP",
     displayName: "Stop",
     description: "Stop workflow execution cleanly and record the reason.",
@@ -5944,6 +5999,37 @@ async function hydrateWorkflowProviderResources(context, workflowVariables) {
 
 export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
+  const transactionActions = Array.isArray(context.allActions) ? context.allActions : actions;
+  const containsRollbackRecords = transactionActions.some((action) => resolveWorkflowActionType(action) === "ROLLBACK_RECORDS");
+  if (containsRollbackRecords && context.transactionOwned !== true) {
+    if (!context.pool?.connect) throw new Error("Roll Back Records requires a database pool");
+    const client = await context.pool.connect();
+    const txDb = (query, params = []) => client.query(query, params);
+    try {
+      await client.query("BEGIN");
+      await client.query("SAVEPOINT oneengine_flow_records");
+      const transactionController = {
+        rollbackRecords: async () => {
+          await client.query("ROLLBACK TO SAVEPOINT oneengine_flow_records");
+        },
+      };
+      const result = await executeWorkflowActions({
+        actions,
+        ...context,
+        db: txDb,
+        traceDb: context.traceDb || context.db,
+        transactionController,
+        transactionOwned: true,
+      });
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   const results = [];
   const completed = [];
   const workflowVariables = context.workflowVariables && typeof context.workflowVariables === "object"
