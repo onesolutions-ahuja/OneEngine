@@ -1052,7 +1052,7 @@ const PACKAGE_CATALOG = [
       settings: ["shop_domain", "environment", "price_list_id", "default_store_id", "catalogue_sync", "inventory_sync", "order_import", "customer_linking"],
       mappings: ["product", "variant", "price", "store_location", "order_status", "fulfilment_status", "tax"],
       webhooks: ["orders/create", "orders/updated", "orders/fulfilled", "orders/cancelled", "refunds/create", "fulfillments/create", "fulfillments/update", "products/create", "products/update", "products/delete", "inventory_levels/update"],
-      actions: ["CONNECTOR_TEST_CONNECTION", "SHOPIFY_PROCESS_WEBHOOK", "SHOPIFY_SYNC_PRODUCTS", "SHOPIFY_SYNC_INVENTORY", "SHOPIFY_EXPORT_FULFILMENT", "SHOPIFY_EXPORT_REFUND", "SHOPIFY_RETRY_FAILED_SYNC"],
+      actions: ["CONNECTOR_TEST_CONNECTION", "CALL_CONNECTOR_CAPABILITY"],
     },
   },
   {
