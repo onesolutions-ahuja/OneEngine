@@ -3766,12 +3766,12 @@ async function startServer() {
                 db,
                 companyId: job.company_id,
                 userId: payload.actorUserId || null,
-                systemKey: "action:SHOPIFY_PROCESS_WEBHOOK",
+                systemKey: "flow:shopify.webhook.process",
                 req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
                 input: { ...payload, _executeFromJob: true },
                 storeId: payload.storeId || null,
                 writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
+                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_WEBHOOK_PROCESS" },
                 extraContext: { pool, createInventoryMovement },
               });
               const outcome = execution.result;
@@ -3805,7 +3805,33 @@ async function startServer() {
               return outcome;
             }
             if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
+              const flowByLegacyKey = {
+                SHOPIFY_SYNC_PRODUCTS: "flow:shopify.products.sync",
+                SHOPIFY_SYNC_INVENTORY: "flow:shopify.inventory.sync",
+                SHOPIFY_RETRY_FAILED_SYNC: "flow:shopify.sync.retry",
+                SHOPIFY_EXPORT_FULFILMENT: "flow:shopify.fulfilment.export",
+                SHOPIFY_EXPORT_REFUND: "flow:shopify.refund.export",
+              };
+              const legacyKey = String(payload.type || payload.key || "").toUpperCase();
+              const systemKey = flowByLegacyKey[legacyKey] || String(payload.flowSystemKey || "");
+              if (!systemKey.startsWith("flow:")) throw Object.assign(new Error("Shopify provider job is missing Flow metadata"), { retryable: false });
+              const execution = await executeSystemWorkflow({
+                db,
+                companyId: job.company_id,
+                userId: payload.actorUserId || null,
+                systemKey,
+                req: { method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
+                input: payload,
+                storeId: payload.storeId || null,
+                writeAudit,
+                source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: systemKey },
+                extraContext: { pool },
+              });
+              const outcome = execution.result;
+              if (outcome?.success === false) throw Object.assign(new Error(outcome.message || outcome.code || "Shopify Flow failed"), { retryable: outcome.retryable !== false });
+              return outcome;
+            }
+            const actionKey = String(payload.type || payload.key || "").toUpperCase();
               if (!actionKey) throw Object.assign(new Error("Shopify provider job is missing an action key"), { retryable: false });
               const execution = await executeSystemWorkflow({
                 db,
