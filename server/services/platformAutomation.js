@@ -137,7 +137,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         metadata: {
           actorUserId: req.user.id || null,
           storeId: req.user.storeId || null,
-          tillId: req.user.tillId || null,
+          deviceSessionId: req.user.deviceSessionId || null,
           entryTransition,
           initialVariables: workflowVariables,
           initialPreviousRecord: workflowRecordSnapshot(fields, previousRecord),
@@ -202,7 +202,7 @@ export async function executePlatformAutomations({ db, object, fields, record, p
             legacyNestedWorkflow: true,
             actorUserId: req.user.id || null,
             storeId: req.user.storeId || null,
-            tillId: req.user.tillId || null,
+            deviceSessionId: req.user.deviceSessionId || null,
             initialVariables: workflowVariables,
             initialPreviousRecord: workflowRecordSnapshot(fields, previousRecord),
           },
