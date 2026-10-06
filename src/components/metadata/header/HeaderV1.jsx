@@ -1,0 +1,1 @@
+export default function HeaderV1({node}){return <h3 className="text-base font-semibold" style={{color:"var(--text-primary,#111827)"}}>{node?.text||node?.label||"Heading"}</h3>}
