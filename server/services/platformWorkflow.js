@@ -1604,6 +1604,27 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     }),
   },
   {
+    key: "UI_ACTION",
+    displayName: "UI Action",
+    description: "Dispatch a metadata-defined UI directive without embedding domain-specific behaviour in the Flow engine.",
+    validation: (action) => {
+      const component = String(action?.component || "").trim();
+      const uiAction = String(action?.uiAction || action?.ui_action || "").trim();
+      if (!component || !/^[a-z0-9_.-]{1,80}$/i.test(component)) throw new Error("UI Action requires a valid component");
+      if (!uiAction || !/^[a-z0-9_.-]{1,80}$/i.test(uiAction)) throw new Error("UI Action requires a valid uiAction");
+    },
+    async: false,
+    requiredPermissions: [],
+    executor: async ({ action }) => ({
+      status: "completed",
+      uiDirective: {
+        component: String(action.component),
+        action: String(action.uiAction || action.ui_action),
+        config: action.config || {},
+      },
+    }),
+  },
+  {
     key: "SHOW_MESSAGE",
     displayName: "Show Message",
     description: "Show a transient user-facing message.",
