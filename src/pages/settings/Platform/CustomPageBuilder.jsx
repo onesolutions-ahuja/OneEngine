@@ -274,7 +274,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
       componentApi: meta.api || `${componentKey}.v1`,
       ...(meta.containsChildren ? { children: [] } : {}),
       ...(meta.recordBound ? {
-        collection: registered.collection || { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
+        collection: registered.collection || {},
         interaction: registered.interaction || { type: "none" },
       } : {}),
       ...(meta.kind === "action" ? { interaction: registered.interaction || { type: "none" } } : {}),
