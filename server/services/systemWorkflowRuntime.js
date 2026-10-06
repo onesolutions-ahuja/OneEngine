@@ -52,9 +52,6 @@ async function resolveSystemWorkflowActor({ db, companyId, userId = null, req = 
 
 function runtimeAction(action, capabilityType, runtimeInput = {}) {
   if (!action || typeof action !== "object") return action;
-  if (capabilityType === "function" && action.type === "CALL_FUNCTION") {
-    return { ...action, inputs: { ...(action.inputs || {}), ...(runtimeInput || {}) } };
-  }
   if (action.systemTemplate === true) {
     return { ...action, ...(runtimeInput || {}) };
   }
