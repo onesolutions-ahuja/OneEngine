@@ -14,12 +14,12 @@ test("ONE_HTTP_REQUEST remains the generic core HTTP action", () => {
 test("Open Food Facts flows are package metadata, not core runtime code", () => {
   const pkg = packageDefinitions().find((item) => item.packageKey === "open_food_facts");
   assert.ok(pkg);
-  const flows=(pkg.manifest.workflows||[]).filter((flow)=>String(flow?.action?.apiName||"").startsWith("GPT_OPEN_FOOD_FACTS_"));
+  const flows=(pkg.manifest.workflows||[]).filter((flow)=>String(flow?.apiName||"").startsWith("GPT_OPEN_FOOD_FACTS_"));
   assert.equal(flows.length,2);
   for(const flow of flows){
     assert.equal(flow.action.systemGenerated,undefined);
-    assert.equal(flow.action.scope,"system");
-    const keys=(flow.action.actions||[]).map((action)=>action.key);
+    assert.equal(flow.scope,"system");
+    const keys=(flow.actions||[]).map((action)=>action.key);
     assert.ok(keys.includes("ONE_HTTP_REQUEST"));
     assert.ok(keys.includes("CONDITION"));
     assert.ok(keys.includes("ASSIGNMENT"));
@@ -36,8 +36,8 @@ test("Open Food Facts package flows keep editable resources and assignments", ()
   const connection=flows.find((flow)=>flow.action?.apiName==="GPT_OPEN_FOOD_FACTS_TEST_CONNECTION");
   assert.ok(lookup);
   assert.ok(connection);
-  assert.deepEqual(lookup.action.resources.filter((r)=>r.availableOutput).map((r)=>r.apiName),["barcode","found","productName","brand","imageUrl","ingredients"]);
-  assert.equal(lookup.action.resources.find((r)=>r.apiName==="barcode").availableInput,true);
-  assert.deepEqual(lookup.action.actions.filter((a)=>a.key==="ASSIGNMENT").map((a)=>a.variableName),["found","barcode","productName","brand","imageUrl","ingredients","found"]);
-  assert.deepEqual(connection.action.resources.filter((r)=>r.availableOutput).map((r)=>r.apiName),["connected","message","statusCode"]);
+  assert.deepEqual(lookup.resources.filter((r)=>r.availableOutput).map((r)=>r.apiName),["barcode","found","productName","brand","imageUrl","ingredients"]);
+  assert.equal(lookup.resources.find((r)=>r.apiName==="barcode").availableInput,true);
+  assert.deepEqual(lookup.actions.filter((a)=>a.key==="ASSIGNMENT").map((a)=>a.variableName),["found","barcode","productName","brand","imageUrl","ingredients","found"]);
+  assert.deepEqual(connection.resources.filter((r)=>r.availableOutput).map((r)=>r.apiName),["connected","message","statusCode"]);
 });
