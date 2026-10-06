@@ -160,6 +160,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const actionKey = (slot) => String(surfaceActions?.[slot] || '')
   const buttonFor = (slot) => buttons.find((row) => row.button_key === actionKey(slot))
   const settingValue = (slot, fallback) => surfacePath(settings, surfaceSettings?.[slot], fallback)
+  const surfaceField = (slot, fallback = '') => String(surfaceFields?.[slot] || fallback)
+  const recordValue = (record, slot, fallback = undefined) => record?.[surfaceField(slot)] ?? fallback
   const currency = settingValue('currencyPath', 'GBP')
   const meta = useMemo(() => buttonMap(buttons), [buttons])
 
@@ -396,21 +398,21 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     let groups = []
     try {
       if (online) {
-        const groupResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('modifierGroup'))}/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ product_id: product.id }))}`)
+        const groupResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('modifierGroup'))}/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ [surfaceField('modifierGroupProductId')]: product.id }))}`)
         const groupRows = Array.isArray(groupResponse?.records) ? groupResponse.records : Array.isArray(groupResponse?.data) ? groupResponse.data : []
-        const activeGroups = groupRows.filter((row) => row.active !== false && String(row.product_id) === String(product.id))
+        const activeGroups = groupRows.filter((row) => row?.[surfaceField('modifierGroupActive', 'active')] !== false && String(row?.[surfaceField('modifierGroupProductId')]) === String(product.id))
         const optionResponses = await Promise.all(activeGroups.map((group) =>
-          apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('modifierOption'))}/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ group_id: group.id }))}`).catch(() => ({ records: [] }))
+          apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('modifierOption'))}/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ [surfaceField('modifierOptionGroupId')]: group.id }))}`).catch(() => ({ records: [] }))
         ))
         groups = activeGroups
-          .sort((a,b) => Number(a.display_order || 0) - Number(b.display_order || 0))
+          .sort((a,b) => Number(a?.[surfaceField('modifierGroupOrder', 'display_order')] || 0) - Number(b?.[surfaceField('modifierGroupOrder', 'display_order')] || 0))
           .map((group, index) => ({
             id: group.id,
             name: group.name,
             required: group.required === true,
-            maxSelections: Number(group.max_selections) || 1,
+            maxSelections: Number(group?.[surfaceField('modifierGroupMaxSelections', 'max_selections')]) || 1,
             options: (Array.isArray(optionResponses[index]?.records) ? optionResponses[index].records : Array.isArray(optionResponses[index]?.data) ? optionResponses[index].data : [])
-              .filter((option) => option.active !== false && String(option.group_id) === String(group.id))
+              .filter((option) => option?.[surfaceField('modifierOptionActive', 'active')] !== false && String(option.group_id) === String(group.id))
               .sort((a,b) => Number(a.display_order || 0) - Number(b.display_order || 0)),
           }))
         cacheProductModifiers(product.id, groups)
@@ -452,7 +454,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }, [products, online])
 
   useEffect(() => {
-    if (!online || !till?.terminal_id) return undefined
+    if (!online || !recordValue(till, 'sessionTerminalId', null)) return undefined
     let stopped = false
     let scannerUnavailable = false
     let timer
@@ -478,7 +480,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       stopped = true
       window.clearTimeout(timer)
     }
-  }, [online, till?.terminal_id, products])
+  }, [online, recordValue(till, 'sessionTerminalId', null), products])
 
   useEffect(() => {
     if (!online || !permissions.includes('online_orders.view')) return undefined
@@ -526,8 +528,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     const clientRequestId = crypto.randomUUID()
     const mappings = runtimeSurface?.payloadMappings || {}
     const sale = mapRuntimePayload(mappings.sale, {
-      storeId: till?.store_id || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
-      terminalId: till?.terminal_id || null,
+      storeId: recordValue(till, 'sessionStoreId', null) || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
+      terminalId: recordValue(till, 'sessionTerminalId', null) || null,
       userId: getStoredUser()?.id || getStoredUser()?.userId || null,
       customerId: selectedCustomer?.id || null,
       subtotal: Number(subtotal || 0),
@@ -563,7 +565,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       paymentMethod: row?.method || row?.paymentMethod || defaultMethod,
       amount: Number(row?.amount ?? total ?? 0),
       provider: row?.provider || null,
-      terminalId: till?.terminal_id || null,
+      terminalId: recordValue(till, 'sessionTerminalId', null) || null,
       providerTransactionId: row?.providerTransactionId || row?.provider_transaction_id || null,
       idempotencyKey: row?.idempotencyKey || row?.idempotency_key || clientRequestId,
       status: row?.status || 'COMPLETED',
@@ -822,7 +824,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     try {
       await executeMetadataButton(button, {
         tillSessionId: till?.id || null,
-        terminalId: till?.terminal_id || till?.terminalId || null,
+        terminalId: recordValue(till, 'sessionTerminalId', null) || till?.terminalId || null,
         userId: getStoredUser()?.id || getStoredUser()?.userId || null,
         reason: 'No-sale drawer open from Till',
       })
@@ -883,8 +885,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       if (useRecordScope && !scopedRecordId) throw new Error('Complete a sale before using this action.')
 
       const context = {
-        storeId: till?.store_id || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
-        terminalId: till?.terminal_id || null,
+        storeId: recordValue(till, 'sessionStoreId', null) || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
+        terminalId: recordValue(till, 'sessionTerminalId', null) || null,
         tillSessionId: till?.id || null,
         online,
         userId: getStoredUser()?.id || getStoredUser()?.userId || null,
@@ -937,7 +939,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     executeConnector,
     currency,
     clientRequestId,
-    terminalId: terminalId || till?.terminal_id || null,
+    terminalId: terminalId || recordValue(till, 'sessionTerminalId', null) || null,
     selfCheckout: false,
   })
 
