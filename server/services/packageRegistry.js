@@ -2319,7 +2319,7 @@ export function packageDefinition(entry) {
 
           {
             objectKey: "sale", metadataScope: "global", label: "Sale", pluralLabel: "Sales",
-            description: "Canonical sales transaction header.", sourceTable: "sales", storeScoped: true,
+            description: "Canonical sales transaction header.", sourceTable: "sales", storeScoped: true, config: { flowWritesOnly: true },
             fields: [
               { apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false },
               { apiName:"store_id",label:"Store",fieldType:"lookup",sourceColumn:"store_id",writable:true },
@@ -2343,7 +2343,7 @@ export function packageDefinition(entry) {
           },
           {
             objectKey: "sale_item", metadataScope: "global", label: "Sale Item", pluralLabel: "Sale Items",
-            description: "Canonical line item related to a Sale.", sourceTable: "sale_items",
+            description: "Canonical line item related to a Sale.", sourceTable: "sale_items", config: { flowWritesOnly: true },
             fields: [
               { apiName:"sale_id",label:"Sale",fieldType:"lookup",sourceColumn:"sale_id",required:true,writable:true,config:{relatedObjectKey:"sale"} },
               { apiName:"product_id",label:"Product",fieldType:"lookup",sourceColumn:"product_id",required:true,writable:true,config:{relatedObjectKey:"product"} },
@@ -2360,7 +2360,7 @@ export function packageDefinition(entry) {
           },
           {
             objectKey: "payment", metadataScope: "global", label: "Payment", pluralLabel: "Payments",
-            description: "Canonical payment record related to a transaction.", sourceTable: "payments", storeScoped: true,
+            description: "Canonical payment record related to a transaction.", sourceTable: "payments", storeScoped: true, config: { flowWritesOnly: true },
             fields: [
               { apiName:"sale_id",label:"Sale",fieldType:"lookup",sourceColumn:"sale_id",writable:true,config:{relatedObjectKey:"sale"} },
               { apiName:"company_id",label:"Company",fieldType:"lookup",sourceColumn:"company_id",writable:false },
