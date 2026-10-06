@@ -1250,7 +1250,31 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
 
   const definitionToBuilder = (definition) => {
     const action = definition?.action || {}
-    const restoredElements = Array.isArray(action.gptBuilderElements) ? action.gptBuilderElements : []
+    const restoredElements = Array.isArray(action.gptBuilderElements) && action.gptBuilderElements.length
+      ? action.gptBuilderElements
+      : (Array.isArray(action.actions) ? action.actions.map((runtimeAction, index) => ({
+          id: runtimeAction.id || `imported-step-${index + 1}`,
+          key: 'action',
+          label: runtimeAction.label || runtimeAction.apiName || runtimeAction.key || runtimeAction.type || `Step ${index + 1}`,
+          apiName: runtimeAction.apiName || runtimeAction.id || `Imported_Step_${index + 1}`,
+          description: runtimeAction.description || '',
+          labelSource: 'manual',
+          apiNameSource: 'manual',
+          config: {
+            actionKey: runtimeAction.key || runtimeAction.type || '',
+            inputs: {},
+            inputModes: {},
+            inputIncluded: {},
+            transforms: {},
+            outputMode: 'automatic',
+            manualOutputs: [],
+            importedRuntimeAction: runtimeAction,
+            importedRuntimeActionText: '',
+          },
+          configured: true,
+          source: 'runtime_import',
+          position: null,
+        })) : [])
     setFlowProps((current) => ({
       ...current,
       label: definition?.name || current.label,
