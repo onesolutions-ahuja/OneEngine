@@ -1966,8 +1966,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
+            { id:"validate_hold_items",label:"Validate Held Sale Items",apiName:"validate_hold_items",key:"FORMULA",resourceName:"holdItemsValid",resultType:"boolean",expression:"COUNT(items) > 0",inputs:{items:{path:"$record.items"}} },
+            { id:"hold_ready",label:"Held Sale Ready?",apiName:"hold_ready",key:"CONDITION",outcomes:[{id:"yes",label:"Valid",condition:{match:"all",conditions:[{field:"variables.holdItemsValid",operator:"equals",value:true}]},branch:["create_held_sale"]}],defaultLabel:"Invalid",defaultBranch:["hold_invalid"] },
             { id: "create_held_sale", label: "Create Held Sale", apiName: "create_held_sale", key: "CREATE_RECORD", objectKey: "held_sale",
               fieldValues: { user_id: { path: "$record.userId" }, customer_id: { path: "$record.customerId" }, items: { path: "$record.items" }, discount_type: { path: "$record.discountType" }, discount_value: { path: "$record.discountValue" } } },
+            { id:"hold_invalid",label:"Hold Sale Rejected",apiName:"hold_invalid",key:"CUSTOM_ERROR",errorMessage:"A held sale must contain at least one item.",errorLocation:"record" },
           ],
         },
         {
@@ -1976,7 +1979,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           inputContract: [{ name: "heldSaleId", label: "Held Sale", type: "text", required: true }],
           outputContract: [],
           actions: [
+            { id:"get_held_sale",label:"Get Held Sale",apiName:"get_held_sale",key:"GET_RECORDS",objectKey:"held_sale",filters:[{field:"id",operator:"equals",value:{path:"$record.heldSaleId"}}],limit:1,store:"first" },
+            { id:"held_sale_found",label:"Held Sale Found?",apiName:"held_sale_found",key:"CONDITION",outcomes:[{id:"yes",label:"Found",condition:{match:"all",conditions:[{field:"steps.get_held_sale.record.id",operator:"is_not_blank"}]},branch:["delete_held_sale"]}],defaultLabel:"Missing",defaultBranch:["held_sale_missing"] },
             { id: "delete_held_sale", label: "Delete Held Sale", apiName: "delete_held_sale", key: "DELETE_RECORD", objectKey: "held_sale", recordId: { path: "$record.heldSaleId" } },
+            { id:"held_sale_missing",label:"Held Sale Missing",apiName:"held_sale_missing",key:"CUSTOM_ERROR",errorMessage:"The held sale no longer exists.",errorLocation:"record" },
           ],
         },
         {
@@ -2004,8 +2010,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
+            { id:"find_open_session",label:"Find Open Till Session",apiName:"find_open_session",key:"GET_RECORDS",objectKey:"till_session",filters:[{field:"terminal_id",operator:"equals",value:{path:"$record.terminalId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
+            { id:"can_open_till",label:"Terminal Available?",apiName:"can_open_till",key:"CONDITION",outcomes:[{id:"yes",label:"Available",condition:{match:"all",conditions:[{field:"steps.find_open_session.record.id",operator:"is_blank"}]},branch:["create_till_session"]}],defaultLabel:"Already Open",defaultBranch:["open_till_invalid"] },
             { id: "create_till_session", label: "Create Till Session", apiName: "create_till_session", key: "CREATE_RECORD", objectKey: "till_session",
               fieldValues: { terminal_id: { path: "$record.terminalId" }, user_id: { path: "$record.userId" }, opening_cash: { path: "$record.openingCash" }, status: "open" } },
+            { id:"open_till_invalid",label:"Till Already Open",apiName:"open_till_invalid",key:"CUSTOM_ERROR",errorMessage:"This terminal already has an open till session.",errorLocation:"record" },
           ],
         },
         {
@@ -2019,8 +2028,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_cash_in", label: "Create Cash In", apiName: "create_cash_in", key: "CREATE_RECORD", objectKey: "cash_movement",
-              fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_in", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
+            { id:"validate_amount",label:"Validate Amount",apiName:"validate_amount",key:"FORMULA",resourceName:"cashAmountValid",resultType:"boolean",expression:"amount > 0",inputs:{amount:{path:"$record.amount"}} },
+            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"till_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
+            { id:"cash_movement_ready",label:"Cash Movement Ready?",apiName:"cash_movement_ready",key:"CONDITION",outcomes:[{id:"yes",label:"Valid",condition:{match:"all",conditions:[{field:"variables.cashAmountValid",operator:"equals",value:true},{field:"steps.get_open_session.record.id",operator:"is_not_blank"}]},branch:["create_cash_movement"]}],defaultLabel:"Invalid",defaultBranch:["cash_movement_invalid"] },
+            { id:"create_cash_movement",label:"Create Cash In",apiName:"create_cash_movement",key:"CREATE_RECORD",objectKey:"cash_movement",fieldValues:{till_session_id:{path:"$record.tillSessionId"},user_id:{path:"$record.userId"},type:"cash_in",amount:{path:"$record.amount"},reason:{path:"$record.reason"}} },
+            { id:"cash_movement_invalid",label:"Cash Movement Rejected",apiName:"cash_movement_invalid",key:"CUSTOM_ERROR",errorMessage:"Cash movement requires a positive amount and an open till session.",errorLocation:"record" },
           ],
         },
         {
@@ -2034,8 +2046,11 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_cash_out", label: "Create Cash Out", apiName: "create_cash_out", key: "CREATE_RECORD", objectKey: "cash_movement",
-              fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_out", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
+            { id:"validate_amount",label:"Validate Amount",apiName:"validate_amount",key:"FORMULA",resourceName:"cashAmountValid",resultType:"boolean",expression:"amount > 0",inputs:{amount:{path:"$record.amount"}} },
+            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"till_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
+            { id:"cash_movement_ready",label:"Cash Movement Ready?",apiName:"cash_movement_ready",key:"CONDITION",outcomes:[{id:"yes",label:"Valid",condition:{match:"all",conditions:[{field:"variables.cashAmountValid",operator:"equals",value:true},{field:"steps.get_open_session.record.id",operator:"is_not_blank"}]},branch:["create_cash_movement"]}],defaultLabel:"Invalid",defaultBranch:["cash_movement_invalid"] },
+            { id:"create_cash_movement",label:"Create Cash Out",apiName:"create_cash_movement",key:"CREATE_RECORD",objectKey:"cash_movement",fieldValues:{till_session_id:{path:"$record.tillSessionId"},user_id:{path:"$record.userId"},type:"cash_out",amount:{path:"$record.amount"},reason:{path:"$record.reason"}} },
+            { id:"cash_movement_invalid",label:"Cash Movement Rejected",apiName:"cash_movement_invalid",key:"CUSTOM_ERROR",errorMessage:"Cash movement requires a positive amount and an open till session.",errorLocation:"record" },
           ],
         },
         {
@@ -2049,9 +2064,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
+            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"till_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
+            { id:"can_close_till",label:"Open Session Found?",apiName:"can_close_till",key:"CONDITION",outcomes:[{id:"yes",label:"Open",condition:{match:"all",conditions:[{field:"steps.get_open_session.record.id",operator:"is_not_blank"}]},branch:["close_till_session"]}],defaultLabel:"Not Open",defaultBranch:["close_till_invalid"] },
             { id: "close_till_session", label: "Close Till Session", apiName: "close_till_session", key: "UPDATE_RECORD", objectKey: "till_session",
               recordId: { path: "$record.tillSessionId" },
               fieldValues: { status: "closed", closing_cash: { path: "$record.countedCash" }, closed_by: { path: "$record.userId" }, closed_at: { path: "$record.closedAt" } } },
+            { id:"close_till_invalid",label:"Till Close Rejected",apiName:"close_till_invalid",key:"CUSTOM_ERROR",errorMessage:"The till session is missing or is not open.",errorLocation:"record" },
           ],
         },
         {
