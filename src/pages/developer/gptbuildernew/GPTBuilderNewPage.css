@@ -16,3 +16,10 @@
 .gptbn-execution-panel{z-index:50}.gptbn-execution-panel header>div{display:flex;flex-direction:column}.gptbn-execution-panel header h3{margin:0}.gptbn-execution-panel .gptbn-panel-body input,.gptbn-execution-panel .gptbn-panel-body select{box-sizing:border-box;width:100%;border:1px solid #747474;border-radius:4px;padding:7px}.gptbn-assertion{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin:6px 0}.gptbn-debug-output{max-height:360px;overflow:auto;padding:10px;background:#181818;color:#fff;font-size:11px;white-space:pre-wrap}.gptbn-error{color:#ba0517}
 
 .gptbn-outcomes{display:grid;gap:10px}.gptbn-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.gptbn-condition-row{display:grid;grid-template-columns:1fr 130px 1fr;gap:6px;margin:6px 0}.gptbn-outcome-order{display:flex;gap:5px;justify-content:flex-end}.gptbn-port.branch{bottom:-7px;top:auto;width:10px;height:10px}.gptbn-canvas.phase2{cursor:default}.gptbn-canvas.phase2:active{cursor:grabbing}
+
+/* Phase 9: Salesforce-captured interaction states. Exact uncaptured pixel measurements remain intentionally unspecified. */
+.gptbn-builder button:focus-visible,.gptbn-builder input:focus-visible,.gptbn-builder select:focus-visible,.gptbn-builder textarea:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.gptbn-manager-filter{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px}.gptbn-manager-filter select{min-width:110px}
+.gptbn-node[aria-pressed="true"]{outline:2px solid currentColor;outline-offset:2px}
+.gptbn-panel [role="alert"],.gptbn-dialog [role="alert"]{display:block;margin-top:4px;font-size:12px}
+@media (prefers-reduced-motion:reduce){.gptbn-builder *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
