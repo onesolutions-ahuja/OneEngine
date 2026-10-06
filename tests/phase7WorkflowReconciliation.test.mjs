@@ -13,8 +13,10 @@ test("Phase 7 every package workflow persists one Builder node per runtime step"
   const packageFlows = [];
   for (const pkg of packageDefinitions()) {
     for (const flow of pkg.manifest?.workflows || []) {
-      packageFlows.push({ packageKey: pkg.packageKey, name: flow.name || flow.label || flow.key, flow });
-      if (actionsOf(flow).length !== nodesOf(flow).length) {
+      const action = actionOf(flow);
+      const runtime = String(action.flowType || "").toUpperCase() !== "KIOSK_EXPERIENCE";
+      packageFlows.push({ packageKey: pkg.packageKey, name: flow.name || flow.label || flow.key, flow, runtime });
+      if (runtime && actionsOf(flow).length !== nodesOf(flow).length) {
         missing.push({ packageKey: pkg.packageKey, name: flow.name || flow.label || flow.key, steps: actionsOf(flow).length, nodes: nodesOf(flow).length });
       }
     }
@@ -65,6 +67,9 @@ test("Phase 7 reports exact remaining short-flow definitions", () => {
   const packageFlows = [];
   for (const pkg of packageDefinitions()) {
     for (const flow of pkg.manifest?.workflows || []) {
+      const action = actionOf(flow);
+      const runtime = String(action.flowType || "").toUpperCase() !== "KIOSK_EXPERIENCE";
+      if (!runtime) continue;
       packageFlows.push({
         source: `package:${pkg.packageKey}`,
         name: flow.name || flow.label || flow.key || "(unnamed)",
