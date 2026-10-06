@@ -1099,46 +1099,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 }
 
 
-  const STANDARD_RELATIONSHIPS = [];
-
-  const additionalStandardObjects = [
-    {
-      key: "licence_request",
-      label: "Licence Request",
-      plural: "Licence Requests",
-      table: "platform_licence_requests",
-      fields: [
-        ["package_key", "Package Key", "text", "package_key", true],
-        ["package_name", "Package Name", "text", "package_name", true],
-        ["requesting_user_id", "Requesting User", "lookup", "requesting_user_id", false],
-        ["requesting_user_name", "Requesting User Name", "text", "requesting_user_name", false],
-        ["status", "Status", "picklist", "status", false],
-        ["created_at", "Created At", "datetime", "created_at", false],
-        ["updated_at", "Updated At", "datetime", "updated_at", false],
-      ],
-    },
-  ];
-
-  function standardDefinition(fields) {
-    return {
-      sections: [{ id: "section-details", label: "Details", order: 0, columns: 2, visible: true }],
-      components: fields
-        .filter((field) => field.active !== false && field.source_column)
-        .map((field, index) => ({
-          id: `field-${field.api_name}`,
-          type: "field",
-          field_key: field.api_name,
-          section_id: "section-details",
-          order: index,
-          width: "1/2",
-          visible: true,
-          required: field.required === true,
-          readOnly: field.writable !== true,
-        })),
-    };
-  }
-
-  /**
+/**
  * Legacy compatibility hook.
  *
  * Business objects, workflows, buttons, rules and layouts are provisioned by
