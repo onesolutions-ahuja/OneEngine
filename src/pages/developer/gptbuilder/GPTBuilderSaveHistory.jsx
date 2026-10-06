@@ -9,7 +9,7 @@ function apiNameFromLabel(label, fallback = 'New_Flow') {
 }
 
 export function GPTBuilderSaveAsMenu({ open, disabled, onToggle, onNewVersion, onNewFlow }) {
-  return <div className="gptb-save-as">
+  return <div className="gptb-save-as" onBlur={(event) => { if (open && !event.currentTarget.contains(event.relatedTarget)) onToggle?.() }}>
     <button type="button" className="gptb-text-tool" disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={onToggle}>Save As <ChevronDown size={12}/></button>
     {open ? <div className="gptb-save-as-menu" role="menu">
       <button type="button" role="menuitem" onClick={onNewVersion}><span><b>Save as New Version</b><small>Keep the same flow and API name.</small></span></button>
