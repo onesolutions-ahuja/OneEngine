@@ -14,7 +14,7 @@ export default function createDashboardRouter({ authenticate, authorize, db }) {
         ),
         valid_sales AS (
           SELECT s.id, s.total, s.created_at, s.store_id
-          FROM sales s
+          FROM sale_ledger s
           INNER JOIN companies c ON c.id = s.company_id
           CROSS JOIN business_day d
           WHERE s.company_id = $1
@@ -31,7 +31,7 @@ export default function createDashboardRouter({ authenticate, authorize, db }) {
             (SELECT today FROM business_day),
             INTERVAL '1 day'
           ) AS dates(sale_date)
-          LEFT JOIN sales s
+          LEFT JOIN sale_ledger s
             ON s.company_id = $1
             AND s.store_id = $2
             AND s.status = 'completed'
