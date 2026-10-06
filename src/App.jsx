@@ -31,7 +31,6 @@ const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage')
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
-const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
 const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
@@ -2368,9 +2367,9 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'custom-reports' ? (
           <CustomReportsPage onBack={() => openItem('reports')} />
         ) : activeApp === 'integrations' ? (
-          <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
+          <MetadataPageRuntime objectKey="integration" appKey="integrations" />
         ) : activeApp === 'accounting' ? (
-          <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
+          <MetadataPageRuntime objectKey="integration" appKey="accounting" />
         ) : activeApp === 'online-orders' ? (
           <MetadataPageRuntime objectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
