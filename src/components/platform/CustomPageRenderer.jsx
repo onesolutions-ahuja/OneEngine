@@ -637,6 +637,14 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (VersionedComponent && api === "container.v1") {
     return <VersionedComponent node={node}>{(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={onRecordClick} onButtonClick={onButtonClick} data={data} runtimeOverrides={runtimeOverrides} />)}</VersionedComponent>;
   }
+  if (VersionedComponent && api === "multi_container.v1") {
+    const columns = multiContainerColumns({ sectionWidth, containerSize: node.containerSize || "medium", device });
+    return <VersionedComponent node={node} builderMode={builderMode} onRecordClick={onRecordClick} data={data?.[node.id]} columns={columns} />;
+  }
+  if (VersionedComponent && api === "tree_view.v1") return <VersionedComponent node={node} builderMode={builderMode} onRecordClick={onRecordClick} data={data?.[node.id]} />;
+  if (VersionedComponent && api === "process_path.v1") return <VersionedComponent node={node} builderMode={builderMode} data={data?.[node.id]} onAction={(payload) => onButtonClick?.({ ...node, interactionPayload: payload })} />;
+  if (VersionedComponent && ["header.v1","text.v1","divider.v1","spacer.v1","related_list.v1"].includes(api)) return <VersionedComponent node={node} />;
+  if (VersionedComponent && api === "field_value.v1") return <VersionedComponent node={node} value={currentOverride?.value} />;
 
   if (key === "container") {
     return (
