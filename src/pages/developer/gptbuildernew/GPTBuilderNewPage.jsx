@@ -113,7 +113,7 @@ const CANVAS_ELEMENTS = [
   ['screen','Screen'],['action','Action'],['subflow','Subflow'],['assignment','Assignment'],['decision','Decision'],['loop','Loop'],
   ['transform','Transform'],['collection_sort','Collection Sort'],['collection_filter','Collection Filter'],['wait_conditions','Wait for Conditions'],
   ['wait_amount','Wait for Amount of Time'],['wait_date','Wait Until Date'],['create_records','Create Records'],['update_records','Update Records'],
-  ['get_records','Get Records'],['delete_records','Delete Records'],
+  ['get_records','Get Records'],['delete_records','Delete Records'],['rollback','Roll Back Records'],
 ].map(([key,label])=>({key,label}))
 
 const uid=()=>`gptbn_${Date.now()}_${Math.random().toString(36).slice(2,8)}`
@@ -283,7 +283,7 @@ function dataRuntimeAction(element) {
   if(element.key==='create_records') return {id:element.id,key:'CREATE_RECORD',label:element.label,apiName:element.apiName,objectKey:c.objectKey,createMode:c.valueMode||'manual',howMany:c.howMany||'one',fieldValues:Object.fromEntries((c.fieldValues||[]).filter((row)=>row.field).map((row)=>[row.field,configured(row)])),recordResource:c.recordResource?{path:c.recordResource}:undefined,recordCollectionResource:c.recordCollectionResource?{path:c.recordCollectionResource}:undefined}
   if(element.key==='update_records') return {id:element.id,key:'UPDATE_RECORD',label:element.label,apiName:element.apiName,objectKey:c.objectKey,updateMode:c.findMode||'conditions',recordResource:c.recordResource?{path:c.recordResource}:undefined,recordCollectionResource:c.recordCollectionResource?{path:c.recordCollectionResource}:undefined,match:c.conditionLogic==='any'?'any':'all',conditions:(c.conditions||[]).map((row)=>({field:row.field,operator:row.operator||'equals',value:configured(row)})),fieldValues:Object.fromEntries((c.fieldValues||[]).filter((row)=>row.field).map((row)=>[row.field,configured(row)]))}
   if(element.key==='delete_records') return {id:element.id,key:'DELETE_RECORD',label:element.label,apiName:element.apiName,objectKey:c.objectKey,deleteMode:c.findMode||'conditions',recordResource:c.recordResource?{path:c.recordResource}:undefined,recordCollectionResource:c.recordCollectionResource?{path:c.recordCollectionResource}:undefined,match:c.conditionLogic==='any'?'any':'all',conditions:(c.conditions||[]).map((row)=>({field:row.field,operator:row.operator||'equals',value:configured(row)}))}
-  if(element.key==='rollback') return null
+  if(element.key==='rollback') return {id:element.id,key:'ROLLBACK_RECORDS',label:element.label,apiName:element.apiName,description:element.description||''}
   return null
 }
 
