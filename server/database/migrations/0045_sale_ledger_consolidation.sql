@@ -36,5 +36,5 @@ WHERE object_key IN ('sale_item','payment','refund');
 
 -- Align lookup field metadata which stores the related object by key.
 UPDATE platform_fields
-SET config = jsonb_set(config, '{relatedObjectKey}', '"sale_ledger"', true)
+SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{relatedObjectKey}', '"sale_ledger"', true)
 WHERE config->>'relatedObjectKey' = 'sale';
