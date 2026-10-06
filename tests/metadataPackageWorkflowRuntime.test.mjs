@@ -12,7 +12,7 @@ test("business packages use visible metadata workflows without a function regist
 
 test("package buttons support workflow targets", async () => {
   const source = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(source, /\["action", "workflow"\]/);
+  assert.match(source, /\["action","workflow","modal","navigation","command"\]/);
   assert.match(source, /targetType/);
 });
 
