@@ -18,6 +18,13 @@ test("Phase 1 has no legacy CALL_FUNCTION runtime path", async()=>{
   }
 });
 
+test("Phase 1 package compatibility functions stay empty", async()=>{
+  for(const path of ["server/packages/purchasing_core/functions.js","server/packages/finance_core/functions.js"]){
+    const source=await read(path);
+    assert.match(source,/packageFunctions = \[\]/,path+" must contain no business runtime functions");
+  }
+});
+
 test("Phase 1 business compatibility functions stay removed", async()=>{
   const source=await read("server/services/platformFunctionRegistry.js");
   for(const key of [
