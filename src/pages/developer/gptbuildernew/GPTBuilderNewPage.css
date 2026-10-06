@@ -6,3 +6,5 @@
 .gptbn-element-editor .gptbn-panel-body{max-height:calc(100vh - 160px);overflow:auto}.gptbn-element-editor input:not([type=radio]):not([type=checkbox]),.gptbn-element-editor textarea,.gptbn-element-editor select{width:100%;box-sizing:border-box;border:1px solid #747474;border-radius:4px;padding:7px 8px;background:#fff}.gptbn-element-editor textarea{resize:vertical}.gptbn-element-editor b{color:#ba0517}.gptbn-element-editor fieldset{border:0;padding:0;margin:0}.gptbn-element-editor .gptbn-radio input{width:auto}
 
 .gptbn-data-rows{display:flex;flex-direction:column;gap:8px}.gptbn-data-rows>div{display:grid;grid-template-columns:24px 1fr 1fr 1fr;gap:6px;align-items:center}.gptbn-data-rows>button{align-self:flex-start;display:flex;align-items:center;gap:5px;padding:0 10px}.gptbn-data-rows input,.gptbn-data-rows select{min-width:0}
+
+.gptbn-action-inputs{display:flex;flex-direction:column;gap:9px;padding:10px 0;border-top:1px solid #e5e5e5}.gptbn-action-inputs>strong{font-size:13px}.gptbn-action-inputs small{font-weight:400}
