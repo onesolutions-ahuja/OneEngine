@@ -160,8 +160,11 @@ app.use(cors({
     if (isAllowedOrigin(origin)) return callback(null, true);
     if (!origin) return callback(null, true);
     db("SELECT 1 FROM security_trusted_origins WHERE origin=$1 AND origin_type='CORS' AND active=TRUE LIMIT 1", [origin])
-      .then((result) => callback(result.rows.length ? null : new Error("CORS origin not allowed"), result.rows.length > 0))
-      .catch(() => callback(new Error("CORS origin not allowed"), false));
+      .then((result) => callback(null, result.rows.length > 0))
+      .catch((error) => {
+        console.warn("CORS trusted-origin lookup failed", { origin, message: error?.message || String(error) });
+        callback(null, false);
+      });
   },
   credentials: true,
   allowedHeaders: [
