@@ -96,7 +96,7 @@ const coreFiles=[
   "server/services/systemWorkflowRuntime.js",
   "server/services/systemWorkflowCatalog.js",
 ];
-const providerPattern=/\b(?:uber(?:_eats)?|deliveroo|just[_ -]?eat|shopify|quickbooks|paypal|dojo|sumup|mailchimp)\b/gi;
+const providerPattern=/\b(?:uber(?:_eats)?|deliveroo|just[_ -]?eat|shopify|quickbooks|paypal|dojo|sumup|mailchimp|open_food_facts|go_upc|upcitemdb|barcode_nest)\b/gi;
 for(const item of coreFiles){
   const file=path.join(ROOT,item);
   if(!fs.existsSync(file)) continue;
