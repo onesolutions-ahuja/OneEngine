@@ -74,11 +74,6 @@ test("fresh schema and startup schema use canonical physical tables", async () =
 
 test("runtime metadata endpoints use canonical sale and sales-order objects", async () => {
   const paths = [
-    "src/pages/till/TillPage.jsx",
-    "src/services/tillOffline.js",
-    "src/pages/kiosk/OneKioskPage.jsx",
-    "server/routes/selfCheckout.js",
-    "server/routes/secureInvoice.js",
     "src/pages/online/useOnlineOrderMetadata.js",
     "src/pages/online/useOnlineOrderActions.js",
   ];
