@@ -6,11 +6,11 @@
  * Builds a partner API payload from a onePOS source object plus a
  * field-mapping definition:
  *
- *   [{ partnerField: "customer_name", sourcePath: "sales.customer.name" }]
+ *   [{ partnerField: "customer_name", sourcePath: "record.related.field" }]
  *
  * Source lookups delegate to integrationFieldResolver.js (never duplicated).
  * Partner paths support nesting ("customer.postcode") and one or more []
- * array levels ("items[].sku"). Array fields sharing the same target array
+ * array levels ("lines[].field"). Array fields sharing the same target array
  * stay aligned by index and preserve source ordering.
  *
  * MISSING DATA
@@ -66,7 +66,7 @@ function assignScalar(root, segments, value) {
 
 /**
  * Recursive writer supporting nested [] levels in the partner path.
- * Example: partner "orders[].lines[].sku" builds arrays at both levels and
+ * Example: partner "groups[].lines[].field" builds arrays at both levels and
  * keeps each level aligned by index.
  */
 function assignValue(node, segments, resolved) {
@@ -103,7 +103,7 @@ function assignValue(node, segments, resolved) {
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i] === undefined ? null : rows[i];
     if (rest.length === 1 && !rest[0].isArray) {
-      // Fast path for the common "items[].sku" shape.
+      // Fast path for the common "lines[].field" shape.
       if (!isRecord(list[i])) list[i] = {};
       list[i][rest[0].field] = row === null ? null : row;
     } else {
