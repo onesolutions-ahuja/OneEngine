@@ -850,8 +850,6 @@ export const platformSchema = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-  ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS landing_flow JSONB NOT NULL DEFAULT '{"rules":[],"defaultDestination":"/app/dashboard"}'::jsonb;
-  ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS jarves_behaviour_media JSONB NOT NULL DEFAULT '{"behaviour_1":"/jarves.mp4","behaviour_2":"/jarves.mp4","behaviour_3":"/jarves.mp4"}'::jsonb;
   ALTER TABLE platform_rules ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id) ON DELETE SET NULL;
   ALTER TABLE platform_rules ADD COLUMN IF NOT EXISTS lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (lifecycle_status IN ('DRAFT','ACTIVE','INACTIVE'));
   UPDATE platform_rules SET lifecycle_status=CASE WHEN active THEN 'ACTIVE' ELSE 'INACTIVE' END WHERE lifecycle_status='DRAFT' AND created_at < NOW();
