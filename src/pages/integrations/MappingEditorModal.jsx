@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
-import { getIntegrationFieldCatalogue } from "../../services/integrationFieldCatalogue.js";
+import { loadIntegrationFieldCatalogue } from "../../services/integrationFieldCatalogue.js";
 import { validateMapping } from "../../services/integrationMapping.js";
 
 const MAPPING_TYPES = [
@@ -30,7 +30,7 @@ function rowFromApi(row) {
 }
 
 export default function MappingEditorModal({ integration, endpoint, onClose }) {
-  const catalogue = useMemo(() => getIntegrationFieldCatalogue(), []);
+  const [catalogue, setCatalogue] = useState([]);
   const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,8 +42,12 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
     setLoading(true);
     setError("");
     try {
-      const data = await apiRequest(`/api/integrations/${integration.id}/endpoints/${endpoint.id}/mappings`);
+      const [data, fields] = await Promise.all([
+        apiRequest(`/api/integrations/${integration.id}/endpoints/${endpoint.id}/mappings`),
+        loadIntegrationFieldCatalogue(apiRequest).catch(() => []),
+      ]);
       setMappings((data?.data || []).map(rowFromApi));
+      setCatalogue(fields);
     } catch (err) {
       setError(err.message || "Unable to load mappings");
     } finally {
@@ -189,7 +193,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                             <input
                               value={row.oneposSourcePath}
                               onChange={(e) => updateRow(index, { oneposSourcePath: e.target.value })}
-                              placeholder="sales.customer.name"
+                              placeholder="object.relationship.field"
                               className="h-9 px-2.5 border border-slate-200 rounded-lg text-sm font-mono flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               aria-label="onePOS source path (custom)"
                             />
@@ -238,7 +242,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                 />
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                Source paths support relationship traversal (<code>sales.customer.address.postcode</code>) and collections (<code>sales.items[].product.ean</code> — marked&nbsp;[&nbsp;]).
+                Source paths come from Platform Object metadata and support configured relationship traversal and collections.
               </p>
               {message && <div className="mt-3 px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm">{message}</div>}
               {error && <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
