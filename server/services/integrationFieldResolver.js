@@ -9,7 +9,7 @@
  *                               (a plain segment over an array maps every element)
  *   - explicit collections:     purchase.items[].quantity
  *
- * Provider-agnostic by design: nothing here knows about Xero/Shopify/etc.
+ * Provider-agnostic by design: nothing here knows about any concrete provider.
  */
 
 /**
