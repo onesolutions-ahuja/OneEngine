@@ -54,7 +54,54 @@ const targetedFiles = {
   ],
 };
 
-const findings = [];
+
+function collectManifestSourceTables() {
+  const dir = path.join(ROOT, "server", "metadata", "manifests");
+  if (!fs.existsSync(dir)) return new Set();
+  const tables = new Set();
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      const manifest = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
+      const visit = (value) => {
+        if (Array.isArray(value)) { value.forEach(visit); return; }
+        if (!value || typeof value !== "object") return;
+        const table = value.sourceTable || value.source_table;
+        if (typeof table === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) tables.add(table);
+        Object.values(value).forEach(visit);
+      };
+      visit(manifest);
+    } catch {}
+  }
+  return tables;
+}
+
+function directBusinessSqlFindings() {
+  const tables = collectManifestSourceTables();
+  const roots = [path.join(ROOT, "server", "routes"), path.join(ROOT, "server", "services")];
+  const output = [];
+  for (const file of roots.flatMap(walk)) {
+    if (ignored(file)) continue;
+    const source = fs.readFileSync(file, "utf8");
+    for (const table of tables) {
+      const patterns = [
+        new RegExp("\\bFROM\\s+" + table + "\\b", "gi"),
+        new RegExp("\\bJOIN\\s+" + table + "\\b", "gi"),
+        new RegExp("\\bINSERT\\s+INTO\\s+" + table + "\\b", "gi"),
+        new RegExp("\\bUPDATE\\s+" + table + "\\b", "gi"),
+        new RegExp("\\bDELETE\\s+FROM\\s+" + table + "\\b", "gi"),
+      ];
+      for (const pattern of patterns) {
+        for (const match of source.matchAll(pattern)) {
+          output.push({ rule: "DIRECT_BUSINESS_SQL", table, file: rel(file), line: lineOf(source, match.index) });
+        }
+      }
+    }
+  }
+  return output;
+}
+
+const findings = [...directBusinessSqlFindings()];
 for (const root of EXECUTABLE_ROOTS) {
   for (const file of walk(path.join(ROOT, root))) {
     if (ignored(file)) continue;
