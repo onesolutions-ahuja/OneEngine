@@ -55,8 +55,8 @@ test("phase 4 provider configuration routes have no business SQL writers",()=>{
 });
 
 test("phase 4 retired business mutation services are deleted and disconnected",()=>{
-  for(const path of ["server/services/canonicalTransactions.js","server/services/inventory.js","server/services/inventoryPlatform.js","server/services/productImportExport.js"]) assert.equal(fs.existsSync(path),false,path);
-  for(const legacy of ["canonicalTransactions.js","services/inventory.js","productImportExport.js","createInventoryMovement"]) assert.equal(server.includes(legacy),false,legacy);
+  for(const path of ["server/services/canonicalTransactions.js","server/services/inventory.js","server/services/inventoryPlatform.js","server/services/productImportExport.js","server/services/integrationDispatcher.js"]) assert.equal(fs.existsSync(path),false,path);
+  for(const legacy of ["canonicalTransactions.js","services/inventory.js","productImportExport.js","integrationDispatcher.js","createInventoryMovement"]) assert.equal(server.includes(legacy),false,legacy);
 });
 
 test("phase 4 route tree has no direct business-table mutation SQL outside explicit infrastructure/protocol allowlist",()=>{
@@ -68,4 +68,14 @@ test("phase 4 route tree has no direct business-table mutation SQL outside expli
     const source=read(`server/routes/${name}`);
     assert.equal(mutation.test(source),false,`${name} contains direct business mutation SQL`);
   }
+});
+
+
+test("phase 4 payment and invoice services contain transport/read primitives only",()=>{
+  const payment=read("server/services/paymentAttempts.js");
+  const delivery=read("server/services/invoiceDelivery.js");
+  assert.equal(/INSERT\\s+INTO|UPDATE\\s+payment_attempts|DELETE\\s+FROM/i.test(payment),false);
+  for(const business of ["sales","sale_items","customers","createInvoiceDeliveryLink","resendInvoiceByChannel"]) assert.equal(delivery.includes(business),false,business);
+  assert.match(delivery,/sendSmsViaProvider/);
+  assert.match(delivery,/sendEmailViaProvider/);
 });
