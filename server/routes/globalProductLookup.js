@@ -120,6 +120,8 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
         packageKey: entry.key,
         displayName: manifestConnector.displayName || entry.name,
         configKey,
+        targetObjectKey: manifestConnector.targetObjectKey || null,
+        categoryObjectKey: manifestConnector.categoryObjectKey || null,
         installed,
         licensed,
         enabled: stored?.active !== false && config.enabled !== false,
