@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { getCompanyEntitlements, mergeEntitlements, normaliseEntitlements } from "../services/licensing.js";
 import { reconcileCompanyPackageEntitlements } from "../services/packageEntitlements.js";
 import { createAuditWriter } from "../services/auditLog.js";
+import { getJarvesLicenceState, setJarvesAllowance, JARVES_ALLOWANCE_RESULTS } from "../services/jarvis/licensing.js";
 import {
   DUPLICATE_EMAIL_MESSAGE,
   findNormalizedEmailConflict,
@@ -278,13 +279,8 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
 
   router.get("/superadmin/companies/:id/jarves-licence", async (req,res) => {
     try {
-      const [settings, enabled] = await Promise.all([
-        db("SELECT jarves_licence_users FROM company_settings WHERE company_id=$1 LIMIT 1", [req.params.id]),
-        db("SELECT COUNT(*)::int AS count FROM users WHERE company_id=$1 AND active=true AND jarves_enabled=true", [req.params.id]),
-      ]);
-      const allowance = Math.max(0, Number(settings.rows[0]?.jarves_licence_users) || 0);
-      const enabledUsers = Number(enabled.rows[0]?.count) || 0;
-      res.json({ success: true, data: { allowance, enabledUsers, seatsRemaining: Math.max(0, allowance - enabledUsers) } });
+      const state = await getJarvesLicenceState(db, req.params.id);
+      res.json({ success: true, data: state });
     } catch (error) {
       res.status(500).json({ success: false, message: "Unable to load JARVES licence allocation" });
     }
@@ -293,19 +289,13 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
   router.put("/superadmin/companies/:id/jarves-licence", async (req,res) => {
     const allowance = Math.max(0, Math.trunc(Number(req.body?.allowance) || 0));
     try {
-      const enabled = await db("SELECT COUNT(*)::int AS count FROM users WHERE company_id=$1 AND active=true AND jarves_enabled=true", [req.params.id]);
-      const enabledUsers = Number(enabled.rows[0]?.count) || 0;
-      if (allowance < enabledUsers) {
-        return res.status(409).json({ success: false, message: `Cannot reduce JARVES seats below ${enabledUsers} enabled user${enabledUsers === 1 ? "" : "s"}` });
+      const result = await setJarvesAllowance(db, req.params.id, allowance, req.user.id);
+      if (result === JARVES_ALLOWANCE_RESULTS.ALLOWANCE_BELOW_ENABLED) {
+        const state = await getJarvesLicenceState(db, req.params.id);
+        return res.status(409).json({ success: false, message: `Cannot reduce JARVES seats below ${state.enabledUsers} enabled user${state.enabledUsers === 1 ? "" : "s"}` });
       }
-      const result = await db(
-        `INSERT INTO company_settings(company_id,jarves_licence_users)
-         VALUES($1,$2)
-         ON CONFLICT(company_id) DO UPDATE SET jarves_licence_users=EXCLUDED.jarves_licence_users,updated_at=NOW()
-         RETURNING jarves_licence_users`,
-        [req.params.id, allowance]
-      );
-      res.json({ success: true, data: { allowance: Number(result.rows[0]?.jarves_licence_users) || 0, enabledUsers, seatsRemaining: Math.max(0, allowance - enabledUsers) } });
+      const state = await getJarvesLicenceState(db, req.params.id);
+      res.json({ success: true, data: state });
     } catch (error) {
       res.status(500).json({ success: false, message: "Unable to update JARVES licence allocation" });
     }
