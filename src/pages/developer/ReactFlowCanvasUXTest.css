@@ -94,10 +94,8 @@
 .rfux-scroll-surface {
   position: absolute;
   inset: 0;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  scrollbar-width: auto;
 }
 
 .rfux-scroll-surface::-webkit-scrollbar {
@@ -121,6 +119,8 @@
 
 .rfux-canvas-stage {
   position: relative;
+  width: 100% !important;
+  height: 100% !important;
   min-width: 100%;
   min-height: 100%;
 }
