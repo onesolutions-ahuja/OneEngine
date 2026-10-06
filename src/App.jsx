@@ -2341,7 +2341,7 @@ function Desktop({ onLock, onSignOut }) {
             onNavigate={openItem}
           />
         ) : activeApp === 'sales' ? (
-          <SalesPage initialObjectKey="sale" appKey="sales" />
+          <SalesPage initialObjectKey="sale_ledger" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
           <SupplierReturnsPage />
         ) : activeApp === 'products' ? (
