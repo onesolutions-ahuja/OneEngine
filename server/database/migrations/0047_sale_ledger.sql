@@ -1,6 +1,6 @@
 -- Canonical Sale Ledger migration.
--- Non-destructive first stage: populate the canonical ledger while legacy tables
--- remain available until all runtime references have been migrated.
+-- Stage 1 preserves every existing sales identifier while moving sale headers,
+-- lines, sale-linked payments and refunds into one physical ledger table.
 
 CREATE TABLE IF NOT EXISTS sale_ledger (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -10,18 +10,18 @@ CREATE TABLE IF NOT EXISTS sale_ledger (
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
   product_id UUID REFERENCES products(id) ON DELETE SET NULL,
+
   sale_id UUID,
   return_id UUID,
-
   transaction_id UUID NOT NULL DEFAULT gen_random_uuid(),
   source_record_id UUID,
-  source_record_type VARCHAR(30) NOT NULL DEFAULT 'SALE',
+  source_record_type VARCHAR(30) NOT NULL DEFAULT 'SALE_HEADER',
 
   receipt_number VARCHAR(100),
   product_name VARCHAR(255),
   quantity NUMERIC(12,3),
-  line_count INTEGER,
   unit_price NUMERIC(12,2),
+  line_count INTEGER,
   subtotal NUMERIC(12,2),
   tax NUMERIC(12,2),
   discount NUMERIC(12,2),
@@ -61,111 +61,121 @@ CREATE TABLE IF NOT EXISTS sale_ledger (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sale_ledger_transaction ON sale_ledger(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_sale_ledger_sale ON sale_ledger(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_ledger_company_store_date ON sale_ledger(company_id, store_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sale_ledger_product ON sale_ledger(product_id);
 CREATE INDEX IF NOT EXISTS idx_sale_ledger_type ON sale_ledger(company_id, transaction_type, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_sale_ledger_client_request
   ON sale_ledger(company_id, client_request_id)
   WHERE client_request_id IS NOT NULL AND source_record_type='SALE_HEADER';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sale_ledger_idempotency
+  ON sale_ledger(company_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL AND source_record_type='PAYMENT';
 
--- One canonical ledger row per historical sale line.
+-- Preserve every historical sale header using the SAME id.
 INSERT INTO sale_ledger (
-  company_id, store_id, terminal_id, user_id, customer_id, product_id,
-  transaction_id, source_record_id, source_record_type,
-  receipt_number, product_name, quantity, unit_price, subtotal, tax, discount, total, net_amount,
+  id, company_id, store_id, terminal_id, user_id, customer_id,
+  sale_id, transaction_id, source_record_id, source_record_type,
+  receipt_number, line_count, subtotal, tax, discount, total, net_amount,
+  transaction_type, status, payment_data,
+  offline_created, sync_status, client_request_id, client_request_fingerprint, original_transaction_id,
+  created_at, completed_at, migrated_at
+)
+SELECT
+  s.id, s.company_id, s.store_id, s.terminal_id, s.user_id, s.customer_id,
+  s.id, s.id, s.id, 'SALE_HEADER',
+  s.receipt_number, COALESCE(s.line_count,0), s.subtotal, s.tax, s.discount, s.total, COALESCE(s.net_amount,s.total),
+  COALESCE(s.transaction_type,'SALE'), s.status,
+  COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'id', p.id,
+      'method', p.payment_method,
+      'amount', p.amount,
+      'status', p.status,
+      'reference', p.reference,
+      'provider', p.provider,
+      'providerTransactionId', p.provider_transaction_id,
+      'direction', p.direction
+    ) ORDER BY p.created_at,p.id)
+    FROM payments p
+    WHERE p.sale_id=s.id OR p.transaction_id=s.id
+  ), '[]'::jsonb),
+  COALESCE(s.offline_created,FALSE), s.sync_status, s.client_request_id, s.client_request_fingerprint, s.original_transaction_id,
+  s.created_at, s.completed_at, NOW()
+FROM sales s
+ON CONFLICT (id) DO NOTHING;
+
+-- Preserve each historical line using the SAME sale_item id.
+INSERT INTO sale_ledger (
+  id, company_id, store_id, terminal_id, user_id, customer_id, product_id,
+  sale_id, transaction_id, source_record_id, source_record_type,
+  receipt_number, product_name, quantity, unit_price, tax, discount, total,
   transaction_type, item_type, status,
-  payment_method, payment_reference, payment_status, payment_data,
   modifier_data, bundle_components,
-  offline_created, sync_status, client_request_id, client_request_fingerprint, original_transaction_id,
+  offline_created, sync_status, original_transaction_id,
   created_at, completed_at, migrated_at
 )
 SELECT
-  s.company_id, s.store_id, s.terminal_id, s.user_id, s.customer_id, si.product_id,
-  s.id, si.id, 'SALE_LINE',
-  s.receipt_number, si.product_name, si.quantity, si.unit_price, s.subtotal, si.tax, si.discount, si.total,
-  COALESCE(s.net_amount, s.total),
-  COALESCE(s.transaction_type, 'SALE'), si.item_type, s.status,
-  p.first_payment_method, p.first_reference, p.first_status, COALESCE(p.payment_data, '[]'::jsonb),
-  COALESCE(si.modifier_data, '[]'::jsonb), COALESCE(si.bundle_components, '[]'::jsonb),
-  COALESCE(s.offline_created, FALSE), s.sync_status, s.client_request_id, s.client_request_fingerprint, s.original_transaction_id,
+  si.id, s.company_id, s.store_id, s.terminal_id, s.user_id, s.customer_id, si.product_id,
+  s.id, s.id, si.id, 'SALE_LINE',
+  s.receipt_number, si.product_name, si.quantity, si.unit_price, si.tax, si.discount, si.total,
+  COALESCE(s.transaction_type,'SALE'), si.item_type, s.status,
+  COALESCE(si.modifier_data,'[]'::jsonb), COALESCE(si.bundle_components,'[]'::jsonb),
+  COALESCE(s.offline_created,FALSE), s.sync_status, s.original_transaction_id,
   s.created_at, s.completed_at, NOW()
-FROM sales s
-JOIN sale_items si ON si.sale_id=s.id
-LEFT JOIN LATERAL (
-  SELECT
-    MIN(pay.payment_method) AS first_payment_method,
-    MIN(pay.reference) AS first_reference,
-    MIN(pay.status) AS first_status,
-    jsonb_agg(jsonb_build_object(
-      'id', pay.id,
-      'method', pay.payment_method,
-      'amount', pay.amount,
-      'status', pay.status,
-      'reference', pay.reference,
-      'provider', pay.provider,
-      'providerTransactionId', pay.provider_transaction_id,
-      'direction', pay.direction
-    ) ORDER BY pay.created_at, pay.id) AS payment_data
-  FROM payments pay
-  WHERE pay.sale_id=s.id OR pay.transaction_id=s.id
-) p ON TRUE
-ON CONFLICT (source_record_type, source_record_id) DO NOTHING;
+FROM sale_items si
+JOIN sales s ON s.id=si.sale_id
+ON CONFLICT (id) DO NOTHING;
 
--- Preserve historical sale headers which legitimately have no line rows.
+-- Sale-linked tender rows also live in the same ledger and keep their IDs.
 INSERT INTO sale_ledger (
-  company_id, store_id, terminal_id, user_id, customer_id,
-  transaction_id, source_record_id, source_record_type,
-  receipt_number, subtotal, tax, discount, total, net_amount,
-  transaction_type, status,
-  payment_method, payment_reference, payment_status, payment_data,
-  offline_created, sync_status, client_request_id, client_request_fingerprint, original_transaction_id,
+  id, company_id, store_id, terminal_id, customer_id,
+  sale_id, transaction_id, source_record_id, source_record_type,
+  transaction_type, status, payment_method, direction, reference, amount,
+  provider, provider_transaction_id, idempotency_key,
   created_at, completed_at, migrated_at
 )
 SELECT
-  s.company_id, s.store_id, s.terminal_id, s.user_id, s.customer_id,
-  s.id, s.id, 'SALE_HEADER',
-  s.receipt_number, s.subtotal, s.tax, s.discount, s.total, COALESCE(s.net_amount, s.total),
-  COALESCE(s.transaction_type, 'SALE'), s.status,
-  p.first_payment_method, p.first_reference, p.first_status, COALESCE(p.payment_data, '[]'::jsonb),
-  COALESCE(s.offline_created, FALSE), s.sync_status, s.client_request_id, s.client_request_fingerprint, s.original_transaction_id,
-  s.created_at, s.completed_at, NOW()
-FROM sales s
-LEFT JOIN sale_items si ON si.sale_id=s.id
-LEFT JOIN LATERAL (
-  SELECT
-    MIN(pay.payment_method) AS first_payment_method,
-    MIN(pay.reference) AS first_reference,
-    MIN(pay.status) AS first_status,
-    jsonb_agg(jsonb_build_object(
-      'id', pay.id,
-      'method', pay.payment_method,
-      'amount', pay.amount,
-      'status', pay.status,
-      'reference', pay.reference,
-      'provider', pay.provider,
-      'providerTransactionId', pay.provider_transaction_id,
-      'direction', pay.direction
-    ) ORDER BY pay.created_at, pay.id) AS payment_data
-  FROM payments pay
-  WHERE pay.sale_id=s.id OR pay.transaction_id=s.id
-) p ON TRUE
-WHERE si.id IS NULL
-ON CONFLICT (source_record_type, source_record_id) DO NOTHING;
+  p.id,
+  COALESCE(p.company_id,s.company_id),
+  COALESCE(p.store_id,s.store_id),
+  s.terminal_id,
+  COALESCE(p.customer_id,s.customer_id),
+  COALESCE(p.sale_id,p.transaction_id),
+  COALESCE(p.transaction_id,p.sale_id),
+  p.id,
+  'PAYMENT',
+  'PAYMENT',
+  p.status,
+  p.payment_method,
+  p.direction,
+  p.reference,
+  p.amount,
+  p.provider,
+  p.provider_transaction_id,
+  p.idempotency_key,
+  p.created_at,
+  p.created_at,
+  NOW()
+FROM payments p
+LEFT JOIN sales s ON s.id=COALESCE(p.sale_id,p.transaction_id)
+WHERE p.sale_id IS NOT NULL OR p.transaction_id IS NOT NULL
+ON CONFLICT (id) DO NOTHING;
 
--- Refunds become ledger entries rather than a separate business object.
+-- Refunds become negative sale-ledger entries and keep their historical IDs.
 INSERT INTO sale_ledger (
-  company_id, store_id, terminal_id, user_id, customer_id,
-  transaction_id, source_record_id, source_record_type,
-  receipt_number, quantity, total, net_amount,
+  id, company_id, store_id, terminal_id, user_id, customer_id,
+  sale_id, return_id, transaction_id, source_record_id, source_record_type,
+  receipt_number, quantity, amount, total, net_amount,
   transaction_type, status, payment_method, reason,
   original_transaction_id, created_at, completed_at, migrated_at
 )
 SELECT
-  s.company_id, s.store_id, s.terminal_id, r.user_id, s.customer_id,
-  s.id, r.id, 'REFUND',
-  s.receipt_number, -1, -ABS(r.amount), -ABS(r.amount),
+  r.id, s.company_id, s.store_id, s.terminal_id, r.user_id, s.customer_id,
+  s.id, r.return_id, s.id, r.id, 'REFUND',
+  s.receipt_number, -1, -ABS(r.amount), -ABS(r.amount), -ABS(r.amount),
   'SALE_RETURN', 'completed', r.payment_method, r.reason,
   s.id, r.created_at, r.created_at, NOW()
 FROM refunds r
 JOIN sales s ON s.id=r.sale_id
-ON CONFLICT (source_record_type, source_record_id) DO NOTHING;
+ON CONFLICT (id) DO NOTHING;
