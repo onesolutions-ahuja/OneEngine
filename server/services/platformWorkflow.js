@@ -1356,27 +1356,28 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       required: ["connectionId", "operation"],
     },
     validation: (action) => {
-      if (typeof action?.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
-        throw new Error("Call Connector requires a valid connectionId");
-      }
-      if (typeof action?.operation !== "string" || !/^[a-zA-Z0-9_.-]{1,100}$/.test(action.operation)) {
-        throw new Error("Call Connector requires a valid operation key");
-      }
+      if (typeof action?.connectionId !== "string" && typeof action?.connectionId !== "object") throw new Error("Call Connector requires a connectionId or resource binding");
+      if (typeof action?.operation !== "string" && typeof action?.operation !== "object") throw new Error("Call Connector requires an operation key or resource binding");
       if (action.input !== undefined && (!action.input || typeof action.input !== "object" || Array.isArray(action.input))) {
         throw new Error("Call Connector input must be an object");
       }
     },
     async: false,
     requiredPermissions: ["integration.manage"],
-    executor: async ({ action, db, companyId, req }) => {
+    executor: async ({ action, db, companyId, req, workflowVariables, record, object }) => {
+      const context = { workflowVariables, record, object, req };
+      const connectionId = String(resolveConfiguredResource(action.connectionId, context, { preserveMissing: false }) || "").trim();
+      const operation = String(resolveConfiguredResource(action.operation, context, { preserveMissing: false }) || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) throw new Error("Call Connector resolved an invalid connectionId");
+      if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(operation)) throw new Error("Call Connector resolved an invalid operation key");
       const execute = createConnectorActionExecutor({ db });
       return {
         status: "completed",
         ...(await execute({
           companyId: companyId || req?.user?.companyId,
-          connectionId: action.connectionId,
-          operation: action.operation,
-          input: action.input || {},
+          connectionId,
+          operation,
+          input: resolveFieldValueMap(action.input || {}, context) || {},
           platformCredentialAccess:
             Array.isArray(req?.user?.permissions) && req.user.permissions.includes("oneengine.manage"),
           actorUserId: req?.user?.id || null,
