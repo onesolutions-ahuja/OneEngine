@@ -1060,20 +1060,32 @@
       "buttonKey": "till_open_drawer",
       "label": "Open Drawer",
       "targetType": "workflow",
-      "targetKey": "Open Drawer",
-      "placement": "till_action",
-      "requiredPermission": "workflow.execute",
-      "inputMappings": {}
+      "targetKey": "OneTill - Open Drawer",
+      "placement": "till_action_bar",
+      "requiredPermission": "cash.open_drawer",
+      "inputMappings": {},
+      "actionKey": "till.open_drawer",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "open_drawer",
+        "icon": "archive-open",
+        "order": 100
+      }
     },
     {
       "objectKey": "sale",
       "buttonKey": "till_petty_cash_submit",
-      "label": "Petty Cash",
+      "label": "Record Petty Cash",
       "targetType": "workflow",
-      "targetKey": "Record Petty Cash",
-      "placement": "till_action",
-      "requiredPermission": "workflow.execute",
-      "inputMappings": {}
+      "targetKey": "OneTill - Record Petty Cash",
+      "placement": "till_internal",
+      "requiredPermission": "cash.payout",
+      "inputMappings": {},
+      "actionKey": "till_petty_cash_submit",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "petty_submit"
+      }
     },
     {
       "objectKey": "sale",
@@ -1114,6 +1126,480 @@
       "placement": "record_action",
       "requiredPermission": "workflow.execute",
       "inputMappings": {}
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_session",
+      "label": "Till",
+      "actionKey": "till.session",
+      "placement": "till_action_header",
+      "requiredPermission": "till.open",
+      "targetType": "modal",
+      "targetKey": "till",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "till_session",
+        "icon": "badge-pound-sterling",
+        "order": 10,
+        "modal": "till"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_customer",
+      "label": "Customer",
+      "actionKey": "till.customer",
+      "placement": "till_action_header",
+      "requiredPermission": "customer.view",
+      "targetType": "modal",
+      "targetKey": "customer",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "customer",
+        "icon": "user-round",
+        "order": 20,
+        "modal": "customer"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_hold",
+      "label": "Hold",
+      "actionKey": "till.hold",
+      "placement": "till_action_bar",
+      "requiredPermission": "sale.hold",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Hold Sale",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "hold",
+        "icon": "pause",
+        "order": 10
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_resume",
+      "label": "Resume",
+      "actionKey": "till.resume",
+      "placement": "till_action_bar",
+      "requiredPermission": "sale.hold",
+      "targetType": "modal",
+      "targetKey": "held",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "resume",
+        "icon": "file-text",
+        "order": 20,
+        "modal": "held",
+        "consumeButtonKey": "till_resume_consume"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_returns",
+      "label": "Returns",
+      "actionKey": "till.returns",
+      "placement": "till_action_bar",
+      "requiredPermission": "returns.create",
+      "targetType": "navigation",
+      "targetKey": "returns",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "returns",
+        "icon": "refresh-cw",
+        "order": 24,
+        "route": "returns"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_exchange",
+      "label": "Exchange",
+      "actionKey": "till.exchange",
+      "placement": "till_action_bar",
+      "requiredPermission": "returns.create",
+      "targetType": "navigation",
+      "targetKey": "exchange",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "exchange",
+        "icon": "arrow-left-right",
+        "order": 26,
+        "route": "exchange"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_layaway",
+      "label": "Layaway",
+      "actionKey": "till.layaway",
+      "placement": "till_action_bar",
+      "requiredPermission": "layaway.view",
+      "targetType": "navigation",
+      "targetKey": "layaway",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "layaway",
+        "icon": "layers",
+        "order": 28,
+        "route": "layaway"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_customer_action",
+      "label": "Customer",
+      "actionKey": "till.customer_action",
+      "placement": "till_action_bar",
+      "requiredPermission": "customer.view",
+      "targetType": "modal",
+      "targetKey": "customer",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "customer",
+        "icon": "user-round",
+        "order": 30,
+        "modal": "customer"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_discount",
+      "label": "Discount",
+      "actionKey": "till.discount",
+      "placement": "till_action_bar",
+      "requiredPermission": "sale.discount",
+      "targetType": "modal",
+      "targetKey": "discount",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "discount",
+        "icon": "tag",
+        "order": 40,
+        "modal": "discount"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_void",
+      "label": "Void",
+      "actionKey": "till.void",
+      "placement": "till_action_bar",
+      "requiredPermission": "sale.void",
+      "targetType": "command",
+      "targetKey": "clear_sale",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "void",
+        "icon": "x",
+        "order": 50,
+        "command": "clear_sale"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_misc_item",
+      "label": "Misc Item",
+      "actionKey": "till.misc_item",
+      "placement": "till_action_bar",
+      "requiredPermission": "sale.create",
+      "targetType": "modal",
+      "targetKey": "misc",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "misc",
+        "icon": "shopping-bag",
+        "order": 60,
+        "modal": "misc",
+        "submitButtonKey": "till_misc_line_build"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_petty_cash",
+      "label": "Petty Cash",
+      "actionKey": "till.petty_cash",
+      "placement": "till_action_bar",
+      "requiredPermission": "cash.payout",
+      "targetType": "modal",
+      "targetKey": "petty",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "petty",
+        "icon": "hand-coins",
+        "order": 70,
+        "modal": "petty",
+        "submitButtonKey": "till_petty_cash_submit"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_print",
+      "label": "Print",
+      "actionKey": "till.print",
+      "placement": "till_action_bar",
+      "requiredPermission": "sale.invoice.reprint",
+      "targetType": "command",
+      "targetKey": "print_receipt",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "print",
+        "icon": "printer",
+        "order": 80,
+        "command": "print_receipt",
+        "recordContext": "last_sale"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_receipt_qr",
+      "label": "Receipt QR",
+      "actionKey": "till.receipt_qr",
+      "placement": "till_action_bar",
+      "requiredPermission": "sale.view",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Receipt QR",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "receipt_qr",
+        "icon": "qr-code",
+        "order": 90,
+        "recordContext": "last_sale",
+        "policyButtonKey": "till_receipt_qr_policy",
+        "revokeButtonKey": "till_receipt_qr_revoke",
+        "policyEvent": "MANUAL"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_customer_display",
+      "label": "Customer Display",
+      "actionKey": "till.customer_display",
+      "placement": "till_action_bar",
+      "requiredPermission": "sale.view",
+      "targetType": "command",
+      "targetKey": "customer_display",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "customer_display",
+        "icon": "monitor",
+        "order": 95,
+        "command": "customer_display"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_price_override",
+      "label": "Change Price",
+      "actionKey": "till.price_override",
+      "placement": "till_line_action",
+      "requiredPermission": "sale.price_change",
+      "targetType": "modal",
+      "targetKey": "price_override",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "price_override",
+        "icon": "pencil",
+        "order": 10,
+        "modal": "price_override",
+        "submitButtonKey": "till_price_override_apply"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_open_session",
+      "label": "Open Till",
+      "actionKey": "till.open_session",
+      "placement": "till_session",
+      "requiredPermission": "till.open",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Open Till Session",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "open_till",
+        "icon": "badge-pound-sterling",
+        "order": 10,
+        "modal": "till"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_close_session",
+      "label": "Close Till",
+      "actionKey": "till.close_session",
+      "placement": "till_session",
+      "requiredPermission": "till.close",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Close Till Session",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "close_till",
+        "icon": "x",
+        "order": 20,
+        "modal": "till"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_cash_in",
+      "label": "Cash In",
+      "actionKey": "till.cash_in",
+      "placement": "till_session",
+      "requiredPermission": "cash.adjustment",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Cash In",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "cash_in",
+        "icon": "plus",
+        "order": 30,
+        "modal": "till"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_cash_out",
+      "label": "Cash Out",
+      "actionKey": "till.cash_out",
+      "placement": "till_session",
+      "requiredPermission": "cash.payout",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Cash Out",
+      "variant": "secondary",
+      "config": {
+        "uiAction": "cash_out",
+        "icon": "minus",
+        "order": 40,
+        "modal": "till"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_resume_consume",
+      "label": "Consume Held Sale",
+      "actionKey": "till_resume_consume",
+      "placement": "till_internal",
+      "requiredPermission": "sale.hold",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Consume Held Sale",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "resume_commit"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_price_override_apply",
+      "label": "Apply Price Override",
+      "actionKey": "till_price_override_apply",
+      "placement": "till_internal",
+      "requiredPermission": "sale.price_change",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Validate Price Override",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "price_override_submit"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_age_preflight",
+      "label": "Checkout Age Preflight",
+      "actionKey": "till_age_preflight",
+      "placement": "till_checkout_preflight",
+      "requiredPermission": "sale.create",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Checkout Age Preflight",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "checkout_preflight",
+        "modalOnFalse": "age"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_payment_process",
+      "label": "Select Payment Mode",
+      "actionKey": "till_payment_process",
+      "placement": "till_internal",
+      "requiredPermission": "sale.create",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Process Payment",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "payment_process"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_pricing_calculate",
+      "label": "Calculate Sale Pricing",
+      "actionKey": "till_pricing_calculate",
+      "placement": "till_internal",
+      "requiredPermission": "sale.create",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Calculate Sale Pricing",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "pricing_calculate"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_split_payment_validate",
+      "label": "Validate Split Payment",
+      "actionKey": "till_split_payment_validate",
+      "placement": "till_internal",
+      "requiredPermission": "sale.create",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Validate Split Payment",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "split_validate"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_misc_line_build",
+      "label": "Build Misc Sale Line",
+      "actionKey": "till_misc_line_build",
+      "placement": "till_internal",
+      "requiredPermission": "sale.create",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Build Misc Sale Line",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "misc_submit"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_receipt_qr_policy",
+      "label": "Receipt QR Policy",
+      "actionKey": "till_receipt_qr_policy",
+      "placement": "till_internal",
+      "requiredPermission": "sale.view",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Receipt QR Policy",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "receipt_policy"
+      }
+    },
+    {
+      "objectKey": "sale",
+      "buttonKey": "till_receipt_qr_revoke",
+      "label": "Revoke Receipt QR",
+      "actionKey": "till_receipt_qr_revoke",
+      "placement": "till_internal",
+      "requiredPermission": "sale.view",
+      "targetType": "workflow",
+      "targetKey": "OneTill - Revoke Receipt QR",
+      "variant": "secondary",
+      "config": {
+        "runtimeRole": "receipt_revoke"
+      }
     }
   ],
   "workflows": [
@@ -4621,6 +5107,2811 @@
               },
               "expiryMinutes": {
                 "path": "variables.expiryMinutes"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Hold Sale",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_HOLD_SALE",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Hold Sale",
+        "inputContract": [
+          {
+            "name": "userId",
+            "label": "User",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "customerId",
+            "label": "Customer",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "items",
+            "label": "Items",
+            "type": "object",
+            "required": true
+          },
+          {
+            "name": "discountType",
+            "label": "Discount Type",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "discountValue",
+            "label": "Discount Value",
+            "type": "number",
+            "required": false
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.userId",
+            "apiName": "userId",
+            "label": "User",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.customerId",
+            "apiName": "customerId",
+            "label": "Customer",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.items",
+            "apiName": "items",
+            "label": "Items",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.discountType",
+            "apiName": "discountType",
+            "label": "Discount Type",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.discountValue",
+            "apiName": "discountValue",
+            "label": "Discount Value",
+            "type": "Variable",
+            "dataType": "Number",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "create_held_sale",
+            "label": "Create Held Sale",
+            "apiName": "create_held_sale",
+            "key": "CREATE_RECORD",
+            "objectKey": "held_sale",
+            "fieldValues": {
+              "user_id": {
+                "path": "$record.userId"
+              },
+              "customer_id": {
+                "path": "$record.customerId"
+              },
+              "items": {
+                "path": "$record.items"
+              },
+              "discount_type": {
+                "path": "$record.discountType"
+              },
+              "discount_value": {
+                "path": "$record.discountValue"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Consume Held Sale",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_CONSUME_HELD_SALE",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Consume Held Sale",
+        "inputContract": [
+          {
+            "name": "heldSaleId",
+            "label": "Held Sale",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.heldSaleId",
+            "apiName": "heldSaleId",
+            "label": "Held Sale",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "delete_held_sale",
+            "label": "Delete Held Sale",
+            "apiName": "delete_held_sale",
+            "key": "DELETE_RECORD",
+            "objectKey": "held_sale",
+            "recordId": {
+              "path": "$record.heldSaleId"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Open Drawer",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_OPEN_DRAWER",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Open Drawer",
+        "inputContract": [
+          {
+            "name": "tillSessionId",
+            "label": "Till Session",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "userId",
+            "label": "User",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "terminalId",
+            "label": "Terminal",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "label": "Reason",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.tillSessionId",
+            "apiName": "tillSessionId",
+            "label": "Till Session",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.userId",
+            "apiName": "userId",
+            "label": "User",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.terminalId",
+            "apiName": "terminalId",
+            "label": "Terminal",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.reason",
+            "apiName": "reason",
+            "label": "Reason",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "create_drawer_open",
+            "label": "Record Drawer Open",
+            "apiName": "create_drawer_open",
+            "key": "CREATE_RECORD",
+            "objectKey": "cash_movement",
+            "fieldValues": {
+              "till_session_id": {
+                "path": "$record.tillSessionId"
+              },
+              "user_id": {
+                "path": "$record.userId"
+              },
+              "terminal_id": {
+                "path": "$record.terminalId"
+              },
+              "type": "drawer_open",
+              "amount": 0,
+              "reason": {
+                "path": "$record.reason"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Open Till Session",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_OPEN_SESSION",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Open Till Session",
+        "inputContract": [
+          {
+            "name": "terminalId",
+            "label": "Till",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "userId",
+            "label": "User",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "openingCash",
+            "label": "Opening Cash",
+            "type": "currency",
+            "required": true
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.terminalId",
+            "apiName": "terminalId",
+            "label": "Till",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.userId",
+            "apiName": "userId",
+            "label": "User",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.openingCash",
+            "apiName": "openingCash",
+            "label": "Opening Cash",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "create_till_session",
+            "label": "Create Till Session",
+            "apiName": "create_till_session",
+            "key": "CREATE_RECORD",
+            "objectKey": "till_session",
+            "fieldValues": {
+              "terminal_id": {
+                "path": "$record.terminalId"
+              },
+              "user_id": {
+                "path": "$record.userId"
+              },
+              "opening_cash": {
+                "path": "$record.openingCash"
+              },
+              "status": "open"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Cash In",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_CASH_IN",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Cash In",
+        "inputContract": [
+          {
+            "name": "tillSessionId",
+            "label": "Till Session",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "userId",
+            "label": "User",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "label": "Amount",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "label": "Reason",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.tillSessionId",
+            "apiName": "tillSessionId",
+            "label": "Till Session",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.userId",
+            "apiName": "userId",
+            "label": "User",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.amount",
+            "apiName": "amount",
+            "label": "Amount",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.reason",
+            "apiName": "reason",
+            "label": "Reason",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "create_cash_in",
+            "label": "Create Cash In",
+            "apiName": "create_cash_in",
+            "key": "CREATE_RECORD",
+            "objectKey": "cash_movement",
+            "fieldValues": {
+              "till_session_id": {
+                "path": "$record.tillSessionId"
+              },
+              "user_id": {
+                "path": "$record.userId"
+              },
+              "type": "cash_in",
+              "amount": {
+                "path": "$record.amount"
+              },
+              "reason": {
+                "path": "$record.reason"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Cash Out",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_CASH_OUT",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Cash Out",
+        "inputContract": [
+          {
+            "name": "tillSessionId",
+            "label": "Till Session",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "userId",
+            "label": "User",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "label": "Amount",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "label": "Reason",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.tillSessionId",
+            "apiName": "tillSessionId",
+            "label": "Till Session",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.userId",
+            "apiName": "userId",
+            "label": "User",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.amount",
+            "apiName": "amount",
+            "label": "Amount",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.reason",
+            "apiName": "reason",
+            "label": "Reason",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "create_cash_out",
+            "label": "Create Cash Out",
+            "apiName": "create_cash_out",
+            "key": "CREATE_RECORD",
+            "objectKey": "cash_movement",
+            "fieldValues": {
+              "till_session_id": {
+                "path": "$record.tillSessionId"
+              },
+              "user_id": {
+                "path": "$record.userId"
+              },
+              "type": "cash_out",
+              "amount": {
+                "path": "$record.amount"
+              },
+              "reason": {
+                "path": "$record.reason"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Close Till Session",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_CLOSE_SESSION",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Close Till Session",
+        "inputContract": [
+          {
+            "name": "tillSessionId",
+            "label": "Till Session",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "userId",
+            "label": "Closed By",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "countedCash",
+            "label": "Counted Cash",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "closedAt",
+            "label": "Closed At",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.tillSessionId",
+            "apiName": "tillSessionId",
+            "label": "Till Session",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.userId",
+            "apiName": "userId",
+            "label": "Closed By",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.countedCash",
+            "apiName": "countedCash",
+            "label": "Counted Cash",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.closedAt",
+            "apiName": "closedAt",
+            "label": "Closed At",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "close_till_session",
+            "label": "Close Till Session",
+            "apiName": "close_till_session",
+            "key": "UPDATE_RECORD",
+            "objectKey": "till_session",
+            "recordId": {
+              "path": "$record.tillSessionId"
+            },
+            "fieldValues": {
+              "status": "closed",
+              "closing_cash": {
+                "path": "$record.countedCash"
+              },
+              "closed_by": {
+                "path": "$record.userId"
+              },
+              "closed_at": {
+                "path": "$record.closedAt"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Validate Price Override",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_VALIDATE_PRICE_OVERRIDE",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Validate Price Override",
+        "inputContract": [
+          {
+            "name": "productId",
+            "label": "Product",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "originalPrice",
+            "label": "Original Price",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "requestedPrice",
+            "label": "Requested Price",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "label": "Reason",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "approvedPrice",
+            "label": "Approved Price",
+            "type": "currency",
+            "source": "variables.approvedPrice"
+          },
+          {
+            "name": "approvedReason",
+            "label": "Approved Reason",
+            "type": "text",
+            "source": "variables.approvedReason"
+          }
+        ],
+        "resources": [
+          {
+            "value": "record.productId",
+            "apiName": "productId",
+            "label": "Product",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.originalPrice",
+            "apiName": "originalPrice",
+            "label": "Original Price",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.requestedPrice",
+            "apiName": "requestedPrice",
+            "label": "Requested Price",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.reason",
+            "apiName": "reason",
+            "label": "Reason",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "variables.approvedPrice",
+            "apiName": "approvedPrice",
+            "label": "Approved Price",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.approvedReason",
+            "apiName": "approvedReason",
+            "label": "Approved Reason",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "get_product",
+            "label": "Get Product",
+            "apiName": "get_product",
+            "key": "GET_RECORDS",
+            "objectKey": "product",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.productId"
+                }
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "price_is_valid",
+            "label": "Requested Price Is Valid",
+            "apiName": "price_is_valid",
+            "key": "FORMULA",
+            "resourceName": "priceIsValid",
+            "resultType": "boolean",
+            "expression": "requestedPrice > 0",
+            "inputs": {
+              "requestedPrice": {
+                "path": "$record.requestedPrice"
+              }
+            }
+          },
+          {
+            "id": "validate_price",
+            "label": "Validate Requested Price",
+            "apiName": "validate_price",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "valid",
+                "label": "Valid Price",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.priceIsValid",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "approved_price",
+                  "approved_reason"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid Price",
+            "defaultBranch": [
+              "invalid_price"
+            ]
+          },
+          {
+            "id": "approved_price",
+            "label": "Set Approved Price",
+            "apiName": "approved_price",
+            "key": "ASSIGNMENT",
+            "variableName": "approvedPrice",
+            "variableType": "currency",
+            "operator": "set",
+            "value": {
+              "path": "$record.requestedPrice"
+            }
+          },
+          {
+            "id": "approved_reason",
+            "label": "Set Override Reason",
+            "apiName": "approved_reason",
+            "key": "ASSIGNMENT",
+            "variableName": "approvedReason",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "$record.reason"
+            }
+          },
+          {
+            "id": "invalid_price",
+            "label": "Reject Invalid Price",
+            "apiName": "invalid_price",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Price override must be greater than zero",
+            "errorLocation": "record"
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Record Petty Cash",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_RECORD_PETTY_CASH",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Record Petty Cash",
+        "inputContract": [
+          {
+            "name": "tillSessionId",
+            "label": "Till Session",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "userId",
+            "label": "User",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "label": "Amount",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "label": "Reason",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.tillSessionId",
+            "apiName": "tillSessionId",
+            "label": "Till Session",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.userId",
+            "apiName": "userId",
+            "label": "User",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.amount",
+            "apiName": "amount",
+            "label": "Amount",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.reason",
+            "apiName": "reason",
+            "label": "Reason",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "amount_is_valid",
+            "label": "Petty Cash Amount Is Valid",
+            "apiName": "amount_is_valid",
+            "key": "FORMULA",
+            "resourceName": "amountIsValid",
+            "resultType": "boolean",
+            "expression": "amount > 0",
+            "inputs": {
+              "amount": {
+                "path": "$record.amount"
+              }
+            }
+          },
+          {
+            "id": "validate_amount",
+            "label": "Validate Petty Cash",
+            "apiName": "validate_amount",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "valid",
+                "label": "Valid Amount",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.amountIsValid",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_cash_movement"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid Amount",
+            "defaultBranch": [
+              "invalid_amount"
+            ]
+          },
+          {
+            "id": "create_cash_movement",
+            "label": "Create Cash Movement",
+            "apiName": "create_cash_movement",
+            "key": "CREATE_RECORD",
+            "objectKey": "cash_movement",
+            "fieldValues": {
+              "till_session_id": {
+                "path": "$record.tillSessionId"
+              },
+              "user_id": {
+                "path": "$record.userId"
+              },
+              "type": "cash_out",
+              "amount": {
+                "path": "$record.amount"
+              },
+              "reason": {
+                "path": "$record.reason"
+              }
+            }
+          },
+          {
+            "id": "invalid_amount",
+            "label": "Reject Invalid Amount",
+            "apiName": "invalid_amount",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Petty cash amount must be greater than zero",
+            "errorLocation": "record"
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Checkout Age Preflight",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_CHECKOUT_AGE_PREFLIGHT",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Checkout Age Preflight",
+        "inputContract": [
+          {
+            "name": "basket",
+            "label": "Basket Lines",
+            "type": "collection",
+            "required": true
+          },
+          {
+            "name": "ageVerified",
+            "label": "Age Verified",
+            "type": "boolean",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "requiresAgeVerification",
+            "label": "Requires Age Verification",
+            "type": "boolean",
+            "source": "variables.requiresAgeVerification"
+          },
+          {
+            "name": "allowed",
+            "label": "Allowed",
+            "type": "boolean",
+            "source": "variables.allowed"
+          }
+        ],
+        "resources": [
+          {
+            "value": "record.basket",
+            "apiName": "basket",
+            "label": "Basket Lines",
+            "type": "Variable",
+            "dataType": "Collection",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": true
+          },
+          {
+            "value": "record.ageVerified",
+            "apiName": "ageVerified",
+            "label": "Age Verified",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "variables.requiresAgeVerification",
+            "apiName": "requiresAgeVerification",
+            "label": "Requires Age Verification",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.allowed",
+            "apiName": "allowed",
+            "label": "Allowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "age_start",
+            "label": "1. Start Age Check",
+            "apiName": "age_start",
+            "key": "ASSIGNMENT",
+            "variableName": "requiresAgeVerification",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": false
+          },
+          {
+            "id": "age_loop",
+            "label": "2. Loop Through Basket Lines",
+            "apiName": "age_loop",
+            "key": "LOOP",
+            "collection": "$record.basket",
+            "itemVariable": "ageLine",
+            "bodyBranch": [
+              "age_line_requires",
+              "age_next_required",
+              "age_set_required"
+            ]
+          },
+          {
+            "id": "age_line_requires",
+            "label": "3. Check Line Age Restriction",
+            "apiName": "age_line_requires",
+            "key": "FORMULA",
+            "resourceName": "lineRequiresAge",
+            "resultType": "boolean",
+            "expression": "ageRestricted == true",
+            "inputs": {
+              "ageRestricted": {
+                "path": "variables.ageLine.ageRestricted"
+              }
+            }
+          },
+          {
+            "id": "age_next_required",
+            "label": "4. Keep Any Age Restriction",
+            "apiName": "age_next_required",
+            "key": "FORMULA",
+            "resourceName": "nextRequiresAge",
+            "resultType": "boolean",
+            "expression": "requiresAgeVerification || lineRequiresAge",
+            "inputs": {
+              "requiresAgeVerification": {
+                "path": "variables.requiresAgeVerification"
+              },
+              "lineRequiresAge": {
+                "path": "variables.lineRequiresAge"
+              }
+            }
+          },
+          {
+            "id": "age_set_required",
+            "label": "5. Save Age Requirement",
+            "apiName": "age_set_required",
+            "key": "ASSIGNMENT",
+            "variableName": "requiresAgeVerification",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": {
+              "path": "variables.nextRequiresAge"
+            }
+          },
+          {
+            "id": "age_allowed",
+            "label": "6. Decide Whether Checkout Can Continue",
+            "apiName": "age_allowed",
+            "key": "FORMULA",
+            "resourceName": "allowed",
+            "resultType": "boolean",
+            "expression": "!requiresAgeVerification || ageVerified",
+            "inputs": {
+              "requiresAgeVerification": {
+                "path": "variables.requiresAgeVerification"
+              },
+              "ageVerified": {
+                "path": "$record.ageVerified"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Process Payment",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_PAYMENT_MODE",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Process Payment",
+        "inputContract": [
+          {
+            "name": "paymentMode",
+            "label": "Payment Mode",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "online",
+            "label": "Online",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "customerSelected",
+            "label": "Customer Selected",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "hasGiftCardCode",
+            "label": "Additional Code Supplied",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "cashReceived",
+            "label": "Received Amount",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "total",
+            "label": "Sale Total",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "executeConnector",
+            "label": "Execute Connector",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "currency",
+            "label": "Currency",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "clientRequestId",
+            "label": "Client Request ID",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "terminalId",
+            "label": "Terminal",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "selfCheckout",
+            "label": "Self Checkout",
+            "type": "boolean",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "selectedPaymentMode",
+            "label": "Selected Payment Mode",
+            "type": "text",
+            "source": "variables.selectedPaymentMode"
+          },
+          {
+            "name": "connectorRequired",
+            "label": "Connector Required",
+            "type": "boolean",
+            "source": "variables.connectorRequired"
+          },
+          {
+            "name": "connectorApproved",
+            "label": "Connector Approved",
+            "type": "boolean",
+            "source": "variables.connectorApproved"
+          },
+          {
+            "name": "allowed",
+            "label": "Allowed",
+            "type": "boolean",
+            "source": "variables.allowed"
+          }
+        ],
+        "resources": [
+          {
+            "value": "record.paymentMode",
+            "apiName": "paymentMode",
+            "label": "Payment Mode",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.online",
+            "apiName": "online",
+            "label": "Online",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.customerSelected",
+            "apiName": "customerSelected",
+            "label": "Customer Selected",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.hasGiftCardCode",
+            "apiName": "hasGiftCardCode",
+            "label": "Additional Code Supplied",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.cashReceived",
+            "apiName": "cashReceived",
+            "label": "Received Amount",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.total",
+            "apiName": "total",
+            "label": "Sale Total",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.executeConnector",
+            "apiName": "executeConnector",
+            "label": "Execute Connector",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.currency",
+            "apiName": "currency",
+            "label": "Currency",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.clientRequestId",
+            "apiName": "clientRequestId",
+            "label": "Client Request ID",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.terminalId",
+            "apiName": "terminalId",
+            "label": "Terminal",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.selfCheckout",
+            "apiName": "selfCheckout",
+            "label": "Self Checkout",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "variables.selectedPaymentMode",
+            "apiName": "selectedPaymentMode",
+            "label": "Selected Payment Mode",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.connectorRequired",
+            "apiName": "connectorRequired",
+            "label": "Connector Required",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.connectorApproved",
+            "apiName": "connectorApproved",
+            "label": "Connector Approved",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.allowed",
+            "apiName": "allowed",
+            "label": "Allowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "get_payment_method",
+            "label": "1. Get Payment Method",
+            "apiName": "get_payment_method",
+            "key": "GET_RECORDS",
+            "objectKey": "payment_method",
+            "filters": [
+              {
+                "field": "code",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.paymentMode"
+                }
+              },
+              {
+                "field": "active",
+                "operator": "equals",
+                "value": true
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "set_payment_mode",
+            "label": "2. Set Selected Payment Mode",
+            "apiName": "set_payment_mode",
+            "key": "ASSIGNMENT",
+            "variableName": "selectedPaymentMode",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "$record.paymentMode"
+            }
+          },
+          {
+            "id": "method_found",
+            "label": "3. Confirm Payment Method Exists",
+            "apiName": "method_found",
+            "key": "FORMULA",
+            "resourceName": "methodFound",
+            "resultType": "boolean",
+            "expression": "COALESCE(methodCode,\"\") != \"\"",
+            "inputs": {
+              "methodCode": {
+                "path": "steps.get_payment_method.record.code"
+              }
+            }
+          },
+          {
+            "id": "offline_allowed",
+            "label": "4. Check Online / Offline Eligibility",
+            "apiName": "offline_allowed",
+            "key": "FORMULA",
+            "resourceName": "connectionAllowed",
+            "resultType": "boolean",
+            "expression": "online || allowOffline",
+            "inputs": {
+              "online": {
+                "path": "$record.online"
+              },
+              "allowOffline": {
+                "path": "steps.get_payment_method.record.allow_offline"
+              }
+            }
+          },
+          {
+            "id": "customer_allowed",
+            "label": "5. Check Customer Requirement",
+            "apiName": "customer_allowed",
+            "key": "FORMULA",
+            "resourceName": "customerAllowed",
+            "resultType": "boolean",
+            "expression": "!requiresCustomer || customerSelected",
+            "inputs": {
+              "requiresCustomer": {
+                "path": "steps.get_payment_method.record.config.requiresCustomer"
+              },
+              "customerSelected": {
+                "path": "$record.customerSelected"
+              }
+            }
+          },
+          {
+            "id": "code_allowed",
+            "label": "6. Check Additional Code Requirement",
+            "apiName": "code_allowed",
+            "key": "FORMULA",
+            "resourceName": "codeAllowed",
+            "resultType": "boolean",
+            "expression": "!requiresCode || hasCode",
+            "inputs": {
+              "requiresCode": {
+                "path": "steps.get_payment_method.record.config.requiresGiftCardCode"
+              },
+              "hasCode": {
+                "path": "$record.hasGiftCardCode"
+              }
+            }
+          },
+          {
+            "id": "amount_allowed",
+            "label": "7. Check Received Amount Requirement",
+            "apiName": "amount_allowed",
+            "key": "FORMULA",
+            "resourceName": "amountAllowed",
+            "resultType": "boolean",
+            "expression": "!requiresAmount || received >= total",
+            "inputs": {
+              "requiresAmount": {
+                "path": "steps.get_payment_method.record.config.requiresCashReceived"
+              },
+              "received": {
+                "path": "$record.cashReceived"
+              },
+              "total": {
+                "path": "$record.total"
+              }
+            }
+          },
+          {
+            "id": "connector_required",
+            "label": "8. Read Connector Requirement",
+            "apiName": "connector_required",
+            "key": "FORMULA",
+            "resourceName": "connectorRequired",
+            "resultType": "boolean",
+            "expression": "requiresConnector == true || COALESCE(connectorPackageKey,\"\") != \"\"",
+            "inputs": {
+              "requiresConnector": {
+                "path": "steps.get_payment_method.record.config.requiresConnector"
+              },
+              "connectorPackageKey": {
+                "path": "steps.get_payment_method.record.config.connectorPackageKey"
+              }
+            }
+          },
+          {
+            "id": "precheck_allowed",
+            "label": "9. Validate Payment Method",
+            "apiName": "precheck_allowed",
+            "key": "FORMULA",
+            "resourceName": "precheckAllowed",
+            "resultType": "boolean",
+            "expression": "methodFound && connectionAllowed && customerAllowed && codeAllowed && amountAllowed",
+            "inputs": {
+              "methodFound": {
+                "path": "variables.methodFound"
+              },
+              "connectionAllowed": {
+                "path": "variables.connectionAllowed"
+              },
+              "customerAllowed": {
+                "path": "variables.customerAllowed"
+              },
+              "codeAllowed": {
+                "path": "variables.codeAllowed"
+              },
+              "amountAllowed": {
+                "path": "variables.amountAllowed"
+              }
+            }
+          },
+          {
+            "id": "connector_needed",
+            "label": "10. Decide Whether To Execute Connector",
+            "apiName": "connector_needed",
+            "key": "FORMULA",
+            "resourceName": "connectorNeeded",
+            "resultType": "boolean",
+            "expression": "precheckAllowed && connectorRequired && executeConnector",
+            "inputs": {
+              "precheckAllowed": {
+                "path": "variables.precheckAllowed"
+              },
+              "connectorRequired": {
+                "path": "variables.connectorRequired"
+              },
+              "executeConnector": {
+                "path": "$record.executeConnector"
+              }
+            }
+          },
+          {
+            "id": "connector_decision",
+            "label": "11. Connector Execution Path",
+            "apiName": "connector_decision",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "execute",
+                "label": "Execute Connector",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.connectorNeeded",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "call_payment_connector",
+                  "connector_status",
+                  "set_connector_result"
+                ]
+              }
+            ],
+            "defaultLabel": "No Connector Call",
+            "defaultBranch": [
+              "skip_connector"
+            ]
+          },
+          {
+            "id": "call_payment_connector",
+            "label": "12. Call Payment Connector",
+            "apiName": "call_payment_connector",
+            "key": "CALL_CONNECTOR_CAPABILITY",
+            "packageKey": {
+              "path": "steps.get_payment_method.record.config.connectorPackageKey"
+            },
+            "capability": "payment.sale",
+            "input": {
+              "amount": {
+                "path": "$record.total"
+              },
+              "currency": {
+                "path": "$record.currency"
+              },
+              "idempotencyKey": {
+                "path": "$record.clientRequestId"
+              },
+              "reference": {
+                "path": "$record.clientRequestId"
+              },
+              "terminalId": {
+                "path": "$record.terminalId"
+              },
+              "paymentMode": {
+                "path": "$record.paymentMode"
+              },
+              "selfCheckout": {
+                "path": "$record.selfCheckout"
+              }
+            }
+          },
+          {
+            "id": "connector_status",
+            "label": "13. Check Connector Approval",
+            "apiName": "connector_status",
+            "key": "FORMULA",
+            "resourceName": "connectorWasApproved",
+            "resultType": "boolean",
+            "expression": "available == true && status == \"APPROVED\"",
+            "inputs": {
+              "available": {
+                "path": "steps.call_payment_connector.available"
+              },
+              "status": {
+                "path": "steps.call_payment_connector.result.status"
+              }
+            }
+          },
+          {
+            "id": "set_connector_result",
+            "label": "14. Save Connector Approval",
+            "apiName": "set_connector_result",
+            "key": "ASSIGNMENT",
+            "variableName": "connectorApproved",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": {
+              "path": "variables.connectorWasApproved"
+            }
+          },
+          {
+            "id": "skip_connector",
+            "label": "12A. Connector Call Not Required Yet",
+            "apiName": "skip_connector",
+            "key": "ASSIGNMENT",
+            "variableName": "connectorApproved",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": true
+          },
+          {
+            "id": "final_payment_allowed",
+            "label": "15. Final Payment Decision",
+            "apiName": "final_payment_allowed",
+            "key": "FORMULA",
+            "resourceName": "allowed",
+            "resultType": "boolean",
+            "expression": "precheckAllowed && connectorApproved",
+            "inputs": {
+              "precheckAllowed": {
+                "path": "variables.precheckAllowed"
+              },
+              "connectorApproved": {
+                "path": "variables.connectorApproved"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Calculate Sale Pricing",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_CALCULATE_SALE_PRICING",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Calculate Sale Pricing",
+        "inputContract": [
+          {
+            "name": "lines",
+            "label": "Sale Lines",
+            "type": "collection",
+            "required": true
+          },
+          {
+            "name": "discountType",
+            "label": "Discount Type",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "discountValue",
+            "label": "Discount Value",
+            "type": "currency",
+            "required": false
+          },
+          {
+            "name": "vatEnabled",
+            "label": "VAT Enabled",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "defaultVatRate",
+            "label": "Default VAT Rate",
+            "type": "number",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "grossSubtotal",
+            "label": "Gross Subtotal",
+            "type": "currency",
+            "source": "variables.grossSubtotal"
+          },
+          {
+            "name": "discountAmount",
+            "label": "Discount Amount",
+            "type": "currency",
+            "source": "variables.discountAmount"
+          },
+          {
+            "name": "subtotal",
+            "label": "Subtotal",
+            "type": "currency",
+            "source": "variables.subtotal"
+          },
+          {
+            "name": "vat",
+            "label": "VAT",
+            "type": "currency",
+            "source": "variables.vat"
+          },
+          {
+            "name": "total",
+            "label": "Total",
+            "type": "currency",
+            "source": "variables.total"
+          }
+        ],
+        "resources": [
+          {
+            "value": "record.lines",
+            "apiName": "lines",
+            "label": "Sale Lines",
+            "type": "Variable",
+            "dataType": "Collection",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": true
+          },
+          {
+            "value": "record.discountType",
+            "apiName": "discountType",
+            "label": "Discount Type",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.discountValue",
+            "apiName": "discountValue",
+            "label": "Discount Value",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.vatEnabled",
+            "apiName": "vatEnabled",
+            "label": "VAT Enabled",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.defaultVatRate",
+            "apiName": "defaultVatRate",
+            "label": "Default VAT Rate",
+            "type": "Variable",
+            "dataType": "Number",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "variables.grossSubtotal",
+            "apiName": "grossSubtotal",
+            "label": "Gross Subtotal",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.discountAmount",
+            "apiName": "discountAmount",
+            "label": "Discount Amount",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.subtotal",
+            "apiName": "subtotal",
+            "label": "Subtotal",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.vat",
+            "apiName": "vat",
+            "label": "VAT",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.total",
+            "apiName": "total",
+            "label": "Total",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "start_gross",
+            "label": "1. Start Gross Subtotal",
+            "apiName": "start_gross",
+            "key": "ASSIGNMENT",
+            "variableName": "grossSubtotal",
+            "variableType": "currency",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "sum_lines",
+            "label": "2. Loop Through Sale Lines",
+            "apiName": "sum_lines",
+            "key": "LOOP",
+            "collection": "$record.lines",
+            "itemVariable": "currentLine",
+            "bodyBranch": [
+              "line_gross",
+              "add_line_gross"
+            ]
+          },
+          {
+            "id": "line_gross",
+            "label": "3. Calculate Line Gross",
+            "apiName": "line_gross",
+            "key": "FORMULA",
+            "resourceName": "lineGross",
+            "resultType": "number",
+            "expression": "ROUND(unitPrice * quantity, 2)",
+            "inputs": {
+              "unitPrice": {
+                "path": "variables.currentLine.unitPrice"
+              },
+              "quantity": {
+                "path": "variables.currentLine.quantity"
+              }
+            }
+          },
+          {
+            "id": "add_line_gross",
+            "label": "4. Add Line To Gross Subtotal",
+            "apiName": "add_line_gross",
+            "key": "ASSIGNMENT",
+            "variableName": "grossSubtotal",
+            "variableType": "currency",
+            "operator": "add",
+            "value": {
+              "path": "variables.lineGross"
+            }
+          },
+          {
+            "id": "calculate_discount",
+            "label": "5. Calculate Discount",
+            "apiName": "calculate_discount",
+            "key": "FORMULA",
+            "resourceName": "discountAmount",
+            "resultType": "number",
+            "expression": "IF(discountType == \"percent\", ROUND(grossSubtotal * MAX(0, discountValue) / 100, 2), IF(discountType == \"fixed\", MIN(grossSubtotal, MAX(0, discountValue)), 0))",
+            "inputs": {
+              "discountType": {
+                "path": "$record.discountType"
+              },
+              "discountValue": {
+                "path": "$record.discountValue"
+              },
+              "grossSubtotal": {
+                "path": "variables.grossSubtotal"
+              }
+            }
+          },
+          {
+            "id": "calculate_subtotal",
+            "label": "6. Calculate Discounted Subtotal",
+            "apiName": "calculate_subtotal",
+            "key": "FORMULA",
+            "resourceName": "subtotal",
+            "resultType": "number",
+            "expression": "MAX(0, ROUND(grossSubtotal - discountAmount, 2))",
+            "inputs": {
+              "grossSubtotal": {
+                "path": "variables.grossSubtotal"
+              },
+              "discountAmount": {
+                "path": "variables.discountAmount"
+              }
+            }
+          },
+          {
+            "id": "start_vat",
+            "label": "7. Start VAT Total",
+            "apiName": "start_vat",
+            "key": "ASSIGNMENT",
+            "variableName": "vat",
+            "variableType": "currency",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "vat_lines",
+            "label": "8. Loop Through Lines For VAT",
+            "apiName": "vat_lines",
+            "key": "LOOP",
+            "collection": "$record.lines",
+            "itemVariable": "vatLine",
+            "bodyBranch": [
+              "vat_line_gross",
+              "vat_discount_share",
+              "vat_line_net",
+              "vat_rate",
+              "vat_line_amount",
+              "add_vat"
+            ]
+          },
+          {
+            "id": "vat_line_gross",
+            "label": "9. Calculate VAT Line Gross",
+            "apiName": "vat_line_gross",
+            "key": "FORMULA",
+            "resourceName": "vatLineGross",
+            "resultType": "number",
+            "expression": "ROUND(unitPrice * quantity, 2)",
+            "inputs": {
+              "unitPrice": {
+                "path": "variables.vatLine.unitPrice"
+              },
+              "quantity": {
+                "path": "variables.vatLine.quantity"
+              }
+            }
+          },
+          {
+            "id": "vat_discount_share",
+            "label": "10. Allocate Discount To Line",
+            "apiName": "vat_discount_share",
+            "key": "FORMULA",
+            "resourceName": "vatDiscountShare",
+            "resultType": "number",
+            "expression": "IF(grossSubtotal > 0, discountAmount * vatLineGross / grossSubtotal, 0)",
+            "inputs": {
+              "grossSubtotal": {
+                "path": "variables.grossSubtotal"
+              },
+              "discountAmount": {
+                "path": "variables.discountAmount"
+              },
+              "vatLineGross": {
+                "path": "variables.vatLineGross"
+              }
+            }
+          },
+          {
+            "id": "vat_line_net",
+            "label": "11. Calculate VAT Line Net",
+            "apiName": "vat_line_net",
+            "key": "FORMULA",
+            "resourceName": "vatLineNet",
+            "resultType": "number",
+            "expression": "MAX(0, vatLineGross - vatDiscountShare)",
+            "inputs": {
+              "vatLineGross": {
+                "path": "variables.vatLineGross"
+              },
+              "vatDiscountShare": {
+                "path": "variables.vatDiscountShare"
+              }
+            }
+          },
+          {
+            "id": "vat_rate",
+            "label": "12. Resolve VAT Rate",
+            "apiName": "vat_rate",
+            "key": "FORMULA",
+            "resourceName": "resolvedVatRate",
+            "resultType": "number",
+            "expression": "IF(!vatEnabled || vatApplicable == false, 0, IF(lineVatRate > 0, lineVatRate / 100, defaultVatRate / 100))",
+            "inputs": {
+              "vatEnabled": {
+                "path": "$record.vatEnabled"
+              },
+              "vatApplicable": {
+                "path": "variables.vatLine.vatApplicable"
+              },
+              "lineVatRate": {
+                "path": "variables.vatLine.vatRate"
+              },
+              "defaultVatRate": {
+                "path": "$record.defaultVatRate"
+              }
+            }
+          },
+          {
+            "id": "vat_line_amount",
+            "label": "13. Calculate VAT Included In Line",
+            "apiName": "vat_line_amount",
+            "key": "FORMULA",
+            "resourceName": "vatLineAmount",
+            "resultType": "number",
+            "expression": "IF(resolvedVatRate > 0, vatLineNet - vatLineNet / (1 + resolvedVatRate), 0)",
+            "inputs": {
+              "resolvedVatRate": {
+                "path": "variables.resolvedVatRate"
+              },
+              "vatLineNet": {
+                "path": "variables.vatLineNet"
+              }
+            }
+          },
+          {
+            "id": "add_vat",
+            "label": "14. Add Line VAT",
+            "apiName": "add_vat",
+            "key": "ASSIGNMENT",
+            "variableName": "vat",
+            "variableType": "currency",
+            "operator": "add",
+            "value": {
+              "path": "variables.vatLineAmount"
+            }
+          },
+          {
+            "id": "final_total",
+            "label": "15. Set Final Total",
+            "apiName": "final_total",
+            "key": "ASSIGNMENT",
+            "variableName": "total",
+            "variableType": "currency",
+            "operator": "set",
+            "value": {
+              "path": "variables.subtotal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Build Misc Sale Line",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_BUILD_MISC_LINE",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Build Misc Sale Line",
+        "inputContract": [
+          {
+            "name": "description",
+            "label": "Description",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "price",
+            "label": "Entered Price",
+            "type": "currency",
+            "required": true
+          },
+          {
+            "name": "quantity",
+            "label": "Quantity",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "vatRate",
+            "label": "VAT Rate",
+            "type": "number",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "productId",
+            "label": "Product",
+            "type": "text",
+            "source": "variables.productId"
+          },
+          {
+            "name": "unitPrice",
+            "label": "Approved Line Price",
+            "type": "currency",
+            "source": "variables.unitPrice"
+          },
+          {
+            "name": "quantity",
+            "label": "Approved Quantity",
+            "type": "number",
+            "source": "variables.quantity"
+          },
+          {
+            "name": "description",
+            "label": "Approved Description",
+            "type": "text",
+            "source": "variables.description"
+          },
+          {
+            "name": "vatRate",
+            "label": "Approved VAT Rate",
+            "type": "number",
+            "source": "variables.vatRate"
+          }
+        ],
+        "resources": [
+          {
+            "value": "record.description",
+            "apiName": "description",
+            "label": "Description",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.price",
+            "apiName": "price",
+            "label": "Entered Price",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.quantity",
+            "apiName": "quantity",
+            "label": "Quantity",
+            "type": "Variable",
+            "dataType": "Number",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.vatRate",
+            "apiName": "vatRate",
+            "label": "VAT Rate",
+            "type": "Variable",
+            "dataType": "Number",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "variables.productId",
+            "apiName": "productId",
+            "label": "Product",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.unitPrice",
+            "apiName": "unitPrice",
+            "label": "Approved Line Price",
+            "type": "Variable",
+            "dataType": "Currency",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.quantity",
+            "apiName": "quantity",
+            "label": "Approved Quantity",
+            "type": "Variable",
+            "dataType": "Number",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.description",
+            "apiName": "description",
+            "label": "Approved Description",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          },
+          {
+            "value": "variables.vatRate",
+            "apiName": "vatRate",
+            "label": "Approved VAT Rate",
+            "type": "Variable",
+            "dataType": "Number",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "get_misc_product",
+            "label": "1. Find Dedicated Misc Product",
+            "apiName": "get_misc_product",
+            "key": "GET_RECORDS",
+            "objectKey": "product",
+            "filters": [
+              {
+                "field": "sku",
+                "operator": "equals",
+                "value": "MISC"
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "misc_product_exists",
+            "label": "2. Misc Product Exists?",
+            "apiName": "misc_product_exists",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "exists",
+                "label": "Existing Product",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.get_misc_product.record.id",
+                      "operator": "is_not_blank"
+                    }
+                  ]
+                },
+                "branch": []
+              }
+            ],
+            "defaultLabel": "Create Product",
+            "defaultBranch": [
+              "create_misc_product"
+            ]
+          },
+          {
+            "id": "create_misc_product",
+            "label": "3. Create Dedicated Misc Product",
+            "apiName": "create_misc_product",
+            "key": "CREATE_RECORD",
+            "objectKey": "product",
+            "fieldValues": {
+              "name": "Misc Item",
+              "sku": "MISC",
+              "price": 0,
+              "cost_price": 0,
+              "vat_rate": 0,
+              "vat_applicable": false,
+              "track_stock": false,
+              "stock_quantity": 0,
+              "active": false
+            },
+            "store": "record"
+          },
+          {
+            "id": "resolve_misc_product",
+            "label": "4. Resolve Misc Product Id",
+            "apiName": "resolve_misc_product",
+            "key": "FORMULA",
+            "resourceName": "resolvedMiscProductId",
+            "resultType": "text",
+            "expression": "existingId || createdId",
+            "inputs": {
+              "existingId": {
+                "path": "steps.get_misc_product.record.id"
+              },
+              "createdId": {
+                "path": "steps.create_misc_product.record.id"
+              }
+            }
+          },
+          {
+            "id": "validate_misc_price",
+            "label": "5. Validate Entered Price And Quantity",
+            "apiName": "validate_misc_price",
+            "key": "FORMULA",
+            "resourceName": "miscValid",
+            "resultType": "boolean",
+            "expression": "price > 0 && quantity > 0",
+            "inputs": {
+              "price": {
+                "path": "$record.price"
+              },
+              "quantity": {
+                "path": "$record.quantity"
+              }
+            }
+          },
+          {
+            "id": "misc_decision",
+            "label": "3. Is Misc Line Valid?",
+            "apiName": "misc_decision",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "valid",
+                "label": "Valid Misc Line",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.miscValid",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "set_misc_product",
+                  "set_misc_price",
+                  "set_misc_qty",
+                  "set_misc_desc",
+                  "set_misc_vat"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid Misc Line",
+            "defaultBranch": [
+              "misc_error"
+            ]
+          },
+          {
+            "id": "set_misc_product",
+            "label": "4. Use Only The Misc Product",
+            "apiName": "set_misc_product",
+            "key": "ASSIGNMENT",
+            "variableName": "productId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "variables.resolvedMiscProductId"
+            }
+          },
+          {
+            "id": "set_misc_price",
+            "label": "5. Apply Temporary Billing Price",
+            "apiName": "set_misc_price",
+            "key": "ASSIGNMENT",
+            "variableName": "unitPrice",
+            "variableType": "currency",
+            "operator": "set",
+            "value": {
+              "path": "$record.price"
+            }
+          },
+          {
+            "id": "set_misc_qty",
+            "label": "6. Apply Quantity",
+            "apiName": "set_misc_qty",
+            "key": "ASSIGNMENT",
+            "variableName": "quantity",
+            "variableType": "number",
+            "operator": "set",
+            "value": {
+              "path": "$record.quantity"
+            }
+          },
+          {
+            "id": "set_misc_desc",
+            "label": "7. Apply Description",
+            "apiName": "set_misc_desc",
+            "key": "ASSIGNMENT",
+            "variableName": "description",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "$record.description"
+            }
+          },
+          {
+            "id": "set_misc_vat",
+            "label": "8. Apply VAT Rate",
+            "apiName": "set_misc_vat",
+            "key": "ASSIGNMENT",
+            "variableName": "vatRate",
+            "variableType": "number",
+            "operator": "set",
+            "value": {
+              "path": "$record.vatRate"
+            }
+          },
+          {
+            "id": "misc_error",
+            "label": "Invalid Misc Line",
+            "apiName": "misc_error",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Misc item price and quantity must be greater than zero",
+            "errorLocation": "record"
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Receipt QR",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_RECEIPT_QR",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Receipt QR",
+        "inputContract": [
+          {
+            "name": "expiryMinutes",
+            "label": "Expiry Minutes",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "baseUrl",
+            "label": "Public Base URL",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [],
+        "resources": [
+          {
+            "value": "record.expiryMinutes",
+            "apiName": "expiryMinutes",
+            "label": "Expiry Minutes",
+            "type": "Variable",
+            "dataType": "Number",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.baseUrl",
+            "apiName": "baseUrl",
+            "label": "Public Base URL",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "create_receipt_qr",
+            "label": "Create Temporary Receipt Download",
+            "apiName": "create_receipt_qr",
+            "key": "ONE_API_REQUEST",
+            "method": "POST",
+            "path": "/api/platform/runtime/document-links",
+            "requireSuccess": true,
+            "body": {
+              "documentType": "RECEIPT",
+              "resourceId": {
+                "path": "$record.id"
+              },
+              "expiryMinutes": {
+                "path": "$record.expiryMinutes"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Receipt QR Policy",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_RECEIPT_QR_POLICY",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Receipt QR Policy",
+        "inputContract": [
+          {
+            "name": "event",
+            "label": "Policy Event",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "mode",
+            "label": "Auto Show Mode",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "printerAvailable",
+            "label": "Printer Available",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "allowManual",
+            "label": "Allow Manual QR",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "allowRegenerate",
+            "label": "Allow Regenerate",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "autoClose",
+            "label": "Auto Close On New Sale",
+            "type": "boolean",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "allowed",
+            "label": "Allowed",
+            "type": "boolean",
+            "source": "variables.allowed"
+          }
+        ],
+        "resources": [
+          {
+            "value": "record.event",
+            "apiName": "event",
+            "label": "Policy Event",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.mode",
+            "apiName": "mode",
+            "label": "Auto Show Mode",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.printerAvailable",
+            "apiName": "printerAvailable",
+            "label": "Printer Available",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.allowManual",
+            "apiName": "allowManual",
+            "label": "Allow Manual QR",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.allowRegenerate",
+            "apiName": "allowRegenerate",
+            "label": "Allow Regenerate",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "record.autoClose",
+            "apiName": "autoClose",
+            "label": "Auto Close On New Sale",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "variables.allowed",
+            "apiName": "allowed",
+            "label": "Allowed",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "policy_allowed",
+            "label": "Evaluate Receipt QR Policy",
+            "apiName": "policy_allowed",
+            "key": "FORMULA",
+            "resourceName": "allowed",
+            "resultType": "boolean",
+            "expression": "(event == \"AUTO\" && (mode == \"ALWAYS\" || (mode == \"ONLY_WHEN_PRINTER_UNAVAILABLE\" && !printerAvailable))) || (event == \"MANUAL\" && allowManual) || (event == \"REGENERATE\" && allowRegenerate) || (event == \"NEW_SALE\" && autoClose)",
+            "inputs": {
+              "event": {
+                "path": "$record.event"
+              },
+              "mode": {
+                "path": "$record.mode"
+              },
+              "printerAvailable": {
+                "path": "$record.printerAvailable"
+              },
+              "allowManual": {
+                "path": "$record.allowManual"
+              },
+              "allowRegenerate": {
+                "path": "$record.allowRegenerate"
+              },
+              "autoClose": {
+                "path": "$record.autoClose"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Revoke Receipt QR",
+      "triggerKey": "manual",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "apiName": "ONETILL_RECEIPT_QR_REVOKE",
+        "flowType": "AUTOLAUNCHED",
+        "description": "OneTill - Revoke Receipt QR",
+        "inputContract": [],
+        "outputContract": [],
+        "resources": [],
+        "actions": [
+          {
+            "id": "revoke_receipt_qr",
+            "label": "Revoke Temporary Receipt Downloads",
+            "apiName": "revoke_receipt_qr",
+            "key": "ONE_API_REQUEST",
+            "method": "DELETE",
+            "path": "/api/platform/runtime/document-links",
+            "requireSuccess": true,
+            "body": {
+              "documentType": "RECEIPT",
+              "resourceId": {
+                "path": "$record.id"
               }
             }
           }
