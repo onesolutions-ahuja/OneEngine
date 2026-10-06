@@ -2319,10 +2319,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeApp === 'till' ? (
-          <TillPage
-            onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
-            onNavigate={openItem}
-          />
+          <MetadataPageRuntime pageKey="till" />
         ) : activeApp === 'sales' ? (
           <MetadataPageRuntime objectKey="sale" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
@@ -2332,13 +2329,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'categories' ? (
           <MetadataPageRuntime objectKey="category" appKey="categories" />
         ) : activeApp === 'global-products' ? (
-          <GlobalProductLookupPage
-            onBack={() => openItem('products')}
-            onOpenStore={() => {
-              setAppSearch('')
-              setTopPanel('store')
-            }}
-          />
+          <MetadataPageRuntime pageKey="global-product-lookup" />
 
         ) : activeApp === 'purchases' ? (
           <MetadataPageRuntime objectKey="purchase" appKey="purchases" />
@@ -2353,9 +2344,9 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'stores' ? (
           <MetadataPageRuntime objectKey="store" appKey="stores" />
         ) : activeApp === 'reports' ? (
-          <ReportsPage />
+          <MetadataPageRuntime pageKey="reports" />
         ) : activeApp === 'custom-reports' ? (
-          <CustomReportsPage onBack={() => openItem('reports')} />
+          <MetadataPageRuntime pageKey="reports" />
         ) : activeApp === 'integrations' ? (
           <MetadataPageRuntime objectKey="integration" appKey="integrations" />
         ) : activeApp === 'accounting' ? (
@@ -2399,7 +2390,7 @@ function Desktop({ onLock, onSignOut }) {
             }}
           />
         ) : activeApp === 'home' || activeApp === 'dashboard' ? (
-          <DashboardPage />
+          <MetadataPageRuntime pageKey="dashboard" />
         ) : (
           <div className="module-state" role="alert">This app is not available in this workspace.</div>
         )}
