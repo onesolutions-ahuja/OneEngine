@@ -2,7 +2,7 @@ import express from "express";
 import crypto from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { resolveTxt } from "node:dns/promises";
-import { isSafeIdentifier } from "../services/platformMetadata.js";
+import { isSafeIdentifier } from "../services/platformIdentifiers.js";
 
 const SENSITIVE_COLUMN=/password|secret|token|cipher|credential|private_key|auth_verifier|recovery|hash/i;
 
