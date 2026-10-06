@@ -1,0 +1,468 @@
+{
+  "objects": [
+    {
+      "objectKey": "hospitality_floor",
+      "label": "Floor",
+      "pluralLabel": "Floors",
+      "sourceTable": "hospitality_floors",
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "display_order",
+          "label": "Display Order",
+          "fieldType": "number",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "writable": true
+        }
+      ]
+    },
+    {
+      "objectKey": "hospitality_table",
+      "label": "Table",
+      "pluralLabel": "Tables",
+      "sourceTable": "hospitality_tables",
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "floor_id",
+          "label": "Floor",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "table_number",
+          "label": "Table Number",
+          "fieldType": "text",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "capacity",
+          "label": "Capacity",
+          "fieldType": "number",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "shape",
+          "label": "Shape",
+          "fieldType": "picklist",
+          "writable": true,
+          "options": [
+            "square",
+            "round",
+            "rectangle"
+          ]
+        },
+        {
+          "apiName": "position_x",
+          "label": "X",
+          "fieldType": "number",
+          "writable": true
+        },
+        {
+          "apiName": "position_y",
+          "label": "Y",
+          "fieldType": "number",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "writable": true
+        }
+      ]
+    },
+    {
+      "objectKey": "hospitality_reservation",
+      "label": "Reservation",
+      "pluralLabel": "Reservations",
+      "sourceTable": "hospitality_reservations",
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "table_id",
+          "label": "Table",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "customer_id",
+          "label": "Customer",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "customer_name",
+          "label": "Customer Name",
+          "fieldType": "text",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "reservation_date",
+          "label": "Date",
+          "fieldType": "date",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "reservation_time",
+          "label": "Time",
+          "fieldType": "text",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "guests",
+          "label": "Guests",
+          "fieldType": "number",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "status",
+          "label": "Status",
+          "fieldType": "picklist",
+          "writable": true,
+          "options": [
+            "RESERVED",
+            "SEATED",
+            "CANCELLED",
+            "COMPLETED"
+          ]
+        }
+      ]
+    },
+    {
+      "objectKey": "hospitality_report_session",
+      "label": "Hospitality Session Report",
+      "pluralLabel": "Hospitality Session Reports",
+      "sourceTable": "hospitality_report_sessions",
+      "storeScoped": true,
+      "fields": [
+        {
+          "apiName": "report_date",
+          "label": "Date",
+          "fieldType": "date",
+          "writable": false
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "writable": false
+        },
+        {
+          "apiName": "floor_name",
+          "label": "Floor",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "table_number",
+          "label": "Table",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "session_id",
+          "label": "Hospitality Session",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "operator_name",
+          "label": "Operator",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "status",
+          "label": "Session Status",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "guests",
+          "label": "Covers",
+          "fieldType": "number",
+          "writable": false
+        },
+        {
+          "apiName": "source",
+          "label": "Reservation / Walk-in",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "gross",
+          "label": "Gross",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "discount",
+          "label": "Discount",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "net",
+          "label": "Net",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "vat",
+          "label": "VAT",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "service_charge",
+          "label": "Service Charge",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "tips",
+          "label": "Tips",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "paid",
+          "label": "Total Paid",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "remaining",
+          "label": "Remaining Balance",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "payment_method",
+          "label": "Payment Method",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "payment_count",
+          "label": "Payment Count",
+          "fieldType": "number",
+          "writable": false
+        },
+        {
+          "apiName": "opened_at",
+          "label": "Opened",
+          "fieldType": "datetime",
+          "writable": false
+        },
+        {
+          "apiName": "closed_at",
+          "label": "Closed",
+          "fieldType": "datetime",
+          "writable": false
+        },
+        {
+          "apiName": "duration_minutes",
+          "label": "Duration",
+          "fieldType": "number",
+          "writable": false
+        },
+        {
+          "apiName": "average_spend_per_cover",
+          "label": "Average Spend Per Cover",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "ticket_created",
+          "label": "KDS Ticket Created",
+          "fieldType": "datetime",
+          "writable": false
+        },
+        {
+          "apiName": "ticket_completed",
+          "label": "KDS Ticket Completed",
+          "fieldType": "datetime",
+          "writable": false
+        },
+        {
+          "apiName": "preparation_duration",
+          "label": "Preparation Duration",
+          "fieldType": "number",
+          "writable": false
+        },
+        {
+          "apiName": "delayed",
+          "label": "Delayed Ticket",
+          "fieldType": "boolean",
+          "writable": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "hospitality_floor",
+      "childObjectKey": "hospitality_table",
+      "relationshipKey": "tables",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "floor_id"
+    },
+    {
+      "parentObjectKey": "hospitality_table",
+      "childObjectKey": "hospitality_reservation",
+      "relationshipKey": "reservations",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "table_id"
+    },
+    {
+      "parentObjectKey": "customer",
+      "childObjectKey": "hospitality_reservation",
+      "relationshipKey": "reservations",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "customer_id"
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "hospitality_table",
+      "viewKey": "all",
+      "label": "All Tables",
+      "columns": [
+        "table_number",
+        "capacity",
+        "shape",
+        "active"
+      ],
+      "isDefault": true
+    },
+    {
+      "objectKey": "hospitality_reservation",
+      "viewKey": "upcoming",
+      "label": "Upcoming Reservations",
+      "columns": [
+        "reservation_date",
+        "reservation_time",
+        "customer_name",
+        "guests",
+        "status"
+      ],
+      "isDefault": true
+    }
+  ],
+  "permissions": [
+    "hospitality.tables.view",
+    "hospitality.tables.manage",
+    "hospitality.floor.manage",
+    "hospitality.reservations.view",
+    "hospitality.reservations.manage",
+    "hospitality.kds.view",
+    "hospitality.kds.manage",
+    "hospitality.kitchen.reprint",
+    "hospitality.bill.split",
+    "hospitality.bill.pay",
+    "hospitality.table.transfer",
+    "hospitality.service_charge.override",
+    "hospitality.qr.manage"
+  ],
+  "permissionDeclarations": [
+    {
+      "permission": "hospitality.tables.view",
+      "label": "View Hospitality tables"
+    },
+    {
+      "permission": "hospitality.tables.manage",
+      "label": "Manage Hospitality tables"
+    },
+    {
+      "permission": "hospitality.floor.manage",
+      "label": "Manage Hospitality floor plans"
+    },
+    {
+      "permission": "hospitality.reservations.view",
+      "label": "View Hospitality reservations"
+    },
+    {
+      "permission": "hospitality.reservations.manage",
+      "label": "Manage Hospitality reservations"
+    },
+    {
+      "permission": "hospitality.kds.view",
+      "label": "View kitchen display"
+    },
+    {
+      "permission": "hospitality.kds.manage",
+      "label": "Manage kitchen display"
+    },
+    {
+      "permission": "hospitality.kitchen.reprint",
+      "label": "Reprint kitchen tickets"
+    },
+    {
+      "permission": "hospitality.bill.split",
+      "label": "Split hospitality bills"
+    },
+    {
+      "permission": "hospitality.bill.pay",
+      "label": "Take Hospitality Bill Payments"
+    },
+    {
+      "permission": "hospitality.table.transfer",
+      "label": "Transfer hospitality tables"
+    },
+    {
+      "permission": "hospitality.service_charge.override",
+      "label": "Override service charges"
+    },
+    {
+      "permission": "hospitality.qr.manage",
+      "label": "Manage QR ordering"
+    }
+  ],
+  "pages": [
+    {
+      "pageKey": "hospitality",
+      "label": "Hospitality",
+      "routePath": "/app/custom/hospitality",
+      "runtimeComponent": "hospitality_operations"
+    }
+  ]
+}
