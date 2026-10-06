@@ -28,6 +28,8 @@ const PACKAGE_CATALOG = [
         },
         values: {
           onlineOrderReceived: "RECEIVED",
+          offlineSyncSource: "OFFLINE_SYNC",
+          offlineSyncStatus: "SYNCED"
         },
         fields: {
           sessionStatus: "status",
