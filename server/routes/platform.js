@@ -3220,12 +3220,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       let conditionClauses = conditionClauseCount > 0 ? clauses.splice(scopeClauseCount, conditionClauseCount) : [];
       if (conditionClauses.length && conditionMatch === "any") conditionClauses = [`(${conditionClauses.join(" OR ")})`];
       clauses.push(...conditionClauses);
-      if (["customers"].includes(object.source_table) && !req.platformCompanyCustomers) {
-        /* Mirror the appendSystemReadScope customer-store rule for record feeds. */
-        if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
-        params.push(req.user.storeId, req.user.companyId);
-        clauses.push(`EXISTS (SELECT 1 FROM customer_stores cs WHERE cs.customer_id="customers".id AND cs.store_id=$${params.length - 1} AND cs.company_id=$${params.length} AND cs.active=true)`);
-      }
       appendSystemReadScope(object, req, clauses, params);
 
       /* Sort entries must name readable fields. */
