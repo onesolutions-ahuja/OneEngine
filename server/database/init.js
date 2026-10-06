@@ -1852,7 +1852,7 @@ async function initializeLegacyDatabase(pool) {
     UPDATE company_settings SET platform_theme = 'theme2' WHERE platform_theme IS NULL OR platform_theme NOT IN ('theme2', 'theme3', 'theme4');
     ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_mfg_rule VARCHAR(20) NOT NULL DEFAULT 'none';
     ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_expiry_rule VARCHAR(20) NOT NULL DEFAULT 'none';
-    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_expiry_days INTEGER NOT NULL DEFAULT 365;    ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS workflow_id UUID;
+    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS batch_default_expiry_days INTEGER NOT NULL DEFAULT 365;
 
     CREATE TABLE IF NOT EXISTS payment_terminals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
