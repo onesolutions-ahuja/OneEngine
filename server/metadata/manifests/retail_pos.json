@@ -1841,17 +1841,17 @@
         "systemKey": "flow:sale.complete",
         "inputContract": [
           {
-            "name": "sale",
-            "type": "record",
+            "name": "checkout",
+            "type": "object",
             "required": true
           },
           {
-            "name": "items",
+            "name": "lineItems",
             "type": "collection",
             "required": true
           },
           {
-            "name": "payments",
+            "name": "tenderSelections",
             "type": "collection",
             "required": true
           }
@@ -1860,45 +1860,45 @@
           {
             "name": "sale",
             "type": "record",
-            "source": "variables.sale"
+            "source": "steps.create_sale.created"
           }
         ],
         "resources": [
           {
-            "value": "variables.sale",
-            "apiName": "sale",
-            "label": "Sale",
+            "value": "variables.checkout",
+            "apiName": "checkout",
+            "label": "Checkout Context",
             "type": "Variable",
-            "dataType": "Record",
-            "defaultValue": null,
+            "dataType": "Object",
+            "defaultValue": {},
             "isCollection": false,
             "availableInput": true,
-            "availableOutput": true,
-            "objectKey": "sale"
+            "availableOutput": false,
+            "objectKey": ""
           },
           {
-            "value": "variables.items",
-            "apiName": "items",
-            "label": "Sale Items",
+            "value": "variables.lineItems",
+            "apiName": "lineItems",
+            "label": "Line Items",
             "type": "Variable",
             "dataType": "Collection",
             "defaultValue": [],
             "isCollection": true,
             "availableInput": true,
             "availableOutput": false,
-            "objectKey": "sale_item"
+            "objectKey": ""
           },
           {
-            "value": "variables.payments",
-            "apiName": "payments",
-            "label": "Payments",
+            "value": "variables.tenderSelections",
+            "apiName": "tenderSelections",
+            "label": "Tender Selections",
             "type": "Variable",
             "dataType": "Collection",
             "defaultValue": [],
             "isCollection": true,
             "availableInput": true,
             "availableOutput": false,
-            "objectKey": "payment"
+            "objectKey": ""
           }
         ],
         "actions": [
@@ -1908,15 +1908,59 @@
             "apiName": "create_sale",
             "key": "CREATE_RECORD",
             "objectKey": "sale",
-            "recordResource": {
-              "path": "variables.sale"
+            "fieldValues": {
+              "store_id": {
+                "path": "variables.checkout.storeId"
+              },
+              "terminal_id": {
+                "path": "variables.checkout.terminalId"
+              },
+              "user_id": {
+                "path": "variables.checkout.userId"
+              },
+              "customer_id": {
+                "path": "variables.checkout.customerId"
+              },
+              "subtotal": {
+                "path": "variables.checkout.subtotal"
+              },
+              "tax": {
+                "path": "variables.checkout.tax"
+              },
+              "discount": {
+                "path": "variables.checkout.discount"
+              },
+              "total": {
+                "path": "variables.checkout.total"
+              },
+              "line_count": {
+                "path": "variables.checkout.lineCount"
+              },
+              "status": {
+                "path": "variables.checkout.status",
+                "fallback": "COMPLETED"
+              },
+              "offline_created": {
+                "path": "variables.checkout.offlineCreated",
+                "fallback": false
+              },
+              "sync_status": {
+                "path": "variables.checkout.syncStatus",
+                "fallback": "SYNCED"
+              },
+              "client_request_id": {
+                "path": "variables.checkout.requestId"
+              },
+              "completed_at": {
+                "path": "variables.checkout.completedAt"
+              }
             },
             "checkMatchingRecords": true,
             "matchConditions": [
               {
                 "field": "client_request_id",
                 "value": {
-                  "path": "variables.sale.client_request_id"
+                  "path": "variables.checkout.requestId"
                 }
               }
             ],
@@ -1925,32 +1969,116 @@
             "store": "record"
           },
           {
-            "id": "create_items",
-            "label": "3. Create Sale Items",
-            "apiName": "create_items",
+            "id": "line_loop",
+            "label": "2. Create Sale Items",
+            "apiName": "line_loop",
+            "key": "LOOP",
+            "collection": {
+              "path": "variables.lineItems"
+            },
+            "itemVariable": "currentLine",
+            "bodyBranch": [
+              "create_item"
+            ]
+          },
+          {
+            "id": "create_item",
+            "label": "Create Sale Item",
+            "apiName": "create_item",
             "key": "CREATE_RECORD",
             "objectKey": "sale_item",
-            "recordCollectionResource": {
-              "path": "variables.items"
-            },
-            "commonFieldValues": {
+            "fieldValues": {
               "sale_id": {
                 "path": "steps.create_sale.created.id"
+              },
+              "product_id": {
+                "path": "variables.currentLine.productId"
+              },
+              "product_name": {
+                "path": "variables.currentLine.name"
+              },
+              "quantity": {
+                "path": "variables.currentLine.quantity"
+              },
+              "unit_price": {
+                "path": "variables.currentLine.unitPrice"
+              },
+              "discount": {
+                "path": "variables.currentLine.discount",
+                "fallback": 0
+              },
+              "tax": {
+                "path": "variables.currentLine.tax",
+                "fallback": 0
+              },
+              "total": {
+                "path": "variables.currentLine.total"
+              },
+              "item_type": {
+                "path": "variables.currentLine.itemType",
+                "fallback": "PRODUCT"
+              },
+              "modifier_data": {
+                "path": "variables.currentLine.modifiers",
+                "fallback": []
+              },
+              "bundle_components": {
+                "path": "variables.currentLine.bundleComponents",
+                "fallback": []
               }
             }
           },
           {
-            "id": "create_payments",
-            "label": "4. Create Payments",
-            "apiName": "create_payments",
+            "id": "tender_loop",
+            "label": "3. Create Payments",
+            "apiName": "tender_loop",
+            "key": "LOOP",
+            "collection": {
+              "path": "variables.tenderSelections"
+            },
+            "itemVariable": "currentTender",
+            "bodyBranch": [
+              "create_payment"
+            ]
+          },
+          {
+            "id": "create_payment",
+            "label": "Create Payment",
+            "apiName": "create_payment",
             "key": "CREATE_RECORD",
             "objectKey": "payment",
-            "recordCollectionResource": {
-              "path": "variables.payments"
-            },
-            "commonFieldValues": {
+            "fieldValues": {
               "sale_id": {
                 "path": "steps.create_sale.created.id"
+              },
+              "customer_id": {
+                "path": "variables.checkout.customerId"
+              },
+              "direction": {
+                "path": "variables.currentTender.direction",
+                "fallback": "IN"
+              },
+              "payment_method": {
+                "path": "variables.currentTender.method"
+              },
+              "amount": {
+                "path": "variables.currentTender.amount"
+              },
+              "provider": {
+                "path": "variables.currentTender.provider"
+              },
+              "terminal_id": {
+                "path": "variables.currentTender.terminalId"
+              },
+              "provider_transaction_id": {
+                "path": "variables.currentTender.providerTransactionId"
+              },
+              "idempotency_key": {
+                "path": "variables.currentTender.idempotencyKey"
+              },
+              "status": {
+                "path": "variables.currentTender.status",
+                "fallback": "COMPLETED"
               }
             }
           }
