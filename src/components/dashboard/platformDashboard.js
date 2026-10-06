@@ -82,60 +82,6 @@ export const layoutEquals = (a, b) =>
   a?.x === b?.x && a?.y === b?.y && a?.w === b?.w && a?.h === b?.h;
 
 /*
- * The component vocabulary mirrored for the client. The server stays
- * authoritative; this exists so the runtime and the Builder render and label
- * the same components without importing server code into the browser bundle.
- */
-export const DASHBOARD_COMPONENTS = Object.freeze([
-  { key: "kpi", label: "Metric / KPI", kind: "metric" },
-  { key: "pie", label: "Pie Chart", kind: "chart" },
-  { key: "donut", label: "Donut Chart", kind: "chart" },
-  { key: "bar", label: "Bar Chart", kind: "chart" },
-  { key: "line", label: "Line Chart", kind: "chart" },
-  { key: "gauge", label: "Gauge", kind: "chart" },
-  { key: "funnel", label: "Funnel", kind: "chart" },
-  { key: "scatter", label: "Scatter", kind: "chart" },
-  { key: "combo", label: "Combo Chart", kind: "chart" },
-  { key: "table", label: "Table / List", kind: "record" },
-  { key: "text", label: "Text", kind: "content" },
-  { key: "image", label: "Image", kind: "content" },
-  { key: "clock_widget", label: "Clock / Watch", kind: "content" },
-  { key: "calendar_widget", label: "Calendar", kind: "content" },
-  { key: "weather_widget", label: "Weather", kind: "content" },
-]);
-
-export const DASHBOARD_DATE_RANGES = Object.freeze([
-  { key: "today", label: "Today" },
-  { key: "yesterday", label: "Yesterday" },
-  { key: "this_week", label: "This week" },
-  { key: "last_7_days", label: "Last 7 days" },
-  { key: "this_month", label: "This month" },
-  { key: "this_quarter", label: "This quarter" },
-  { key: "fiscal_year", label: "Fiscal year" },
-]);
-
-export const DASHBOARD_SALES_FIELDS = Object.freeze([
-  { key: "date", label: "Date", groupable: true },
-  { key: "store", label: "Store", groupable: true },
-  { key: "user", label: "Operator", groupable: true },
-  { key: "product", label: "Product", groupable: true },
-  { key: "category", label: "Category", groupable: true },
-  { key: "method", label: "Payment method", groupable: true },
-  { key: "sku", label: "SKU", groupable: true },
-  { key: "quantity", label: "Quantity sold", aggregate: true },
-  { key: "gross_sales", label: "Gross sales", aggregate: true },
-  { key: "net_sales", label: "Net sales", aggregate: true },
-  { key: "total", label: "Total", aggregate: true },
-  { key: "vat", label: "VAT", aggregate: true },
-  { key: "discount", label: "Discounts", aggregate: true },
-  { key: "transactions", label: "Transactions", aggregate: true },
-]);
-
-export function getDashboardComponentSpec(key) {
-  return DASHBOARD_COMPONENTS.find((component) => component.key === String(key || "")) || null;
-}
-
-/*
  * The aggregation and condition vocabularies, mirrored from the reporting
  * engine so the Builder only ever offers combinations the server will accept:
  *   - services/reportableSources.js  (AGGREGATES, OPERATORS, numeric field types)
@@ -147,13 +93,6 @@ export function getDashboardComponentSpec(key) {
 export const AGGREGATES = Object.freeze(["COUNT", "SUM", "AVG", "MIN", "MAX"]);
 export const AGGREGATABLE_FIELD_TYPES = Object.freeze(["number", "decimal", "currency", "date", "datetime", "formula", "rollup"]);
 export const SUMMARY_COLUMN = (aggregate, field) => `${String(aggregate).toLowerCase()}_${field}`;
-
-export const DATE_FILTER_FIELDS = Object.freeze([
-  { key: "date", label: "Date", kind: "date" },
-  { key: "store", label: "Store", kind: "id" },
-  { key: "user", label: "Operator", kind: "id" },
-  { key: "product", label: "Product", kind: "id" },
-]);
 
 /* Field-type driven operator lists — the same rules the Custom Report builder
    already uses, so a condition authored here executes unchanged there. */
@@ -191,3 +130,14 @@ export function platformFieldChoices(fields = []) {
   };
 }
 
+
+export function reportSourceFieldChoices(source = null) {
+  const fields = Array.isArray(source?.fields) ? source.fields : [];
+  return fields.map((field) => {
+    const key = typeof field === "string" ? field : field?.key || field?.apiName || field?.api_name || "";
+    const label = typeof field === "string"
+      ? field.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+      : field?.label || key;
+    return { key, label, type: typeof field === "object" ? (field.type || field.fieldType || field.field_type || "text") : "text", groupable: true, aggregate: true };
+  }).filter((field) => field.key);
+}
