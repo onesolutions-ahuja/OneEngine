@@ -572,6 +572,17 @@
           "fieldType": "datetime",
           "sourceColumn": "updated_at",
           "writable": false
+        },
+        {
+          "apiName": "jarves_licence_users",
+          "label": "JARVES User Allowance",
+          "fieldType": "number",
+          "sourceColumn": "jarves_licence_users",
+          "writable": true,
+          "config": {
+            "settingsSection": "AI Assistant",
+            "min": 0
+          }
         }
       ]
     },
