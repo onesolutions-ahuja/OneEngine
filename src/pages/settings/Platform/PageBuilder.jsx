@@ -90,6 +90,31 @@ export default function PageBuilder({ onMessage, onError }) {
   };
   const updateComponent = (changes) => patch((d) => ({ ...d, components: d.components.map((c) => c.id === selected ? { ...c, ...changes, props: { ...c.props, ...(changes.props || {}) } } : c) }));
   const removeComponent = () => { patch((d) => ({ ...d, components: d.components.filter((c) => c.id !== selected) })); setSelected(""); };
+  const removeLibraryComponent = async (component) => {
+    try {
+      const reference = component.id || component.key;
+      const usage = await apiRequest(`/api/platform/component-registry/${encodeURIComponent(reference)}/usages`);
+      const data = usage?.data || {};
+      const references = Array.isArray(data.references) ? data.references : [];
+      if (references.length) {
+        const where = references.map((ref) => ref.type === "page"
+          ? `${ref.appLabel || ref.appKey || "App"} → ${ref.pageLabel || ref.pageKey || "Page"}`
+          : `${ref.objectKey || "Object"} → ${ref.layoutLabel || ref.layoutKey || "Layout"}`
+        ).join("\n");
+        window.alert(`Cannot remove "${component.label}". It is still used in:\n\n${where}\n\nRemove it from these pages/layouts first.`);
+        return;
+      }
+      if (!window.confirm(`Remove "${component.label}" from this tenant's Component Library? Existing global code is retained for other tenants.`)) return;
+      await apiRequest(`/api/platform/component-registry/${encodeURIComponent(reference)}/availability`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "REMOVED" }),
+      });
+      onMessage?.(`${component.label} removed from this tenant's Component Library.`);
+      window.location.reload();
+    } catch (error) {
+      onError?.(error?.message || "Unable to remove component.");
+    }
+  };
   const reorder = (sourceId, targetId, sectionId) => patch((d) => {
     const next = [...d.components];
     const from = next.findIndex((c) => c.id === sourceId), to = targetId ? next.findIndex((c) => c.id === targetId) : next.length;
@@ -128,7 +153,7 @@ export default function PageBuilder({ onMessage, onError }) {
       {!preview && <aside className="lab-pane lab-palette">
         <div className="lab-pane-title">Components</div>
         <div className="lab-palette-list">
-          {palette.map((item) => { const Icon = componentIcon(item); return <button key={item.key} draggable title={`${item.label} — ${componentCategoryLabel(item.category)}`} onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-component", item.key)} onClick={() => addComponent(definition.sections[0]?.id, item.key)} className="lab-palette-item"><span className="flex items-center gap-2 min-w-0"><Icon size={14} className="shrink-0 opacity-60" aria-hidden="true" /><span className="truncate">{item.label}</span></span></button>; })}
+          {palette.map((item) => { const Icon = componentIcon(item); return <div key={item.key} className="flex items-center gap-1"><button draggable title={`${item.label} — ${componentCategoryLabel(item.category)} — ID ${item.id}`} onDragStart={(e) => e.dataTransfer.setData("application/x-onepos-component", item.key)} onClick={() => addComponent(definition.sections[0]?.id, item.key)} className="lab-palette-item min-w-0 flex-1"><span className="flex items-center gap-2 min-w-0"><Icon size={14} className="shrink-0 opacity-60" aria-hidden="true" /><span className="truncate">{item.label}</span></span></button><button type="button" className="lab-remove shrink-0 p-2" title={`Check usage and remove ${item.label}`} aria-label={`Check usage and remove ${item.label}`} onClick={() => void removeLibraryComponent(item)}><Trash2 size={13}/></button></div>; })}
         </div>
         <button className="lab-add-section" onClick={addSection}><Plus size={14}/> Add section</button>
       </aside>}
