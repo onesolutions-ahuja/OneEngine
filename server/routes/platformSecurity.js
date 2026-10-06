@@ -1,5 +1,5 @@
 import express from "express";
-import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
+import { isSafeIdentifier, toSafeApiName } from "../services/platformCoreMetadata.js";
 import { loadEffectivePublicGroupIds, publicGroupMembershipWouldCycle } from "../services/platformGroups.js";
 import { validateConditionConfig } from "../services/platformConditions.js";
 
