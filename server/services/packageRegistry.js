@@ -1120,10 +1120,11 @@ export function packageDefinition(entry) {
               { id:"expire_open_tokens",label:"Expire Existing Tokens",apiName:"expire_open_tokens",key:"LOOP",collection:"steps.get_open_tokens.records",itemVariable:"currentToken",bodyBranch:["mark_token_used"] },
               { id:"mark_token_used",label:"Mark Existing Token Used",apiName:"mark_token_used",key:"UPDATE_RECORD",objectKey:"account_action_token",recordId:{path:"variables.currentToken.id"},fieldValues:{used_at:{path:"$now"}} },
               { id:"generate_token",label:"Generate Secure Token",apiName:"generate_token",key:"GENERATE_SECURE_TOKEN",tokenResourceName:"token",hashResourceName:"tokenHash",bytes:32 },
-              { id:"calculate_expiry",label:"Calculate Token Expiry",apiName:"calculate_expiry",key:"FORMULA",resourceName:"expiresAt",resultType:"datetime",expression:"ADDMINUTES(currentTime, expiresMinutes)",inputs:{currentTime:{path:"$now"},expiresMinutes:{path:"$record.expiresMinutes"}} },
+              { id:"clamp_expiry",label:"Clamp Token Expiry",apiName:"clamp_expiry",key:"FORMULA",resourceName:"safeExpiresMinutes",resultType:"number",expression:"MIN(MAX(expiresMinutes,1),10080)",inputs:{expiresMinutes:{path:"$record.expiresMinutes"}} },
+              { id:"calculate_expiry",label:"Calculate Token Expiry",apiName:"calculate_expiry",key:"FORMULA",resourceName:"expiresAt",resultType:"datetime",expression:"ADDMINUTES(currentTime, expiresMinutes)",inputs:{currentTime:{path:"$now"},expiresMinutes:{path:"variables.safeExpiresMinutes"}} },
               { id:"create_token_record",label:"Create Token Record",apiName:"create_token_record",key:"CREATE_RECORD",objectKey:"account_action_token",
                 fieldValues:{user_id:{path:"$record.userId"},purpose:{path:"$record.purpose"},token_hash:{path:"variables.tokenHash"},expires_at:{path:"variables.expiresAt"}} },
-              { id:"set_expiry_output",label:"Set Expiry Output",apiName:"set_expiry_output",key:"ASSIGNMENT",variableName:"expiresMinutes",variableType:"number",operator:"set",value:{path:"$record.expiresMinutes"} },
+              { id:"set_expiry_output",label:"Set Expiry Output",apiName:"set_expiry_output",key:"ASSIGNMENT",variableName:"expiresMinutes",variableType:"number",operator:"set",value:{path:"variables.safeExpiresMinutes"} },
             ],
           },
           {
