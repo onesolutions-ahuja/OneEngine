@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
+import { readFileSync } from "node:fs";
 import { executeWorkflowActions, getWorkflowActionDefinition } from "../server/services/platformWorkflow.js";
 
+const retailManifest = JSON.parse(readFileSync(new URL("../server/metadata/manifests/retail_pos.json", import.meta.url), "utf8"));
 const systemFlows = new Map(
-  systemWorkflowDefinitions()
-    .filter((flow) => ["flow:till.", "flow:sale."].some((prefix) => String(flow?.systemKey || "").startsWith(prefix)))
-    .map((flow) => [flow.systemKey, flow.action])
+  (retailManifest.workflows || [])
+    .filter((flow) => ["flow:till.", "flow:sale."].some((prefix) => String(flow?.action?.systemKey || "").startsWith(prefix)))
+    .map((flow) => [flow.action.systemKey, flow.action])
 );
 
 function permissionDb({ products = [], inserted = [] } = {}) {
