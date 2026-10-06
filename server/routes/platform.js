@@ -5705,11 +5705,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
-      if (rollbackMode) {
+      const hasRollbackRecords = flowType === "screen" && actions.some((action) => String(action?.key || action?.type || "").toUpperCase() === "ROLLBACK_RECORDS");
+      const transactionMode = rollbackMode || hasRollbackRecords;
+      if (transactionMode) {
         client = await pool.connect();
         await client.query("BEGIN");
       }
-      const executionDb = rollbackMode ? ((query, params = []) => client.query(query, params)) : db;
+      const executionDb = transactionMode ? ((query, params = []) => client.query(query, params)) : db;
       let results = [];
       let debugError = null;
       const declaredInputs = Array.isArray(workflow.action?.inputContract) ? workflow.action.inputContract : [];
@@ -5745,6 +5747,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           debugWaitElementBehavior: executionMode === "TEST" && req.body?.debugWaitElementBehavior === true,
           debugWaitPaths: req.body?.debugWaitPaths && typeof req.body.debugWaitPaths === "object" ? req.body.debugWaitPaths : {},
           workflowVariables,
+          rollbackCurrentTransaction: transactionMode ? async () => {
+            await client.query("ROLLBACK");
+            await client.query("BEGIN");
+          } : undefined,
         });
       } catch (error) {
         debugError = error;
@@ -6295,7 +6301,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         rollbackCurrentTransaction: async () => {
           if (!screenTransactionActive) return;
           await client.query("ROLLBACK");
-          screenTransactionActive = false;
+          await client.query("BEGIN");
+          screenTransactionActive = true;
         },
       });
       if (screenTransactionActive) {
@@ -6478,7 +6485,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         rollbackCurrentTransaction: isScreenFlow ? async () => {
           if (!screenTransactionActive) return;
           await client.query("ROLLBACK");
-          screenTransactionActive = false;
+          await client.query("BEGIN");
+          screenTransactionActive = true;
         } : undefined,
       });
       if (screenTransactionActive) {
