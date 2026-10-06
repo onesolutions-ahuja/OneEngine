@@ -47,6 +47,22 @@ import {
   Text,
   TextCursorInput,
   Workflow,
+  Image as ImageIcon,
+  Video,
+  UserCircle,
+  QrCode,
+  Barcode,
+  Search,
+  SlidersHorizontal,
+  Upload,
+  Radio,
+  ToggleLeft,
+  Layers,
+  Columns3,
+  PanelRightOpen,
+  MessageSquareWarning,
+  BadgeCheck,
+  LoaderCircle,
 } from "lucide-react";
 
 // Client fallback mirrors the server registry so the builder remains usable
@@ -66,6 +82,35 @@ export const FALLBACK_COMPONENT_REGISTRY = Object.freeze([]);
 
 export const COMPONENT_ICONS = {
   section: Square,
+  card: Square,
+  grid: Columns3,
+  stack: Layers,
+  tabs: PanelTop,
+  accordion: Rows3,
+  modal: Square,
+  drawer: PanelRightOpen,
+  alert: MessageSquareWarning,
+  badge: BadgeCheck,
+  progress: Gauge,
+  empty_state: Box,
+  loading_state: LoaderCircle,
+  image: ImageIcon,
+  video: Video,
+  avatar: UserCircle,
+  icon: Sparkles,
+  qr_code: QrCode,
+  barcode: Barcode,
+  search_box: Search,
+  searchable_dropdown: ListFilter,
+  toggle: ToggleLeft,
+  radio_group: Radio,
+  slider: SlidersHorizontal,
+  file_upload: Upload,
+  pin_input: TextCursorInput,
+  record_picker: ListFilter,
+  pagination: Rows3,
+  filter_bar: ListFilter,
+  product_image_card: ImageIcon,
   container: Box,
   multi_container: Rows3,
   table: Table,
@@ -137,6 +182,12 @@ export const COMPONENT_CATEGORY_LABELS = {
   record: "Record",
   dashboard: "Dashboard",
   action: "Actions",
+  input: "Inputs",
+  navigation: "Navigation",
+  media: "Media",
+  feedback: "Feedback",
+  overlay: "Overlays",
+  modern: "Modern",
 };
 
 export function componentCategoryLabel(category) {
@@ -145,7 +196,7 @@ export function componentCategoryLabel(category) {
 
 /** Ordered category sequence for filter tabs (unknown categories appended). */
 export function componentCategories(registry) {
-  const preferred = ["all", "layout", "content", "field", "record", "dashboard", "modern", "action"];
+  const preferred = ["all", "layout", "content", "field", "input", "record", "navigation", "media", "feedback", "overlay", "dashboard", "modern", "action"];
   const known = new Set(preferred);
   const extra = [];
   for (const component of registry || []) {
