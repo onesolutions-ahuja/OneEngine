@@ -10,8 +10,6 @@ export const ACTING_COMPANY_STORAGE_KEY = 'onepos_developer_target_company_id'
 export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
 export const ACTIVE_STORE_STORAGE_KEY = 'onepos_active_store_id'
 export const AVAILABLE_STORES_STORAGE_KEY = 'onepos_available_stores'
-export const KIOSK_TOKEN_STORAGE_KEY = 'onepos_kiosk_token'
-export const KIOSK_DISPLAY_TOKEN_STORAGE_KEY = 'onepos_kiosk_display_token'
 export const DEVICE_KEY_STORAGE_KEY = 'onepos_device_key'
 
 export function getDeviceKey() {
@@ -207,11 +205,7 @@ export async function apiFetch(path, options = {}) {
       code: 'TRUSTED_RUNTIME_REQUIRED',
     })
   }
-  const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
-  const kioskDisplay = typeof window !== 'undefined' && /\/kiosk-display\/?$/.test(window.location.pathname)
-  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
-  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
-  const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   return fetch(apiUrl(path), {
     ...options,
     headers: {
@@ -434,11 +428,7 @@ function apiRequestDedupeKey(path, token) {
 
 export function apiRequest(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase()
-  const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
-  const kioskDisplay = typeof window !== 'undefined' && /\/kiosk-display\/?$/.test(window.location.pathname)
-  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
-  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
-  const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   const canDedupe = method === 'GET' && options.dedupe !== false && !options.signal && !options.body && !options.headers
   if (!canDedupe) return apiRequestCore(path, options, token)
 
@@ -558,11 +548,7 @@ export async function apiDownload(path, options = {}) {
       code: "UNREGISTERED_CAPABILITY",
     })
   }
-  const kioskRuntime = typeof window !== "undefined" && /\/kiosk-runtime\/?$/.test(window.location.pathname)
-  const kioskDisplay = typeof window !== "undefined" && /\/kiosk-display\/?$/.test(window.location.pathname)
-  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || "") : ""
-  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || "") : ""
-  const token = kioskToken || displayToken || sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token")
+  const token = sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token")
   const response = await fetchWithTimeout(apiUrl(path), {
     ...options,
     headers: {
@@ -946,35 +932,6 @@ export async function ensureActingCompanyContext({ force = false } = {}) {
     .finally(() => { sessionBootstrapInFlight = null })
 
   return sessionBootstrapInFlight
-}
-
-export function lockToKioskDisplayMode() {
-  clearCompanyContext()
-  sessionStorage.removeItem('onepos_token')
-  sessionStorage.removeItem('onepos_user')
-  sessionStorage.removeItem('onepos.settings.context.v2')
-  sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
-  sessionStorage.removeItem(AVAILABLE_STORES_STORAGE_KEY)
-  localStorage.removeItem('onepos_token')
-  localStorage.removeItem('onepos_user')
-  setActingCompanyId('')
-  try { localStorage.removeItem(ACTIVE_STORE_STORAGE_KEY) } catch {}
-}
-
-export function lockToKioskMode() {
-  // Preserve the dedicated kiosk token and server address only. Remove all
-  // staff/browser identity so navigating away from /kiosk-runtime cannot
-  // inherit an administrator or cashier session.
-  clearCompanyContext()
-  sessionStorage.removeItem('onepos_token')
-  sessionStorage.removeItem('onepos_user')
-  sessionStorage.removeItem('onepos.settings.context.v2')
-  sessionStorage.removeItem(SESSION_PERMISSIONS_STORAGE_KEY)
-  sessionStorage.removeItem(AVAILABLE_STORES_STORAGE_KEY)
-  localStorage.removeItem('onepos_token')
-  localStorage.removeItem('onepos_user')
-  setActingCompanyId('')
-  try { localStorage.removeItem(ACTIVE_STORE_STORAGE_KEY) } catch {}
 }
 
 export function logout() {
