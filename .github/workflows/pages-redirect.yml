@@ -1,8 +1,9 @@
 name: Deploy OneEngine to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["Validate OneEngine"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -16,10 +17,15 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -36,11 +42,10 @@ jobs:
           VITE_API_BASE: https://oneengine-6gas.onrender.com
         run: npm run build
 
-      # Fixed route documents must return 200, not the SPA fallback's 404.
       - name: Add GitHub Pages route entry points and SPA fallback
         run: |
           node scripts/build-pages-routes.mjs
-          printf '%s' "$GITHUB_SHA" > dist/deploy-sha.txt
+          printf '%s' "$DEPLOY_SHA" > dist/deploy-sha.txt
           node scripts/workflow-builder-fingerprint.mjs > dist/workflow-builder-sha.txt
 
       - name: Configure Pages
