@@ -2,7 +2,7 @@ import express from "express";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { getCompanyEntitlements, isPackageLicensed } from "../services/licensing.js";
-import { executeSystemAction, executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeSystemAction } from "../services/systemWorkflowRuntime.js";
 
 const PRODUCT_PROVIDER_ENTRIES = Object.freeze(internalAppCatalog.filter((entry) => entry.providerConnector?.globalProductLookup));
 const PROVIDER_KEYS = Object.freeze(PRODUCT_PROVIDER_ENTRIES.map((entry) => entry.providerConnector.globalProductLookup.providerKey).filter(Boolean));
