@@ -104,7 +104,8 @@ export async function executeSystemWorkflow({
   db,
   companyId,
   userId = null,
-  systemKey,
+  systemKey = null,
+  apiName = null,
   req = null,
   input = {},
   object = null,
@@ -119,7 +120,7 @@ export async function executeSystemWorkflow({
 }) {
   if (!db || typeof db !== "function") throw new Error("System workflow requires database context");
   if (!companyId) throw new Error("System workflow requires company context");
-  if (!systemKey) throw new Error("System workflow key is required");
+  if (!systemKey && !apiName) throw new Error("System workflow key or API name is required");
 
   await ensureSystemWorkflowCatalog({ db, companyId, userId });
   const actor = await resolveSystemWorkflowActor({ db, companyId, userId, req });
@@ -135,19 +136,30 @@ export async function executeSystemWorkflow({
     },
   };
 
-  const workflowResult = await db(
-    `SELECT * FROM platform_rules
-      WHERE company_id=$1
-        AND action->>'systemGenerated'='true'
-        AND action->>'systemKey'=$2
-        AND active=TRUE
-        AND lifecycle_status='ACTIVE'
-      LIMIT 1`,
-    [companyId, systemKey]
-  );
+  const workflowResult = systemKey
+    ? await db(
+      `SELECT * FROM platform_rules
+        WHERE company_id=$1
+          AND action->>'systemGenerated'='true'
+          AND action->>'systemKey'=$2
+          AND active=TRUE
+          AND lifecycle_status='ACTIVE'
+        LIMIT 1`,
+      [companyId, systemKey]
+    )
+    : await db(
+      `SELECT * FROM platform_rules
+        WHERE company_id=$1
+          AND action->>'apiName'=$2
+          AND active=TRUE
+          AND lifecycle_status='ACTIVE'
+        ORDER BY updated_at DESC,created_at DESC
+        LIMIT 1`,
+      [companyId, apiName]
+    );
   const workflow = workflowResult.rows[0];
   if (!workflow) {
-    const error = new Error(`System workflow "${systemKey}" is unavailable or inactive`);
+    const error = new Error(`Workflow "${systemKey || apiName}" is unavailable or inactive`);
     error.code = "SYSTEM_WORKFLOW_UNAVAILABLE";
     error.status = 409;
     throw error;
@@ -160,8 +172,8 @@ export async function executeSystemWorkflow({
       || randomUUID()
   );
   const sourceInfo = safeSource(req, source);
-  const capabilityType = workflow.action?.capabilityType || null;
-  const capabilityKey = workflow.action?.capabilityKey || null;
+  const capabilityType = workflow.action?.capabilityType || (workflow.action?.type === "workflow" ? "workflow" : null);
+  const capabilityKey = workflow.action?.capabilityKey || workflow.action?.apiName || apiName || null;
   const actions = (workflow.action?.actions || []).map((action) =>
     runtimeAction(action, capabilityType, input)
   );
@@ -188,7 +200,8 @@ export async function executeSystemWorkflow({
     parentRunId: parentRunId || null,
     status: "RUNNING",
     metadata: {
-      systemKey,
+      systemKey: systemKey || null,
+      apiName: workflow.action?.apiName || apiName || null,
       capabilityType,
       capabilityKey,
       actorUserId: actor.id,
