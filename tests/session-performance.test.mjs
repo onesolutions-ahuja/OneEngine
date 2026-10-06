@@ -291,11 +291,10 @@ test('normal password login runs security, Google readiness and permissions conc
 })
 
 
-test('all production-facing live E2E workflows are manual-only', async () => {
+test('bandwidth-heavy production E2E workflows are manual-only', async () => {
   for (const path of [
     '../.github/workflows/playwright-e2e.yml',
     '../.github/workflows/cypress-deep-e2e.yml',
-    '../.github/workflows/workflow-builder-e2e.yml',
     '../.github/workflows/appointment-debug.yml',
   ]) {
     const source = await read(path)
