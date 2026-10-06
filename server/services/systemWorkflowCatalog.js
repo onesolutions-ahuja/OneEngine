@@ -107,13 +107,6 @@ const creditFlow = ({ key, name, inputs, outputs, actions }) => {
 
 const CUSTOMER_CREDIT_SYSTEM_WORKFLOWS = [];
 
-const tillFlow = (spec) => {
-  const flow = creditFlow(spec);
-  return { ...flow, name: `OneTill - ${spec.name}` };
-};
-
-const TILL_SYSTEM_WORKFLOWS = Object.freeze([]);
-
 const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
   {
     systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
@@ -337,7 +330,7 @@ function titleCase(value = "") {
 }
 
 export function systemWorkflowDefinitions() {
-  return [...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS];
+  return [...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS];
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {
