@@ -40,7 +40,7 @@ test("Phase 2 generic runtime surfaces contain no business object literals", asy
 });
 
 test("Phase 2 Till and kiosk resolve business runtime contracts from metadata", async()=>{
-  for(const path of ["src/pages/till/TillPage.jsx","src/services/tillOffline.js","src/pages/kiosk/OneKioskPage.jsx"]){
+  for(const path of ["src/pages/till/TillPage.jsx","src/services/tillOffline.js","src/pages/kiosk/OneKioskPage.jsx","src/pages/kiosk/OneKioskDisplayPage.jsx"]){
     const source=await read(path);
     for(const token of [
       "/api/platform/runtime/objects/sale/buttons",
