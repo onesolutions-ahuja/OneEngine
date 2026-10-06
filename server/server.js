@@ -2057,7 +2057,7 @@ app.use(
 app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers }));
 
 
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt }));
 
 /* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
 app.use(
