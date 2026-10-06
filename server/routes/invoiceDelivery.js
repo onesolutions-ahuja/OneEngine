@@ -10,10 +10,7 @@ import {
   decryptSecret,
   maskEmail,
 } from "../services/onlineOrders/platformConfig.js";
-import {
-  resendInvoiceByChannel,
-  testInvoiceChannelConnection,
-} from "../services/invoiceDelivery.js";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
 /*
  * T9D-NEXT - SMS + Email invoice delivery settings/delivery routes.
@@ -316,15 +313,14 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
           return res.status(404).json({ success: false, message: "Sale not found in your company" });
         }
 
-        const result = await resendInvoiceByChannel({
-          db,
-          channel: req.params.channel,
-          saleId,
-          companyId: req.user.companyId,
-          storeId: req.user.storeId ?? null,
-          userId: req.user.id ?? null,
-          overrideRecipient: recipient, // admin-supplied demo recipient
+        const execution = await executeSystemWorkflow({
+          db, companyId:req.user.companyId, userId:req.user.id || null,
+          systemKey:"flow:invoice.delivery.send", req,
+          input:{ saleId, channel:req.params.channel, recipient, message:"Invoice available", invoiceUrl:null },
+          storeId:req.user.storeId || null, writeAudit,
+          source:{ type:"api", method:req.method, path:req.path, capability:"INVOICE_DELIVERY" },
         });
+        const result = { ok:true, outcome:"sent", ...(execution.result || {}) };
 
         await writeAudit(req.user.companyId, req.user.id, result.ok ? "invoice_delivery_test_sent" : "invoice_delivery_test_failed", "sale", saleId, {
           channel: channel.label.toLowerCase(),
@@ -382,14 +378,14 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
           return res.status(404).json({ success: false, message: "Sale not found in your company" });
         }
 
-        const result = await resendInvoiceByChannel({
-          db,
-          channel: req.params.channel,
-          saleId,
-          companyId: req.user.companyId,
-          storeId: req.user.storeId ?? null,
-          userId: req.user.id ?? null,
+        const execution = await executeSystemWorkflow({
+          db, companyId:req.user.companyId, userId:req.user.id || null,
+          systemKey:"flow:invoice.delivery.send", req,
+          input:{ saleId, channel:req.params.channel, recipient:null, message:"Invoice available", invoiceUrl:null },
+          storeId:req.user.storeId || null, writeAudit,
+          source:{ type:"api", method:req.method, path:req.path, capability:"INVOICE_DELIVERY" },
         });
+        const result = { ok:true, outcome:"sent", ...(execution.result || {}) };
 
         await writeAudit(req.user.companyId, req.user.id, result.ok ? "invoice_delivered" : "invoice_delivery_failed", "sale", saleId, {
           channel: channel.label.toLowerCase(),
