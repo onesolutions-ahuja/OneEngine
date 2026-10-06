@@ -89,9 +89,24 @@ export async function loginIfConfigured(page) {
     );
 
     await page.getByRole("button", { name: /^Sign In$/ }).click();
-    const loginResponse = await loginResponsePromise;
+    let loginResponse = await loginResponsePromise;
     let loginBody = null;
     try { loginBody = await loginResponse.json(); } catch {}
+
+    if ([502, 503, 504].includes(loginResponse.status())) {
+      await page.waitForTimeout(1200);
+      await page.goto("./");
+      const retryUser = page.getByPlaceholder("Email or username");
+      await retryUser.fill(username);
+      await page.getByPlaceholder("Password").fill(password);
+      const retryResponsePromise = page.waitForResponse(
+        (response) => response.url().includes("/api/auth/login") && response.request().method() === "POST",
+        { timeout: 30_000 },
+      );
+      await page.getByRole("button", { name: /^Sign In$/ }).click();
+      loginResponse = await retryResponsePromise;
+      try { loginBody = await loginResponse.json(); } catch { loginBody = null; }
+    }
 
     if (!loginResponse.ok() || loginBody?.success === false) {
       throw new Error(`Login failed (${loginResponse.status()}): ${loginBody?.message || "authentication rejected"}`);
