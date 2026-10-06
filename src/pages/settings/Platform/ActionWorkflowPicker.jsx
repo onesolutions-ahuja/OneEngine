@@ -553,14 +553,14 @@ export function WorkflowCreationOverlay({ contextObjectKey, onClose, onCreated }
           <button type="button" className="onepos-btn onepos-btn-secondary" onClick={onClose}>Cancel</button>
         </header>
         <div className="min-h-0 flex-1 overflow-auto p-4">
-          <GPT BuilderOverlayHost contextObjectKey={contextObjectKey} baseline={baseline} onClose={onClose} onCreated={onCreated} />
+          <WorkflowBuilderOverlayHost contextObjectKey={contextObjectKey} baseline={baseline} onClose={onClose} onCreated={onCreated} />
         </div>
       </div>
     </div>
   );
 }
 
-function GPT BuilderOverlayHost({ contextObjectKey, baseline, onClose, onCreated }) {
+function WorkflowBuilderOverlayHost({ contextObjectKey, baseline, onClose, onCreated }) {
   // InlineNewWorkflowForm already returns the created workflow through onCreated.
   // Avoid polling the full rules registry while this overlay is open.
   return (
