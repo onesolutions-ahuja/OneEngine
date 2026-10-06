@@ -342,7 +342,7 @@ export default function RelationshipEditor({
                     };
                   });
                 }}
-                placeholder="Customer Sales"
+                placeholder="Parent Records"
                 required
               />
             </label>
@@ -361,7 +361,7 @@ export default function RelationshipEditor({
                     event.target.value
                   )
                 }
-                placeholder="customer_sales"
+                placeholder="parent_records"
                 required
               />
             </label>
