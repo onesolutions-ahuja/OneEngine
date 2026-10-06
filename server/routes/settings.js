@@ -260,12 +260,6 @@ export default function createSettingsRouter({
     }
   });
 
-  router.get("/health/integrations", authenticate, async (req, res) => {
-    let database = "Unavailable";
-    try { await db("SELECT 1"); database = "Connected"; } catch { database = "Unavailable"; }
-    const terminals = await db("SELECT COUNT(*)::int AS count FROM payment_terminals WHERE company_id=$1 AND active=true", [req.user.companyId]);
-    res.json({ success: true, data: { database, api: "Connected", paymentTerminal: terminals.rows[0].count ? "Configured" : "Not configured", barcodeScanner: "Not configured", cashDrawer: "Not configured", receiptPrinter: "Not configured" } });
-  });
 
 
   return router;
