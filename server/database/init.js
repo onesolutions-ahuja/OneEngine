@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { runMigrations } from "./migrations.js";
 import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
 import { backfillLegacyRuleFieldReferences } from "../services/platformRuleReferences.js";
-import { packageDefinitions } from "../services/packageRegistry.js";
 import { platformSchema } from "../services/platformMetadata.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { decryptSecret } from "../services/onlineOrders/platformConfig.js";
@@ -424,7 +423,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "24",
       name: "Synchronise internal package catalog with package registry",
       up: async client => {
-        const definitions = packageDefinitions();
+        const definitions = [];
         for (const pkg of definitions) {
           const packageType = pkg.manifest?.packageType || "APPLICATION";
           const publisher = pkg.manifest?.publisher || "OneSolutions";
@@ -1226,7 +1225,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "44",
       name: "Replace persisted hidden appointment conversation workflows in place",
       up: async client => {
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const oneAssistant = null;
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
         if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
 
@@ -1306,7 +1305,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "46",
       name: "Refresh persisted appointment graph with rejoined channel branches",
       up: async client => {
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const oneAssistant = null;
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
         if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
         const rows = await client.query(
@@ -1336,7 +1335,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "47",
       name: "Replace hidden appointment slot search with generic Flow primitives",
       up: async client => {
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const oneAssistant = null;
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
         if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
         const keys = router.action.actions.map((action) => action.key);
@@ -1375,7 +1374,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           "UPDATE platform_rules SET action=replace(action::text,'\"SEND_APPOINTMENT_MESSAGE\"','\"SEND_COMMUNICATION\"')::jsonb,updated_at=NOW() WHERE action::text LIKE '%SEND_APPOINTMENT_MESSAGE%'"
         );
 
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const oneAssistant = null;
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
         if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
         if (router.action.actions.some((action) => action.key === "SEND_APPOINTMENT_MESSAGE")) {
@@ -1567,7 +1566,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "62",
       name: "Keep exactly one OneAssistant communication event router per tenant",
       up: async client => {
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
+        const oneAssistant = null;
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
         if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
 
