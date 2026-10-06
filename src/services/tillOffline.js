@@ -150,7 +150,13 @@ export async function syncOfflineCashSales(apiRequest) {
       const transactionObjectKey = String(surface?.objects?.transaction || '')
       const completeSaleAction = String(surface?.actions?.completeSale || '')
       if (!transactionObjectKey || !completeSaleAction) throw new Error('Offline Till runtime metadata is incomplete.')
-      const response = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(transactionObjectKey)}/buttons/${encodeURIComponent(completeSaleAction)}/execute`, { method: 'POST', body: JSON.stringify({ context: { source: 'OFFLINE_SYNC' }, inputs: { sale: { ...(entry.payload.sale || {}), offline_created: true, sync_status: 'SYNCED' }, items: entry.payload.items || [], payments: entry.payload.payments || [] } }) })
+      const saleMapping = surface?.payloadMappings?.sale || {}
+      const offlineCreatedField = String(saleMapping?.offlineCreated || '')
+      const syncStatusField = String(saleMapping?.syncStatus || '')
+      const sale = { ...(entry.payload.sale || {}) }
+      if (offlineCreatedField) sale[offlineCreatedField] = true
+      if (syncStatusField) sale[syncStatusField] = surface?.values?.offlineSyncStatus
+      const response = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(transactionObjectKey)}/buttons/${encodeURIComponent(completeSaleAction)}/execute`, { method: 'POST', body: JSON.stringify({ context: { source: surface?.values?.offlineSyncSource || null }, inputs: { sale, items: entry.payload.items || [], payments: entry.payload.payments || [] } }) })
       const saleStep = response?.data?.results?.find?.((step) => step?.stepId === 'create_sale')?.result
       const saleId = saleStep?.created?.id || saleStep?.matched?.id || null
       if (!response?.success || !saleId) throw Object.assign(new Error(response?.message || 'Unconfirmed sale response'), { serverResponse: true })
