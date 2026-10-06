@@ -46,7 +46,7 @@ export function isPrivilegedMutation(path, method = "GET") {
   const verb = String(method || "GET").toUpperCase();
   if (!["POST","PUT","PATCH","DELETE"].includes(verb)) return false;
   const pathname = canonicalPath(path);
-  return pathname.startsWith("/api/appointments") || pathname.startsWith("/api/platform/") || pathname.startsWith("/api/security/") || pathname.startsWith("/api/packages/")
+  return pathname.startsWith("/api/platform/") || pathname.startsWith("/api/security/") || pathname.startsWith("/api/packages/")
     || pathname.startsWith("/api/admin/") || pathname.startsWith("/api/settings/");
 }
 
