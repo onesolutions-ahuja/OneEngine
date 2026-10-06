@@ -25,7 +25,13 @@ test("transactional objects use metadata flow writes instead of protected busine
   assert.match(registry, /flowWritesOnly:true|flowWritesOnly: true/);
 });
 
-test("system object helper contains no business-specific purchase metadata", async () => {\n  const source = await readFile(new URL("../server/services/systemObjects.js", import.meta.url), "utf8");\n  assert.match(source, /SYSTEM_OBJECTS = Object\\.freeze\\(\\[\\]\\)/);\n  assert.equal(source.includes("purchase_line"), false);\n  assert.equal(source.includes("purchase_items"), false);\n});\n
+test("system object helper contains no business-specific purchase metadata", async () => {
+  const source = await readFile(new URL("../server/services/systemObjects.js", import.meta.url), "utf8");
+  assert.match(source, /SYSTEM_OBJECTS = Object\.freeze\(\[\]\)/);
+  assert.equal(source.includes("purchase_line"), false);
+  assert.equal(source.includes("purchase_items"), false);
+});
+
 
 test("purchase create is generic object flow metadata", async () => {
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
