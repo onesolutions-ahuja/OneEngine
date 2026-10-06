@@ -45,6 +45,7 @@ import createReportsRouter from "./routes/reports.js";
 import createSecureInvoiceRouter from "./routes/secureInvoice.js";
 import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
+import createCoreRuntimeRouter from "./routes/coreRuntime.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
@@ -1980,6 +1981,7 @@ app.use("/api", createPlatformEventsRouter({
   },
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
+app.use("/api", createCoreRuntimeRouter({ authenticate, authorize, db }));
 
 app.use("/api", createSettingsRouter({
   authenticate,
