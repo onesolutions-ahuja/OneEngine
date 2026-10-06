@@ -573,226 +573,707 @@
   "workflows": [
     {
       "objectKey": "purchase",
-      "name": "Purchase Create",
+      "name": "Purchase · Create",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
-      "inputContract": [
-        {
-          "name": "purchase",
-          "type": "record",
-          "required": true
-        },
-        {
-          "name": "items",
-          "type": "record_collection",
-          "required": true
-        }
-      ],
-      "outputContract": [
-        {
-          "name": "purchase",
-          "type": "record",
-          "source": "variables.purchase"
-        }
-      ],
-      "actions": [
-        {
-          "id": "create_purchase",
-          "label": "Create Purchase",
-          "key": "CREATE_RECORD",
-          "objectKey": "purchase",
-          "recordResource": {
-            "path": "variables.purchase"
-          }
-        },
-        {
-          "id": "create_purchase_lines",
-          "label": "Create Purchase Lines",
-          "key": "CREATE_RECORD",
-          "objectKey": "purchase_line",
-          "recordCollectionResource": {
-            "path": "variables.items"
+      "action": {
+        "type": "workflow",
+        "scope": "package",
+        "capabilityKey": "purchase.create",
+        "apiName": "PURCHASE_CREATE",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "supplierId",
+            "label": "supplierId",
+            "type": "text",
+            "required": true
           },
-          "commonFieldValues": {
-            "purchase_id": {
-              "path": "steps.create_purchase.created.id"
+          {
+            "name": "supplierName",
+            "label": "supplierName",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "referenceNumber",
+            "label": "referenceNumber",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "purchaseDate",
+            "label": "purchaseDate",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "label": "notes",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "items",
+            "label": "items",
+            "type": "collection",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "purchaseId",
+            "label": "purchaseId",
+            "type": "text",
+            "source": "variables.purchaseId"
+          },
+          {
+            "name": "total",
+            "label": "total",
+            "type": "number",
+            "source": "variables.total"
+          }
+        ],
+        "actions": [
+          {
+            "id": "init_total",
+            "label": "Initialize Total",
+            "key": "ASSIGNMENT",
+            "variableName": "total",
+            "variableType": "currency",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "sum_lines",
+            "label": "Calculate Purchase Total",
+            "key": "LOOP",
+            "collection": "$record.items",
+            "itemVariable": "currentItem",
+            "bodyBranch": [
+              "line_total",
+              "add_total"
+            ]
+          },
+          {
+            "id": "line_total",
+            "label": "Calculate Line Total",
+            "key": "FORMULA",
+            "resourceName": "lineTotal",
+            "resultType": "number",
+            "expression": "quantity * unitCost",
+            "inputs": {
+              "quantity": {
+                "path": "variables.currentItem.quantity"
+              },
+              "unitCost": {
+                "path": "variables.currentItem.unitCost"
+              }
+            }
+          },
+          {
+            "id": "add_total",
+            "label": "Add Line Total",
+            "key": "ASSIGNMENT",
+            "variableName": "total",
+            "variableType": "currency",
+            "operator": "add",
+            "value": {
+              "path": "variables.lineTotal"
+            }
+          },
+          {
+            "id": "create_purchase",
+            "label": "Create Purchase",
+            "key": "CREATE_RECORD",
+            "objectKey": "purchase",
+            "fieldValues": {
+              "supplier_id": {
+                "path": "$record.supplierId"
+              },
+              "supplier_name": {
+                "path": "$record.supplierName"
+              },
+              "reference_number": {
+                "path": "$record.referenceNumber"
+              },
+              "purchase_date": {
+                "path": "$record.purchaseDate"
+              },
+              "notes": {
+                "path": "$record.notes"
+              },
+              "status": "DRAFT",
+              "subtotal": {
+                "path": "variables.total"
+              },
+              "total": {
+                "path": "variables.total"
+              }
+            }
+          },
+          {
+            "id": "set_purchase_id",
+            "label": "Store Purchase Id",
+            "key": "ASSIGNMENT",
+            "variableName": "purchaseId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_purchase.record.id"
+            }
+          },
+          {
+            "id": "create_lines",
+            "label": "Create Purchase Lines",
+            "key": "LOOP",
+            "collection": "$record.items",
+            "itemVariable": "currentItem",
+            "bodyBranch": [
+              "line_total_for_create",
+              "create_line"
+            ]
+          },
+          {
+            "id": "line_total_for_create",
+            "label": "Calculate Saved Line Total",
+            "key": "FORMULA",
+            "resourceName": "savedLineTotal",
+            "resultType": "number",
+            "expression": "quantity * unitCost",
+            "inputs": {
+              "quantity": {
+                "path": "variables.currentItem.quantity"
+              },
+              "unitCost": {
+                "path": "variables.currentItem.unitCost"
+              }
+            }
+          },
+          {
+            "id": "create_line",
+            "label": "Create Purchase Line",
+            "key": "CREATE_RECORD",
+            "objectKey": "purchase_line",
+            "fieldValues": {
+              "purchase_id": {
+                "path": "variables.purchaseId"
+              },
+              "product_id": {
+                "path": "variables.currentItem.productId"
+              },
+              "quantity": {
+                "path": "variables.currentItem.quantity"
+              },
+              "received_quantity": 0,
+              "unit_cost": {
+                "path": "variables.currentItem.unitCost"
+              },
+              "line_total": {
+                "path": "variables.savedLineTotal"
+              },
+              "batch_number": {
+                "path": "variables.currentItem.batchNumber"
+              },
+              "manufacturing_date": {
+                "path": "variables.currentItem.manufacturingDate"
+              },
+              "expiry_date": {
+                "path": "variables.currentItem.expiryDate"
+              }
             }
           }
-        }
-      ],
-      "variables": [
-        {
-          "value": "variables.purchase",
-          "apiName": "purchase",
-          "label": "Purchase",
-          "type": "Variable",
-          "dataType": "Record",
-          "defaultValue": null,
-          "isCollection": false,
-          "availableInput": true,
-          "availableOutput": true,
-          "objectKey": "purchase"
-        },
-        {
-          "value": "variables.items",
-          "apiName": "items",
-          "label": "Purchase Lines",
-          "type": "Variable",
-          "dataType": "Record",
-          "defaultValue": [],
-          "isCollection": true,
-          "availableInput": true,
-          "availableOutput": false,
-          "objectKey": "purchase_line"
-        }
-      ]
+        ]
+      }
     },
     {
       "objectKey": "purchase",
-      "name": "Purchase Receive",
+      "name": "Purchase · Receive",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
-      "inputContract": [
-        {
-          "name": "receipt",
-          "type": "record",
-          "required": true
-        },
-        {
-          "name": "purchase",
-          "type": "record",
-          "required": true
-        }
-      ],
-      "actions": [
-        {
-          "id": "create_receipt",
-          "label": "Create Purchase Receipt",
-          "key": "CREATE_RECORD",
-          "objectKey": "purchase_receipt",
-          "recordResource": {
-            "path": "variables.receipt"
-          }
-        },
-        {
-          "id": "update_purchase",
-          "label": "Update Purchase Receipt Status",
-          "key": "UPDATE_RECORD",
-          "objectKey": "purchase",
-          "recordId": {
-            "path": "record.id"
+      "action": {
+        "type": "workflow",
+        "scope": "package",
+        "capabilityKey": "purchase.receive",
+        "apiName": "PURCHASE_RECEIVE",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "purchaseId",
+            "label": "purchaseId",
+            "type": "text",
+            "required": true
           },
-          "fieldValues": {
-            "status": {
-              "path": "variables.purchase.status"
+          {
+            "name": "receivingReference",
+            "label": "receivingReference",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "receivingNotes",
+            "label": "receivingNotes",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "now",
+            "label": "now",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "userId",
+            "label": "userId",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "receiptId",
+            "label": "receiptId",
+            "type": "text",
+            "source": "variables.receiptId"
+          }
+        ],
+        "actions": [
+          {
+            "id": "get_purchase",
+            "label": "Get Purchase",
+            "key": "GET_RECORDS",
+            "objectKey": "purchase",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.purchaseId"
+                }
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "get_lines",
+            "label": "Get Purchase Lines",
+            "key": "GET_RECORDS",
+            "objectKey": "purchase_line",
+            "filters": [
+              {
+                "field": "purchase_id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.purchaseId"
+                }
+              }
+            ],
+            "limit": 20000,
+            "store": "all"
+          },
+          {
+            "id": "create_receipt",
+            "label": "Create Purchase Receipt",
+            "key": "CREATE_RECORD",
+            "objectKey": "purchase_receipt",
+            "fieldValues": {
+              "purchase_id": {
+                "path": "$record.purchaseId"
+              },
+              "reference_number": {
+                "path": "$record.receivingReference"
+              },
+              "notes": {
+                "path": "$record.receivingNotes"
+              },
+              "received_by": {
+                "path": "$record.userId"
+              }
+            }
+          },
+          {
+            "id": "set_receipt_id",
+            "label": "Store Receipt Id",
+            "key": "ASSIGNMENT",
+            "variableName": "receiptId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_receipt.record.id"
+            }
+          },
+          {
+            "id": "receive_lines",
+            "label": "Receive Remaining Lines",
+            "key": "LOOP",
+            "collection": {
+              "path": "steps.get_lines.records"
             },
-            "received_by": {
-              "path": "variables.purchase.received_by"
+            "itemVariable": "currentLine",
+            "bodyBranch": [
+              "remaining_qty",
+              "has_remaining",
+              "inventory_subflow",
+              "mark_line_received"
+            ]
+          },
+          {
+            "id": "remaining_qty",
+            "label": "Calculate Remaining Quantity",
+            "key": "FORMULA",
+            "resourceName": "remainingQty",
+            "resultType": "number",
+            "expression": "ordered - received",
+            "inputs": {
+              "ordered": {
+                "path": "variables.currentLine.quantity"
+              },
+              "received": {
+                "path": "variables.currentLine.received_quantity",
+                "fallback": 0
+              }
+            }
+          },
+          {
+            "id": "has_remaining",
+            "label": "Remaining Quantity?",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Receive",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.remainingQty",
+                      "operator": "greater_than",
+                      "value": 0
+                    }
+                  ]
+                },
+                "branch": [
+                  "inventory_subflow",
+                  "mark_line_received"
+                ]
+              }
+            ],
+            "defaultLabel": "Already Received",
+            "defaultBranch": []
+          },
+          {
+            "id": "inventory_subflow",
+            "label": "Apply Inventory Movement",
+            "key": "RUN_SUBFLOW",
+            "subflowApiName": "INVENTORY_MOVEMENT_CREATE",
+            "inputAssignments": {
+              "productId": {
+                "path": "variables.currentLine.product_id"
+              },
+              "movementType": "PURCHASE",
+              "quantityChange": {
+                "path": "variables.remainingQty"
+              },
+              "referenceType": "PURCHASE",
+              "referenceId": {
+                "path": "$record.purchaseId"
+              },
+              "createdBy": {
+                "path": "$record.userId"
+              }
+            }
+          },
+          {
+            "id": "mark_line_received",
+            "label": "Mark Line Received",
+            "key": "UPDATE_RECORD",
+            "objectKey": "purchase_line",
+            "recordId": {
+              "path": "variables.currentLine.id"
             },
-            "received_at": {
-              "path": "variables.purchase.received_at"
+            "fieldValues": {
+              "received_quantity": {
+                "path": "variables.currentLine.quantity"
+              }
+            }
+          },
+          {
+            "id": "mark_purchase_received",
+            "label": "Mark Purchase Received",
+            "key": "UPDATE_RECORD",
+            "objectKey": "purchase",
+            "recordId": {
+              "path": "$record.purchaseId"
+            },
+            "fieldValues": {
+              "status": "RECEIVED",
+              "received_by": {
+                "path": "$record.userId"
+              },
+              "received_at": {
+                "path": "$record.now"
+              }
             }
           }
-        }
-      ],
-      "variables": [
-        {
-          "value": "variables.receipt",
-          "apiName": "receipt",
-          "label": "Receipt",
-          "type": "Variable",
-          "dataType": "Record",
-          "defaultValue": null,
-          "isCollection": false,
-          "availableInput": true,
-          "availableOutput": true,
-          "objectKey": "purchase_receipt"
-        },
-        {
-          "value": "variables.purchase",
-          "apiName": "purchase",
-          "label": "Purchase Update",
-          "type": "Variable",
-          "dataType": "Record",
-          "defaultValue": null,
-          "isCollection": false,
-          "availableInput": true,
-          "availableOutput": false,
-          "objectKey": "purchase"
-        }
-      ]
+        ]
+      }
     },
     {
       "objectKey": "purchase_line",
-      "name": "Supplier Return Execute",
+      "name": "Purchasing · Supplier Return",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
-      "inputContract": [
-        {
-          "name": "return",
-          "type": "record",
-          "required": true
-        },
-        {
-          "name": "items",
-          "type": "record_collection",
-          "required": true
-        }
-      ],
-      "actions": [
-        {
-          "id": "create_return",
-          "label": "Create Supplier Return",
-          "key": "CREATE_RECORD",
-          "objectKey": "stock_return",
-          "recordResource": {
-            "path": "variables.return"
-          }
-        },
-        {
-          "id": "create_return_lines",
-          "label": "Create Return Lines",
-          "key": "CREATE_RECORD",
-          "objectKey": "stock_return_line",
-          "recordCollectionResource": {
-            "path": "variables.items"
+      "action": {
+        "type": "workflow",
+        "scope": "package",
+        "capabilityKey": "supplier.return.execute",
+        "apiName": "SUPPLIER_RETURN_EXECUTE",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "purchaseItemId",
+            "label": "purchaseItemId",
+            "type": "text",
+            "required": true
           },
-          "commonFieldValues": {
-            "return_id": {
-              "path": "steps.create_return.created.id"
+          {
+            "name": "purchaseId",
+            "label": "purchaseId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "productId",
+            "label": "productId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "quantity",
+            "label": "quantity",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "label": "reason",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "returnNumber",
+            "label": "returnNumber",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "supplierId",
+            "label": "supplierId",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "unitCost",
+            "label": "unitCost",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "userId",
+            "label": "userId",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "returnId",
+            "label": "returnId",
+            "type": "text",
+            "source": "variables.returnId"
+          },
+          {
+            "name": "credit",
+            "label": "credit",
+            "type": "number",
+            "source": "variables.credit"
+          }
+        ],
+        "actions": [
+          {
+            "id": "get_line",
+            "label": "Get Purchase Line",
+            "key": "GET_RECORDS",
+            "objectKey": "purchase_line",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.purchaseItemId"
+                }
+              },
+              {
+                "field": "purchase_id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.purchaseId"
+                }
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "credit",
+            "label": "Calculate Return Credit",
+            "key": "FORMULA",
+            "resourceName": "credit",
+            "resultType": "number",
+            "expression": "unitCost * quantity",
+            "inputs": {
+              "unitCost": {
+                "path": "$record.unitCost"
+              },
+              "quantity": {
+                "path": "$record.quantity"
+              }
+            }
+          },
+          {
+            "id": "create_return",
+            "label": "Create Supplier Return",
+            "key": "CREATE_RECORD",
+            "objectKey": "stock_return",
+            "fieldValues": {
+              "return_type": "SUPPLIER",
+              "return_number": {
+                "path": "$record.returnNumber"
+              },
+              "purchase_id": {
+                "path": "$record.purchaseId"
+              },
+              "supplier_id": {
+                "path": "$record.supplierId"
+              },
+              "status": "COMPLETED",
+              "reason": {
+                "path": "$record.reason"
+              }
+            }
+          },
+          {
+            "id": "set_return_id",
+            "label": "Store Return Id",
+            "key": "ASSIGNMENT",
+            "variableName": "returnId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_return.record.id"
+            }
+          },
+          {
+            "id": "create_return_line",
+            "label": "Create Return Line",
+            "key": "CREATE_RECORD",
+            "objectKey": "stock_return_line",
+            "fieldValues": {
+              "return_id": {
+                "path": "variables.returnId"
+              },
+              "product_id": {
+                "path": "$record.productId"
+              },
+              "purchase_item_id": {
+                "path": "$record.purchaseItemId"
+              },
+              "quantity": {
+                "path": "$record.quantity"
+              },
+              "reason": {
+                "path": "$record.reason"
+              }
+            }
+          },
+          {
+            "id": "inventory_return",
+            "label": "Apply Inventory Return",
+            "key": "RUN_SUBFLOW",
+            "subflowApiName": "INVENTORY_MOVEMENT_CREATE",
+            "inputAssignments": {
+              "productId": {
+                "path": "$record.productId"
+              },
+              "movementType": "SUPPLIER_RETURN",
+              "quantityChange": {
+                "path": "$record.quantity"
+              },
+              "referenceType": "PURCHASE_RETURN",
+              "referenceId": {
+                "path": "variables.returnId"
+              },
+              "reason": {
+                "path": "$record.reason"
+              },
+              "createdBy": {
+                "path": "$record.userId"
+              }
+            }
+          },
+          {
+            "id": "has_supplier",
+            "label": "Supplier Credit?",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Post Credit",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "$record.supplierId",
+                      "operator": "is_not_blank"
+                    }
+                  ]
+                },
+                "branch": [
+                  "supplier_credit"
+                ]
+              }
+            ],
+            "defaultLabel": "No Supplier Credit",
+            "defaultBranch": []
+          },
+          {
+            "id": "supplier_credit",
+            "label": "Post Supplier Credit",
+            "key": "RUN_SUBFLOW",
+            "subflowApiName": "SUPPLIER_LEDGER_ADJUST",
+            "inputAssignments": {
+              "supplierId": {
+                "path": "$record.supplierId"
+              },
+              "entryType": "RETURN_CREDIT",
+              "amount": {
+                "path": "variables.credit"
+              },
+              "debit": false,
+              "reference": {
+                "path": "$record.returnNumber"
+              },
+              "description": {
+                "path": "$record.reason"
+              }
             }
           }
-        }
-      ],
-      "variables": [
-        {
-          "value": "variables.return",
-          "apiName": "return",
-          "label": "Return",
-          "type": "Variable",
-          "dataType": "Record",
-          "defaultValue": null,
-          "isCollection": false,
-          "availableInput": true,
-          "availableOutput": true,
-          "objectKey": "stock_return"
-        },
-        {
-          "value": "variables.items",
-          "apiName": "items",
-          "label": "Return Lines",
-          "type": "Variable",
-          "dataType": "Record",
-          "defaultValue": [],
-          "isCollection": true,
-          "availableInput": true,
-          "availableOutput": false,
-          "objectKey": "stock_return_line"
-        }
-      ]
+        ]
+      }
     }
   ],
   "buttons": [
