@@ -583,6 +583,46 @@
             "settingsSection": "AI Assistant",
             "min": 0
           }
+        },
+        {
+          "apiName": "landing_flow",
+          "label": "Landing Flow",
+          "fieldType": "json",
+          "sourceColumn": "landing_flow",
+          "writable": true,
+          "config": {
+            "settingsHidden": true
+          }
+        },
+        {
+          "apiName": "platform_theme",
+          "label": "Platform Theme",
+          "fieldType": "json",
+          "sourceColumn": "platform_theme",
+          "writable": true,
+          "config": {
+            "settingsHidden": true
+          }
+        },
+        {
+          "apiName": "jarves_behaviour_media",
+          "label": "JARVES Behaviour Media",
+          "fieldType": "json",
+          "sourceColumn": "jarves_behaviour_media",
+          "writable": true,
+          "config": {
+            "settingsSection": "AI Assistant"
+          }
+        },
+        {
+          "apiName": "updated_by",
+          "label": "Updated By",
+          "fieldType": "lookup",
+          "sourceColumn": "updated_by",
+          "writable": true,
+          "config": {
+            "settingsHidden": true
+          }
         }
       ]
     },
@@ -752,14 +792,20 @@
           "label": "Last Test Result",
           "fieldType": "text",
           "sourceColumn": "last_test_result",
-          "writable": false
+          "writable": false,
+          "config": {
+            "runtimeWritable": true
+          }
         },
         {
           "apiName": "last_tested_at",
           "label": "Last Tested",
           "fieldType": "datetime",
           "sourceColumn": "last_tested_at",
-          "writable": false
+          "writable": false,
+          "config": {
+            "runtimeWritable": true
+          }
         },
         {
           "apiName": "created_at",
@@ -774,6 +820,27 @@
           "fieldType": "datetime",
           "sourceColumn": "updated_at",
           "writable": false
+        },
+        {
+          "apiName": "device_key",
+          "label": "Device Key",
+          "fieldType": "text",
+          "sourceColumn": "device_key",
+          "writable": true,
+          "config": {
+            "settingsHidden": true
+          }
+        },
+        {
+          "apiName": "api_credentials",
+          "label": "API Credentials",
+          "fieldType": "secret",
+          "sourceColumn": "api_credentials",
+          "writable": true,
+          "config": {
+            "settingsHidden": true,
+            "secure": true
+          }
         }
       ]
     },
@@ -880,14 +947,30 @@
           "label": "Last Test Result",
           "fieldType": "text",
           "sourceColumn": "last_test_result",
-          "writable": false
+          "writable": false,
+          "config": {
+            "runtimeWritable": true
+          }
         },
         {
           "apiName": "last_tested_at",
           "label": "Last Tested",
           "fieldType": "datetime",
           "sourceColumn": "last_tested_at",
-          "writable": false
+          "writable": false,
+          "config": {
+            "runtimeWritable": true
+          }
+        },
+        {
+          "apiName": "device_key",
+          "label": "Device Key",
+          "fieldType": "text",
+          "sourceColumn": "device_key",
+          "writable": true,
+          "config": {
+            "settingsHidden": true
+          }
         }
       ]
     },
