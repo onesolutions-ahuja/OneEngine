@@ -54,3 +54,24 @@ test("system object helper contains no business-specific purchasing metadata", a
   assert.match(source, /SYSTEM_OBJECTS = Object\.freeze\(\[\]\)/);
   for (const key of ["purchase","purchase_line","supplier_return","supplier_invoice","supplier_payment"]) assert.equal(source.includes(key), false, key);
 });
+
+test("Phase 2 has no legacy direct SQL business writers", async () => {
+  const treeTargets = [
+    "../server/services/integrationDispatcher.js",
+    "../server/services/platformFunctionRegistry.js",
+    "../server/services/platformWorkflow.js",
+    "../server/server.js",
+  ];
+  const forbidden = /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(?:purchases|purchase_items|purchase_receipts|suppliers|supplier_invoices|supplier_payments|supplier_payment_allocations|supplier_ledger_entries|stock_returns|stock_return_items)\b/i;
+  for (const target of treeTargets) {
+    const source = await readFile(new URL(target, import.meta.url), "utf8");
+    assert.equal(forbidden.test(source), false, target);
+  }
+});
+
+test("deleted purchasing and supplier business executors do not return", async () => {
+  const registry = await readFile(new URL("../server/services/platformFunctionRegistry.js", import.meta.url), "utf8");
+  for (const key of ["purchase.create","purchase.receive","supplier.return.execute","supplier.payment.execute","supplier.invoice.create","supplier.ledger.adjust"]) {
+    assert.equal(registry.includes(key), false, key);
+  }
+});
