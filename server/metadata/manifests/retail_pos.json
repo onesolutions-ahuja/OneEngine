@@ -498,7 +498,10 @@
                   "unitPrice": "unit_price",
                   "discount": "discount",
                   "tax": "tax",
-                  "total": "total"
+                  "total": "total",
+                  "discountType": "discount_type",
+                  "discountValue": "discount_value",
+                  "originalUnitPrice": "original_unit_price"
                 },
                 "limit": 500
               },
@@ -779,6 +782,27 @@
           "label": "Bundle Components",
           "fieldType": "json",
           "sourceColumn": "bundle_components",
+          "writable": true
+        },
+        {
+          "apiName": "discount_type",
+          "label": "Discount Type",
+          "fieldType": "text",
+          "sourceColumn": "discount_type",
+          "writable": true
+        },
+        {
+          "apiName": "discount_value",
+          "label": "Discount Value",
+          "fieldType": "decimal",
+          "sourceColumn": "discount_value",
+          "writable": true
+        },
+        {
+          "apiName": "original_unit_price",
+          "label": "Original Unit Price",
+          "fieldType": "currency",
+          "sourceColumn": "original_unit_price",
           "writable": true
         }
       ]
