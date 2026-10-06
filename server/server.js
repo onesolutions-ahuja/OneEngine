@@ -33,7 +33,7 @@ import {
 } from "./services/platformWorkflow.js";
 import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
-import { executeSystemAction, executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
+import { executeSystemAction } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
