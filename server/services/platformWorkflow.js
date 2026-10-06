@@ -16,7 +16,7 @@ import { effectiveManifest, resolvePersistedConnectorCapability } from "./connec
 import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
-import { decryptSecret } from "./onlineOrders/platformConfig.js";
+import { decryptSecret } from "./secretCrypto.js";
 import { hasEntitlement } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
