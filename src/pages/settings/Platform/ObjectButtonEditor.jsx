@@ -153,7 +153,7 @@ export default function ObjectButtonEditor({ object, button = null, onSaved, onC
           <option value="url">URL / link</option>
         </select></label>
         {form.targetType === "url" ? (
-          <label>URL / path<input value={form.targetKey} onChange={(event) => setForm({ ...form, targetKey: event.target.value })} placeholder="https://example.com/customer/{id} or /workspace/customer/{id}"/><small>HTTPS or app-relative paths only. Use field placeholders such as {id} or {customer_id}.</small></label>
+          <label>URL / path<input value={form.targetKey} onChange={(event) => setForm({ ...form, targetKey: event.target.value })} placeholder="https://example.com/object/{id} or /workspace/object/{id}"/><small>HTTPS or app-relative paths only. Use field placeholders such as {id} or {record_id}.</small></label>
         ) : (
           <label>Runs<select value={form.targetKey} onChange={(event) => setForm({ ...form, targetKey: event.target.value })}>
             <option value="">Select target</option>
