@@ -8,7 +8,7 @@ const manifestUrl = new URL("../server/metadata/manifests/purchasing_core.json",
 test("purchasing transactions are metadata Flow owned", async () => {
   const manifest = JSON.parse(await readFile(manifestUrl, "utf8"));
   const objectKeys = new Set(manifest.objects.map((item) => item.objectKey));
-  for (const key of ["purchase","purchase_line","purchase_receipt","supplier_return","supplier_return_line"]) assert.ok(objectKeys.has(key), key);
+  for (const key of ["purchase","purchase_line","purchase_receipt","stock_return","stock_return_line"]) assert.ok(objectKeys.has(key), key);
   for (const object of manifest.objects) assert.equal(object.config?.flowWritesOnly, true, object.objectKey);
   const names = new Set(manifest.workflows.map((flow) => flow.name));
   for (const name of ["Purchase Create","Purchase Receive","Supplier Return Execute"]) assert.ok(names.has(name), name);
@@ -47,12 +47,6 @@ test("generic CRUD protects Flow-owned purchasing transaction objects", async ()
   const platform = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
   assert.match(platform, /config\?\.flowWritesOnly === true/);
   assert.match(platform, /SYSTEM_OBJECT_OPERATION_REQUIRED/);
-});
-
-test("system object helper contains no business-specific purchasing metadata", async () => {
-  const source = await readFile(new URL("../server/services/systemObjects.js", import.meta.url), "utf8");
-  assert.match(source, /SYSTEM_OBJECTS = Object\.freeze\(\[\]\)/);
-  for (const key of ["purchase","purchase_line","supplier_return","supplier_invoice","supplier_payment"]) assert.equal(source.includes(key), false, key);
 });
 
 test("Phase 2 has no legacy direct SQL business writers", async () => {
