@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock, ChevronLeft, Copy, MousePointer2, Play, Plus, Redo2, Search, Trash2, Undo2, Workflow, X, Zap, ZoomIn, ZoomOut } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
+import GPTBuilderFormulaBuilder, { basicFormulaCheck } from '../gptbuilder/GPTBuilderFormulaBuilder'
 import './GPTBuilderNewPage.css'
 
 export const FLOW_TYPES = [
@@ -166,6 +167,9 @@ const RESOURCE_TYPES=[['Variable','variable'],['Constant','constant'],['Formula'
 const DATA_TYPES=[['Text','text'],['Record','record'],['Number','number'],['Currency','currency'],['Boolean','boolean'],['Date','date'],['Date/Time','datetime'],['Time','time'],['Picklist','picklist'],['Multi-Select Picklist','multiselect'],['Apex-Defined','apex_defined']]
 const formulaCheck=(value)=>{const text=String(value||'').trim();if(!text)return 'Enter a formula.';let depth=0;for(const ch of text){if(ch==='(')depth++;if(ch===')')depth--;if(depth<0)return 'Formula has unmatched parentheses.'}return depth===0?'':'Formula has unmatched parentheses.'}
 
+function resourceReferences(resource,nodes,resources){const names=[resource.apiName,resourcePath(resource)].filter(Boolean);const haystack=JSON.stringify({nodes,resources:resources.filter((r)=>r.id!==resource.id)});return names.filter((name)=>haystack.includes(name))}
+function rewriteResourceReferences(value,oldApi,newApi){if(value==null)return value;if(typeof value==='string')return value.replaceAll('variables.'+oldApi,'variables.'+newApi).replaceAll(oldApi,newApi);if(Array.isArray(value))return value.map((v)=>rewriteResourceReferences(v,oldApi,newApi));if(typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,rewriteResourceReferences(v,oldApi,newApi)]));return value}
+function compatibleResources(resources,{collection=null,dataType=null,objectKey=null}={}){return resources.filter((r)=>(collection==null||Boolean(r.isCollection)===Boolean(collection))&&(!dataType||String(r.dataType).toLowerCase()===String(dataType).toLowerCase())&&(!objectKey||!r.objectKey||r.objectKey===objectKey))}
 function ResourceManager({resources,nodes,onNew,onClose}) {
  const [q,setQ]=useState('');const needle=q.trim().toLowerCase();const rows=resources.filter((r)=>!needle||`${r.apiName} ${r.resourceType}`.toLowerCase().includes(needle))
  return <aside className="gptbn-manager"><header><strong>Manager</strong><button onClick={onClose}><X size={15}/></button></header><label className="gptbn-manager-search"><Search size={14}/><input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search this flow"/></label><button className="gptbn-primary gptbn-new-resource" onClick={onNew}><Plus size={13}/> New Resource</button><section><h4>Elements <span>{nodes.length}</span></h4>{nodes.map((n)=><div key={n.id}><strong>{n.label}</strong><small>{n.apiName}</small></div>)}</section><section><h4>Resources <span>{rows.length}</span></h4>{rows.map((r)=><div key={r.id}><strong>{r.apiName}</strong><small>{RESOURCE_TYPES.find((x)=>x[1]===r.resourceType)?.[0]||r.resourceType}{r.isCollection?' · Collection':''}</small></div>)}</section></aside>
@@ -441,6 +445,8 @@ function Builder({flow,onBack}) {
   const startValid=!needsStart||(flow.key==='schedule'?Boolean(start.startDate&&start.startTime):flow.key==='platform_event'?Boolean(start.eventKey):Boolean(start.objectKey))
   const save=async()=>{
     if(!startValid){setMessage('Configure Start before saving.');return}
+    const duplicateResources=resources.filter((r,i)=>resources.findIndex((x)=>x.apiName===r.apiName)!==i);if(duplicateResources.length){setMessage('Resource API names must be unique.');return}
+    const invalidFormula=resources.find((r)=>r.resourceType==='formula'&&formulaCheck(r.formula));if(invalidFormula){setMessage(`Fix formula ${invalidFormula.label||invalidFormula.apiName} before saving.`);return}
     setSaving(true);setMessage('')
     const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:active,lifecycleStatus:active?'ACTIVE':'DRAFT',version:version,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:resources,goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:nodes.filter((node)=>node.configured).map((node)=>runtimeActionForNode(node,resources)).filter(Boolean)}}
     try{const response=await apiRequest(savedId?`/api/platform/rules/${encodeURIComponent(savedId)}`:'/api/platform/rules',{method:savedId?'PUT':'POST',body:JSON.stringify(payload)});if(response?.data?.id)setSavedId(String(response.data.id));setMessage('Flow saved.')}
