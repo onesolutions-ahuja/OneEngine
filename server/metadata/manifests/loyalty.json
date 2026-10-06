@@ -381,6 +381,26 @@
         },
         "actions": [
           {
+            "id": "validate_loyalty_adjustment",
+            "label": "Validate Loyalty Adjustment",
+            "apiName": "validate_loyalty_adjustment",
+            "key": "FORMULA",
+            "resourceName": "loyaltyValid",
+            "resultType": "boolean",
+            "expression": "points != 0 && !ISBLANK(customerId) && !ISBLANK(reason)",
+            "inputs": {
+              "points": {
+                "path": "variables.points"
+              },
+              "customerId": {
+                "path": "variables.customerId"
+              },
+              "reason": {
+                "path": "variables.reason"
+              }
+            }
+          },
+          {
             "id": "get_account",
             "label": "Get Loyalty Account",
             "apiName": "get_account",
@@ -397,6 +417,42 @@
             ],
             "limit": 1,
             "store": "first"
+          },
+          {
+            "id": "loyalty_ready",
+            "label": "Loyalty Adjustment Ready?",
+            "apiName": "loyalty_ready",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.loyaltyValid",
+                      "operator": "equals",
+                      "value": true
+                    },
+                    {
+                      "field": "steps.get_account.record.id",
+                      "operator": "is_null",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_adjustment",
+                  "create_activity",
+                  "update_balance"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid Adjustment",
+            "defaultBranch": [
+              "loyalty_invalid"
+            ]
           },
           {
             "id": "create_adjustment",
@@ -456,6 +512,328 @@
                 "path": "steps.create_activity.created.balance_after"
               }
             }
+          },
+          {
+            "id": "loyalty_invalid",
+            "label": "Loyalty Adjustment Rejected",
+            "apiName": "loyalty_invalid",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Loyalty adjustment requires an existing loyalty account, a non-zero points value, and a reason.",
+            "errorLocation": "record"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.loyaltyValid",
+            "apiName": "loyaltyValid",
+            "label": "Loyalty Adjustment Valid",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": false,
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": false
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "validate_loyalty_adjustment",
+            "key": "action",
+            "label": "Validate Loyalty Adjustment",
+            "apiName": "validate_loyalty_adjustment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "validate_loyalty_adjustment",
+                "label": "Validate Loyalty Adjustment",
+                "apiName": "validate_loyalty_adjustment",
+                "key": "FORMULA",
+                "resourceName": "loyaltyValid",
+                "resultType": "boolean",
+                "expression": "points != 0 && !ISBLANK(customerId) && !ISBLANK(reason)",
+                "inputs": {
+                  "points": {
+                    "path": "variables.points"
+                  },
+                  "customerId": {
+                    "path": "variables.customerId"
+                  },
+                  "reason": {
+                    "path": "variables.reason"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "get_account",
+            "key": "action",
+            "label": "Get Loyalty Account",
+            "apiName": "get_account",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "get_account",
+                "label": "Get Loyalty Account",
+                "apiName": "get_account",
+                "key": "GET_RECORDS",
+                "objectKey": "loyalty_account",
+                "filters": [
+                  {
+                    "field": "customer_id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.customerId"
+                    }
+                  }
+                ],
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "loyalty_ready",
+            "key": "action",
+            "label": "Loyalty Adjustment Ready?",
+            "apiName": "loyalty_ready",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "loyalty_ready",
+                "label": "Loyalty Adjustment Ready?",
+                "apiName": "loyalty_ready",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "variables.loyaltyValid",
+                          "operator": "equals",
+                          "value": true
+                        },
+                        {
+                          "field": "steps.get_account.record.id",
+                          "operator": "is_null",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_adjustment",
+                      "create_activity",
+                      "update_balance"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Invalid Adjustment",
+                "defaultBranch": [
+                  "loyalty_invalid"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_adjustment",
+            "key": "action",
+            "label": "Create Loyalty Adjustment",
+            "apiName": "create_adjustment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_adjustment",
+                "label": "Create Loyalty Adjustment",
+                "apiName": "create_adjustment",
+                "key": "CREATE_RECORD",
+                "objectKey": "loyalty_adjustment",
+                "fieldValues": {
+                  "customer_id": {
+                    "path": "variables.customerId"
+                  },
+                  "points": {
+                    "path": "variables.points"
+                  },
+                  "reason": {
+                    "path": "variables.reason"
+                  },
+                  "reference_id": {
+                    "path": "variables.referenceId"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_activity",
+            "key": "action",
+            "label": "Create Loyalty Activity",
+            "apiName": "create_activity",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_activity",
+                "label": "Create Loyalty Activity",
+                "apiName": "create_activity",
+                "key": "CREATE_RECORD",
+                "objectKey": "loyalty_activity",
+                "fieldValues": {
+                  "customer_id": {
+                    "path": "variables.customerId"
+                  },
+                  "transaction_type": "ADJUSTMENT",
+                  "amount": {
+                    "path": "variables.points"
+                  },
+                  "reference_type": "loyalty_adjustment",
+                  "reference_id": {
+                    "path": "steps.create_adjustment.created.id"
+                  },
+                  "description": {
+                    "path": "variables.reason"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "update_balance",
+            "key": "action",
+            "label": "Update Loyalty Balance",
+            "apiName": "update_balance",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "update_balance",
+                "label": "Update Loyalty Balance",
+                "apiName": "update_balance",
+                "key": "UPDATE_RECORD",
+                "objectKey": "loyalty_account",
+                "recordId": {
+                  "path": "steps.get_account.record.id"
+                },
+                "fieldValues": {
+                  "balance": {
+                    "path": "steps.create_activity.created.balance_after"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "loyalty_invalid",
+            "key": "action",
+            "label": "Loyalty Adjustment Rejected",
+            "apiName": "loyalty_invalid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "loyalty_invalid",
+                "label": "Loyalty Adjustment Rejected",
+                "apiName": "loyalty_invalid",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Loyalty adjustment requires an existing loyalty account, a non-zero points value, and a reason.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
