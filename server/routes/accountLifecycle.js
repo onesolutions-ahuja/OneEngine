@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { consumeAccountToken, hashAccountToken, issueAccountOtp, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeSystemAction, executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
 
 export default function createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit = null }) {
@@ -58,7 +58,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     const u=r.rows[0]; if(!u)return res.status(404).json({success:false,message:"User not found"});
     if(!u.email_registration_enabled)return res.status(409).json({success:false,message:"Email registration is disabled"});
     if(!domainAllowed(u.email,u.user_email_domain,u.domain_users_only))return res.status(400).json({success:false,message:"User email is outside the allowed company domain"});
-    const tokenExecution=await executeSystemWorkflow({
+    const tokenExecution=await executeSystemAction({
       db,
       companyId:u.company_id,
       userId:req.user.id||null,
@@ -89,7 +89,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
         db,
         companyId:u.company_id,
         userId:null,
-        systemKey:"action:SEND_EMAIL",
+        actionKey: "SEND_EMAIL",
         req,
         input:{
           recipient:email,

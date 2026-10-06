@@ -267,3 +267,126 @@ export async function executeSystemWorkflow({
     throw error;
   }
 }
+
+
+export async function executeSystemAction({
+  db,
+  companyId,
+  userId = null,
+  actionKey,
+  req = null,
+  input = {},
+  object = null,
+  record = null,
+  recordId = null,
+  storeId = null,
+  tillId = null,
+  connectorDrivers = null,
+  writeAudit = null,
+  source = null,
+  extraContext = {},
+}) {
+  if (!db || typeof db !== "function") throw new Error("System action requires database context");
+  if (!companyId) throw new Error("System action requires company context");
+  const normalizedActionKey = String(actionKey || "").trim().toUpperCase();
+  if (!normalizedActionKey) throw new Error("System action key is required");
+
+  const actor = await resolveSystemWorkflowActor({ db, companyId, userId, req });
+  const runtimeReq = {
+    ...(req || {}),
+    user: {
+      ...(req?.user || {}),
+      id: actor.id,
+      roleId: actor.role_id,
+      companyId,
+      storeId: storeId || actor.store_id || req?.user?.storeId || null,
+      tillId: tillId || actor.till_id || req?.user?.tillId || null,
+    },
+  };
+  const correlationId = String(
+    req?.businessCommandCorrelationId
+      || req?.headers?.["x-request-id"]
+      || req?.headers?.["x-correlation-id"]
+      || randomUUID()
+  );
+  const sourceInfo = safeSource(req, source);
+  const parentRunId = req?.ensureBusinessCommandRun
+    ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, tillId })
+    : (req?.businessCommandRunId || null);
+  const run = await createWorkflowRun({
+    db,
+    companyId,
+    workflowId: null,
+    workflowName: `System Action · ${normalizedActionKey}`,
+    workflowVersion: 1,
+    objectId: object?.id || null,
+    recordId: recordId || record?.id || null,
+    triggerKey: "system_action",
+    parentRunId: parentRunId || null,
+    status: "RUNNING",
+    metadata: {
+      capabilityType: "action",
+      capabilityKey: normalizedActionKey,
+      actorUserId: actor.id,
+      storeId: runtimeReq.user.storeId || null,
+      tillId: runtimeReq.user.tillId || null,
+      correlationId,
+      source: sourceInfo,
+    },
+  });
+
+  try {
+    const workflowVariables = { variables: {}, steps: {} };
+    const actions = [{ ...(input || {}), type: normalizedActionKey, systemTemplate: true }];
+    const results = await executeWorkflowActions({
+      actions,
+      db,
+      req: runtimeReq,
+      companyId,
+      object,
+      record,
+      recordId: recordId || record?.id || null,
+      storeId: runtimeReq.user.storeId || null,
+      tillId: runtimeReq.user.tillId || null,
+      connectorDrivers,
+      writeAudit,
+      actorUserId: actor.id,
+      runId: run?.id || null,
+      workflowVersion: 1,
+      trigger: "system_action",
+      workflowVariables,
+      ...extraContext,
+    });
+    const waiting = workflowResultsContainStatus(results, "waiting");
+    if (!waiting) {
+      await db(
+        "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
+        [run.id, companyId]
+      );
+    }
+    return {
+      runId: run.id,
+      correlationId,
+      status: waiting ? "WAITING" : "COMPLETED",
+      results,
+      result: results.at(-1)?.result ?? null,
+      workflowVariables,
+    };
+  } catch (error) {
+    await db(
+      `UPDATE platform_workflow_runs
+          SET status='FAILED',error_text=COALESCE(error_text,$1),completed_at=NOW(),
+              metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW()
+        WHERE id=$3 AND company_id=$4`,
+      [
+        String(error?.message || error).slice(0, 2000),
+        JSON.stringify({ correlationId, source: sourceInfo }),
+        run.id,
+        companyId,
+      ]
+    );
+    error.workflowRunId = run.id;
+    error.correlationId = correlationId;
+    throw error;
+  }
+}

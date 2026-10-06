@@ -77,13 +77,13 @@ test("provider-specific adapters stay removed in favor of metadata workflows", (
   assert.ok(all.has("CONNECTOR_TEST_CONNECTION"), "generic connector test action must remain executable");
 });
 
-test("internal adapters do not get generated System workflows", () => {
-  const systemKeys = new Set(systemWorkflowDefinitions().map((item) => item.systemKey));
-  for (const key of INTERNAL) {
-    assert.equal(systemKeys.has("action:" + key), false, key + " must not generate a System Action workflow");
-  }
-  for (const key of ["CREATE_RECORD","SEND_COMMUNICATION","CALL_CONNECTOR"]) {
-    assert.ok(systemKeys.has("action:" + key), key + " should remain a visible System Action workflow");
+test("registered actions and jobs never become one-step System workflows", () => {
+  const definitions = systemWorkflowDefinitions();
+  for (const flow of definitions) {
+    assert.equal(String(flow.systemKey || "").startsWith("action:"), false, flow.systemKey);
+    assert.equal(String(flow.systemKey || "").startsWith("job:"), false, flow.systemKey);
+    assert.notEqual(flow.action?.capabilityType, "action", flow.systemKey);
+    assert.notEqual(flow.action?.capabilityType, "job", flow.systemKey);
   }
 });
 
@@ -98,4 +98,19 @@ test("customer credit business flows are not hardcoded in the system workflow ca
     "customer.credit.transaction.build_adjustment",
     "customer.credit.statement.generate",
   ]) assert.equal(source.includes(key), false, key + " must remain metadata/tenant Flow-owned");
+});
+
+
+test("Phase 1 removes generated action and job pseudo-workflows from persistence", () => {
+  const catalog = readFileSync(new URL("../server/services/systemWorkflowCatalog.js", import.meta.url), "utf8");
+  const runtime = readFileSync(new URL("../server/services/systemWorkflowRuntime.js", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
+  assert.doesNotMatch(catalog, /function\s+actionWorkflow\s*\(/);
+  assert.doesNotMatch(catalog, /function\s+jobWorkflow\s*\(/);
+  assert.doesNotMatch(catalog, /PLATFORM_ACTION_REGISTRY/);
+  assert.doesNotMatch(catalog, /TRUSTED_JOB_KINDS/);
+  assert.match(runtime, /export async function executeSystemAction\(/);
+  assert.match(migration, /0066_remove_system_action_job_workflow_wrappers/);
+  assert.match(migration, /systemKey' LIKE 'action:%'/);
+  assert.match(migration, /systemKey' LIKE 'job:%'/);
 });
