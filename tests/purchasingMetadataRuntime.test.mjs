@@ -136,6 +136,17 @@ test("gift cards online orders and attendance use metadata workspaces while runt
 });
 
 
+test("retail transaction model is canonical metadata and Flow owned", async () => {
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const workflow = await readFile(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
+  for (const objectKey of ["sale","sale_item","payment","refund","till_session","cash_movement"]) {
+    assert.ok(registry.includes(`objectKey:"${objectKey}"`) || registry.includes(`objectKey: "${objectKey}"`), objectKey);
+  }
+  assert.match(registry, /apiName:"COMPLETE_SALE"/);
+  assert.match(registry, /commonFieldValues:\{sale_id:\{path:"variables\.sale\.id"\}\}/);
+  assert.match(workflow, /commonFieldValues/);
+});
+
 test("legacy sales route is removed in favor of metadata runtime", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/sales.js"), false);
