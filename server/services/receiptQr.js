@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { buildInvoicePdf } from "../utils/invoicePdf.js";
+import { selectMetadataRecords } from "./metadataRecordStore.js";
 
 export const RECEIPT_QR_DEFAULTS = Object.freeze({
   showAfterSuccessfulPayment: "OFF",
@@ -41,13 +42,16 @@ export function generateReceiptQrToken() {
 export async function resolveReceiptQrSettings(db, companyId) {
   if (!db || !companyId) return getReceiptQrSettingDefaults();
   try {
-    const result = await db(
-      `SELECT receipt_qr_show_after_payment, receipt_qr_expiry_minutes, receipt_qr_allow_manual, receipt_qr_allow_regenerate,
-              receipt_qr_auto_close_on_new_sale, receipt_qr_show_countdown, receipt_qr_download_filename_format
-       FROM company_settings WHERE company_id = $1 LIMIT 1`,
-      [companyId]
-    );
-    const row = result.rows?.[0] || {};
+    const rows = await selectMetadataRecords(db, {
+      objectKey: "system_settings",
+      companyId,
+      columns: [
+        "receipt_qr_show_after_payment","receipt_qr_expiry_minutes","receipt_qr_allow_manual","receipt_qr_allow_regenerate",
+        "receipt_qr_auto_close_on_new_sale","receipt_qr_show_countdown","receipt_qr_download_filename_format"
+      ],
+      limit: 1,
+    });
+    const row = rows[0] || {};
     return normaliseReceiptQrSettings({
       showAfterSuccessfulPayment: row.receipt_qr_show_after_payment,
       expiryMinutes: row.receipt_qr_expiry_minutes,
@@ -196,47 +200,45 @@ export async function cleanupExpiredTemporaryReceipts(db) {
 export async function loadPublicReceiptData({ db, companyId, saleId }) {
   if (!db || !companyId || !saleId) return null;
   try {
-    const saleResult = await db(
-      `SELECT s.*, st.name AS store_name, st.address_line1, st.address_line2, st.city, st.postcode, st.phone AS store_phone,
-              u.username AS cashier, cst.name AS customer_name, cst.phone AS customer_phone, cst.email AS customer_email,
-              c.name AS company_name, c.email AS company_email, c.phone AS company_phone, c.currency AS company_currency, c.timezone AS company_timezone
-       FROM sales s
-       LEFT JOIN stores st ON st.id = s.store_id
-       LEFT JOIN companies c ON c.id = s.company_id
-       LEFT JOIN users u ON u.id = s.user_id
-       LEFT JOIN customers cst ON cst.id = s.customer_id
-       WHERE s.id = $1 AND s.company_id = $2 LIMIT 1`,
-      [saleId, companyId]
-    );
-    if (!saleResult.rows?.[0]) return null;
-    const sale = saleResult.rows[0];
-    const items = await db("SELECT * FROM sale_items WHERE sale_id = $1 ORDER BY id ASC", [saleId]);
-    const payments = await db("SELECT payment_method, amount, status FROM payments WHERE sale_id = $1 ORDER BY created_at ASC", [saleId]);
+    const sale = (await selectMetadataRecords(db, {
+      objectKey: "sale",
+      companyId,
+      filters: { id: saleId },
+      limit: 1,
+    }))[0];
+    if (!sale) return null;
+
+    const [storeResult, companyResult, userResult, customerRows, items, payments] = await Promise.all([
+      sale.store_id ? db("SELECT name,address_line1,address_line2,city,postcode,phone FROM stores WHERE id=$1 AND company_id=$2 LIMIT 1",[sale.store_id,companyId]) : Promise.resolve({rows:[]}),
+      db("SELECT name,email,phone,currency,timezone FROM companies WHERE id=$1 LIMIT 1",[companyId]),
+      sale.user_id ? db("SELECT username FROM users WHERE id=$1 AND company_id=$2 LIMIT 1",[sale.user_id,companyId]) : Promise.resolve({rows:[]}),
+      sale.customer_id ? selectMetadataRecords(db,{objectKey:"customer",companyId,filters:{id:sale.customer_id},columns:["name","phone","email"],limit:1}) : Promise.resolve([]),
+      selectMetadataRecords(db,{objectKey:"sale_item",companyId,filters:{sale_id:saleId},orderBy:{field:"id",direction:"ASC"}}),
+      selectMetadataRecords(db,{objectKey:"payment",companyId,filters:{sale_id:saleId},columns:["payment_method","amount","status","created_at"],orderBy:{field:"created_at",direction:"ASC"}}),
+    ]);
+    const store=storeResult.rows[0]||{};
+    const company=companyResult.rows[0]||{};
+    const cashier=userResult.rows[0]?.username||null;
+    const customer=customerRows[0]||{};
     return {
-      company: {
-        name: sale.company_name || "onePOS",
-        email: sale.company_email || null,
-        phone: sale.company_phone || null,
-      },
-      store: {
-        name: sale.store_name || "Store",
-        phone: sale.store_phone || null,
-        addressLine1: sale.address_line1 || null,
-        city: sale.city || null,
-        postcode: sale.postcode || null,
-      },
+      company: { name: company.name || "onePOS", email: company.email || null, phone: company.phone || null },
+      store: { name: store.name || "Store", phone: store.phone || null, addressLine1: store.address_line1 || null, city: store.city || null, postcode: store.postcode || null },
       sale: {
         ...sale,
+        cashier,
+        customer_name: customer.name || null,
+        customer_phone: customer.phone || null,
+        customer_email: customer.email || null,
         receiptNumber: sale.receipt_number || sale.id,
         createdAt: sale.created_at,
         completedAt: sale.completed_at || sale.created_at,
-        companyCurrency: sale.company_currency || "GBP",
-        companyTimezone: sale.company_timezone || "Europe/London",
+        companyCurrency: company.currency || "GBP",
+        companyTimezone: company.timezone || "Europe/London",
         subtotal: Number(sale.subtotal || 0),
         tax: Number(sale.tax || 0),
         discount: Number(sale.discount || 0),
         total: Number(sale.total || 0),
-        items: (items.rows || []).map((item) => ({
+        items: items.map((item) => ({
           name: item.product_name || item.description || "Item",
           quantity: Number(item.quantity || 0),
           unitPrice: Number(item.unit_price || 0),
@@ -244,10 +246,7 @@ export async function loadPublicReceiptData({ db, companyId, saleId }) {
           tax: Number(item.tax || 0),
           total: Number(item.total || 0),
         })),
-        payments: (payments.rows || []).map((pay) => ({
-          method: pay.payment_method || "Unknown",
-          amount: Number(pay.amount || 0),
-        })),
+        payments: payments.map((pay) => ({ method: pay.payment_method || "Unknown", amount: Number(pay.amount || 0) })),
       },
     };
   } catch {
