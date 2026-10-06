@@ -1,5 +1,5 @@
 import { evaluateCondition } from "./platformConditions.js";
-import { isSafeIdentifier } from "./platformMetadata.js";
+import { isSafeIdentifier } from "./platformCoreMetadata.js";
 import { evaluateWorkflowFormula } from "./platformFormula.js";
 import { createWorkflowRun, executeWorkflowActions, workflowResultsContainStatus } from "./platformWorkflow.js";
 import { systemObject, isExtensionField } from "./platformSystemObjects.js";
