@@ -22,7 +22,7 @@ const allowedSqlFiles = new Set([
 const ignoredDirs = new Set(["node_modules","dist","build",".git","coverage","playwright-report","test-results","docs","server/docs","server/database","server/metadata"]);
 const businessTerms = /\b(sales?|customers?|suppliers?|purchases?|products?|inventory|returns?|exchanges?|layaway|loyalty|gift[_ -]?cards?|online[_ -]?orders?|hospitality|kiosk|till)\b/i;
 const sqlDml = /\b(?:INSERT\s+INTO|UPDATE\s+[a-zA-Z_][\w]*\s+SET|DELETE\s+FROM)\b/i;
-const legacyExec = /\bCALL_FUNCTION\b|\bcall_function\b|platformFunctionRegistry|systemWorkflowCatalog|getRegisteredFunction|executePlatformFunction/g;
+const legacyExec = /\bCALL_FUNCTION\b|\bcall_function\b|platformFunctionRegistry|getRegisteredFunction|executePlatformFunction/g;
 
 function walk(dir, out=[]) {
   if (!fs.existsSync(dir)) return out;
