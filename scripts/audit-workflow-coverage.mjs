@@ -194,15 +194,24 @@ for (const file of walk(SERVER)) {
   }
 }
 
+const hiddenFunctionReferences = [];
+for (const file of walk(SERVER)) {
+  const fileRel = rel(file);
+  const text = fs.readFileSync(file, "utf8");
+  if (/\bCALL_FUNCTION\b/.test(text)) hiddenFunctionReferences.push({ file: fileRel, key: "CALL_FUNCTION" });
+  if (/\bRUN_ASSISTANT_SUBFLOW\b/.test(text) && fileRel !== "server/database/init.js") hiddenFunctionReferences.push({ file: fileRel, key: "RUN_ASSISTANT_SUBFLOW" });
+}
+
 const catalogueCoverage = {
-  functions: /PLATFORM_FUNCTIONS\.map\s*\(/.test(systemWorkflowCatalog),
+  functions: functions.length === 0,
   actions: /PLATFORM_ACTION_REGISTRY[\s\S]*\.map\s*\(/.test(systemWorkflowCatalog),
   jobs: /TRUSTED_JOB_KINDS\.map\s*\(/.test(systemWorkflowCatalog),
 };
 
 const findings = [
   ...executableDefaultFindings,
-  ...(!catalogueCoverage.functions ? functions.map((key) => ({ severity: "GAP", type: "FUNCTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
+  ...functions.map((key) => ({ severity: "GAP", type: "LEGACY_FUNCTION_REGISTRY_NOT_EMPTY", key })),
+  ...hiddenFunctionReferences.map((item) => ({ severity: "GAP", type: "HIDDEN_WORKFLOW_EXECUTOR_REFERENCE", ...item })),
   ...(!catalogueCoverage.actions ? actions.map((key) => ({ severity: "GAP", type: "ACTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
   ...(!catalogueCoverage.jobs ? jobs.map((key) => ({ severity: "GAP", type: "JOB_TRIGGER_REQUIRES_WORKFLOW", key })) : []),
   ...directRuntimeCalls.map((call) => ({ severity: "GAP", type: "DIRECT_RUNTIME_CALL_BYPASS", ...call })),
@@ -223,6 +232,7 @@ const report = {
     bypassMutationRoutes: bypassRoutes.length,
     directRuntimeCallSites: directRuntimeCalls.length,
     catalogueFunctionsCovered: catalogueCoverage.functions,
+    hiddenFunctionReferences: hiddenFunctionReferences.length,
     catalogueActionsCovered: catalogueCoverage.actions,
     catalogueJobsCovered: catalogueCoverage.jobs,
     globalBusinessCommandGateway: globalGatewayEnabled,
@@ -256,7 +266,8 @@ const md = [
   `- Workflow-mediated mutation routes: ${report.summary.workflowMediatedMutationRoutes}`,
   `- Mutation-route bypass candidates: ${report.summary.bypassMutationRoutes}`,
   `- Direct runtime call sites: ${report.summary.directRuntimeCallSites}`,
-  `- Catalogue functions covered: ${report.summary.catalogueFunctionsCovered}`,
+  `- Legacy function registry empty: ${report.summary.catalogueFunctionsCovered}`,
+  `- Hidden function executor references: ${report.summary.hiddenFunctionReferences}`,
   `- Catalogue actions covered: ${report.summary.catalogueActionsCovered}`,
   `- Catalogue jobs covered: ${report.summary.catalogueJobsCovered}`,
   `- Executable literal defaults: ${report.summary.executableLiteralDefaults}`,
@@ -266,6 +277,7 @@ const md = [
 fs.writeFileSync(path.join(OUT, "workflow-coverage-audit.md"), md + "\n");
 
 console.log(JSON.stringify(report.summary, null, 2));
+if (hiddenFunctionReferences.length) console.log("HIDDEN_FUNCTION_REFERENCES=" + JSON.stringify(hiddenFunctionReferences));
 if (directRuntimeCalls.length) console.log("DIRECT_RUNTIME_CALLS=" + JSON.stringify(directRuntimeCalls));
 const bypassByFile = Object.entries(bypassRoutes.reduce((acc, route) => {
   acc[route.file] = (acc[route.file] || 0) + 1;

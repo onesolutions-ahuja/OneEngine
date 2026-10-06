@@ -2333,7 +2333,7 @@ export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen 
         if (!live) return
         const rows = Array.isArray(response?.data) ? response.data : []
         const saved = rows.find((item) => String(item?.id || '') === id)
-        if (!saved) throw new Error('Saved flow not found.')
+        if (!saved) throw new Error('Saved GPT Builder flow not found.')
         const normalized = normalizeExistingRuleForGPTBuilder(saved)
         const definition = FLOW_TYPES.find((item) => item.key === normalized.action?.flowType)
         if (!definition) throw new Error('This flow type is not supported by GPT Builder.')
