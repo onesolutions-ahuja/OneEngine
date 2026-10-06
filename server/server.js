@@ -77,7 +77,6 @@ import { createReferencePaymentDriver } from "./services/referencePaymentConnect
 import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
 import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
 import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
-import { ONE_CONNECT_PROVIDER_DRIVER_KEYS, createOneConnectProviderDriver } from "./services/oneConnectProviders.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
 import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
@@ -459,9 +458,6 @@ connectorDrivers.register(createPaypalQrDriver());
 connectorDrivers.register(createSmsGateDriver());
 connectorDrivers.register(createBrevoDriver());
 connectorDrivers.register(createMailjetDriver());
-for (const providerKey of ONE_CONNECT_PROVIDER_DRIVER_KEYS) {
-  connectorDrivers.register(createOneConnectProviderDriver(providerKey));
-}
 app.locals.connectorDrivers = connectorDrivers;
 
 async function testPaymentTerminal(terminal) {
