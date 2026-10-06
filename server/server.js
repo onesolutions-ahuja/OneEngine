@@ -47,7 +47,6 @@ import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReportsRouter from "./routes/reports.js";
 import createSecureInvoiceRouter from "./routes/secureInvoice.js";
-import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
 import createWhatsAppSettingsRouter from "./routes/whatsapp.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
@@ -2007,19 +2006,6 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createSettingsRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  writeAudit,
-  testPaymentTerminal,
-  requireLoyaltyEntitlement: (req, res, next) => {
-    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
-    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
-    return requireEntitlement(db, "loyalty")(req, res, next);
-  },
-}));
 app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
 app.use("/api", createWhatsAppSettingsRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createSmsGateWebhookRouter({ pool }));
