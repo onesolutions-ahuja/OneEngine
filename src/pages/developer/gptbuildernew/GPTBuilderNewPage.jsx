@@ -129,6 +129,32 @@ function CanvasPicker({onPick,onClose}) {
 
 
 
+
+const RESOURCE_TYPES=[['Variable','variable'],['Constant','constant'],['Formula','formula'],['Text Template','text_template'],['Choice','choice'],['Collection Choice Set','collection_choice_set'],['Record Choice Set','record_choice_set'],['Picklist Choice Set','picklist_choice_set'],['Stage','stage']]
+const DATA_TYPES=[['Text','text'],['Record','record'],['Number','number'],['Currency','currency'],['Boolean','boolean'],['Date','date'],['Date/Time','datetime'],['Time','time'],['Picklist','picklist'],['Multi-Select Picklist','multiselect'],['Apex-Defined','apex_defined']]
+const formulaCheck=(value)=>{const text=String(value||'').trim();if(!text)return 'Enter a formula.';let depth=0;for(const ch of text){if(ch==='(')depth++;if(ch===')')depth--;if(depth<0)return 'Formula has unmatched parentheses.'}return depth===0?'':'Formula has unmatched parentheses.'}
+
+function ResourceManager({resources,nodes,onNew,onClose}) {
+ const [q,setQ]=useState('');const needle=q.trim().toLowerCase();const rows=resources.filter((r)=>!needle||`${r.apiName} ${r.resourceType}`.toLowerCase().includes(needle))
+ return <aside className="gptbn-manager"><header><strong>Manager</strong><button onClick={onClose}><X size={15}/></button></header><label className="gptbn-manager-search"><Search size={14}/><input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search this flow"/></label><button className="gptbn-primary gptbn-new-resource" onClick={onNew}><Plus size={13}/> New Resource</button><section><h4>Elements <span>{nodes.length}</span></h4>{nodes.map((n)=><div key={n.id}><strong>{n.label}</strong><small>{n.apiName}</small></div>)}</section><section><h4>Resources <span>{rows.length}</span></h4>{rows.map((r)=><div key={r.id}><strong>{r.apiName}</strong><small>{RESOURCE_TYPES.find((x)=>x[1]===r.resourceType)?.[0]||r.resourceType}{r.isCollection?' · Collection':''}</small></div>)}</section></aside>
+}
+function ResourceEditor({resources,objects,onCreate,onCancel}) {
+ const [type,setType]=useState('variable'),[name,setName]=useState(''),[description,setDescription]=useState(''),[dataType,setDataType]=useState('text'),[value,setValue]=useState(''),[formula,setFormula]=useState(''),[collection,setCollection]=useState(false),[input,setInput]=useState(false),[output,setOutput]=useState(false),[choiceLabel,setChoiceLabel]=useState(''),[choiceValue,setChoiceValue]=useState(''),[sourceObject,setSourceObject]=useState(''),[sourceField,setSourceField]=useState(''),[stageOrder,setStageOrder]=useState(0)
+ const duplicate=resources.some((r)=>String(r.apiName).toLowerCase()===name.trim().toLowerCase());const valid=/^[A-Za-z][A-Za-z0-9_]*$/.test(name)&&!name.endsWith('_')&&!name.includes('__')&&!duplicate;const formulaError=type==='formula'?formulaCheck(formula):''
+ const create=()=>{if(!valid||formulaError)return;onCreate({id:uid(),resourceType:type,apiName:name.trim(),label:name.trim(),description,dataType:['variable','constant','formula'].includes(type)?dataType:type==='text_template'?'text':'choice',value:type==='constant'?value:undefined,formula:type==='formula'?formula:undefined,text:type==='text_template'?value:undefined,choiceLabel:type==='choice'?(choiceLabel||name.trim()):undefined,choiceValue:type==='choice'?choiceValue:undefined,sourceObject:['record_choice_set','picklist_choice_set'].includes(type)?sourceObject:undefined,sourceField:['collection_choice_set','record_choice_set','picklist_choice_set'].includes(type)?sourceField:undefined,stageOrder:type==='stage'?Number(stageOrder):undefined,isCollection:type==='variable'?collection:false,availableForInput:type==='variable'?input:false,availableForOutput:type==='variable'?output:false,source:'manager'})}
+ return <div className="gptbn-backdrop"><section className="gptbn-dialog gptbn-resource-dialog"><header><h2>New Resource</h2><button onClick={onCancel}><X size={16}/></button></header><div className="gptbn-resource-body"><label><span>Resource Type</span><select value={type} onChange={(e)=>setType(e.target.value)}>{RESOURCE_TYPES.map(([l,k])=><option key={k} value={k}>{l}</option>)}</select></label><label><span>API Name <b>*</b></span><input autoFocus value={name} onChange={(e)=>setName(e.target.value)}/>{duplicate?<small>API Name must be unique in the flow.</small>:null}</label><label><span>Description</span><textarea rows="3" value={description} onChange={(e)=>setDescription(e.target.value)}/></label>
+ {['variable','constant','formula'].includes(type)?<label><span>Data Type</span><select value={dataType} onChange={(e)=>setDataType(e.target.value)}>{DATA_TYPES.map(([l,k])=><option key={k} value={k}>{l}</option>)}</select></label>:null}
+ {dataType==='record'&&['variable','constant','formula'].includes(type)?<label><span>Object</span><select value={sourceObject} onChange={(e)=>setSourceObject(e.target.value)}><option value="">Select an object</option>{objects.map((o)=><option key={o.id||objectKey(o)} value={objectKey(o)}>{objectLabel(o)}</option>)}</select></label>:null}
+ {type==='constant'?<label><span>Value</span><input value={value} onChange={(e)=>setValue(e.target.value)}/></label>:null}
+ {type==='formula'?<><label><span>Formula <b>*</b></span><textarea rows="6" value={formula} onChange={(e)=>setFormula(e.target.value)} placeholder="Enter formula or resource reference"/>{formulaError?<small>{formulaError}</small>:null}</label><p className="gptbn-info">Resources can be referenced by API name in formulas and element values.</p></>:null}
+ {type==='text_template'?<label><span>Body</span><textarea rows="7" value={value} onChange={(e)=>setValue(e.target.value)}/></label>:null}
+ {type==='choice'?<><label><span>Choice Label</span><input value={choiceLabel} onChange={(e)=>setChoiceLabel(e.target.value)}/></label><label><span>Choice Value</span><input value={choiceValue} onChange={(e)=>setChoiceValue(e.target.value)}/></label></>:null}
+ {type==='collection_choice_set'?<label><span>Source Collection / Field</span><input value={sourceField} onChange={(e)=>setSourceField(e.target.value)}/></label>:null}
+ {['record_choice_set','picklist_choice_set'].includes(type)?<><label><span>Object</span><select value={sourceObject} onChange={(e)=>setSourceObject(e.target.value)}><option value="">Select an object</option>{objects.map((o)=><option key={o.id||objectKey(o)} value={objectKey(o)}>{objectLabel(o)}</option>)}</select></label><label><span>{type==='picklist_choice_set'?'Picklist Field':'Label / Value Field'}</span><input value={sourceField} onChange={(e)=>setSourceField(e.target.value)}/></label></>:null}
+ {type==='stage'?<label><span>Stage Order</span><input type="number" min="0" value={stageOrder} onChange={(e)=>setStageOrder(e.target.value)}/></label>:null}
+ {type==='variable'?<><label className="gptbn-radio"><input type="checkbox" checked={collection} onChange={(e)=>setCollection(e.target.checked)}/>Allow multiple values (collection)</label><label className="gptbn-radio"><input type="checkbox" checked={input} onChange={(e)=>setInput(e.target.checked)}/>Available for input</label><label className="gptbn-radio"><input type="checkbox" checked={output} onChange={(e)=>setOutput(e.target.checked)}/>Available for output</label></>:null}
+ </div><footer><button onClick={onCancel}>Cancel</button><button className="is-brand" disabled={!valid||Boolean(formulaError)} onClick={create}>Done</button></footer></section></div>
+}
 function ActionSubflowEditor({element,onSave,onCancel}) {
   const [draft,setDraft]=useState(()=>clone(element||{}))
   const [actions,setActions]=useState([]),[flows,setFlows]=useState([]),[loading,setLoading]=useState(true)
@@ -261,6 +287,9 @@ function Builder({flow,onBack}) {
   const [layout,setLayout]=useState('auto')
   const [nodes,setNodes]=useState([])
   const [edges,setEdges]=useState([])
+  const [resources,setResources]=useState([])
+  const [managerOpen,setManagerOpen]=useState(true)
+  const [resourceOpen,setResourceOpen]=useState(false)
   const [selected,setSelected]=useState([])
   const [picker,setPicker]=useState(false)
   const [zoom,setZoom]=useState(100)
@@ -351,7 +380,7 @@ function Builder({flow,onBack}) {
   const save=async()=>{
     if(!startValid){setMessage('Configure Start before saving.');return}
     setSaving(true);setMessage('')
-    const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:false,lifecycleStatus:'DRAFT',version:1,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:[],goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:nodes.filter((node)=>node.configured).map((node)=>node.runtimeAction||dataRuntimeAction(node)).filter(Boolean)}}
+    const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:false,lifecycleStatus:'DRAFT',version:1,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:resources,goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:nodes.filter((node)=>node.configured).map((node)=>node.runtimeAction||dataRuntimeAction(node)).filter(Boolean)}}
     try{const response=await apiRequest(savedId?`/api/platform/rules/${encodeURIComponent(savedId)}`:'/api/platform/rules',{method:savedId?'PUT':'POST',body:JSON.stringify(payload)});if(response?.data?.id)setSavedId(String(response.data.id));setMessage('Flow saved.')}
     catch(error){setMessage(error?.message||'Unable to save flow.')}
     finally{setSaving(false)}
@@ -370,10 +399,11 @@ function Builder({flow,onBack}) {
     <header className="gptbn-toolbar"><button onClick={onBack} aria-label="Back to automations"><ChevronLeft size={18}/></button><div className="gptbn-brand"><Workflow size={19}/><span><strong>Flow Builder</strong><small>{flow.label}</small></span></div><span className="gptbn-status">Inactive · {savedId?'Saved':'Never saved'}</span><div className="gptbn-canvas-tools">
       <button title="Select Elements" className={selected.length?'is-on':''}><MousePointer2 size={15}/></button><button title="Copy" disabled={!selected.length} onClick={copySelected}><Copy size={15}/></button><button title="Delete" disabled={!selected.length} onClick={deleteSelected}><Trash2 size={15}/></button>
       <button title="Undo" disabled={!history.length} onClick={undo}><Undo2 size={15}/></button><button title="Redo" disabled={!future.length} onClick={redo}><Redo2 size={15}/></button>
-    </div><div className="gptbn-actions"><button disabled>Run</button><button disabled>Debug</button><button disabled>View Tests</button><button disabled>Save As New Version</button><button className="is-brand" disabled={saving} onClick={save}>{saving?'Saving…':'Save'}</button><button disabled>Activate</button></div></header>
+    </div><button className="gptbn-manager-toggle" onClick={()=>setManagerOpen((v)=>!v)}>Manager</button><div className="gptbn-actions"><button disabled>Run</button><button disabled>Debug</button><button disabled>View Tests</button><button disabled>Save As New Version</button><button className="is-brand" disabled={saving} onClick={save}>{saving?'Saving…':'Save'}</button><button disabled>Activate</button></div></header>
     {message?<div className="gptbn-message" role="status">{message}</div>:null}
     <div className="gptbn-layout-switch"><button className={layout==='auto'?'is-selected':''} onClick={()=>setLayout('auto')}>Auto-Layout</button><button className={layout==='free'?'is-selected':''} onClick={()=>setLayout('free')}>Freeform</button></div>
     <div className="gptbn-zoom"><button aria-label="Zoom out" onClick={()=>setZoom((v)=>Math.max(25,v-10))}><ZoomOut size={15}/></button><span>{zoom}%</span><button aria-label="Zoom in" onClick={()=>setZoom((v)=>Math.min(150,v+10))}><ZoomIn size={15}/></button><button onClick={()=>setZoom(100)}>Reset</button></div>
+    {managerOpen?<ResourceManager resources={resources} nodes={nodes} onNew={()=>setResourceOpen(true)} onClose={()=>setManagerOpen(false)}/>:null}
     <div ref={(el)=>{canvasRef.current=el}} className="gptbn-canvas phase2" onMouseMove={moveDrag} onMouseUp={endDrag} onMouseLeave={endDrag} onClick={()=>setSelected([])}>
       <div className="gptbn-stage" style={{transform:`scale(${zoom/100})`,transformOrigin:'top left'}}>
         <svg className="gptbn-edges" width="1200" height="900" aria-hidden="true">{edges.map((edge)=>{const a=point(edge.source,true),b=point(edge.target,false);return <path key={edge.id} d={`M ${a.x} ${a.y} C ${a.x} ${a.y+45}, ${b.x} ${b.y-45}, ${b.x} ${b.y}`}/>})}</svg>
@@ -386,6 +416,7 @@ function Builder({flow,onBack}) {
     </div>
     <div className="gptbn-flow-name"><label>Flow Label<input value={label} onChange={(e)=>setLabel(e.target.value)}/></label><label>API Name<input value={apiName(label)} readOnly/></label></div>
     {picker?<CanvasPicker onPick={(definition)=>addNode(definition)} onClose={()=>setPicker(false)}/>:null}
+    {resourceOpen?<ResourceEditor resources={resources} objects={objects} onCancel={()=>setResourceOpen(false)} onCreate={(resource)=>{setResources((rows)=>[...rows,resource]);setResourceOpen(false)}}/>:null}
     {editing?<ElementEditor element={nodes.find((node)=>node.id===editing.id)} nodes={nodes} objects={objects} onSave={saveElement} onCancel={()=>{if(editing.isNew){const id=editing.id;setNodes((rows)=>rows.filter((node)=>node.id!==id));setEdges((rows)=>rows.filter((edge)=>edge.source!==id&&edge.target!==id))}setEditing(null)}}/>:null}
     {startOpen?<StartEditor flow={flow} start={draft} setStart={setDraft} objects={objects} events={events} onCancel={()=>setStartOpen(false)} onDone={()=>{setStart({...draft});setStartOpen(false)}}/>:null}
   </section>
