@@ -10,8 +10,6 @@ export const ACTING_COMPANY_STORAGE_KEY = 'onepos_developer_target_company_id'
 export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
 export const ACTIVE_STORE_STORAGE_KEY = 'onepos_active_store_id'
 export const AVAILABLE_STORES_STORAGE_KEY = 'onepos_available_stores'
-export const KIOSK_TOKEN_STORAGE_KEY = 'onepos_kiosk_token'
-export const KIOSK_DISPLAY_TOKEN_STORAGE_KEY = 'onepos_kiosk_display_token'
 export const DEVICE_KEY_STORAGE_KEY = 'onepos_device_key'
 
 export function getDeviceKey() {
@@ -207,11 +205,7 @@ export async function apiFetch(path, options = {}) {
       code: 'TRUSTED_RUNTIME_REQUIRED',
     })
   }
-  const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
-  const kioskDisplay = typeof window !== 'undefined' && /\/kiosk-display\/?$/.test(window.location.pathname)
-  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
-  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
-  const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   return fetch(apiUrl(path), {
     ...options,
     headers: {
