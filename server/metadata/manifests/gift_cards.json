@@ -75,7 +75,7 @@
       "objectKey": "gift_card_activity",
       "label": "Gift Card Activity",
       "pluralLabel": "Gift Card Activity",
-      "sourceTable": "gift_card_transactions",
+      "sourceTable": "gift_card_ledger",
       "metadataScope": "global",
       "config": {
         "flowWritesOnly": true
