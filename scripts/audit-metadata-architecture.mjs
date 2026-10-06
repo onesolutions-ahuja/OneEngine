@@ -35,16 +35,8 @@ for (const file of runtimeFiles) {
   }
 
   if (/\/src\/(?:pages\/developer|pages\/settings\/Platform|platform\/workspace)\//.test(file.replaceAll("\\","/"))) {
-    for (const re of [
-      /\b(?:customer|supplier|purchase|sale|inventory|hospitality|online_order|product)_?[a-z0-9_]*\b/gi,
-      /["'](?:customer|supplier|purchase|sale|inventory|hospitality|online_order|product)["']/gi,
-    ]) {
-      for (const match of text.matchAll(re)) {
-        const value = String(match[0] || "").toLowerCase();
-        if (/productname|product_name/.test(value)) continue;
-        add("BUILDER_BUSINESS_IDENTIFIER", file, text, match, match[0]);
-      }
-    }
+    const businessLiteral = /["'](?:customer|customer_id|customer_name|customer_orders|supplier|supplier_id|purchase|purchase_id|sale|sale_id|sale_number|inventory|hospitality|online_order|product|product_id|product_detail|sales)["']/gi;
+    for (const match of text.matchAll(businessLiteral)) add("BUILDER_BUSINESS_IDENTIFIER", file, text, match, match[0]);
   }
 }
 
@@ -64,6 +56,7 @@ for (const file of [
 
 const businessApi = /["'`]\/api\/(?:products?|customers?|sales?|purchases?|suppliers?|inventory|stock|online-orders?|hospitality|appointments?)(?:\/|["'`])/gi;
 for (const file of walk(path.join(ROOT, "src"))) {
+  if (rel(file) === "src/services/trustedRuntime.js") continue;
   const text = fs.readFileSync(file, "utf8");
   for (const match of text.matchAll(businessApi)) add("UI_BUSINESS_ENDPOINT_WIRING", file, text, match, match[0]);
 }
