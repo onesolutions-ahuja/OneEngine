@@ -14,7 +14,7 @@ export const VALUE_FORMATS = Object.freeze(["number", "currency", "percent"]);
 export const DATE_RANGES = Object.freeze([
   "all_time", "today", "yesterday", "this_week", "last_7_days", "this_month", "this_quarter", "fiscal_year",
 ]);
-export const FILTER_FIELDS = Object.freeze(["store", "date"]);
+export const FILTER_FIELDS = Object.freeze([]);
 export const DASHBOARD_PRINCIPAL_TYPES = Object.freeze(["USER", "ROLE", "PUBLIC_GROUP", "COMPANY"]);
 export const DASHBOARD_ACCESS_LEVELS = Object.freeze(["VIEW", "EDIT", "MANAGE"]);
 export const DASHBOARD_RUN_AS_MODES = Object.freeze(["VIEWER", "FIXED_USER"]);
@@ -172,7 +172,7 @@ export function validateDashboardDefinition(input = {}) {
     const contentComponents = new Set(["text","image"]);
     if (!modernComponents.has(type) && !utilityComponents.has(type) && !contentComponents.has(type) && !config.reportId && !config.report) throw new Error(`Component ${index + 1} must reference a report`);
     if (config.report) {
-      if (config.report.dataSource && !["sales","platform_object"].includes(String(config.report.dataSource))) throw new Error(`Component ${index + 1} uses an unsupported data source`);
+      if (config.report.dataSource != null && !String(config.report.dataSource).trim()) throw new Error(`Component ${index + 1} uses an invalid data source`);
       if (!Array.isArray(config.report.fields) || !config.report.fields.length) throw new Error(`Component ${index + 1} must select at least one field`);
     }
     return {
@@ -183,7 +183,7 @@ export function validateDashboardDefinition(input = {}) {
         reportId: config.reportId ? String(config.reportId) : null,
         report: config.report && typeof config.report === "object" ? {
           ...config.report,
-          dataSource: ["sales","platform_object"].includes(config.report.dataSource) ? config.report.dataSource : "sales",
+          dataSource: config.report.dataSource ? String(config.report.dataSource) : null,
           objectId: config.report.objectId ? String(config.report.objectId) : null,
           fields: [...new Set((Array.isArray(config.report.fields) ? config.report.fields : []).map(String))],
           groupBy: [...new Set((Array.isArray(config.report.groupBy) ? config.report.groupBy : []).map(String))],
@@ -248,7 +248,7 @@ export function validateDashboardDefinition(input = {}) {
   normalized.forEach((entry,index)=>{entry.layout=packed[index];});
   const filters=Array.isArray(input.filters)?input.filters.slice(0,20).map((filter)=>{
     const field=String(filter?.field||"");
-    if(!FILTER_FIELDS.includes(field)) throw new Error("Invalid dashboard filter");
+    if(!field || !/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(field)) throw new Error("Invalid dashboard filter");
     return {field,operator:String(filter.operator||"equals"),value:filter.value};
   }):[];
   return {
@@ -274,44 +274,22 @@ export function validateDashboardDefinition(input = {}) {
  * saved definition says. Changing a component's reportId, metric, grouping or
  * date range changes the rendered dashboard without touching React source.
  */
-const salesDatasource = { dataSource: "sales", fields: [], groupBy: [], sort: [], filters: [], filterLogic: "all" };
-
 export const DEFAULT_DASHBOARD_DEFINITION = Object.freeze({
   name: "Business Overview",
-  description: "Default configurable dashboard: KPIs and visualisations bound to saved reports.",
+  description: "Default configurable dashboard assembled from generic components.",
   run_as_mode: "VIEWER",
   access: [],
   default_assignments: [],
   filters: [],
   components: [
     { id: "default-clock", type: "clock_widget", title: "Clock", config: { showDate: true, showSeconds: false, hour12: false }, layout: { x: 0, y: 0, w: 3, h: 1 } },
-    { id: "default-kpi-total-sales", type: "kpi", title: "Total Sales", config: { reportId: "report_total_sales", valueField: "net_sales", format: "currency", size: "medium", dateRange: "all_time", report: { ...salesDatasource, fields: ["net_sales"] } }, layout: { x: 3, y: 0, w: 3, h: 1 } },
-    { id: "default-kpi-quarter-sales", type: "kpi", title: "Quarter Sales", config: { reportId: "report_quarter_sales", valueField: "net_sales", format: "currency", size: "medium", dateRange: "this_quarter", report: { ...salesDatasource, fields: ["net_sales"] } }, layout: { x: 6, y: 0, w: 3, h: 1 } },
-    { id: "default-kpi-annual-sales", type: "kpi", title: "Annual Sales", config: { reportId: "report_annual_sales", valueField: "net_sales", format: "currency", size: "medium", dateRange: "fiscal_year", report: { ...salesDatasource, fields: ["net_sales"] } }, layout: { x: 9, y: 0, w: 3, h: 1 } },
-    { id: "default-kpi-top-product", type: "kpi", title: "Most Selling Product", config: { reportId: "report_top_product", valueField: "quantity", labelField: "product", format: "number", size: "medium", dateRange: "fiscal_year", report: { ...salesDatasource, fields: ["product", "quantity"], groupBy: ["product"], sort: [{ field: "quantity", direction: "desc" }] } }, layout: { x: 0, y: 1, w: 4, h: 3 } },
-    { id: "default-pie-category", type: "pie", title: "Sales by Category", config: { reportId: "report_sales_by_category", valueField: "net_sales", labelField: "category", maxCategories: 6, dateRange: "fiscal_year", report: { ...salesDatasource, fields: ["category", "net_sales"], groupBy: ["category"], sort: [{ field: "net_sales", direction: "desc" }] } }, layout: { x: 4, y: 1, w: 4, h: 3 } },
-    { id: "default-donut-payment", type: "donut", title: "Payment Method Mix", config: { reportId: "report_payment_mix", valueField: "total", labelField: "method", maxCategories: 6, dateRange: "fiscal_year", report: { ...salesDatasource, fields: ["method", "total"], groupBy: ["method"], sort: [{ field: "total", direction: "desc" }] } }, layout: { x: 8, y: 1, w: 4, h: 3 } },
-    { id: "default-bar-period", type: "bar", title: "Sales by Period", config: { reportId: "report_sales_by_period", valueField: "net_sales", labelField: "date", limit: 12, dateRange: "last_7_days", report: { ...salesDatasource, fields: ["date", "net_sales"], groupBy: ["date"], sort: [{ field: "date", direction: "asc" }] } }, layout: { x: 0, y: 4, w: 12, h: 4 } },
   ],
 });
 
+
 /* The custom-report fields a Dashboard Builder administrator may pick from for
    the built-in sales datasource. Reuses the reporting engine's field list. */
-export const DASHBOARD_SALES_FIELDS = Object.freeze([
-  { key: "date", label: "Date", groupable: true },
-  { key: "store", label: "Store", groupable: true },
-  { key: "user", label: "Operator", groupable: true },
-  { key: "product", label: "Product", groupable: true },
-  { key: "sku", label: "SKU", groupable: true },
-  { key: "category", label: "Category", groupable: true },
-  { key: "method", label: "Payment method", groupable: true },
-  { key: "quantity", label: "Quantity sold", aggregate: true },
-  { key: "gross_sales", label: "Gross sales", aggregate: true },
-  { key: "net_sales", label: "Net sales", aggregate: true },
-  { key: "vat", label: "VAT", aggregate: true },
-  { key: "discount", label: "Discounts", aggregate: true },
-  { key: "transactions", label: "Transactions", aggregate: true },
-]);
+
 
 export function mergeDashboardFilters(reportDefinition, dashboardFilters = []) {
   const filters = Array.isArray(reportDefinition?.filters) ? [...reportDefinition.filters] : [];
