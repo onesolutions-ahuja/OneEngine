@@ -52,8 +52,6 @@ import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
 import createIntegrationsRouter from "./routes/integrations.js";
-import createProviderOAuthRouter from "./routes/providerOAuth.js";
-import createShopifyWebhooksRouter from "./routes/shopifyWebhooks.js";
 import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
@@ -2078,21 +2076,6 @@ app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudi
 | T9A - generic integration foundation (provider-agnostic). Credentials are
 | encrypted at rest; no Sales/Purchases data is sent anywhere by this module.
 */
-app.use(
-  "/api",
-  createShopifyWebhooksRouter({ db, writeAudit })
-);
-
-app.use(
-  "/api",
-  createProviderOAuthRouter({
-    authenticate,
-    authorize,
-    db,
-    writeAudit,
-  })
-);
-
 app.use(
   "/api",
   createIntegrationsRouter({
