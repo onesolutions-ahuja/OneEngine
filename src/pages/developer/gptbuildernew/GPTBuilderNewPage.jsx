@@ -275,6 +275,31 @@ function dataRuntimeAction(element) {
   return null
 }
 
+
+const resourcePath=(resource)=>resource?.path||(resource?.apiName?'variables.'+resource.apiName:'')
+const resourceType=(resource)=>resource?.isCollection?'collection':String(resource?.dataType||'text').toLowerCase()
+const runtimeValue=(value)=>typeof value==='string'&&(value.startsWith('variables.')||value.startsWith('$record')||value.startsWith('steps.'))?{path:value}:value
+function logicRuntimeAction(element,resources=[]) {
+ const c=element.config||{}
+ if(element.key==='assignment'){
+   const rows=Array.isArray(c.assignments)&&c.assignments.length?c.assignments:[{variable:c.variable||'',operator:c.operator==='assign'?'set':c.operator||'set',value:c.value}]
+   return {id:element.id,key:'ASSIGNMENT',label:element.label,apiName:element.apiName,description:element.description||'',assignments:rows.filter((r)=>r.variable).map((r)=>{const target=resources.find((x)=>resourcePath(x)===r.variable||x.apiName===r.variable);return {variable:r.variable.startsWith('variables.')?r.variable:'variables.'+r.variable,variableType:resourceType(target),operator:r.operator||'set',value:runtimeValue(r.value)}})}
+ }
+ if(element.key==='decision'){
+   const outcomes=Array.isArray(c.outcomes)&&c.outcomes.length?c.outcomes:[{id:'outcome-1',label:c.outcomeLabel||'Outcome 1',apiName:apiFromElement(c.outcomeLabel||'Outcome 1'),conditionLogic:c.match||'all',conditions:[{resource:c.resource||'',operator:c.operator||'equals',value:c.value}],branch:c.nextId?[c.nextId]:[]}]
+   return {id:element.id,key:'CONDITION',label:element.label,apiName:element.apiName,description:element.description||'',decisionLogic:'manual',outcomes:outcomes.map((o)=>({id:o.id||uid(),label:o.label,apiName:o.apiName||apiFromElement(o.label),branch:Array.isArray(o.branch)?o.branch:[],condition:{match:o.conditionLogic==='any'?'any':'all',customConditionLogic:o.conditionLogic==='custom'?o.customConditionLogic:undefined,conditions:(o.conditions||[]).map((row)=>({field:row.resource,operator:row.operator||'equals',value:runtimeValue(row.value)}))}})),defaultLabel:c.defaultLabel||'Default Outcome',defaultBranch:Array.isArray(c.defaultBranch)?c.defaultBranch:[]}
+ }
+ if(element.key==='loop'){const selected=resources.find((r)=>resourcePath(r)===c.collection);return {id:element.id,key:'LOOP',label:element.label,apiName:element.apiName,description:element.description||'',collection:c.collection,itemVariable:c.itemVariable||'CurrentItem_'+apiFromElement(element.apiName||element.label),itemType:selected?.dataType||'text',itemObjectKey:selected?.objectKey||'',iterationOrder:c.direction==='last'?'LAST_TO_FIRST':'FIRST_TO_LAST',bodyBranch:Array.isArray(c.bodyBranch)?c.bodyBranch:(c.nextId?[c.nextId]:[])}}
+ if(element.key==='collection_filter'){const selected=resources.find((r)=>resourcePath(r)===c.collection);return {id:element.id,key:'COLLECTION_FILTER',label:element.label,apiName:element.apiName,description:element.description||'',collection:c.collection,currentItemVariable:'CurrentItem_'+apiFromElement(element.apiName||element.label),outputVariable:apiFromElement(element.apiName||element.label),itemType:selected?.dataType||'text',itemObjectKey:selected?.objectKey||'',mode:c.match||'all',match:c.match==='any'?'any':'all',filters:[{field:c.resource||'',operator:c.operator||'equals',value:runtimeValue(c.value)}]}}
+ if(element.key==='collection_sort') return {id:element.id,key:'COLLECTION_SORT',label:element.label,apiName:element.apiName,description:element.description||'',collection:c.collection,sortOptions:[{field:c.field||'',direction:c.order==='desc'?'desc':'asc',nullsFirst:false}],sortField:c.field||'',sortDirection:c.order==='desc'?'desc':'asc',nullsFirst:false,limit:Number(c.limit||0)}
+ if(element.key==='transform') return {id:element.id,key:'TRANSFORM',label:element.label,apiName:element.apiName,description:element.description||'',collection:c.source||'',sources:c.source?[c.source]:[],target:{dataType:c.targetType||'text',objectKey:c.targetObjectKey||'',isCollection:Boolean(c.targetCollection)},joins:[],outputVariable:apiFromElement(element.apiName||element.label),transformMappings:c.transformMappings||{}}
+ if(element.key==='wait_amount') return {id:element.id,key:'WAIT',label:element.label,apiName:element.apiName,waitType:'duration',amount:Number(c.amount||0),unit:c.unit||'hours'}
+ if(element.key==='wait_date') return {id:element.id,key:'WAIT',label:element.label,apiName:element.apiName,waitType:'datetime',dateTime:runtimeValue(c.dateTime)}
+ if(element.key==='wait_conditions') return {id:element.id,key:'WAIT',label:element.label,apiName:element.apiName,waitType:'conditions',match:c.match==='any'?'any':'all',conditions:[{field:c.resource||'',operator:c.operator||'equals',value:runtimeValue(c.value)}]}
+ return null
+}
+function runtimeActionForNode(node,resources){return node.runtimeAction||dataRuntimeAction(node)||logicRuntimeAction(node,resources)}
+
 function ElementEditor({element,nodes,objects,resources=[],onResourcesChange,onSave,onCancel}) {
   if(element?.key==='screen') return <ScreenElementEditor element={element} resources={resources} onResourcesChange={onResourcesChange} onSave={onSave} onCancel={onCancel}/>
   if(element && ['action','subflow'].includes(element.key)) return <ActionSubflowEditor element={element} onSave={onSave} onCancel={onCancel}/>
@@ -416,7 +441,7 @@ function Builder({flow,onBack}) {
   const save=async()=>{
     if(!startValid){setMessage('Configure Start before saving.');return}
     setSaving(true);setMessage('')
-    const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:active,lifecycleStatus:active?'ACTIVE':'DRAFT',version:version,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:resources,goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:nodes.filter((node)=>node.configured).map((node)=>node.runtimeAction||dataRuntimeAction(node)).filter(Boolean)}}
+    const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:active,lifecycleStatus:active?'ACTIVE':'DRAFT',version:version,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:resources,goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:nodes.filter((node)=>node.configured).map((node)=>runtimeActionForNode(node,resources)).filter(Boolean)}}
     try{const response=await apiRequest(savedId?`/api/platform/rules/${encodeURIComponent(savedId)}`:'/api/platform/rules',{method:savedId?'PUT':'POST',body:JSON.stringify(payload)});if(response?.data?.id)setSavedId(String(response.data.id));setMessage('Flow saved.')}
     catch(error){setMessage(error?.message||'Unable to save flow.')}
     finally{setSaving(false)}
