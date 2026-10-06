@@ -17,6 +17,7 @@ const decision = read('src/pages/developer/gptbuilder/GPTBuilderDecision.jsx')
 const getRecords = read('src/pages/developer/gptbuilder/GPTBuilderGetRecords.jsx')
 const createRecords = read('src/pages/developer/gptbuilder/GPTBuilderCreateRecords.jsx')
 const action = read('src/pages/developer/gptbuilder/GPTBuilderAction.jsx')
+const saveHistory = read('src/pages/developer/gptbuilder/GPTBuilderSaveHistory.jsx')
 const runtime = read('server/services/platformWorkflow.js')
 const platform = read('server/routes/platform.js')
 
@@ -60,15 +61,16 @@ assert(decision.includes("'ArrowUp','ArrowDown'"), 'Decision arrow reorder handl
 for (const text of ['Sort Order','How Many Records to Store','Only the first record','All records, up to a specified limit','How to Store Record Data','Automatically store all fields']) {
   assert(getRecords.includes(text), 'Get Records parity text missing: ' + text)
 }
-for (const text of ['How to set record field values','From a Record Variable']) {
+for (const text of ['How to Set Record Field Values','From a Record Variable']) {
   assert(createRecords.includes(text), 'Create Records parity text missing: ' + text)
 }
 for (const text of ['All Actions','Create HTTP Callout','Search actions...']) {
   assert(action.includes(text), 'Action picker parity text missing: ' + text)
 }
-for (const text of ['Run','Debug','View Tests','Save As New Version','Activate','Auto-Layout','Free-Form']) {
+for (const text of ['Run','Debug','View Tests','Activate','Auto-Layout','Free-Form']) {
   assert(page.includes(text), 'Builder lifecycle/canvas control missing: ' + text)
 }
+assert(saveHistory.includes('Save as New Version'), 'Builder lifecycle control missing: Save as New Version')
 
 assert(runtime.includes('key: "ROLLBACK_RECORDS"'), 'ROLLBACK_RECORDS runtime registry missing')
 assert(runtime.includes('rollbackTransaction: true'), 'ROLLBACK_RECORDS runtime signal missing')
