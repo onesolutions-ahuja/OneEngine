@@ -82,7 +82,6 @@ import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
 import createDebugCodesRouter from "./routes/debugCodes.js";
 import { buildDebugPayload, classifyDebugCode, builtinDebugCode, createDebugReference, normalizeDebugCode, writeDebugEvent } from "./services/debugCodes.js";
-import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformMetadata.js";
 import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
 import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
@@ -2125,7 +2124,6 @@ app.use((req, res) => {
 function platformBootstrapFingerprint() {
   const hash = createHash("sha256");
   for (const relativePath of [
-    "./services/platformMetadata.js",
     "./services/internalAppCatalog.js",
     "./services/packageRegistry.js",
   ]) {
@@ -2563,15 +2561,11 @@ async function startServer() {
         let bootstrapRan = false;
         if (!bootstrapState.current) {
           console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
-          await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-          await initializeStandardObjectEcosystem(pool);
           bootstrapRan = true;
         } else {
           const initialRegistryHealth = await verifyPublicPackageRegistry(pool);
           if (!initialRegistryHealth.healthy) {
             console.warn("onePOS: package registry drift detected; repairing from source catalogue");
-            await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-            await initializeStandardObjectEcosystem(pool);
             bootstrapRan = true;
           } else {
             console.log("onePOS: platform bootstrap metadata unchanged; registry verified");
