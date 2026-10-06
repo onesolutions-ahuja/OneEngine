@@ -10,7 +10,7 @@ export async function resolveMetadataObject(db, { objectKey, companyId = null })
   const result = await db(
     `SELECT o.id,o.object_key,o.source_table,o.company_id,o.company_scoped,o.store_scoped,
             COALESCE(jsonb_agg(jsonb_build_object(
-              'apiName',f.api_name,'sourceColumn',f.source_column,'writable',f.writable,'fieldType',f.field_type
+              'apiName',f.api_name,'sourceColumn',f.source_column,'writable',f.writable,'fieldType',f.field_type,'config',COALESCE(f.config,'{}'::jsonb)
             ) ORDER BY f.display_order) FILTER (WHERE f.id IS NOT NULL),'[]'::jsonb) AS fields
        FROM platform_objects o
        LEFT JOIN platform_fields f ON f.object_id=o.id AND f.active=true
@@ -72,7 +72,10 @@ export async function upsertMetadataRecord(db, {
   const object = await resolveMetadataObject(db, { objectKey, companyId });
   const merged = { ...(values || {}) };
   if (companyId && object.fieldMap.has("company_id") && merged.company_id === undefined) merged.company_id = companyId;
-  const entries = Object.entries(merged).filter(([apiName]) => object.fieldMap.get(apiName)?.writable !== false);
+  const entries = Object.entries(merged).filter(([apiName]) => {
+    const field = object.fieldMap.get(apiName);
+    return field && (field.writable !== false || field.config?.runtimeWritable === true);
+  });
   if (!entries.length) throw new Error(`No writable metadata fields supplied for ${objectKey}`);
   const params = entries.map(([, value]) => value);
   const columns = entries.map(([apiName]) => fieldColumn(object, apiName));
@@ -107,7 +110,7 @@ export async function updateMetadataRecords(db, { objectKey, companyId = null, f
   const sets = [];
   for (const [apiName, value] of Object.entries(values || {})) {
     const field = object.fieldMap.get(apiName);
-    if (!field || field.writable === false) throw new Error(`Field is not writable in metadata: ${objectKey}.${apiName}`);
+    if (!field || (field.writable === false && field.config?.runtimeWritable !== true)) throw new Error(`Field is not writable in metadata: ${objectKey}.${apiName}`);
     params.push(value);
     sets.push(`${field.sourceColumn}=$${params.length}`);
   }
