@@ -3963,10 +3963,28 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         : (() => {
             if (!db || typeof db !== "function") return null;
             const id = action.workflowId || action.subflowId;
-            if (id) return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
+            const runtimeCompanyId = companyId || req?.user?.companyId;
+            if (id) return db(
+              `SELECT * FROM platform_rules
+                WHERE id=$1 AND company_id=$2
+                  AND action->>'type'='workflow'
+                  AND (active=true OR active_version IS NULL)
+                ORDER BY CASE WHEN active=true THEN 0 ELSE 1 END, version DESC
+                LIMIT 1`,
+              [id, runtimeCompanyId]
+            ).then((result) => result.rows[0] || null);
             const apiName = action.subflowApiName || action.subflowCapability;
             if (!apiName) return null;
-            return db(`SELECT * FROM platform_rules WHERE company_id=$1 AND active=true AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2 OR action->>'subflowCapability'=$2) ORDER BY updated_at DESC LIMIT 1`, [companyId || req?.user?.companyId, apiName]).then((result) => result.rows[0] || null);
+            return db(
+              `SELECT * FROM platform_rules
+                WHERE company_id=$1
+                  AND action->>'type'='workflow'
+                  AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2 OR action->>'subflowCapability'=$2)
+                  AND (active=true OR active_version IS NULL)
+                ORDER BY CASE WHEN active=true THEN 0 ELSE 1 END, version DESC, updated_at DESC
+                LIMIT 1`,
+              [runtimeCompanyId, apiName]
+            ).then((result) => result.rows[0] || null);
           })();
       const definition = await Promise.resolve(subflowDefinition);
       if (!definition) {
