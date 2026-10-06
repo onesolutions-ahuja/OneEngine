@@ -1,6 +1,6 @@
 import { normalizeAdvancedReportDefinition } from "./reportAnalyticsDefinition.js";
 import { buildPlatformObjectQuery } from "./reportableSources.js";
-import { DATE_RANGES, mergeDashboardFilters } from "./dashboardBuilder.js";
+import { mergeDashboardFilters } from "./dashboardBuilder.js";
 import { applyDashboardGlobalFilters } from "./analyticsManagement.js";
 import { loadPlatformReportContext } from "./platformReportSecurity.js";
 
@@ -33,18 +33,7 @@ export function createDashboardExecution({ db, canViewCompanyCustomers, canAcces
 
     if (config.report && typeof config.report === "object") {
       const definition = normalizeAdvancedReportDefinition(config.report);
-      const merged = mergeDashboardFilters(definition, dashboardFilters);
-      if (
-        config.dateRange &&
-        DATE_RANGES.includes(config.dateRange) &&
-        !dashboardFilters.some((filter) => filter && filter.field === "date")
-      ) {
-        merged.filters = [
-          { field: "date", operator: config.dateRange },
-          ...merged.filters.filter((filter) => filter && filter.field !== "date"),
-        ];
-      }
-      return merged;
+      return mergeDashboardFilters(definition, dashboardFilters);
     }
 
     if (reportId) throw new Error(`Unknown dashboard report reference: ${reportId}`);
