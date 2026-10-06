@@ -2339,6 +2339,9 @@ export function packageDefinition(entry) {
               { apiName:"sync_status",label:"Sync Status",fieldType:"text",sourceColumn:"sync_status",writable:true },
               { apiName:"client_request_id",label:"Client Request ID",fieldType:"text",sourceColumn:"client_request_id",writable:true },
               { apiName:"client_request_fingerprint",label:"Client Request Fingerprint",fieldType:"text",sourceColumn:"client_request_fingerprint",writable:true },
+              { apiName:"transaction_type",label:"Transaction Type",fieldType:"picklist",sourceColumn:"transaction_type",writable:true,options:["SALE","EXCHANGE"] },
+              { apiName:"original_transaction_id",label:"Original Transaction",fieldType:"lookup",sourceColumn:"original_transaction_id",writable:true,config:{relatedObjectKey:"sale"} },
+              { apiName:"net_amount",label:"Net Amount",fieldType:"currency",sourceColumn:"net_amount",writable:true },
               { apiName:"created_at",label:"Created",fieldType:"datetime",sourceColumn:"created_at",writable:false },
               { apiName:"completed_at",label:"Completed",fieldType:"datetime",sourceColumn:"completed_at",writable:true }
             ],
