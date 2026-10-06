@@ -48,7 +48,6 @@ const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/St
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
-const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
 const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
@@ -105,49 +104,23 @@ import {
 
 
 
-const SETTINGS_VISUALS = {
-  general: { icon: Settings2, tone: 'orange', searchTerms: ['date format', 'currency', 'timezone', 'regional'] },
-  company: { icon: Building2, tone: 'blue', searchTerms: ['company name', 'legal name', 'company email', 'company phone', 'logo'] },
-  'store-till': { icon: Store, tone: 'blue', searchTerms: ['store', 'till', 'terminal', 'terminal number', 'product view', 'invoice'] },
-  'client-web-shop': { icon: ShoppingCart, tone: 'green' },
-  'tax-vat': { icon: ReceiptText, tone: 'green', searchTerms: ['vat', 'tax', 'vat enabled', 'default vat rate', 'rate'] },
-  receipts: { icon: ReceiptText, tone: 'green' },
-  'payment-terminals': { icon: CreditCard, tone: 'green' },
-  'customer-loyalty': { icon: Sparkles, tone: 'purple', searchTerms: ['loyalty', 'earning rate', 'points', 'redeem', 'rewards'] },
-  hardware: { icon: HardDrive, tone: 'gray' },
-  users: { icon: Users, tone: 'blue', searchTerms: ['user', 'username', 'email', 'role', 'store', 'active', 'inactive'] },
-  'roles-permissions': { icon: ShieldCheck, tone: 'blue', searchTerms: ['role', 'permission', 'permissions', 'parent role', 'system role', 'custom role'] },
-  'security-identity': { icon: Shield, tone: 'blue', searchTerms: ['security', 'identity', 'ip range', 'trusted network', 'login hours', 'password policy', 'session', 'login history'] },
-  'mfa-administration': { icon: ShieldCheck, tone: 'blue', searchTerms: ['mfa', 'verification', 'temporary code', 'trusted device'] },
-  'identity-verification-history': { icon: ShieldCheck, tone: 'blue', searchTerms: ['identity verification history', 'mfa audit', 'verification events', 'step up'] },
-  'security-governance': { icon: ShieldCheck, tone: 'blue', searchTerms: ['security health', 'oauth', 'connected apps', 'trusted origins', 'credential vault', 'certificates', 'keys'] },
-  'data-protection': { icon: ShieldCheck, tone: 'blue', searchTerms: ['data export', 'retention', 'privacy', 'email security', 'dkim', 'delegated administration'] },
-  'ai-assistant': { icon: Sparkles, tone: 'purple' },
-  connections: { icon: Cable, tone: 'purple' },
-  'uber-eats': { icon: Cable, tone: 'purple' },
-  deliveroo: { icon: Cable, tone: 'purple' },
-  whatsapp: { icon: Cable, tone: 'green' },
-  'whatsapp-assistant': { icon: Cable, tone: 'green' },
-  'sms-delivery': { icon: CreditCard, tone: 'pink' },
-  'email-delivery': { icon: Mail, tone: 'pink' },
-  'server-api': { icon: MonitorCog, tone: 'gray' },
-  objects: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
-  'assignment-rules': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['assignment rules', 'routing', 'owner', 'assign'] },
-  'sharing-rules': { icon: ShieldCheck, tone: 'cyan', searchTerms: ['sharing rules', 'record access', 'sharing', 'permissions'] },
-  platform: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow', 'approval flow', 'page builder', 'dashboard builder', 'report builder', 'canvas', 'components'] },
-  'workflow-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow builder', 'automation', 'flow'] },
-  'approval-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['approval flow builder', 'approval'] },
-  'page-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['page builder', 'canvas', 'page'] },
-  'dashboard-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['dashboard builder', 'dashboard'] },
-  'report-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['report builder', 'report'] },
-  'workflow-runs': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow', 'runs', 'automation', 'history'] },
-  'work-items': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['work items', 'workflow', 'approval', 'tasks'] },
-  'platform-apps': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['platform apps', 'apps', 'metadata'] },
-  deployments: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['deployments', 'release', 'promotion'] },
-  notifications: { icon: Bell, tone: 'cyan', searchTerms: ['notification subscriptions', 'events'] },
-  'value-sets': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['value sets', 'picklist', 'reusable values'] },
-  'message-templates': { icon: Mail, tone: 'pink', searchTerms: ['message templates', 'email template', 'sms template', 'whatsapp template'] },
-}
+const SETTINGS_ICON_REGISTRY = {
+  settings: Settings2,
+  company: Building2,
+  store: Store,
+  cart: ShoppingCart,
+  receipt: ReceiptText,
+  payment: CreditCard,
+  hardware: HardDrive,
+  users: Users,
+  security: ShieldCheck,
+  assistant: Sparkles,
+  connection: Cable,
+  monitor: MonitorCog,
+  objects: LayoutGrid,
+  mail: Mail,
+  notification: Bell,
+};
 
 const SETTINGS_NAV_CACHE_KEY = 'onepos.settings.nav.v1'
 
@@ -175,16 +148,19 @@ function writeSettingsNavCache(value) {
 
 
 
-function settingsVisual(label, explicitKey = '') {
+function settingsVisual(label, explicitKey = '', metadata = {}) {
   const labelSlug = settingsNavSlug(label)
   const key = explicitKey || labelSlug
-  const visual = SETTINGS_VISUALS[key] || {}
+  const iconKey = String(metadata.iconKey || metadata.icon_key || metadata.icon || 'settings').trim().toLowerCase()
+  const searchTerms = Array.isArray(metadata.searchTerms || metadata.search_terms)
+    ? (metadata.searchTerms || metadata.search_terms)
+    : []
   return {
     key,
-    icon: visual.icon || Settings2,
-    tone: visual.tone || 'gray',
-    searchTerms: visual.searchTerms || [],
-    developer: DEVELOPER_SETTINGS_KEYS.has(key),
+    icon: SETTINGS_ICON_REGISTRY[iconKey] || Settings2,
+    tone: String(metadata.tone || metadata.colorTone || metadata.color_tone || 'gray'),
+    searchTerms,
+    developer: metadata.developer === true || DEVELOPER_SETTINGS_KEYS.has(key),
   }
 }
 
@@ -201,7 +177,7 @@ function buildSettingsGroupsFromCatalog(catalog) {
       if (DEVELOPER_SETTINGS_KEYS.has(String(section.key)) || ['developer', 'platform'].includes(groupKey.toLowerCase()) || ['developer', 'platform'].includes(groupLabel.toLowerCase())) continue
       if (!grouped.has(groupLabel)) grouped.set(groupLabel, [])
       grouped.get(groupLabel).push({
-        ...settingsVisual(section.label, section.key),
+        ...settingsVisual(section.label, section.key, section),
         label: section.label,
         action: section.action || null,
         description: section.description || '',
@@ -234,7 +210,7 @@ function buildSettingsGroupsFromCatalog(catalog) {
         const fieldConfig = field?.config || {}
         const label = fieldConfig.settingsSection || fieldConfig.settings_section || 'General'
         const explicitKey = fieldConfig.settingsKey || fieldConfig.settings_key || ''
-        const visual = settingsVisual(label, explicitKey)
+        const visual = settingsVisual(label, explicitKey, fieldConfig)
         const targetGroup = fieldConfig.settingsGroup || fieldConfig.settings_group || config.settingsGroup || config.settings_group || 'Settings'
         if (!visual.developer && !['developer', 'platform'].includes(String(targetGroup).toLowerCase())) {
           push(targetGroup, { ...visual, label })
@@ -1132,126 +1108,10 @@ function SettingsPage({ onOpenProfile }) {
                 </>
               ) : current?.key === 'client-web-shop' ? (
                 <MetadataSettingsSection section="Client Web Shop" />
-              ) : current?.key === 'tax-vat' ? (
-                <>
-                  <div className="settings-row">
-                    <strong>VAT enabled</strong>
-                    <button
-                      type="button"
-                      className={`mac-switch ${settings.tax?.vatEnabled ? 'is-on' : ''}`}
-                      disabled={!canManage || saving === 'vatEnabled'}
-                      onClick={() => update('vatEnabled', !settings.tax?.vatEnabled)}
-                    >
-                      <span />
-                    </button>
-                  </div>
-                  <div className="settings-row">
-                    <div><strong>Default VAT rate</strong><p>Any rate from 0% to 100%.</p></div>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      defaultValue={Number(settings.tax?.defaultVatRate ?? 20)}
-                      disabled={!canManage || saving === 'defaultVatRate'}
-                      onBlur={(event) => {
-                        const next = Number(event.target.value)
-                        if (Number.isFinite(next) && next >= 0 && next <= 100 && next !== Number(settings.tax?.defaultVatRate ?? 20)) {
-                          update('defaultVatRate', next)
-                        }
-                      }}
-                      aria-label="Default VAT rate"
-                    />
-                  </div>
-                </>
-              ) : current?.key === 'receipts' ? (
-                <>
-                  <div className="settings-row">
-                    <div><strong>Header company</strong><p>Company name used on receipts.</p></div>
-                    <span className="settings-value">{settings.company?.name || '—'}</span>
-                  </div>
-                  <div className="settings-row">
-                    <div><strong>VAT display</strong><p>Uses the company VAT configuration.</p></div>
-                    <button
-                      type="button"
-                      className={`mac-switch ${settings.tax?.vatEnabled ? 'is-on' : ''}`}
-                      disabled={!canManage || saving === 'vatEnabled'}
-                      onClick={() => update('vatEnabled', !settings.tax?.vatEnabled)}
-                      aria-label="VAT display"
-                    >
-                      <span />
-                    </button>
-                  </div>
-                  <div className="settings-row">
-                    <div><strong>Default VAT rate</strong><p>Rate shown when VAT is enabled.</p></div>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      defaultValue={Number(settings.tax?.defaultVatRate ?? 20)}
-                      disabled={!canManage || saving === 'defaultVatRate'}
-                      onBlur={(event) => {
-                        const next = Number(event.target.value)
-                        if (Number.isFinite(next) && next >= 0 && next <= 100 && next !== Number(settings.tax?.defaultVatRate ?? 20)) {
-                          update('defaultVatRate', next)
-                        }
-                      }}
-                      aria-label="Receipt VAT rate"
-                    />
-                  </div>
-                  <div className="settings-row">
-                    <div><strong>Date format</strong><p>Date format printed on receipts.</p></div>
-                    <select
-                      value={settings.general?.dateFormat || 'DD/MM/YYYY'}
-                      disabled={!canManage || saving === 'dateFormat'}
-                      onChange={(event) => update('dateFormat', event.target.value)}
-                    >
-                      <option>DD/MM/YYYY</option>
-                      <option>MM/DD/YYYY</option>
-                      <option>YYYY-MM-DD</option>
-                    </select>
-                  </div>
-                  <div className="settings-row">
-                    <div><strong>Paper width</strong><p>Printer and paper settings are managed under Hardware.</p></div>
-                    <span className="settings-value">Configure under Hardware</span>
-                  </div>
-                </>
+              ) : current?.key === 'tax-vat' || current?.key === 'receipts' || current?.key === 'customer-loyalty' ? (
+                <MetadataSettingsSection section={current?.label || ''} />
               ) : current?.key === 'payment-terminals' ? (
                 <PaymentTerminalSettings />
-              ) : current?.key === 'customer-loyalty' ? (
-                <>
-                  <div className="settings-row">
-                    <strong>Loyalty enabled</strong>
-                    <button
-                      type="button"
-                      className={`mac-switch ${settings.loyalty?.enabled ? 'is-on' : ''}`}
-                      disabled={!canManage || saving === 'loyaltyEnabled'}
-                      onClick={() => update('loyaltyEnabled', !settings.loyalty?.enabled)}
-                    >
-                      <span />
-                    </button>
-                  </div>
-                  <div className="settings-row">
-                    <div><strong>Earning rate</strong><p>Percentage of purchase total earned as points (1% = 1 point per £1).</p></div>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      defaultValue={(Number(settings.loyalty?.earningRate || 0) * 100).toFixed(2)}
-                      disabled={!canManage || saving === 'loyaltyEarningRate'}
-                      onBlur={(event) => {
-                        const percent = Number(event.target.value)
-                        if (Number.isFinite(percent) && percent >= 0 && percent <= 100) {
-                          const next = percent / 100
-                          if (next !== Number(settings.loyalty?.earningRate || 0)) update('loyaltyEarningRate', next)
-                        }
-                      }}
-                      aria-label="Loyalty earning rate"
-                    />
-                  </div>
-                </>
               ) : current?.key === 'hardware' ? (
                 <HardwareSettings />
               ) : current?.key === 'connections' ? (
@@ -1261,7 +1121,7 @@ function SettingsPage({ onOpenProfile }) {
               ) : current?.key === 'sms-delivery' ? (
                 <DeliverySettingsPage channel="sms" />
               ) : current?.key === 'whatsapp-assistant' ? (
-                <WhatsAppAssistantSettings />
+                <ConnectorAppSettings packageKey={String(current?.action?.packageKey || current?.action?.package_key || current?.key || '').replaceAll('-', '_')} />
               ) : current?.key === 'ai-assistant' ? (
                 <AiAssistantSettings />
               ) : current?.key === 'security-identity' ? (
@@ -1376,13 +1236,7 @@ function SettingsPage({ onOpenProfile }) {
                   ]}
                 />
               ) : (
-                <div className="settings-row">
-                  <div>
-                    <strong>{current?.label}</strong>
-                    <p>RBAC visibility is live. This section is ready for the next onePOS component/data migration pass.</p>
-                  </div>
-                  <ChevronRight size={16} />
-                </div>
+                <MetadataSettingsSection section={current?.label || ''} />
               )}
             </div>
           )}
