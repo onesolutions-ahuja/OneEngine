@@ -19,10 +19,7 @@ const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserSto
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
 const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
-const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/PaymentTerminalSettings'))
-const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
-const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
 const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
 const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const MetadataPageRuntime = lazyWithRecovery(() => import('./platform/pages/MetadataPageRuntime'))
@@ -1209,7 +1206,7 @@ function SettingsPage({ onOpenProfile }) {
                   </div>
                 </>
               ) : current?.key === 'payment-terminals' ? (
-                <PaymentTerminalSettings />
+                <MetadataPageRuntime objectKey="payment_terminal" appKey="settings" />
               ) : current?.key === 'customer-loyalty' ? (
                 <>
                   <div className="settings-row">
@@ -1244,9 +1241,9 @@ function SettingsPage({ onOpenProfile }) {
                   </div>
                 </>
               ) : current?.key === 'hardware' ? (
-                <HardwareSettings />
+                <MetadataPageRuntime objectKey="hardware_configuration" appKey="settings" />
               ) : current?.key === 'connections' ? (
-                <ConnectionsSettings />
+                <MetadataPageRuntime objectKey="integration" appKey="settings" />
               ) : current?.key === 'email-delivery' ? (
                 <DeliverySettingsPage channel="email" />
               ) : current?.key === 'sms-delivery' ? (
