@@ -542,7 +542,37 @@ const PACKAGE_CATALOG = [
     packageKey: "one_connect_google",
     name: "Google Connect",
     description: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users with tenant-specific OAuth configuration.",
-    route: "/app/google-connect",
+key: "one_connect_google",
+    packageKey: "one_connect_google",
+    name: "Google Connect",
+    description: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users with tenant-specific OAuth configuration.",
+    route: "/app/connector-settings/one_connect_google",
+    runtimeSurfaces: {
+      connectorSettings: {
+        endpoints: {
+          load: "/api/google-connect/config",
+          save: "/api/google-connect/config",
+          test: "/api/google-connect/test"
+        },
+        saveMethod: "PUT",
+        fields: [
+          { key: "enabled", type: "boolean", label: "Enable Google SSO" },
+          { key: "allowedDomain", type: "text", label: "Allowed Google domain (optional)", placeholder: "company.com" },
+          { key: "allowPasswordLogin", type: "boolean", label: "Allow email/password login as fallback" }
+        ],
+        readonly: [
+          { key: "licensed", label: "Licence active", type: "boolean" },
+          { key: "installed", label: "Installed", type: "boolean" },
+          { key: "configured", label: "OAuth configured", type: "boolean" },
+          { key: "clientIdConfigured", label: "Client ID configured", type: "boolean" },
+          { key: "clientSecretConfigured", label: "Client secret configured", type: "boolean" },
+          { key: "redirectUri", label: "Redirect URI", type: "text" }
+        ],
+        actions: [
+          { key: "test", label: "Test Connection", endpointKey: "test", method: "POST" }
+        ]
+      }
+    },
     permissions: ["integration.manage"],
     storeScoped: false,
     category: "Identity & Access",
