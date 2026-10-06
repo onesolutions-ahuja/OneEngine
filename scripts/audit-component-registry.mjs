@@ -8,7 +8,7 @@ const requiredGenericPrimitives = [
   "related_list","field_value","record_picker","tree_view","process_path","timeline","kanban",
   "calendar","scheduler","gantt","map","hierarchy_viewer","file_viewer","signature",
   "tabs","accordion","pagination","filter_bar","modal","drawer",
-  "image","video","avatar","icon","qr_code","barcode","product_image_card",
+  "image","video","avatar","icon","qr_code","barcode","image_detail_card",
   "alert","badge","progress","empty_state","loading_state","button","icon_button","back_button","close_button","refresh_button","navigation_button","link","select","multi_select","time_input","date_picker","menu","breadcrumb","stepper","tooltip","toast","confirmation_dialog","app_icon","dock_item",
   "kpi","bar_chart","line_chart","pie_chart","donut_chart","gauge_chart","funnel_chart",
   "scatter_chart","combo_chart","analytics_table","dashboard_text","dashboard_image",
