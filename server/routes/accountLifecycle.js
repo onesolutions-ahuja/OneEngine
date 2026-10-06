@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { consumeAccountToken, hashAccountToken, issueAccountOtp, issueAccountToken, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeSystemWorkflow, executeSystemAction } from "../services/systemWorkflowRuntime.js";
 import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
 import { selectMetadataRecords, updateMetadataRecords } from "../services/metadataRecordStore.js";
 
@@ -104,7 +104,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     await writeAudit?.(u.company_id,u.id,"password_reset_otp_requested","user",u.id,{channel:"EMAIL",expiresMinutes:10});
     const otp=await issueAccountOtp(db,{companyId:u.company_id,userId:u.id,purpose:"PASSWORD_RESET",expiresMinutes:10});
     try {
-      await executeSystemWorkflow({
+      await executeSystemAction({
         db,
         companyId:u.company_id,
         userId:null,
