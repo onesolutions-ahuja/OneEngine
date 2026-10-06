@@ -30,7 +30,7 @@ import { getIntegrationDispatchStatus } from "../services/integrationDispatcher.
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const AUTH_TYPES = ["none", "api_key", "bearer", "basic"];
+const AUTH_TYPES = ["none", "api_key", "bearer", "basic", "oauth2", "oauth2_client_credentials"];
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const ENTITY_TYPES = ["custom"];
 const MAPPING_TYPES = ["direct", "constant", "template"];
