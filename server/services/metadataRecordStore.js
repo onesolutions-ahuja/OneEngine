@@ -39,7 +39,7 @@ function fieldColumn(object, apiName) {
 }
 
 export async function selectMetadataRecords(db, {
-  objectKey, companyId = null, filters = {}, columns = null, orderBy = null, limit = null, forUpdate = false,
+  objectKey, companyId = null, filters = {}, conditions = [], columns = null, orderBy = null, limit = null, forUpdate = false,
 } = {}) {
   const object = await resolveMetadataObject(db, { objectKey, companyId });
   const selected = Array.isArray(columns) && columns.length
@@ -49,7 +49,28 @@ export async function selectMetadataRecords(db, {
   const where = [];
   for (const [apiName, value] of Object.entries(filters || {})) {
     params.push(value);
-    where.push(`${fieldColumn(object, apiName)}=$${params.length}`);
+    where.push(`${fieldColumn(object, apiName)}=${params.length}`);
+  }
+  for (const condition of Array.isArray(conditions) ? conditions : []) {
+    const apiName = condition?.field;
+    if (!apiName) continue;
+    const column = fieldColumn(object, apiName);
+    const operator = String(condition?.operator || "equals").toLowerCase();
+    if (operator === "is_null") { where.push(`${column} IS NULL`); continue; }
+    if (operator === "not_null") { where.push(`${column} IS NOT NULL`); continue; }
+    if (operator === "in" || operator === "not_in") {
+      const values = Array.isArray(condition?.value) ? condition.value : [];
+      params.push(values);
+      where.push(`${column} ${operator === "in" ? "=" : "<>"} ANY(${params.length})`);
+      continue;
+    }
+    const sqlOperator = {
+      equals: "=", not_equals: "<>", less_than: "<", less_or_equal: "<=",
+      greater_than: ">", greater_or_equal: ">=",
+    }[operator];
+    if (!sqlOperator) throw new Error(`Unsupported metadata filter operator: ${operator}`);
+    params.push(condition?.value);
+    where.push(`${column}${sqlOperator}${params.length}`);
   }
   if (companyId && object.fieldMap.has("company_id") && !Object.prototype.hasOwnProperty.call(filters || {}, "company_id")) {
     params.push(companyId);
