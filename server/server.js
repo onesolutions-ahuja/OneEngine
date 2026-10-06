@@ -34,7 +34,7 @@ import {
 import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
-import { createWorkflowTraceGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
+import { createWorkflowTraceGateway, purgeOldWorkflowTraceRuns } from "./services/businessCommandGateway.js";
 import createTillRouter from "./routes/till.js";
 import createCustomersRouter from "./routes/customers.js";
 import createProductsRouter from "./routes/products.js";
@@ -503,7 +503,7 @@ app.use("/api", createWorkflowTraceGateway({ db }));
 const writeAudit = createAuditWriter({ db });
 app.locals.writeAudit = writeAudit;
 const workflowTraceRetentionDays = Math.max(7, Number(process.env.WORKFLOW_TRACE_RETENTION_DAYS || 90));
-const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
+const purgeWorkflowTraceBatch = () => purgeOldWorkflowTraceRuns({
   db,
   retentionDays: workflowTraceRetentionDays,
   batchSize: 5000,
