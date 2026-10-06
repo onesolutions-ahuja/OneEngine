@@ -331,7 +331,6 @@ export function packageDefinition(entry) {
           required: true,
         }];
       })(),
-      ...(entry.key === "uber_eats" ? { workflows: uberEatsWorkflowDefinitions() } : {}),
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
       ...(entry.key === "one_kiosk" ? {
         workflows: [
