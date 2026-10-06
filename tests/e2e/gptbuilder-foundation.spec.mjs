@@ -9,19 +9,15 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.goto('developer/gptbuilder')
     await expect(page.getByRole('dialog', { name: /New Automation/i })).toBeVisible({ timeout: 30_000 })
 
-    await expect(page.getByRole('button', { name: /Start From Scratch/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Use a Template/i })).toBeVisible()
-    await page.getByRole('button', { name: /^Next$/ }).click()
-
+    await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Frequently Used' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Triggered' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Screens' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Autolaunched Automations' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Triggered/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Screen/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Autolaunched/ })).toBeVisible()
 
-    await page.getByLabel('Search automation types').fill('screen')
+    await page.getByLabel('Search automations').fill('screen')
     await expect(page.getByRole('button', { name: /Screen Flow/i })).toBeVisible()
     await page.getByRole('button', { name: /Screen Flow/i }).click()
-    await page.getByRole('button', { name: /^Create$/ }).click()
 
     await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
     await expect(page.getByLabel('Start')).toBeVisible()
