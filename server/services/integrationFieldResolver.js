@@ -2,9 +2,9 @@
  * T9A - generic onePOS field-path resolver and payload builder.
  *
  * Resolves dotted source paths against onePOS data objects, supporting:
- *   - direct fields:            sales.sale_id
- *   - relationship traversal:   sales.customer.name
- *                               sales.customer.address.postcode
+ *   - direct fields:            object.record_id
+ *   - relationship traversal:   object.relationship.name
+ *                               object.relationship.address.postcode
  *   - implicit collections:     purchase.items.product.ean
  *                               (a plain segment over an array maps every element)
  *   - explicit collections:     purchase.items[].quantity
@@ -35,7 +35,7 @@ function resolveSegment(value, segment) {
 /**
  * Resolve a dotted onePOS source path against a data object.
  *
- * @param {string} path e.g. "sales.customer.address.postcode"
+ * @param {string} path e.g. "object.relationship.address.postcode"
  * @param {*} data the onePOS payload object
  * @returns {Array<{value: *, found: boolean}>} leaves reached
  */
