@@ -200,18 +200,18 @@ export async function loadPublicReceiptData({ db, companyId, saleId }) {
       `SELECT s.*, st.name AS store_name, st.address_line1, st.address_line2, st.city, st.postcode, st.phone AS store_phone,
               u.username AS cashier, cst.name AS customer_name, cst.phone AS customer_phone, cst.email AS customer_email,
               c.name AS company_name, c.email AS company_email, c.phone AS company_phone, c.currency AS company_currency, c.timezone AS company_timezone
-       FROM sales s
+       FROM sale_ledger s
        LEFT JOIN stores st ON st.id = s.store_id
        LEFT JOIN companies c ON c.id = s.company_id
        LEFT JOIN users u ON u.id = s.user_id
        LEFT JOIN customers cst ON cst.id = s.customer_id
-       WHERE s.id = $1 AND s.company_id = $2 LIMIT 1`,
+       WHERE s.id = $1 AND s.company_id = $2 AND s.source_record_type='SALE_HEADER' LIMIT 1`,
       [saleId, companyId]
     );
     if (!saleResult.rows?.[0]) return null;
     const sale = saleResult.rows[0];
-    const items = await db("SELECT * FROM sale_items WHERE sale_id = $1 ORDER BY id ASC", [saleId]);
-    const payments = await db("SELECT payment_method, amount, status FROM payments WHERE sale_id = $1 ORDER BY created_at ASC", [saleId]);
+    const items = await db("SELECT * FROM sale_ledger WHERE transaction_id = $1 AND source_record_type='SALE_LINE' ORDER BY id ASC", [saleId]);
+    const payments = await db("SELECT payment_method, amount, status FROM sale_ledger WHERE transaction_id = $1 AND source_record_type='PAYMENT' ORDER BY created_at ASC", [saleId]);
     return {
       company: {
         name: sale.company_name || "onePOS",
