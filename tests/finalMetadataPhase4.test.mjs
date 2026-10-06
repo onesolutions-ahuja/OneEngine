@@ -5,6 +5,7 @@ import fs from "node:fs";
 const sales=fs.readFileSync("server/routes/sales.js","utf8");
 const till=fs.readFileSync("server/routes/till.js","utf8");
 const platform=fs.readFileSync("server/routes/platform.js","utf8");
+const invoiceDelivery=fs.readFileSync("server/routes/invoiceDelivery.js","utf8");
 
 test("phase 4 legacy sale mutation engine is retired",()=>{
   assert.equal(sales.includes("INSERT INTO sales"),false);
@@ -26,4 +27,10 @@ test("phase 4 generic platform runtime owns canonical record writes",()=>{
 test("phase 4 business reads may remain while mutation orchestration is metadata-owned",()=>{
   assert.equal(sales.includes('router.get('),true);
   assert.equal(till.includes('router.get('),true);
+});
+
+test("phase 4 invoice configuration has no route-local SQL writer",()=>{
+  assert.equal(invoiceDelivery.includes("INSERT INTO integrations"),false);
+  assert.equal(invoiceDelivery.includes("UPDATE integrations SET"),false);
+  assert.equal(invoiceDelivery.includes("Delivery configuration writes are executed through Integration metadata Actions/Flows."),true);
 });
