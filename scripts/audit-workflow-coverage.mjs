@@ -127,7 +127,7 @@ const jobsSection = trustedJobKindsSource.match(/TRUSTED_JOB_KINDS\s*=\s*Object\
 const jobs = extractKeys(jobsSection, /"([A-Z0-9_]+)"/g);
 
 const serverSource = read("server/server.js");
-const globalGatewayEnabled = /app\.use\("\/api",\s*createBusinessCommandGateway\(\{\s*db\s*\}\)\)/.test(serverSource);
+const globalGatewayEnabled = /app\.use\("\/api",\s*createWorkflowTraceGateway\(\{\s*db\s*\}\)\)/.test(serverSource);
 const NON_MUTATING_POST_ROUTES = new Set([
   "/api/auth/login",
   "/customer-auth/login",
@@ -225,7 +225,7 @@ const report = {
     catalogueFunctionsCovered: catalogueCoverage.functions,
     catalogueActionsCovered: catalogueCoverage.actions,
     catalogueJobsCovered: catalogueCoverage.jobs,
-    globalBusinessCommandGateway: globalGatewayEnabled,
+    globalWorkflowTraceGateway: globalGatewayEnabled,
     executableLiteralDefaults: executableDefaultFindings.length,
     totalGaps: findings.length,
   },
