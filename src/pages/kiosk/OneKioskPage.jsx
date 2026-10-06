@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2, ArrowLeft, Accessibility, Languages, HelpCircle, QrCode, GitCompareArrows, Volume2, LogOut } from "lucide-react";
 import { apiRequest, KIOSK_TOKEN_STORAGE_KEY, lockToKioskMode } from "../../services/api.js";
+import { loadRuntimeSurface } from '../../services/runtimeSurface'
 import "./oneKiosk.css";
 
 const ONE_KIOSK_DEVICE_KEY = "onepos_one_kiosk_device_key";
@@ -972,7 +973,11 @@ export default function OneKioskPage({ publicMode = false }) {
         idempotency_key: clientRequestId,
         status: "COMPLETED",
       }];
-      const saleResponse = await apiRequest("/api/platform/runtime/objects/sale/buttons/till_complete_sale/execute", {
+      const retailSurface = await loadRuntimeSurface('till', 'till');
+      const transactionObjectKey = String(retailSurface?.objects?.transaction || '');
+      const completeSaleAction = String(retailSurface?.actions?.completeSale || '');
+      if (!transactionObjectKey || !completeSaleAction) throw new Error("Sale runtime metadata is unavailable");
+      const saleResponse = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(transactionObjectKey)}/buttons/${encodeURIComponent(completeSaleAction)}/execute`, {
         method: "POST",
         body: JSON.stringify({
           context: { source: "KIOSK", kioskDeviceKey: kioskDeviceKey() },
@@ -983,7 +988,7 @@ export default function OneKioskPage({ publicMode = false }) {
       if (!saleResponse?.success || !saleId) {
         throw new Error(saleResponse?.message || "Card payment could not be completed");
       }
-      const saved = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`);
+      const saved = await apiRequest(`/api/platform/objects/${encodeURIComponent(transactionObjectKey)}/records/${encodeURIComponent(saleId)}`);
       const completedSale = saved?.record || saved?.data || { id: saleId, total };
       setPaidSale(completedSale);
       await createFulfilmentFromPaidSale(completedSale);
@@ -1119,7 +1124,11 @@ export default function OneKioskPage({ publicMode = false }) {
     const saleId = confirmation?.saleId || confirmation?.order?.platform_data?.saleId || confirmation?.order?.platform_data?.sale_id;
     if (!saleId) return setError("Receipt QR is not available for this order.");
     try {
-      const response = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}/buttons/till_receipt_qr/execute`, {
+      const retailSurface = await loadRuntimeSurface('till', 'till');
+      const transactionObjectKey = String(retailSurface?.objects?.transaction || '');
+      const receiptQrAction = String(retailSurface?.actions?.receiptQr || '');
+      if (!transactionObjectKey || !receiptQrAction) throw new Error("Receipt runtime metadata is unavailable");
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(transactionObjectKey)}/records/${encodeURIComponent(saleId)}/buttons/${encodeURIComponent(receiptQrAction)}/execute`, {
         method: "POST",
         body: JSON.stringify({ inputs: { expiryMinutes: Number(confirmationScreen.qrExpiryMinutes || 5), baseUrl: window.location.origin } }),
       });
