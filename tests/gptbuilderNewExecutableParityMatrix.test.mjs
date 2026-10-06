@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { executeWorkflowAction, executeWorkflowActions } from '../server/services/platformWorkflow.js'
 import { executionInputValue } from '../src/pages/developer/gptbuildernew/executionInputs.js'
+import { FLOW_CAPABILITIES, flowElementAllowed } from '../src/pages/developer/gptbuildernew/flowCapabilities.js'
 
 const page=await readFile(new URL('../src/pages/developer/gptbuildernew/GPTBuilderNewPage.jsx',import.meta.url),'utf8')
 const runtime=await readFile(new URL('../server/services/platformWorkflow.js',import.meta.url),'utf8')
@@ -139,8 +140,14 @@ test('Subflow falls back to latest saved version snapshot when no version is act
 })
 
 test('specialist flow interaction capabilities match current Salesforce behavior',()=>{
- assert.ok(page.includes("user_provisioning:{start:'user_provisioning',screens:true,waits:false}"))
- assert.ok(page.includes("contact_request:{start:'contact_request',screens:true,waits:false}"))
- assert.ok(page.includes("individual_linking:{start:'invoked',screens:true,waits:false}"))
- assert.ok(page.includes("identity_registration:{start:'identity_provider',screens:false,waits:false}"))
+ assert.deepEqual(FLOW_CAPABILITIES.user_provisioning,{start:'user_provisioning',screens:true,waits:false})
+ assert.deepEqual(FLOW_CAPABILITIES.contact_request,{start:'contact_request',screens:true,waits:false})
+ assert.deepEqual(FLOW_CAPABILITIES.individual_linking,{start:'invoked',screens:true,waits:false})
+ assert.deepEqual(FLOW_CAPABILITIES.identity_registration,{start:'identity_provider',screens:false,waits:false})
+ assert.equal(flowElementAllowed('screen','screen'),true)
+ assert.equal(flowElementAllowed('screen','wait_amount'),false)
+ assert.equal(flowElementAllowed('screen','rollback'),true)
+ assert.equal(flowElementAllowed('autolaunched','screen'),false)
+ assert.equal(flowElementAllowed('autolaunched','wait_amount'),true)
+ assert.equal(flowElementAllowed('autolaunched','rollback'),false)
 })
