@@ -1941,12 +1941,6 @@ export default function LayoutEditor({
             <input type="text" className="onepos-input" value={component.workflow_id || ""} placeholder="Existing workflow ID" onChange={(event) => updateComponent(index, "workflow_id", event.target.value)} />
           </label>
         ) : null}
-        {component.action === ? (
-          <label className="pfb-field">
-            <span className="pfb-field-label">Registered Function Key</span>
-            <input type="text" className="onepos-input" value={component.function_key || ""} placeholder="Registered function key" onChange={(event) => updateComponent(index, "function_key", event.target.value)} />
-          </label>
-        ) : null}
         <label className="pfb-check-row">
           <input type="checkbox" checked={component.visible !== false} onChange={(event) => updateComponent(index, "visible", event.target.checked)} />
           <span>Visible</span>
