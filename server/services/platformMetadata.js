@@ -1163,6 +1163,18 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
      RETURNING id`
   );
   const moduleId = moduleResult.rows[0].id;
+  const retailPackage = await pool.query(
+    "SELECT id,module_id,version,manifest FROM package_registry WHERE package_key='retail_pos' AND active=true LIMIT 1"
+  );
+  if (retailPackage.rows[0]?.id && retailPackage.rows[0]?.module_id) {
+    await provisionPackageMetadata(pool.query.bind(pool), {
+      packageId: retailPackage.rows[0].id,
+      moduleId: retailPackage.rows[0].module_id,
+      companyId: null,
+      manifest: retailPackage.rows[0].manifest || {},
+      packageVersion: retailPackage.rows[0].version || "1.0.0",
+    });
+  }
   for (const object of [...retailObjects, ...(includeOperationalObjects ? operationalObjects : [])]) {
     const objectModuleResult = object.moduleKey
       ? await pool.query("SELECT id FROM platform_modules WHERE module_key=$1 LIMIT 1", [object.moduleKey])
