@@ -1067,47 +1067,19 @@ export default function createSalesRouter({
             }
           }
           const saleItemId=saleItemIds[itemIndex]||null;
-          for (const modifier of features.modifiers) {
-            if (!saleItemId) continue;
-            await client.query(`INSERT INTO sale_item_modifiers (sale_item_id,modifier_option_id,quantity,unit_price,total) VALUES ($1,$2,$3,$4,$5)`,
-              [saleItemId,modifier.optionId,modifier.quantity,modifier.price,roundCurrency(modifier.quantity*modifier.price)]);
-          }
         }
 
-         /*
-          * T10-DISCOUNT: audit trail for every discount applied to this sale.
-          * Per-line entries reference the sale_items row; order-level entries
-          * have item_id NULL. Persisted atomically with the sale.
-          */
-          for (const entry of saleDiscountAudit) {
-            const itemId = entry.itemIndex != null ? saleItemIds[entry.itemIndex] : null;
-            await client.query(
-              `
-              INSERT INTO sale_discounts
-                (sale_id, item_id, user_id, type, value, amount)
-              VALUES ($1, $2, $3, $4, $5, $6)
-              `,
-              [saleId, itemId || null, entry.userId, entry.discountType, entry.discountValue, entry.amount]
-            );
-          }
-
-          /*
-           * T10-PRICE: audit trail for manual price overrides (sale.price_change).
-           * Persisted atomically with the sale; links the sale, sale_item and
-           * product with the original and overridden unit prices and the actor.
-           */
-          for (const entry of salePriceOverride) {
-            const itemId = entry.itemIndex != null ? saleItemIds[entry.itemIndex] : null;
-            await client.query(
-              `
-              INSERT INTO sale_price_overrides
-                (sale_id, item_id, product_id, user_id, original_unit_price, overridden_unit_price, reason)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)
-              `,
-              [saleId, itemId, entry.productId, entry.userId, entry.originalUnitPrice, entry.overriddenUnitPrice, entry.reason]
-            );
-          }
-
+        const modifierAuditRecords = saleItemFeatureMap.flatMap((entry,itemIndex)=>entry.features.modifiers.map((modifier)=>({sale_item_id:saleItemIds[itemIndex]||null,modifier_option_id:modifier.optionId,quantity:modifier.quantity,unit_price:modifier.price,total:roundCurrency(modifier.quantity*modifier.price)}))).filter((row)=>row.sale_item_id);
+        const discountAuditRecords = saleDiscountAudit.map((entry)=>({sale_id:saleId,item_id:entry.itemIndex!=null?(saleItemIds[entry.itemIndex]||null):null,user_id:entry.userId,type:entry.discountType,value:entry.discountValue,amount:entry.amount}));
+        const priceOverrideAuditRecords = salePriceOverride.map((entry)=>({sale_id:saleId,item_id:entry.itemIndex!=null?(saleItemIds[entry.itemIndex]||null):null,product_id:entry.productId,user_id:entry.userId,original_unit_price:entry.originalUnitPrice,overridden_unit_price:entry.overriddenUnitPrice,reason:entry.reason}));
+        if (modifierAuditRecords.length || discountAuditRecords.length || priceOverrideAuditRecords.length) {
+          await executeSystemWorkflow({
+            db:(sql,params=[])=>client.query(sql,params), companyId:req.user.companyId, userId:req.user.id||null,
+            systemKey:"flow:sale.audit.persist", req,
+            input:{modifiers:modifierAuditRecords,discounts:discountAuditRecords,priceOverrides:priceOverrideAuditRecords},
+            storeId:req.user.storeId||null, source:{type:"flow",capability:"sale.audit.persist"},
+          });
+        }
 
         /*
           * Payment records — one row per tender.
