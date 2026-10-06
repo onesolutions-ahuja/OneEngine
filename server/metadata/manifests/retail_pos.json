@@ -994,7 +994,10 @@
           "label": "Updated",
           "fieldType": "datetime",
           "sourceColumn": "updated_at",
-          "writable": false
+          "writable": false,
+          "config": {
+            "runtimeWritable": true
+          }
         }
       ]
     }
