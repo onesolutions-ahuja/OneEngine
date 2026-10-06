@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
  * Dashboard Builder persisted. Swapping a component's report/field changes what
  * these renderers draw without changing this file.
  */
-import { DASHBOARD_COMPONENTS } from "./platformDashboard.js";
 import { formatDateValue } from "../../utils/dateFormat.js";
 import {
   ComboChart,
@@ -188,7 +187,6 @@ function RecordTable({ result }) {
 
 function Card({ component, state, children }) {
   const type = component.type === "chart" ? (component.config?.chartType || "bar") : component.type;
-  const spec = DASHBOARD_COMPONENTS.find((entry) => entry.key === type);
   const isSmartClock = type === "clock_widget";
   return <section
     data-testid={`dashboard-component-${component.id}`}
