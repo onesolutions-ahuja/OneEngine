@@ -153,7 +153,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
       companyId:candidate.company_id,userId:candidate.user_id,previousHash:candidate.password_hash,settings,
       revokeSessions:settings?.terminate_sessions_on_password_reset===true,
     });
-    await req.ensureBusinessCommandRun?.({companyId:candidate.company_id,userId:candidate.user_id||null});
+    await req.ensureWorkflowTraceRun?.({companyId:candidate.company_id,userId:candidate.user_id||null});
     await writeAudit?.(candidate.company_id,candidate.user_id,"password_reset_otp_verified","user",candidate.user_id,{channel:"EMAIL"});
     res.json({success:true,message:"Password reset successfully."});
   });
@@ -169,7 +169,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     const passwordCheck=await assertPasswordAllowed(db,{companyId:candidate.company_id,userId:candidate.user_id,password,bcrypt,enforceMinimumLifetime:false});
     if(!passwordCheck.ok)return res.status(400).json({success:false,code:"PASSWORD_POLICY",message:passwordCheck.message});
     const t=await consumeAccountToken(db,{token,purpose:"REGISTRATION"}); if(!t)return res.status(400).json({success:false,message:"Registration link is invalid or expired"});
-    await req.ensureBusinessCommandRun?.({ companyId: t.company_id, userId: t.user_id || null });
+    await req.ensureWorkflowTraceRun?.({ companyId: t.company_id, userId: t.user_id || null });
     await db("UPDATE users SET password_hash=$1,active=TRUE,must_change_password=FALSE,updated_at=NOW() WHERE id=$2 AND company_id=$3",[await bcrypt.hash(password,12),t.user_id,t.company_id]);
     await recordPasswordChange(db,{companyId:t.company_id,userId:t.user_id,previousHash:candidate.password_hash,settings:passwordCheck.settings,revokeSessions:false});
     res.json({success:true,data:{next:"POLICY_ONBOARDING"}});
