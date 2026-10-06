@@ -1,5 +1,5 @@
 import express from "express";
-import { createPaypalPaymentAttempt, getPaymentAttempt, transitionPaymentAttempt } from "../services/paypalPaymentAttempts.js";
+import { createPaymentAttempt, getPaymentAttempt, transitionPaymentAttempt } from "../services/paymentAttempts.js";
 
 export default function createPaypalQrRouter({ authenticate, authorize, db, connectorDrivers, writeAudit = null }) {
   const router = express.Router();
@@ -8,7 +8,7 @@ export default function createPaypalQrRouter({ authenticate, authorize, db, conn
   router.post("/paypal-qr/attempts", authenticate, authorize("sale.create"), async (req, res) => {
     try {
       const scope = scopedUser(req);
-      const attempt = await createPaypalPaymentAttempt({ db, connectorDrivers, companyId: scope.companyId, storeId: scope.storeId, tillId: scope.tillId, saleId: req.body?.saleId || null, sessionReference: req.body?.sessionReference || null, amount: req.body?.amount, currency: req.body?.currency || "GBP", idempotencyKey: req.body?.idempotencyKey, expiresInSeconds: req.body?.expiresInSeconds, actorUserId: req.user.id });
+      const attempt = await createPaymentAttempt({ db, connectorDrivers, companyId: scope.companyId, storeId: scope.storeId, tillId: scope.tillId, saleId: req.body?.saleId || null, sessionReference: req.body?.sessionReference || null, amount: req.body?.amount, currency: req.body?.currency || "GBP", idempotencyKey: req.body?.idempotencyKey, expiresInSeconds: req.body?.expiresInSeconds, actorUserId: req.user.id });
       res.status(201).json({ success: true, data: attempt });
     } catch (error) {
       res.status(error?.code === "CONNECTOR_UNAVAILABLE" ? 503 : 400).json({ success: false, code: error?.code || "PAYMENT_ATTEMPT_FAILED", message: error.message });
