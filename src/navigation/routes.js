@@ -10,7 +10,6 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'report-builder',
   'workflow-runs',
   'work-items',
-  'platform-apps',
   'deployments',
   'notifications',
   'value-sets',
@@ -42,7 +41,7 @@ export function readRoute() {
   }
   if (parts[0] === 'developer') {
     const requestedSection = parts[1] || 'objects'
-    const section = requestedSection === 'workflow-builder' || requestedSection === 'builder-2' ? 'gptbuilder' : requestedSection
+    const section = requestedSection === 'workflow-builder' || requestedSection === 'builder-2' ? 'gptbuilder' : requestedSection === 'platform-apps' ? 'gptappbuilder' : requestedSection
     const params = new URLSearchParams(window.location.search || '')
     const workflowId = section === 'gptbuilder'
       ? decodeURIComponent(parts[2] || params.get('workflowId') || '')

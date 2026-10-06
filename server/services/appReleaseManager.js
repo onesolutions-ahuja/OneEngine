@@ -205,6 +205,51 @@ export async function listPackageReleases(db, { packageKey = null } = {}) {
   return (result.rows || []).map(readStoredRelease);
 }
 
+export async function registerPortableApplicationPackage({
+  db, packageKey, name, version = "1.0.0", description = "", manifest = {},
+  publisher = "OneSolutions", category = "Apps", billable = true,
+} = {}) {
+  const key = String(packageKey || "").trim();
+  const label = String(name || "").trim();
+  if (!/^[a-z0-9_.-]{1,100}$/i.test(key) || !label) throw new Error("Valid packageKey and name are required");
+  validateDeploymentManifest(manifest);
+  const result = await db(
+    `INSERT INTO package_registry
+       (package_key,name,version,description,manifest,active,package_type,publisher,category,
+        publication_state,visible,installable,billable,system_only,display_order,licence_mode,updated_at)
+     VALUES ($1,$2,$3,$4,$5::jsonb,TRUE,'APPLICATION',$6,$7,'DRAFT',FALSE,TRUE,$8,FALSE,0,
+             CASE WHEN $8=TRUE THEN 'COMMERCIAL' ELSE 'TECHNICAL' END,NOW())
+     ON CONFLICT (package_key) DO UPDATE SET
+       name=EXCLUDED.name,version=EXCLUDED.version,description=EXCLUDED.description,
+       manifest=EXCLUDED.manifest,publisher=EXCLUDED.publisher,category=EXCLUDED.category,
+       billable=EXCLUDED.billable,licence_mode=EXCLUDED.licence_mode,updated_at=NOW()
+     RETURNING id,package_key,name,version,publication_state,visible,installable,billable,licence_mode`,
+    [key, label, String(version || "1.0.0"), description || null, JSON.stringify(manifest), publisher, category, billable === true]
+  );
+  return result.rows[0];
+}
+
+export async function projectPublishedPackageToOneStore(db, packageKey) {
+  const result = await db(
+    `INSERT INTO onestore_apps
+       (app_key,name,version,description,svg,landing_route,category,publisher,active,visible,installable,display_order,updated_at)
+     SELECT p.package_key,p.name,p.version,p.description,
+            NULLIF(p.manifest->>'svg',''),
+            COALESCE(NULLIF(p.manifest->>'landingRoute',''),NULLIF(p.manifest->>'route',''),'/workspace'),
+            p.category,p.publisher,p.active,p.visible,p.installable,p.display_order,NOW()
+       FROM package_registry p
+      WHERE p.package_key=$1 AND p.publication_state='PUBLISHED' AND p.active=TRUE
+     ON CONFLICT (app_key) DO UPDATE SET
+       name=EXCLUDED.name,version=EXCLUDED.version,description=EXCLUDED.description,
+       svg=EXCLUDED.svg,landing_route=EXCLUDED.landing_route,category=EXCLUDED.category,
+       publisher=EXCLUDED.publisher,active=EXCLUDED.active,visible=EXCLUDED.visible,
+       installable=EXCLUDED.installable,display_order=EXCLUDED.display_order,updated_at=NOW()
+     RETURNING id,app_key,name,version`,
+    [String(packageKey || "")]
+  );
+  return result.rows[0] || null;
+}
+
 export async function createPackageRelease({ db, packageKey, version, previousVersion = null, releaseNotes = "", status = "DRAFT", minimumPlatformVersion = null, updatePolicy = "OPTIONAL", changeSet = [], manifest = {}, createdBy = null }) {
   const packageKeyValue = String(packageKey || "").trim();
   if (!packageKeyValue) throw new Error("packageKey is required");
@@ -301,6 +346,12 @@ export async function publishPackageRelease({ db, releaseId, publishedBy = null 
     [release.version, release.packageKey, JSON.stringify(release.manifest || {})]
   );
   if (!packageUpdate.rows?.length) throw new Error("Package not found or inactive");
+  await db(
+    `UPDATE package_registry SET publication_state='PUBLISHED',visible=TRUE,installable=TRUE,updated_at=NOW()
+      WHERE id=$1`,
+    [packageUpdate.rows[0].id]
+  );
+  await projectPublishedPackageToOneStore(db, release.packageKey);
   await writeReleaseAudit(db, {
     userId: publishedBy,
     action: "release.published",

@@ -142,7 +142,6 @@ const SETTINGS_VISUALS = {
   'report-builder': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['report builder', 'report'] },
   'workflow-runs': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['workflow', 'runs', 'automation', 'history'] },
   'work-items': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['work items', 'workflow', 'approval', 'tasks'] },
-  'platform-apps': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['platform apps', 'apps', 'metadata'] },
   deployments: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['deployments', 'release', 'promotion'] },
   notifications: { icon: Bell, tone: 'cyan', searchTerms: ['notification subscriptions', 'events'] },
   'value-sets': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['value sets', 'picklist', 'reusable values'] },

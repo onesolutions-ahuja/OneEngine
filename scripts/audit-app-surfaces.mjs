@@ -113,6 +113,18 @@ for (const full of walk(path.join(root, 'src')).filter((p) => /\.(js|jsx|ts|tsx)
 
 assert(!read('vite.config.js').includes("'/smart-theme/'"), 'vite.config.js contains stale smart-theme base')
 
+const developer = read('src/pages/developer/OneDeveloperPage.jsx')
+const routes = read('src/navigation/routes.js')
+const gptAppBuilder = read('src/pages/developer/gptappbuilder/GPTAppBuilderPage.jsx')
+for (const retired of ['src/pages/settings/Platform/PackageBuilderAdmin.jsx', 'src/pages/settings/Platform/PlatformAppsAdmin.jsx']) {
+  assert(!exists(retired), `Retired legacy app builder still exists: ${retired}`)
+}
+assert(!developer.includes('PackageBuilderAdmin'), 'OneDeveloper must not import the retired Package Builder')
+assert(!developer.includes("key: 'platform-apps'"), 'OneDeveloper must not expose the retired platform-apps section')
+assert(routes.includes("requestedSection === 'platform-apps' ? 'gptappbuilder'"), 'Legacy platform-apps route must redirect to GPTAppBuilder')
+assert(gptAppBuilder.includes('/api/superadmin/packages/register-portable'), 'GPTAppBuilder publish must use generic portable package registration')
+assert(gptAppBuilder.includes('/api/superadmin/packages/releases'), 'GPTAppBuilder publish must use the generic release lifecycle')
+
 if (errors.length) {
   console.error('\nApp surface audit FAILED:')
   for (const error of errors) console.error(` - ${error}`)

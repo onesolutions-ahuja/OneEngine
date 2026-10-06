@@ -19,7 +19,7 @@ const ROUTES = [
   "developer/report-builder",
   "developer/workflow-runs",
   "developer/work-items",
-  "developer/platform-apps",
+  "developer/gptappbuilder",
   "developer/deployments",
 ];
 
