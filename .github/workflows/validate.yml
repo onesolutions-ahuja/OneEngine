@@ -2,7 +2,7 @@ name: Validate OneEngine
 
 on:
   push:
-    branches: [main]
+    branches: [main, gptbuildernew-phase2-work]
   pull_request:
     branches: [main]
   workflow_dispatch:
