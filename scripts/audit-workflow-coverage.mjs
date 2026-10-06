@@ -204,16 +204,16 @@ for (const file of walk(SERVER)) {
 
 const catalogueCoverage = {
   functions: functions.length === 0,
-  actions: /PLATFORM_ACTION_REGISTRY[\s\S]*\.map\s*\(/.test(systemWorkflowCatalog),
-  jobs: /TRUSTED_JOB_KINDS\.map\s*\(/.test(systemWorkflowCatalog),
+  actions: !/function\s+actionWorkflow\s*\(|PLATFORM_ACTION_REGISTRY[\s\S]*\.map\s*\(/.test(systemWorkflowCatalog),
+  jobs: !/function\s+jobWorkflow\s*\(|TRUSTED_JOB_KINDS\.map\s*\(/.test(systemWorkflowCatalog),
 };
 
 const findings = [
   ...executableDefaultFindings,
   ...functions.map((key) => ({ severity: "GAP", type: "LEGACY_FUNCTION_REGISTRY_NOT_EMPTY", key })),
   ...hiddenFunctionReferences.map((item) => ({ severity: "GAP", type: "HIDDEN_WORKFLOW_EXECUTOR_REFERENCE", ...item })),
-  ...(!catalogueCoverage.actions ? actions.map((key) => ({ severity: "GAP", type: "ACTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
-  ...(!catalogueCoverage.jobs ? jobs.map((key) => ({ severity: "GAP", type: "JOB_TRIGGER_REQUIRES_WORKFLOW", key })) : []),
+  ...(!catalogueCoverage.actions ? [{ severity: "GAP", type: "ACTION_PSEUDO_WORKFLOW_GENERATOR_PRESENT" }] : []),
+  ...(!catalogueCoverage.jobs ? [{ severity: "GAP", type: "JOB_PSEUDO_WORKFLOW_GENERATOR_PRESENT" }] : []),
   ...directRuntimeCalls.map((call) => ({ severity: "GAP", type: "DIRECT_RUNTIME_CALL_BYPASS", ...call })),
   ...bypassRoutes.map((route) => ({ severity: "GAP", type: "MUTATION_ROUTE_NOT_WORKFLOW_MEDIATED", ...route })),
 ];
@@ -268,8 +268,8 @@ const md = [
   `- Direct runtime call sites: ${report.summary.directRuntimeCallSites}`,
   `- Legacy function registry empty: ${report.summary.catalogueFunctionsCovered}`,
   `- Hidden function executor references: ${report.summary.hiddenFunctionReferences}`,
-  `- Catalogue actions covered: ${report.summary.catalogueActionsCovered}`,
-  `- Catalogue jobs covered: ${report.summary.catalogueJobsCovered}`,
+  `- Actions kept out of pseudo-workflow catalogue: ${report.summary.catalogueActionsCovered}`,
+  `- Jobs kept out of pseudo-workflow catalogue: ${report.summary.catalogueJobsCovered}`,
   `- Executable literal defaults: ${report.summary.executableLiteralDefaults}`,
   `- Total gaps: ${report.summary.totalGaps}`,
   "",
