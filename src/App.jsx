@@ -970,6 +970,7 @@ function Desktop({ onLock, onSignOut }) {
 }
 
 export default function App() {
+  const route = readRoute()
   if (route.app === 'flow-runtime') {
     return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
   }
