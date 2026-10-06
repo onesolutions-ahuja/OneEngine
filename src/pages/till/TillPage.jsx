@@ -5,7 +5,7 @@ import {
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor, RefreshCw, ArrowLeftRight,
 } from 'lucide-react'
 import { apiRequest, getStoredUser, loadSessionPermissions } from '../../services/api'
-import { loadRuntimeSurface, surfacePath } from '../../services/runtimeSurface'
+import { loadRuntimeSurface, mapRuntimePayload, surfacePath } from '../../services/runtimeSurface'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
@@ -524,69 +524,53 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const buildSalePayload = (paymentMethod, verifiedOverride = false, options = {}) => {
     const clientRequestId = crypto.randomUUID()
-    const sale = {
-      store_id: till?.store_id || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
-      terminal_id: till?.terminal_id || null,
-      user_id: getStoredUser()?.id || getStoredUser()?.userId || null,
-      customer_id: selectedCustomer?.id || null,
+    const mappings = runtimeSurface?.payloadMappings || {}
+    const sale = mapRuntimePayload(mappings.sale, {
+      storeId: till?.store_id || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
+      terminalId: till?.terminal_id || null,
+      userId: getStoredUser()?.id || getStoredUser()?.userId || null,
+      customerId: selectedCustomer?.id || null,
       subtotal: Number(subtotal || 0),
       tax: Number(vat || 0),
       discount: Number(discountAmount || 0),
       total: Number(total || 0),
-      line_count: Number(basket.length + miscLines.length),
+      lineCount: Number(basket.length + miscLines.length),
       status: 'COMPLETED',
-      offline_created: false,
-      sync_status: 'SYNCED',
-      client_request_id: clientRequestId,
-      completed_at: new Date().toISOString(),
-    }
+      offlineCreated: false,
+      syncStatus: 'SYNCED',
+      clientRequestId,
+      completedAt: new Date().toISOString(),
+    })
+    const itemValues = (line, itemType = 'PRODUCT') => ({
+      productId: line.id || line.productId || line.product_id || null,
+      productName: line.name || line.description || 'Misc Item',
+      quantity: Number(line.quantity || 0),
+      unitPrice: Number(line.price || 0),
+      discount: Number(line.lineDiscount || 0),
+      tax: Number(line.tax || 0),
+      total: Number(line.total ?? (Number(line.price || 0) * Number(line.quantity || 0))),
+      itemType,
+      modifierData: Array.isArray(line.modifiers) ? line.modifiers : [],
+      bundleComponents: Array.isArray(line.bundleComponents) ? line.bundleComponents : [],
+    })
     const items = [
-      ...basket.map((item) => ({
-        product_id: item.id,
-        product_name: item.name,
-        quantity: Number(item.quantity || 0),
-        unit_price: Number(item.price || 0),
-        discount: Number(item.lineDiscount || 0),
-        tax: Number(item.tax || 0),
-        total: Number(item.total ?? (Number(item.price || 0) * Number(item.quantity || 0))),
-        item_type: item.itemType || 'PRODUCT',
-        modifier_data: Array.isArray(item.modifiers) ? item.modifiers : [],
-        bundle_components: Array.isArray(item.bundleComponents) ? item.bundleComponents : [],
-      })),
-      ...miscLines.map((line) => ({
-        product_id: line.productId || line.product_id || null,
-        product_name: line.description || 'Misc Item',
-        quantity: Number(line.quantity || 0),
-        unit_price: Number(line.price || 0),
-        discount: 0,
-        tax: 0,
-        total: Number(line.price || 0) * Number(line.quantity || 0),
-        item_type: 'MISC',
-        modifier_data: [],
-        bundle_components: [],
-      })),
+      ...basket.map((item) => mapRuntimePayload(mappings.item, itemValues(item, item.itemType || 'PRODUCT'))),
+      ...miscLines.map((line) => mapRuntimePayload(mappings.item, itemValues(line, 'MISC'))),
     ]
+    const paymentValue = (row, defaultMethod = paymentMethod) => ({
+      customerId: selectedCustomer?.id || null,
+      direction: 'IN',
+      paymentMethod: row?.method || row?.paymentMethod || defaultMethod,
+      amount: Number(row?.amount ?? total ?? 0),
+      provider: row?.provider || null,
+      terminalId: till?.terminal_id || null,
+      providerTransactionId: row?.providerTransactionId || row?.provider_transaction_id || null,
+      idempotencyKey: row?.idempotencyKey || row?.idempotency_key || clientRequestId,
+      status: row?.status || 'COMPLETED',
+    })
     const paymentRows = Array.isArray(options.payments) && options.payments.length
-      ? options.payments.map((row) => ({
-          customer_id: selectedCustomer?.id || null,
-          direction: 'IN',
-          payment_method: row.method || row.paymentMethod || paymentMethod,
-          amount: Number(row.amount || 0),
-          provider: row.provider || null,
-          terminal_id: till?.terminal_id || null,
-          provider_transaction_id: row.providerTransactionId || row.provider_transaction_id || null,
-          idempotency_key: row.idempotencyKey || row.idempotency_key || clientRequestId,
-          status: row.status || 'COMPLETED',
-        }))
-      : [{
-          customer_id: selectedCustomer?.id || null,
-          direction: 'IN',
-          payment_method: paymentMethod,
-          amount: Number(total || 0),
-          terminal_id: till?.terminal_id || null,
-          idempotency_key: clientRequestId,
-          status: 'COMPLETED',
-        }]
+      ? options.payments.map((row) => mapRuntimePayload(mappings.payment, paymentValue(row)))
+      : [mapRuntimePayload(mappings.payment, paymentValue(null))]
     return { clientRequestId, sale, items, payments: paymentRows, ageVerified: ageVerified || verifiedOverride, paymentInputs: options.paymentInputs || {} }
   }
 
