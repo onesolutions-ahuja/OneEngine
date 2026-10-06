@@ -352,8 +352,9 @@ export function createRegisteredComponent(component, builder = "PAGE") {
     componentApi: spec.api,
     rendererKey: spec.rendererKey || spec.key,
     runtimeKind: spec.runtimeKind || null,
-    label: spec.label,
+    label: defaults.label || spec.label,
     title: defaults.title || spec.label,
+    ...defaults,
     config: defaults.config || {},
     layout: defaults.layout || {},
   };
