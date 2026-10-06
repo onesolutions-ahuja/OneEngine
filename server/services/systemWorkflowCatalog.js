@@ -1,5 +1,4 @@
 import { PACKAGE_RUNTIME_FLOWS } from "../packages/runtimeFlowManifests.js";
-import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 import { TRUSTED_JOB_KINDS } from "./trustedJobKinds.js";
 
