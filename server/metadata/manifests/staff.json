@@ -1,0 +1,320 @@
+{
+  "workflows": [
+    {
+      "objectKey": "employee",
+      "name": "Attendance · Clock In",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "scope": "package",
+        "capabilityKey": "attendance.clock_in",
+        "apiName": "ATTENDANCE_CLOCK_IN",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "userId",
+            "label": "userId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "storeId",
+            "label": "storeId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "now",
+            "label": "now",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "recordId",
+            "label": "recordId",
+            "type": "text",
+            "source": "variables.recordId"
+          },
+          {
+            "name": "alreadyOpen",
+            "label": "alreadyOpen",
+            "type": "boolean",
+            "source": "variables.alreadyOpen"
+          }
+        ],
+        "actions": [
+          {
+            "id": "find_open",
+            "label": "Find Open Attendance",
+            "key": "GET_RECORDS",
+            "objectKey": "attendance",
+            "filters": [
+              {
+                "field": "user_id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.userId"
+                }
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "open"
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "open_exists",
+            "label": "Open Attendance Exists?",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Already Open",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.find_open.record.id",
+                      "operator": "is_not_blank"
+                    }
+                  ]
+                },
+                "branch": [
+                  "set_existing_id",
+                  "set_already_open"
+                ]
+              }
+            ],
+            "defaultLabel": "Create Attendance",
+            "defaultBranch": [
+              "create_attendance",
+              "set_created_id",
+              "set_not_already_open"
+            ]
+          },
+          {
+            "id": "create_attendance",
+            "label": "Create Attendance",
+            "key": "CREATE_RECORD",
+            "objectKey": "attendance",
+            "fieldValues": {
+              "user_id": {
+                "path": "$record.userId"
+              },
+              "status": "open",
+              "clock_in": {
+                "path": "$record.now"
+              }
+            }
+          },
+          {
+            "id": "set_existing_id",
+            "label": "Return Existing Record",
+            "key": "ASSIGNMENT",
+            "variableName": "recordId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.find_open.record.id"
+            }
+          },
+          {
+            "id": "set_created_id",
+            "label": "Return Created Record",
+            "key": "ASSIGNMENT",
+            "variableName": "recordId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_attendance.record.id"
+            }
+          },
+          {
+            "id": "set_already_open",
+            "label": "Already Open",
+            "key": "ASSIGNMENT",
+            "variableName": "alreadyOpen",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": true
+          },
+          {
+            "id": "set_not_already_open",
+            "label": "New Attendance",
+            "key": "ASSIGNMENT",
+            "variableName": "alreadyOpen",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": false
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "employee",
+      "name": "Attendance · Clock Out",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "scope": "package",
+        "capabilityKey": "attendance.clock_out",
+        "apiName": "ATTENDANCE_CLOCK_OUT",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "userId",
+            "label": "userId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "now",
+            "label": "now",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "recordId",
+            "label": "recordId",
+            "type": "text",
+            "source": "variables.recordId"
+          },
+          {
+            "name": "closed",
+            "label": "closed",
+            "type": "boolean",
+            "source": "variables.closed"
+          }
+        ],
+        "actions": [
+          {
+            "id": "find_open",
+            "label": "Find Open Attendance",
+            "key": "GET_RECORDS",
+            "objectKey": "attendance",
+            "filters": [
+              {
+                "field": "user_id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.userId"
+                }
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "open"
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "open_exists",
+            "label": "Open Attendance Exists?",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Close Attendance",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.find_open.record.id",
+                      "operator": "is_not_blank"
+                    }
+                  ]
+                },
+                "branch": [
+                  "worked_minutes",
+                  "close_attendance",
+                  "set_closed_id",
+                  "set_closed"
+                ]
+              }
+            ],
+            "defaultLabel": "Nothing Open",
+            "defaultBranch": [
+              "set_not_closed"
+            ]
+          },
+          {
+            "id": "worked_minutes",
+            "label": "Calculate Worked Minutes",
+            "key": "FORMULA",
+            "resourceName": "workedMinutes",
+            "resultType": "number",
+            "expression": "MINUTESBETWEEN(clockIn, clockOut)",
+            "inputs": {
+              "clockIn": {
+                "path": "steps.find_open.record.clock_in"
+              },
+              "clockOut": {
+                "path": "$record.now"
+              }
+            }
+          },
+          {
+            "id": "close_attendance",
+            "label": "Close Attendance",
+            "key": "UPDATE_RECORD",
+            "objectKey": "attendance",
+            "recordId": {
+              "path": "steps.find_open.record.id"
+            },
+            "fieldValues": {
+              "status": "closed",
+              "clock_out": {
+                "path": "$record.now"
+              },
+              "worked_minutes": {
+                "path": "variables.workedMinutes"
+              }
+            }
+          },
+          {
+            "id": "set_closed_id",
+            "label": "Return Closed Record",
+            "key": "ASSIGNMENT",
+            "variableName": "recordId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.find_open.record.id"
+            }
+          },
+          {
+            "id": "set_closed",
+            "label": "Closed",
+            "key": "ASSIGNMENT",
+            "variableName": "closed",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": true
+          },
+          {
+            "id": "set_not_closed",
+            "label": "Not Closed",
+            "key": "ASSIGNMENT",
+            "variableName": "closed",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": false
+          }
+        ]
+      }
+    }
+  ]
+}
