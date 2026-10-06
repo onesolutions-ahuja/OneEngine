@@ -19,80 +19,6 @@ function kioskDeviceKey() {
   }
 }
 
-const DEMO_PRODUCTS = [
-  {
-    id: "demo-classic-beef",
-    name: "Classic Beef Burger",
-    sku: "DEMO-BEEF-01",
-    description: "Juicy beef patty, cheese, lettuce and tomato",
-    categoryLabel: "Burgers",
-    price: 5.49,
-    imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "demo-crispy-chicken",
-    name: "Crispy Chicken Burger",
-    sku: "DEMO-CHICK-01",
-    description: "Crispy chicken, lettuce and creamy mayo",
-    categoryLabel: "Chicken",
-    price: 5.29,
-    imageUrl: "https://images.unsplash.com/photo-1606755962773-d324e0a13086?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "demo-veggie-deluxe",
-    name: "Veggie Deluxe",
-    sku: "DEMO-VEG-01",
-    description: "Plant-based patty, lettuce, tomato and onion",
-    categoryLabel: "Burgers",
-    price: 4.99,
-    imageUrl: "https://images.unsplash.com/photo-1520072959219-c595dc870360?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "demo-cheese-fries",
-    name: "Cheese Fries",
-    sku: "DEMO-SIDE-01",
-    description: "Golden fries with melted cheese",
-    categoryLabel: "Sides",
-    price: 3.49,
-    imageUrl: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "demo-chicken-bites",
-    name: "Chicken Bites",
-    sku: "DEMO-CHICK-02",
-    description: "Six crispy chicken pieces with dip",
-    categoryLabel: "Chicken",
-    price: 3.99,
-    imageUrl: "https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "demo-cola",
-    name: "Cola",
-    sku: "DEMO-DRINK-01",
-    description: "Chilled cola with ice",
-    categoryLabel: "Drinks",
-    price: 2.29,
-    imageUrl: "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "demo-sundae",
-    name: "Chocolate Sundae",
-    sku: "DEMO-DESSERT-01",
-    description: "Soft serve with chocolate sauce",
-    categoryLabel: "Desserts",
-    price: 2.49,
-    imageUrl: "https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "demo-shake",
-    name: "Vanilla Shake",
-    sku: "DEMO-DRINK-02",
-    description: "Creamy vanilla shake",
-    categoryLabel: "Drinks",
-    price: 2.79,
-    imageUrl: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=900&q=85",
-  },
-];
 
 function money(value, currency = "GBP") {
   const amount = Number(value || 0);
@@ -106,20 +32,13 @@ function money(value, currency = "GBP") {
 export default function OneKioskPage({ publicMode = false }) {
   const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
   const demoFlowKey = useMemo(() => new URLSearchParams(window.location.search).get("flow") || "", []);
-  const [products, setProducts] = useState(demoMode ? DEMO_PRODUCTS : []);
+  const [products, setProducts] = useState([]);
   const [currency, setCurrency] = useState("GBP");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
-  const [basket, setBasket] = useState(() => demoMode
-    ? [
-        { ...DEMO_PRODUCTS.find((product) => product.id === "demo-classic-beef"), quantity: 1 },
-        { ...DEMO_PRODUCTS.find((product) => product.id === "demo-cheese-fries"), quantity: 1 },
-        { ...DEMO_PRODUCTS.find((product) => product.id === "demo-cola"), quantity: 1 },
-      ]
-    : []
-  );
+  const [basket, setBasket] = useState([]);
   const [fulfilmentType, setFulfilmentType] = useState("COLLECT");
   const [paying, setPaying] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
@@ -171,27 +90,43 @@ export default function OneKioskPage({ publicMode = false }) {
 
   useEffect(() => {
     if (demoMode) {
-      setProducts(DEMO_PRODUCTS);
-      setCurrency("GBP");
-      apiRequest(demoMode ? "/api/kiosk/flows?demo=1" : "/api/kiosk/flows")
-        .then((response) => {
-          const flows = Array.isArray(response?.data) ? response.data : [];
-          const requested = String(demoFlowKey || "").trim().toLowerCase();
-          const selected = (requested
-            ? flows.find((flow) => String(flow?.action?.templateKey || "").toLowerCase() === requested)
-              || flows.find((flow) => String(flow?.action?.ui?.profile || "").toLowerCase() === requested)
-              || flows.find((flow) => String(flow?.name || "").toLowerCase().includes(requested))
-            : null)
-            || flows.find((flow) => flow?.action?.defaultForNewDevices === true)
-            || flows[0];
-          if (selected?.action?.ui) {
-            setExperienceUi(selected.action.ui);
-            setExperienceFlow({ id: selected.id, name: selected.name, version: selected.version, templateKey: selected.action?.templateKey || null });
-          }
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-      return undefined;
+      let live = true;
+      Promise.all([
+        apiRequest("/api/kiosk/catalogue?demo=1"),
+        apiRequest("/api/kiosk/flows?demo=1"),
+        apiRequest("/api/settings").catch(() => null),
+      ]).then(([productResponse, flowResponse, settingsResponse]) => {
+        if (!live) return;
+        const rows = (Array.isArray(productResponse?.data) ? productResponse.data : [])
+          .filter((product) => product?.active !== false)
+          .map((product) => ({
+            ...product,
+            price: Number(product.display_price ?? product.price ?? 0),
+            basePrice: Number(product.base_price ?? product.price ?? 0),
+            displaySavings: Number(product.display_savings || 0),
+            categoryLabel: product.categoryLabel || product.category_name || product.category || "Other",
+          }));
+        setProducts(rows);
+        setCurrency(settingsResponse?.data?.company?.currency || settingsResponse?.company?.currency || "GBP");
+        const flows = Array.isArray(flowResponse?.data) ? flowResponse.data : [];
+        const requested = String(demoFlowKey || "").trim().toLowerCase();
+        const selected = (requested
+          ? flows.find((flow) => String(flow?.action?.templateKey || "").toLowerCase() === requested)
+            || flows.find((flow) => String(flow?.action?.ui?.profile || "").toLowerCase() === requested)
+            || flows.find((flow) => String(flow?.name || "").toLowerCase().includes(requested))
+          : null)
+          || flows.find((flow) => flow?.action?.defaultForNewDevices === true)
+          || flows[0];
+        if (selected?.action?.ui) {
+          setExperienceUi(selected.action.ui);
+          setExperienceFlow({ id: selected.id, name: selected.name, version: selected.version, templateKey: selected.action?.templateKey || null });
+        }
+      }).catch((reason) => {
+        if (live) setError(reason?.message || "Unable to load demo kiosk metadata");
+      }).finally(() => {
+        if (live) setLoading(false);
+      });
+      return () => { live = false; };
     }
     let live = true;
     Promise.all([
