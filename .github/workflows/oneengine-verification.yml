@@ -29,7 +29,7 @@ jobs:
         run: npm ci
       - name: Install backend dependencies
         working-directory: server
-        run: npm ci
+        run: npm install --ignore-scripts --no-audit --no-fund
       - name: Frontend architecture and production build
         run: npm run build
       - name: Frontend unit tests
