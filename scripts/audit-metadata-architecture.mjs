@@ -105,6 +105,17 @@ for(const item of coreFiles){
   for(const match of text.matchAll(providerPattern)) add("PROVIDER_SPECIFIC_CORE_RUNTIME",file,text,match.index,match[0]);
 }
 
+
+const serverEntry=path.join(ROOT,"server/server.js");
+const trustedKinds=path.join(ROOT,"server/services/trustedJobKinds.js");
+for(const file of [serverEntry,trustedKinds]){
+  if(!fs.existsSync(file)) continue;
+  const text=fs.readFileSync(file,"utf8");
+  for(const match of text.matchAll(/\b(?:QUICKBOOKS|SHOPIFY|UBER|DELIVEROO|PAYPAL|DOJO|SUMUP)_[A-Z0-9_]*(?:JOB|SYNC|EVENT)\b/g)){
+    add("PROVIDER_SPECIFIC_JOB_RUNTIME",file,text,match.index,match[0]);
+  }
+}
+
 const functionRegistry=path.join(ROOT,"server/services/platformFunctionRegistry.js");
 if(fs.existsSync(functionRegistry)){
   const text=fs.readFileSync(functionRegistry,"utf8");
