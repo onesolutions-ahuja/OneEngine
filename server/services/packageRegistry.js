@@ -4,6 +4,28 @@ import { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, re
 export { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 import { packageManifestCatalog } from "../packages/packageManifestCatalog.js";
 
+const REVIEW_REMOVED_OBJECT_KEYS = new Set(["appointment", "appointment_booking_case"]);
+
+function reviewedOneAssistantManifest() {
+  const blockedReference = (value) => {
+    let blocked = false;
+    JSON.stringify(value, (key, item) => {
+      if (["objectKey","relatedObjectKey","parentObjectKey","childObjectKey"].includes(key)
+          && REVIEW_REMOVED_OBJECT_KEYS.has(String(item || ""))) blocked = true;
+      return item;
+    });
+    return blocked;
+  };
+  return {
+    ...oneAssistantManifest,
+    objects: (oneAssistantManifest.objects || []).filter((object) => !REVIEW_REMOVED_OBJECT_KEYS.has(object?.objectKey)),
+    relationships: (oneAssistantManifest.relationships || []).filter((item) => !blockedReference(item)),
+    listViews: (oneAssistantManifest.listViews || []).filter((item) => !blockedReference(item)),
+    rules: (oneAssistantManifest.rules || []).filter((item) => !blockedReference(item)),
+    workflows: (oneAssistantManifest.workflows || []).filter((item) => !blockedReference(item)),
+  };
+}
+
 const metadataManifestCache = new Map();
 function manifestForPackage(packageKey) {
   if (!packageKey) return null;
@@ -580,7 +602,7 @@ export function packageDefinition(entry) {
           { objectKey: "communication_event", viewKey: "recent_communication_events", label: "Recent Communication Events", columns: ["channel","event_type","direction","provider","body","recipient","created_at"], sort: { field: "created_at", direction: "desc" }, pageSize: 50, isDefault: true }
         ],
       } : {}),
-      ...(entry.key === "one_assistant" ? oneAssistantManifest : {}),
+      ...(entry.key === "one_assistant" ? reviewedOneAssistantManifest() : {}),
       ...(entry.key === "whatsapp_assistant" ? {
         workflows: [
           {
