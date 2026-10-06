@@ -7,7 +7,7 @@ test("Phase 5 Online Orders metadata is manifest-owned and Flow-write-only",asyn
  const m=JSON.parse(await read("server/metadata/manifests/online_orders.json"));
  assert.deepEqual(m.objects.map(x=>x.objectKey).sort(),["sales_order","sales_order_line"]);
  for(const o of m.objects) assert.equal(o.config?.flowWritesOnly,true,o.objectKey);
- assert.ok(m.workflows.some(x=>x.apiName==="ONLINE_ORDER_TRANSITION"));
+ const line=m.objects.find(o=>o.objectKey==="sales_order_line");\n assert.equal(line.config?.internal,true);\n assert.equal(line.config?.childStorage,true);\n assert.equal(line.config?.generateOneId,false);\n assert.ok(m.workflows.some(x=>x.apiName==="ONLINE_ORDER_TRANSITION"));
  assert.ok(m.actions.every(x=>x.handlerKey==="RUN_SUBFLOW"));
 });
 test("Phase 5 Online Orders is not inline in package registry",async()=>{
