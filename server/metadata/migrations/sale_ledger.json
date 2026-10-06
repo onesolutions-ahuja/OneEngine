@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "status": "PREPARE",
+  "canonicalObject": {
+    "apiName": "sale_ledger",
+    "label": "Sale Ledger",
+    "oneIdEligible": true,
+    "oneIdAssigned": false
+  },
+  "absorbs": [
+    {
+      "apiName": "sale",
+      "oneIdEligible": false,
+      "disposition": "ABSORB"
+    },
+    {
+      "apiName": "sale_item",
+      "oneIdEligible": false,
+      "disposition": "ABSORB"
+    },
+    {
+      "apiName": "payment",
+      "oneIdEligible": false,
+      "disposition": "ABSORB"
+    },
+    {
+      "apiName": "refund",
+      "oneIdEligible": false,
+      "disposition": "ABSORB"
+    }
+  ],
+  "migrationRules": {
+    "preserveData": true,
+    "destructiveChangesAllowedBeforeDependencyAudit": false,
+    "assignOneIdBeforeDependencyAudit": false,
+    "legacyReferencesCountAsUsage": false,
+    "canonicalModelAuthority": "approved_review"
+  }
+}
