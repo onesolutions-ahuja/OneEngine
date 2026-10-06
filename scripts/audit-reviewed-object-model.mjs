@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { packageDefinitions } from "../server/services/packageRegistry.js";
 
 const canonical = new Set([
@@ -37,7 +38,7 @@ for (const key of canonical) {
 assert.equal(activeObjects.filter((object) => object.objectKey === "purchase_ledger").length, 1, "purchase_ledger must have one package owner");
 assert.equal(activeObjects.find((object) => object.objectKey === "purchase_ledger")?.packageKey, "purchasing_core", "purchasing_core must own purchase_ledger");
 
-const rootPath = process.cwd();
+const rootPath = fileURLToPath(new URL("../", import.meta.url));
 const extensions = new Set([".js",".jsx",".mjs",".cjs"]);
 const excluded = [
   "server/database/",
