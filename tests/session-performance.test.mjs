@@ -395,10 +395,14 @@ test('Dashboard startup reads are launched together instead of separate mount wa
   assert.match(source, /loadSessionPermissions\(\)/)
 })
 
-test('Dashboard starts saved filter-state lookup before building the run request', async () => {
+test('Dashboard restores saved filter state before building the run request', async () => {
   const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /const statePromise = value\?\.id/)
-  assert.match(source, /const state = await statePromise/)
+  const stateLookup = source.indexOf('const state = value?.id ? await apiRequest(')
+  const endpointBuild = source.indexOf('const endpoint = value.id', stateLookup)
+  const runRequest = source.indexOf('const run = await apiRequest(endpoint', endpointBuild)
+  assert.ok(stateLookup >= 0, 'saved dashboard filter-state lookup must exist')
+  assert.ok(endpointBuild > stateLookup, 'saved filter state must resolve before the run endpoint is built')
+  assert.ok(runRequest > endpointBuild, 'dashboard run must execute after saved filter state is applied')
 })
 
 test('Settings loads values only for the active metadata section', async () => {
