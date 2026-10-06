@@ -175,6 +175,16 @@ test("Phase 1 retail write paths use generic atomic metadata workflows", async (
   assert.match(platform, /status='FAILED'/);
 });
 
+test("Complete Sale uses generic idempotent matching", async () => {
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const workflow = await readFile(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
+  assert.match(registry, /checkMatchingRecords:true/);
+  assert.match(registry, /client_request_id/);
+  assert.match(registry, /haltOnMatch:true/);
+  assert.match(workflow, /haltWorkflow/);
+  assert.match(workflow, /matched: existing/);
+});
+
 test("legacy sales route is removed in favor of metadata runtime", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/sales.js"), false);
