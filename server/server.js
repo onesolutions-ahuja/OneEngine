@@ -35,7 +35,6 @@ import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemAction } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
-import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
 
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
@@ -1968,15 +1967,6 @@ app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool,
 |   PUT  /api/products/:id          (product.edit)
 |   DEL  /api/products/:id          (product.delete)
 */
-app.use(
-  "/api",
-  createProductFeaturesRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-  })
-);
 
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
