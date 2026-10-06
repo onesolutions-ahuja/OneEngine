@@ -102,12 +102,6 @@
           "label": "Idempotency Key",
           "fieldType": "text",
           "writable": true
-        },
-        {
-          "apiName": "idempotency_key",
-          "label": "Idempotency Key",
-          "fieldType": "text",
-          "writable": true
         }
       ],
       "config": {
@@ -286,6 +280,106 @@
         },
         "actions": [
           {
+            "id": "validate_credit_entry",
+            "label": "Validate Credit Entry",
+            "apiName": "validate_credit_entry",
+            "key": "FORMULA",
+            "resourceName": "creditEntryValid",
+            "resultType": "boolean",
+            "expression": "amount > 0 && !ISBLANK(customerId) && !ISBLANK(transactionType) && !ISBLANK(idempotencyKey)",
+            "inputs": {
+              "amount": {
+                "path": "variables.amount"
+              },
+              "customerId": {
+                "path": "variables.customerId"
+              },
+              "transactionType": {
+                "path": "variables.transactionType"
+              },
+              "idempotencyKey": {
+                "path": "variables.idempotencyKey"
+              }
+            }
+          },
+          {
+            "id": "find_customer",
+            "label": "Find Customer",
+            "apiName": "find_customer",
+            "key": "GET_RECORDS",
+            "objectKey": "customer",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.customerId"
+                }
+              }
+            ],
+            "match": "all",
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "find_existing_credit_entry",
+            "label": "Find Existing Credit Entry",
+            "apiName": "find_existing_credit_entry",
+            "key": "GET_RECORDS",
+            "objectKey": "customer_credit_ledger",
+            "filters": [
+              {
+                "field": "idempotency_key",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.idempotencyKey"
+                }
+              }
+            ],
+            "match": "all",
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "credit_entry_ready",
+            "label": "Credit Entry Ready?",
+            "apiName": "credit_entry_ready",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.creditEntryValid",
+                      "operator": "equals",
+                      "value": true
+                    },
+                    {
+                      "field": "steps.find_customer.record.id",
+                      "operator": "is_null",
+                      "value": false
+                    },
+                    {
+                      "field": "steps.find_existing_credit_entry.record.id",
+                      "operator": "is_null",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_entry"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid or Duplicate",
+            "defaultBranch": [
+              "credit_entry_invalid"
+            ]
+          },
+          {
             "id": "create_entry",
             "label": "Create Customer Credit Ledger Entry",
             "apiName": "create_entry",
@@ -326,6 +420,315 @@
                 "path": "variables.idempotencyKey"
               }
             }
+          },
+          {
+            "id": "credit_entry_invalid",
+            "label": "Customer Credit Entry Rejected",
+            "apiName": "credit_entry_invalid",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Credit entry is invalid, the customer does not exist, or the idempotency key was already used.",
+            "errorLocation": "record"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.creditEntryValid",
+            "apiName": "creditEntryValid",
+            "label": "Credit Entry Valid",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": false,
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": false
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "validate_credit_entry",
+            "key": "action",
+            "label": "Validate Credit Entry",
+            "apiName": "validate_credit_entry",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "validate_credit_entry",
+                "label": "Validate Credit Entry",
+                "apiName": "validate_credit_entry",
+                "key": "FORMULA",
+                "resourceName": "creditEntryValid",
+                "resultType": "boolean",
+                "expression": "amount > 0 && !ISBLANK(customerId) && !ISBLANK(transactionType) && !ISBLANK(idempotencyKey)",
+                "inputs": {
+                  "amount": {
+                    "path": "variables.amount"
+                  },
+                  "customerId": {
+                    "path": "variables.customerId"
+                  },
+                  "transactionType": {
+                    "path": "variables.transactionType"
+                  },
+                  "idempotencyKey": {
+                    "path": "variables.idempotencyKey"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "find_customer",
+            "key": "action",
+            "label": "Find Customer",
+            "apiName": "find_customer",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "find_customer",
+                "label": "Find Customer",
+                "apiName": "find_customer",
+                "key": "GET_RECORDS",
+                "objectKey": "customer",
+                "filters": [
+                  {
+                    "field": "id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.customerId"
+                    }
+                  }
+                ],
+                "match": "all",
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "find_existing_credit_entry",
+            "key": "action",
+            "label": "Find Existing Credit Entry",
+            "apiName": "find_existing_credit_entry",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "find_existing_credit_entry",
+                "label": "Find Existing Credit Entry",
+                "apiName": "find_existing_credit_entry",
+                "key": "GET_RECORDS",
+                "objectKey": "customer_credit_ledger",
+                "filters": [
+                  {
+                    "field": "idempotency_key",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.idempotencyKey"
+                    }
+                  }
+                ],
+                "match": "all",
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "credit_entry_ready",
+            "key": "action",
+            "label": "Credit Entry Ready?",
+            "apiName": "credit_entry_ready",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "credit_entry_ready",
+                "label": "Credit Entry Ready?",
+                "apiName": "credit_entry_ready",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "variables.creditEntryValid",
+                          "operator": "equals",
+                          "value": true
+                        },
+                        {
+                          "field": "steps.find_customer.record.id",
+                          "operator": "is_null",
+                          "value": false
+                        },
+                        {
+                          "field": "steps.find_existing_credit_entry.record.id",
+                          "operator": "is_null",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_entry"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Invalid or Duplicate",
+                "defaultBranch": [
+                  "credit_entry_invalid"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_entry",
+            "key": "action",
+            "label": "Create Customer Credit Ledger Entry",
+            "apiName": "create_entry",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_entry",
+                "label": "Create Customer Credit Ledger Entry",
+                "apiName": "create_entry",
+                "key": "CREATE_RECORD",
+                "objectKey": "customer_credit_ledger",
+                "idempotency": {
+                  "key": {
+                    "path": "variables.idempotencyKey"
+                  },
+                  "matchFields": [
+                    "idempotency_key"
+                  ],
+                  "onMatch": "skip"
+                },
+                "fieldValues": {
+                  "customer_id": {
+                    "path": "variables.customerId"
+                  },
+                  "store_id": {
+                    "path": "variables.storeId"
+                  },
+                  "transaction_type": {
+                    "path": "variables.transactionType"
+                  },
+                  "amount": {
+                    "path": "variables.amount"
+                  },
+                  "reference_type": {
+                    "path": "variables.referenceType"
+                  },
+                  "reference_id": {
+                    "path": "variables.referenceId"
+                  },
+                  "description": {
+                    "path": "variables.description"
+                  },
+                  "idempotency_key": {
+                    "path": "variables.idempotencyKey"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "credit_entry_invalid",
+            "key": "action",
+            "label": "Customer Credit Entry Rejected",
+            "apiName": "credit_entry_invalid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "credit_entry_invalid",
+                "label": "Customer Credit Entry Rejected",
+                "apiName": "credit_entry_invalid",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Credit entry is invalid, the customer does not exist, or the idempotency key was already used.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
