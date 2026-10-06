@@ -1,0 +1,28 @@
+{
+  "connectors": [
+    {
+      "connectorKey": "open_food_facts",
+      "name": "open food facts Connection",
+      "description": "Metadata-driven connection for open food facts.",
+      "publisher": "OneSolutions",
+      "authType": "none",
+      "baseUrl": "https://world.openfoodfacts.org",
+      "credentialsSchema": [],
+      "operations": [
+        {
+          "key": "test_connection",
+          "name": "Test Connection",
+          "method": "GET",
+          "path": "/api/v2/product/737628064502.json"
+        }
+      ],
+      "timeoutMs": 15000,
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "backoffMs": 0
+      },
+      "required": true
+    }
+  ],
+  "iconAssetKey": null
+}
