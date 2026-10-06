@@ -228,16 +228,6 @@ BEGIN
   LOOP
     EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', fk.table_name, fk.conname);
   END LOOP;
-
-  -- payment references
-  FOR fk IN
-    SELECT conrelid::regclass AS table_name, conname
-    FROM pg_constraint
-    WHERE contype='f' AND confrelid=to_regclass('public.payments')
-      AND conrelid = to_regclass('public.financial_ledger_entries')
-  LOOP
-    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', fk.table_name, fk.conname);
-  END LOOP;
 END $$;
 
 DO $$
@@ -262,9 +252,7 @@ BEGIN
   END IF;
   IF to_regclass('public.financial_ledger_entries') IS NOT NULL THEN
     ALTER TABLE financial_ledger_entries DROP CONSTRAINT IF EXISTS fk_financial_transaction_sale_ledger;
-    ALTER TABLE financial_ledger_entries DROP CONSTRAINT IF EXISTS fk_financial_payment_sale_ledger;
     ALTER TABLE financial_ledger_entries ADD CONSTRAINT fk_financial_transaction_sale_ledger FOREIGN KEY (transaction_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
-    ALTER TABLE financial_ledger_entries ADD CONSTRAINT fk_financial_payment_sale_ledger FOREIGN KEY (payment_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
   END IF;
   IF to_regclass('public.layaways') IS NOT NULL THEN
     ALTER TABLE layaways DROP CONSTRAINT IF EXISTS fk_layaway_sale_ledger;
