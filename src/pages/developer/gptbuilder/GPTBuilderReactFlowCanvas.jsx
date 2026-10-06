@@ -203,6 +203,7 @@ export default function GPTBuilderReactFlowCanvas({
   onRemove,
   onAddAt,
   onAddDecisionBranch,
+  onOpenStart,
 }) {
   const graph = useMemo(() => buildGraph(elements, startLabel, onOpen, onRemove, onAddAt, onAddDecisionBranch), [elements, startLabel, onOpen, onRemove, onAddAt, onAddDecisionBranch])
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
@@ -258,7 +259,10 @@ export default function GPTBuilderReactFlowCanvas({
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onNodeClick={(_, node) => node.data?.element && onOpen?.(node.data.element)}
+            onNodeClick={(_, node) => {
+              if (node.id === '__start__') { onOpenStart?.(); return }
+              if (node.data?.element) onOpen?.(node.data.element)
+            }}
             defaultViewport={{ x: 140, y: 24, zoom: 0.8 }}
             minZoom={0.25}
             maxZoom={2}
