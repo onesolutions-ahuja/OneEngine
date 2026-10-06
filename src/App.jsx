@@ -22,7 +22,6 @@ const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/
 const MetadataPageRuntime = lazyWithRecovery(() => import('./platform/pages/MetadataPageRuntime'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
-const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   LockKeyhole,
@@ -2305,7 +2304,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'google-connect' ? (
           <MetadataPageRuntime objectKey="integration" appKey="google-connect" />
         ) : activeApp === 'connector-settings' ? (
-          <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
+          <MetadataPageRuntime objectKey="integration" appKey={routeState?.packageKey || "connector-settings"} />
         ) : activeApp === 'till' ? (
           <MetadataPageRuntime pageKey="till" />
         ) : activeApp === 'sales' ? (
