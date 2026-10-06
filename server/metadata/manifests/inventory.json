@@ -9,7 +9,7 @@
       "objectKey": "inventory_movement",
       "label": "Inventory Movement",
       "pluralLabel": "Inventory Movements",
-      "sourceTable": "inventory_movements",
+      "sourceTable": "inventory_ledger",
       "config": {
         "flowWritesOnly": true
       },
@@ -227,14 +227,14 @@
     {
       "parentObjectKey": "product",
       "childObjectKey": "inventory_movement",
-      "relationshipKey": "inventory_movements",
+      "relationshipKey": "inventory_ledger",
       "relationshipType": "one_to_many",
       "childFieldApiName": "product_id"
     },
     {
       "parentObjectKey": "store",
       "childObjectKey": "inventory_movement",
-      "relationshipKey": "inventory_movements",
+      "relationshipKey": "inventory_ledger",
       "relationshipType": "one_to_many",
       "childFieldApiName": "store_id"
     },
