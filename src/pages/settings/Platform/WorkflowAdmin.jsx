@@ -3767,7 +3767,6 @@ const actionOptions = [
   { value: "SEND_SMS", label: "Send SMS" },
   { value: "SEND_WHATSAPP", label: "Send WhatsApp" },
   { value: "SEND_APPOINTMENT_CONFIRMATION", label: "Appointments - Send Booking Confirmation" },
-  { value: "CALL_FUNCTION", label: "Call Function" },
   { value: "RUN_SUBFLOW", label: "Subflow" },
   { value: "WEBHOOK", label: "Webhook" },
   { value: "CONDITION", label: "Decision" },
@@ -4051,7 +4050,7 @@ function workflowActionCategory(type = "") {
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","LIMIT_REPETITIONS","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN","RUN_AGENT"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
-  if (["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
+  if (["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
   return "Actions";
 }
 
@@ -4063,7 +4062,6 @@ const TRIGGER_LABELS = {
   after_save: "When a record is created or updated",
   manual: "Manual trigger",
   scheduled: "Scheduled trigger",
-  system_function: "System function",
   system_action: "System action",
   system_job: "System job trigger",
 };
@@ -4379,7 +4377,6 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "IN_APP_NOTIFICATION" && (!config.title || !config.message || !config.recipient)) {
     return "Add title, message and recipient.";
   }
-  if (step.type === "CALL_FUNCTION" && !config.functionKey) return "Choose a registered function.";
   if (step.type === "RUN_SUBFLOW") {
     if (!config.workflowId) return "Choose a subflow.";
     const selectedSubflow = availableWorkflows?.find?.((item) => String(item.id) === String(config.workflowId));
@@ -4853,7 +4850,7 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   );
 }
 
-function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], platformComponents = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
+function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, availableWorkflows, messageTemplates = [], platformComponents = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const [pendingOutcomeRemoval, setPendingOutcomeRemoval] = useState(null);
   const [relationshipOptions, setRelationshipOptions] = useState([]);
@@ -6225,23 +6222,6 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             </div>
           </div>
         );
-      case "CALL_FUNCTION":
-        return (
-          <div className="space-y-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Registered function</label>
-              <select className={inputClass} value={step.config?.functionKey || ""} onChange={(event) => updateConfig({ functionKey: event.target.value })}>
-                <option value="">Select a registered function</option>
-                {step.config?.functionKey && !functionRegistry.some((item) => item.key === step.config.functionKey) ? <option value={step.config.functionKey} disabled>{step.config.functionKey} (unavailable)</option> : null}
-                {functionRegistry.map((item) => <option key={item.key} value={item.key}>{item.displayName || item.key}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Inputs</label>
-              <MappingEditor value={step.config?.inputs || {}} onChange={(inputs) => updateConfig({ inputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Input name" valueLabel="Input value" />
-            </div>
-          </div>
-        );
       case "RUN_SUBFLOW": {
         const selectedSubflow = availableWorkflows.find((item) => String(item.id) === String(step.config?.workflowId || ""));
         const inputContract = Array.isArray(selectedSubflow?.inputContract) ? selectedSubflow.inputContract : [];
@@ -6645,7 +6625,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [], flowIssues = [], onOpenFlowProperties, canvasCommand = null }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [], flowIssues = [], onOpenFlowProperties, canvasCommand = null }) {
   const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -8731,7 +8711,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <button type="button" className="workflow-save-button" onClick={finishInspector}>Done</button>
             </div>
           </div>
-        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} platformComponents={platformComponents} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
+        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} platformComponents={platformComponents} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
@@ -8792,9 +8772,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [showBuilder, setShowBuilder] = useState(embedded);
   const [savedWorkflows, setSavedWorkflows] = useState(() => embedded && normalizedInitialWorkflow ? [normalizedInitialWorkflow] : []);
   const [providerAvailable, setProviderAvailable] = useState({ EMAIL: false, BREVO: false, MAILJET: false, SMS: false, WHATSAPP: false });
-  const [registryOptions, setRegistryOptions] = useState(scopeKey ? [] : actionOptions);
-  const [functionRegistry, setFunctionRegistry] = useState([]);
-  const [messageTemplates, setMessageTemplates] = useState([]);
+  const [registryOptions, setRegistryOptions] = useState(scopeKey ? [] : actionOptions);  const [messageTemplates, setMessageTemplates] = useState([]);
   const [workflowListSearch, setWorkflowListSearch] = useState("");
   const [workflowListFilter, setWorkflowListFilter] = useState("all");
   const [triggerOptions, setTriggerOptions] = useState([
@@ -9296,7 +9274,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const enabledSteps = (workflow.steps || []).filter((step) => step.enabled !== false);
   const conditionSteps = enabledSteps.filter((step) => step.type === "CONDITION");
   const actionSteps = enabledSteps.filter((step) => step.type !== "CONDITION");
-  const triggerNeedsObject = !["manual","whatsapp_message_received","system_function","system_action","system_job"].includes(workflow.trigger);
+  const triggerNeedsObject = !["manual","whatsapp_message_received","system_action","system_job"].includes(workflow.trigger);
   const triggerIssue = !workflow.trigger
     ? "Choose a trigger."
     : triggerNeedsObject && !workflow.object
@@ -10822,7 +10800,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : (
         <div id="workflow-canvas-section">
-          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} canvasCommand={canvasCommand} />
+          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} canvasCommand={canvasCommand} />
         </div>
       )}
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
