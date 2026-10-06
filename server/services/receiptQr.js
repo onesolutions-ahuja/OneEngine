@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { buildInvoicePdf } from "../utils/invoicePdf.js";
-import { selectMetadataRecords } from "./metadataRecordStore.js";
+import { selectMetadataRecords, upsertMetadataRecord, updateMetadataRecords } from "./metadataRecordStore.js";
 
 export const RECEIPT_QR_DEFAULTS = Object.freeze({
   showAfterSuccessfulPayment: "OFF",
@@ -84,31 +84,30 @@ export async function createTemporaryReceiptDownload({
   const expiresAt = new Date(Date.now() + Math.max(1, Number(expiryMinutes) || 5) * 60 * 1000);
 
   try {
-    const result = await db(
-      `INSERT INTO temporary_receipt_downloads
-       (company_id, store_id, till_id, sale_id, token_hash, status, created_at, expires_at)
-       VALUES ($1, $2, $3, $4, $5, 'ACTIVE', NOW(), $6)
-       ON CONFLICT (token_hash) DO UPDATE SET
-         company_id = EXCLUDED.company_id,
-         store_id = EXCLUDED.store_id,
-         till_id = EXCLUDED.till_id,
-         sale_id = EXCLUDED.sale_id,
-         status = 'ACTIVE',
-         expires_at = EXCLUDED.expires_at,
-         downloaded_at = NULL,
-         revoked_at = NULL,
-         updated_at = NOW()
-       RETURNING id, company_id, store_id, till_id, sale_id, status, created_at, expires_at`,
-      [companyId, storeId, tillId, saleId, tokenHash, expiresAt]
-    );
-    const row = result.rows?.[0] || {};
+    const row = await upsertMetadataRecord(db, {
+      objectKey: "temporary_receipt_download",
+      companyId,
+      match: { token_hash: tokenHash },
+      values: {
+        company_id: companyId,
+        store_id: storeId,
+        till_id: tillId,
+        sale_id: saleId,
+        token_hash: tokenHash,
+        status: "ACTIVE",
+        expires_at: expiresAt,
+        downloaded_at: null,
+        revoked_at: null,
+        updated_at: new Date(),
+      },
+    });
     return {
       ok: true,
-      id: row.id || null,
+      id: row?.id || null,
       saleId,
       token: plaintext,
-      expiresAt: row.expires_at ? new Date(row.expires_at) : expiresAt,
-      status: row.status || "ACTIVE",
+      expiresAt: row?.expires_at ? new Date(row.expires_at) : expiresAt,
+      status: row?.status || "ACTIVE",
     };
   } catch (error) {
     return { ok: false, status: 500, message: error?.message || "Unable to create temporary receipt download" };
@@ -120,19 +119,21 @@ export async function validateTemporaryReceiptDownload({ db, token }) {
   if (!db || typeof token !== "string" || !token.trim()) return generic;
 
   try {
-    const row = await db(
-      `SELECT id, company_id, store_id, till_id, sale_id, token_hash, status, created_at, expires_at, downloaded_at, revoked_at
-       FROM temporary_receipt_downloads WHERE token_hash = $1 LIMIT 1`,
-      [hashToken(token)]
-    );
-    const receipt = row.rows?.[0];
+    const receipt = (await selectMetadataRecords(db, {
+      objectKey: "temporary_receipt_download",
+      filters: { token_hash: hashToken(token) },
+      columns: ["id","company_id","store_id","till_id","sale_id","token_hash","status","created_at","expires_at","downloaded_at","revoked_at"],
+      limit: 1,
+    }))[0];
     if (!receipt) return generic;
     if (receipt.status === "REVOKED" || receipt.status === "EXPIRED") return generic;
     if (receipt.revoked_at || (receipt.expires_at && new Date(receipt.expires_at).getTime() <= Date.now())) {
-      await db(
-        `UPDATE temporary_receipt_downloads SET status='EXPIRED', updated_at=NOW() WHERE id=$1`,
-        [receipt.id]
-      );
+      await updateMetadataRecords(db, {
+        objectKey: "temporary_receipt_download",
+        companyId: receipt.company_id,
+        filters: { id: receipt.id },
+        values: { status: "EXPIRED", updated_at: new Date() },
+      });
       return generic;
     }
     return { ok: true, receipt };
@@ -144,12 +145,21 @@ export async function validateTemporaryReceiptDownload({ db, token }) {
 export async function revokeTemporaryReceiptDownload({ db, companyId, receiptId }) {
   if (!db || !companyId || !receiptId) return { ok: false, revoked: 0 };
   try {
-    const result = await db(
-      `UPDATE temporary_receipt_downloads
-       SET status='REVOKED', revoked_at=NOW(), updated_at=NOW()
-       WHERE id=$1 AND company_id=$2 AND status IN ('ACTIVE', 'DOWNLOADED')`,
-      [receiptId, companyId]
-    );
+    const rows = await selectMetadataRecords(db, {
+      objectKey: "temporary_receipt_download",
+      companyId,
+      filters: { id: receiptId },
+      conditions: [{ field: "status", operator: "in", value: ["ACTIVE","DOWNLOADED"] }],
+      columns: ["id"],
+      limit: 1,
+    });
+    if (!rows.length) return { ok: true, revoked: 0 };
+    const result = await updateMetadataRecords(db, {
+      objectKey: "temporary_receipt_download",
+      companyId,
+      filters: { id: receiptId },
+      values: { status: "REVOKED", revoked_at: new Date(), updated_at: new Date() },
+    });
     return { ok: true, revoked: Number(result.rowCount || 0) };
   } catch {
     return { ok: false, revoked: 0 };
@@ -159,13 +169,24 @@ export async function revokeTemporaryReceiptDownload({ db, companyId, receiptId 
 export async function revokeTemporaryReceiptDownloadsForSale({ db, companyId, saleId }) {
   if (!db || !companyId || !saleId) return { ok: false, revoked: 0 };
   try {
-    const result = await db(
-      `UPDATE temporary_receipt_downloads
-       SET status='REVOKED', revoked_at=NOW(), updated_at=NOW()
-       WHERE company_id=$1 AND sale_id=$2 AND status IN ('ACTIVE', 'DOWNLOADED')`,
-      [companyId, saleId]
-    );
-    return { ok: true, revoked: Number(result.rowCount || 0) };
+    const rows = await selectMetadataRecords(db, {
+      objectKey: "temporary_receipt_download",
+      companyId,
+      filters: { sale_id: saleId },
+      conditions: [{ field: "status", operator: "in", value: ["ACTIVE","DOWNLOADED"] }],
+      columns: ["id"],
+    });
+    let revoked = 0;
+    for (const row of rows) {
+      const result = await updateMetadataRecords(db, {
+        objectKey: "temporary_receipt_download",
+        companyId,
+        filters: { id: row.id },
+        values: { status: "REVOKED", revoked_at: new Date(), updated_at: new Date() },
+      });
+      revoked += Number(result.rowCount || 0);
+    }
+    return { ok: true, revoked };
   } catch {
     return { ok: false, revoked: 0 };
   }
@@ -174,10 +195,19 @@ export async function revokeTemporaryReceiptDownloadsForSale({ db, companyId, sa
 export async function markTemporaryReceiptDownloaded({ db, receiptId }) {
   if (!db || !receiptId) return false;
   try {
-    await db(
-      `UPDATE temporary_receipt_downloads SET status='DOWNLOADED', downloaded_at=NOW(), updated_at=NOW() WHERE id=$1`,
-      [receiptId]
-    );
+    const row = (await selectMetadataRecords(db, {
+      objectKey: "temporary_receipt_download",
+      filters: { id: receiptId },
+      columns: ["id","company_id"],
+      limit: 1,
+    }))[0];
+    if (!row) return false;
+    await updateMetadataRecords(db, {
+      objectKey: "temporary_receipt_download",
+      companyId: row.company_id,
+      filters: { id: receiptId },
+      values: { status: "DOWNLOADED", downloaded_at: new Date(), updated_at: new Date() },
+    });
     return true;
   } catch {
     return false;
@@ -187,11 +217,26 @@ export async function markTemporaryReceiptDownloaded({ db, receiptId }) {
 export async function cleanupExpiredTemporaryReceipts(db) {
   if (!db) return { ok: true, cleaned: 0 };
   try {
-    const result = await db(
-      `UPDATE temporary_receipt_downloads SET status='EXPIRED', updated_at=NOW()
-       WHERE status IN ('ACTIVE', 'DOWNLOADED') AND expires_at IS NOT NULL AND expires_at <= NOW()`,
-    );
-    return { ok: true, cleaned: Number(result.rowCount || 0) };
+    const rows = await selectMetadataRecords(db, {
+      objectKey: "temporary_receipt_download",
+      conditions: [
+        { field: "status", operator: "in", value: ["ACTIVE","DOWNLOADED"] },
+        { field: "expires_at", operator: "not_null" },
+        { field: "expires_at", operator: "less_or_equal", value: new Date() },
+      ],
+      columns: ["id","company_id"],
+    });
+    let cleaned = 0;
+    for (const row of rows) {
+      const result = await updateMetadataRecords(db, {
+        objectKey: "temporary_receipt_download",
+        companyId: row.company_id,
+        filters: { id: row.id },
+        values: { status: "EXPIRED", updated_at: new Date() },
+      });
+      cleaned += Number(result.rowCount || 0);
+    }
+    return { ok: true, cleaned };
   } catch {
     return { ok: false, cleaned: 0 };
   }
