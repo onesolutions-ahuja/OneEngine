@@ -13,6 +13,7 @@
     "audit:workflow-coverage:enforce": "node scripts/audit-workflow-coverage.mjs --enforce",
     "audit:metadata-phase3": "node --test tests/finalMetadataPhase3.test.mjs",
     "audit:metadata-phase4": "node --test tests/finalMetadataPhase4.test.mjs",
+    "audit:metadata-phase5": "node --test tests/finalMetadataPhase5.test.mjs",
     "test:unit": "node --test tests/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
