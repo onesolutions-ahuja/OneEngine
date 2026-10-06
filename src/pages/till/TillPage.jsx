@@ -396,11 +396,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     let groups = []
     try {
       if (online) {
-        const groupResponse = await apiRequest(`/api/platform/objects/product_modifier_group/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ product_id: product.id }))}`)
+        const groupResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('modifierGroup'))}/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ product_id: product.id }))}`)
         const groupRows = Array.isArray(groupResponse?.records) ? groupResponse.records : Array.isArray(groupResponse?.data) ? groupResponse.data : []
         const activeGroups = groupRows.filter((row) => row.active !== false && String(row.product_id) === String(product.id))
         const optionResponses = await Promise.all(activeGroups.map((group) =>
-          apiRequest(`/api/platform/objects/product_modifier_option/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ group_id: group.id }))}`).catch(() => ({ records: [] }))
+          apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('modifierOption'))}/records?page=1&pageSize=100&filter=${encodeURIComponent(JSON.stringify({ group_id: group.id }))}`).catch(() => ({ records: [] }))
         ))
         groups = activeGroups
           .sort((a,b) => Number(a.display_order || 0) - Number(b.display_order || 0))
@@ -485,9 +485,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     let stopped = false
     const loadOrders = async () => {
       try {
-        const response = await apiRequest('/api/online/orders?status=RECEIVED&limit=50')
-        if (!stopped && response?.success) {
-          const next = Array.isArray(response.data) ? response.data.length : 0
+        const filter = encodeURIComponent(JSON.stringify({ status: 'RECEIVED' }))
+        const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('onlineOrder'))}/records?page=1&pageSize=50&filter=${filter}`)
+        if (!stopped) {
+          const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
+          const next = rows.length
           setOnlineOrderCount((previous) => {
             if (next > previous) setOnlineOrderToast('New online order received')
             return next
@@ -523,7 +525,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const buildSalePayload = (paymentMethod, verifiedOverride = false, options = {}) => {
     const clientRequestId = crypto.randomUUID()
     const sale = {
-      store_id: till?.store_id || settings?.store?.id || getStoredUser()?.storeId || null,
+      store_id: till?.store_id || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
       terminal_id: till?.terminal_id || null,
       user_id: getStoredUser()?.id || getStoredUser()?.userId || null,
       customer_id: selectedCustomer?.id || null,
@@ -595,7 +597,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     const button = buttonFor('receiptQr')
     if (!button) return
     const response = await executeMetadataButton(button, {
-      expiryMinutes: Number(settings?.receiptQr?.expiryMinutes || 5),
+      expiryMinutes: Number(settingValue('receiptQrExpiryMinutesPath', 5) || 5),
       baseUrl: window.location.origin,
     }, sale.id)
     const qrUrl = deepFind(response?.data, 'qrcodeUrl')
@@ -788,7 +790,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const searchCustomers = async (value) => {
     setCustomerSearch(value)
     if (!value.trim()) return setCustomers([])
-    try { const response = await apiRequest(`/api/customer-lookup?search=${encodeURIComponent(value.trim())}`); setCustomers(response?.data || []) } catch { setCustomers([]) }
+    try { const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('customer'))}/records?page=1&pageSize=25&search=${encodeURIComponent(value.trim())}`); setCustomers(response?.records || response?.data || []) } catch { setCustomers([]) }
   }
 
   const emitReceiptQr = (payload = {}) => {
@@ -899,7 +901,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       if (useRecordScope && !scopedRecordId) throw new Error('Complete a sale before using this action.')
 
       const context = {
-        storeId: till?.store_id || settings?.store?.id || getStoredUser()?.storeId || null,
+        storeId: till?.store_id || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
         terminalId: till?.terminal_id || null,
         tillSessionId: till?.id || null,
         online,
@@ -929,7 +931,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       }
 
       const endpoint = useRecordScope && scopedRecordId
-        ? `/api/platform/objects/sale/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
+        ? `/api/platform/objects/${encodeURIComponent(objectKey('transaction'))}/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
         : `/api/platform/runtime/objects/${encodeURIComponent(objectKey('transaction'))}/buttons/${encodeURIComponent(button.button_key)}/execute`
 
       const response = await apiRequest(endpoint, {
@@ -990,7 +992,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     const button = buttonFor('receiptQrPolicy')
     if (!button) return false
     let printerAvailable = false
-    if (event === 'AUTO' && String(settings?.receiptQr?.showAfterSuccessfulPayment || '').toUpperCase() === 'ONLY_WHEN_PRINTER_UNAVAILABLE') {
+    if (event === 'AUTO' && String(settingValue('receiptQrShowAfterPaymentPath', null) || '').toUpperCase() === 'ONLY_WHEN_PRINTER_UNAVAILABLE') {
       try {
         const status = await apiRequest('/api/connector-capabilities/printer.status')
         printerAvailable = status?.data?.available === true
@@ -998,11 +1000,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
     const response = await executeMetadataButton(button, {
       event,
-      mode: String(settings?.receiptQr?.showAfterSuccessfulPayment || 'OFF').toUpperCase(),
+      mode: String(settingValue('receiptQrShowAfterPaymentPath', null) || 'OFF').toUpperCase(),
       printerAvailable,
-      allowManual: settings?.receiptQr?.allowManualQr !== false,
-      allowRegenerate: settings?.receiptQr?.allowRegenerate !== false,
-      autoClose: settings?.receiptQr?.autoCloseOnNewSale !== false,
+      allowManual: settingValue('receiptQrAllowManualPath', null) !== false,
+      allowRegenerate: settingValue('receiptQrAllowRegeneratePath', null) !== false,
+      autoClose: settingValue('receiptQrAutoClosePath', null) !== false,
     })
     return deepFind(response?.data, 'allowed') === true || deepFind(response?.data, 'value') === true
   }
@@ -1026,13 +1028,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       return
     }
     if (type === 'workflow') {
-      if (button.button_key === 'till_hold') return holdSale(button)
+      if (button.button_key === actionKey('hold')) return holdSale(button)
       if (config.policyEvent) {
         const allowed = await runReceiptPolicy(config.policyEvent)
         if (!allowed) return
       }
       const response = await executeMetadataButton(button, {
-        expiryMinutes: Number(settings?.receiptQr?.expiryMinutes || 5),
+        expiryMinutes: Number(settingValue('receiptQrExpiryMinutesPath', 5) || 5),
         baseUrl: window.location.origin,
       })
       const qrUrl = deepFind(response?.data, 'qrcodeUrl')
@@ -1067,7 +1069,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     return true
   })
   const lineButtons = buttons.filter((button) => button.placement === 'till_line_action')
-  const productView = settings?.till?.productView || 'image'
+  const productView = settingValue('productViewPath', 'image') || 'image'
 
   return (
     <section className="till-theme-page">
@@ -1163,7 +1165,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       {modifierPicker ? <ModifierPicker product={modifierPicker.product} groups={modifierPicker.groups} onClose={() => setModifierPicker(null)} onConfirm={(modifiers) => { addLine(modifierPicker.product, modifiers); setModifierPicker(null) }}/> : null}
 
       {modal === 'discount' ? <Modal title={meta.discount?.label || 'Discount'} onClose={() => setModal(null)}><DiscountForm value={discount} onApply={(next) => { setDiscount(next); setModal(null) }}/></Modal> : null}
-      {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={async (line) => {
+      {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settingValue('defaultVatRatePath', 0) ?? 0)} onAdd={async (line) => {
         const button = buttonFor('miscLine')
         if (!button) return setError('Misc Item Flow is not configured.')
         try {
@@ -1217,13 +1219,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
           setModal(null)
         } catch (err) { setError(err?.message || 'Price override was rejected.') }
       }}/></Modal> : null}
-      {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { void revokeReceiptQr(); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}{settings?.receiptQr?.showCountdown !== false ? <p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p> : null}<button type="button" className="till-primary" onClick={async () => {
+      {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { void revokeReceiptQr(); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}{settingValue('receiptQrShowCountdownPath', null) !== false ? <p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p> : null}<button type="button" className="till-primary" onClick={async () => {
         const allowed = await runReceiptPolicy('REGENERATE')
         if (!allowed) return
         const button = buttonFor('receiptQr')
         if (button && receiptQr?.saleId) {
           const response = await executeMetadataButton(button, {
-            expiryMinutes: Number(settings?.receiptQr?.expiryMinutes || 5),
+            expiryMinutes: Number(settingValue('receiptQrExpiryMinutesPath', 5) || 5),
             baseUrl: window.location.origin,
           }, receiptQr.saleId)
           const qrUrl = deepFind(response?.data, 'qrcodeUrl')
