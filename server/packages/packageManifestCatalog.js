@@ -1447,6 +1447,14 @@ const PACKAGE_CATALOG = [
       collectionDisplay: {
         objects: { order: "online_order" },
         filters: { platformField: "platform", platformValue: "one_kiosk" },
+        endpoints: {
+          displaySession: "/api/kiosk/display-session",
+          flows: "/api/kiosk/flows"
+        },
+        statusSets: {
+          active: ["PREPARING", "ACCEPTED"],
+          ready: ["READY", "READY_FOR_PICKUP"]
+        }
       },
     },
     permissions: ["sale.create", "online_orders.view", "online_orders.manage"],
