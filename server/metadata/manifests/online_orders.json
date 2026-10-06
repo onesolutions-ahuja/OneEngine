@@ -238,8 +238,8 @@
     {
       "objectKey": "sales_order_line",
       "metadataScope": "global",
-      "label": "Sales Order Line",
-      "pluralLabel": "Sales Order Lines",
+      "label": "Online Order Line",
+      "pluralLabel": "Online Order Lines",
       "description": "Existing online order item rows and Product Core references.",
       "sourceTable": "sales_order_items",
       "required": true,
@@ -362,14 +362,14 @@
     {
       "parentObjectKey": "customer",
       "childObjectKey": "sales_order",
-      "relationshipKey": "sales_orders",
+      "relationshipKey": "online_orders",
       "relationshipType": "one_to_many",
       "childFieldApiName": "customer_id"
     },
     {
       "parentObjectKey": "store",
       "childObjectKey": "sales_order",
-      "relationshipKey": "sales_orders",
+      "relationshipKey": "online_orders",
       "relationshipType": "one_to_many",
       "childFieldApiName": "store_id"
     }
@@ -1974,5 +1974,5 @@
       "description": "A canonical online order was completed."
     }
   ],
-  "packageKey": "sales_orders"
+  "packageKey": "online_orders"
 }
