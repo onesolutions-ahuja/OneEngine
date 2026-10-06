@@ -124,3 +124,120 @@ export function validateAppDefinition(definition = {}) {
   }
   return { valid: true, graph };
 }
+
+
+const TYPE_TO_MANIFEST_COLLECTION = Object.freeze({
+  object: "objects",
+  relationship: "relationships",
+  recordType: "recordTypes",
+  layout: "layouts",
+  listView: "listViews",
+  validation: "rules",
+  workflow: "rules",
+  action: "actions",
+  button: "buttons",
+  permission: "permissions",
+  fieldPermission: "fieldPermissions",
+  connector: "connectors",
+  template: "templates",
+  report: "reports",
+  dashboard: "dashboards",
+  package: "packages",
+});
+
+function emptyPortableManifest(definition) {
+  return {
+    schemaVersion: GPT_APP_BUILDER_SCHEMA_VERSION,
+    packageKey: definition.app.appKey,
+    version: definition.app.version,
+    apps: [{ ...definition.app, config: { navigation: definition.navigation || { tabs: [] } } }],
+    pages: (definition.pages || []).map(({ device, ...page }) => ({
+      ...page,
+      definition: { ...(page.definition || {}), device: device || page.definition?.device || null },
+    })),
+    objects: [], relationships: [], recordTypes: [], layouts: [], listViews: [],
+    rules: [], actions: [], buttons: [], permissions: [], fieldPermissions: [],
+    connectors: [], templates: [], reports: [], dashboards: [], packages: [],
+  };
+}
+
+/**
+ * Resolve graph nodes through a generic metadata resolver.
+ * resolver({ type, key }) must return portable metadata or null.
+ * No table names, app names or business rules are embedded here.
+ */
+export async function compilePortableAppManifest(definition = {}, resolver) {
+  const { graph } = validateAppDefinition(definition);
+  if (typeof resolver !== "function") throw new Error("A generic metadata resolver is required");
+  const manifest = emptyPortableManifest(definition);
+  const unresolved = [];
+  const resolvedIds = new Set();
+
+  const queue = graph.nodes.filter((node) => !["app", "page"].includes(node.type));
+  while (queue.length) {
+    const node = queue.shift();
+    const id = `${node.type}:${node.key}`;
+    if (resolvedIds.has(id)) continue;
+    if (!GPT_APP_BUILDER_METADATA_TYPES.includes(node.type)) {
+      throw new Error(`Unsupported GPTAppBuilder metadata type: ${node.type}`);
+    }
+    const metadata = await resolver({ type: node.type, key: node.key });
+    if (!metadata) {
+      unresolved.push({ type: node.type, key: node.key });
+      continue;
+    }
+    scanSecrets(metadata, id);
+    resolvedIds.add(id);
+
+    // Fields are packaged under their owning object to match the portable platform manifest.
+    if (node.type === "field") {
+      const [ownerKey, fieldKey] = String(node.key).split(".", 2);
+      const owner = manifest.objects.find((item) => (item.objectKey || item.object_key) === ownerKey);
+      if (!owner) {
+        const objectMetadata = await resolver({ type: "object", key: ownerKey });
+        if (!objectMetadata) {
+          unresolved.push({ type: "object", key: ownerKey });
+          continue;
+        }
+        scanSecrets(objectMetadata, `object:${ownerKey}`);
+        manifest.objects.push({ ...objectMetadata, fields: [] });
+      }
+      const target = manifest.objects.find((item) => (item.objectKey || item.object_key) === ownerKey);
+      const field = metadata.apiName || metadata.api_name ? metadata : { ...metadata, apiName: fieldKey };
+      if (!(target.fields || []).some((item) => (item.apiName || item.api_name) === (field.apiName || field.api_name))) {
+        target.fields = [...(target.fields || []), field];
+      }
+    } else {
+      const collection = TYPE_TO_MANIFEST_COLLECTION[node.type];
+      if (!collection) throw new Error(`No portable collection for metadata type: ${node.type}`);
+      manifest[collection].push(metadata);
+    }
+
+    for (const dependency of collectTypedReferences(metadata)) {
+      const dependencyId = `${dependency.type}:${dependency.key}`;
+      if (!resolvedIds.has(dependencyId)) queue.push(reference(dependency.type, dependency.key));
+    }
+  }
+
+  const unique = (items) => {
+    const seen = new Set();
+    return items.filter((item) => {
+      const key = JSON.stringify(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+  for (const key of Object.values(TYPE_TO_MANIFEST_COLLECTION)) manifest[key] = unique(manifest[key]);
+  manifest.objects = unique(manifest.objects);
+
+  return {
+    valid: unresolved.length === 0,
+    unresolved: unique(unresolved),
+    graph: { ...graph, nodes: unique([...graph.nodes, ...[...resolvedIds].map((id) => {
+      const split = id.indexOf(":");
+      return { id, type: id.slice(0, split), key: id.slice(split + 1), dependsOn: [] };
+    })]) },
+    manifest,
+  };
+}
