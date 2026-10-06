@@ -7,6 +7,119 @@ let cache = null;
 
 const SALES_LEGACY_OBJECTS = new Set(["sale", "sale_item", "payment", "refund"]);
 
+const OBJECT_ALIASES = new Map([
+  ["till_session", "device_session"],
+  ["cash_movement", "cash_ledger"],
+  ["purchase", "purchase_ledger"],
+  ["purchase_line", "purchase_ledger"],
+  ["purchase_receipt", "purchase_ledger"],
+  ["supplier_invoice", "purchase_ledger"],
+  ["supplier_payment", "purchase_ledger"],
+  ["inventory_movement", "inventory_ledger"],
+  ["online_order", "salesorder"],
+  ["online_order_line", "salesorder"],
+]);
+
+const REMOVED_OBJECTS = new Set([
+  "appointment",
+  "appointment_booking_case",
+  "loyalty_configuration",
+  "loyalty_account",
+  "loyalty_activity",
+  "loyalty_adjustment",
+  "gift_card_activity",
+]);
+
+function canonicalObjectKey(value) {
+  const key = String(value || "");
+  if (SALES_LEGACY_OBJECTS.has(key)) return "sale_ledger";
+  return OBJECT_ALIASES.get(key) || key;
+}
+
+function rewriteCanonicalObjectReferences(value) {
+  if (Array.isArray(value)) return value.map(rewriteCanonicalObjectReferences);
+  if (!value || typeof value !== "object") return value;
+  const next = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (["objectKey", "relatedObjectKey", "parentObjectKey", "childObjectKey"].includes(key) && typeof item === "string") {
+      next[key] = canonicalObjectKey(item);
+    } else {
+      next[key] = rewriteCanonicalObjectReferences(item);
+    }
+  }
+  return next;
+}
+
+function collapseObjectFamily(objects, keys, canonicalKey, label, sourceTable) {
+  const family = objects.filter((object) => keys.has(object?.objectKey));
+  if (!family.length) return null;
+  const base = family[0];
+  const fields = [];
+  const seen = new Set();
+  for (const object of family) {
+    for (const field of Array.isArray(object.fields) ? object.fields : []) {
+      const apiName = String(field?.apiName || field?.api_name || "");
+      if (!apiName || seen.has(apiName)) continue;
+      seen.add(apiName);
+      fields.push(rewriteCanonicalObjectReferences(field));
+    }
+  }
+  for (const field of [
+    { apiName: "source_record_type", label: "Source Record Type", fieldType: "text", sourceColumn: "source_record_type", writable: true },
+    { apiName: "transaction_id", label: "Transaction ID", fieldType: "text", sourceColumn: "transaction_id", writable: true },
+  ]) {
+    if (!seen.has(field.apiName)) fields.push(field);
+  }
+  return rewriteCanonicalObjectReferences({
+    ...base,
+    objectKey: canonicalKey,
+    label,
+    pluralLabel: label,
+    sourceTable,
+    fields,
+  });
+}
+
+function canonicalizeObjectFamilies(manifest) {
+  const source = manifest && typeof manifest === "object" ? manifest : {};
+  const objects = Array.isArray(source.objects) ? source.objects : [];
+  const excluded = new Set([...REMOVED_OBJECTS]);
+
+  const device = collapseObjectFamily(objects, new Set(["till_session"]), "device_session", "Device Session", "device_sessions");
+  const cash = collapseObjectFamily(objects, new Set(["cash_movement"]), "cash_ledger", "Cash Ledger", "cash_ledger");
+  const purchasing = collapseObjectFamily(
+    objects,
+    new Set(["purchase", "purchase_line", "purchase_receipt", "supplier_invoice", "supplier_payment"]),
+    "purchase_ledger",
+    "Purchase Ledger",
+    "purchase_ledger"
+  );
+  const inventory = collapseObjectFamily(objects, new Set(["inventory_movement"]), "inventory_ledger", "Inventory Ledger", "inventory_ledger");
+  const orders = collapseObjectFamily(objects, new Set(["online_order", "online_order_line"]), "salesorder", "Sales Order", "salesorder");
+
+  for (const key of OBJECT_ALIASES.keys()) excluded.add(key);
+  for (const key of SALES_LEGACY_OBJECTS) excluded.add(key);
+
+  const canonicalObjects = [device, cash, purchasing, inventory, orders].filter(Boolean);
+  const passthrough = objects
+    .filter((object) => !excluded.has(object?.objectKey))
+    .map(rewriteCanonicalObjectReferences);
+
+  return rewriteCanonicalObjectReferences({
+    ...source,
+    objects: [...passthrough, ...canonicalObjects],
+    relationships: (source.relationships || [])
+      .filter((relationship) => !REMOVED_OBJECTS.has(relationship?.parentObjectKey) && !REMOVED_OBJECTS.has(relationship?.childObjectKey))
+      .map(rewriteCanonicalObjectReferences),
+    rules: (source.rules || [])
+      .filter((rule) => !REMOVED_OBJECTS.has(rule?.objectKey))
+      .map(rewriteCanonicalObjectReferences),
+    workflows: (source.workflows || [])
+      .filter((workflow) => !REMOVED_OBJECTS.has(workflow?.objectKey))
+      .map(rewriteCanonicalObjectReferences),
+  });
+}
+
 function rewriteSalesObjectReferences(value) {
   if (Array.isArray(value)) return value.map(rewriteSalesObjectReferences);
   if (!value || typeof value !== "object") return value;
@@ -259,10 +372,10 @@ function loadManifestMap() {
     if (!file.isFile() || extname(file.name) !== ".json") continue;
     const packageKey = file.name.slice(0, -5);
     const parsed = JSON.parse(readFileSync(join(manifestDirectory, file.name), "utf8"));
-    const canonical = packageKey === "retail_pos"
+    const salesCanonical = packageKey === "retail_pos"
       ? canonicalizeRetailSalesManifest(parsed)
       : rewriteSalesObjectReferences(parsed);
-    entries.set(packageKey, canonical);
+    entries.set(packageKey, canonicalizeObjectFamilies(salesCanonical));
   }
   cache = entries;
   return cache;
