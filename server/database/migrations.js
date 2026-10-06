@@ -35,6 +35,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0042_exact_root_cause_diagnostics",
   "0043_platform_agents",
   "0044_canonical_data_schema_ledgers",
+  "0045_sale_ledger_consolidation",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -234,6 +235,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Canonical data schema ledger and device names",
     up: client => client.query(
       readFileSync(new URL("./migrations/0044_canonical_data_schema_ledgers.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0045_sale_ledger_consolidation",
+    version: "45",
+    name: "Consolidate sale metadata under sale ledger",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0045_sale_ledger_consolidation.sql", import.meta.url), "utf8")
     ),
   },
 ]);
