@@ -17,24 +17,18 @@ import { apiRequest } from "../../../services/api.js";
  * flows an admin has already published.
  */
 
-const PROVIDER_ACTION_KIND = {
-  SEND_EMAIL: "EMAIL",
-  SEND_SMS: "SMS",
-  SEND_WHATSAPP: "WHATSAPP",
-};
-
 /** Registry keys with no server executor/validation yet. Shown clearly as
  *  unavailable instead of being hidden, per the capability-first audit. */
 const NOT_IMPLEMENTED = new Set();
 
 function actionKindLabel(item) {
-  if (item.key.startsWith("SEND_")) return "Communication";
+  if (item.category || item.kind) return item.category || item.kind;
+  if (item.key === "SEND_COMMUNICATION") return "Communication";
   if (["CREATE_RECORD", "UPDATE_RECORD", "UPDATE_RELATED_RECORD", "CREATE_RELATED_RECORD", "DELETE_RECORD", "ASSIGN_RECORD"].includes(item.key)) {
     return "Record";
   }
   if (["ADD_RELATIONSHIP", "REMOVE_RELATIONSHIP"].includes(item.key)) return "Relationship";
   if (item.key === "IN_APP_NOTIFICATION") return "Notification";
-  if (item.key === "CALL_FUNCTION") return "Registered function";
   if (item.key === "RUN_SUBFLOW") return "Subflow";
   if (item.key === "WEBHOOK") return "Webhook";
   if (item.key === "CONDITION") return "Logic";
@@ -43,19 +37,8 @@ function actionKindLabel(item) {
   return "Other";
 }
 
-function providerPill(available) {
-  return (
-    <span
-      className={"onepos-badge " + (available ? "onepos-badge-success" : "onepos-badge-warning")}
-    >
-      {available ? "Provider configured" : "Provider not configured"}
-    </span>
-  );
-}
-
 export default function ActionsAdmin({ onError }) {
   const [actions, setActions] = useState([]);
-  const [integrations, setIntegrations] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,15 +51,11 @@ export default function ActionsAdmin({ onError }) {
       setError("");
 
       try {
-        const [registryResponse, integrationsResponse] = await Promise.all([
-          apiRequest("/api/platform/workflow-actions"),
-          apiRequest("/api/integrations").catch(() => ({ data: [] })),
-        ]);
+        const registryResponse = await apiRequest("/api/platform/workflow-actions");
 
         if (cancelled) return;
 
         setActions(Array.isArray(registryResponse?.data) ? registryResponse.data : []);
-        setIntegrations(Array.isArray(integrationsResponse?.data) ? integrationsResponse.data : []);
       } catch (err) {
         if (!cancelled) {
           setError(err?.message || "Unable to load the action registry.");
@@ -93,23 +72,6 @@ export default function ActionsAdmin({ onError }) {
       cancelled = true;
     };
   }, [onError]);
-
-  const providerAvailability = useMemo(() => {
-    const state = { EMAIL: false, SMS: false, WHATSAPP: false };
-
-    for (const item of integrations) {
-      const provider = String(item.provider || "").toUpperCase();
-      if (provider in state) {
-        state[provider] = Boolean(
-          item.active !== false &&
-          item.configuration &&
-          Object.keys(item.configuration || {}).length > 0
-        );
-      }
-    }
-
-    return state;
-  }, [integrations]);
 
   const filtered = useMemo(() => {
     const value = search.trim().toLowerCase();
@@ -133,8 +95,7 @@ export default function ActionsAdmin({ onError }) {
           <h1 className="onepos-page-title">Actions</h1>
           <p className="onepos-page-subtitle">
             The registered actions available to Flows, Validation Rules and
-            record buttons. Configure communication providers under Settings →
-            Connections before using Send actions.
+            record buttons. Availability and configuration requirements come from the registered action metadata.
           </p>
         </div>
 
@@ -179,8 +140,7 @@ export default function ActionsAdmin({ onError }) {
               </thead>
               <tbody>
                 {filtered.map((item) => {
-                  const providerKind = PROVIDER_ACTION_KIND[item.key];
-                  const available = executable(item) && (!providerKind || providerAvailability[providerKind]);
+                  const available = executable(item) && item.available !== false && item.enabled !== false;
 
                   return (
                     <tr key={item.key}>
@@ -201,8 +161,6 @@ export default function ActionsAdmin({ onError }) {
                       <td>
                         {item.key === "RUN_SUBFLOW" ? (
                           <span className="onepos-badge onepos-badge-info">Reusable flows</span>
-                        ) : providerKind ? (
-                          providerPill(available)
                         ) : available ? (
                           <span className="onepos-badge onepos-badge-success">Available</span>
                         ) : (
