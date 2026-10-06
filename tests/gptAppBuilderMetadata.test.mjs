@@ -72,3 +72,18 @@ test("portable compiler fails closed on unresolved dependencies", async () => {
   assert.equal(compiled.valid, false);
   assert.deepEqual(compiled.unresolved, [{ type: "workflow", key: "missing_flow" }]);
 });
+
+
+test("HTTP callout metadata captures connector dependency without credentials", () => {
+  const app = createBlankAppDefinition({ appKey: "sample_app", label: "Sample App" });
+  app.pages[0].definition.children.push({
+    interaction: {
+      type: "workflow",
+      workflowUuid: "00000000-0000-0000-0000-000000000001",
+      callout: { connectorKey: "sample_connector", connectorOperationKey: "create_record" },
+    },
+  });
+  const graph = compileAppDependencyGraph(app);
+  assert.ok(graph.nodes.some((node) => node.id === "connector:sample_connector"));
+  assert.doesNotThrow(() => validateAppDefinition(app));
+});
