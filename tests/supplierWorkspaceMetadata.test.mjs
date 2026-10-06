@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 test("supplier app routes directly to generic workspace runtime", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  assert.match(app, /WorkspacePage initialObjectKey="supplier" appKey="suppliers"/);
+  assert.match(app, /MetadataPageRuntime objectKey="supplier" appKey="suppliers"/);
   assert.equal(app.includes("SuppliersPage"), false);
 });
 
