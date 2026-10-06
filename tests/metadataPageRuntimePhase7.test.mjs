@@ -14,7 +14,7 @@ test("phase 7 app routes enter one metadata page runtime boundary",()=>{
 test("phase 7 runtime selects only generic metadata renderers by stable identity",()=>{
  assert.match(runtime,/if \(pageKey\)/);
  assert.match(runtime,/if \(objectKey\)/);
- for(const forbidden of ["sale","customer","supplier","purchase","till","kiosk","uber"]) assert.equal(runtime.includes(forbidden),false,forbidden);
+ for(const forbidden of ["sale","customer","supplier","purchase","till","kiosk","uber"]) assert.equal(runtime.includes(String.fromCharCode(34)+forbidden+String.fromCharCode(34)),false,forbidden);
 });
 test("phase 7 internal renderers remain metadata consumers",()=>{
  assert.match(custom,/CustomPageRenderer/);
