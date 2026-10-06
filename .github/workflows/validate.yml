@@ -31,6 +31,7 @@ jobs:
       - run: npm run test:unit
       - run: npm run audit:trusted
       - run: npm run audit:apps
+      - run: npm run audit:metadata-purity
       - run: npm run audit:workflow-coverage:enforce
       - run: npm run audit:gptbuilder-sfdc-parity
 
