@@ -1,0 +1,37 @@
+{
+  "packageKey": "platform",
+  "objects": [
+    {
+      "objectKey": "system_settings",
+      "metadataScope": "global",
+      "label": "System Settings",
+      "pluralLabel": "System Settings",
+      "description": "Tenant platform settings resolved entirely through metadata.",
+      "sourceTable": "company_settings",
+      "companyScoped": true,
+      "storeScoped": false,
+      "fields": [
+        {"apiName":"company_id","label":"Company","fieldType":"lookup","required":true,"writable":false},
+        {"apiName":"default_landing_page","label":"Default Landing Page","fieldType":"text","writable":true},
+        {"apiName":"landing_flow","label":"Landing Flow","fieldType":"json","writable":true},
+        {"apiName":"platform_theme","label":"Platform Theme","fieldType":"text","writable":true},
+        {"apiName":"jarves_licence_users","label":"Assistant User Allowance","fieldType":"number","writable":true},
+        {"apiName":"jarves_behaviour_media","label":"Assistant Behaviour Media","fieldType":"json","writable":true},
+        {"apiName":"updated_by","label":"Updated By","fieldType":"lookup","writable":true},
+        {"apiName":"updated_at","label":"Updated","fieldType":"datetime","writable":false}
+      ],
+      "config": {
+        "flowWritesOnly": false,
+        "settings": {
+          "singletonBy": "company_id",
+          "readPermission": "settings.manage",
+          "writePermission": "settings.manage"
+        }
+      }
+    }
+  ],
+  "permissionDeclarations": [
+    {"key":"view","permission":"settings.manage","access":"read"},
+    {"key":"manage","permission":"settings.manage","access":"write"}
+  ]
+}
