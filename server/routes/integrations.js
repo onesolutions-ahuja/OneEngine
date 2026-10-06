@@ -141,6 +141,43 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
     }
   );
 
+  // Metadata-driven field catalogue for integration mappings.
+  router.get(
+    "/integrations/field-catalogue",
+    authenticate,
+    authorize("integration.manage"),
+    async (req, res) => {
+      try {
+        const result = await db(
+          `SELECT o.object_key,o.label AS object_label,f.api_name,f.label,f.field_type
+             FROM platform_objects o
+             JOIN platform_fields f ON f.object_id=o.id
+            WHERE o.active=TRUE
+              AND f.active=TRUE
+              AND f.readable=TRUE
+              AND (o.company_id IS NULL OR o.company_id=$1)
+              AND (f.company_id IS NULL OR f.company_id=$1)
+              AND COALESCE((f.config->>'secure')::boolean,FALSE)=FALSE
+            ORDER BY lower(o.label),f.display_order,lower(f.label)`,
+          [req.user.companyId]
+        );
+        const data = (result.rows || []).map((row) => ({
+          path: `${row.object_key}.${row.api_name}`,
+          label: `${row.object_label} · ${row.label || row.api_name}`,
+          type: row.field_type || "text",
+          selectable: true,
+          array: false,
+          objectKey: row.object_key,
+          fieldKey: row.api_name,
+        }));
+        res.json({ success: true, data });
+      } catch (error) {
+        console.error("Integration field catalogue error:", error);
+        res.status(500).json({ success: false, message: "Unable to load integration field metadata" });
+      }
+    }
+  );
+
   // Get a single integration (company-scoped).
   router.get(
     "/integrations/:id",
