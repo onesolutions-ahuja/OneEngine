@@ -9178,7 +9178,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const fields = await applyFieldSecurity(db, metadataFields, req);
       if (!object) return res.status(404).json({ success: false, message: "Unknown object" });
       if (!(await hasPlatformObjectPermission(db, req, object.id, "create"))) return res.status(403).json({ success: false, message: "You do not have permission to create records for this object" });
-      if (object?.config?.flowWritesOnly === true || object?.config?.protectedWrites === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
+      if (object?.config?.flowWritesOnly === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
       if (!object.active) return res.status(400).json({ success: false, message: "Object is inactive" });
       if (!object.source_table || !isSafeIdentifier(object.source_table)) return res.status(400).json({ success: false, message: "Object records are not available" });
       if (object.store_scoped && !req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
@@ -9211,7 +9211,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const fields = await applyFieldSecurity(db, metadataFields, req);
       if (!object) return res.status(404).json({ success: false, message: "Unknown object" });
       if (!(await hasPlatformObjectPermission(db, req, object.id, "edit"))) return res.status(403).json({ success: false, message: "You do not have permission to edit records for this object" });
-      if (object?.config?.flowWritesOnly === true || object?.config?.protectedWrites === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
+      if (object?.config?.flowWritesOnly === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
       if (!object.active) return res.status(400).json({ success: false, message: "Object is inactive" });
       if (!object.source_table || !isSafeIdentifier(object.source_table)) return res.status(400).json({ success: false, message: "Object records are not available" });
       if (object.store_scoped && !req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
@@ -9242,7 +9242,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const fields = await applyFieldSecurity(db, metadataFields, req);
       if (!object) return res.status(404).json({ success: false, message: "Unknown object" });
       if (!(await hasPlatformObjectPermission(db, req, object.id, "delete"))) return res.status(403).json({ success: false, message: "You do not have permission to delete records for this object" });
-      if (object?.config?.flowWritesOnly === true || object?.config?.protectedWrites === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
+      if (object?.config?.flowWritesOnly === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
       if (!object.active) return res.status(400).json({ success: false, message: "Object is inactive" });
       if (!object.source_table || !isSafeIdentifier(object.source_table)) return res.status(404).json({ success: false, message: "Object records are not available" });
       if (object.store_scoped && !req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
