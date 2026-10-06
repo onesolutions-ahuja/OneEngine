@@ -1,8 +1,8 @@
 /*
  * T9M - Field mapping editor (Partner field | onePOS field).
  *
- * The onePOS side is a searchable dropdown driven by the T9E field
- * catalogue (never hard-coded here) with a free-text custom path fallback.
+ * The onePOS side is a searchable dropdown loaded from live Platform field
+ * metadata, with a free-text custom path fallback for connector-specific payloads.
  * Validates every row via the T9D contract, surfaces per-row errors,
  * duplicate partner-field detection and array indicators. Non-direct
  * (constant/template) mappings support a static value.
@@ -30,7 +30,7 @@ function rowFromApi(row) {
 }
 
 export default function MappingEditorModal({ integration, endpoint, onClose }) {
-  const catalogue = useMemo(() => getIntegrationFieldCatalogue(), []);
+  const [catalogue, setCatalogue] = useState([]);
   const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,8 +42,12 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
     setLoading(true);
     setError("");
     try {
-      const data = await apiRequest(`/api/integrations/${integration.id}/endpoints/${endpoint.id}/mappings`);
+      const [data, fields] = await Promise.all([
+        apiRequest(`/api/integrations/${integration.id}/endpoints/${endpoint.id}/mappings`),
+        getIntegrationFieldCatalogue(),
+      ]);
       setMappings((data?.data || []).map(rowFromApi));
+      setCatalogue(Array.isArray(fields) ? fields : []);
     } catch (err) {
       setError(err.message || "Unable to load mappings");
     } finally {
@@ -189,7 +193,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                             <input
                               value={row.oneposSourcePath}
                               onChange={(e) => updateRow(index, { oneposSourcePath: e.target.value })}
-                              placeholder="sales.customer.name"
+                              placeholder="object.field"
                               className="h-9 px-2.5 border border-slate-200 rounded-lg text-sm font-mono flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               aria-label="onePOS source path (custom)"
                             />
@@ -201,7 +205,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                           <input
                             value={row.staticValue}
                             onChange={(e) => updateRow(index, { staticValue: e.target.value })}
-                            placeholder={row.mappingType === "template" ? "Template, e.g. {{sales.receipt_number}}" : "Static value"}
+                            placeholder={row.mappingType === "template" ? "Template, e.g. {{record.field}}" : "Static value"}
                             className="h-9 w-full px-2.5 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                             aria-label="Static value"
                           />
@@ -238,7 +242,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                 />
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                Source paths support relationship traversal (<code>sales.customer.address.postcode</code>) and collections (<code>sales.items[].product.ean</code> — marked&nbsp;[&nbsp;]).
+                Source paths are discovered from Platform metadata. Custom relationship paths and collection paths remain available when a connector payload requires them.
               </p>
               {message && <div className="mt-3 px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm">{message}</div>}
               {error && <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
