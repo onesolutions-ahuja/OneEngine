@@ -221,22 +221,20 @@ test("kiosk administration is metadata-driven while customer runtime remains pac
 });
 
 
-test("store and till administration use metadata while operational till runtime remains", async () => {
-  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  const admin = await readFile(new URL("../server/routes/admin.js", import.meta.url), "utf8");
-  const till = await readFile(new URL("../server/routes/till.js", import.meta.url), "utf8");
+test("Till operational writes are metadata Flow owned", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  const settingsPage = await readFile(new URL("../src/pages/settings/StoreTillSettingsPage.jsx", import.meta.url), "utf8");
-  assert.equal(app.includes("pages/stores/StoresPage"), false);
-  assert.match(app, /initialObjectKey="store" appKey="stores"/);
-  assert.match(metadata, /key: "store"[\s\S]*table: "stores"/);
-  assert.match(metadata, /key: "terminal"[\s\S]*table: "terminals"/);
-  assert.equal(admin.includes('router.put("/admin/stores/:id"'), false);
-  assert.equal(admin.includes('router.put("/admin/tills/:id"'), false);
-  assert.equal(settingsPage.includes("/api/admin/tills/"), false);
-  assert.match(till, /\/till\/sessions\/current/);
+  assert.equal(server.includes("./routes/till.js"), false);
+  assert.equal(server.includes("createTillRouter"), false);
+  for (const objectKey of ["till_session","cash_movement","refund","sale","sale_item","payment"]) assert.ok(registry.includes(`objectKey:"${objectKey}"`) || registry.includes(`objectKey: "${objectKey}"`), objectKey);
+  assert.match(metadata, /ONETILL_OPEN_SESSION/);
+  assert.match(metadata, /ONETILL_CLOSE_SESSION/);
+  assert.match(metadata, /ONETILL_CASH_IN/);
+  assert.match(metadata, /ONETILL_CASH_OUT/);
+  assert.match(metadata, /ONETILL_OPEN_DRAWER/);
+  assert.equal(metadata.includes("cash_ledger"), false);
 });
-
 
 test("staff app is metadata-driven while identity and RBAC administration remain platform-core", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
