@@ -1,83 +1,58 @@
 /*
- * --------------------------------------------------------------------------
- * Integration Field Catalogue (T9E)
- * --------------------------------------------------------------------------
+ * Integration mapping source catalogue.
  *
- * Metadata only for the future Integration frontend field-selection
- * dropdown/tree. No resolution, mapping, database or route logic here.
- *
- * Each entry:
- *   { path, label, type, selectable, array }
- *
- * - path: canonical onePOS source path (dot + optional [] notation).
- * - label: human-friendly display name.
- * - type: "string" | "number" | "date".
- * - selectable: always true here (every listed field is user-selectable).
- * - array: true when the path contains "[]", else false.
+ * The catalogue is derived from Platform Object metadata at runtime. No sales,
+ * purchase, customer, return, supplier or other business field is declared in
+ * frontend code.
  */
-
-const CATALOGUE = [
-  // ---- Sales ----
-  { path: 'sales.sale_id', label: 'Sale ID', type: 'string', selectable: true, array: false },
-  { path: 'sales.receipt_number', label: 'Receipt number', type: 'string', selectable: true, array: false },
-  { path: 'sales.total', label: 'Sale total', type: 'number', selectable: true, array: false },
-  { path: 'sales.subtotal', label: 'Sale subtotal', type: 'number', selectable: true, array: false },
-  { path: 'sales.tax', label: 'Sale tax', type: 'number', selectable: true, array: false },
-  { path: 'sales.discount', label: 'Sale discount', type: 'number', selectable: true, array: false },
-  { path: 'sales.sale_date', label: 'Sale date', type: 'date', selectable: true, array: false },
-  { path: 'sales.payment_methods[].method', label: 'Payment method', type: 'string', selectable: true, array: true },
-  { path: 'sales.payment_methods[].amount', label: 'Payment amount', type: 'number', selectable: true, array: true },
-  { path: 'sales.payment_methods[].provider', label: 'Payment provider', type: 'string', selectable: true, array: true },
-  { path: 'sales.customer.name', label: 'Customer name', type: 'string', selectable: true, array: false },
-  { path: 'sales.customer.address.postcode', label: 'Customer postcode', type: 'string', selectable: true, array: false },
-  { path: 'sales.items[].product.name', label: 'Item product name', type: 'string', selectable: true, array: true },
-  { path: 'sales.items[].product.sku', label: 'Item product SKU', type: 'string', selectable: true, array: true },
-  { path: 'sales.items[].product.ean', label: 'Item product EAN', type: 'string', selectable: true, array: true },
-  { path: 'sales.items[].quantity', label: 'Item quantity', type: 'number', selectable: true, array: true },
-  { path: 'sales.items[].unit_price', label: 'Item unit price', type: 'number', selectable: true, array: true },
-  { path: 'sales.items[].total', label: 'Item total', type: 'number', selectable: true, array: true },
-  { path: 'sales.items[].tax', label: 'Item tax', type: 'number', selectable: true, array: true },
-  { path: 'sales.items[].discount', label: 'Item discount', type: 'number', selectable: true, array: true },
-
-  // ---- Purchase ----
-  { path: 'purchase.purchase_id', label: 'Purchase ID', type: 'string', selectable: true, array: false },
-  { path: 'purchase.subtotal', label: 'Purchase subtotal', type: 'number', selectable: true, array: false },
-  { path: 'purchase.reference_number', label: 'Purchase reference number', type: 'string', selectable: true, array: false },
-  { path: 'purchase.purchase_date', label: 'Purchase date', type: 'date', selectable: true, array: false },
-  { path: 'purchase.supplier.name', label: 'Supplier name', type: 'string', selectable: true, array: false },
-  { path: 'purchase.supplier.contact', label: 'Supplier contact', type: 'string', selectable: true, array: false },
-  { path: 'purchase.items[].product.name', label: 'Purchase item product name', type: 'string', selectable: true, array: true },
-  { path: 'purchase.items[].product.sku', label: 'Purchase item product SKU', type: 'string', selectable: true, array: true },
-  { path: 'purchase.items[].product.ean', label: 'Purchase item product EAN', type: 'string', selectable: true, array: true },
-  { path: 'purchase.items[].quantity', label: 'Purchase item quantity', type: 'number', selectable: true, array: true },
-  { path: 'purchase.items[].unit_cost', label: 'Purchase item unit cost', type: 'number', selectable: true, array: true },
-  { path: 'purchase.items[].total', label: 'Purchase item total', type: 'number', selectable: true, array: true },
-
-  // ---- Customer return (T9G dispatch entity: SALES_RETURN_CREATED) ----
-  { path: 'return.return_id', label: 'Return ID', type: 'string', selectable: true, array: false },
-  { path: 'return.return_type', label: 'Return type', type: 'string', selectable: true, array: false },
-  { path: 'return.receipt_number', label: 'Original receipt number', type: 'string', selectable: true, array: false },
-  { path: 'return.purchase_reference', label: 'Original purchase reference', type: 'string', selectable: true, array: false },
-  { path: 'return.supplier_name', label: 'Supplier name', type: 'string', selectable: true, array: false },
-  { path: 'return.reason', label: 'Return reason', type: 'string', selectable: true, array: false },
-  { path: 'return.refund_total', label: 'Refund total', type: 'number', selectable: true, array: false },
-  { path: 'return.created_at', label: 'Return created at', type: 'date', selectable: true, array: false },
-  { path: 'return.items[].quantity', label: 'Return item quantity', type: 'number', selectable: true, array: true },
-  { path: 'return.items[].product.name', label: 'Return item product name', type: 'string', selectable: true, array: true },
-  { path: 'return.items[].product.sku', label: 'Return item product SKU', type: 'string', selectable: true, array: true },
-  { path: 'return.items[].product.ean', label: 'Return item product EAN', type: 'string', selectable: true, array: true },
-  { path: 'return.items[].reason', label: 'Return item reason', type: 'string', selectable: true, array: true },
-  { path: 'return.customer.name', label: 'Return customer name', type: 'string', selectable: true, array: false },
-];
-
-/**
- * Return a fresh deep copy of the catalogue so callers can never mutate the
- * shared definition.
- *
- * @returns {Array<{path: string, label: string, type: string, selectable: boolean, array: boolean}>}
- */
-export function getIntegrationFieldCatalogue() {
-  return CATALOGUE.map((entry) => ({ ...entry }));
+function objectRows(payload) {
+  const data = payload?.data;
+  if (Array.isArray(data?.objects)) return data.objects;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(payload?.objects)) return payload.objects;
+  return [];
 }
 
-export default { getIntegrationFieldCatalogue };
+function normalizePath(object, path) {
+  const objectKey = String(object?.object_key || object?.objectKey || object?.api_name || "").trim();
+  const raw = String(path?.path || path?.apiPath || path?.api_path || path?.key || "").trim();
+  if (!objectKey || !raw) return null;
+  const sourcePath = raw.startsWith(objectKey + ".") ? raw : `${objectKey}.${raw}`;
+  const label = path?.label || path?.displayLabel || path?.display_label || sourcePath;
+  const type = String(path?.field_type || path?.fieldType || path?.type || "string").toLowerCase();
+  const array = path?.isCollection === true || path?.is_collection === true || sourcePath.includes("[]");
+  return { path: sourcePath, label: String(label), type, selectable: path?.readable !== false, array };
+}
+
+export async function loadIntegrationFieldCatalogue(apiRequest, { depth = 4 } = {}) {
+  const response = await apiRequest("/api/platform/objects");
+  const objects = objectRows(response).filter((object) => object?.active !== false && object?.permissions?.can_view !== false);
+  const groups = await Promise.all(objects.map(async (object) => {
+    const id = object?.id || object?.object_id;
+    if (!id) return [];
+    try {
+      const paths = await apiRequest(`/api/platform/objects/${encodeURIComponent(id)}/record-paths?depth=${Math.max(1, Math.min(6, Number(depth) || 4))}`);
+      return (Array.isArray(paths?.data) ? paths.data : [])
+        .map((path) => normalizePath(object, path))
+        .filter((entry) => entry?.selectable !== false);
+    } catch {
+      try {
+        const fields = await apiRequest(`/api/platform/objects/${encodeURIComponent(id)}/fields`);
+        return (Array.isArray(fields?.data) ? fields.data : [])
+          .filter((field) => field?.active !== false && field?.readable !== false)
+          .map((field) => normalizePath(object, {
+            path: field.api_name || field.key,
+            label: field.label,
+            field_type: field.field_type || field.type,
+            is_collection: field.is_collection,
+          }))
+          .filter(Boolean);
+      } catch {
+        return [];
+      }
+    }
+  }));
+  return groups.flat().sort((a, b) => a.label.localeCompare(b.label) || a.path.localeCompare(b.path));
+}
+
+export default { loadIntegrationFieldCatalogue };
