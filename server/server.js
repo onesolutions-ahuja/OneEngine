@@ -51,7 +51,6 @@ import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
 import createIntegrationsRouter from "./routes/integrations.js";
-import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
 import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
@@ -534,7 +533,7 @@ function sensitiveResourceKey(req) {
   if (/\/api\/(settings\/roles|roles)(?:\/|$)/.test(path) && method !== "GET") return "MANAGE_ROLES";
   if (/\/api\/platform\/security\/(?:objects\/[^/]+\/sharing|sharing-rules|public-groups|queues)(?:\/|$)/.test(path)) return "MANAGE_SHARING";
   if (/\/api\/(admin\/users|settings\/users|platform\/objects\/employee)(?:\/|$)/.test(path)) return "MANAGE_USERS";
-  if (/\/api\/(reports|custom-reports|dashboard|dashboard-builder)(?:\/|$)/.test(path)) return "REPORTS_DASHBOARDS";
+  if (/\/api\/(reports|custom-reports|dashboards|dashboard-builder)(?:\/|$)/.test(path)) return "REPORTS_DASHBOARDS";
   if (/\/api\/.*(?:export|data-export)(?:\/|$)/.test(path)) return "MANAGE_DATA_EXPORT";
   if (/\/api\/(connectors|integrations|packages)(?:\/|$)/.test(path) && method !== "GET") return "MANAGE_CONNECTED_APPS";
   if (/\/api\/security\/(certificates|keys)(?:\/|$)/.test(path)) return "MANAGE_CERTIFICATES";
@@ -1893,7 +1892,6 @@ app.use("/api", createGlobalProductLookupRouter({
   connectorDrivers,
 }));
 
-app.use("/api", createDashboardRouter({ authenticate, authorize, db }));
 app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
 
 /*
