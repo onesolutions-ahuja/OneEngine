@@ -1,16 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.js";
 
-test("package functions are package-owned and loaded through the generic package index", async () => {
-  const registry = await readFile(new URL("../server/services/platformFunctionRegistry.js", import.meta.url), "utf8");
+test("business package runtime has no imperative function registry", async () => {
+  const workflow = await readFile(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
   const index = await readFile(new URL("../server/packages/functionsIndex.js", import.meta.url), "utf8");
-  assert.match(registry, /packages\/functionsIndex\.js/);
-  assert.equal(registry.includes('key: "purchase.receive"'), false);
-  assert.equal(registry.includes("await readdir"), false);
+  assert.equal(workflow.includes("CALL_FUNCTION"), false);
   assert.match(index, /export const packageFunctions/);
-  assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === "purchase.receive"), false);
 });
 
 test("package buttons support workflow targets", async () => {
@@ -19,8 +15,7 @@ test("package buttons support workflow targets", async () => {
   assert.match(source, /targetType/);
 });
 
-test("metadata button flows use registered function permissions", async () => {
+test("metadata button flows use workflow action permissions", async () => {
   const source = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
   assert.match(source, /assertWorkflowActionPermissions/);
-  assert.match(source, /functionDefinition\.permissionsAny/);
 });
