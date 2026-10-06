@@ -1108,12 +1108,6 @@ function SettingsPage({ onOpenProfile }) {
                       </>
                     ) : null}
                   </section>
-                </div>
-              ) : current?.key === 'store-till' ? (
-                <>
-                  <MetadataSettingsSection section="Store & Till" />
-                  <StoreTillSettingsPage />
-                </>
               ) : current?.key === 'client-web-shop' ? (
                 <MetadataSettingsSection section="Client Web Shop" />
               ) : current?.key === 'tax-vat' ? (
@@ -1707,8 +1701,6 @@ function DevicesMenu({ onOpenSettings }) {
 }
 function HelpMenu({ onSelect }) {
   const items = [
-    ['Getting started', 'Basic onePOS setup and first steps'],
-    ['Till guide', 'Sales, payments, returns and till workflows'],
     ['Settings guide', 'Company, store, users and permissions'],
     ['Troubleshooting', 'Connection health and recovery tools'],
     ['System diagnostics', 'Server, database and integration status'],
@@ -1825,13 +1817,6 @@ function Desktop({ onLock, onSignOut }) {
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
 
-  useEffect(() => {
-    if (!isTillUser || activeApp !== 'home') return
-    const next = { app: 'till', section: null }
-    setRouteState(next)
-    setRoute('till')
-    setActiveApp('till')
-  }, [isTillUser, activeApp])
 
   useEffect(() => {
     const syncRoute = () => {
@@ -2366,10 +2351,6 @@ function Desktop({ onLock, onSignOut }) {
 }
 
 export default function App() {
-  const route = readRoute()
-  if (route.app === 'customer-display') {
-    return <div data-oneengine-route="customer-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary></div>
-  }
   if (route.app === 'flow-runtime') {
     return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
   }
