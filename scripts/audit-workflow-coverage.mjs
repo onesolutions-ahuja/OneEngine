@@ -277,7 +277,6 @@ const serverSource = read("server/server.js");
 const globalGatewayEnabled = /app\.use\("\/api",\s*createBusinessCommandGateway\(\{\s*db\s*\}\)\)/.test(serverSource);
 const NON_MUTATING_POST_ROUTES = new Set([
   "/api/auth/login",
-  "/customer-auth/login",
   "/client-web-shop/public/:slug/quote",
 ]);
 
