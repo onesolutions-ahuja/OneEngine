@@ -1479,7 +1479,55 @@ export function packageDefinition(entry) {
 }
 
 export function packageDefinitions(catalog = packageManifestCatalog) {
-  return catalog.map(packageDefinition);
+  return catalog.map(packageDefinition).map((definition) => {
+    const manifest = definition?.manifest || {};
+    const workflows = Array.isArray(manifest.workflows) ? manifest.workflows : null;
+    if (!workflows) return definition;
+    return {
+      ...definition,
+      manifest: {
+        ...manifest,
+        workflows: workflows.map((workflow) => {
+          const action = workflow?.action || {};
+          const actions = Array.isArray(action.actions) ? action.actions : [];
+          if (!actions.length || String(action.flowType || "").toUpperCase() === "KIOSK_EXPERIENCE") return workflow;
+          const existing = Array.isArray(action.gptBuilderElements) ? action.gptBuilderElements : [];
+          const nodes = existing.length === actions.length ? existing : actions.map((step, index) => ({
+            id: step.id || `package-step-${index + 1}`,
+            key: "action",
+            label: step.label || step.apiName || step.key || `Step ${index + 1}`,
+            apiName: step.apiName || step.id || `Package_Step_${index + 1}`,
+            description: step.description || "",
+            labelSource: "manual",
+            apiNameSource: "manual",
+            config: {
+              actionKey: step.key || step.type || "",
+              inputs: {},
+              inputModes: {},
+              inputIncluded: {},
+              transforms: {},
+              outputMode: "automatic",
+              manualOutputs: [],
+              importedRuntimeAction: step,
+              importedRuntimeActionText: "",
+            },
+            configured: true,
+            source: "runtime_import",
+            position: null,
+          }));
+          return {
+            ...workflow,
+            action: {
+              ...action,
+              gptBuilder: true,
+              layout: action.layout || { mode: "AUTO" },
+              gptBuilderElements: nodes,
+            },
+          };
+        }),
+      },
+    };
+  });
 }
 
 export const packageRegistrySchema = `
