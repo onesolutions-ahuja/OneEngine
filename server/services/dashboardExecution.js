@@ -31,11 +31,6 @@ export function createDashboardExecution({ db, canViewCompanyCustomers, canAcces
       return mergeDashboardFilters(normalizeAdvancedReportDefinition(savedReport.definition), dashboardFilters);
     }
 
-    if (config.report && typeof config.report === "object") {
-      const definition = normalizeAdvancedReportDefinition(config.report);
-      return mergeDashboardFilters(definition, dashboardFilters);
-    }
-
     if (reportId) throw new Error(`Unknown dashboard report reference: ${reportId}`);
     throw new Error("No report configured");
   }
