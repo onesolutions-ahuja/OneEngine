@@ -3,7 +3,7 @@ import { AppWindow, Plus, Search } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 import CustomPageBuilder from "../../settings/Platform/CustomPageBuilder.jsx";
 import ConnectorDefinitionEditor from "./ConnectorDefinitionEditor.jsx";
-import { compilePortableAppManifest, buildPortableArtifact } from "../../../../server/services/gptAppBuilderMetadata.js";
+import { compilePortableAppManifest, buildPortableArtifact } from "../../../shared/gptAppBuilderMetadata.js";
 import { createPlatformMetadataResolver } from "./platformMetadataResolver.js";
 
 const BUILDER_DEFINITION = Object.freeze({
