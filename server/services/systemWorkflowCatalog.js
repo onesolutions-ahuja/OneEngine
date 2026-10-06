@@ -1,4 +1,3 @@
-import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 import { TRUSTED_JOB_KINDS } from "./trustedJobKinds.js";
 
@@ -338,28 +337,6 @@ function titleCase(value = "") {
     .trim();
 }
 
-function functionWorkflow(fn) {
-  return {
-    systemKey: `function:${fn.key}`,
-    name: `System · Function · ${titleCase(fn.key)}`,
-    triggerKey: "system_function",
-    action: {
-      type: "workflow",
-      systemGenerated: true,
-      systemKey: `function:${fn.key}`,
-      scope: "system",
-      capabilityType: "function",
-      capabilityKey: fn.key,
-      actions: [{
-        type: "CALL_FUNCTION",
-        functionKey: fn.key,
-        inputs: {},
-        label: fn.description || fn.key,
-      }],
-    },
-  };
-}
-
 function actionWorkflow(action) {
   return {
     systemKey: `action:${action.key}`,
@@ -406,12 +383,11 @@ function jobWorkflow(kind) {
 }
 
 export function systemWorkflowDefinitions() {
-  const functions = PLATFORM_FUNCTIONS.map(functionWorkflow);
   const actions = PLATFORM_ACTION_REGISTRY
     .filter((item) => item?.key && item.key !== "WORKFLOW" && item.systemVisible !== false)
     .map(actionWorkflow);
   const jobs = TRUSTED_JOB_KINDS.map(jobWorkflow);
-  return [...functions, ...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS];
+  return [...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS];
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {
