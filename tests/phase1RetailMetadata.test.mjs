@@ -29,14 +29,14 @@ test("Phase 1 business processes are editable workflow metadata", () => {
 
 test("generated parent IDs are passed through Flow step resources", () => {
   const complete = flows.get("flow:sale.complete").action.actions;
-  assert.equal(complete.find((a) => a.id === "create_items").commonFieldValues.sale_id.path, "steps.create_sale.created.id");
-  assert.equal(complete.find((a) => a.id === "create_payments").commonFieldValues.sale_id.path, "steps.create_sale.created.id");
+  assert.equal(complete.find((a) => a.id === "create_item").fieldValues.sale_id.path, "steps.create_sale.created.id");
+  assert.equal(complete.find((a) => a.id === "create_payment").fieldValues.sale_id.path, "steps.create_sale.created.id");
   const customerReturn = flows.get("flow:return.create").action.actions;
   assert.equal(customerReturn.find((a) => a.id === "create_return_items").commonFieldValues.return_id.path, "steps.create_return.created.id");
 });
 
 test("retail metadata uses generic runtime primitives only", () => {
-  const allowed = new Set(["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","BULK_UPDATE_RECORDS","CREATE_RELATED_RECORD","UPDATE_RELATED_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP","ASSIGN_RECORD","ASSIGNMENT","DECISION","CONDITION","LOOP","WAIT","FORMULA","RUN_SUBFLOW","STOP","ERROR","CUSTOM_ERROR","CALL_FUNCTION"]);
+  const allowed = new Set(["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","BULK_UPDATE_RECORDS","CREATE_RELATED_RECORD","UPDATE_RELATED_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP","ASSIGN_RECORD","ASSIGNMENT","DECISION","CONDITION","LOOP","WAIT","FORMULA","RUN_SUBFLOW","STOP","ERROR","CUSTOM_ERROR","ONE_HTTP_REQUEST","ONE_API_REQUEST"]);
   for (const flow of manifest.workflows || []) {
     for (const action of flow.action?.actions || []) {
       const key = String(action.key || action.type || "").toUpperCase();
