@@ -9,7 +9,7 @@ function cleanPath(req) {
 }
 
 export function createWorkflowTraceGateway({ db }) {
-  if (!db || typeof db !== "function") throw new Error("Business command gateway requires db");
+  if (!db || typeof db !== "function") throw new Error("Workflow trace gateway requires db");
 
   return function workflowTraceGateway(req, res, next) {
     if (!MUTATION_METHODS.has(String(req.method || "").toUpperCase())) return next();
@@ -24,7 +24,7 @@ export function createWorkflowTraceGateway({ db }) {
     let creating = null;
     const startedAt = Date.now();
 
-    req.ensureBusinessCommandRun = async ({ companyId = null, userId = null, storeId = null } = {}) => {
+    req.ensureWorkflowTraceRun = async ({ companyId = null, userId = null, storeId = null } = {}) => {
       if (req.workflowTraceRunId) return req.workflowTraceRunId;
       if (creating) return creating;
       const tenantId = companyId || req.user?.companyId || null;
@@ -34,8 +34,8 @@ export function createWorkflowTraceGateway({ db }) {
         db,
         companyId: tenantId,
         workflowId: null,
-        workflowName: "System · Business Command",
-        triggerKey: "business_command",
+        workflowName: "System · Workflow Trace",
+        triggerKey: "workflow_trace",
         status: "RUNNING",
         metadata: {
           systemGenerated: true,
@@ -65,7 +65,7 @@ export function createWorkflowTraceGateway({ db }) {
       Promise.resolve()
         .then(async () => {
           if (!req.workflowTraceRunId && req.user?.companyId) {
-            await req.ensureBusinessCommandRun({
+            await req.ensureWorkflowTraceRun({
               companyId: req.user.companyId,
               userId: req.user.id || null,
               storeId: req.user.storeId || null,
@@ -97,7 +97,7 @@ export function createWorkflowTraceGateway({ db }) {
             ]
           );
         })
-        .catch((error) => console.error("Business command trace finalize error:", error?.message || error));
+        .catch((error) => console.error("Workflow trace finalize error:", error?.message || error));
     };
 
     res.once("finish", () => finalize({ aborted: false }));
@@ -116,7 +116,7 @@ export async function purgeOldWorkflowTraceRuns({ db, retentionDays = 90, batchS
     `WITH doomed AS (
        SELECT id
        FROM platform_workflow_runs
-       WHERE trigger_key='business_command'
+       WHERE trigger_key='workflow_trace'
          AND created_at < NOW() - ($1::text || ' days')::interval
        ORDER BY created_at
        LIMIT $2
