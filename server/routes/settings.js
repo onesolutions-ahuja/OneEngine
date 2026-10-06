@@ -537,7 +537,6 @@ export default function createSettingsRouter({
       const days = Math.floor(Number(value));
       return Number.isFinite(days) && days >= 0 && days <= 3650 ? days : SETTINGS_PATCH_INVALID;
     },
-    productView: (value) => (["image", "compact"].includes(value) ? value : SETTINGS_PATCH_INVALID),
     paymentMethods: (value) => {
       if (!Array.isArray(value) || value.some((m) => !["card", "cash", "cod"].includes(m))) return SETTINGS_PATCH_INVALID;
       return JSON.stringify(value);
@@ -546,10 +545,6 @@ export default function createSettingsRouter({
       if (!Array.isArray(value) || value.length > 8 || new Set(value).size !== value.length) return SETTINGS_PATCH_INVALID;
       if (value.some((item) => typeof item !== "string" || !item.trim() || item.length > 120)) return SETTINGS_PATCH_INVALID;
       return JSON.stringify(value.map((item) => item.trim()));
-    },
-    invoicePrefix: (value) => {
-      if (typeof value !== "string" || !/^[A-Za-z0-9]{1,10}$/.test(value.trim())) return SETTINGS_PATCH_INVALID;
-      return value.trim().toUpperCase();
     },
     negativeBilling: (value, patch) => {
       /* T10U safety contract is preserved: enabling requires the explicit
@@ -640,12 +635,9 @@ export default function createSettingsRouter({
       loyaltyMinPointsRedeem,
       scanGoEnabled,
       exchangeMode,
-      productView,
       dockQuickAccess,
-      customerDisplayEnabled,
       onlineOrderingEnabled,
       onlinePaymentMethods,
-      invoicePrefixes,
       batchInventoryMode,
       batchDefaultMfgRule,
       batchDefaultExpiryRule,
@@ -698,11 +690,6 @@ export default function createSettingsRouter({
       loyaltyMinPointsNorm = minPoints;
     }
 
-    // Validate till product view (T10Q: image | compact; default image)
-    if (productView !== undefined && productView !== null && !["image", "compact"].includes(productView)) {
-      return res.status(400).json({ success: false, message: "Till product view must be 'image' or 'compact'" });
-    }
-
     // Validate exchange mode (receipt | normal | both; default both)
     const EXCHANGE_MODES = ["receipt", "normal", "both"];
     const exchangeModeNorm = exchangeMode === undefined || exchangeMode === null
@@ -732,28 +719,6 @@ export default function createSettingsRouter({
       if (!Array.isArray(dockQuickAccess) || dockQuickAccess.length > 8 || new Set(dockQuickAccess).size !== dockQuickAccess.length ||
           dockQuickAccess.some((item) => typeof item !== "string" || !item.trim() || item.length > 120)) {
         return res.status(400).json({ success: false, message: "Dock quick access must contain up to 8 unique metadata keys" });
-      }
-    }
-
-    // customerDisplayEnabled (Customer Display master switch): boolean only.
-    if (customerDisplayEnabled !== undefined && customerDisplayEnabled !== null
-        && typeof customerDisplayEnabled !== "boolean") {
-      return res.status(400).json({ success: false, message: "customerDisplayEnabled must be a boolean" });
-    }
-
-    // Validate invoice prefixes (configurable receipt prefixes per sale
-    // source): uppercase alphanumeric, 1-10 chars. null/undefined = keep.
-    if (invoicePrefixes !== undefined && invoicePrefixes !== null) {
-      if (typeof invoicePrefixes !== "object" || Array.isArray(invoicePrefixes)) {
-        return res.status(400).json({ success: false, message: "invoicePrefixes must be an object" });
-      }
-      const prefixFields = ["till", "delivery", "selfCheckout"];
-      for (const field of prefixFields) {
-        const value = invoicePrefixes[field];
-        if (value === undefined || value === null) continue;
-        if (typeof value !== "string" || !/^[A-Za-z0-9]{1,10}$/.test(value.trim())) {
-          return res.status(400).json({ success: false, message: `Invoice prefix for ${field} must be 1-10 letters/numbers` });
-        }
       }
     }
 
@@ -804,27 +769,15 @@ export default function createSettingsRouter({
           loyaltyMinPointsNorm,
           scanGoEnabled === true,
           exchangeModeNorm || null,
-          productView === "compact" ? "compact" : productView === "image" ? "image" : null,
           Array.isArray(dockQuickAccess) ? JSON.stringify(dockQuickAccess) : null,
-          typeof customerDisplayEnabled === "boolean" ? customerDisplayEnabled : null,
           onlineOrderingEnabled === true,
           onlinePaymentMethods !== undefined ? JSON.stringify(onlinePaymentMethods) : null,
-          /* Invoice prefixes: per-source objects only; null = keep existing. */
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.till === "string" ? invoicePrefixes.till.trim().toUpperCase() : null)
-            : null,
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.delivery === "string" ? invoicePrefixes.delivery.trim().toUpperCase() : null)
-            : null,
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.selfCheckout === "string" ? invoicePrefixes.selfCheckout.trim().toUpperCase() : null)
-            : null,
           req.user.id
         ]
       );
       await client.query(
         `INSERT INTO audit_logs (company_id, user_id, action, entity_type, entity_id, details) VALUES ($1,$2,'settings.updated','company',$1,$3)`,
-        [req.user.companyId, req.user.id, JSON.stringify({ currency, timezone, dateFormat, vatEnabled, defaultVatRate: vatRate, loyaltyEnabled, loyaltyEarningRate, scanGoEnabled, productView, dockQuickAccess, customerDisplayEnabled, onlineOrderingEnabled, onlinePaymentMethods, invoicePrefixes })]
+        [req.user.companyId, req.user.id, JSON.stringify({ currency, timezone, dateFormat, vatEnabled, defaultVatRate: vatRate, loyaltyEnabled, loyaltyEarningRate, scanGoEnabled, dockQuickAccess, onlineOrderingEnabled, onlinePaymentMethods })]
       );
       await client.query("COMMIT");
       res.json({ success: true, message: "Settings updated" });
