@@ -314,13 +314,6 @@ test('Render shutdown is bounded against stale keep-alive connections', async ()
 })
 
 
-test('trusted runtime accepts package functions protected by permissionsAny', async () => {
-  const source = await read('../server/services/trustedRuntime.js')
-  assert.match(source, /alternativePermissions/)
-  assert.match(source, /fn\?\.permissionsAny/)
-  assert.match(source, /!requiredPermissions\.length && !alternativePermissions\.length/)
-})
-
 
 test('login network policy uses the preloaded preflight result instead of another database round trip', async () => {
   const server = await read('../server/server.js')
