@@ -1,4 +1,4 @@
-import { isSafeIdentifier } from "./platformMetadata.js";
+import { isSafeIdentifier } from "./platformCoreMetadata.js";
 import {
   fieldComparisonSql,
   normalizeAdvancedFieldFilter,
