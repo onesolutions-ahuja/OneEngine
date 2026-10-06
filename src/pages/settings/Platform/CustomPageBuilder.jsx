@@ -470,6 +470,26 @@ const updateNode = (nodeId, changes) => {
         await loadVersions(saved.id);
         onMessage?.("Draft created.");
       }
+      // Re-read the persisted draft before declaring save complete. This is
+      // the same definition the next edit session will reopen, so save/reopen
+      // drift is detected immediately instead of reaching runtime.
+      if (saved?.id) {
+        const reopened = await apiRequest(`/api/platform/pages/${encodeURIComponent(saved.id)}`);
+        if (reopened?.success && reopened.data) {
+          saved = reopened.data;
+          setPage(saved);
+          const persistedTree = normalizeCustomPageTree(saved?.draft_definition || saved?.definition || {});
+          setDraft((current) => ({
+            ...current,
+            pageKey: saved?.page_key || current.pageKey,
+            label: saved?.label || current.label,
+            presentation_mode: persistedTree.presentation_mode,
+            device: persistedTree.device,
+            sections: persistedTree.sections,
+          }));
+          setPages((current) => current.map((row) => row.id === saved.id ? saved : row));
+        }
+      }
       setUndoStack([]); setRedoStack([]); setDirty(false);
       return saved;
     } catch (error) {
