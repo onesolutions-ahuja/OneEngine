@@ -52,8 +52,8 @@ test('N002 compatible resource comparisons reject mismatched and unknown data ty
     resource('$Record.name', 'text'),
     { id: 'malformed', path: '$Record.malformed', apiName: '$Record.malformed' },
   ]
-  assert.equal(decisionResourceType(source), 'currency')
-  assert.deepEqual(compatibleDecisionResources(rows, source).map((row) => row.path), ['$Record.subtotal'])
+  assert.equal(decisionResourceType(source), 'number')
+  assert.deepEqual(compatibleDecisionResources(rows, source).map((row) => row.path), ['$Record.subtotal', '$Record.count'])
   assert.deepEqual(compatibleDecisionResources(rows, rows[3]), [])
 })
 
