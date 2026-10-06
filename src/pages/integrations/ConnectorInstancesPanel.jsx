@@ -28,7 +28,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const selectedApp = apps.find((app) => app.package_key === packageKey);
   const schema = selectedApp?.manifest?.connectorApp?.configurationSchema || [];
   const testActions = selectedApp?.manifest?.connectorApp?.testActions || [];
-  const dedicatedName = selectedApp?.name || (requestedPackageKey === "one_connect_square" ? "One Connect - Square" : requestedPackageKey.replaceAll("_", " "));
+  const dedicatedName = selectedApp?.name || requestedPackageKey.replaceAll("_", " ");
   const selectedStore = stores.find((store) => store.id === storeId);
   const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
   const companyScoped = selectedApp?.manifest?.connectorApp?.scope === "company";
