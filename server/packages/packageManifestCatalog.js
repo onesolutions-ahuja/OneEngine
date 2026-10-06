@@ -34,7 +34,9 @@ const PACKAGE_CATALOG = [
           paymentStatusCompleted: "COMPLETED",
           paymentDirectionIn: "IN",
           itemTypeProduct: "PRODUCT",
-          itemTypeMisc: "MISC"
+          itemTypeMisc: "MISC",
+          heldBasketKey: "items",
+          heldMiscLinesKey: "miscLines"
         },
         fields: {
           sessionStatus: "status",
@@ -59,6 +61,9 @@ const PACKAGE_CATALOG = [
           modifierOptionActive: "active",
           modifierOptionOrder: "display_order",
           onlineOrderStatus: "status",
+        },
+        endpoints: {
+          scannerEvents: "/api/mobile-scanner/events?terminalId={terminalId}"
         },
         settings: {
           source: "/api/settings",
@@ -91,6 +96,12 @@ const PACKAGE_CATALOG = [
             items: ["items"],
             discountType: ["discount_type"],
             discountValue: ["discount_value"]
+          },
+          customer: {
+            id: ["id"],
+            name: ["name", "full_name"],
+            phone: ["phone", "mobile"],
+            email: ["email"]
           },
           paymentInput: {
             providerTransactionId: ["providerTransactionId", "provider_transaction_id"],
