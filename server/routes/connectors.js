@@ -1509,7 +1509,6 @@ export default function createConnectorsRouter({
         storeId: session.rows[0].store_id,
         terminalId: session.rows[0].terminal_id,
         capabilityKey: req.params.capabilityKey,
-        selfCheckout: req.user.mode === "self_checkout",
       });
       res.json({ success: true, data: result });
     } catch (error) {
