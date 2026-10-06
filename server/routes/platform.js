@@ -7710,29 +7710,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     for (const workflowAction of actions || []) {
       validateWorkflowAction(workflowAction);
       const actionType = workflowAction.type || workflowAction.key;
-      if (String(actionType || "").toUpperCase() === "CALL_FUNCTION") {
-        const functionKey = workflowAction.functionKey || workflowAction.function_key;
-        const functionDefinition = null;
-        if (!functionDefinition) {
-          const error = new Error(`Function "${functionKey}" is not registered`);
-          error.status = 422;
-          throw error;
-        }
-        for (const permission of Array.isArray(functionDefinition.permissions) ? functionDefinition.permissions : []) {
-          if (!(await hasExecutionPermission(req, permission))) {
-            const error = new Error("You do not have permission to execute this function");
-            error.status = 403;
-            throw error;
-          }
-        }
-        const any = Array.isArray(functionDefinition.permissionsAny) ? functionDefinition.permissionsAny : [];
-        if (any.length && !(await Promise.all(any.map((permission) => hasExecutionPermission(req, permission)))).some(Boolean)) {
-          const error = new Error("You do not have permission to execute this function");
-          error.status = 403;
-          throw error;
-        }
-        continue;
-      }
       const definition = getWorkflowActionDefinition(actionType);
       for (const requiredPermission of definition?.requiredPermissions || []) {
         if (!(await hasExecutionPermission(req, requiredPermission))) {
