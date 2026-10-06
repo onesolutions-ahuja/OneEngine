@@ -378,7 +378,7 @@ app.use((req, res, next) => {
 });
 /* T10P: Scan & Go checkout deducts stock through the SAME inventory ledger
  * helper the till and online orders use (no second inventory mechanism). */
-app.locals.createInventoryMovement = createInventoryMovement;
+// Inventory mutations are mediated by metadata Flows.
 
 /*
  * A backend error on an idle pool connection (network blip, Postgres restart,
@@ -2038,7 +2038,6 @@ app.use(
     authorize,
     db,
     pool,
-    createInventoryMovement,
     writeAudit,
     canAccessStore,
     savePlatformRecord: saveDomainConfiguration,
@@ -3685,7 +3684,6 @@ async function startServer() {
                   workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   trigger: payload.eventType || workflow.trigger_key,
                   writeAudit,
-                  createInventoryMovement,
                 });
                 const waiting = workflowEntriesContainStatus(results, "waiting");
                 if (run?.id) {
