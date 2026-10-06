@@ -1,0 +1,996 @@
+{
+  "metadataOwnership": {
+    "policy": "PACKAGE_MANAGED",
+    "preserveUserModified": true,
+    "requiredTypes": [
+      "object",
+      "field",
+      "relationship",
+      "form",
+      "layout",
+      "workflow",
+      "action",
+      "report",
+      "permission",
+      "connector",
+      "template"
+    ],
+    "objects": [
+      "online_order",
+      "online_order_line"
+    ],
+    "relationships": [
+      "order_lines",
+      "product",
+      "customer",
+      "store"
+    ],
+    "layouts": [
+      "online_order_detail"
+    ],
+    "forms": [
+      "online_order_create",
+      "online_order_edit"
+    ],
+    "listViews": [
+      "all"
+    ],
+    "validations": [
+      "online_order_line_quantity_positive"
+    ],
+    "permissions": [
+      "online_orders.view",
+      "online_orders.manage",
+      "online_orders.status_update",
+      "online_orders.cancel"
+    ],
+    "actions": [
+      "online_order.accept",
+      "online_order.reject",
+      "online_order.prepare",
+      "online_order.mark_ready",
+      "online_order.mark_ready_for_pickup",
+      "online_order.mark_ready_for_delivery",
+      "online_order.collect",
+      "online_order.complete",
+      "online_order.cancel"
+    ],
+    "events": [
+      "online_order.created",
+      "online_order.accepted",
+      "online_order.status_changed",
+      "online_order.cancelled",
+      "online_order.completed"
+    ]
+  },
+  "upgrade": {
+    "migrationKey": "online_orders_core_1_0_0",
+    "strategy": "additive",
+    "preservesRecordIds": true,
+    "idempotentMetadataProvisioning": true
+  },
+  "objects": [
+    {
+      "objectKey": "online_order",
+      "metadataScope": "global",
+      "label": "Online Order",
+      "pluralLabel": "Online Orders",
+      "description": "Canonical provider-neutral online order record.",
+      "sourceTable": "online_orders",
+      "required": true,
+      "fields": [
+        {
+          "apiName": "external_reference",
+          "sourceColumn": "external_reference",
+          "label": "Order Reference",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "external_order_id",
+          "sourceColumn": "external_order_id",
+          "label": "External Provider Order ID",
+          "fieldType": "text",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "platform",
+          "sourceColumn": "platform",
+          "label": "Provider / Channel",
+          "fieldType": "text",
+          "required": true,
+          "writable": true,
+          "config": {
+            "normalizedProviderKey": true,
+            "allowFutureProviders": true
+          }
+        },
+        {
+          "apiName": "company_id",
+          "sourceColumn": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "store_id",
+          "sourceColumn": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "customer_id",
+          "sourceColumn": "customer_id",
+          "label": "Customer",
+          "fieldType": "lookup",
+          "writable": false
+        },
+        {
+          "apiName": "customer_name",
+          "sourceColumn": "customer_name",
+          "label": "Customer Name",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "customer_phone",
+          "sourceColumn": "customer_phone",
+          "label": "Customer Phone",
+          "fieldType": "phone",
+          "writable": true
+        },
+        {
+          "apiName": "customer_email",
+          "sourceColumn": "customer_email",
+          "label": "Customer Email",
+          "fieldType": "email",
+          "writable": true
+        },
+        {
+          "apiName": "fulfilment_type",
+          "sourceColumn": "fulfilment_type",
+          "label": "Fulfilment",
+          "fieldType": "picklist",
+          "required": true,
+          "writable": true,
+          "options": [
+            "SELF_PICKUP",
+            "DELIVERY"
+          ]
+        },
+        {
+          "apiName": "status",
+          "sourceColumn": "status",
+          "label": "Status",
+          "fieldType": "picklist",
+          "required": true,
+          "writable": true,
+          "options": [
+            "RECEIVED",
+            "ACCEPTED",
+            "PREPARING",
+            "READY",
+            "READY_FOR_PICKUP",
+            "READY_FOR_DELIVERY",
+            "COLLECTED",
+            "COMPLETED",
+            "REJECTED",
+            "CANCELLED"
+          ]
+        },
+        {
+          "apiName": "subtotal",
+          "sourceColumn": "subtotal",
+          "label": "Subtotal",
+          "fieldType": "currency",
+          "writable": true
+        },
+        {
+          "apiName": "tax",
+          "sourceColumn": "tax",
+          "label": "Tax",
+          "fieldType": "currency",
+          "writable": true
+        },
+        {
+          "apiName": "total",
+          "sourceColumn": "total",
+          "label": "Total",
+          "fieldType": "currency",
+          "writable": true
+        },
+        {
+          "apiName": "notes",
+          "sourceColumn": "notes",
+          "label": "Notes",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "delivery_address",
+          "sourceColumn": "delivery_address",
+          "label": "Delivery Address",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "created_at",
+          "sourceColumn": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "sourceColumn": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ],
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "online_order_line",
+      "metadataScope": "global",
+      "label": "Online Order Line",
+      "pluralLabel": "Online Order Lines",
+      "description": "Existing online order item rows and Product Core references.",
+      "sourceTable": "online_order_items",
+      "required": true,
+      "fields": [
+        {
+          "apiName": "order_id",
+          "sourceColumn": "order_id",
+          "label": "Online Order",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "product_id",
+          "sourceColumn": "product_id",
+          "label": "Product",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "product_name",
+          "sourceColumn": "product_name",
+          "label": "Product Name",
+          "fieldType": "text",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "external_item_id",
+          "sourceColumn": "external_item_id",
+          "label": "External Item ID",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "quantity",
+          "sourceColumn": "quantity",
+          "label": "Quantity",
+          "fieldType": "decimal",
+          "required": true,
+          "writable": true,
+          "config": {
+            "minimum": 0.001
+          }
+        },
+        {
+          "apiName": "unit_price",
+          "sourceColumn": "unit_price",
+          "label": "Unit Price",
+          "fieldType": "currency",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "tax",
+          "sourceColumn": "tax",
+          "label": "Tax",
+          "fieldType": "currency",
+          "writable": false
+        },
+        {
+          "apiName": "total",
+          "sourceColumn": "total",
+          "label": "Line Total",
+          "fieldType": "currency",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "mapping_status",
+          "sourceColumn": "mapping_status",
+          "label": "Product Mapping",
+          "fieldType": "picklist",
+          "required": true,
+          "writable": false,
+          "options": [
+            "MAPPED",
+            "UNMAPPED"
+          ]
+        },
+        {
+          "apiName": "platform_data",
+          "sourceColumn": "platform_data",
+          "label": "Provider Item Data",
+          "fieldType": "json",
+          "writable": false
+        },
+        {
+          "apiName": "created_at",
+          "sourceColumn": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ],
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "online_order",
+      "childObjectKey": "online_order_line",
+      "relationshipKey": "order_lines",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "order_id",
+      "required": true
+    },
+    {
+      "parentObjectKey": "online_order_line",
+      "childObjectKey": "product",
+      "relationshipKey": "product",
+      "relationshipType": "lookup",
+      "childFieldApiName": "product_id"
+    },
+    {
+      "parentObjectKey": "customer",
+      "childObjectKey": "online_order",
+      "relationshipKey": "online_orders",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "customer_id"
+    },
+    {
+      "parentObjectKey": "store",
+      "childObjectKey": "online_order",
+      "relationshipKey": "online_orders",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "store_id"
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "online_order",
+      "viewKey": "all",
+      "label": "All Online Orders",
+      "columns": [
+        "external_reference",
+        "external_order_id",
+        "platform",
+        "store_id",
+        "fulfilment_type",
+        "status",
+        "total",
+        "created_at"
+      ],
+      "sort": {
+        "field": "created_at",
+        "direction": "desc"
+      },
+      "pageSize": 50,
+      "isDefault": true
+    }
+  ],
+  "layouts": [
+    {
+      "objectKey": "online_order",
+      "layoutKey": "online_order_detail",
+      "pageType": "detail",
+      "name": "Online Order Details",
+      "isDefault": true,
+      "required": true,
+      "definition": {
+        "sections": [
+          {
+            "id": "order-details",
+            "label": "Order Details",
+            "order": 0,
+            "columns": 2,
+            "visible": true
+          }
+        ],
+        "components": [
+          {
+            "id": "field-external_reference",
+            "type": "field",
+            "field_key": "external_reference",
+            "section_id": "order-details",
+            "order": 0,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-external_order_id",
+            "type": "field",
+            "field_key": "external_order_id",
+            "section_id": "order-details",
+            "order": 1,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-platform",
+            "type": "field",
+            "field_key": "platform",
+            "section_id": "order-details",
+            "order": 2,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-store_id",
+            "type": "field",
+            "field_key": "store_id",
+            "section_id": "order-details",
+            "order": 3,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-customer_id",
+            "type": "field",
+            "field_key": "customer_id",
+            "section_id": "order-details",
+            "order": 4,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-customer_name",
+            "type": "field",
+            "field_key": "customer_name",
+            "section_id": "order-details",
+            "order": 5,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-fulfilment_type",
+            "type": "field",
+            "field_key": "fulfilment_type",
+            "section_id": "order-details",
+            "order": 6,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-status",
+            "type": "field",
+            "field_key": "status",
+            "section_id": "order-details",
+            "order": 7,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-subtotal",
+            "type": "field",
+            "field_key": "subtotal",
+            "section_id": "order-details",
+            "order": 8,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-tax",
+            "type": "field",
+            "field_key": "tax",
+            "section_id": "order-details",
+            "order": 9,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-total",
+            "type": "field",
+            "field_key": "total",
+            "section_id": "order-details",
+            "order": 10,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "field-created_at",
+            "type": "field",
+            "field_key": "created_at",
+            "section_id": "order-details",
+            "order": 11,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "related-order-lines",
+            "type": "related_list",
+            "relationship_key": "order_lines",
+            "label": "Order Lines",
+            "visible": true
+          }
+        ]
+      }
+    }
+  ],
+  "forms": [
+    {
+      "objectKey": "online_order",
+      "formKey": "online_order_create",
+      "pageType": "create",
+      "name": "Online Order Create",
+      "fields": [
+        "external_order_id",
+        "platform",
+        "store_id",
+        "customer_id",
+        "fulfilment_type",
+        "status"
+      ]
+    },
+    {
+      "objectKey": "online_order",
+      "formKey": "online_order_edit",
+      "pageType": "edit",
+      "name": "Online Order Edit",
+      "fields": [
+        "external_reference",
+        "external_order_id",
+        "platform",
+        "store_id",
+        "customer_id",
+        "fulfilment_type",
+        "status",
+        "notes"
+      ]
+    }
+  ],
+  "validationRules": [
+    {
+      "objectKey": "online_order_line",
+      "name": "online_order_line_quantity_positive",
+      "triggerKey": "before_create",
+      "conditions": [
+        {
+          "field": "quantity",
+          "operator": "less_than",
+          "value": 0.001
+        }
+      ],
+      "action": {
+        "message": "Order line quantity must be greater than zero."
+      },
+      "required": true
+    }
+  ],
+  "permissionDeclarations": [
+    {
+      "key": "online_order_read",
+      "permission": "online_orders.view",
+      "access": "read"
+    },
+    {
+      "key": "online_order_lifecycle",
+      "permission": "online_orders.manage",
+      "access": "execute"
+    }
+  ],
+  "workflows": [
+    {
+      "objectKey": "online_order",
+      "name": "Online Order Transition",
+      "apiName": "ONLINE_ORDER_TRANSITION",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "inputContract": [
+        {
+          "name": "orderId",
+          "label": "Order ID",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "toStatus",
+          "label": "Target Status",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "actions": [
+        {
+          "id": "update_online_order_status",
+          "label": "Update Online Order Status",
+          "apiName": "update_online_order_status",
+          "key": "UPDATE_RECORD",
+          "objectKey": "online_order",
+          "recordId": {
+            "path": "$record.id"
+          },
+          "fieldValues": {
+            "status": {
+              "path": "$record.toStatus"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "actionKey": "online_order.accept",
+      "objectKey": "online_order",
+      "label": "Accept Order",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "PREPARING"
+        }
+      }
+    },
+    {
+      "actionKey": "online_order.reject",
+      "objectKey": "online_order",
+      "label": "Reject Order",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "REJECTED"
+        }
+      }
+    },
+    {
+      "actionKey": "online_order.prepare",
+      "objectKey": "online_order",
+      "label": "Prepare Order",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "PREPARING"
+        }
+      }
+    },
+    {
+      "actionKey": "online_order.mark_ready",
+      "objectKey": "online_order",
+      "label": "Mark Ready",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "READY"
+        }
+      }
+    },
+    {
+      "actionKey": "online_order.mark_ready_for_pickup",
+      "objectKey": "online_order",
+      "label": "Mark Ready for Pickup",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "READY_FOR_PICKUP"
+        }
+      }
+    },
+    {
+      "actionKey": "online_order.mark_ready_for_delivery",
+      "objectKey": "online_order",
+      "label": "Mark Ready for Delivery",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "READY_FOR_DELIVERY"
+        }
+      }
+    },
+    {
+      "actionKey": "online_order.collect",
+      "objectKey": "online_order",
+      "label": "Collect Order",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "COLLECTED"
+        }
+      }
+    },
+    {
+      "actionKey": "online_order.complete",
+      "objectKey": "online_order",
+      "label": "Complete Order",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "COMPLETED"
+        }
+      }
+    },
+    {
+      "actionKey": "online_order.cancel",
+      "objectKey": "online_order",
+      "label": "Cancel Order",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "online_orders.manage",
+      "config": {
+        "subflowApiName": "ONLINE_ORDER_TRANSITION",
+        "inputMappings": {
+          "orderId": {
+            "path": "record.id"
+          },
+          "toStatus": "CANCELLED"
+        }
+      }
+    }
+  ],
+  "buttons": [
+    {
+      "buttonKey": "online_order_accept",
+      "objectKey": "online_order",
+      "label": "Accept Order",
+      "actionKey": "online_order.accept",
+      "requiredPermission": "online_orders.manage",
+      "variant": "primary",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "equals",
+        "value": "RECEIVED"
+      },
+      "config": {
+        "uiAction": "accept",
+        "busyLabel": "Accepting...",
+        "prepVisible": false,
+        "order": 10
+      }
+    },
+    {
+      "buttonKey": "online_order_reject",
+      "objectKey": "online_order",
+      "label": "Reject",
+      "actionKey": "online_order.reject",
+      "requiredPermission": "online_orders.manage",
+      "variant": "danger",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "equals",
+        "value": "RECEIVED"
+      },
+      "config": {
+        "uiAction": "reject",
+        "busyLabel": "Rejecting...",
+        "prepVisible": false,
+        "order": 20
+      }
+    },
+    {
+      "buttonKey": "online_order_ready",
+      "objectKey": "online_order",
+      "label": "Mark Ready",
+      "actionKey": "online_order.mark_ready",
+      "requiredPermission": "online_orders.manage",
+      "variant": "secondary",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "in",
+        "value": [
+          "ACCEPTED",
+          "PREPARING"
+        ]
+      },
+      "config": {
+        "uiAction": "ready",
+        "busyLabel": "Marking ready...",
+        "prepVisible": true,
+        "order": 30
+      }
+    },
+    {
+      "buttonKey": "online_order_complete",
+      "objectKey": "online_order",
+      "label": "Complete Order",
+      "actionKey": "online_order.complete",
+      "requiredPermission": "online_orders.manage",
+      "variant": "primary",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "equals",
+        "value": "READY"
+      },
+      "config": {
+        "uiAction": "complete",
+        "busyLabel": "Completing...",
+        "prepVisible": true,
+        "order": 40
+      }
+    },
+    {
+      "buttonKey": "online_order_cancel",
+      "objectKey": "online_order",
+      "label": "Cancel",
+      "actionKey": "online_order.cancel",
+      "requiredPermission": "online_orders.manage",
+      "variant": "danger",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "in",
+        "value": [
+          "RECEIVED",
+          "ACCEPTED",
+          "PREPARING",
+          "READY"
+        ]
+      },
+      "config": {
+        "uiAction": "cancel",
+        "busyLabel": "Cancelling...",
+        "prepVisible": true,
+        "order": 50
+      }
+    },
+    {
+      "buttonKey": "online_order_prepare",
+      "objectKey": "online_order",
+      "label": "Prepare",
+      "actionKey": "online_order.prepare",
+      "requiredPermission": "online_orders.manage",
+      "variant": "secondary",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "equals",
+        "value": "__generic_only__"
+      },
+      "config": {
+        "uiAction": "prepare",
+        "order": 60,
+        "hiddenFromProviderQueue": true
+      }
+    },
+    {
+      "buttonKey": "online_order_ready_pickup",
+      "objectKey": "online_order",
+      "label": "Ready for Pickup",
+      "actionKey": "online_order.mark_ready_for_pickup",
+      "requiredPermission": "online_orders.manage",
+      "variant": "secondary",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "equals",
+        "value": "__generic_only__"
+      },
+      "config": {
+        "uiAction": "ready_pickup",
+        "order": 70,
+        "hiddenFromProviderQueue": true
+      }
+    },
+    {
+      "buttonKey": "online_order_ready_delivery",
+      "objectKey": "online_order",
+      "label": "Ready for Delivery",
+      "actionKey": "online_order.mark_ready_for_delivery",
+      "requiredPermission": "online_orders.manage",
+      "variant": "secondary",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "equals",
+        "value": "__generic_only__"
+      },
+      "config": {
+        "uiAction": "ready_delivery",
+        "order": 80,
+        "hiddenFromProviderQueue": true
+      }
+    },
+    {
+      "buttonKey": "online_order_collect",
+      "objectKey": "online_order",
+      "label": "Collect",
+      "actionKey": "online_order.collect",
+      "requiredPermission": "online_orders.manage",
+      "variant": "secondary",
+      "visibilityRule": {
+        "path": "status",
+        "operator": "equals",
+        "value": "__generic_only__"
+      },
+      "config": {
+        "uiAction": "collect",
+        "order": 90,
+        "hiddenFromProviderQueue": true
+      }
+    }
+  ],
+  "events": [
+    {
+      "eventType": "online_order.created",
+      "description": "A canonical online order was created."
+    },
+    {
+      "eventType": "online_order.accepted",
+      "description": "A canonical online order was accepted."
+    },
+    {
+      "eventType": "online_order.status_changed",
+      "description": "A canonical online order status changed."
+    },
+    {
+      "eventType": "online_order.cancelled",
+      "description": "A canonical online order was cancelled."
+    },
+    {
+      "eventType": "online_order.completed",
+      "description": "A canonical online order was completed."
+    }
+  ],
+  "packageKey": "online_orders"
+}
