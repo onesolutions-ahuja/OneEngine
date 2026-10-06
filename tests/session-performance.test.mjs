@@ -346,8 +346,12 @@ test('login timing keeps permission and authorization phases separate', async ()
 })
 
 
-test('final loading verification waits for a compatible ready backend before live login', async () => {
+test('final loading verification waits for compatible Pages and backend deployments before live login', async () => {
   const source = await read('../.github/workflows/final-loading-verification.yml')
+  assert.equal(source.includes("workflow_run.conclusion == 'success'"), false)
+  assert.match(source, /ref:\s*\$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/)
+  assert.match(source, /Verify current Pages deployment/)
+  assert.match(source, /compare\/\$DEPLOY_SHA\.\.\.\$SHA/)
   assert.match(source, /Wait for compatible backend deployment readiness/)
   assert.match(source, /\/api\/health/)
   assert.match(source, /STATUS.*ready.*online/s)
@@ -391,10 +395,14 @@ test('Dashboard startup reads are launched together instead of separate mount wa
   assert.match(source, /loadSessionPermissions\(\)/)
 })
 
-test('Dashboard starts saved filter-state lookup before building the run request', async () => {
+test('Dashboard restores saved filter state before building the run request', async () => {
   const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /const statePromise = value\?\.id/)
-  assert.match(source, /const state = await statePromise/)
+  const stateLookup = source.indexOf('const state = value?.id ? await apiRequest(')
+  const endpointBuild = source.indexOf('const endpoint = value.id', stateLookup)
+  const runRequest = source.indexOf('const run = await apiRequest(endpoint', endpointBuild)
+  assert.ok(stateLookup >= 0, 'saved dashboard filter-state lookup must exist')
+  assert.ok(endpointBuild > stateLookup, 'saved filter state must resolve before the run endpoint is built')
+  assert.ok(runRequest > endpointBuild, 'dashboard run must execute after saved filter state is applied')
 })
 
 test('Settings loads values only for the active metadata section', async () => {
