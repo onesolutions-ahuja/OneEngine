@@ -1,19 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bell, CalendarDays, Pencil, RefreshCw, X } from 'lucide-react'
-import { apiRequest, getAvailableStores, loadSessionPermissions } from '../../services/api'
+import { Bell, Pencil, RefreshCw, X } from 'lucide-react'
+import { apiRequest, loadSessionPermissions } from '../../services/api'
 import DashboardGrid from '../../components/dashboard/DashboardGrid.jsx'
 import { setRoute } from '../../navigation/routes'
 
-const DATE_RANGES = [
-  ['all_time', 'All time'],
-  ['today', 'Today'],
-  ['yesterday', 'Yesterday'],
-  ['this_week', 'This week'],
-  ['last_7_days', 'Last 7 days'],
-  ['this_month', 'MTD'],
-  ['this_quarter', 'This quarter'],
-  ['fiscal_year', 'Fiscal year'],
-]
 
 function displayValue(value) {
   if (value == null || value === '') return '—'
@@ -180,7 +170,6 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [currency, setCurrency] = useState('GBP')
-  const [dateRange, setDateRange] = useState('this_month')
   const [globalFilterValues, setGlobalFilterValues] = useState({})
   const [permissionCodes, setPermissionCodes] = useState([])
   const [showSubscriptions, setShowSubscriptions] = useState(false)
@@ -197,11 +186,6 @@ export default function DashboardPage({ onOpenBuilder }) {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London',
     recipientPrincipals: [],
   }))
-  const [dashboardStores, setDashboardStores] = useState(() => getAvailableStores())
-  const [dashboardStoreId, setDashboardStoreId] = useState(() => {
-    const stores = getAvailableStores()
-    return stores.length === 1 ? String(stores[0].id) : ''
-  })
   const [viewportMode, setViewportMode] = useState(() => (
     typeof window === 'undefined' ? 'desktop' : window.innerWidth < 640 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop'
   ))
@@ -227,7 +211,7 @@ export default function DashboardPage({ onOpenBuilder }) {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const loadDashboard = useCallback(async (dashboardId = '', range = dateRange, filterValues = globalFilterValues) => {
+  const loadDashboard = useCallback(async (dashboardId = '', filterValues = globalFilterValues) => {
     try {
       setLoading(true)
       setError('')
@@ -235,15 +219,10 @@ export default function DashboardPage({ onOpenBuilder }) {
       if (dashboardId) {
         const saved = await apiRequest(`/api/dashboards/${encodeURIComponent(dashboardId)}`)
         if (saved?.success) value = {
-          id: saved.data.id,
-          name: saved.data.name,
-          description: saved.data.description,
-          components: saved.data.components || [],
-          filters: saved.data.filters || [],
-          global_filters: saved.data.global_filters || [],
-          responsive_layouts: saved.data.responsive_layouts || {},
-          run_as_mode: saved.data.run_as_mode || 'VIEWER',
-          run_as_user_id: saved.data.run_as_user_id || null,
+          id: saved.data.id, name: saved.data.name, description: saved.data.description,
+          components: saved.data.components || [], filters: saved.data.filters || [],
+          global_filters: saved.data.global_filters || [], responsive_layouts: saved.data.responsive_layouts || {},
+          run_as_mode: saved.data.run_as_mode || 'VIEWER', run_as_user_id: saved.data.run_as_user_id || null,
         }
       }
       if (!value) {
@@ -251,26 +230,14 @@ export default function DashboardPage({ onOpenBuilder }) {
         if (!fallback?.success) throw new Error(fallback?.message || 'Unable to load dashboard')
         value = fallback.data
       }
-
-      const statePromise = value?.id
-        ? apiRequest(`/api/dashboards/${encodeURIComponent(value.id)}/state`).catch(() => null)
-        : Promise.resolve(null)
-
+      const state = value?.id ? await apiRequest(`/api/dashboards/${encodeURIComponent(value.id)}/state`).catch(() => null) : null
       setDefinition(value)
-      const stores = dashboardStores.length ? dashboardStores : getAvailableStores()
-      const scopedStoreIds = dashboardStoreId ? [dashboardStoreId] : stores.map((store) => String(store.id)).filter(Boolean)
-      const state = await statePromise
       if (state?.success && Object.keys(filterValues || {}).length === 0) {
         filterValues = state.data?.filter_values || {}
         setGlobalFilterValues(filterValues)
       }
-      const filters = [
-        ...(value.filters || []).filter((filter) => filter?.field !== 'date' && filter?.field !== 'store'),
-        ...(range ? [{ field: 'date', operator: range }] : (value.filters || []).filter((filter) => filter?.field === 'date')),
-        ...(scopedStoreIds.length ? [{ field: 'store', operator: 'in', value: scopedStoreIds }] : []),
-      ]
       const endpoint = value.id ? `/api/dashboards/${encodeURIComponent(value.id)}/run` : '/api/dashboards/run'
-      const body = value.id ? { filters, globalFilterValues: filterValues } : { ...value, filters, globalFilterValues: filterValues }
+      const body = value.id ? { filters: value.filters || [], globalFilterValues: filterValues } : { ...value, globalFilterValues: filterValues }
       const run = await apiRequest(endpoint, { method: 'POST', body: JSON.stringify(body) })
       if (!run?.success) throw new Error(run?.message || 'Unable to run dashboard')
       setResults(run.data?.components || [])
@@ -279,34 +246,9 @@ export default function DashboardPage({ onOpenBuilder }) {
     } finally {
       setLoading(false)
     }
-  }, [dashboardStoreId, dashboardStores, dateRange, globalFilterValues])
+  }, [globalFilterValues])
 
-  useEffect(() => { void loadDashboard(activeId, dateRange, globalFilterValues) }, [activeId, dashboardStoreId])
-
-  useEffect(() => {
-    const handleStoreChange = () => {
-      const stores = getAvailableStores()
-      setDashboardStores(stores)
-      if (stores.length === 1) setDashboardStoreId(String(stores[0].id))
-      else if (dashboardStoreId && !stores.some((store) => String(store.id) === String(dashboardStoreId))) setDashboardStoreId('')
-    }
-    const handleDashboardStoreScopeChange = (event) => {
-      const stores = getAvailableStores()
-      setDashboardStores(stores)
-      const requested = String(event?.detail?.storeId || '')
-      if (stores.length <= 1) {
-        setDashboardStoreId(stores[0]?.id ? String(stores[0].id) : '')
-        return
-      }
-      setDashboardStoreId(requested && stores.some((store) => String(store.id) === requested) ? requested : '')
-    }
-    window.addEventListener('onepos:store-context-changed', handleStoreChange)
-    window.addEventListener('onepos:dashboard-store-scope-changed', handleDashboardStoreScopeChange)
-    return () => {
-      window.removeEventListener('onepos:store-context-changed', handleStoreChange)
-      window.removeEventListener('onepos:dashboard-store-scope-changed', handleDashboardStoreScopeChange)
-    }
-  }, [dashboardStoreId])
+  useEffect(() => { void loadDashboard(activeId, globalFilterValues) }, [activeId])
 
   useEffect(() => {
     const navigate = (app, options = {}) => {
@@ -363,7 +305,7 @@ export default function DashboardPage({ onOpenBuilder }) {
         body: JSON.stringify({ filterValues: next }),
       }).catch(() => null)
     }
-    await loadDashboard(activeId, dateRange, next)
+    await loadDashboard(activeId, next)
   }
 
   const canSubscribe = permissionCodes.includes('dashboard.subscribe')
@@ -427,7 +369,7 @@ export default function DashboardPage({ onOpenBuilder }) {
     ...(subscriptionPrincipals?.groups || []).map((item) => ({ value:`PUBLIC_GROUP:${item.id}`, label:`Group · ${item.name}` })),
   ]
 
-  if (error && !definition) return <section className="dashboard-page"><div className="dashboard-error"><strong>Unable to load dashboard</strong><span>{error}</span><button onClick={() => loadDashboard(activeId, dateRange, globalFilterValues)}>Retry</button></div></section>
+  if (error && !definition) return <section className="dashboard-page"><div className="dashboard-error"><strong>Unable to load dashboard</strong><span>{error}</span><button onClick={() => loadDashboard(activeId, globalFilterValues)}>Retry</button></div></section>
 
   return <section className="dashboard-page">
     <header className="dashboard-header">
@@ -437,7 +379,6 @@ export default function DashboardPage({ onOpenBuilder }) {
           <option value="">Default dashboard</option>
           {available.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        <label><CalendarDays size={14}/><select value={dateRange} aria-label="Dashboard date range" onChange={(event) => { const next=event.target.value; setDateRange(next); void loadDashboard(activeId,next,globalFilterValues) }}>{DATE_RANGES.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         <button type="button" onClick={() => loadDashboard(activeId,dateRange,globalFilterValues)}><RefreshCw size={14}/></button>
         {canSubscribe && definition?.id ? <button type="button" onClick={openSubscriptions}><Bell size={14}/> Subscribe</button> : null}
         {onOpenBuilder ? <button type="button" onClick={onOpenBuilder}><Pencil size={14}/> Edit</button> : null}
