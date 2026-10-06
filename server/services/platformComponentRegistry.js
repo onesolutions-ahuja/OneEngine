@@ -3,7 +3,22 @@
  * Forms, record pages and custom pages must use these keys rather than
  * inventing page-specific control vocabularies.
  */
-export const PLATFORM_COMPONENTS = Object.freeze([
+const COMPONENT_ID_WIDTH = 14;
+
+// Stable numeric identity for registry definitions. IDs are derived from the
+// registry key so adding/reordering components never changes an existing ID.
+export function componentRegistryId(key) {
+  const input = String(key || "").trim();
+  let hash = 2166136261n;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= BigInt(input.charCodeAt(i));
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  const modulus = 10n ** BigInt(COMPONENT_ID_WIDTH);
+  return (hash % modulus).toString().padStart(COMPONENT_ID_WIDTH, "0");
+}
+
+const RAW_PLATFORM_COMPONENTS = Object.freeze([
   { key: "section", label: "Section", category: "layout", kind: "layout", bindable: false, supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, supportsRecordContext: false, supportsChildren: true, rendererKey: "section" },
   { key: "folder_card", label: "Folder Card", category: "modern", kind: "card", bindable: false, dashboard: true, supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, supportsRecordContext: false, supportsChildren: false, rendererKey: "folder_card", configurable: ["title", "subtitle", "icon", "image", "metric", "backgroundStyle", "accentStyle", "clickAction", "linkedPage", "visibility"] },
   { key: "avatar_group", label: "Avatar Group", category: "modern", kind: "avatar", bindable: false, dashboard: true, supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, supportsRecordContext: false, supportsChildren: false, rendererKey: "avatar_group", configurable: ["dataSource", "objectKey", "imageField", "initialsField", "maxVisible", "overflowCount", "size", "spacing", "clickAction", "filter", "visibility"] },
@@ -119,8 +134,16 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   { key: "dashboard_image", label: "Dashboard Image", category: "dashboard", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["DASHBOARD"], supportedContexts: ["dashboard"], supportsPageContext: false, supportsDashboardContext: true, runtimeKind: "analytics", rendererKey: "image", defaults: { title: "Image", config: { imageUrl: "", altText: "", imageFit: "contain", linkUrl: "" }, layout: { w: 6, h: 4 } }, configurable: ["imageUrl","altText","imageFit","linkUrl"] },
   // Reserved canonical trigger component. Behaviour/variants are configured in UI Batch 2.
   { key: "button", label: "Custom Button", category: "action", kind: "action", bindable: false, reserved: true },
+  { key: "product_image_card", label: "Product Image Card", category: "record", kind: "card", bindable: true, recordBound: true, supportedBuilders: ["PAGE"], supportedContexts: ["page", "record"], supportsPageContext: true, supportsRecordContext: true, rendererKey: "product_image_card", configurable: ["objectKey", "imageField", "titleField", "subtitleFields", "priceField", "badgeField", "statusField", "clickAction", "imageFit", "visibility"] },
+  { key: "search_box", label: "Search Box", category: "input", kind: "input", bindable: false, supportedBuilders: ["PAGE"], supportedContexts: ["page"], supportsPageContext: true, rendererKey: "search_box", configurable: ["placeholder", "valueBinding", "searchFields", "debounceMs", "clearable", "visibility"] },
+  { key: "searchable_dropdown", label: "Searchable Dropdown", category: "input", kind: "input", bindable: true, supportedBuilders: ["PAGE"], supportedContexts: ["page", "record"], supportsPageContext: true, supportsRecordContext: true, rendererKey: "searchable_dropdown", configurable: ["objectKey", "valueField", "labelField", "secondaryField", "filters", "sort", "placeholder", "allowClear", "visibility"] },
   { key: "jarves", label: "JARVES", category: "action", kind: "assistant", bindable: false, registered: true, behaviours: ["behaviour_1", "behaviour_2", "behaviour_3"], interactions: ["voice", "message", "ask_input"] },
 ]);
+
+export const PLATFORM_COMPONENTS = Object.freeze(RAW_PLATFORM_COMPONENTS.map((component) => Object.freeze({
+  ...component,
+  id: componentRegistryId(component.key),
+})));
 
 const COMPONENT_MAP = new Map(PLATFORM_COMPONENTS.map((component) => [component.key, component]));
 
