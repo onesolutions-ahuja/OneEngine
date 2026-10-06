@@ -88,6 +88,18 @@ export default function OneKioskPage({ publicMode = false }) {
     postcode: "",
   });
 
+  const resolveRuntimeButton = async ({ placement = "", recordContext = "" } = {}) => {
+    const objectKey = String(experienceUi?.checkoutObjectKey || experienceUi?.checkout_object_key || "sale");
+    const response = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(objectKey)}/buttons`);
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    const button = rows.find((item) => {
+      if (placement && String(item?.placement || "") !== placement) return false;
+      if (recordContext && String(item?.config?.recordContext || item?.config?.record_context || "") !== recordContext) return false;
+      return item?.active !== false;
+    }) || null;
+    return { objectKey, button };
+  };
+
   useEffect(() => {
     if (demoMode) {
       let live = true;
@@ -906,7 +918,9 @@ export default function OneKioskPage({ publicMode = false }) {
         idempotencyKey: clientRequestId,
         status: "COMPLETED",
       }];
-      const saleResponse = await apiRequest("/api/platform/runtime/objects/sale/buttons/till_complete_sale/execute", {
+      const { objectKey: checkoutObjectKey, button: checkoutButton } = await resolveRuntimeButton({ placement: "till_checkout" });
+      if (!checkoutButton?.button_key) throw new Error("Checkout action is not configured");
+      const saleResponse = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(checkoutObjectKey)}/buttons/${encodeURIComponent(checkoutButton.button_key)}/execute`, {
         method: "POST",
         body: JSON.stringify({
           context: { source: "KIOSK", kioskDeviceKey: kioskDeviceKey() },
@@ -1053,7 +1067,9 @@ export default function OneKioskPage({ publicMode = false }) {
     const saleId = confirmation?.saleId || confirmation?.order?.platform_data?.saleId || confirmation?.order?.platform_data?.sale_id;
     if (!saleId) return setError("Receipt QR is not available for this order.");
     try {
-      const response = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}/buttons/till_receipt_qr/execute`, {
+      const { objectKey, button } = await resolveRuntimeButton({ placement: "till_action_bar", recordContext: "last_sale" });
+      if (!button?.button_key) throw new Error("Receipt action is not configured");
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey)}/records/${encodeURIComponent(saleId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
         method: "POST",
         body: JSON.stringify({ inputs: { expiryMinutes: Number(confirmationScreen.qrExpiryMinutes || 5), baseUrl: window.location.origin } }),
       });
