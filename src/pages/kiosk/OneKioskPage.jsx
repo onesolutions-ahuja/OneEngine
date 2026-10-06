@@ -387,7 +387,7 @@ export default function OneKioskPage({ publicMode = false }) {
       window.removeEventListener("online", onlineListener);
       window.removeEventListener("offline", onlineListener);
     };
-  }, [demoMode]);
+  }, [demoMode, kioskSurface, publicMode]);
 
   const screenSequence = useMemo(
     () => Array.isArray(experienceUi?.screens) ? experienceUi.screens.filter((screen) => screen?.key && screen?.type) : [],
