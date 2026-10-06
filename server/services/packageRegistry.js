@@ -4,6 +4,12 @@ import { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, re
 export { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 import { packageManifestCatalog } from "../packages/packageManifestCatalog.js";
 
+const metadataManifestCache = new Map();
+function manifestForPackage(packageKey) {
+  if (!packageKey) return null;
+  return metadataManifestCache.get(packageKey) || null;
+}
+
 export function packageDefinition(entry) {
   const iconAssetKeys = {
     uber_eats: "uber-eats",
@@ -210,6 +216,7 @@ export function packageDefinition(entry) {
     }
   }
 
+  const extractedManifest = manifestForPackage(entry.key || entry.packageKey);
   return {
     packageKey: entry.packageKey || entry.key,
     name: packageNames[entry.key] || entry.name,
@@ -218,6 +225,7 @@ export function packageDefinition(entry) {
     dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : (dependencies[entry.key] || []),
     moduleKey: entry.key,
     manifest: {
+        ...(extractedManifest || {}),
       packageKey: entry.packageKey || entry.key,
       name: packageNames[entry.key] || entry.name,
       version: entry.version || "1.0.0",
