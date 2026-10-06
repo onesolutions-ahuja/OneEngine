@@ -7,6 +7,9 @@ import DividerV1 from "./divider/DividerV1.jsx";
 import SpacerV1 from "./spacer/SpacerV1.jsx";
 import RelatedListV1 from "./related-list/RelatedListV1.jsx";
 import FieldValueV1 from "./field-value/FieldValueV1.jsx";
+import MultiContainerV1 from "./multi-container/MultiContainerV1.jsx";
+import TreeViewV1 from "./tree-view/TreeViewV1.jsx";
+import ProcessPathV1 from "./process-path/ProcessPathV1.jsx";
 
 
 /**
@@ -23,6 +26,9 @@ export const COMPONENT_IMPLEMENTATIONS = Object.freeze({
   "spacer.v1": SpacerV1,
   "related_list.v1": RelatedListV1,
   "field_value.v1": FieldValueV1,
+  "multi_container.v1": MultiContainerV1,
+  "tree_view.v1": TreeViewV1,
+  "process_path.v1": ProcessPathV1,
 });
 
 export const LEGACY_COMPONENT_API_ALIASES = Object.freeze({
@@ -35,6 +41,9 @@ export const LEGACY_COMPONENT_API_ALIASES = Object.freeze({
   spacer: "spacer.v1",
   related_list: "related_list.v1",
   field_value: "field_value.v1",
+  multi_container: "multi_container.v1",
+  tree_view: "tree_view.v1",
+  process_path: "process_path.v1",
 });
 
 export function canonicalComponentApi(value) {
