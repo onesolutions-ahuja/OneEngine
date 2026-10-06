@@ -145,7 +145,7 @@ const PACKAGE_CATALOG = [
     visibility: "HIDDEN",
     systemOnly: true,
     installable: true,
-    dependencies: ["supplier_core"],
+    dependencies: ["supplier_core", "purchasing_core"],
     bootstrapFoundation: true,
     capabilities: ["supplier_accounting", "financial_ledger"],
   },
