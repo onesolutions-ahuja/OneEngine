@@ -6621,7 +6621,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
         });
       }
 
-      if (result?.status === "stopped" || result?.status === "waiting" || branchPaused) break;
+      if (result?.haltWorkflow === true || result?.status === "stopped" || result?.status === "waiting" || branchPaused) break;
       if (context.branchExecution !== true && item.nextStepId) {
         const targetIndex = actions.findIndex((candidate) => String(candidate?.id || "") === String(item.nextStepId));
         if (targetIndex > actionIndex) actionIndex = targetIndex - 1;
