@@ -28,7 +28,8 @@ export function createDashboardExecution({ db, canViewCompanyCustomers, canAcces
         );
         if (!accessResult.rows.length) throw new Error("Saved report unavailable");
       }
-      return mergeDashboardFilters(normalizeAdvancedReportDefinition(savedReport.definition), dashboardFilters);
+      const runtimeFilters = Array.isArray(config.runtimeFilters) ? config.runtimeFilters : [];
+      return mergeDashboardFilters(normalizeAdvancedReportDefinition(savedReport.definition), [...dashboardFilters, ...runtimeFilters]);
     }
 
     if (reportId) throw new Error(`Unknown dashboard report reference: ${reportId}`);
