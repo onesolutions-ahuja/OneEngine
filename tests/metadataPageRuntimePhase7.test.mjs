@@ -8,8 +8,8 @@ test("phase 7 app routes enter one metadata page runtime boundary",()=>{
  assert.match(app,/MetadataPageRuntime/);
  assert.equal(app.includes("<WorkspacePage"),false);
  assert.equal(app.includes("<CustomPageRuntimePage"),false);
- assert.equal(app.includes("import('./platform\/workspace\/WorkspacePage')"),false);
- assert.equal(app.includes("import('./platform\/pages\/CustomPageRuntimePage')"),false);
+ assert.equal(app.includes("import('./platform/workspace/WorkspacePage')"),false);
+ assert.equal(app.includes("import('./platform/pages/CustomPageRuntimePage')"),false);
 });
 test("phase 7 runtime selects only generic metadata renderers by stable identity",()=>{
  assert.match(runtime,/if \(pageKey\)/);
