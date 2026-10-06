@@ -3810,7 +3810,7 @@ async function initializeLegacyDatabase(pool) {
      * Online platform (Uber / Deliveroo) settings are stored here, one row
      * per company + provider. Secrets inside the "configuration" JSONB are
      * encrypted by the application (AES-256-GCM, see
-     * services/onlineOrders/platformConfig.js).
+     * services/secretCrypto.js).
      */
     ALTER TABLE integrations
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
