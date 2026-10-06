@@ -4,167 +4,537 @@
   "name": "Staff Core",
   "version": "1.1.0",
   "description": "Reusable employee and attendance metadata over existing user identities.",
-  "workflows": [
+  "dependencies": [],
+  "billable": false,
+  "licenceRequired": false,
+  "visibility": "HIDDEN",
+  "installable": true,
+  "systemOnly": true,
+  "technical": true,
+  "upgrade": {
+    "strategy": "idempotent_metadata_upsert",
+    "adoptsExistingData": true,
+    "preservesRecordIds": true,
+    "migrations": [
+      "staff_core_object_metadata_v1"
+    ]
+  },
+  "objects": [
+    {
+      "objectKey": "employee",
+      "label": "Staff Member",
+      "pluralLabel": "Staff",
+      "description": "Business-facing staff metadata on the existing authentication user record.",
+      "sourceTable": "users",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Users",
+        "settingsLabel": "Users",
+        "settingsOrder": 200,
+        "settingsAllowCreate": false,
+        "settingsAllowDelete": false
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "full_name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "full_name",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "username",
+          "label": "User",
+          "fieldType": "text",
+          "sourceColumn": "username",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "email",
+          "label": "Email",
+          "fieldType": "email",
+          "sourceColumn": "email",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Status",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "role_id",
+          "label": "Role",
+          "fieldType": "lookup",
+          "sourceColumn": "role_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "role"
+          }
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
     {
       "objectKey": "attendance",
-      "name": "Attendance · Clock In",
-      "triggerKey": "manual",
-      "action": {
-        "type": "workflow",
-        "systemGenerated": true,
-        "systemKey": "flow:attendance.clock_in",
-        "scope": "package",
-        "capabilityType": "workflow",
-        "capabilityKey": "attendance.clock_in",
-        "apiName": "ATTENDANCE_CLOCK_IN",
-        "flowType": "AUTOLAUNCHED",
-        "inputContract": [
+      "label": "Attendance",
+      "pluralLabel": "Attendance Records",
+      "description": "Existing server-timestamped staff attendance sessions.",
+      "sourceTable": "attendance_records",
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "storeScoped": true,
+      "fields": [
+        {
+          "apiName": "user_id",
+          "label": "Staff User",
+          "fieldType": "lookup",
+          "sourceColumn": "user_id",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "status",
+          "label": "Status",
+          "fieldType": "picklist",
+          "sourceColumn": "status",
+          "required": true,
+          "writable": true,
+          "options": [
+            "open",
+            "closed"
+          ]
+        },
+        {
+          "apiName": "clock_in",
+          "label": "Clock In",
+          "fieldType": "datetime",
+          "sourceColumn": "clock_in",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "clock_out",
+          "label": "Clock Out",
+          "fieldType": "datetime",
+          "sourceColumn": "clock_out",
+          "writable": true
+        },
+        {
+          "apiName": "worked_minutes",
+          "label": "Worked Minutes",
+          "fieldType": "number",
+          "sourceColumn": "worked_minutes",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "employee",
+      "childObjectKey": "attendance",
+      "relationshipKey": "attendance_records",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "user_id",
+      "required": true
+    },
+    {
+      "parentObjectKey": "store",
+      "childObjectKey": "employee",
+      "relationshipKey": "staff",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "store_id"
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "employee",
+      "viewKey": "all_staff",
+      "label": "All Staff",
+      "description": "Existing business-facing user and employee records.",
+      "columns": [
+        "full_name",
+        "active",
+        "username",
+        "email",
+        "store_id"
+      ],
+      "sort": {
+        "field": "full_name",
+        "direction": "asc"
+      },
+      "isDefault": true
+    }
+  ],
+  "layouts": [
+    {
+      "objectKey": "employee",
+      "pageType": "detail",
+      "layoutKey": "staff_record_detail",
+      "name": "Staff Record",
+      "metadataScope": "global",
+      "definition": {
+        "sections": [
           {
-            "name": "userId",
-            "label": "userId",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "storeId",
-            "label": "storeId",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "now",
-            "label": "now",
-            "type": "text",
-            "required": true
+            "id": "staff-details",
+            "label": "Staff Details",
+            "order": 0,
+            "columns": 2,
+            "visible": true
           }
         ],
-        "outputContract": [
+        "components": [
           {
-            "name": "recordId",
-            "label": "recordId",
-            "type": "text",
-            "source": "variables.recordId"
+            "id": "staff-header",
+            "type": "header",
+            "label": "Staff Record",
+            "section_id": "staff-details",
+            "order": 0,
+            "width": "full",
+            "visible": true
           },
           {
-            "name": "alreadyOpen",
-            "label": "alreadyOpen",
-            "type": "boolean",
-            "source": "variables.alreadyOpen"
-          }
-        ],
-        "actions": [
-          {
-            "id": "find_open",
-            "label": "Find Open Attendance",
-            "key": "GET_RECORDS",
-            "objectKey": "attendance",
-            "filters": [
-              {
-                "field": "user_id",
-                "operator": "equals",
-                "value": {
-                  "path": "$record.userId"
-                }
-              },
-              {
-                "field": "status",
-                "operator": "equals",
-                "value": "open"
-              }
-            ],
-            "limit": 1,
-            "store": "first"
+            "id": "staff-full-name",
+            "type": "field",
+            "field_key": "full_name",
+            "section_id": "staff-details",
+            "order": 1,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
           },
           {
-            "id": "open_exists",
-            "label": "Open Attendance Exists?",
-            "key": "CONDITION",
-            "outcomes": [
-              {
-                "id": "yes",
-                "label": "Already Open",
-                "condition": {
-                  "match": "all",
-                  "conditions": [
-                    {
-                      "field": "steps.find_open.record.id",
-                      "operator": "is_not_blank"
-                    }
-                  ]
-                },
-                "branch": [
-                  "set_existing_id",
-                  "set_already_open"
-                ]
-              }
-            ],
-            "defaultLabel": "Create Attendance",
-            "defaultBranch": [
-              "create_attendance",
-              "set_created_id",
-              "set_not_already_open"
-            ]
+            "id": "staff-active",
+            "type": "field",
+            "field_key": "active",
+            "section_id": "staff-details",
+            "order": 2,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
           },
           {
-            "id": "create_attendance",
-            "label": "Create Attendance",
-            "key": "CREATE_RECORD",
-            "objectKey": "attendance",
-            "fieldValues": {
-              "user_id": {
-                "path": "$record.userId"
-              },
-              "store_id": {
-                "path": "$record.storeId"
-              },
-              "status": "open",
-              "clock_in": {
-                "path": "$record.now"
-              }
-            }
+            "id": "staff-username",
+            "type": "field",
+            "field_key": "username",
+            "section_id": "staff-details",
+            "order": 3,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
           },
           {
-            "id": "set_existing_id",
-            "label": "Return Existing Record",
-            "key": "ASSIGNMENT",
-            "variableName": "recordId",
-            "variableType": "text",
-            "operator": "set",
-            "value": {
-              "path": "steps.find_open.record.id"
-            }
+            "id": "staff-email",
+            "type": "field",
+            "field_key": "email",
+            "section_id": "staff-details",
+            "order": 4,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
           },
           {
-            "id": "set_created_id",
-            "label": "Return Created Record",
-            "key": "ASSIGNMENT",
-            "variableName": "recordId",
-            "variableType": "text",
-            "operator": "set",
-            "value": {
-              "path": "steps.create_attendance.record.id"
-            }
+            "id": "staff-store",
+            "type": "field",
+            "field_key": "store_id",
+            "section_id": "staff-details",
+            "order": 5,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
           },
           {
-            "id": "set_already_open",
-            "label": "Already Open",
-            "key": "ASSIGNMENT",
-            "variableName": "alreadyOpen",
-            "variableType": "boolean",
-            "operator": "set",
-            "value": true
+            "id": "staff-created",
+            "type": "field",
+            "field_key": "created_at",
+            "section_id": "staff-details",
+            "order": 6,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
           },
           {
-            "id": "set_not_already_open",
-            "label": "New Attendance",
-            "key": "ASSIGNMENT",
-            "variableName": "alreadyOpen",
-            "variableType": "boolean",
-            "operator": "set",
-            "value": false
+            "id": "staff-attendance",
+            "type": "related_list",
+            "relationship_key": "attendance_records",
+            "label": "Attendance",
+            "section_id": "staff-details",
+            "order": 7,
+            "width": "full",
+            "visible": true
           }
         ]
       }
+    },
+    {
+      "objectKey": "employee",
+      "pageType": "view",
+      "layoutKey": "staff_record_view",
+      "name": "Staff Record View",
+      "metadataScope": "global",
+      "definition": {
+        "sections": [
+          {
+            "id": "staff-view",
+            "label": "Staff Details",
+            "order": 0,
+            "columns": 2,
+            "visible": true
+          }
+        ],
+        "components": [
+          {
+            "id": "staff-view-header",
+            "type": "header",
+            "label": "Staff Record",
+            "section_id": "staff-view",
+            "order": 0,
+            "width": "full",
+            "visible": true
+          },
+          {
+            "id": "staff-view-name",
+            "type": "field",
+            "field_key": "full_name",
+            "section_id": "staff-view",
+            "order": 1,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-status",
+            "type": "field",
+            "field_key": "active",
+            "section_id": "staff-view",
+            "order": 2,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-user",
+            "type": "field",
+            "field_key": "username",
+            "section_id": "staff-view",
+            "order": 3,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-email",
+            "type": "field",
+            "field_key": "email",
+            "section_id": "staff-view",
+            "order": 4,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-store",
+            "type": "field",
+            "field_key": "store_id",
+            "section_id": "staff-view",
+            "order": 5,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-attendance",
+            "type": "related_list",
+            "relationship_key": "attendance_records",
+            "label": "Attendance",
+            "section_id": "staff-view",
+            "order": 6,
+            "width": "full",
+            "visible": true
+          }
+        ]
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "objectKey": "employee",
+      "name": "Staff - Send Invitation",
+      "apiName": "STAFF_SEND_INVITATION",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "actions": [
+        {
+          "id": "get_invite_settings",
+          "label": "Get User Lifecycle Settings",
+          "apiName": "get_invite_settings",
+          "key": "GET_RECORDS",
+          "objectKey": "system_settings",
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "invite_enabled",
+          "label": "Email Registration Enabled",
+          "apiName": "invite_enabled",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Enabled",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_invite_settings.record.email_registration_enabled",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "invite_email_present"
+              ]
+            }
+          ],
+          "defaultLabel": "Disabled",
+          "defaultBranch": [
+            "invite_disabled_error"
+          ]
+        },
+        {
+          "id": "invite_disabled_error",
+          "label": "Email Registration Disabled",
+          "apiName": "invite_disabled_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Email registration is disabled in Settings",
+          "errorLocation": "record"
+        },
+        {
+          "id": "invite_email_present",
+          "label": "User Has Email",
+          "apiName": "invite_email_present",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Email Present",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "$record.email",
+                    "operator": "is_not_empty"
+                  }
+                ]
+              },
+              "branch": [
+                "issue_invite_token",
+                "send_invite_email"
+              ]
+            }
+          ],
+          "defaultLabel": "Missing Email",
+          "defaultBranch": [
+            "invite_email_error"
+          ]
+        },
+        {
+          "id": "invite_email_error",
+          "label": "Missing Email",
+          "apiName": "invite_email_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "User has no email address",
+          "errorLocation": "record"
+        },
+        {
+          "id": "issue_invite_token",
+          "label": "Issue Registration Token",
+          "apiName": "issue_invite_token",
+          "key": "ONE_API_REQUEST",
+          "method": "POST",
+          "path": "/api/platform/runtime/security/tokens",
+          "requireSuccess": true,
+          "body": {
+            "subjectType": "USER",
+            "subjectId": {
+              "path": "$record.id"
+            },
+            "purpose": "REGISTRATION",
+            "expiresMinutes": {
+              "path": "steps.get_invite_settings.record.registration_link_expiry_minutes"
+            }
+          }
+        },
+        {
+          "id": "send_invite_email",
+          "label": "Send Invitation Email",
+          "apiName": "send_invite_email",
+          "key": "SEND_COMMUNICATION",
+          "channel": "EMAIL",
+          "recipient": {
+            "path": "$record.email"
+          },
+          "templateKey": "USER_INVITATION",
+          "templateContext": {
+            "token": {
+              "path": "steps.issue_invite_token.data.token"
+            },
+            "userId": {
+              "path": "$record.id"
+            },
+            "expiresMinutes": {
+              "path": "steps.issue_invite_token.data.expiresMinutes"
+            }
+          }
+        }
+      ]
     },
     {
       "objectKey": "attendance",
@@ -326,5 +696,118 @@
         ]
       }
     }
+  ],
+  "actions": [
+    {
+      "actionKey": "employee.send_invitation",
+      "objectKey": "employee",
+      "label": "Send Invitation",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "user.manage",
+      "config": {
+        "subflowApiName": "STAFF_SEND_INVITATION"
+      }
+    }
+  ],
+  "buttons": [
+    {
+      "objectKey": "employee",
+      "buttonKey": "send_invitation",
+      "label": "Send Invitation",
+      "targetType": "action",
+      "targetKey": "employee.send_invitation",
+      "actionKey": "employee.send_invitation",
+      "placement": "record",
+      "variant": "secondary",
+      "requiredPermission": "user.manage",
+      "config": {
+        "icon": "mail-plus"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "name": "Staff name is required",
+      "objectKey": "employee",
+      "triggerKey": "before_save",
+      "active": true,
+      "required": true,
+      "conditions": [
+        {
+          "field": "full_name",
+          "operator": "is_empty"
+        }
+      ],
+      "action": {
+        "type": "validation",
+        "match": "all",
+        "message": "Enter a staff name."
+      }
+    }
+  ],
+  "permissionDeclarations": [
+    {
+      "key": "staff_records",
+      "objectKey": "employee",
+      "permission": "user.view",
+      "access": "read"
+    },
+    {
+      "key": "staff_manage",
+      "objectKey": "employee",
+      "permission": "user.edit",
+      "access": "manage"
+    },
+    {
+      "key": "attendance_records",
+      "objectKey": "attendance",
+      "permission": "attendance.view",
+      "access": "read"
+    },
+    {
+      "key": "attendance_actions",
+      "objectKey": "attendance",
+      "permission": "attendance.use",
+      "access": "execute"
+    }
+  ],
+  "permissions": [
+    "user.view",
+    "user.create",
+    "user.edit",
+    "attendance.view",
+    "attendance.use"
+  ],
+  "capabilities": [
+    "staff_core",
+    "employee_metadata",
+    "attendance_metadata"
+  ],
+  "ownership": {
+    "metadataTypes": [
+      "object",
+      "field",
+      "relationship",
+      "layout",
+      "list_view",
+      "validation",
+      "workflow",
+      "action"
+    ],
+    "excludes": [
+      "authentication_user_metadata",
+      "roles",
+      "permissions",
+      "user_records",
+      "attendance_record_data"
+    ]
+  },
+  "upgradeMetadata": {
+    "strategy": "additive",
+    "preserveExistingUserIds": true,
+    "preserveAttendanceRecords": true
+  },
+  "migrations": [
+    "staff_core_object_metadata_v1"
   ]
 }
