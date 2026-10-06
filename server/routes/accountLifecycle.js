@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { consumeAccountToken, hashAccountToken, issueAccountOtp, issueAccountToken, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
+import { selectMetadataRecords, updateMetadataRecords } from "../services/metadataRecordStore.js";
 
 export default function createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit = null }) {
   const router = express.Router();
@@ -39,23 +40,41 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
   });
 
   router.get("/settings/account-policy", authenticate, authorize("settings.manage"), async(req,res)=>{
-    const r=await db(`SELECT c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.password_reset_email_enabled,
-      cs.registration_link_expiry_minutes,cs.password_reset_expiry_minutes FROM companies c JOIN company_settings cs ON cs.company_id=c.id WHERE c.id=$1`,[req.user.companyId]);
-    res.json({success:true,data:r.rows[0]||{}});
+    const [company, settings] = await Promise.all([
+      db("SELECT user_email_domain FROM companies WHERE id=$1", [req.user.companyId]),
+      selectMetadataRecords(db, {
+        objectKey: "system_settings",
+        companyId: req.user.companyId,
+        columns: ["domain_users_only","email_registration_enabled","password_reset_email_enabled","registration_link_expiry_minutes","password_reset_expiry_minutes"],
+        limit: 1,
+      }),
+    ]);
+    res.json({success:true,data:{user_email_domain: company.rows[0]?.user_email_domain || null, ...(settings[0] || {})}});
   });
   router.put("/settings/account-policy", authenticate, authorize("settings.manage"), async(req,res)=>{
     const b=req.body||{}; const domain=String(b.userEmailDomain||"").trim().toLowerCase().replace(/^@/,"")||null;
     await db("UPDATE companies SET user_email_domain=$1,updated_at=NOW() WHERE id=$2",[domain,req.user.companyId]);
-    await db(`UPDATE company_settings SET domain_users_only=$1,email_registration_enabled=$2,password_reset_email_enabled=$3,
-      registration_link_expiry_minutes=$4,password_reset_expiry_minutes=$5,updated_by=$6,updated_at=NOW() WHERE company_id=$7`,
-      [b.domainUsersOnly===true,b.emailRegistrationEnabled===true,b.passwordResetEmailEnabled!==false,Math.max(5,Number(b.registrationLinkExpiryMinutes)||1440),Math.max(5,Number(b.passwordResetExpiryMinutes)||60),req.user.id,req.user.companyId]);
+    await updateMetadataRecords(db, {
+      objectKey: "system_settings",
+      companyId: req.user.companyId,
+      values: {
+        domain_users_only: b.domainUsersOnly===true,
+        email_registration_enabled: b.emailRegistrationEnabled===true,
+        password_reset_email_enabled: b.passwordResetEmailEnabled!==false,
+        registration_link_expiry_minutes: Math.max(5,Number(b.registrationLinkExpiryMinutes)||1440),
+        password_reset_expiry_minutes: Math.max(5,Number(b.passwordResetExpiryMinutes)||60),
+      },
+    });
     res.json({success:true});
   });
 
   router.post("/account/invite/:userId", authenticate, authorize("admin.users"), async(req,res)=>{
-    const r=await db(`SELECT u.id,u.email,u.company_id,c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.registration_link_expiry_minutes
-      FROM users u JOIN companies c ON c.id=u.company_id JOIN company_settings cs ON cs.company_id=c.id WHERE u.id=$1 AND u.company_id=$2`,[req.params.userId,req.user.companyId]);
+    const r=await db(`SELECT u.id,u.email,u.company_id,c.user_email_domain
+      FROM users u JOIN companies c ON c.id=u.company_id WHERE u.id=$1 AND u.company_id=$2`,[req.params.userId,req.user.companyId]);
     const u=r.rows[0]; if(!u)return res.status(404).json({success:false,message:"User not found"});
+    const accountSettings=(await selectMetadataRecords(db,{objectKey:"system_settings",companyId:u.company_id,
+      columns:["domain_users_only","email_registration_enabled","registration_link_expiry_minutes"],limit:1}))[0]||{};
+    Object.assign(u,accountSettings);
     if(!u.email_registration_enabled)return res.status(409).json({success:false,message:"Email registration is disabled"});
     if(!domainAllowed(u.email,u.user_email_domain,u.domain_users_only))return res.status(400).json({success:false,message:"User email is outside the allowed company domain"});
     // Token issuance is a generic identity/security mechanic. Business orchestration
@@ -74,11 +93,13 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     const email=normalizeEmail(req.body?.email);
     const generic={success:true,message:"If the account is eligible, a 6-digit reset code will be sent by email."};
     if(!email)return res.json(generic);
-    const r=await db(`SELECT u.id,u.company_id,cs.password_reset_email_enabled FROM users u
-      JOIN company_settings cs ON cs.company_id=u.company_id
+    const r=await db(`SELECT u.id,u.company_id FROM users u
       WHERE LOWER(u.email)=LOWER($1) AND u.active=TRUE LIMIT 1`,[email]);
     const u=r.rows[0];
-    if(!u?.password_reset_email_enabled)return res.json(generic);
+    if(!u)return res.json(generic);
+    const resetSettings=(await selectMetadataRecords(db,{objectKey:"system_settings",companyId:u.company_id,
+      columns:["password_reset_email_enabled"],limit:1}))[0]||{};
+    if(resetSettings.password_reset_email_enabled!==true)return res.json(generic);
 
     await writeAudit?.(u.company_id,u.id,"password_reset_otp_requested","user",u.id,{channel:"EMAIL",expiresMinutes:10});
     const otp=await issueAccountOtp(db,{companyId:u.company_id,userId:u.id,purpose:"PASSWORD_RESET",expiresMinutes:10});
