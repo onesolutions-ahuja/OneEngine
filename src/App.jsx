@@ -24,7 +24,6 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
@@ -927,8 +926,6 @@ function Desktop({ onLock, onSignOut }) {
             setRoute('profile')
             setActiveApp('profile')
           }} />
-        ) : activeApp === 'google-connect' ? (
-          <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeApp === 'audit-log' ? (
