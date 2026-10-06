@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { apiRequest, KIOSK_DISPLAY_TOKEN_STORAGE_KEY, lockToKioskDisplayMode } from "../../services/api.js";
-import { loadRuntimeSurface } from "../../services/runtimeSurface";
+import { loadRuntimeSurface, runtimeEndpoint } from "../../services/runtimeSurface";
 import "./oneKioskDisplay.css";
 
 const DISPLAY_FLOW_KEY = "onepos_kiosk_display_flow_id";
@@ -13,6 +13,7 @@ export default function OneKioskDisplayPage() {
   const [displayReady, setDisplayReady] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [flows, setFlows] = useState([]);
+  const [runtimeSurface, setRuntimeSurface] = useState(null);
   const [flowId, setFlowId] = useState(() => {
     try { return localStorage.getItem(DISPLAY_FLOW_KEY) || ""; } catch { return ""; }
   });
@@ -27,7 +28,11 @@ export default function OneKioskDisplayPage() {
     }
     setProvisioning(true);
     try {
-      const response = await apiRequest("/api/kiosk/display-session", {
+      const surface = runtimeSurface || await loadRuntimeSurface("kiosk-display", "collectionDisplay");
+      setRuntimeSurface(surface);
+      const displaySessionEndpoint = runtimeEndpoint(surface, "displaySession");
+      if (!displaySessionEndpoint) throw new Error("Collection display session metadata is unavailable");
+      const response = await apiRequest(displaySessionEndpoint, {
         method: "POST",
         body: JSON.stringify({ flowId: flowId || null }),
       });
@@ -54,7 +59,8 @@ export default function OneKioskDisplayPage() {
 
   const load = useCallback(async () => {
     try {
-      const surface = await loadRuntimeSurface("kiosk-display", "collectionDisplay");
+      const surface = runtimeSurface || await loadRuntimeSurface("kiosk-display", "collectionDisplay");
+      setRuntimeSurface(surface);
       const orderObjectKey = String(surface?.objects?.order || "");
       const platformField = String(surface?.filters?.platformField || "");
       const platformValue = surface?.filters?.platformValue;
@@ -63,7 +69,7 @@ export default function OneKioskDisplayPage() {
       const orderPath = `/api/platform/objects/${encodeURIComponent(orderObjectKey)}/records?page=1&pageSize=100${filter ? `&filter=${filter}` : ""}`;
       const [response, flowResponse] = await Promise.all([
         apiRequest(orderPath),
-        apiRequest("/api/kiosk/flows").catch(() => ({ data: [] })),
+        runtimeEndpoint(surface, "flows") ? apiRequest(runtimeEndpoint(surface, "flows")).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
       const nextFlows = Array.isArray(flowResponse?.data) ? flowResponse.data : [];
       const orderRows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [];
@@ -84,7 +90,7 @@ export default function OneKioskDisplayPage() {
     } catch (reason) {
       setError(reason?.message || "Unable to load kiosk orders");
     }
-  }, []);
+  }, [runtimeSurface]);
 
   useEffect(() => {
     if (!document.hidden) void load();
@@ -99,8 +105,8 @@ export default function OneKioskDisplayPage() {
     [flows, flowId]
   );
   const display = selectedFlow?.action?.ui?.orderDisplay || {};
-  const activeStatuses = useMemo(() => new Set(Array.isArray(display.activeStatuses) && display.activeStatuses.length ? display.activeStatuses : ["PREPARING","ACCEPTED"]), [JSON.stringify(display.activeStatuses || [])]);
-  const readyStatuses = useMemo(() => new Set(Array.isArray(display.readyStatuses) && display.readyStatuses.length ? display.readyStatuses : ["READY","READY_FOR_PICKUP"]), [JSON.stringify(display.readyStatuses || [])]);
+  const activeStatuses = useMemo(() => new Set(Array.isArray(display.activeStatuses) && display.activeStatuses.length ? display.activeStatuses : (runtimeSurface?.statusSets?.active || [])), [JSON.stringify(display.activeStatuses || []), JSON.stringify(runtimeSurface?.statusSets?.active || [])]);
+  const readyStatuses = useMemo(() => new Set(Array.isArray(display.readyStatuses) && display.readyStatuses.length ? display.readyStatuses : (runtimeSurface?.statusSets?.ready || [])), [JSON.stringify(display.readyStatuses || []), JSON.stringify(runtimeSurface?.statusSets?.ready || [])]);
   const visibleOrders = useMemo(
     () => flowId ? orders.filter((order) => !order.platform_data?.workflowId || String(order.platform_data.workflowId) === String(flowId)) : orders,
     [orders, flowId]
