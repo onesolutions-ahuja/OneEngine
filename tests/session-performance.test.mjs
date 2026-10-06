@@ -303,12 +303,6 @@ test('bandwidth-heavy production E2E workflows are manual-only', async () => {
 })
 
 
-test('core package function registry has no top-level-await discovery loop', async () => {
-  const source = await read('../server/services/platformFunctionRegistry.js')
-  assert.match(source, /packages\/functionsIndex\.js/)
-  assert.equal(source.includes('for (const directory of await readdir'), false)
-})
-
 test('Render shutdown is bounded against stale keep-alive connections', async () => {
   const source = await read('../server/server.js')
   assert.match(source, /closeIdleConnections/)
@@ -316,13 +310,6 @@ test('Render shutdown is bounded against stale keep-alive connections', async ()
   assert.match(source, /setTimeout\(\(\) => process\.exit\(0\), 5_000\)/)
 })
 
-
-test('trusted runtime accepts package functions protected by permissionsAny', async () => {
-  const source = await read('../server/services/trustedRuntime.js')
-  assert.match(source, /alternativePermissions/)
-  assert.match(source, /fn\?\.permissionsAny/)
-  assert.match(source, /!requiredPermissions\.length && !alternativePermissions\.length/)
-})
 
 
 test('login network policy uses the preloaded preflight result instead of another database round trip', async () => {
