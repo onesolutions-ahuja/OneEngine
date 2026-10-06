@@ -74,3 +74,31 @@ export function marketplaceSearchText(item) {
   const dependencies = Array.isArray(manifest.dependencies) ? manifest.dependencies.map((value) => typeof value === 'string' ? value : value?.packageKey || value?.package_key || '').join(' ') : ''
   return `${item?.name || ''} ${item?.package_key || ''} ${item?.category || ''} ${item?.publisher || ''} ${item?.description || ''} ${capabilities} ${dependencies}`.toLowerCase()
 }
+
+
+export function catalogAppForNavigation(items, navigationKey) {
+  const key = String(navigationKey || '').trim()
+  if (!key || !Array.isArray(items)) return null
+  return items.find((item) => {
+    const manifest = item?.manifest || item?.company_installation?.manifest || {}
+    const packageKey = String(item?.package_key || manifest.packageKey || manifest.package_key || '')
+    if (packageKey === key) return true
+    const route = String(item?.landing_route || item?.route || manifest.route || '')
+    const routeSlug = route.split('?')[0].split('/').filter(Boolean).at(-1) || ''
+    if (routeSlug === key) return true
+    const aliases = Array.isArray(manifest.navigationAliases || manifest.navigation_aliases)
+      ? (manifest.navigationAliases || manifest.navigation_aliases)
+      : []
+    return aliases.some((alias) => String(alias?.slug || alias?.key || '') === key)
+  }) || null
+}
+
+export function resolveCatalogNavigationRoute(item, navigationKey) {
+  if (!item) return ''
+  const manifest = item?.manifest || item?.company_installation?.manifest || {}
+  const aliases = Array.isArray(manifest.navigationAliases || manifest.navigation_aliases)
+    ? (manifest.navigationAliases || manifest.navigation_aliases)
+    : []
+  const alias = aliases.find((entry) => String(entry?.slug || entry?.key || '') === String(navigationKey || ''))
+  return String(alias?.route || resolveAppOpenRoute(item) || '')
+}
