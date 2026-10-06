@@ -46,11 +46,24 @@ const FLOW_CATEGORIES = [
 ]
 
 const FLOW_TYPES = [
-  { key: 'record', category: 'triggered', featured: true, label: 'Record-Triggered Flow', description: 'Launches when a record is created, updated, or deleted.', icon: Zap, tone: 'purple', startNeedsConfiguration: true },
   { key: 'screen', category: 'screens', featured: true, label: 'Screen Flow', description: 'Guides users through screens that collect or display information.', icon: LayoutPanelLeft, tone: 'blue', startNeedsConfiguration: false },
+  { key: 'record', category: 'triggered', featured: true, label: 'Record-Triggered Flow', description: 'Launches when a record is created, updated, or deleted.', icon: Zap, tone: 'purple', startNeedsConfiguration: true },
+  { key: 'schedule', category: 'scheduled', featured: true, label: 'Schedule-Triggered Flow', description: 'Runs in batches at configured times.', icon: Play, tone: 'orange', startNeedsConfiguration: true },
+  { key: 'platform_event', category: 'triggered', featured: false, label: 'Platform Event-Triggered Flow', description: 'Runs when a platform event message arrives.', icon: Sparkles, tone: 'cyan', startNeedsConfiguration: true },
   { key: 'autolaunched', category: 'autolaunched', featured: true, label: 'Autolaunched Flow (No Trigger)', description: 'Runs in the background when another process invokes it.', icon: Workflow, tone: 'green', startNeedsConfiguration: false },
-  { key: 'schedule', category: 'triggered', featured: false, label: 'Schedule-Triggered Flow', description: 'Runs in the background at a specified time and frequency.', icon: Play, tone: 'orange', startNeedsConfiguration: true },
-  { key: 'platform_event', category: 'triggered', featured: false, label: 'Platform Event-Triggered Flow', description: 'Runs when a platform event message is received.', icon: Sparkles, tone: 'cyan', startNeedsConfiguration: true },
+  { key: 'automation_event', category: 'triggered', featured: false, label: 'Automation Event-Triggered Flow', description: 'Background event flow.', icon: Zap, tone: 'purple', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'user_provisioning', category: 'screens', featured: false, label: 'User Provisioning Flow', description: 'User provisioning automation.', icon: LayoutPanelLeft, tone: 'blue', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'contact_request', category: 'screens', featured: false, label: 'Contact Request Flow', description: 'Contact request automation.', icon: LayoutPanelLeft, tone: 'blue', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'cart_async', category: 'autolaunched', featured: false, label: 'Cart Async Flow', description: 'Asynchronous cart automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'recommendation_strategy', category: 'autolaunched', featured: false, label: 'Recommendation Strategy', description: 'Recommendation strategy automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'autolaunched_orchestration', category: 'autolaunched', featured: false, label: 'Autolaunched Orchestration (No Trigger)', description: 'Autolaunched orchestration.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'record_orchestration', category: 'triggered', featured: false, label: 'Record-Triggered Orchestration', description: 'Record-triggered orchestration.', icon: Zap, tone: 'purple', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'evaluation', category: 'autolaunched', featured: false, label: 'Evaluation Flow', description: 'Evaluation automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'cms_orchestration', category: 'autolaunched', featured: false, label: 'Flow Orchestration for CMS', description: 'CMS orchestration automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'individual_object_linking', category: 'screens', featured: false, label: 'Individual-Object Linking Flow', description: 'Individual-object linking automation.', icon: LayoutPanelLeft, tone: 'blue', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'autolaunched_approval', category: 'autolaunched', featured: false, label: 'Autolaunched Flow Approval Process (No Trigger)', description: 'Autolaunched approval process flow.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'record_approval', category: 'triggered', featured: false, label: 'Record-Triggered Flow Approval Process', description: 'Record-triggered approval process flow.', icon: Zap, tone: 'purple', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'identity_registration', category: 'autolaunched', featured: false, label: 'Identity User Registration Flow', description: 'Identity registration automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
 ]
 
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')

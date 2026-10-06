@@ -13,7 +13,7 @@ const FREQUENT_ORDER = ['screen', 'record', 'schedule', 'autolaunched']
 
 function matchesCategory(flow, category) {
   if (!category) return true
-  if (category === 'scheduled') return flow?.key === 'schedule'
+  if (category === 'scheduled') return flow?.category === 'scheduled'
   if (category === 'screen') return flow?.category === 'screens'
   if (category === 'autolaunched') return flow?.category === 'autolaunched'
   if (category === 'triggered') return flow?.category === 'triggered' && flow?.key !== 'schedule'
