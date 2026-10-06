@@ -15,6 +15,7 @@ const OBJECT_ALIASES = new Map([
   ["purchase_receipt", "purchase_ledger"],
   ["supplier_invoice", "purchase_ledger"],
   ["supplier_payment", "purchase_ledger"],
+  ["supplier_payment_allocation", "purchase_ledger"],
   ["inventory_movement", "inventory_ledger"],
   ["online_order", "salesorder"],
   ["online_order_line", "salesorder"],
@@ -80,20 +81,29 @@ function collapseObjectFamily(objects, keys, canonicalKey, label, sourceTable) {
   });
 }
 
-function canonicalizeObjectFamilies(manifest) {
+function canonicalizeObjectFamilies(manifest, { packageKey = "", purchaseSupplementObjects = [] } = {}) {
   const source = manifest && typeof manifest === "object" ? manifest : {};
   const objects = Array.isArray(source.objects) ? source.objects : [];
   const excluded = new Set([...REMOVED_OBJECTS]);
 
   const device = collapseObjectFamily(objects, new Set(["till_session"]), "device_session", "Device Session", "device_sessions");
   const cash = collapseObjectFamily(objects, new Set(["cash_movement"]), "cash_ledger", "Cash Ledger", "cash_ledger");
-  const purchasing = collapseObjectFamily(
-    objects,
-    new Set(["purchase", "purchase_line", "purchase_receipt", "supplier_invoice", "supplier_payment"]),
-    "purchase_ledger",
-    "Purchase Ledger",
-    "purchase_ledger"
-  );
+  const purchasingKeys = new Set(["purchase", "purchase_line", "purchase_receipt", "supplier_invoice", "supplier_payment", "supplier_payment_allocation"]);
+  const purchasingSource = packageKey === "purchasing_core"
+    ? [...objects, ...purchaseSupplementObjects]
+    : objects;
+  const purchasing = packageKey === "purchasing_core"
+    ? collapseObjectFamily(
+        purchasingSource,
+        purchasingKeys,
+        "purchase_ledger",
+        "Purchase Ledger",
+        "purchase_ledger"
+      )
+    : null;
+  if (purchasing && !(purchasing.fields || []).some((field) => field.apiName === "allocation_data")) {
+    purchasing.fields.push({ apiName: "allocation_data", label: "Allocation Data", fieldType: "json", sourceColumn: "allocation_data", writable: true });
+  }
   const inventory = collapseObjectFamily(objects, new Set(["inventory_movement"]), "inventory_ledger", "Inventory Ledger", "inventory_ledger");
   const orders = collapseObjectFamily(objects, new Set(["online_order", "online_order_line"]), "salesorder", "Sales Order", "salesorder");
 
@@ -367,15 +377,26 @@ export function canonicalizeRetailSalesManifest(manifest) {
 
 function loadManifestMap() {
   if (cache) return cache;
-  const entries = new Map();
+  const raw = new Map();
   for (const file of readdirSync(manifestDirectory, { withFileTypes: true })) {
     if (!file.isFile() || extname(file.name) !== ".json") continue;
     const packageKey = file.name.slice(0, -5);
-    const parsed = JSON.parse(readFileSync(join(manifestDirectory, file.name), "utf8"));
+    raw.set(packageKey, JSON.parse(readFileSync(join(manifestDirectory, file.name), "utf8")));
+  }
+
+  const financePurchaseObjects = (raw.get("finance_core")?.objects || []).filter((object) =>
+    ["supplier_invoice", "supplier_payment", "supplier_payment_allocation"].includes(object?.objectKey)
+  );
+
+  const entries = new Map();
+  for (const [packageKey, parsed] of raw.entries()) {
     const salesCanonical = packageKey === "retail_pos"
       ? canonicalizeRetailSalesManifest(parsed)
       : rewriteSalesObjectReferences(parsed);
-    entries.set(packageKey, canonicalizeObjectFamilies(salesCanonical));
+    entries.set(packageKey, canonicalizeObjectFamilies(salesCanonical, {
+      packageKey,
+      purchaseSupplementObjects: packageKey === "purchasing_core" ? financePurchaseObjects : [],
+    }));
   }
   cache = entries;
   return cache;
