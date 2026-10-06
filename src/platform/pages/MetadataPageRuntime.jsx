@@ -9,7 +9,7 @@ import CustomPageRuntimePage from "./CustomPageRuntimePage.jsx";
  * the appropriate generic metadata renderer. Object pages keep the mature
  * record/list runtime while custom composition pages use the shared Component
  * Registry renderer. Both consume platform metadata and neither contains
- * object/business names.
+ * domain-specific identifiers.
  *
  * Phase 7 intentionally centralises the runtime boundary before the internal
  * object-record surface is decomposed into registry components. That migration
