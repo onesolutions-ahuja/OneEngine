@@ -58,7 +58,6 @@ export function isPrivilegedMutation(path, method = "GET") {
 }
 
 export function validateTrustedRuntime() {
-  }
   for (const action of PLATFORM_ACTION_REGISTRY) if (!action?.key) throw new Error("Invalid registered platform action");
   return Object.freeze({ version: TRUSTED_RUNTIME_VERSION, count: TRUSTED_CAPABILITIES.length });
 }
