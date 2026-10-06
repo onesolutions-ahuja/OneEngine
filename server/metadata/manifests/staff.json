@@ -404,6 +404,210 @@
   "workflows": [
     {
       "objectKey": "employee",
+      "name": "Staff - Set Active Status",
+      "apiName": "STAFF_SET_ACTIVE_STATUS",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "inputContract": [
+        {
+          "name": "active",
+          "label": "Active",
+          "type": "boolean",
+          "required": true
+        }
+      ],
+      "actions": [
+        {
+          "id": "set_active_status",
+          "label": "Set Active Status",
+          "apiName": "set_active_status",
+          "key": "UPDATE_RECORD",
+          "objectKey": "employee",
+          "recordId": {
+            "path": "$record.id"
+          },
+          "fieldValues": {
+            "active": {
+              "path": "$record.active"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectKey": "employee",
+      "name": "Staff - Send Password Reset",
+      "apiName": "STAFF_SEND_PASSWORD_RESET",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "actions": [
+        {
+          "id": "get_reset_settings",
+          "label": "Get User Lifecycle Settings",
+          "apiName": "get_reset_settings",
+          "key": "GET_RECORDS",
+          "objectKey": "system_settings",
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "reset_user_active",
+          "label": "User Is Active",
+          "apiName": "reset_user_active",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Active",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "$record.active",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "reset_enabled"
+              ]
+            }
+          ],
+          "defaultLabel": "Inactive",
+          "defaultBranch": [
+            "reset_inactive_error"
+          ]
+        },
+        {
+          "id": "reset_inactive_error",
+          "label": "Inactive User",
+          "apiName": "reset_inactive_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Password reset cannot be sent to an inactive user",
+          "errorLocation": "record"
+        },
+        {
+          "id": "reset_enabled",
+          "label": "Password Reset Email Enabled",
+          "apiName": "reset_enabled",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Enabled",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_reset_settings.record.password_reset_email_enabled",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "reset_email_present"
+              ]
+            }
+          ],
+          "defaultLabel": "Disabled",
+          "defaultBranch": [
+            "reset_disabled_error"
+          ]
+        },
+        {
+          "id": "reset_disabled_error",
+          "label": "Password Reset Disabled",
+          "apiName": "reset_disabled_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Password reset email is disabled in Settings",
+          "errorLocation": "record"
+        },
+        {
+          "id": "reset_email_present",
+          "label": "User Has Email",
+          "apiName": "reset_email_present",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Email Present",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "$record.email",
+                    "operator": "is_not_empty"
+                  }
+                ]
+              },
+              "branch": [
+                "issue_reset_token",
+                "send_reset_email"
+              ]
+            }
+          ],
+          "defaultLabel": "Missing Email",
+          "defaultBranch": [
+            "reset_email_error"
+          ]
+        },
+        {
+          "id": "reset_email_error",
+          "label": "Missing Email",
+          "apiName": "reset_email_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "User has no email address",
+          "errorLocation": "record"
+        },
+        {
+          "id": "issue_reset_token",
+          "label": "Issue Password Reset Token",
+          "apiName": "issue_reset_token",
+          "key": "ONE_API_REQUEST",
+          "method": "POST",
+          "path": "/api/platform/runtime/security/tokens",
+          "requireSuccess": true,
+          "body": {
+            "subjectType": "USER",
+            "subjectId": {
+              "path": "$record.id"
+            },
+            "purpose": "PASSWORD_RESET",
+            "expiresMinutes": {
+              "path": "steps.get_reset_settings.record.password_reset_expiry_minutes"
+            }
+          }
+        },
+        {
+          "id": "send_reset_email",
+          "label": "Send Password Reset Email",
+          "apiName": "send_reset_email",
+          "key": "SEND_COMMUNICATION",
+          "channel": "EMAIL",
+          "recipient": {
+            "path": "$record.email"
+          },
+          "templateKey": "PASSWORD_RESET",
+          "templateContext": {
+            "token": {
+              "path": "steps.issue_reset_token.data.token"
+            },
+            "userId": {
+              "path": "$record.id"
+            },
+            "expiresMinutes": {
+              "path": "steps.issue_reset_token.data.expiresMinutes"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectKey": "employee",
       "name": "Staff - Send Invitation",
       "apiName": "STAFF_SEND_INVITATION",
       "triggerKey": "manual",
@@ -535,6 +739,167 @@
           }
         }
       ]
+    },
+    {
+      "objectKey": "attendance",
+      "name": "Attendance · Clock In",
+      "triggerKey": "manual",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:attendance.clock_in",
+        "scope": "package",
+        "capabilityType": "workflow",
+        "capabilityKey": "attendance.clock_in",
+        "apiName": "ATTENDANCE_CLOCK_IN",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "userId",
+            "label": "userId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "storeId",
+            "label": "storeId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "now",
+            "label": "now",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "recordId",
+            "label": "recordId",
+            "type": "text",
+            "source": "variables.recordId"
+          },
+          {
+            "name": "alreadyOpen",
+            "label": "alreadyOpen",
+            "type": "boolean",
+            "source": "variables.alreadyOpen"
+          }
+        ],
+        "actions": [
+          {
+            "id": "find_open",
+            "label": "Find Open Attendance",
+            "key": "GET_RECORDS",
+            "objectKey": "attendance",
+            "filters": [
+              {
+                "field": "user_id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.userId"
+                }
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "open"
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "open_exists",
+            "label": "Open Attendance Exists?",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Already Open",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.find_open.record.id",
+                      "operator": "is_not_blank"
+                    }
+                  ]
+                },
+                "branch": [
+                  "set_existing_id",
+                  "set_already_open"
+                ]
+              }
+            ],
+            "defaultLabel": "Create Attendance",
+            "defaultBranch": [
+              "create_attendance",
+              "set_created_id",
+              "set_not_already_open"
+            ]
+          },
+          {
+            "id": "create_attendance",
+            "label": "Create Attendance",
+            "key": "CREATE_RECORD",
+            "objectKey": "attendance",
+            "fieldValues": {
+              "user_id": {
+                "path": "$record.userId"
+              },
+              "store_id": {
+                "path": "$record.storeId"
+              },
+              "status": "open",
+              "clock_in": {
+                "path": "$record.now"
+              }
+            }
+          },
+          {
+            "id": "set_existing_id",
+            "label": "Return Existing Record",
+            "key": "ASSIGNMENT",
+            "variableName": "recordId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.find_open.record.id"
+            }
+          },
+          {
+            "id": "set_created_id",
+            "label": "Return Created Record",
+            "key": "ASSIGNMENT",
+            "variableName": "recordId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_attendance.record.id"
+            }
+          },
+          {
+            "id": "set_already_open",
+            "label": "Already Open",
+            "key": "ASSIGNMENT",
+            "variableName": "alreadyOpen",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": true
+          },
+          {
+            "id": "set_not_already_open",
+            "label": "New Attendance",
+            "key": "ASSIGNMENT",
+            "variableName": "alreadyOpen",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": false
+          }
+        ]
+      }
     },
     {
       "objectKey": "attendance",
@@ -699,6 +1064,26 @@
   ],
   "actions": [
     {
+      "actionKey": "employee.set_active_status",
+      "objectKey": "employee",
+      "label": "Set Active Status",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "user.edit",
+      "config": {
+        "subflowApiName": "STAFF_SET_ACTIVE_STATUS"
+      }
+    },
+    {
+      "actionKey": "employee.send_password_reset",
+      "objectKey": "employee",
+      "label": "Send Password Reset",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "user.manage",
+      "config": {
+        "subflowApiName": "STAFF_SEND_PASSWORD_RESET"
+      }
+    },
+    {
       "actionKey": "employee.send_invitation",
       "objectKey": "employee",
       "label": "Send Invitation",
@@ -710,6 +1095,39 @@
     }
   ],
   "buttons": [
+    {
+      "objectKey": "employee",
+      "buttonKey": "set_active_status",
+      "label": "Set Active Status",
+      "targetType": "action",
+      "targetKey": "employee.set_active_status",
+      "actionKey": "employee.set_active_status",
+      "placement": "record",
+      "variant": "secondary",
+      "requiredPermission": "user.edit",
+      "inputMappings": {
+        "active": {
+          "path": "context.active"
+        }
+      },
+      "config": {
+        "hidden": true
+      }
+    },
+    {
+      "objectKey": "employee",
+      "buttonKey": "send_password_reset",
+      "label": "Send Password Reset",
+      "targetType": "action",
+      "targetKey": "employee.send_password_reset",
+      "actionKey": "employee.send_password_reset",
+      "placement": "record",
+      "variant": "secondary",
+      "requiredPermission": "user.manage",
+      "config": {
+        "icon": "key-round"
+      }
+    },
     {
       "objectKey": "employee",
       "buttonKey": "send_invitation",
