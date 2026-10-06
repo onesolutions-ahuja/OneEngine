@@ -263,6 +263,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
 
   const newNodeFor = (componentKey) => {
     const meta = componentMeta(componentKey);
+    const componentApi = meta.api || `${componentKey}.v1`;
     if (meta.runtimeKind === "analytics") return createRegisteredComponent(meta, "PAGE");
     if (componentKey === "container") return { id: uid("container"), componentKey, label: meta.label, size: "medium", columns: 2, spacing: 3, children: [] };
     if (componentKey === "multi_container") {
@@ -338,7 +339,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     if (componentKey === "spacer") return { id: uid("spacer"), componentKey, spacing: 3 };
     if (componentKey === "field_value") return { id: uid("field_value"), componentKey, field: "" };
     if (componentKey === "related_list") return { id: uid("related_list"), componentKey, relationshipKey: "", limit: 10 };
-    return { id: uid(componentKey), componentKey, label: meta.label };
+    return { id: uid(componentKey), componentKey, componentApi, label: meta.label };
   };
 
   const dropIntoSection = (sectionId, payload, index = null) => {
@@ -424,6 +425,15 @@ const updateNode = (nodeId, changes) => {
 
   /* ------------------------------- save ---------------------------------- */
 
+  const withComponentApis = (nodes = []) => nodes.map((node) => {
+    const meta = componentMeta(node.componentKey);
+    return {
+      ...node,
+      componentApi: node.componentApi || meta.api || `${node.componentKey}.v1`,
+      children: Array.isArray(node.children) ? withComponentApis(node.children) : node.children,
+    };
+  });
+
   const definitionForSave = () => normalizeCustomPageTree({
     device: draft.device,
     presentation_mode: draft.presentation_mode,
@@ -431,7 +441,7 @@ const updateNode = (nodeId, changes) => {
       id: section.id,
       width: section.width,
       visible: section.visible !== false,
-      children: section.children,
+      children: withComponentApis(section.children),
     })),
   });
 
