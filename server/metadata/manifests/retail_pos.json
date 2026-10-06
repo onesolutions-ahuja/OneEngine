@@ -1,11 +1,11 @@
 {
   "objects": [
     {
-      "objectKey": "till_session",
+      "objectKey": "device_session",
       "metadataScope": "global",
       "label": "Till Session",
       "pluralLabel": "Till Sessions",
-      "sourceTable": "till_sessions",
+      "sourceTable": "device_sessions",
       "storeScoped": true,
       "config": {
         "flowWritesOnly": true
@@ -95,11 +95,11 @@
       ]
     },
     {
-      "objectKey": "cash_movement",
+      "objectKey": "cash_ledger",
       "metadataScope": "global",
       "label": "Cash Movement",
       "pluralLabel": "Cash Movements",
-      "sourceTable": "cash_movements",
+      "sourceTable": "cash_ledger",
       "storeScoped": true,
       "config": {
         "flowWritesOnly": true
@@ -919,9 +919,9 @@
   ],
   "relationships": [
     {
-      "parentObjectKey": "till_session",
-      "childObjectKey": "cash_movement",
-      "relationshipKey": "cash_movements",
+      "parentObjectKey": "device_session",
+      "childObjectKey": "cash_ledger",
+      "relationshipKey": "cash_ledger",
       "relationshipType": "one_to_many",
       "childFieldApiName": "till_session_id"
     },
@@ -977,7 +977,7 @@
   ],
   "rules": [
     {
-      "objectKey": "till_session",
+      "objectKey": "device_session",
       "name": "Opening cash cannot be negative",
       "triggerKey": "before_save",
       "conditions": [
@@ -993,7 +993,7 @@
       }
     },
     {
-      "objectKey": "cash_movement",
+      "objectKey": "cash_ledger",
       "name": "Cash movement amount cannot be negative",
       "triggerKey": "before_save",
       "conditions": [
@@ -1142,7 +1142,7 @@
   ],
   "buttons": [
     {
-      "objectKey": "till_session",
+      "objectKey": "device_session",
       "buttonKey": "open_till",
       "label": "Open Till",
       "targetType": "workflow",
@@ -1152,7 +1152,7 @@
       "inputMappings": {}
     },
     {
-      "objectKey": "cash_movement",
+      "objectKey": "cash_ledger",
       "buttonKey": "record_cash_movement",
       "label": "Record Cash Movement",
       "targetType": "workflow",
@@ -1212,7 +1212,7 @@
       "inputMappings": {}
     },
     {
-      "objectKey": "till_session",
+      "objectKey": "device_session",
       "buttonKey": "close_till",
       "label": "Close Till",
       "targetType": "workflow",
@@ -1224,7 +1224,7 @@
   ],
   "workflows": [
     {
-      "objectKey": "till_session",
+      "objectKey": "device_session",
       "name": "Open Till Session",
       "triggerKey": "manual",
       "active": true,
@@ -1263,7 +1263,7 @@
             "isCollection": false,
             "availableInput": true,
             "availableOutput": true,
-            "objectKey": "till_session"
+            "objectKey": "device_session"
           }
         ],
         "actions": [
@@ -1272,7 +1272,7 @@
             "label": "Find Open Till Session",
             "apiName": "find_open_session",
             "key": "GET_RECORDS",
-            "objectKey": "till_session",
+            "objectKey": "device_session",
             "filters": [
               {
                 "field": "terminal_id",
@@ -1325,7 +1325,7 @@
             "label": "Create Till Session",
             "apiName": "create_session",
             "key": "CREATE_RECORD",
-            "objectKey": "till_session",
+            "objectKey": "device_session",
             "recordResource": {
               "path": "variables.session"
             }
@@ -1365,7 +1365,7 @@
                 "label": "Find Open Till Session",
                 "apiName": "find_open_session",
                 "key": "GET_RECORDS",
-                "objectKey": "till_session",
+                "objectKey": "device_session",
                 "filters": [
                   {
                     "field": "terminal_id",
@@ -1462,7 +1462,7 @@
                 "label": "Create Till Session",
                 "apiName": "create_session",
                 "key": "CREATE_RECORD",
-                "objectKey": "till_session",
+                "objectKey": "device_session",
                 "recordResource": {
                   "path": "variables.session"
                 }
@@ -1507,7 +1507,7 @@
       }
     },
     {
-      "objectKey": "till_session",
+      "objectKey": "device_session",
       "name": "Close Till Session",
       "triggerKey": "manual",
       "active": true,
@@ -1546,7 +1546,7 @@
             "isCollection": false,
             "availableInput": true,
             "availableOutput": true,
-            "objectKey": "till_session"
+            "objectKey": "device_session"
           }
         ],
         "actions": [
@@ -1555,7 +1555,7 @@
             "label": "Find Open Till Session",
             "apiName": "find_open_session",
             "key": "GET_RECORDS",
-            "objectKey": "till_session",
+            "objectKey": "device_session",
             "filters": [
               {
                 "field": "id",
@@ -1608,7 +1608,7 @@
             "label": "Close Till Session",
             "apiName": "update_session",
             "key": "UPDATE_RECORD",
-            "objectKey": "till_session",
+            "objectKey": "device_session",
             "recordId": {
               "path": "variables.session.id"
             },
@@ -1668,7 +1668,7 @@
                 "label": "Find Open Till Session",
                 "apiName": "find_open_session",
                 "key": "GET_RECORDS",
-                "objectKey": "till_session",
+                "objectKey": "device_session",
                 "filters": [
                   {
                     "field": "id",
@@ -1765,7 +1765,7 @@
                 "label": "Close Till Session",
                 "apiName": "update_session",
                 "key": "UPDATE_RECORD",
-                "objectKey": "till_session",
+                "objectKey": "device_session",
                 "recordId": {
                   "path": "variables.session.id"
                 },
@@ -1830,7 +1830,7 @@
       }
     },
     {
-      "objectKey": "cash_movement",
+      "objectKey": "cash_ledger",
       "name": "Record Cash Movement",
       "triggerKey": "manual",
       "active": true,
@@ -1869,7 +1869,7 @@
             "isCollection": false,
             "availableInput": true,
             "availableOutput": true,
-            "objectKey": "cash_movement"
+            "objectKey": "cash_ledger"
           }
         ],
         "actions": [
@@ -1878,7 +1878,7 @@
             "label": "Find Open Till Session",
             "apiName": "find_open_session",
             "key": "GET_RECORDS",
-            "objectKey": "till_session",
+            "objectKey": "device_session",
             "filters": [
               {
                 "field": "id",
@@ -1931,7 +1931,7 @@
             "label": "Create Cash Movement",
             "apiName": "create_movement",
             "key": "CREATE_RECORD",
-            "objectKey": "cash_movement",
+            "objectKey": "cash_ledger",
             "recordResource": {
               "path": "variables.movement"
             }
@@ -1971,7 +1971,7 @@
                 "label": "Find Open Till Session",
                 "apiName": "find_open_session",
                 "key": "GET_RECORDS",
-                "objectKey": "till_session",
+                "objectKey": "device_session",
                 "filters": [
                   {
                     "field": "id",
@@ -2068,7 +2068,7 @@
                 "label": "Create Cash Movement",
                 "apiName": "create_movement",
                 "key": "CREATE_RECORD",
-                "objectKey": "cash_movement",
+                "objectKey": "cash_ledger",
                 "recordResource": {
                   "path": "variables.movement"
                 }
@@ -2113,7 +2113,7 @@
       }
     },
     {
-      "objectKey": "cash_movement",
+      "objectKey": "cash_ledger",
       "name": "Open Drawer",
       "triggerKey": "manual",
       "active": true,
@@ -2184,7 +2184,7 @@
             "id": "record_drawer",
             "label": "Record Drawer Open",
             "key": "CREATE_RECORD",
-            "objectKey": "cash_movement",
+            "objectKey": "cash_ledger",
             "fieldValues": {
               "till_session_id": {
                 "path": "variables.tillSessionId"
@@ -2228,7 +2228,7 @@
                 "id": "record_drawer",
                 "label": "Record Drawer Open",
                 "key": "CREATE_RECORD",
-                "objectKey": "cash_movement",
+                "objectKey": "cash_ledger",
                 "fieldValues": {
                   "till_session_id": {
                     "path": "variables.tillSessionId"
@@ -2256,7 +2256,7 @@
       }
     },
     {
-      "objectKey": "cash_movement",
+      "objectKey": "cash_ledger",
       "name": "Record Petty Cash",
       "triggerKey": "manual",
       "active": true,
@@ -2354,7 +2354,7 @@
             "label": "Find Open Till Session",
             "apiName": "find_open_session",
             "key": "GET_RECORDS",
-            "objectKey": "till_session",
+            "objectKey": "device_session",
             "filters": [
               {
                 "field": "id",
@@ -2411,7 +2411,7 @@
             "id": "record_petty_cash",
             "label": "Record Petty Cash",
             "key": "CREATE_RECORD",
-            "objectKey": "cash_movement",
+            "objectKey": "cash_ledger",
             "fieldValues": {
               "till_session_id": {
                 "path": "variables.tillSessionId"
@@ -2499,7 +2499,7 @@
                 "label": "Find Open Till Session",
                 "apiName": "find_open_session",
                 "key": "GET_RECORDS",
-                "objectKey": "till_session",
+                "objectKey": "device_session",
                 "filters": [
                   {
                     "field": "id",
@@ -2600,7 +2600,7 @@
                 "id": "record_petty_cash",
                 "label": "Record Petty Cash",
                 "key": "CREATE_RECORD",
-                "objectKey": "cash_movement",
+                "objectKey": "cash_ledger",
                 "fieldValues": {
                   "till_session_id": {
                     "path": "variables.tillSessionId"
