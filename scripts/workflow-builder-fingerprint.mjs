@@ -5,7 +5,6 @@ const files = [
   'src/pages/developer/gptbuilder/GPTBuilderPage.jsx',
   'src/pages/developer/gptbuilder/GPTBuilderElements.jsx',
   'src/pages/developer/gptbuilder/GPTBuilderDecision.jsx',
-  'src/pages/developer/gptbuilder/GPTBuilder.css',
   'src/pages/settings/OneBuilder.jsx',
   'src/pages/developer/OneDeveloperPage.jsx',
   'src/navigation/routes.js',
