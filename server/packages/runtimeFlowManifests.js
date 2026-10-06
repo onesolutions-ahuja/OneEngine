@@ -172,4 +172,8 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"update_batch",label:"Update Batch Quantity",key:"UPDATE_RECORD",objectKey:"inventory_batch",recordId:{path:"variables.currentBatch.id"},fieldValues:{quantity:{expression:"variables.currentBatch.quantity - variables.batchTake"}}},
   {id:"set_consumed",label:"Set Consumed",key:"ASSIGNMENT",variableName:"consumed",variableType:"number",operator:"set",value:{path:"$record.quantity"}}
  ])
+,
+ flow("flow:customer.register","Customer · Register",[input("customer","object")],[output("customer","object")],[
+  {id:"create_customer",label:"Create Customer",key:"CREATE_RECORD",objectKey:"customer",recordResource:{path:"$record.customer"},store:"customer"}
+ ])
 ];
