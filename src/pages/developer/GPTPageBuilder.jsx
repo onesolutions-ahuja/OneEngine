@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Background, Controls, ReactFlow, useNodesState } from '@xyflow/react'
+import { Background, Controls, ReactFlow, ReactFlowProvider, useNodesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Search, Trash2 } from 'lucide-react'
 import {
@@ -42,7 +42,7 @@ function propertyEntries(meta) {
   }).filter((item) => item.key)
 }
 
-export default function GPTPageBuilder() {
+function GPTPageBuilderCanvas() {
   const registry = useComponentRegistry()
   const palette = useMemo(() => registryForBuilder(registry, 'PAGE'), [registry])
   const categories = useMemo(() => componentCategories(palette), [palette])
@@ -176,4 +176,8 @@ export default function GPTPageBuilder() {
       </div>
     </div>
   )
+}
+
+export default function GPTPageBuilder() {
+  return <ReactFlowProvider><GPTPageBuilderCanvas /></ReactFlowProvider>
 }
