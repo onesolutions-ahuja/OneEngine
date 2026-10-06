@@ -2664,7 +2664,7 @@ CREATE TABLE IF NOT EXISTS integration_connections (
     base_url TEXT,
     provider_account_id VARCHAR(255),
     connector_package_key VARCHAR(100),
-    till_id UUID REFERENCES terminals(id) ON DELETE SET NULL,
+    terminal_id UUID REFERENCES terminals(id) ON DELETE SET NULL,
     connector_configuration JSONB NOT NULL DEFAULT '{}'::jsonb,
     connector_capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
     fallback_order INTEGER NOT NULL DEFAULT 0 CHECK (fallback_order >= 0),
@@ -2692,8 +2692,8 @@ ON integration_connections(company_id);
 CREATE INDEX IF NOT EXISTS idx_integration_connections_store
 ON integration_connections(store_id);
 
-CREATE INDEX IF NOT EXISTS idx_integration_connectors_till
-ON integration_connections(company_id, store_id, till_id, enabled, fallback_order)
+CREATE INDEX IF NOT EXISTS idx_integration_connectors_terminal
+ON integration_connections(company_id, store_id, terminal_id, enabled, fallback_order)
 WHERE connector_package_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS integration_endpoints (
@@ -2704,7 +2704,7 @@ CREATE TABLE IF NOT EXISTS integration_endpoints (
         method IN ('GET', 'POST', 'PUT', 'PATCH', 'DELETE')
     ),
     path TEXT NOT NULL,
-    entity_type VARCHAR(50) NOT NULL DEFAULT 'sale',
+    entity_type VARCHAR(50) NOT NULL DEFAULT 'record',
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
