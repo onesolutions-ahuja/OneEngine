@@ -190,16 +190,6 @@ const apiLimiter = createFixedWindowRateLimiter({ windowMs: 60_000, max: 600, ke
 const loginLimiter = createFixedWindowRateLimiter({ windowMs: 15 * 60_000, max: 5, keyPrefix: "login" });
 app.use("/api", apiLimiter);
 
-/*
- * Deliveroo webhooks are HMAC-signed over the RAW request body - parse it
- * before the global JSON parser consumes the stream (express.raw sets
- * req.body to a Buffer; express.json then skips the already-parsed body).
- */
-
-/*
- * Uber primary webhook is HMAC-signed (X-Uber-Signature) over the RAW body -
- * same raw-parsing mechanism as the Deliveroo webhook above.
- */
 
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
 
@@ -1896,26 +1886,9 @@ async function startServer() {
           [pkg.module_id, companyId]
         );
 
-        const workflowVerification = await db(
-          `SELECT r.id,r.active,COALESCE(r.lifecycle_status,'ACTIVE') AS lifecycle_status
-             FROM platform_rules r
-             JOIN platform_objects o ON o.id=r.object_id
-            WHERE r.company_id=$1
-              AND o.object_key='communication_event'
-              AND r.action->>'apiName'='OneAssistant_Booking_Channel_Router'
-            ORDER BY r.updated_at DESC NULLS LAST,r.created_at DESC
-            LIMIT 1`,
-          [companyId]
-        );
-        const bookingWorkflow = workflowVerification.rows[0];
-        if (!bookingWorkflow || bookingWorkflow.active !== true || bookingWorkflow.lifecycle_status !== 'ACTIVE') {
-          throw new Error("OneAssistant WhatsApp booking workflow was not provisioned as active");
-        }
-
         console.log("onePOS: startup package targeted provisioning complete", {
           companyId,
           packageKey,
-          bookingRouterWorkflow: bookingWorkflow.id,
         });
       }
 
@@ -2128,7 +2101,7 @@ async function startServer() {
       if (!companyId) throw Object.assign(new Error("Workflow automation requires a company context"), { retryable: false });
       if (preferredUserId) {
         const preferred = await db(
-          `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS till_id
+          `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS device_session_id
              FROM users u
              JOIN roles r ON r.id=u.role_id
             WHERE u.id=$1 AND u.company_id=$2 AND u.active=true
@@ -2144,7 +2117,7 @@ async function startServer() {
         );
       }
       const fallback = await db(
-        `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS till_id
+        `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS device_session_id
            FROM users u
            JOIN roles r ON r.id=u.role_id
           WHERE u.company_id=$1 AND u.active=true
@@ -2312,7 +2285,7 @@ async function startServer() {
                     roleId: actor.role_id || null,
                     companyId: job.company_id,
                     storeId: actor.store_id || parentRun?.metadata?.storeId || null,
-                    tillId: actor.till_id || parentRun?.metadata?.tillId || null,
+                    deviceSessionId: actor.device_session_id || parentRun?.metadata?.deviceSessionId || null,
                   },
                 };
                 try {
@@ -2334,7 +2307,7 @@ async function startServer() {
                     record,
                     recordId,
                     storeId: req.user.storeId,
-                    tillId: req.user.tillId,
+                    deviceSessionId: req.user.deviceSessionId,
                     connectorDrivers,
                     writeAudit,
                     runId: childRun.id,
@@ -2633,7 +2606,7 @@ async function startServer() {
                   roleId: actor.role_id || null,
                   companyId: job.company_id,
                   storeId: actor.store_id || run.metadata?.storeId || null,
-                  tillId: actor.till_id || run.metadata?.tillId || null,
+                  deviceSessionId: actor.device_session_id || run.metadata?.deviceSessionId || null,
                 },
               };
 
@@ -2664,7 +2637,7 @@ async function startServer() {
                   previousRecord: run.metadata?.initialPreviousRecord || null,
                   recordId: run.record_id || null,
                   storeId: req.user.storeId,
-                  tillId: req.user.tillId,
+                  deviceSessionId: req.user.deviceSessionId,
                   connectorDrivers,
                   writeAudit,
                   runId: run.id,
@@ -2890,11 +2863,11 @@ async function startServer() {
                     roleId: actor.role_id,
                     companyId,
                     storeId: actor.store_id || null,
-                    tillId: actor.till_id || null,
+                    deviceSessionId: actor.device_session_id || null,
                   } },
                   userId: actor.id,
                   storeId: actor.store_id || null,
-                  tillId: actor.till_id || null,
+                  deviceSessionId: actor.device_session_id || null,
                   companyId,
                   object: objectResult.rows[0] || null,
                   record: null,
@@ -3014,12 +2987,12 @@ async function startServer() {
                     id: actor.id,
                     roleId: actor.role_id,
                     storeId: actor.store_id || payload.storeId || null,
-                    tillId: actor.till_id || null,
+                    deviceSessionId: actor.device_session_id || null,
                   } },
                   companyId: job.company_id,
                   userId: actor.id,
                   storeId: actor.store_id || payload.storeId || null,
-                  tillId: actor.till_id || null,
+                  deviceSessionId: actor.device_session_id || null,
                   object: objectResult.rows[0] || null,
                   fields: triggerFields.rows,
                   record: payload.record || null,
