@@ -1427,25 +1427,44 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   });
 
   async function componentReferences(db, component, companyId) {
-    const pages = await db(
-      `SELECT p.id,p.company_id,p.page_key,p.label AS page_label,a.app_key,a.label AS app_label
-         FROM platform_pages p
-         JOIN platform_apps a ON a.id=p.app_id
-        WHERE p.active=true AND p.company_id=$1
-          AND (
-            p.definition::text LIKE '%' || $2 || '%'
-            OR p.definition::text LIKE '%' || $3 || '%'
-            OR COALESCE(p.draft_definition,'{}'::jsonb)::text LIKE '%' || $2 || '%'
-            OR COALESCE(p.draft_definition,'{}'::jsonb)::text LIKE '%' || $3 || '%'
-          )
-        ORDER BY a.label,p.label`,
-      [companyId, component.id, component.key]
-    );
-    return pages.rows.map((page) => ({
-      type: "page", companyId: page.company_id,
-      appKey: page.app_key, appLabel: page.app_label,
-      pageId: page.id, pageKey: page.page_key, pageLabel: page.page_label,
-    }));
+    const needleParams = [companyId, component.id, component.key];
+    const [pages, layouts] = await Promise.all([
+      db(
+        `SELECT p.id,p.company_id,p.page_key,p.label AS page_label,a.app_key,a.label AS app_label
+           FROM platform_pages p
+           JOIN platform_apps a ON a.id=p.app_id
+          WHERE p.active=true AND p.company_id=$1
+            AND (
+              p.definition::text LIKE '%' || $2 || '%'
+              OR p.definition::text LIKE '%' || $3 || '%'
+              OR COALESCE(p.draft_definition,'{}'::jsonb)::text LIKE '%' || $2 || '%'
+              OR COALESCE(p.draft_definition,'{}'::jsonb)::text LIKE '%' || $3 || '%'
+            )
+          ORDER BY a.label,p.label`,
+        needleParams
+      ),
+      db(
+        `SELECT l.id,l.company_id,l.layout_key,l.name,o.object_key
+           FROM platform_layouts l
+           JOIN platform_objects o ON o.id=l.object_id
+          WHERE l.active=true AND (l.company_id IS NULL OR l.company_id=$1)
+            AND (l.definition::text LIKE '%' || $2 || '%' OR l.definition::text LIKE '%' || $3 || '%')
+          ORDER BY o.object_key,l.name`,
+        needleParams
+      ),
+    ]);
+    return [
+      ...pages.rows.map((page) => ({
+        type: "page", companyId: page.company_id,
+        appKey: page.app_key, appLabel: page.app_label,
+        pageId: page.id, pageKey: page.page_key, pageLabel: page.page_label,
+      })),
+      ...layouts.rows.map((layout) => ({
+        type: "layout", companyId: layout.company_id,
+        objectKey: layout.object_key, layoutId: layout.id,
+        layoutKey: layout.layout_key, layoutLabel: layout.name,
+      })),
+    ];
   }
 
   router.get("/platform/component-registry", ...manage, async (req, res) => {
