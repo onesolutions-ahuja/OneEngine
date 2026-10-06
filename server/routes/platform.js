@@ -2240,7 +2240,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         // Reuse a tenant app when one exists; otherwise create the generic
         // metadata app container. This is presentation metadata, not business code.
         let app = (await client.query(
-          "SELECT * FROM platform_apps WHERE company_id=$1 AND active=true ORDER BY CASE WHEN app_key='oneengine_objects' THEN 0 ELSE 1 END, created_at ASC LIMIT 1",
+          "SELECT * FROM platform_apps WHERE company_id=$1 AND app_key='oneengine_objects' AND active=true LIMIT 1",
           [req.user.companyId]
         )).rows[0];
         if (!app) {
