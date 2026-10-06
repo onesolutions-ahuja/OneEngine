@@ -2671,11 +2671,23 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (!entries.length) throw new Error("Create Record requires at least one field value");
         const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
         const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
-        const columns = mappedFields.map((field) => '"' + field.source_column + '"');
+        const sourceColumns = mappedFields.map((field) => field.source_column);
+        const columns = sourceColumns.map((column) => '"' + column + '"');
         const params = entries.map(([, value]) => value);
         const values = entries.map((_, index) => "$" + (index + 1));
-        if (runtimeCompanyId && targetObject.company_scoped) { columns.push('"company_id"'); values.push("$" + (params.length + 1)); params.push(runtimeCompanyId); }
-        if (runtimeStoreId && targetObject.store_scoped) { columns.push('"store_id"'); values.push("$" + (params.length + 1)); params.push(runtimeStoreId); }
+        const applyScope = (column, value) => {
+          const existingIndex = sourceColumns.indexOf(column);
+          if (existingIndex >= 0) {
+            params[existingIndex] = value;
+            return;
+          }
+          sourceColumns.push(column);
+          columns.push('"' + column + '"');
+          params.push(value);
+          values.push("$" + params.length);
+        };
+        if (runtimeCompanyId && targetObject.company_scoped) applyScope("company_id", runtimeCompanyId);
+        if (runtimeStoreId && targetObject.store_scoped) applyScope("store_id", runtimeStoreId);
         const result = await db('INSERT INTO "' + table + '" (' + columns.join(", ") + ") VALUES (" + values.join(", ") + ") RETURNING *", params);
         return { record: result.rows[0] || null, duplicateWarning: duplicateAction === "WARN" };
       };
