@@ -861,10 +861,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     } catch (err) { setError(err?.message || 'Unable to record petty cash') }
   }
 
-  const customerDisplayEnabled =
-    settings?.till?.customerDisplayEnabled === true
-    || settings?.customerDisplayEnabled === true
-    || settings?.storeTill?.customerDisplayEnabled === true
+  const customerDisplayEnabled = (surfaceSettings.customerDisplayEnabledPaths || [])
+    .some((path) => surfacePath(settings, path, false) === true)
 
   const openCustomerDisplay = () => {
     if (!customerDisplayEnabled) {
