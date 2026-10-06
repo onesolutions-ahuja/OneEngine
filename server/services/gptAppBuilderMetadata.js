@@ -75,6 +75,7 @@ function collectTypedReferences(value, output = []) {
   if (value.flowKey) output.push({ type: "workflow", key: String(value.flowKey) });
   if (value.actionKey) output.push({ type: "action", key: String(value.actionKey) });
   if (value.connectorKey || value.providerKey) output.push({ type: "connector", key: String(value.connectorKey || value.providerKey) });
+  if (value.connectorOperationKey && (value.connectorKey || value.providerKey)) output.push({ type: "connector", key: String(value.connectorKey || value.providerKey) });
   if (value.permissionKey) output.push({ type: "permission", key: String(value.permissionKey) });
   if (value.packageKey) output.push({ type: "package", key: String(value.packageKey) });
 
