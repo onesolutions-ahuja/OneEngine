@@ -357,7 +357,15 @@ export const oneAssistantManifest = {
               scope: "one_assistant",
               subflowCapability: "assistant.payment.router",
               actions: [
-                { id: "payment_provider", key: "RUN_ASSISTANT_SUBFLOW", capability: "assistant.payment", required: false }
+                { id:"payment_channel",label:"Route Payment Channel",apiName:"payment_channel",key:"CONDITION",
+                  outcomes:[
+                    {id:"email",label:"Email",condition:{match:"all",conditions:[{field:"$record.channel",operator:"equals",value:"EMAIL"}]},branch:["send_payment_email"]},
+                    {id:"sms",label:"SMS",condition:{match:"all",conditions:[{field:"$record.channel",operator:"equals",value:"SMS"}]},branch:["send_payment_sms"]},
+                    {id:"whatsapp",label:"WhatsApp",condition:{match:"all",conditions:[{field:"$record.channel",operator:"equals",value:"WHATSAPP"}]},branch:["send_payment_whatsapp"]}
+                  ],defaultLabel:"No Message Channel",defaultBranch:[] },
+                { id:"send_payment_email",label:"Send Payment Email",apiName:"send_payment_email",key:"SEND_COMMUNICATION",channel:"EMAIL",recipient:{path:"$record.sender"},templateKey:"assistant_email_payment",templateContext:{paymentUrl:{path:"$record.state.paymentUrl"}} },
+                { id:"send_payment_sms",label:"Send Payment SMS",apiName:"send_payment_sms",key:"SEND_COMMUNICATION",channel:"SMS",recipient:{path:"$record.sender"},templateKey:"assistant_sms_payment",templateContext:{paymentUrl:{path:"$record.state.paymentUrl"}} },
+                { id:"send_payment_whatsapp",label:"Send Payment WhatsApp",apiName:"send_payment_whatsapp",key:"SEND_COMMUNICATION",channel:"WHATSAPP",recipient:{path:"$record.sender"},templateKey:"assistant_whatsapp_payment",templateContext:{paymentUrl:{path:"$record.state.paymentUrl"}} }
               ]
             },
             active: false,
@@ -372,7 +380,15 @@ export const oneAssistantManifest = {
               scope: "one_assistant",
               subflowCapability: "assistant.confirmation",
               actions: [
-                { id: "confirmation_channel", key: "RUN_ASSISTANT_SUBFLOW", capability: "assistant.confirmation", channel: { path: "channel" }, required: false }
+                { id:"confirmation_channel",label:"Route Confirmation Channel",apiName:"confirmation_channel",key:"CONDITION",
+                  outcomes:[
+                    {id:"email",label:"Email",condition:{match:"all",conditions:[{field:"$record.channel",operator:"equals",value:"EMAIL"}]},branch:["send_confirmation_email"]},
+                    {id:"sms",label:"SMS",condition:{match:"all",conditions:[{field:"$record.channel",operator:"equals",value:"SMS"}]},branch:["send_confirmation_sms"]},
+                    {id:"whatsapp",label:"WhatsApp",condition:{match:"all",conditions:[{field:"$record.channel",operator:"equals",value:"WHATSAPP"}]},branch:["send_confirmation_whatsapp"]}
+                  ],defaultLabel:"No Message Channel",defaultBranch:[] },
+                { id:"send_confirmation_email",label:"Send Confirmation Email",apiName:"send_confirmation_email",key:"SEND_COMMUNICATION",channel:"EMAIL",recipient:{path:"$record.sender"},templateKey:"assistant_email_confirmation",templateContext:{appointmentStartsAt:{path:"$record.state.appointmentStartsAt"},invoiceUrl:{path:"$record.state.invoiceUrl"}} },
+                { id:"send_confirmation_sms",label:"Send Confirmation SMS",apiName:"send_confirmation_sms",key:"SEND_COMMUNICATION",channel:"SMS",recipient:{path:"$record.sender"},templateKey:"assistant_sms_confirmation",templateContext:{appointmentStartsAt:{path:"$record.state.appointmentStartsAt"}} },
+                { id:"send_confirmation_whatsapp",label:"Send Confirmation WhatsApp",apiName:"send_confirmation_whatsapp",key:"SEND_COMMUNICATION",channel:"WHATSAPP",recipient:{path:"$record.sender"},templateKey:"assistant_whatsapp_confirmation",templateContext:{appointmentStartsAt:{path:"$record.state.appointmentStartsAt"}} }
               ]
             },
             active: false,
