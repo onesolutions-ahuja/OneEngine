@@ -613,94 +613,91 @@
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
-      "action": {
-        "type": "workflow",
-        "scope": "package",
-        "capabilityKey": "online_order.transition",
-        "apiName": "ONLINE_ORDER_TRANSITION",
-        "flowType": "AUTOLAUNCHED",
-        "inputContract": [
-          {
-            "name": "orderId",
-            "label": "orderId",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "toStatus",
-            "label": "toStatus",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "reason",
-            "label": "reason",
-            "type": "text",
-            "required": false
-          },
-          {
-            "name": "now",
-            "label": "now",
-            "type": "text",
-            "required": true
-          }
-        ],
-        "outputContract": [
-          {
-            "name": "orderId",
-            "label": "orderId",
-            "type": "text",
-            "source": "variables.orderId"
-          }
-        ],
-        "actions": [
-          {
-            "id": "get_order",
-            "label": "Get Online Order",
-            "key": "GET_RECORDS",
-            "objectKey": "online_order",
-            "filters": [
-              {
-                "field": "id",
-                "operator": "equals",
-                "value": {
-                  "path": "$record.orderId"
-                }
+      "scope": "package",
+      "capabilityKey": "online_order.transition",
+      "apiName": "ONLINE_ORDER_TRANSITION",
+      "flowType": "AUTOLAUNCHED",
+      "inputContract": [
+        {
+          "name": "orderId",
+          "label": "orderId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "toStatus",
+          "label": "toStatus",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "reason",
+          "label": "reason",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "now",
+          "label": "now",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "orderId",
+          "label": "orderId",
+          "type": "text",
+          "source": "variables.orderId"
+        }
+      ],
+      "actions": [
+        {
+          "id": "get_order",
+          "label": "Get Online Order",
+          "key": "GET_RECORDS",
+          "objectKey": "online_order",
+          "filters": [
+            {
+              "field": "id",
+              "operator": "equals",
+              "value": {
+                "path": "$record.orderId"
               }
-            ],
-            "limit": 1,
-            "store": "first"
+            }
+          ],
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "update_order",
+          "label": "Update Order Status",
+          "key": "UPDATE_RECORD",
+          "objectKey": "online_order",
+          "recordId": {
+            "path": "steps.get_order.record.id"
           },
-          {
-            "id": "update_order",
-            "label": "Update Order Status",
-            "key": "UPDATE_RECORD",
-            "objectKey": "online_order",
-            "recordId": {
-              "path": "steps.get_order.record.id"
+          "fieldValues": {
+            "status": {
+              "path": "$record.toStatus"
             },
-            "fieldValues": {
-              "status": {
-                "path": "$record.toStatus"
-              },
-              "updated_at": {
-                "path": "$record.now"
-              }
-            }
-          },
-          {
-            "id": "set_order_id",
-            "label": "Return Order",
-            "key": "ASSIGNMENT",
-            "variableName": "orderId",
-            "variableType": "text",
-            "operator": "set",
-            "value": {
-              "path": "steps.get_order.record.id"
+            "updated_at": {
+              "path": "$record.now"
             }
           }
-        ]
-      }
+        },
+        {
+          "id": "set_order_id",
+          "label": "Return Order",
+          "key": "ASSIGNMENT",
+          "variableName": "orderId",
+          "variableType": "text",
+          "operator": "set",
+          "value": {
+            "path": "steps.get_order.record.id"
+          }
+        }
+      ]
     },
     {
       "objectKey": "online_order",
@@ -708,294 +705,291 @@
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
-      "action": {
-        "type": "workflow",
-        "scope": "package",
-        "capabilityKey": "online_order.create",
-        "apiName": "ONLINE_ORDER_CREATE",
-        "flowType": "AUTOLAUNCHED",
-        "inputContract": [
-          {
-            "name": "externalOrderId",
-            "label": "externalOrderId",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "storeId",
-            "label": "storeId",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "fulfilmentType",
-            "label": "fulfilmentType",
-            "type": "text",
-            "required": true
-          },
-          {
-            "name": "items",
-            "label": "items",
-            "type": "collection",
-            "required": true
-          },
-          {
-            "name": "customer",
-            "label": "customer",
-            "type": "object",
-            "required": false
-          },
-          {
-            "name": "notes",
-            "label": "notes",
-            "type": "text",
-            "required": false
+      "scope": "package",
+      "capabilityKey": "online_order.create",
+      "apiName": "ONLINE_ORDER_CREATE",
+      "flowType": "AUTOLAUNCHED",
+      "inputContract": [
+        {
+          "name": "externalOrderId",
+          "label": "externalOrderId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "storeId",
+          "label": "storeId",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "fulfilmentType",
+          "label": "fulfilmentType",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "items",
+          "label": "items",
+          "type": "collection",
+          "required": true
+        },
+        {
+          "name": "customer",
+          "label": "customer",
+          "type": "object",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "notes",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "orderId",
+          "label": "orderId",
+          "type": "text",
+          "source": "variables.orderId"
+        },
+        {
+          "name": "subtotal",
+          "label": "subtotal",
+          "type": "number",
+          "source": "variables.subtotal"
+        },
+        {
+          "name": "tax",
+          "label": "tax",
+          "type": "number",
+          "source": "variables.tax"
+        },
+        {
+          "name": "total",
+          "label": "total",
+          "type": "number",
+          "source": "variables.total"
+        }
+      ],
+      "actions": [
+        {
+          "id": "init_subtotal",
+          "label": "Initialize Subtotal",
+          "key": "ASSIGNMENT",
+          "variableName": "subtotal",
+          "variableType": "currency",
+          "operator": "set",
+          "value": 0
+        },
+        {
+          "id": "init_tax",
+          "label": "Initialize Tax",
+          "key": "ASSIGNMENT",
+          "variableName": "tax",
+          "variableType": "currency",
+          "operator": "set",
+          "value": 0
+        },
+        {
+          "id": "create_order",
+          "label": "Create Online Order",
+          "key": "CREATE_RECORD",
+          "objectKey": "online_order",
+          "fieldValues": {
+            "external_order_id": {
+              "path": "$record.externalOrderId"
+            },
+            "platform": "generic",
+            "store_id": {
+              "path": "$record.storeId"
+            },
+            "fulfilment_type": {
+              "path": "$record.fulfilmentType"
+            },
+            "customer_name": {
+              "path": "$record.customer.name"
+            },
+            "customer_phone": {
+              "path": "$record.customer.phone"
+            },
+            "customer_email": {
+              "path": "$record.customer.email"
+            },
+            "notes": {
+              "path": "$record.notes"
+            },
+            "status": "RECEIVED",
+            "subtotal": 0,
+            "tax": 0,
+            "total": 0
           }
-        ],
-        "outputContract": [
-          {
-            "name": "orderId",
-            "label": "orderId",
-            "type": "text",
-            "source": "variables.orderId"
-          },
-          {
-            "name": "subtotal",
-            "label": "subtotal",
-            "type": "number",
-            "source": "variables.subtotal"
-          },
-          {
-            "name": "tax",
-            "label": "tax",
-            "type": "number",
-            "source": "variables.tax"
-          },
-          {
-            "name": "total",
-            "label": "total",
-            "type": "number",
-            "source": "variables.total"
+        },
+        {
+          "id": "set_order_id",
+          "label": "Store Order Id",
+          "key": "ASSIGNMENT",
+          "variableName": "orderId",
+          "variableType": "text",
+          "operator": "set",
+          "value": {
+            "path": "steps.create_order.record.id"
           }
-        ],
-        "actions": [
-          {
-            "id": "init_subtotal",
-            "label": "Initialize Subtotal",
-            "key": "ASSIGNMENT",
-            "variableName": "subtotal",
-            "variableType": "currency",
-            "operator": "set",
-            "value": 0
-          },
-          {
-            "id": "init_tax",
-            "label": "Initialize Tax",
-            "key": "ASSIGNMENT",
-            "variableName": "tax",
-            "variableType": "currency",
-            "operator": "set",
-            "value": 0
-          },
-          {
-            "id": "create_order",
-            "label": "Create Online Order",
-            "key": "CREATE_RECORD",
-            "objectKey": "online_order",
-            "fieldValues": {
-              "external_order_id": {
-                "path": "$record.externalOrderId"
-              },
-              "platform": "generic",
-              "store_id": {
-                "path": "$record.storeId"
-              },
-              "fulfilment_type": {
-                "path": "$record.fulfilmentType"
-              },
-              "customer_name": {
-                "path": "$record.customer.name"
-              },
-              "customer_phone": {
-                "path": "$record.customer.phone"
-              },
-              "customer_email": {
-                "path": "$record.customer.email"
-              },
-              "notes": {
-                "path": "$record.notes"
-              },
-              "status": "RECEIVED",
-              "subtotal": 0,
-              "tax": 0,
-              "total": 0
-            }
-          },
-          {
-            "id": "set_order_id",
-            "label": "Store Order Id",
-            "key": "ASSIGNMENT",
-            "variableName": "orderId",
-            "variableType": "text",
-            "operator": "set",
-            "value": {
-              "path": "steps.create_order.record.id"
-            }
-          },
-          {
-            "id": "order_lines",
-            "label": "Create Order Lines",
-            "key": "LOOP",
-            "collection": "$record.items",
-            "itemVariable": "currentItem",
-            "bodyBranch": [
-              "get_product",
-              "line_subtotal",
-              "line_tax",
-              "create_line",
-              "add_subtotal",
-              "add_tax"
-            ]
-          },
-          {
-            "id": "get_product",
-            "label": "Get Product",
-            "key": "GET_RECORDS",
-            "objectKey": "product",
-            "filters": [
-              {
-                "field": "id",
-                "operator": "equals",
-                "value": {
-                  "path": "variables.currentItem.productId"
-                }
-              }
-            ],
-            "limit": 1,
-            "store": "first"
-          },
-          {
-            "id": "line_subtotal",
-            "label": "Calculate Line Subtotal",
-            "key": "FORMULA",
-            "resourceName": "lineSubtotal",
-            "resultType": "number",
-            "expression": "price * quantity",
-            "inputs": {
-              "price": {
-                "path": "steps.get_product.record.price"
-              },
-              "quantity": {
-                "path": "variables.currentItem.quantity"
+        },
+        {
+          "id": "order_lines",
+          "label": "Create Order Lines",
+          "key": "LOOP",
+          "collection": "$record.items",
+          "itemVariable": "currentItem",
+          "bodyBranch": [
+            "get_product",
+            "line_subtotal",
+            "line_tax",
+            "create_line",
+            "add_subtotal",
+            "add_tax"
+          ]
+        },
+        {
+          "id": "get_product",
+          "label": "Get Product",
+          "key": "GET_RECORDS",
+          "objectKey": "product",
+          "filters": [
+            {
+              "field": "id",
+              "operator": "equals",
+              "value": {
+                "path": "variables.currentItem.productId"
               }
             }
-          },
-          {
-            "id": "line_tax",
-            "label": "Calculate Line Tax",
-            "key": "FORMULA",
-            "resourceName": "lineTax",
-            "resultType": "number",
-            "expression": "lineSubtotal * vatRate / 100",
-            "inputs": {
-              "lineSubtotal": {
-                "path": "variables.lineSubtotal"
-              },
-              "vatRate": {
-                "path": "steps.get_product.record.vat_rate",
-                "fallback": 0
-              }
+          ],
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "line_subtotal",
+          "label": "Calculate Line Subtotal",
+          "key": "FORMULA",
+          "resourceName": "lineSubtotal",
+          "resultType": "number",
+          "expression": "price * quantity",
+          "inputs": {
+            "price": {
+              "path": "steps.get_product.record.price"
+            },
+            "quantity": {
+              "path": "variables.currentItem.quantity"
             }
-          },
-          {
-            "id": "create_line",
-            "label": "Create Order Line",
-            "key": "CREATE_RECORD",
-            "objectKey": "online_order_line",
-            "fieldValues": {
-              "order_id": {
-                "path": "variables.orderId"
-              },
-              "product_id": {
-                "path": "steps.get_product.record.id"
-              },
-              "product_name": {
-                "path": "steps.get_product.record.name"
-              },
-              "quantity": {
-                "path": "variables.currentItem.quantity"
-              },
-              "unit_price": {
-                "path": "steps.get_product.record.price"
-              },
-              "tax": {
-                "path": "variables.lineTax"
-              },
-              "total": {
-                "path": "variables.lineSubtotal"
-              }
-            }
-          },
-          {
-            "id": "add_subtotal",
-            "label": "Add Subtotal",
-            "key": "ASSIGNMENT",
-            "variableName": "subtotal",
-            "variableType": "currency",
-            "operator": "add",
-            "value": {
+          }
+        },
+        {
+          "id": "line_tax",
+          "label": "Calculate Line Tax",
+          "key": "FORMULA",
+          "resourceName": "lineTax",
+          "resultType": "number",
+          "expression": "lineSubtotal * vatRate / 100",
+          "inputs": {
+            "lineSubtotal": {
               "path": "variables.lineSubtotal"
+            },
+            "vatRate": {
+              "path": "steps.get_product.record.vat_rate",
+              "fallback": 0
             }
-          },
-          {
-            "id": "add_tax",
-            "label": "Add Tax",
-            "key": "ASSIGNMENT",
-            "variableName": "tax",
-            "variableType": "currency",
-            "operator": "add",
-            "value": {
-              "path": "variables.lineTax"
-            }
-          },
-          {
-            "id": "calculate_total",
-            "label": "Calculate Total",
-            "key": "FORMULA",
-            "resourceName": "total",
-            "resultType": "number",
-            "expression": "subtotal + tax",
-            "inputs": {
-              "subtotal": {
-                "path": "variables.subtotal"
-              },
-              "tax": {
-                "path": "variables.tax"
-              }
-            }
-          },
-          {
-            "id": "update_order_totals",
-            "label": "Update Order Totals",
-            "key": "UPDATE_RECORD",
-            "objectKey": "online_order",
-            "recordId": {
+          }
+        },
+        {
+          "id": "create_line",
+          "label": "Create Order Line",
+          "key": "CREATE_RECORD",
+          "objectKey": "online_order_line",
+          "fieldValues": {
+            "order_id": {
               "path": "variables.orderId"
             },
-            "fieldValues": {
-              "subtotal": {
-                "path": "variables.subtotal"
-              },
-              "tax": {
-                "path": "variables.tax"
-              },
-              "total": {
-                "path": "variables.total"
-              }
+            "product_id": {
+              "path": "steps.get_product.record.id"
+            },
+            "product_name": {
+              "path": "steps.get_product.record.name"
+            },
+            "quantity": {
+              "path": "variables.currentItem.quantity"
+            },
+            "unit_price": {
+              "path": "steps.get_product.record.price"
+            },
+            "tax": {
+              "path": "variables.lineTax"
+            },
+            "total": {
+              "path": "variables.lineSubtotal"
             }
           }
-        ]
-      }
+        },
+        {
+          "id": "add_subtotal",
+          "label": "Add Subtotal",
+          "key": "ASSIGNMENT",
+          "variableName": "subtotal",
+          "variableType": "currency",
+          "operator": "add",
+          "value": {
+            "path": "variables.lineSubtotal"
+          }
+        },
+        {
+          "id": "add_tax",
+          "label": "Add Tax",
+          "key": "ASSIGNMENT",
+          "variableName": "tax",
+          "variableType": "currency",
+          "operator": "add",
+          "value": {
+            "path": "variables.lineTax"
+          }
+        },
+        {
+          "id": "calculate_total",
+          "label": "Calculate Total",
+          "key": "FORMULA",
+          "resourceName": "total",
+          "resultType": "number",
+          "expression": "subtotal + tax",
+          "inputs": {
+            "subtotal": {
+              "path": "variables.subtotal"
+            },
+            "tax": {
+              "path": "variables.tax"
+            }
+          }
+        },
+        {
+          "id": "update_order_totals",
+          "label": "Update Order Totals",
+          "key": "UPDATE_RECORD",
+          "objectKey": "online_order",
+          "recordId": {
+            "path": "variables.orderId"
+          },
+          "fieldValues": {
+            "subtotal": {
+              "path": "variables.subtotal"
+            },
+            "tax": {
+              "path": "variables.tax"
+            },
+            "total": {
+              "path": "variables.total"
+            }
+          }
+        }
+      ]
     }
   ],
   "actions": [
