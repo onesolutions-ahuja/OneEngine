@@ -1,22 +1,11 @@
+import { selectMetadataRecords, upsertMetadataRecord } from "../metadataRecordStore.js";
+
 /*
  * JARVES user/licence control (internal configuration foundation).
  *
- * A company may license a fixed number of JARVES users. The allowance lives in
- * the EXISTING company_settings table (jarves_licence_users, default 0 =
- * nobody); per-user opt-in lives on the EXISTING users table
- * (users.jarves_enabled). No billing, no external licence verification and no
- * second permission system - this is plain configuration the admin controls.
- *
- * Rules pinned by tests:
- *   - an unset/zero allowance means NO user can be JARVES-enabled;
- *   - the enabled count can never exceed the allowance (enabling a user when
- *     the count is at the allowance is refused with ALLOWANCE_REACHED);
- *   - lowering the allowance below the current enabled count is refused
- *     (ALLOWANCE_BELOW_ENABLED): existing users are never silently disabled;
- *   - every query is scoped by company_id - company A can never read or change
- *     company B's licence state.
- *
- * `db` is the EXISTING server.js query helper, injected for testability.
+ * Company allowance is exposed through the metadata-owned system_settings Object;
+ * per-user opt-in remains an identity field on users. No business settings table
+ * is referenced by this runtime service.
  */
 
 export const JARVES_MAX_ALLOWANCE = 10000;
@@ -48,11 +37,13 @@ export async function countJarvesEnabledUsers(db, companyId) {
 
 /** Company licence allowance (0 when never configured - JARVES is opt-in). */
 export async function getJarvesAllowance(db, companyId) {
-  const result = await db(
-    `SELECT jarves_licence_users FROM company_settings WHERE company_id = $1`,
-    [companyId]
-  );
-  return Number(result.rows[0]?.jarves_licence_users ?? 0);
+  const rows = await selectMetadataRecords(db, {
+    objectKey: "system_settings",
+    companyId,
+    columns: ["jarves_licence_users"],
+    limit: 1,
+  });
+  return Number(rows[0]?.jarves_licence_users ?? 0);
 }
 
 /** { allowance, enabledUsers, seatsRemaining } for one company - admin UI + enforcement. */
@@ -84,12 +75,12 @@ export async function setJarvesAllowance(db, companyId, allowance, updatedBy = n
   const enabledUsers = await countJarvesEnabledUsers(db, companyId);
   if (safeAllowance < enabledUsers) return JARVES_ALLOWANCE_RESULTS.ALLOWANCE_BELOW_ENABLED;
 
-  await db(
-    `INSERT INTO company_settings (company_id, jarves_licence_users, updated_by, updated_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (company_id) DO UPDATE SET jarves_licence_users = $2, updated_by = $3, updated_at = NOW()`,
-    [companyId, safeAllowance, updatedBy]
-  );
+  await upsertMetadataRecord(db, {
+    objectKey: "system_settings",
+    companyId,
+    match: { company_id: companyId },
+    values: { jarves_licence_users: safeAllowance },
+  });
   return JARVES_ALLOWANCE_RESULTS.OK;
 }
 
