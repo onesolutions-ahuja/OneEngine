@@ -36,6 +36,7 @@ export default function GPTAppBuilderPage() {
   const [buildResult, setBuildResult] = useState(null);
   const [building, setBuilding] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [publishing, setPublishing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState({ label: "", appKey: "", description: "" });
   const [error, setError] = useState("");
@@ -161,6 +162,49 @@ export default function GPTAppBuilderPage() {
     }
   };
 
+  const publishBuild = async () => {
+    if (!buildResult?.artifact || !testResult?.valid) return setError("Build and pass Test before publishing.");
+    setPublishing(true);
+    setError("");
+    try {
+      const { artifact } = buildResult;
+      const app = artifact.manifest.apps[0] || {};
+      await apiRequest("/api/superadmin/packages/register-portable", {
+        method: "POST",
+        body: JSON.stringify({
+          packageKey: artifact.packageKey,
+          name: app.label || artifact.packageKey,
+          version: artifact.version,
+          description: app.description || "",
+          manifest: artifact.manifest,
+          category: app.category || "Apps",
+          publisher: app.publisher || "OneSolutions",
+          billable: app.billable !== false,
+        }),
+      });
+      const releaseResponse = await apiRequest("/api/superadmin/packages/releases", {
+        method: "POST",
+        body: JSON.stringify({
+          packageKey: artifact.packageKey,
+          version: artifact.version,
+          manifest: artifact.manifest,
+          releaseNotes: "Published from GPTAppBuilder",
+          changeSet: [],
+        }),
+      });
+      const releaseId = releaseResponse?.data?.id;
+      if (!releaseId) throw new Error("Release was not created.");
+      const validation = await apiRequest(`/api/superadmin/packages/releases/${encodeURIComponent(releaseId)}/validate`, { method: "POST", body: "{}" });
+      if (validation?.data?.valid !== true) throw new Error((validation?.data?.errors || []).join(" ") || "Release validation failed.");
+      await apiRequest(`/api/superadmin/packages/releases/${encodeURIComponent(releaseId)}/publish`, { method: "POST", body: "{}" });
+      setMessage("Published. Package is now projected to OneStore and uses the existing licence/trial/install lifecycle.");
+    } catch (e) {
+      setError(e?.message || "Publish failed.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   if (selectedAppId) {
     return (
       <div data-builder-key={BUILDER_DEFINITION.key}>
@@ -201,7 +245,7 @@ export default function GPTAppBuilderPage() {
       <div className="developer-record-list">
         {visibleApps.map((app) => <div key={app.id} className="settings-nav-item"><button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={() => setSelectedAppId(String(app.id))}><AppWindow size={16}/><span>{app.label || app.app_key}</span></button><button type="button" className="onepos-btn" disabled={building} onClick={() => void buildSelectedApp(app)}>{building ? "Building…" : "Build"}</button></div>)}
         {buildResult?.valid ? <div className="settings-success">Portable manifest ready · {buildResult.dependencyCount} dependencies · fingerprint {buildResult.artifact.fingerprint} <button type="button" className="onepos-btn" onClick={testBuild}>Test</button></div> : null}
-        {testResult?.valid ? <div className="settings-success">Test passed · artifact is publishable from the validation perspective.</div> : null}
+        {testResult?.valid ? <div className="settings-success">Test passed · artifact is publishable. <button type="button" className="onepos-btn onepos-btn-primary" disabled={publishing} onClick={() => void publishBuild()}>{publishing ? "Publishing…" : "Publish"}</button></div> : null}
         {buildResult && !buildResult.valid ? <div className="settings-error">Unresolved: {buildResult.unresolved.map((item) => `${item.type}:${item.key}`).join(", ")}</div> : null}
       </div>
     </section>
