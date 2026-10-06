@@ -45,6 +45,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   const [defaultPriority, setDefaultPriority] = useState("100");
   const [permissions, setPermissions] = useState({ codes: [] });
   const [layoutMode, setLayoutMode] = useState("desktop");
+  const [reportDefinitions, setReportDefinitions] = useState({});
 
   const selectedIndex = Math.max(0, (current?.components || []).findIndex((component) => component.id === selectedId));
   const selectedComponent = (current?.components || [])[selectedIndex] || null;
@@ -97,6 +98,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { let live=true; apiRequest("/api/reports/custom").then((response)=>{ if(live && response?.success) setReportDefinitions(Object.fromEntries((response.data||[]).map((report)=>[String(report.id),report.definition||{}]))); }).catch(()=>{ if(live) setReportDefinitions({}); }); return ()=>{ live=false; }; }, []);
   useEffect(() => {
     if (!embedded) return;
     setCurrent(initialDashboard ? { ...initialDashboard } : { ...empty });
@@ -261,7 +263,7 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
           </div>
           <DashboardFilterEditor
             filters={current.global_filters || []}
-            components={current.components || []}
+            components={(current.components || []).map((component) => ({ ...component, reportDefinition: reportDefinitions[String(component.config?.reportId || "")] || null }))}
             onChange={(global_filters) => setCurrent({ ...current, global_filters })}
           />
           {current.id && principals && canShare ? <>
