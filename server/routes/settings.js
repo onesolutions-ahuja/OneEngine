@@ -309,7 +309,7 @@ export default function createSettingsRouter({
           },
           exchange: {
             /* receipt | normal | both (default). The till Exchange workflow
-               and POST /api/returns/exchanges enforce this server-side. */
+               and metadata Validation Rules / Flows enforce this server-side. */
             mode: ["receipt", "normal", "both"].includes(settings.exchange_mode)
               ? settings.exchange_mode
               : "both",
