@@ -144,15 +144,6 @@ const creditFlow = ({ key, name, inputs, outputs, actions }) => {
   };
 };
 
-const CUSTOMER_CREDIT_SYSTEM_WORKFLOWS = [];
-
-const tillFlow = (spec) => {
-  const flow = creditFlow(spec);
-  return { ...flow, name: `OneTill - ${spec.name}` };
-};
-
-const TILL_SYSTEM_WORKFLOWS = Object.freeze([]);
-
 const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([]);
 
 function titleCase(value = "") {
@@ -163,7 +154,7 @@ function titleCase(value = "") {
 }
 
 export function systemWorkflowDefinitions() {
-  return [...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS].map(withBuilderMetadata);
+  return [...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS].map(withBuilderMetadata);
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {
