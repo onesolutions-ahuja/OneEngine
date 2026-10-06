@@ -6,6 +6,7 @@ const sales=fs.readFileSync("server/routes/sales.js","utf8");
 const till=fs.readFileSync("server/routes/till.js","utf8");
 const platform=fs.readFileSync("server/routes/platform.js","utf8");
 const invoiceDelivery=fs.readFileSync("server/routes/invoiceDelivery.js","utf8");
+const globalProducts=fs.readFileSync("server/routes/globalProductLookup.js","utf8");
 
 test("phase 4 legacy sale mutation engine is retired",()=>{
   assert.equal(sales.includes("INSERT INTO sales"),false);
@@ -33,4 +34,9 @@ test("phase 4 invoice configuration has no route-local SQL writer",()=>{
   assert.equal(invoiceDelivery.includes("INSERT INTO integrations"),false);
   assert.equal(invoiceDelivery.includes("UPDATE integrations SET"),false);
   assert.equal(invoiceDelivery.includes("Delivery configuration writes are executed through Integration metadata Actions/Flows."),true);
+});
+
+test("phase 4 provider configuration routes have no business SQL writers",()=>{
+  for(const sql of ["INSERT INTO integrations","UPDATE integration_connections","INSERT INTO integration_connections"]) assert.equal(globalProducts.includes(sql),false,sql);
+  assert.equal(globalProducts.includes("Product-provider configuration is executed through Integration metadata Actions/Flows."),true);
 });
