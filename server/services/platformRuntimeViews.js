@@ -151,3 +151,83 @@ export async function loadConfiguredRuntimeView({ db, companyId, storeId = null,
 
   return { record, lookups, collections, descriptor };
 }
+
+
+function metadataValue(value, values = {}) {
+  if (typeof value !== "string" || !value.startsWith("$")) return value;
+  return values[value.slice(1)];
+}
+
+export async function runConfiguredAggregateView({ db, companyId, storeId = null, viewKey, values = {} }) {
+  if (!db || !companyId || !viewKey) return null;
+  const ownerResult = await db(
+    `SELECT * FROM platform_objects
+      WHERE active=true
+        AND (company_id IS NULL OR company_id=$1)
+        AND COALESCE(config,'{}'::jsonb)->'aggregateViews' ? $2
+      ORDER BY company_id NULLS LAST
+      LIMIT 1`,
+    [companyId, String(viewKey)]
+  );
+  const object = ownerResult.rows?.[0] || null;
+  const descriptor = object?.config?.aggregateViews?.[viewKey];
+  if (!object?.source_table || !descriptor || typeof descriptor !== "object") return null;
+  safeIdentifier(object.source_table, "source table");
+  const fields = await resolveFields(db, companyId, object);
+  const params = [];
+  const clauses = [];
+
+  if (object.company_scoped !== false && fields.has("company_id")) {
+    params.push(companyId);
+    clauses.push(`"${fields.get("company_id")}"=$${params.length}`);
+  }
+  if (object.store_scoped === true) {
+    if (!storeId) throw new Error("A store context is required");
+    const storeColumn = fields.get("store_id");
+    if (!storeColumn) throw new Error("Store-scoped metadata object is missing store_id");
+    params.push(storeId);
+    clauses.push(`"${storeColumn}"=$${params.length}`);
+  }
+
+  for (const filter of Array.isArray(descriptor.filters) ? descriptor.filters : []) {
+    const column = fields.get(String(filter.field));
+    if (!column) throw new Error(`Aggregate view field ${filter.field} is unavailable`);
+    const operator = String(filter.operator || "equals");
+    const value = metadataValue(filter.value, values);
+    if (operator === "equals" || operator === "not_equals" || operator === "gte" || operator === "gt" || operator === "lte" || operator === "lt") {
+      params.push(value);
+      const sqlOperator = ({ equals:"=", not_equals:"<>", gte:">=", gt:">", lte:"<=", lt:"<" })[operator];
+      clauses.push(`"${column}" ${sqlOperator} $${params.length}`);
+    } else if (operator === "local_date_equals") {
+      const timezone = metadataValue(filter.timezone, values);
+      if (!timezone || !value) throw new Error("Local-date aggregate filter requires date and timezone");
+      params.push(timezone);
+      const timezoneParam = `$${params.length}`;
+      params.push(value);
+      clauses.push(`("${column}" AT TIME ZONE ${timezoneParam})::date = $${params.length}::date`);
+    } else if (operator === "is_blank") {
+      clauses.push(`"${column}" IS NULL`);
+    } else if (operator === "is_not_blank") {
+      clauses.push(`"${column}" IS NOT NULL`);
+    } else {
+      throw new Error(`Unsupported aggregate view operator ${operator}`);
+    }
+  }
+
+  const summaries = [];
+  for (const summary of Array.isArray(descriptor.summaries) ? descriptor.summaries : []) {
+    const alias = safeIdentifier(summary.alias, "summary alias");
+    const field = fields.get(String(summary.field));
+    if (!field) throw new Error(`Aggregate view summary field ${summary.field} is unavailable`);
+    const aggregate = String(summary.aggregate || "COUNT").toUpperCase();
+    if (!["COUNT","SUM","AVG","MIN","MAX"].includes(aggregate)) throw new Error("Unsupported aggregate");
+    const expr = aggregate === "COUNT"
+      ? `COUNT("${field}")::int`
+      : `COALESCE(${aggregate}("${field}"),0)`;
+    summaries.push(`${expr} AS "${alias}"`);
+  }
+  if (!summaries.length) throw new Error("Aggregate view needs at least one summary");
+  const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+  const result = await db(`SELECT ${summaries.join(",")} FROM "${object.source_table}"${where}`, params);
+  return result.rows?.[0] || {};
+}
