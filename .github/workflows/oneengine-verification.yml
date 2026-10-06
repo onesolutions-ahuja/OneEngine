@@ -1,0 +1,39 @@
+name: OneEngine Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Install backend dependencies
+        working-directory: server
+        run: npm ci
+      - name: Frontend architecture and production build
+        run: npm run build
+      - name: Frontend unit tests
+        run: npm run test:unit
+      - name: Backend build, migration checks, runtime audits and unit tests
+        working-directory: server
+        run: npm run build
