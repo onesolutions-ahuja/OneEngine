@@ -172,7 +172,7 @@ ALTER TABLE integration_connections
   ADD COLUMN IF NOT EXISTS connector_definition_id UUID REFERENCES platform_connector_definitions(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS credential_id UUID,
   ADD COLUMN IF NOT EXISTS connector_package_key VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS till_id UUID REFERENCES terminals(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS terminal_id UUID REFERENCES terminals(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS connector_configuration JSONB NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS connector_capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS fallback_order INTEGER NOT NULL DEFAULT 0,
@@ -186,8 +186,8 @@ ALTER TABLE integration_connections
   ADD COLUMN IF NOT EXISTS last_error TEXT,
   ADD COLUMN IF NOT EXISTS oauth_state_hash VARCHAR(64),
   ADD COLUMN IF NOT EXISTS oauth_state_expires_at TIMESTAMPTZ;
-CREATE INDEX IF NOT EXISTS idx_integration_connectors_till
-  ON integration_connections(company_id, store_id, till_id, enabled, fallback_order)
+CREATE INDEX IF NOT EXISTS idx_integration_connectors_terminal
+  ON integration_connections(company_id, store_id, terminal_id, enabled, fallback_order)
   WHERE connector_package_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS platform_credentials (
