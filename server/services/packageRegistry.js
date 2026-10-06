@@ -1585,6 +1585,142 @@ export function packageDefinitions(catalog = packageManifestCatalog) {
   return catalog.map(packageDefinition);
 }
 
+export const packageRegistrySchema = `
+  CREATE TABLE IF NOT EXISTS package_registry (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    package_key VARCHAR(100) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    version VARCHAR(40) NOT NULL DEFAULT '1.0.0',
+    description TEXT,
+    module_id UUID UNIQUE REFERENCES platform_modules(id) ON DELETE SET NULL,
+    manifest JSONB NOT NULL DEFAULT '{}'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    package_type VARCHAR(30) NOT NULL DEFAULT 'APPLICATION',
+    publisher VARCHAR(200) NOT NULL DEFAULT 'OneSolutions',
+    category VARCHAR(100),
+    required_platform_version VARCHAR(40),
+    publication_state VARCHAR(20) NOT NULL DEFAULT 'PUBLISHED',
+    visible BOOLEAN NOT NULL DEFAULT TRUE,
+    installable BOOLEAN NOT NULL DEFAULT TRUE,
+    billable BOOLEAN NOT NULL DEFAULT TRUE,
+    featured BOOLEAN NOT NULL DEFAULT FALSE,
+    system_only BOOLEAN NOT NULL DEFAULT FALSE,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    available_tiers JSONB NOT NULL DEFAULT '[]'::jsonb,
+    licence_mode VARCHAR(30) NOT NULL DEFAULT 'COMMERCIAL',
+    allowed_bundles TEXT[] NOT NULL DEFAULT '{}',
+    allowed_companies UUID[] NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  ALTER TABLE package_registry ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT FALSE;
+  CREATE TABLE IF NOT EXISTS package_dependencies (
+    package_id UUID NOT NULL REFERENCES package_registry(id) ON DELETE CASCADE,
+    dependency_id UUID NOT NULL REFERENCES package_registry(id) ON DELETE RESTRICT,
+    version_range VARCHAR(40),
+    min_version VARCHAR(40),
+    max_version VARCHAR(40),
+    optional BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (package_id, dependency_id),
+    CHECK (package_id <> dependency_id)
+  );
+  CREATE TABLE IF NOT EXISTS company_package_installations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    package_id UUID NOT NULL REFERENCES package_registry(id) ON DELETE RESTRICT,
+    version VARCHAR(40) NOT NULL,
+    selected_features JSONB NOT NULL DEFAULT '[]'::jsonb,
+    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+    installation_type VARCHAR(30) NOT NULL DEFAULT 'DIRECT',
+    available_version VARCHAR(40),
+    last_upgrade_at TIMESTAMPTZ,
+    last_upgrade_state VARCHAR(20) NOT NULL DEFAULT 'READY',
+    suspended_by_entitlement BOOLEAN NOT NULL DEFAULT FALSE,
+    deactivated_by_user BOOLEAN NOT NULL DEFAULT FALSE,
+    installed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    installed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (company_id, package_id)
+  );
+  ALTER TABLE company_package_installations
+    ADD COLUMN IF NOT EXISTS selected_features JSONB NOT NULL DEFAULT '[]'::jsonb;
+  CREATE INDEX IF NOT EXISTS idx_company_package_installations_company
+    ON company_package_installations(company_id, status);
+  CREATE TABLE IF NOT EXISTS package_installation_versions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    package_id UUID NOT NULL REFERENCES package_registry(id) ON DELETE RESTRICT,
+    version VARCHAR(40) NOT NULL,
+    migration_key VARCHAR(200) NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    applied_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE (company_id, package_id, version, migration_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_package_installation_versions_company
+    ON package_installation_versions(company_id, package_id, applied_at DESC);
+  CREATE TABLE IF NOT EXISTS package_installation_operations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    idempotency_key VARCHAR(200) NOT NULL,
+    operation VARCHAR(20) NOT NULL CHECK (operation IN ('install','uninstall','deactivate')),
+    package_key VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('completed','failed')),
+    response JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (company_id, idempotency_key, operation, package_key)
+  );
+  ALTER TABLE package_installation_operations
+    DROP CONSTRAINT IF EXISTS package_installation_operations_company_id_idempotency_key_operation_key;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_package_installation_operations_key
+    ON package_installation_operations(company_id, idempotency_key, operation, package_key);
+
+  CREATE TABLE IF NOT EXISTS package_releases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    package_key VARCHAR(100) NOT NULL,
+    version VARCHAR(40) NOT NULL,
+    previous_version VARCHAR(40),
+    release_notes TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','VALIDATED','PUBLISHED','PAUSED','ARCHIVED')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    published_at TIMESTAMPTZ,
+    published_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    minimum_platform_version VARCHAR(40),
+    update_policy VARCHAR(20) NOT NULL DEFAULT 'OPTIONAL' CHECK (update_policy IN ('OPTIONAL','FORCED','STAGED')),
+    change_set JSONB NOT NULL DEFAULT '[]'::jsonb,
+    manifest JSONB NOT NULL DEFAULT '{}'::jsonb,
+    validation_summary JSONB NOT NULL DEFAULT '{}'::jsonb
+  );
+  ALTER TABLE package_releases ADD COLUMN IF NOT EXISTS manifest JSONB NOT NULL DEFAULT '{}'::jsonb;
+  CREATE INDEX IF NOT EXISTS idx_package_releases_package_status
+    ON package_releases(package_key, status, published_at DESC);
+
+  ALTER TABLE company_package_installations
+    ADD COLUMN IF NOT EXISTS installed_version VARCHAR(40),
+    ADD COLUMN IF NOT EXISTS target_version VARCHAR(40),
+    ADD COLUMN IF NOT EXISTS update_status VARCHAR(30) NOT NULL DEFAULT 'CURRENT'
+      CHECK (update_status IN ('CURRENT','UPDATE_AVAILABLE','QUEUED','UPDATING','FAILED','CONFLICT','CURRENT_AFTER_UPDATE','ROLLBACK_REQUIRED')),
+    ADD COLUMN IF NOT EXISTS last_update_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS update_error TEXT,
+    ADD COLUMN IF NOT EXISTS auto_update_policy VARCHAR(20) NOT NULL DEFAULT 'OPTIONAL'
+      CHECK (auto_update_policy IN ('OPTIONAL','FORCED','STAGED'));
+
+  ALTER TABLE company_package_installations
+    DROP CONSTRAINT IF EXISTS company_package_installations_update_status_check;
+  ALTER TABLE company_package_installations
+    ADD CONSTRAINT company_package_installations_update_status_check
+    CHECK (update_status IN ('CURRENT','UPDATE_AVAILABLE','QUEUED','UPDATING','FAILED','CONFLICT','CURRENT_AFTER_UPDATE','ROLLBACK_REQUIRED'));
+
+  UPDATE company_package_installations
+     SET installed_version = version,
+         target_version = version,
+         update_status = CASE WHEN status='active' THEN 'CURRENT' ELSE update_status END,
+         auto_update_policy = COALESCE(auto_update_policy, 'OPTIONAL')
+   WHERE installed_version IS NULL;
+`;
+
+
+
 const safeMetadataKey = (value) => typeof value === "string" && /^[a-z_][a-z0-9_]{0,99}$/.test(value);
 
 export async function provisionPackageMetadata(db, { packageId, moduleId, companyId, manifest = {}, packageVersion = manifest.version || "1.0.0" }) {
