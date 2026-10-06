@@ -74,12 +74,12 @@ test("Phase 3A Report Builder chooses sources from server metadata",async()=>{
   assert.equal(source.includes('fields: ["date", "net_sales", "transactions"]'),false);
 });
 
-test("Phase 3A canonical GPT Builder exposes only platform-generic flow categories",async()=>{
+test("Phase 3A canonical GPT Builder keeps Salesforce flow taxonomy while business behavior stays metadata-driven",async()=>{
   const source=await read("src/pages/developer/gptbuilder/GPTBuilderPage.jsx");
-  for(const token of ["user_provisioning","contact_request","cart_async","recommendation_strategy","cms_orchestration","individual_object_linking","identity_registration"]){
-    assert.equal(source.includes(token),false,token);
-  }
-  for(const token of ["record","screen","schedule","platform_event","autolaunched"]){
+  for(const token of ["record","screen","schedule","platform_event","autolaunched","user_provisioning","contact_request","cart_async","recommendation_strategy","cms_orchestration","individual_object_linking","identity_registration"]){
     assert.match(source,new RegExp(`key: ['"]${token}['"]`));
   }
+  assert.equal(source.includes("createCustomer"),false);
+  assert.equal(source.includes("createProduct"),false);
+  assert.equal(source.includes("createSale"),false);
 });
