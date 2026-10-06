@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 import { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
 export { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
@@ -18,7 +17,6 @@ const PRIVILEGED_ROUTES = Object.freeze([
 
 const definitions = [
   ...PRIVILEGED_ROUTES.map((item) => ({ id: item.id, type: "route" })),
-  ...PLATFORM_FUNCTIONS.map((item) => ({ id: `function:${item.key}`, type: "function" })),
   ...PLATFORM_ACTION_REGISTRY.map((item) => ({ id: `action:${item.key}`, type: "action" })),
   ...TRUSTED_JOB_KINDS.map((kind) => ({ id: `job:${kind}`, type: "job" })),
 ];
@@ -60,12 +58,6 @@ export function isPrivilegedMutation(path, method = "GET") {
 }
 
 export function validateTrustedRuntime() {
-  for (const fn of PLATFORM_FUNCTIONS) {
-    const requiredPermissions = Array.isArray(fn?.permissions) ? fn.permissions.filter(Boolean) : [];
-    const alternativePermissions = Array.isArray(fn?.permissionsAny) ? fn.permissionsAny.filter(Boolean) : [];
-    if (!fn?.key || typeof fn.handler !== "function" || (!requiredPermissions.length && !alternativePermissions.length)) {
-      throw new Error(`Invalid registered platform function: ${fn?.key || "(missing key)"}`);
-    }
   }
   for (const action of PLATFORM_ACTION_REGISTRY) if (!action?.key) throw new Error("Invalid registered platform action");
   return Object.freeze({ version: TRUSTED_RUNTIME_VERSION, count: TRUSTED_CAPABILITIES.length });
