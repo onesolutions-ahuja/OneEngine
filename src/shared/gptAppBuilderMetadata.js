@@ -294,7 +294,7 @@ export function validatePortableArtifact(artifact = {}) {
     try { scanSecrets(manifest, "artifact"); } catch (error) { errors.push(error.message); }
     if (!Array.isArray(manifest.apps) || manifest.apps.length !== 1) errors.push("Exactly one app metadata record is required.");
     if (!Array.isArray(manifest.pages) || manifest.pages.length < 1) errors.push("At least one page metadata record is required.");
-    const collections = Object.values(TYPE_TO_MANIFEST_COLLECTION);
+    const collections = ["apps", "pages", ...Object.values(TYPE_TO_MANIFEST_COLLECTION)];
     for (const collection of collections) {
       const rows = Array.isArray(manifest[collection]) ? manifest[collection] : [];
       const seen = new Set();
