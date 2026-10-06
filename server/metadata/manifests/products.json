@@ -1,0 +1,646 @@
+{
+  "packageKey": "products",
+  "packageType": "FOUNDATION",
+  "name": "Product Core",
+  "version": "1.0.0",
+  "description": "Technical foundation for the canonical Product and Category objects.",
+  "dependencies": [],
+  "billable": false,
+  "licenceRequired": false,
+  "visibility": "HIDDEN",
+  "installable": true,
+  "systemOnly": true,
+  "technical": true,
+  "upgrade": {
+    "strategy": "idempotent_metadata_upsert",
+    "adoptsExistingData": true,
+    "preservesRecordIds": true,
+    "migrations": [
+      "product_core.adopt_canonical_metadata.v1"
+    ]
+  },
+  "ownedObjects": [
+    "product",
+    "category"
+  ],
+  "ownedFields": {
+    "product": [
+      "name",
+      "sku",
+      "barcode",
+      "description",
+      "category_id",
+      "active",
+      "product_kind",
+      "parent_product_id",
+      "variant_attributes",
+      "image_url"
+    ],
+    "category": [
+      "name",
+      "display_order",
+      "active"
+    ]
+  },
+  "objects": [
+    {
+      "objectKey": "product",
+      "adoptFromPackageKeys": [
+        "retail_pos"
+      ],
+      "metadataScope": "global",
+      "label": "Product",
+      "pluralLabel": "Products",
+      "description": "Canonical tenant-scoped product records.",
+      "sourceTable": "products",
+      "fields": [
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": true,
+          "displayOrder": 1
+        },
+        {
+          "apiName": "sku",
+          "label": "SKU",
+          "fieldType": "text",
+          "sourceColumn": "sku",
+          "writable": true,
+          "displayOrder": 2
+        },
+        {
+          "apiName": "barcode",
+          "label": "Barcode / EAN",
+          "fieldType": "text",
+          "sourceColumn": "barcode",
+          "writable": true,
+          "displayOrder": 3
+        },
+        {
+          "apiName": "description",
+          "label": "Description",
+          "fieldType": "text",
+          "sourceColumn": "description",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "price",
+          "label": "Price",
+          "fieldType": "currency",
+          "sourceColumn": "price",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "cost_price",
+          "label": "Cost Price",
+          "fieldType": "currency",
+          "sourceColumn": "cost_price",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "vat_rate",
+          "label": "VAT Rate",
+          "fieldType": "decimal",
+          "sourceColumn": "vat_rate",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "vat_applicable",
+          "label": "VAT Applicable",
+          "fieldType": "boolean",
+          "sourceColumn": "vat_applicable",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "age_restricted",
+          "label": "Age Restricted",
+          "fieldType": "boolean",
+          "sourceColumn": "age_restricted",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "stock_quantity",
+          "label": "Stock Quantity",
+          "fieldType": "decimal",
+          "sourceColumn": "stock_quantity",
+          "writable": false,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "low_stock_level",
+          "label": "Low Stock Level",
+          "fieldType": "decimal",
+          "sourceColumn": "low_stock_level",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "track_stock",
+          "label": "Track Stock",
+          "fieldType": "boolean",
+          "sourceColumn": "track_stock",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "batch_tracking",
+          "label": "Batch Tracking",
+          "fieldType": "boolean",
+          "sourceColumn": "batch_tracking",
+          "writable": true,
+          "displayOrder": 4
+        },
+        {
+          "apiName": "category_id",
+          "label": "Category",
+          "fieldType": "lookup",
+          "sourceColumn": "category_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "category"
+          },
+          "displayOrder": 5
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true,
+          "displayOrder": 6
+        },
+        {
+          "apiName": "product_kind",
+          "label": "Product Kind",
+          "fieldType": "picklist",
+          "sourceColumn": "product_kind",
+          "writable": true,
+          "options": [
+            "standard",
+            "variant",
+            "bundle"
+          ],
+          "displayOrder": 7
+        },
+        {
+          "apiName": "parent_product_id",
+          "label": "Parent Product",
+          "fieldType": "lookup",
+          "sourceColumn": "parent_product_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "product",
+            "relationshipKey": "variants",
+            "preventSelfReference": true
+          },
+          "displayOrder": 8
+        },
+        {
+          "apiName": "variant_attributes",
+          "label": "Variant Attributes",
+          "fieldType": "json",
+          "sourceColumn": "variant_attributes",
+          "writable": true,
+          "displayOrder": 9
+        },
+        {
+          "apiName": "image_url",
+          "label": "Image",
+          "fieldType": "text",
+          "sourceColumn": "image_url",
+          "writable": true,
+          "displayOrder": 10
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false,
+          "displayOrder": 11
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false,
+          "displayOrder": 12
+        }
+      ],
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "category",
+      "metadataScope": "global",
+      "label": "Category",
+      "pluralLabel": "Categories",
+      "description": "Canonical product categories.",
+      "sourceTable": "categories",
+      "fields": [
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": true,
+          "displayOrder": 1
+        },
+        {
+          "apiName": "display_order",
+          "label": "Display Order",
+          "fieldType": "number",
+          "sourceColumn": "display_order",
+          "writable": true,
+          "displayOrder": 2
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true,
+          "displayOrder": 3
+        }
+      ],
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "category",
+      "childObjectKey": "product",
+      "relationshipKey": "products",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "category_id",
+      "required": true
+    },
+    {
+      "parentObjectKey": "product",
+      "childObjectKey": "product",
+      "relationshipKey": "variants",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "parent_product_id",
+      "required": true
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "product",
+      "viewKey": "all_products",
+      "label": "All Products",
+      "columns": [
+        "name",
+        "sku",
+        "barcode",
+        "category_id",
+        "active"
+      ],
+      "sort": {
+        "field": "name",
+        "direction": "asc"
+      },
+      "pageSize": 50,
+      "isDefault": true
+    },
+    {
+      "objectKey": "category",
+      "viewKey": "all_categories",
+      "label": "All Categories",
+      "columns": [
+        "name",
+        "display_order",
+        "active"
+      ],
+      "sort": {
+        "field": "display_order",
+        "direction": "asc"
+      },
+      "pageSize": 50,
+      "isDefault": true
+    }
+  ],
+  "layouts": [
+    {
+      "objectKey": "product",
+      "layoutKey": "standard_detail",
+      "pageType": "detail",
+      "metadataScope": "global",
+      "name": "Product Record Page",
+      "isDefault": true,
+      "definition": {
+        "presentation_mode": "inline",
+        "sections": [
+          {
+            "id": "product_identity",
+            "label": "Product Identity",
+            "columns": 2,
+            "order": 1
+          },
+          {
+            "id": "product_category",
+            "label": "Category",
+            "columns": 1,
+            "order": 2
+          },
+          {
+            "id": "product_variants",
+            "label": "Variants",
+            "columns": 1,
+            "order": 3
+          }
+        ],
+        "components": [
+          {
+            "id": "product_name",
+            "type": "field",
+            "field_key": "name",
+            "section_id": "product_identity",
+            "width": "full",
+            "order": 1
+          },
+          {
+            "id": "product_sku",
+            "type": "field",
+            "field_key": "sku",
+            "section_id": "product_identity",
+            "order": 2
+          },
+          {
+            "id": "product_barcode",
+            "type": "field",
+            "field_key": "barcode",
+            "section_id": "product_identity",
+            "order": 3
+          },
+          {
+            "id": "product_kind",
+            "type": "field",
+            "field_key": "product_kind",
+            "section_id": "product_identity",
+            "order": 4
+          },
+          {
+            "id": "product_status",
+            "type": "field",
+            "field_key": "active",
+            "section_id": "product_identity",
+            "order": 5
+          },
+          {
+            "id": "product_category_id",
+            "type": "field",
+            "field_key": "category_id",
+            "section_id": "product_category",
+            "order": 1
+          },
+          {
+            "id": "product_parent_id",
+            "type": "field",
+            "field_key": "parent_product_id",
+            "section_id": "product_variants",
+            "order": 1
+          },
+          {
+            "id": "product_variant_attributes",
+            "type": "field",
+            "field_key": "variant_attributes",
+            "section_id": "product_variants",
+            "order": 2
+          },
+          {
+            "id": "product_image",
+            "type": "field",
+            "field_key": "image_url",
+            "section_id": "product_identity",
+            "order": 6
+          },
+          {
+            "id": "product_variants",
+            "type": "related_list",
+            "relationship_key": "variants",
+            "label": "Variants",
+            "columns": [
+              "name",
+              "sku",
+              "barcode",
+              "product_kind",
+              "active"
+            ],
+            "section_id": "product_variants",
+            "order": 3
+          }
+        ]
+      }
+    }
+  ],
+  "recordForms": [
+    {
+      "objectKey": "product",
+      "formKey": "product_create",
+      "layoutKey": "standard_create",
+      "pageType": "create",
+      "metadataScope": "global",
+      "name": "Create Product",
+      "definition": {
+        "presentation_mode": "inline",
+        "sections": [
+          {
+            "id": "product_form",
+            "label": "Product Details",
+            "columns": 2,
+            "order": 1
+          }
+        ],
+        "components": []
+      }
+    },
+    {
+      "objectKey": "product",
+      "formKey": "product_edit",
+      "layoutKey": "standard_edit",
+      "pageType": "edit",
+      "metadataScope": "global",
+      "name": "Edit Product",
+      "definition": {
+        "presentation_mode": "inline",
+        "sections": [
+          {
+            "id": "product_form",
+            "label": "Product Details",
+            "columns": 2,
+            "order": 1
+          }
+        ],
+        "components": []
+      }
+    }
+  ],
+  "permissionDeclarations": [
+    {
+      "key": "product_read",
+      "permission": "product.view",
+      "access": "read"
+    },
+    {
+      "key": "product_create",
+      "permission": "product.create",
+      "access": "create"
+    },
+    {
+      "key": "product_manage",
+      "permission": "product.edit",
+      "access": "update"
+    },
+    {
+      "key": "category_read",
+      "permission": "category.view",
+      "access": "read"
+    },
+    {
+      "key": "category_create",
+      "permission": "category.create",
+      "access": "create"
+    },
+    {
+      "key": "category_manage",
+      "permission": "category.edit",
+      "access": "update"
+    },
+    {
+      "key": "category_deactivate",
+      "permission": "category.delete",
+      "access": "delete"
+    },
+    {
+      "key": "product_deactivate",
+      "permission": "product.delete",
+      "access": "delete"
+    }
+  ],
+  "actions": [
+    {
+      "actionKey": "product.create",
+      "objectKey": "product",
+      "label": "Create Product",
+      "handlerKey": "RECORD_SAVE",
+      "requiredPermission": "product.create"
+    },
+    {
+      "actionKey": "product.update",
+      "objectKey": "product",
+      "label": "Update Product",
+      "handlerKey": "RECORD_SAVE",
+      "requiredPermission": "product.edit"
+    },
+    {
+      "actionKey": "product.activate",
+      "objectKey": "product",
+      "label": "Activate Product",
+      "handlerKey": "RECORD_SAVE",
+      "requiredPermission": "product.edit"
+    },
+    {
+      "actionKey": "product.deactivate",
+      "objectKey": "product",
+      "label": "Deactivate Product",
+      "handlerKey": "RECORD_SAVE",
+      "requiredPermission": "product.edit"
+    },
+    {
+      "actionKey": "product.add_variant",
+      "objectKey": "product",
+      "label": "Add Variant",
+      "handlerKey": "RECORD_SAVE",
+      "requiredPermission": "product.create"
+    }
+  ],
+  "rules": [
+    {
+      "objectKey": "product",
+      "name": "Product name is required",
+      "triggerKey": "before_save",
+      "conditions": [
+        {
+          "field": "name",
+          "operator": "is_empty"
+        }
+      ],
+      "action": {
+        "type": "validation",
+        "message": "Product name is required"
+      }
+    },
+    {
+      "objectKey": "product",
+      "name": "Variant requires a parent product",
+      "triggerKey": "before_save",
+      "conditions": [
+        {
+          "field": "product_kind",
+          "operator": "equals",
+          "value": "variant"
+        },
+        {
+          "field": "parent_product_id",
+          "operator": "is_empty"
+        }
+      ],
+      "action": {
+        "type": "validation",
+        "message": "A variant must have a parent product"
+      }
+    },
+    {
+      "objectKey": "product",
+      "name": "Only variants can have a parent product",
+      "triggerKey": "before_save",
+      "conditions": [
+        {
+          "field": "product_kind",
+          "operator": "not_equals",
+          "value": "variant"
+        },
+        {
+          "field": "parent_product_id",
+          "operator": "is_not_empty"
+        }
+      ],
+      "action": {
+        "type": "validation",
+        "message": "Only a variant can have a parent product"
+      }
+    }
+  ],
+  "validationRules": [
+    {
+      "key": "product_name_required",
+      "rule": "Product name is required"
+    },
+    {
+      "key": "variant_parent_required",
+      "rule": "Variant requires a parent product"
+    },
+    {
+      "key": "parent_only_for_variant",
+      "rule": "Only variants can have a parent product"
+    }
+  ],
+  "migrations": [
+    "product_core.adopt_canonical_metadata.v1"
+  ]
+}
