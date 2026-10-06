@@ -2,7 +2,7 @@ import React from 'react'
 import {
   ArrowUpDown, Bot, Boxes, CircleHelp, Clock3, Copy, Database, Filter, GitBranch,
   LayoutPanelLeft, ListChecks, Pencil, Plus, Repeat2, Search, Shuffle,
-  Trash2, TriangleAlert, Workflow, X, Zap,
+  Trash2, TriangleAlert, Undo2, Workflow, X, Zap,
 } from 'lucide-react'
 
 export const ELEMENT_CATEGORIES = [
@@ -33,6 +33,7 @@ export const ELEMENTS = [
   { key: 'create_records', label: 'Create Records', category: 'data', icon: Plus, description: 'Create one or more records from values or record resources.' },
   { key: 'update_records', label: 'Update Records', category: 'data', icon: Pencil, description: 'Find records to update and set their field values.' },
   { key: 'delete_records', label: 'Delete Records', category: 'data', icon: Trash2, description: 'Find and permanently delete records.' },
+  { key: 'rollback_records', label: 'Roll Back Records', category: 'data', icon: Undo2, description: 'Roll back pending record changes in the current Screen Flow transaction.' },
 ]
 
 export function elementByKey(key) {
@@ -43,6 +44,7 @@ export function getAvailableElements({ flowType, startConfig = {}, layout = 'aut
   const fastRecord = flowType === 'record' && startConfig.optimize === 'fast'
   return ELEMENTS.filter((element) => {
     if (element.key === 'screen') return flowType === 'screen'
+    if (element.key === 'rollback_records') return flowType === 'screen'
     if (element.key === 'custom_error') return flowType === 'record' && !fastRecord && startConfig?.asyncPath !== true
     if (element.key === 'group') return layout === 'auto'
     if (element.key === 'transform') return ['record', 'screen', 'autolaunched'].includes(flowType)
@@ -128,7 +130,7 @@ export function FreeFormElements({ flowType, startConfig }) {
   </div>
 }
 
-export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen, selecting = false, selected = false, onSelectToggle, connecting = false, onConnectTarget, onFreeSelect, onFreeMoveStart, onConnectorStart, onConnectorEnd }) {
+export function PendingElementCard({ elementKey, instance = null, free = false, position = null, onOpen, onRemove, selecting = false, selected = false, onSelectToggle, connecting = false, onConnectTarget, onFreeSelect, onFreeMoveStart, onConnectorStart, onConnectorEnd }) {
   const key = instance?.key || elementKey
   const element = elementByKey(key)
   if (!element) return null
@@ -157,6 +159,21 @@ export function PendingElementCard({ elementKey, instance = null, free = false, 
     {free ? <span className="gptb-free-connector is-input" aria-hidden="true" onPointerUp={(event) => { event.stopPropagation(); onConnectorEnd?.(event) }}/>: null}
     {free ? <span className="gptb-free-connector is-output" aria-hidden="true" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); onConnectorStart?.(event) }}/>: null}
     {selecting ? <span className="gptb-select-element-node" aria-hidden="true">{selected ? '✓' : '+'}</span> : null}
+    {onRemove && !free && !selecting && !connecting ? <span
+      className="gptb-node-remove"
+      role="button"
+      tabIndex={0}
+      aria-label={`Remove ${label}`}
+      title="Remove"
+      onClick={(event) => { event.stopPropagation(); onRemove?.() }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          event.stopPropagation()
+          onRemove?.()
+        }
+      }}
+    >−</span> : null}
     <span className={`gptb-element-icon is-${element.category}`}><Icon size={16}/></span>
     <span><strong>{label}</strong><small>{instance?.configured ? element.label : `${element.label} · Not fully configured`}</small></span>
     {instance ? <span className="gptb-card-info" tabIndex={0} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>

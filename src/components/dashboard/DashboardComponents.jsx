@@ -187,12 +187,11 @@ function RecordTable({ result }) {
 
 function Card({ component, state, children }) {
   const type = component.type === "chart" ? (component.config?.chartType || "bar") : component.type;
-  const spec = DASHBOARD_COMPONENTS.find((entry) => entry.key === type);
   const isSmartClock = type === "clock_widget";
   return <section
     data-testid={`dashboard-component-${component.id}`}
     data-component-type={type}
-    aria-label={component.title || spec?.label || "Dashboard component"}
+    aria-label={component.title || "Dashboard component"}
     className={`flex flex-col min-h-0 h-full ${isSmartClock ? "dashboard-card--smart-clock" : ""}`}
     style={isSmartClock ? undefined : { background: "var(--onepos-card-bg, var(--onepos-surface-raised))", border: "var(--onepos-card-border-width, 1px) solid var(--onepos-card-border, var(--onepos-border))", borderRadius: "var(--onepos-card-radius, 16px)", boxShadow: "var(--onepos-shadow-card, none)", padding: "var(--onepos-card-pad, 18px)" }}
   >

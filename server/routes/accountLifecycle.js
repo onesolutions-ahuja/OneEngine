@@ -108,7 +108,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
         db,
         companyId:u.company_id,
         userId:null,
-        systemKey:"action:SEND_EMAIL",
+        actionKey: "SEND_EMAIL",
         req,
         input:{
           recipient:email,

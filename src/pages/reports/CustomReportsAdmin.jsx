@@ -34,19 +34,19 @@ import renderDashboardComponent from "../../components/dashboard/DashboardCompon
 const fresh = () => ({
   name: "",
   description: "",
-  dataSource: "sales",
+  dataSource: "platform_object",
   reportTypeId: null,
   objectId: "",
   format: "tabular",
-  fields: ["date", "net_sales", "transactions"],
-  filters: [{ field: "date", operator: "this_week" }],
+  fields: [],
+  filters: [],
   filterLogic: "all",
   crossFilters: [],
-  rowGroups: ["date"],
+  rowGroups: [],
   columnGroups: [],
-  groupBy: ["date"],
+  groupBy: [],
   summaries: [],
-  sort: [{ field: "date", direction: "desc", nulls: "last" }],
+  sort: [],
   rowLimit: 1000,
   showDetails: true,
   showSubtotals: true,
@@ -158,10 +158,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       const data=response.data;setEditingId(data.id);setDefinition({...fresh(),...(data.definition||{}),name:data.name||"",description:data.description||"",userIds:data.user_ids||data.userIds||[]});setRuntimeFilters([]);setResults(null);
     }catch(e){setError(errorMessage(e));}
   };
-  const changeSource=(dataSource)=>{
-    if(dataSource==="sales")update({dataSource,reportTypeId:null,objectId:"",fields:["date","net_sales","transactions"],rowGroups:["date"],groupBy:["date"],columnGroups:[],summaries:[],filters:[{field:"date",operator:"this_week"}],crossFilters:[],sort:[{field:"date",direction:"desc",nulls:"last"}]});
-    else update({dataSource,reportTypeId:null,objectId:metadata.platformObjects?.[0]?.id||"",fields:[],rowGroups:[],groupBy:[],columnGroups:[],summaries:[],filters:[],crossFilters:[],sort:[]});
-  };
+  const changeSource=(dataSource)=>update({dataSource,reportTypeId:null,objectId:dataSource==="platform_object"?(metadata.platformObjects?.[0]?.id||""):"",fields:[],rowGroups:[],groupBy:[],columnGroups:[],summaries:[],filters:[],crossFilters:[],sort:[]});
   const changeReportType=(reportTypeId)=>{
     if(!reportTypeId)return update({reportTypeId:null});
     const reportType=(metadata.reportTypes||[]).find((item)=>String(item.id)===String(reportTypeId));
@@ -238,7 +235,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       <PreviewControls value={definition.previewPreference||{autoPreview:true,sampleLimit:50}} onChange={(previewPreference)=>update({previewPreference})} onRefresh={preview} refreshing={running==="preview"}/>
       <div className="grid md:grid-cols-2 gap-3"><label className="onepos-label">Report name<input className="onepos-input mt-1" value={definition.name} onChange={(e)=>update({name:e.target.value})}/></label><label className="onepos-label">Description<input className="onepos-input mt-1" value={definition.description} onChange={(e)=>update({description:e.target.value})}/></label></div>
       <div className="grid md:grid-cols-3 gap-3">
-        <label className="onepos-label">Data source<select className="onepos-input mt-1" value={definition.dataSource} onChange={(e)=>changeSource(e.target.value)}><option value="sales">Sales</option><option value="platform_object">Platform Object</option></select></label>
+        <label className="onepos-label">Data source<select className="onepos-input mt-1" value={definition.dataSource} onChange={(e)=>changeSource(e.target.value)}>{(metadata.sources||[]).filter((source)=>source.key!=="sales").map((source)=><option key={source.key} value={source.key}>{source.label}</option>)}<option value="platform_object">Platform Object</option></select></label>
         {definition.dataSource==="platform_object"?<label className="onepos-label">Report type<select className="onepos-input mt-1" value={definition.reportTypeId||""} onChange={(e)=>changeReportType(e.target.value)}><option value="">Direct Object report</option>{(metadata.reportTypes||[]).map((item)=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>:null}
         {definition.dataSource==="platform_object"?<label className="onepos-label">Object<select className="onepos-input mt-1" disabled={Boolean(definition.reportTypeId)} value={definition.objectId||""} onChange={(e)=>changeObject(e.target.value)}><option value="">Select object</option>{metadata.platformObjects.map((object)=><option key={object.id} value={object.id}>{object.label||object.object_key}</option>)}</select></label>:null}
       </div>

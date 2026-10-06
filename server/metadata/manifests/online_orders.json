@@ -926,19 +926,998 @@
       ],
       "actions": [
         {
+          "id": "get_online_order",
+          "label": "Get Online Order",
+          "apiName": "get_online_order",
+          "key": "GET_RECORDS",
+          "objectKey": "online_order",
+          "filters": [
+            {
+              "field": "id",
+              "operator": "equals",
+              "value": {
+                "path": "variables.orderId"
+              }
+            }
+          ],
+          "match": "all",
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "validate_transition",
+          "label": "Validate Order Transition",
+          "apiName": "validate_transition",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "transition_1",
+              "label": "RECEIVED → ACCEPTED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "RECEIVED"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "ACCEPTED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_2",
+              "label": "RECEIVED → REJECTED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "RECEIVED"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "REJECTED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_3",
+              "label": "RECEIVED → CANCELLED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "RECEIVED"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "CANCELLED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_4",
+              "label": "ACCEPTED → PREPARING",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "ACCEPTED"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "PREPARING"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_5",
+              "label": "ACCEPTED → CANCELLED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "ACCEPTED"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "CANCELLED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_6",
+              "label": "PREPARING → READY",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "PREPARING"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "READY"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_7",
+              "label": "PREPARING → READY_FOR_PICKUP",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "PREPARING"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "READY_FOR_PICKUP"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_8",
+              "label": "PREPARING → READY_FOR_DELIVERY",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "PREPARING"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "READY_FOR_DELIVERY"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_9",
+              "label": "PREPARING → CANCELLED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "PREPARING"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "CANCELLED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_10",
+              "label": "READY → COLLECTED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "READY"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "COLLECTED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_11",
+              "label": "READY → COMPLETED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "READY"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "COMPLETED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_12",
+              "label": "READY → CANCELLED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "READY"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "CANCELLED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_13",
+              "label": "READY_FOR_PICKUP → COLLECTED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "READY_FOR_PICKUP"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "COLLECTED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_14",
+              "label": "READY_FOR_PICKUP → COMPLETED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "READY_FOR_PICKUP"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "COMPLETED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_15",
+              "label": "READY_FOR_PICKUP → CANCELLED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "READY_FOR_PICKUP"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "CANCELLED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_16",
+              "label": "READY_FOR_DELIVERY → COMPLETED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "READY_FOR_DELIVERY"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "COMPLETED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_17",
+              "label": "READY_FOR_DELIVERY → CANCELLED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "READY_FOR_DELIVERY"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "CANCELLED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "transition_18",
+              "label": "COLLECTED → COMPLETED",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_online_order.record.status",
+                    "operator": "equals",
+                    "value": "COLLECTED"
+                  },
+                  {
+                    "field": "variables.toStatus",
+                    "operator": "equals",
+                    "value": "COMPLETED"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            }
+          ],
+          "defaultLabel": "Invalid Transition",
+          "defaultBranch": [
+            "invalid_transition"
+          ]
+        },
+        {
           "id": "update_online_order_status",
           "label": "Update Online Order Status",
           "apiName": "update_online_order_status",
           "key": "UPDATE_RECORD",
           "objectKey": "online_order",
           "recordId": {
-            "path": "$record.id"
+            "path": "variables.orderId"
           },
           "fieldValues": {
             "status": {
-              "path": "$record.toStatus"
+              "path": "variables.toStatus"
             }
           }
+        },
+        {
+          "id": "invalid_transition",
+          "label": "Order Transition Rejected",
+          "apiName": "invalid_transition",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "The requested online order status transition is not allowed.",
+          "errorLocation": "record"
+        }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "get_online_order",
+          "key": "action",
+          "label": "Get Online Order",
+          "apiName": "get_online_order",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "get_online_order",
+              "label": "Get Online Order",
+              "apiName": "get_online_order",
+              "key": "GET_RECORDS",
+              "objectKey": "online_order",
+              "filters": [
+                {
+                  "field": "id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "variables.orderId"
+                  }
+                }
+              ],
+              "match": "all",
+              "limit": 1,
+              "store": "first"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "validate_transition",
+          "key": "action",
+          "label": "Validate Order Transition",
+          "apiName": "validate_transition",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "validate_transition",
+              "label": "Validate Order Transition",
+              "apiName": "validate_transition",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "transition_1",
+                  "label": "RECEIVED → ACCEPTED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "RECEIVED"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "ACCEPTED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_2",
+                  "label": "RECEIVED → REJECTED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "RECEIVED"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "REJECTED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_3",
+                  "label": "RECEIVED → CANCELLED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "RECEIVED"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "CANCELLED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_4",
+                  "label": "ACCEPTED → PREPARING",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "ACCEPTED"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "PREPARING"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_5",
+                  "label": "ACCEPTED → CANCELLED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "ACCEPTED"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "CANCELLED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_6",
+                  "label": "PREPARING → READY",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "PREPARING"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "READY"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_7",
+                  "label": "PREPARING → READY_FOR_PICKUP",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "PREPARING"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "READY_FOR_PICKUP"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_8",
+                  "label": "PREPARING → READY_FOR_DELIVERY",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "PREPARING"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "READY_FOR_DELIVERY"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_9",
+                  "label": "PREPARING → CANCELLED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "PREPARING"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "CANCELLED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_10",
+                  "label": "READY → COLLECTED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "READY"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "COLLECTED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_11",
+                  "label": "READY → COMPLETED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "READY"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "COMPLETED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_12",
+                  "label": "READY → CANCELLED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "READY"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "CANCELLED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_13",
+                  "label": "READY_FOR_PICKUP → COLLECTED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "READY_FOR_PICKUP"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "COLLECTED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_14",
+                  "label": "READY_FOR_PICKUP → COMPLETED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "READY_FOR_PICKUP"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "COMPLETED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_15",
+                  "label": "READY_FOR_PICKUP → CANCELLED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "READY_FOR_PICKUP"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "CANCELLED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_16",
+                  "label": "READY_FOR_DELIVERY → COMPLETED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "READY_FOR_DELIVERY"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "COMPLETED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_17",
+                  "label": "READY_FOR_DELIVERY → CANCELLED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "READY_FOR_DELIVERY"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "CANCELLED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "transition_18",
+                  "label": "COLLECTED → COMPLETED",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_online_order.record.status",
+                        "operator": "equals",
+                        "value": "COLLECTED"
+                      },
+                      {
+                        "field": "variables.toStatus",
+                        "operator": "equals",
+                        "value": "COMPLETED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                }
+              ],
+              "defaultLabel": "Invalid Transition",
+              "defaultBranch": [
+                "invalid_transition"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "update_online_order_status",
+          "key": "action",
+          "label": "Update Online Order Status",
+          "apiName": "update_online_order_status",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "update_online_order_status",
+              "label": "Update Online Order Status",
+              "apiName": "update_online_order_status",
+              "key": "UPDATE_RECORD",
+              "objectKey": "online_order",
+              "recordId": {
+                "path": "variables.orderId"
+              },
+              "fieldValues": {
+                "status": {
+                  "path": "variables.toStatus"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "invalid_transition",
+          "key": "action",
+          "label": "Order Transition Rejected",
+          "apiName": "invalid_transition",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "invalid_transition",
+              "label": "Order Transition Rejected",
+              "apiName": "invalid_transition",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "The requested online order status transition is not allowed.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
         }
       ]
     }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp,
-  Copy, Eye, History, LayoutPanelLeft, Play, Plus, Redo2, Save, Search,
+  Copy, Eye, History, LayoutPanelLeft, Pencil, Play, Plus, Redo2, Save, Search,
   Settings2, Sparkles, Trash2, Undo2, Workflow, X, Zap, ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
@@ -15,6 +15,7 @@ import GPTBuilderGetRecords, { getRecordsRuntimeAction } from './GPTBuilderGetRe
 import GPTBuilderCreateRecords, { createRecordsRuntimeAction } from './GPTBuilderCreateRecords'
 import GPTBuilderUpdateRecords, { updateRecordsRuntimeAction } from './GPTBuilderUpdateRecords'
 import GPTBuilderDeleteRecords, { deleteRecordsRuntimeAction } from './GPTBuilderDeleteRecords'
+import GPTBuilderRollbackRecords, { rollbackRecordsRuntimeAction } from './GPTBuilderRollbackRecords'
 import GPTBuilderAssignment, { assignmentRuntimeAction } from './GPTBuilderAssignment'
 import GPTBuilderDecision, { decisionRuntimeAction } from './GPTBuilderDecision'
 import GPTBuilderLoop, { loopRuntimeAction } from './GPTBuilderLoop'
@@ -33,6 +34,7 @@ import GPTBuilderSubflow, { subflowRuntimeAction } from './GPTBuilderSubflow'
 import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
+import GPTBuilderReactFlowCanvas from './GPTBuilderReactFlowCanvas'
 import {
   GPTBuilderCompareVersionsPanel, GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
 } from './GPTBuilderSaveHistory'
@@ -46,11 +48,24 @@ const FLOW_CATEGORIES = [
 ]
 
 const FLOW_TYPES = [
-  { key: 'record', category: 'triggered', featured: true, label: 'Record-Triggered Flow', description: 'Launches when a record is created, updated, or deleted.', icon: Zap, tone: 'purple', startNeedsConfiguration: true },
   { key: 'screen', category: 'screens', featured: true, label: 'Screen Flow', description: 'Guides users through screens that collect or display information.', icon: LayoutPanelLeft, tone: 'blue', startNeedsConfiguration: false },
+  { key: 'record', category: 'triggered', featured: true, label: 'Record-Triggered Flow', description: 'Launches when a record is created, updated, or deleted.', icon: Zap, tone: 'purple', startNeedsConfiguration: true },
+  { key: 'schedule', category: 'scheduled', featured: true, label: 'Schedule-Triggered Flow', description: 'Runs in batches at configured times.', icon: Play, tone: 'orange', startNeedsConfiguration: true },
+  { key: 'platform_event', category: 'triggered', featured: false, label: 'Platform Event-Triggered Flow', description: 'Runs when a platform event message arrives.', icon: Sparkles, tone: 'cyan', startNeedsConfiguration: true },
   { key: 'autolaunched', category: 'autolaunched', featured: true, label: 'Autolaunched Flow (No Trigger)', description: 'Runs in the background when another process invokes it.', icon: Workflow, tone: 'green', startNeedsConfiguration: false },
-  { key: 'schedule', category: 'triggered', featured: false, label: 'Schedule-Triggered Flow', description: 'Runs in the background at a specified time and frequency.', icon: Play, tone: 'orange', startNeedsConfiguration: true },
-  { key: 'platform_event', category: 'triggered', featured: false, label: 'Platform Event-Triggered Flow', description: 'Runs when a platform event message is received.', icon: Sparkles, tone: 'cyan', startNeedsConfiguration: true },
+  { key: 'automation_event', category: 'triggered', featured: false, label: 'Automation Event-Triggered Flow', description: 'Background event flow.', icon: Zap, tone: 'purple', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'user_provisioning', category: 'screens', featured: false, label: 'User Provisioning Flow', description: 'User provisioning automation.', icon: LayoutPanelLeft, tone: 'blue', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'contact_request', category: 'screens', featured: false, label: 'Contact Request Flow', description: 'Contact request automation.', icon: LayoutPanelLeft, tone: 'blue', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'cart_async', category: 'autolaunched', featured: false, label: 'Cart Async Flow', description: 'Asynchronous cart automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'recommendation_strategy', category: 'autolaunched', featured: false, label: 'Recommendation Strategy', description: 'Recommendation strategy automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'autolaunched_orchestration', category: 'autolaunched', featured: false, label: 'Autolaunched Orchestration (No Trigger)', description: 'Autolaunched orchestration.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'record_orchestration', category: 'triggered', featured: false, label: 'Record-Triggered Orchestration', description: 'Record-triggered orchestration.', icon: Zap, tone: 'purple', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'evaluation', category: 'autolaunched', featured: false, label: 'Evaluation Flow', description: 'Evaluation automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'cms_orchestration', category: 'autolaunched', featured: false, label: 'Flow Orchestration for CMS', description: 'CMS orchestration automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'individual_object_linking', category: 'screens', featured: false, label: 'Individual-Object Linking Flow', description: 'Individual-object linking automation.', icon: LayoutPanelLeft, tone: 'blue', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'autolaunched_approval', category: 'autolaunched', featured: false, label: 'Autolaunched Flow Approval Process (No Trigger)', description: 'Autolaunched approval process flow.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'record_approval', category: 'triggered', featured: false, label: 'Record-Triggered Flow Approval Process', description: 'Record-triggered approval process flow.', icon: Zap, tone: 'purple', startNeedsConfiguration: false, pickerOnlyReference: true },
+  { key: 'identity_registration', category: 'autolaunched', featured: false, label: 'Identity User Registration Flow', description: 'Identity registration automation.', icon: Workflow, tone: 'green', startNeedsConfiguration: false, pickerOnlyReference: true },
 ]
 
 const objectKey = (value) => String(value?.object_key || value?.api_name || value?.apiName || value?.key || value?.id || '')
@@ -373,11 +388,12 @@ const MANAGER_RESOURCE_TYPES = [
   ['Collection Filter Criteria', 'collection_filter_criteria'],
 ]
 
-function ManagerNewResource({ resources, onCreate, onClose }) {
+function ManagerNewResource({ resources, objects = [], onCreate, onClose }) {
   const [resourceType, setResourceType] = useState('variable')
   const [apiName, setApiName] = useState('')
   const [description, setDescription] = useState('')
   const [dataType, setDataType] = useState('text')
+  const [recordObjectKey, setRecordObjectKey] = useState('')
   const [value, setValue] = useState('')
   const [formula, setFormula] = useState('')
   const [isCollection, setIsCollection] = useState(false)
@@ -385,6 +401,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
   const [availableForOutput, setAvailableForOutput] = useState(false)
   const duplicate = resources.some((resource) => String(resource.apiName || '').toLowerCase() === apiName.trim().toLowerCase())
   const validName = /^[A-Za-z][A-Za-z0-9_]*$/.test(apiName) && !apiName.endsWith('_') && !apiName.includes('__') && !duplicate
+  const resourceValid = validName && (dataType !== 'record' || Boolean(recordObjectKey))
   const supportsDataType = ['variable','constant','formula'].includes(resourceType)
   const create = () => {
     if (!validName) return
@@ -395,6 +412,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       label: apiName.trim(),
       description: description.trim(),
       dataType: supportsDataType ? dataType : resourceType === 'text_template' ? 'text' : ['value_map','collection_filter_criteria'].includes(resourceType) ? 'object' : 'choice',
+      objectKey: supportsDataType && dataType === 'record' ? recordObjectKey : undefined,
       value: resourceType === 'constant' ? value : undefined,
       formula: resourceType === 'formula' ? formula : undefined,
       text: resourceType === 'text_template' ? value : undefined,
@@ -410,7 +428,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       <label><span>Resource Type</span><select value={resourceType} onChange={(event) => setResourceType(event.target.value)}>{MANAGER_RESOURCE_TYPES.map(([label,key]) => <option key={key} value={key}>{label}</option>)}</select></label>
       <label><span>API Name <b>*</b></span><input autoFocus value={apiName} onChange={(event) => setApiName(event.target.value)}/>{duplicate ? <small className="gptb-manager-error">API Name must be unique in the flow.</small> : null}</label>
       <label><span>Description</span><textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)}/></label>
-      {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option></select></label> : null}
+      {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="record">Record</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="time">Time</option><option value="picklist">Picklist</option><option value="multiselect">Multi-Select Picklist</option><option value="apex_defined">Apex-Defined</option></select></label> : null}
       {resourceType === 'constant' ? <label><span>Value</span><input value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
       {resourceType === 'formula' ? <label><span>Formula</span><textarea rows={5} value={formula} onChange={(event) => setFormula(event.target.value)}/></label> : null}
       {resourceType === 'text_template' ? <label><span>Body</span><textarea rows={7} value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
@@ -420,7 +438,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
         <label className="gptb-properties-check"><input type="checkbox" checked={availableForOutput} onChange={(event) => setAvailableForOutput(event.target.checked)}/><span>Available for output</span></label>
       </> : null}
     </div>
-    <footer><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!validName} onClick={create}>Done</button></footer>
+    <footer><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!resourceValid} onClick={create}>Done</button></footer>
   </section></div>
 }
 
@@ -475,7 +493,7 @@ function ManagerPanel({ elements, resources, goToConnections, onNewResource, onO
   </div>
 }
 
-function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, goToConnections, onResourcesChange, onOpenElement }) {
+function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, objects, goToConnections, onResourcesChange, onOpenElement }) {
   const [tab, setTab] = useState(layout === 'free' ? 'elements' : 'manager')
   const [newResourceOpen, setNewResourceOpen] = useState(false)
   const effectiveTab = layout === 'auto' ? 'manager' : tab
@@ -485,27 +503,27 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
     {effectiveTab === 'elements'
       ? <FreeFormElements flowType={flowType} startConfig={startConfig}/>
       : <ManagerPanel elements={elements} resources={availableResources} goToConnections={goToConnections} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement}/>}
-    {newResourceOpen ? <ManagerNewResource resources={availableResources} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
+    {newResourceOpen ? <ManagerNewResource resources={availableResources} objects={objects} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
   </aside>
 }
 
 
-function AutoDecisionCard({ decision, elements, onOpenDecision, onOpenMember, onAddElement, selecting, selectedIds, onSelectToggle, flowType, startConfig, copiedCount }) {
+function AutoDecisionCard({ decision, elements, onOpenDecision, onOpenMember, onAddElement, onRemoveElement, running = false, selecting, selectedIds, onSelectToggle, flowType, startConfig, copiedCount }) {
   const [openPath, setOpenPath] = useState('')
   const outcomes = Array.isArray(decision.config?.outcomes) ? decision.config.outcomes : []
   const paths = [
     ...outcomes.map((outcome, index) => ({ id: outcome.id || `outcome-${index + 1}`, label: outcome.label || `Outcome ${index + 1}`, memberIds: Array.isArray(outcome.branch) ? outcome.branch : [] })),
     { id: '__DEFAULT__', label: decision.config?.defaultLabel || 'Default Outcome', memberIds: Array.isArray(decision.config?.defaultBranch) ? decision.config.defaultBranch : [] },
   ]
-  return <div className="gptb-auto-decision">
-    <PendingElementCard instance={decision} onOpen={onOpenDecision} selecting={selecting} selected={selectedIds.includes(decision.id)} onSelectToggle={() => onSelectToggle(decision.id)}/>
+  return <div className={`gptb-auto-decision ${running ? 'is-running' : ''}`}>
+    <PendingElementCard instance={decision} onOpen={onOpenDecision} onRemove={() => onRemoveElement?.(decision.id)} selecting={selecting} selected={selectedIds.includes(decision.id)} onSelectToggle={() => onSelectToggle(decision.id)}/>
     <div className="gptb-decision-branches" data-decision-id={decision.id}>
       {paths.map((path) => <section className="gptb-decision-branch" key={path.id}>
         <header><span className="gptb-decision-branch-dot"/><strong>{path.label}</strong></header>
         <div className="gptb-decision-branch-line"/>
         {path.memberIds.map((id) => {
           const member = elements.find((item) => item.id === id)
-          return member ? <div className="gptb-decision-branch-member" key={id}><PendingElementCard instance={member} onOpen={() => onOpenMember(member)} selecting={selecting} selected={selectedIds.includes(member.id)} onSelectToggle={() => onSelectToggle(member.id)}/></div> : null
+          return member ? <div className="gptb-decision-branch-member" key={id}><PendingElementCard instance={member} onOpen={() => onOpenMember(member)} onRemove={() => onRemoveElement?.(member.id)} selecting={selecting} selected={selectedIds.includes(member.id)} onSelectToggle={() => onSelectToggle(member.id)}/></div> : null
         })}
         <div className="gptb-decision-branch-add">
           <button type="button" className="gptb-add-node" aria-label={`Add element to ${path.label}`} aria-expanded={openPath === path.id} onClick={() => setOpenPath((current) => current === path.id ? '' : path.id)}><Plus size={14}/></button>
@@ -822,7 +840,7 @@ function GPTBuilderExecutionPanel({ mode, workflowId, flowType, objectKey, input
   </aside>
 }
 
-function AutoGroupCard({ group, members, onOpenGroup, onOpenMember, selecting, selectedIds, onSelectToggle, connecting, onConnectTarget, flowType, startConfig, copiedCount, onAddElement, onDeleteGroup }) {
+function AutoGroupCard({ group, members, onOpenGroup, onOpenMember, onRemoveMember, selecting, selectedIds, onSelectToggle, connecting, onConnectTarget, flowType, startConfig, copiedCount, onAddElement, onDeleteGroup }) {
   const storageKey = `gptbuilder.group.${group.id}.collapsed`
   const [adding, setAdding] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
@@ -839,7 +857,7 @@ function AutoGroupCard({ group, members, onOpenGroup, onOpenMember, selecting, s
       <span className="gptb-auto-group-actions"><button type="button" className="gptb-auto-group-edit" onClick={onOpenGroup}>Edit</button><button type="button" className="gptb-auto-group-delete" aria-label={`Delete group ${group.label}`} onClick={onDeleteGroup}><Trash2 size={12}/></button></span>
     </div>
     {!collapsed ? <div className="gptb-auto-group-body">
-      {members.length ? members.map((element)=><div className="gptb-auto-group-member" key={element.id}><PendingElementCard instance={element} onOpen={()=>onOpenMember(element)} selecting={selecting} selected={selectedIds.includes(element.id)} onSelectToggle={()=>onSelectToggle(element.id)} connecting={connecting} onConnectTarget={()=>onConnectTarget(element.id)}/></div>) : <div className="gptb-auto-group-empty">This group is empty.</div>}
+      {members.length ? members.map((element)=><div className="gptb-auto-group-member" key={element.id}><PendingElementCard instance={element} onOpen={()=>onOpenMember(element)} onRemove={()=>onRemoveMember?.(element.id)} selecting={selecting} selected={selectedIds.includes(element.id)} onSelectToggle={()=>onSelectToggle(element.id)} connecting={connecting} onConnectTarget={()=>onConnectTarget(element.id)}/></div>) : <div className="gptb-auto-group-empty">This group is empty.</div>}
       <div className="gptb-group-add-slot"><button type="button" className="gptb-add-node" aria-label={`Add element to ${group.label}`} aria-expanded={adding} onClick={()=>setAdding((value)=>!value)}><Plus size={14}/></button>{adding?<ElementPicker flowType={flowType} startConfig={startConfig} hasExistingElements={members.length>0} copiedCount={copiedCount} onSelect={(element)=>{onAddElement?.(element);setAdding(false)}} onClose={()=>setAdding(false)}/>:null}</div>
     </div> : null}
   </div>
@@ -871,6 +889,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [saveError, setSaveError] = useState('')
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
   const [autoInsertIndex, setAutoInsertIndex] = useState(null)
+  const [decisionInsertTarget, setDecisionInsertTarget] = useState(null)
+  const [groupInsertTarget, setGroupInsertTarget] = useState(null)
   const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
   const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
   const [providerResources, setProviderResources] = useState([])
@@ -1092,6 +1112,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         if (element.key === 'create_records') return createRecordsRuntimeAction(element)
         if (element.key === 'update_records') return updateRecordsRuntimeAction(element)
         if (element.key === 'delete_records') return deleteRecordsRuntimeAction(element)
+        if (element.key === 'rollback_records') return rollbackRecordsRuntimeAction(element)
         if (element.key === 'assignment') return assignmentRuntimeAction(element, resources)
         if (element.key === 'decision') return decisionRuntimeAction(element)
         if (element.key === 'loop') return loopRuntimeAction(element, resources)
@@ -1229,7 +1250,31 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
 
   const definitionToBuilder = (definition) => {
     const action = definition?.action || {}
-    const restoredElements = Array.isArray(action.gptBuilderElements) ? action.gptBuilderElements : []
+    const restoredElements = Array.isArray(action.gptBuilderElements) && action.gptBuilderElements.length
+      ? action.gptBuilderElements
+      : (Array.isArray(action.actions) ? action.actions.map((runtimeAction, index) => ({
+          id: runtimeAction.id || `imported-step-${index + 1}`,
+          key: 'action',
+          label: runtimeAction.label || runtimeAction.apiName || runtimeAction.key || runtimeAction.type || `Step ${index + 1}`,
+          apiName: runtimeAction.apiName || runtimeAction.id || `Imported_Step_${index + 1}`,
+          description: runtimeAction.description || '',
+          labelSource: 'manual',
+          apiNameSource: 'manual',
+          config: {
+            actionKey: runtimeAction.key || runtimeAction.type || '',
+            inputs: {},
+            inputModes: {},
+            inputIncluded: {},
+            transforms: {},
+            outputMode: 'automatic',
+            manualOutputs: [],
+            importedRuntimeAction: runtimeAction,
+            importedRuntimeActionText: '',
+          },
+          configured: true,
+          source: 'runtime_import',
+          position: null,
+        })) : [])
     setFlowProps((current) => ({
       ...current,
       label: definition?.name || current.label,
@@ -1608,11 +1653,12 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setGroupDeleteTarget(null)
     setDirty(true)
   }
-  const removeSelectedAutoElements = () => {
-    if (!selectedElementIds.length) return
-    const selectedGroups = elements.filter((item) => selectedElementIds.includes(item.id) && item.key === 'group')
+  const removeAutoElements = (ids = []) => {
+    const requested = ids.filter(Boolean)
+    if (!requested.length) return
+    const selectedGroups = elements.filter((item) => requested.includes(item.id) && item.key === 'group')
     if (selectedGroups.length) { setGroupDeleteTarget(selectedGroups[0]); return }
-    const removed = new Set(selectedElementIds)
+    const removed = new Set(requested)
     for (const decision of elements.filter((item) => removed.has(item.id) && item.key === 'decision')) {
       for (const id of (decision.config?.outcomes || []).flatMap((outcome) => outcome.branch || [])) removed.add(id)
       for (const id of decision.config?.defaultBranch || []) removed.add(id)
@@ -1627,9 +1673,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       return item
     }).filter((item) => !removed.has(item.id)))
     setGoToConnections((current) => current.filter((edge) => !removed.has(edge.sourceId) && !removed.has(edge.targetId)))
-    setSelectedElementIds([])
+    setSelectedElementIds((current) => current.filter((id) => !removed.has(id)))
+    if (editingElement?.id && removed.has(editingElement.id)) setEditingElement(null)
     setDirty(true)
   }
+  const removeSelectedAutoElements = () => removeAutoElements(selectedElementIds)
   const canvasPoint = (clientX, clientY) => {
     const canvas = canvasRef.current
     if (!canvas) return { x: 0, y: 0 }
@@ -1824,10 +1872,10 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
     {layoutSwitchError ? <div className="gptb-toast is-error" role="alert">{layoutSwitchError}<button aria-label="Dismiss layout error" onClick={() => setLayoutSwitchError('')}><X size={13}/></button></div> : null}
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''} ${editHistoryOpen ? 'is-history-mode' : ''}`}>
-      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={availableResources} goToConnections={goToConnections} onResourcesChange={applyResourceChanges} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
+      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={availableResources} objects={objects} goToConnections={goToConnections} onResourcesChange={applyResourceChanges} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
       <main
         ref={canvasRef}
-        className="gptb-canvas"
+        className={`gptb-canvas ${layout === 'auto' ? 'is-reactflow' : ''}`}
         tabIndex="-1"
         aria-label="Flow canvas"
         onDragOver={layout === 'free' ? (event) => { if (event.dataTransfer.types.includes('application/x-gptbuilder-element') || event.dataTransfer.types.includes('application/x-gptbuilder-existing')) event.preventDefault() } : undefined}
@@ -1835,34 +1883,82 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         onPointerMove={layout === 'free' && freeConnectorDraft ? (event) => { const point = canvasPoint(event.clientX, event.clientY); setFreeConnectorDraft((current) => current ? { ...current, x: point.x, y: point.y } : current) } : undefined}
         onPointerUp={layout === 'free' && freeConnectorDraft ? () => setFreeConnectorDraft(null) : undefined}
       >
-        <div className="gptb-canvas-stage" style={{ transform: `scale(${zoom / 100})` }}>{layout === 'auto' ? <>
-          <button className={`gptb-start-card ${!startConfigured ? 'needs-config' : ''}`} data-gptb-auto-focus="true" data-gptb-element-id="start" data-gptb-description="The Start element defines when and how the flow begins." aria-label="Start" aria-disabled={!flow.startNeedsConfiguration} onClick={flow.startNeedsConfiguration ? openStart : undefined}><span className="gptb-start-dot"/><span><strong>Start</strong><small>{startSummary(flow.key, startConfig, objects)}</small></span><ChevronRight size={14}/></button>
-          {(() => {
-            const autoElements = elements.filter((element) => element.source === 'auto')
-            const groupMemberIds = autoElements.filter((element)=>element.key==='group').flatMap((group)=>Array.isArray(group.config?.memberIds)?group.config.memberIds:[])
-            const decisionMemberIds = autoElements.filter((element)=>element.key==='decision').flatMap((decision)=>[
-              ...(decision.config?.outcomes || []).flatMap((outcome)=>Array.isArray(outcome.branch)?outcome.branch:[]),
-              ...(Array.isArray(decision.config?.defaultBranch)?decision.config.defaultBranch:[]),
-            ])
-            const memberIds = new Set([...groupMemberIds, ...decisionMemberIds])
-            const visible = autoElements.filter((element)=>!memberIds.has(element.id))
-            const addSlot = (index) => <div className="gptb-add-slot" key={`add-${index}`}>
-              <div className="gptb-connector"/>
-              <button className="gptb-add-node" aria-label={`Add element at position ${index + 1}`} aria-expanded={elementPickerOpen && autoInsertIndex === index} onClick={() => {
-                const same = elementPickerOpen && autoInsertIndex === index
-                setElementPickerOpen(!same)
-                setAutoInsertIndex(same ? null : index)
-                setStartOpen(false); setDiagnosticsOpen(false); setEditingElement(null)
-              }}><Plus size={15}/></button>
-              {elementPickerOpen && autoInsertIndex === index ? <ElementPicker flowType={flow.key} startConfig={startConfig} hasExistingElements={autoElements.length > 0} copiedCount={copiedElements.length} onPaste={pasteCopiedElements} onConnect={beginConnectToElement} onSelect={(element) => chooseElement(element, 'auto', null, index)} onClose={() => { setElementPickerOpen(false); setAutoInsertIndex(null) }}/>:null}
-            </div>
-            return <>{addSlot(0)}{visible.map((element,index)=><React.Fragment key={element.id}><div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-element-id={element.id} data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`}>{element.key==='group'
-              ? <AutoGroupCard group={element} members={(element.config?.memberIds||[]).map((id)=>autoElements.find((item)=>item.id===id)).filter(Boolean)} onOpenGroup={()=>openElement(element)} onOpenMember={openElement} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} connecting={connectMode} onConnectTarget={connectToElement} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length} onAddElement={(picked)=>addElementToGroup(element.id,picked)} onDeleteGroup={()=>setGroupDeleteTarget(element)}/>
-              : element.key==='decision'
-                ? <AutoDecisionCard decision={element} elements={autoElements} onOpenDecision={()=>openElement(element)} onOpenMember={openElement} onAddElement={addElementToDecisionBranch} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length}/>
-                : <PendingElementCard instance={element} onOpen={() => openElement(element)} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/>}</div>{addSlot(index + 1)}</React.Fragment>)}</>
-          })()}
-          <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
+        <div className={`gptb-canvas-stage ${layout === 'auto' ? 'is-reactflow' : ''}`} style={layout === 'free' ? { transform: `scale(${zoom / 100})` } : undefined}>{layout === 'auto' ? <>
+          <GPTBuilderReactFlowCanvas
+            elements={elements}
+            selectedId={editingElement?.id || selectedElementIds[0] || ''}
+            startLabel={startSummary(flow.key, startConfig, objects)}
+            onOpen={openElement}
+            onRemove={(id) => removeAutoElements([id])}
+            onAddAt={(index) => {
+              setDecisionInsertTarget(null)
+              setGroupInsertTarget(null)
+              setElementPickerOpen(true)
+              setAutoInsertIndex(index)
+              setStartOpen(false)
+              setDiagnosticsOpen(false)
+              setEditingElement(null)
+            }}
+            onAddDecisionBranch={(decisionId, pathId) => {
+              setAutoInsertIndex(null)
+              setGroupInsertTarget(null)
+              setDecisionInsertTarget({ decisionId, pathId })
+              setElementPickerOpen(true)
+              setStartOpen(false)
+              setDiagnosticsOpen(false)
+              setEditingElement(null)
+            }}
+            onAddGroupMember={(groupId) => {
+              setAutoInsertIndex(null)
+              setDecisionInsertTarget(null)
+              setGroupInsertTarget(groupId)
+              setElementPickerOpen(true)
+              setStartOpen(false)
+              setDiagnosticsOpen(false)
+              setEditingElement(null)
+            }}
+            onOpenStart={flow.startNeedsConfiguration ? openStart : undefined}
+          />
+          {elementPickerOpen && autoInsertIndex != null ? <div className="gptb-reactflow-picker">
+            <ElementPicker
+              flowType={flow.key}
+              startConfig={startConfig}
+              hasExistingElements={elements.some((element) => element.source === 'auto')}
+              copiedCount={copiedElements.length}
+              onPaste={pasteCopiedElements}
+              onConnect={beginConnectToElement}
+              onSelect={(element) => chooseElement(element, 'auto', null, autoInsertIndex)}
+              onClose={() => { setElementPickerOpen(false); setAutoInsertIndex(null) }}
+            />
+          </div> : null}
+          {elementPickerOpen && decisionInsertTarget ? <div className="gptb-reactflow-picker">
+            <ElementPicker
+              flowType={flow.key}
+              startConfig={startConfig}
+              hasExistingElements
+              copiedCount={copiedElements.length}
+              onSelect={(element) => {
+                addElementToDecisionBranch(decisionInsertTarget.decisionId, decisionInsertTarget.pathId, element)
+                setDecisionInsertTarget(null)
+                setElementPickerOpen(false)
+              }}
+              onClose={() => { setDecisionInsertTarget(null); setElementPickerOpen(false) }}
+            />
+          </div> : null}
+          {elementPickerOpen && groupInsertTarget ? <div className="gptb-reactflow-picker">
+            <ElementPicker
+              flowType={flow.key}
+              startConfig={startConfig}
+              hasExistingElements
+              copiedCount={copiedElements.length}
+              onSelect={(element) => {
+                addElementToGroup(groupInsertTarget, element)
+                setGroupInsertTarget(null)
+                setElementPickerOpen(false)
+              }}
+              onClose={() => { setGroupInsertTarget(null); setElementPickerOpen(false) }}
+            />
+          </div> : null}
         </> : <>
           <svg className="gptb-free-connections" aria-hidden="true">
             {goToConnections.map((edge) => {
@@ -1891,7 +1987,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
           />)}
           <div className="gptb-free-hint">Drag elements from the Elements tab, move them anywhere, and drag connectors between elements.</div>
         </>}</div>
-        <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(25, value - 10))} disabled={zoom <= 25}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button><button className="gptb-fit-view" aria-label="Zoom to fit" onClick={zoomToFit}>Fit</button></div>
+        {layout === 'free' ? <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(25, value - 10))} disabled={zoom <= 25}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button><button className="gptb-fit-view" aria-label="Zoom to fit" onClick={zoomToFit}>Fit</button></div> : null}
         <div className="gptb-canvas-help" tabIndex="-1"><CircleHelp size={14}/><span>{layout === 'auto' ? 'Auto-Layout keeps the flow arranged and connected automatically.' : 'Free-Form lets you position and connect elements manually.'}</span></div>
       </main>
       {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
@@ -1957,6 +2053,8 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                   startConfig={startConfig}
                   onConfiguredChange={setConfigured}
                 />
+              : activeElement.key === 'rollback_records'
+                ? <GPTBuilderRollbackRecords onConfiguredChange={setConfigured}/>
               : activeElement.key === 'assignment'
                 ? <GPTBuilderAssignment
                     draft={draft}
@@ -2088,18 +2186,167 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   </section>
 }
 
+
+function inferExistingFlowType(rule = {}) {
+  const action = rule?.action || {}
+  const raw = String(action.flowType || action.flow_type || '').trim().toLowerCase()
+  const aliases = {
+    record_triggered: 'record',
+    record: 'record',
+    screen_flow: 'screen',
+    screen: 'screen',
+    schedule_triggered: 'schedule',
+    scheduled: 'schedule',
+    schedule: 'schedule',
+    platform_event_triggered: 'platform_event',
+    platform_event: 'platform_event',
+    autolaunched_flow: 'autolaunched',
+    autolaunched: 'autolaunched',
+  }
+  if (aliases[raw]) return aliases[raw]
+  if (FLOW_TYPES.some((item) => item.key === raw)) return raw
+  const trigger = String(rule?.trigger_key || rule?.triggerKey || rule?.trigger || action.triggerKey || action.trigger_key || '').toLowerCase()
+  if (trigger === 'scheduled' || trigger === 'schedule') return 'schedule'
+  if (trigger.includes('platform_event') || trigger === 'event') return 'platform_event'
+  if (/^(before|after)_(create|update|delete|save)$/.test(trigger)) return 'record'
+  if (rule?.object_key || rule?.objectKey || rule?.object || rule?.trigger_object) return 'record'
+  return 'autolaunched'
+}
+
+function existingStartConfig(rule = {}, flowType = 'autolaunched') {
+  const action = rule?.action || {}
+  if (action.start && typeof action.start === 'object') return structuredClone(action.start)
+  if (flowType === 'record') {
+    const triggerKey = String(rule?.trigger_key || rule?.triggerKey || rule?.trigger || action.triggerKey || action.trigger_key || '').toLowerCase()
+    const trigger =
+      triggerKey.includes('delete') ? 'deleted'
+        : triggerKey.includes('create') && !triggerKey.includes('update') ? 'created'
+          : triggerKey.includes('update') && !triggerKey.includes('create') ? 'updated'
+            : 'created_or_updated'
+    return {
+      ...initialStart('record'),
+      objectKey: String(rule?.object_key || rule?.objectKey || rule?.object || rule?.trigger_object || action.objectKey || action.object || ''),
+      trigger,
+      optimize: triggerKey.startsWith('before_') ? 'fast' : 'actions',
+      conditionMode: Array.isArray(rule?.conditions) && rule.conditions.length ? 'all' : 'none',
+      conditions: Array.isArray(rule?.conditions) ? structuredClone(rule.conditions) : [],
+      updateMode: String(action.entryTransition || '').toUpperCase() === 'UPDATED_TO_MEET' ? 'transition' : 'every_time',
+    }
+  }
+  if (flowType === 'schedule') return { ...initialStart('schedule'), ...(action.schedule && typeof action.schedule === 'object' ? structuredClone(action.schedule) : {}) }
+  if (flowType === 'platform_event') return { ...initialStart('platform_event'), eventKey: String(rule?.trigger_key || rule?.triggerKey || rule?.trigger || action.triggerKey || action.trigger_key || '') }
+  return initialStart(flowType)
+}
+
+function legacyRuntimeActionToBuilderElement(runtimeAction = {}, index = 0) {
+  const runtimeKey = String(runtimeAction?.key || runtimeAction?.actionKey || runtimeAction?.action_key || runtimeAction?.type || '').trim()
+  const id = String(runtimeAction?.id || `legacy-action-${index + 1}`)
+  const label = runtimeAction?.label || runtimeAction?.name || runtimeKey || `Action ${index + 1}`
+  const apiName = runtimeAction?.apiName || runtimeAction?.api_name || apiNameFromLabel(label, `Action_${index + 1}`)
+  const reserved = new Set(['id','key','actionKey','action_key','type','label','name','apiName','api_name','description','automaticOutputVariable','manualOutputMappings'])
+  const inputs = {}
+  const inputModes = {}
+  const inputIncluded = {}
+  const transforms = {}
+  for (const [name, value] of Object.entries(runtimeAction || {})) {
+    if (reserved.has(name) || value === undefined) continue
+    if (value && typeof value === 'object' && value.__flowInputMode === 'formula') {
+      inputs[name] = value.expression || ''
+      inputModes[name] = 'formula'
+    } else if (value && typeof value === 'object' && value.__flowInputMode === 'transform') {
+      inputs[name] = ''
+      inputModes[name] = 'transform'
+      transforms[name] = { source: value.source || '', mappings: Array.isArray(value.mappings) ? structuredClone(value.mappings) : [] }
+    } else if (value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.path === 'string') {
+      inputs[name] = value.path
+      inputModes[name] = 'resource'
+    } else {
+      inputs[name] = structuredClone(value)
+      inputModes[name] = 'value'
+    }
+    inputIncluded[name] = 'specified'
+  }
+  return {
+    id,
+    key: 'action',
+    label,
+    apiName,
+    description: runtimeAction?.description || '',
+    configured: Boolean(runtimeKey),
+    source: 'existing-runtime-action',
+    config: {
+      actionKey: runtimeKey,
+      inputs,
+      inputModes,
+      inputIncluded,
+      transforms,
+      outputMode: Array.isArray(runtimeAction?.manualOutputMappings) && runtimeAction.manualOutputMappings.length ? 'manual' : 'automatic',
+      manualOutputs: Array.isArray(runtimeAction?.manualOutputMappings) ? structuredClone(runtimeAction.manualOutputMappings) : [],
+    },
+  }
+}
+
+function normalizeExistingRuleForGPTBuilder(rule = {}) {
+  const action = rule?.action && typeof rule.action === 'object' ? structuredClone(rule.action) : {}
+  const flowType = inferExistingFlowType(rule)
+  if (!Array.isArray(action.gptBuilderElements)) {
+    action.gptBuilderElements = (Array.isArray(action.actions) ? action.actions : []).map(legacyRuntimeActionToBuilderElement)
+  }
+  action.gptBuilder = true
+  action.flowType = flowType
+  action.start = existingStartConfig(rule, flowType)
+  action.layout = action.layout && typeof action.layout === 'object' ? action.layout : { mode: 'AUTO' }
+  return { ...rule, action }
+}
+
+function flowTypeLabel(rule = {}) {
+  const key = inferExistingFlowType(rule)
+  return FLOW_TYPES.find((item) => item.key === key)?.label || 'Flow'
+}
+
+function flowStatusLabel(rule = {}) {
+  return rule?.runtime_active === true || rule?.active === true || String(rule?.lifecycle_status || '').toUpperCase() === 'ACTIVE'
+    ? 'Active'
+    : 'Draft'
+}
+
 export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen }) {
-  const [newOpen, setNewOpen] = useState(() => !initialWorkflowId)
+  const [newOpen, setNewOpen] = useState(false)
   const [flow, setFlow] = useState(null)
   const [initialRule, setInitialRule] = useState(null)
   const [loadingExisting, setLoadingExisting] = useState(Boolean(initialWorkflowId))
   const [openError, setOpenError] = useState('')
+  const [flows, setFlows] = useState([])
+  const [listLoading, setListLoading] = useState(true)
+  const [listError, setListError] = useState('')
+  const [listQuery, setListQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+
+  const loadFlows = () => {
+    setListLoading(true)
+    setListError('')
+    return apiRequest('/api/platform/rules')
+      .then((response) => {
+        const rows = Array.isArray(response?.data) ? response.data : []
+        setFlows(rows.filter((item) => String(item?.action?.type || '').toLowerCase() === 'workflow' || Array.isArray(item?.action?.actions)))
+        return rows
+      })
+      .catch((error) => {
+        setFlows([])
+        setListError(error?.message || 'Unable to load flows.')
+        return []
+      })
+      .finally(() => setListLoading(false))
+  }
+
+  useEffect(() => { void loadFlows() }, [])
 
   useEffect(() => {
     let live = true
     const id = String(initialWorkflowId || '')
     if (!id) {
       setInitialRule(null)
+      setFlow(null)
       setLoadingExisting(false)
       return () => { live = false }
     }
@@ -2111,28 +2358,100 @@ export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen 
         const rows = Array.isArray(response?.data) ? response.data : []
         const saved = rows.find((item) => String(item?.id || '') === id)
         if (!saved) throw new Error('Saved GPT Builder flow not found.')
-        if (saved.action?.gptBuilder !== true) throw new Error('This workflow was not created by GPT Builder.')
-        const definition = FLOW_TYPES.find((item) => item.key === saved.action?.flowType)
-        if (!definition) throw new Error('This GPT Builder flow type is not supported.')
-        setInitialRule(saved)
+        const normalized = normalizeExistingRuleForGPTBuilder(saved)
+        const definition = FLOW_TYPES.find((item) => item.key === normalized.action?.flowType)
+        if (!definition) throw new Error('This flow type is not supported by GPT Builder.')
+        setInitialRule(normalized)
         setFlow(definition)
         setNewOpen(false)
       })
-      .catch((error) => { if (live) { setInitialRule(null); setFlow(null); setOpenError(error?.message || 'Unable to reopen flow.') } })
+      .catch((error) => {
+        if (live) {
+          setInitialRule(null)
+          setFlow(null)
+          setOpenError(error?.message || 'Unable to reopen flow.')
+        }
+      })
       .finally(() => { if (live) setLoadingExisting(false) })
     return () => { live = false }
   }, [initialWorkflowId])
 
+  const openExisting = (rule) => {
+    const normalized = normalizeExistingRuleForGPTBuilder(rule)
+    const definition = FLOW_TYPES.find((item) => item.key === normalized.action?.flowType)
+    if (!definition) {
+      setOpenError('This flow type is not supported by GPT Builder.')
+      return
+    }
+    setInitialRule(normalized)
+    setFlow(definition)
+    setNewOpen(false)
+    setOpenError('')
+    onWorkflowOpen?.(String(rule.id))
+  }
+
   const startNew = () => {
     setInitialRule(null)
+    setFlow(null)
     setNewOpen(true)
     onWorkflowOpen?.('')
   }
 
+  const filteredFlows = useMemo(() => {
+    const needle = listQuery.trim().toLowerCase()
+    return flows.filter((rule) => {
+      const type = inferExistingFlowType(rule)
+      if (typeFilter !== 'all' && type !== typeFilter) return false
+      if (!needle) return true
+      return `${rule?.name || ''} ${rule?.action?.apiName || ''} ${flowTypeLabel(rule)} ${flowStatusLabel(rule)}`.toLowerCase().includes(needle)
+    })
+  }, [flows, listQuery, typeFilter])
+
+  const filterOptions = [
+    ['all', 'All'],
+    ['record', 'Record'],
+    ['screen', 'Screen'],
+    ['schedule', 'Scheduled'],
+    ['platform_event', 'Platform Event'],
+    ['autolaunched', 'Autolaunched'],
+  ]
+
   return <section className="gptb-root" aria-label="GPT Builder">
     {loadingExisting ? <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1><p>Opening saved flow…</p></main>
-      : flow ? <FlowShell key={initialRule?.id || flow.key} flow={flow} initialRule={initialRule} onWorkflowSaved={onWorkflowOpen} onNew={startNew}/>
-      : <main className="gptb-empty-home"><span className="gptb-empty-logo"><Workflow size={28}/></span><h1>GPT Builder</h1>{openError ? <p role="alert">{openError}</p> : <p>Create a Salesforce-style automation in the isolated GPT Builder workspace.</p>}<button className="gptb-button is-brand" onClick={() => setNewOpen(true)}><Plus size={15}/> New Automation</button></main>}
+      : flow ? <FlowShell key={initialRule?.id || flow.key} flow={flow} initialRule={initialRule} onWorkflowSaved={(id) => { onWorkflowOpen?.(id); void loadFlows() }} onNew={startNew}/>
+      : <main className="gptb-flow-list-view">
+          <header className="gptb-flow-list-head">
+            <div><h1>Flows</h1><p>Create and manage automation flows.</p></div>
+            <button className="gptb-button is-brand" onClick={startNew}><Plus size={15}/> New Flow</button>
+          </header>
+          <div className="gptb-flow-list-toolbar">
+            <label className="gptb-flow-list-search">
+              <Search size={14}/>
+              <input value={listQuery} onChange={(event) => setListQuery(event.target.value)} placeholder="Search flows..." aria-label="Search flows"/>
+            </label>
+            <div className="gptb-flow-type-filters" role="group" aria-label="Filter by flow type">
+              {filterOptions.map(([key, label]) => <button key={key} type="button" className={typeFilter === key ? 'is-active' : ''} aria-pressed={typeFilter === key} onClick={() => setTypeFilter(key)}>{label}</button>)}
+            </div>
+          </div>
+          {openError ? <div className="gptb-flow-list-error" role="alert">{openError}</div> : null}
+          {listError ? <div className="gptb-flow-list-error" role="alert">{listError}</div> : null}
+          <div className="gptb-flow-table-wrap">
+            <table className="gptb-flow-table">
+              <thead><tr><th>Flow Label</th><th>API Name</th><th>Type</th><th>Status</th><th>Last Modified</th><th aria-label="Actions"></th></tr></thead>
+              <tbody>
+                {listLoading ? <tr><td colSpan="6" className="gptb-flow-table-empty">Loading flows…</td></tr>
+                  : filteredFlows.length ? filteredFlows.map((rule) => <tr key={rule.id}>
+                    <td><button type="button" className="gptb-flow-name-link" onClick={() => openExisting(rule)}>{rule.name || 'Untitled Flow'}</button></td>
+                    <td>{rule?.action?.apiName || '—'}</td>
+                    <td>{flowTypeLabel(rule)}</td>
+                    <td><span className={`gptb-flow-status ${flowStatusLabel(rule) === 'Active' ? 'is-active' : ''}`}>{flowStatusLabel(rule)}</span></td>
+                    <td>{rule.updated_at || rule.created_at ? new Date(rule.updated_at || rule.created_at).toLocaleString() : '—'}</td>
+                    <td className="gptb-flow-action-cell"><button type="button" className="gptb-flow-edit" aria-label={`Edit ${rule.name || 'flow'}`} title="Edit Flow" onClick={() => openExisting(rule)}><Pencil size={14}/></button></td>
+                  </tr>) : <tr><td colSpan="6" className="gptb-flow-table-empty">No flows match this view.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </main>}
     {newOpen ? <GPTBuilderNewAutomation flowTypes={FLOW_TYPES} onCreate={(definition) => { setInitialRule(null); setFlow(definition); setNewOpen(false); onWorkflowOpen?.('') }} onClose={() => setNewOpen(false)}/> : null}
   </section>
 }

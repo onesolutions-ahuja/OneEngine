@@ -1695,6 +1695,110 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log("onePOS: OneAssistant communication event trigger registered");
       },
     },
+    {
+      key: "0065_remove_legacy_duplicate_workflow_wrappers",
+      version: "65",
+      name: "Remove six stale generated workflow duplicates",
+      up: async client => {
+        const staleSystemKeys = [
+          "function:purchase.create",
+          "function:purchase.receive",
+          "function:supplier.return.execute",
+          "function:supplier.invoice.create",
+          "function:supplier.payment.execute",
+          "action:ONLINE_ORDER_TRANSITION",
+        ];
+
+        const removed = await client.query(
+          `DELETE FROM platform_rules
+            WHERE action->>'systemGenerated'='true'
+              AND (
+                (action->>'systemKey') = ANY($1::text[])
+                OR (
+                  action->>'capabilityType'='function'
+                  AND (action->>'capabilityKey') = ANY($2::text[])
+                )
+                OR (
+                  action->>'capabilityType'='action'
+                  AND action->>'capabilityKey'='ONLINE_ORDER_TRANSITION'
+                )
+              )
+            RETURNING id,name,company_id,action->>'systemKey' AS system_key`,
+          [
+            staleSystemKeys,
+            [
+              "purchase.create",
+              "purchase.receive",
+              "supplier.return.execute",
+              "supplier.invoice.create",
+              "supplier.payment.execute",
+            ],
+          ]
+        );
+
+        const remaining = await client.query(
+          `SELECT id,name,company_id,action->>'systemKey' AS system_key
+             FROM platform_rules
+            WHERE action->>'systemGenerated'='true'
+              AND (
+                (action->>'systemKey') = ANY($1::text[])
+                OR (
+                  action->>'capabilityType'='function'
+                  AND (action->>'capabilityKey') = ANY($2::text[])
+                )
+                OR (
+                  action->>'capabilityType'='action'
+                  AND action->>'capabilityKey'='ONLINE_ORDER_TRANSITION'
+                )
+              )`,
+          [
+            staleSystemKeys,
+            [
+              "purchase.create",
+              "purchase.receive",
+              "supplier.return.execute",
+              "supplier.invoice.create",
+              "supplier.payment.execute",
+            ],
+          ]
+        );
+        if (remaining.rows.length) throw new Error("Legacy duplicate workflow wrapper cleanup verification failed");
+
+        console.log("onePOS: removed stale generated workflow duplicates", {
+          removed: removed.rowCount,
+          expectedSets: 6,
+        });
+      },
+    },
+    {
+      key: "0066_remove_system_action_job_workflow_wrappers",
+      version: "66",
+      name: "Remove generated action and job pseudo-workflows",
+      up: async client => {
+        const removed = await client.query(
+          `DELETE FROM platform_rules
+            WHERE action->>'systemGenerated'='true'
+              AND (
+                action->>'systemKey' LIKE 'action:%'
+                OR action->>'systemKey' LIKE 'job:%'
+                OR action->>'capabilityType' IN ('action','job')
+              )
+            RETURNING id,name,company_id,action->>'systemKey' AS system_key`
+        );
+        const remaining = await client.query(
+          `SELECT id,name,company_id,action->>'systemKey' AS system_key
+             FROM platform_rules
+            WHERE action->>'systemGenerated'='true'
+              AND (
+                action->>'systemKey' LIKE 'action:%'
+                OR action->>'systemKey' LIKE 'job:%'
+                OR action->>'capabilityType' IN ('action','job')
+              )`
+        );
+        if (remaining.rows.length) throw new Error("Generated action/job pseudo-workflow cleanup verification failed");
+        console.log("onePOS: removed generated action/job pseudo-workflows", { removed: removed.rowCount });
+      },
+    },
     ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);

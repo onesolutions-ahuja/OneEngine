@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronUp, ChevronDown, Plus, Trash2 } from 'lucide-react'
 
 const uid = () => globalThis.crypto?.randomUUID?.() || `dc-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -110,6 +110,7 @@ function ResourcePicker({ resources, value, onChange, allowedResources = resourc
 
 export default function GPTBuilderDecision({ draft, updateConfig, resources, flowType, onConfiguredChange }) {
   const config = normalizeDecisionConfig(draft.config)
+  const [keyboardOutcome,setKeyboardOutcome]=useState(null)
   const errors = useMemo(() => decisionConfigErrors(config, flowType), [JSON.stringify(config), flowType])
   useEffect(() => { onConfiguredChange?.(errors.length === 0, errors) }, [JSON.stringify(errors)])
 
@@ -135,8 +136,9 @@ export default function GPTBuilderDecision({ draft, updateConfig, resources, flo
       {config.logicMode !== 'manual' ? <label><span>{config.logicMode === 'date' ? 'Date / Date-Time Resource' : 'Resource'} <b>*</b></span><ResourcePicker resources={resources} allowedResources={splitCandidates} value={config.splitResource} onChange={(splitResource)=>patch({splitResource})}/></label> : null}
     </section>
     <section><h3>Outcome Order</h3>
+      <p className="gptb-help-text">To reorder a row, press Spacebar. To move the selected row, use the arrow keys.</p>
       <div className="gptb-decision-outcomes">
-        {config.outcomes.map((outcome,index) => <fieldset key={outcome.id}>
+        {config.outcomes.map((outcome,index) => <fieldset key={outcome.id} tabIndex={0} aria-label={`Outcome ${index+1}: ${outcome.label||'Untitled'}`} data-keyboard-reorder={keyboardOutcome===index?'selected':'idle'} onKeyDown={(event)=>{if(event.target!==event.currentTarget)return;if(event.key===' '){event.preventDefault();setKeyboardOutcome((current)=>current===index?null:index);return}if(keyboardOutcome===index&&['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const direction=event.key==='ArrowUp'?-1:1;const target=index+direction;if(target>=0&&target<config.outcomes.length){moveOutcome(index,direction);setKeyboardOutcome(target)}}}}>
           <legend><span>Outcome {index + 1}</span><span><button type="button" aria-label={`Move outcome ${index + 1} up`} disabled={index===0} onClick={() => moveOutcome(index,-1)}><ChevronUp size={13}/></button><button type="button" aria-label={`Move outcome ${index + 1} down`} disabled={index===config.outcomes.length-1} onClick={() => moveOutcome(index,1)}><ChevronDown size={13}/></button><button type="button" aria-label={`Remove outcome ${index + 1}`} onClick={() => patch({ outcomes: config.outcomes.filter((item) => item.id !== outcome.id) })}><Trash2 size={13}/></button></span></legend>
           <label><span>Outcome Label <b>*</b></span><input value={outcome.label || ''} onChange={(event) => {
             const label = event.target.value

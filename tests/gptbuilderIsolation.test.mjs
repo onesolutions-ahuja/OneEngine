@@ -13,13 +13,44 @@ test('OneDeveloper exposes GPT Builder as a separate developer section', async (
 
 test('GPT Builder phase 2 shell follows Salesforce flow-creation and canvas chrome rules', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderReactFlowCanvas.jsx', import.meta.url), 'utf8')
   const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
   for (const text of ['New Automation','Search automations...','Categories','Frequently Used']) assert.ok(automation.includes(text), text)
   for (const text of ['Record-Triggered Flow','Screen Flow','Autolaunched Flow (No Trigger)','Schedule-Triggered Flow','Platform Event-Triggered Flow','Auto-Layout','Free-Form','Canvas zoom']) assert.ok(page.includes(text), text)
-  assert.match(page, /aria-label="Start"/)
-  assert.match(page, /aria-label=\{\`Add element at position \$\{index \+ 1\}\`\}/)
-  assert.match(page, />End</)
+  assert.match(canvas, /title: 'Start'/)
+  assert.match(canvas, /aria-label=\{\`Add after \$\{data\.title\}\`\}/)
+  assert.match(canvas, /title: 'End'/)
 })
+
+test('GPT Builder phase 1 exposes all 18 Salesforce automation type cards captured in the reference audit', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const automation = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderNewAutomation.jsx', import.meta.url), 'utf8')
+  const names = [
+    'Screen Flow',
+    'Record-Triggered Flow',
+    'Schedule-Triggered Flow',
+    'Platform Event-Triggered Flow',
+    'Autolaunched Flow (No Trigger)',
+    'Automation Event-Triggered Flow',
+    'User Provisioning Flow',
+    'Contact Request Flow',
+    'Cart Async Flow',
+    'Recommendation Strategy',
+    'Autolaunched Orchestration (No Trigger)',
+    'Record-Triggered Orchestration',
+    'Evaluation Flow',
+    'Flow Orchestration for CMS',
+    'Individual-Object Linking Flow',
+    'Autolaunched Flow Approval Process (No Trigger)',
+    'Record-Triggered Flow Approval Process',
+    'Identity User Registration Flow',
+  ]
+  for (const name of names) assert.ok(page.includes(name), name)
+  assert.equal(names.length, 18)
+  assert.match(automation, /category === 'scheduled'\) return flow\?\.category === 'scheduled'/)
+  assert.match(page, /pickerOnlyReference: true/)
+})
+
 
 test('GPT Builder keeps auto-layout and free-form toolbox behavior separate', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
@@ -179,13 +210,14 @@ test('GPT Builder phase 3 element modules expose validation and runtime contract
 
 test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection and reopen persistence', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderReactFlowCanvas.jsx', import.meta.url), 'utf8')
   assert.match(page, /Ctrl\/Cmd \+ Alt\/Option \+ \+ \/ − or Ctrl\/Cmd \+ mouse wheel/)
   assert.match(page, /if \(event\.key === 'F6'\)/)
   assert.match(page, /sequence === 'gd'/)
   assert.match(page, /\['ArrowDown','ArrowUp','ArrowLeft','ArrowRight'\]/)
   assert.match(page, /axis = 'vertical'/)
-  assert.match(page, /data-gptb-element-id="start"/)
-  assert.match(page, /data-gptb-element-id=\{element\.id\}/)
+  assert.match(canvas, /data-gptb-element-id=\{elementId\}/)
+  assert.match(canvas, /data-gptb-auto-focus="true"/)
   assert.match(page, /layout === 'free' && primary && event\.key === '\/'/)
   assert.match(page, /const focusedAutoElementId = \(\) =>/)
   assert.match(page, /Arrow keys in Auto-Layout/)
@@ -198,6 +230,12 @@ test('GPT Builder A6 supports current Salesforce zoom keyboard focus selection a
   assert.match(page, /goToConnections,/)
   assert.match(page, /initialWorkflowId = ''/)
   assert.match(page, /Saved GPT Builder flow not found/)
+  assert.match(page, /const \[newOpen, setNewOpen\] = useState\(false\)/)
+  assert.match(page, /className="gptb-flow-list-view"/)
+  assert.match(page, /> New Flow<\/button>/)
+  assert.match(page, /className="gptb-flow-edit"/)
+  assert.match(page, /normalizeExistingRuleForGPTBuilder/)
+  assert.doesNotMatch(page, /This workflow was not created by GPT Builder/)
   assert.match(page, /setLayout\(action\.layout\?\.mode === 'FREE_FORM' \? 'free' : 'auto'\)/)
   assert.match(page, /setGoToConnections\(Array\.isArray\(action\.goToConnections\)/)
 })
@@ -304,7 +342,7 @@ test('GPT Builder Screen matches Salesforce frame navigation palette drag reorde
   const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
   for (const text of [
     'Components',
-    'Configure Frame',
+    'Configure Header',
     'Control Navigation',
     'Show Header',
     'Show Footer',
@@ -462,6 +500,7 @@ test('GPT Builder Custom Error matches Salesforce record-page and inline-field e
 
 test('GPT Builder Group supports add-inside move keyboard delete and keep-or-delete group removal', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderReactFlowCanvas.jsx', import.meta.url), 'utf8')
   const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
   assert.match(page, /Add element to \$\{group\.label\}/)
   assert.match(page, /addElementToGroup/)
@@ -477,6 +516,7 @@ test('GPT Builder Group supports add-inside move keyboard delete and keep-or-del
 test('GPT Builder Group matches Salesforce auto-layout visual grouping and browser-local collapse behavior', async () => {
   const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderGroup.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderReactFlowCanvas.jsx', import.meta.url), 'utf8')
   const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   assert.match(editor, /Groups organize auto-layout elements visually and don't change runtime behavior/)
@@ -485,7 +525,8 @@ test('GPT Builder Group matches Salesforce auto-layout visual grouping and brows
   assert.match(page, /gptbuilder\.group\.\$\{group\.id\}\.collapsed/)
   assert.match(page, /localStorage\.setItem\(storageKey/)
   assert.match(page, /AutoGroupCard/)
-  assert.match(page, /element\.key==='group'/)
+  assert.match(canvas, /element\.key === 'group'/)
+  assert.match(canvas, /gptbuilder\.group\.\$\{group\.id\}\.collapsed/)
   assert.match(page, /activeElement\.key === 'group'/)
   assert.match(elements, /element\.key === 'group'\) return layout === 'auto'/)
   assert.match(css, /\.gptb-auto-group/)
@@ -1022,9 +1063,11 @@ test('GPT Builder phase 3 applies Salesforce flow-type and layout availability r
 
 test('GPT Builder phase 3 matches auto-layout picker and free-form drag discovery behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderReactFlowCanvas.jsx', import.meta.url), 'utf8')
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   assert.match(page, /<ElementPicker/)
-  assert.match(page, /aria-label=\{\`Add element at position \$\{index \+ 1\}\`\} aria-expanded=\{elementPickerOpen && autoInsertIndex === index\}/)
+  assert.match(canvas, /onAddAt\(topIndex \+ 1\)/)
+  assert.match(canvas, /className="rfux-node-add nodrag"/)
   assert.match(page, /application\/x-gptbuilder-element/)
   assert.match(page, /onDrop=\{dropElement\}/)
   assert.match(page, /<GPTBuilderElementProperties/)
@@ -1062,10 +1105,11 @@ test('GPT Builder phase 4 shared properties implements Salesforce label and API-
 
 test('GPT Builder integrated Auto-Layout exposes insertion points between every element', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderReactFlowCanvas.jsx', import.meta.url), 'utf8')
   assert.match(page, /const \[autoInsertIndex, setAutoInsertIndex\] = useState\(null\)/)
-  assert.match(page, /const addSlot = \(index\) =>/)
-  assert.match(page, /Add element at position/)
-  assert.match(page, /chooseElement\(element, 'auto', null, index\)/)
+  assert.match(canvas, /onAddAt\(topIndex \+ 1\)/)
+  assert.match(canvas, /onAdd: \(\) => onAddAt\(0\)/)
+  assert.match(page, /chooseElement\(element, 'auto', null, autoInsertIndex\)/)
   assert.match(page, /const target = topLevelAutoElements\[insertIndex\] \|\| null/)
 })
 
@@ -1287,13 +1331,15 @@ test('GPT Builder recheck makes Use a Template functional instead of a placehold
 
 test('GPT Builder Decision renders executable Auto-Layout outcome branches', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderReactFlowCanvas.jsx', import.meta.url), 'utf8')
   const decision = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDecision.jsx', import.meta.url), 'utf8')
   const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
   const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
   assert.match(page, /function AutoDecisionCard/)
   assert.match(page, /addElementToDecisionBranch/)
-  assert.match(page, /decisionMemberIds/)
-  assert.match(page, /defaultBranch/)
+  assert.match(canvas, /decisionMemberIds/)
+  assert.match(canvas, /defaultBranch/)
+  assert.match(canvas, /onAddDecisionBranch/)
   assert.match(decision, /branch: Array\.isArray\(outcome\.branch\)/)
   assert.match(decision, /defaultBranch: Array\.isArray\(c\.defaultBranch\)/)
   assert.match(runtime, /selectedOutcome \? \(selectedOutcome\.branch \|\| \[\]\) : \(item\.defaultBranch \|\| \[\]\)/)
@@ -1389,3 +1435,14 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
 
 
 
+
+
+test('GPT Builder can reopen and round-trip metadata flows that already have runtime steps', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const action = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAction.jsx', import.meta.url), 'utf8')
+  assert.match(page, /source: 'runtime_import'/)
+  assert.match(page, /importedRuntimeAction: runtimeAction/)
+  assert.match(action, /Imported runtime configuration/)
+  assert.match(action, /JSON\.parse\(c\.importedRuntimeActionText\)/)
+  assert.match(action, /\.\.\.imported/)
+});

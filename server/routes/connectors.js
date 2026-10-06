@@ -1427,7 +1427,7 @@ export default function createConnectorsRouter({
       let workflowExecution = null;
       if (!resetTest && requestedEnabled !== null && requestedEnabled !== (current.enabled === true)) {
         req.user = await hydrateConnectorPermissions(req.user);
-        workflowExecution = await executeSystemWorkflow({
+        workflowExecution = await executeSystemAction({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
@@ -1493,7 +1493,7 @@ export default function createConnectorsRouter({
         db,
         companyId: req.user.companyId,
         userId: req.user.id || null,
-        systemKey: "action:CONNECTOR_TEST_CONNECTION",
+        actionKey: "CONNECTOR_TEST_CONNECTION",
         req,
         input: { connectorInstanceId: req.params.id },
         storeId: instance.store_id || null,

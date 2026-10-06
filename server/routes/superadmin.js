@@ -21,6 +21,7 @@ import {
 } from "../services/tenantDatabase.js";
 import {
   createPackageRelease,
+  registerPortableApplicationPackage,
   executeTenantReleaseUpgrade,
   getPackageReleaseRolloutStatus,
   listPackageReleases,
@@ -766,6 +767,33 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: result.rows });
   });
 
+  router.post("/superadmin/packages/register-portable", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const result = await registerPortableApplicationPackage({
+        db,
+        packageKey: body.packageKey || body.package_key,
+        name: body.name,
+        version: body.version,
+        description: body.description || "",
+        manifest: body.manifest || {},
+        publisher: body.publisher || "OneSolutions",
+        category: body.category || "Apps",
+        billable: body.billable !== false,
+      });
+      await writeAudit.object({
+        userId: req.user?.id || null,
+        action: "package.registered",
+        entityType: "package",
+        entityId: result.id,
+        metadata: { packageKey: result.package_key, version: result.version },
+      });
+      res.status(201).json({ success: true, data: result });
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message || "Unable to register package" });
+    }
+  });
+
   router.get("/superadmin/packages/releases", async (req, res) => {
     try {
       const releases = await listPackageReleases(db, { packageKey: req.query?.packageKey || req.query?.package_key || null });
@@ -797,6 +825,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
         minimumPlatformVersion: payload.minimumPlatformVersion || payload.minimum_platform_version || null,
         updatePolicy: payload.updatePolicy || payload.update_policy || "OPTIONAL",
         changeSet: Array.isArray(payload.changeSet) ? payload.changeSet : (Array.isArray(payload.change_set) ? payload.change_set : []),
+        manifest: payload.manifest || {},
         createdBy: req.user?.id || null,
       });
       await writeAudit.object({

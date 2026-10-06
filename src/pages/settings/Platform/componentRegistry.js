@@ -51,59 +51,11 @@ import {
 // Client fallback mirrors the server registry so the builder remains usable
 // during transient API failures. The server /platform/component-registry is
 // authoritative and is loaded by builders at runtime.
-export const FALLBACK_COMPONENT_REGISTRY = [
-  { key: "section", label: "Section", category: "layout", kind: "layout", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true },
-  { key: "folder_card", label: "Folder Card", category: "modern", kind: "card", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "folder_card" },
-  { key: "avatar_group", label: "Avatar Group", category: "modern", kind: "avatar", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "avatar_group" },
-  { key: "modern_app_card", label: "Modern App Card", category: "modern", kind: "card", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "modern_app_card" },
-  { key: "modern_kpi_card", label: "Modern KPI Card", category: "modern", kind: "metric", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "modern_kpi_card" },
-  { key: "modern_section_header", label: "Modern Section Header", category: "modern", kind: "section", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "modern_section_header" },
-  { key: "modern_data_card", label: "Modern Data Card", category: "modern", kind: "card", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "modern_data_card" },
-  { key: "icon_action_tile", label: "Action Tile", category: "modern", kind: "action", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "icon_action_tile" },
-  { key: "header", label: "Header", category: "content", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true },
-  { key: "text", label: "Information Text", category: "content", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true },
-  { key: "clock_widget", label: "Clock / Watch", category: "content", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "clock_widget" },
-  { key: "calendar_widget", label: "Calendar", category: "content", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "calendar_widget" },
-  { key: "weather_widget", label: "Weather", category: "content", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "weather_widget" },
-  { key: "divider", label: "Divider", category: "layout", kind: "layout" },
-  { key: "spacer", label: "Spacer", category: "layout", kind: "layout" },
-  { key: "text_input", label: "Text Box", category: "field", kind: "field", bindable: true },
-  { key: "long_text", label: "Long Text", category: "field", kind: "field", bindable: true },
-  { key: "number", label: "Number", category: "field", kind: "field", bindable: true },
-  { key: "currency", label: "Currency / Decimal", category: "field", kind: "field", bindable: true },
-  { key: "date", label: "Date", category: "field", kind: "field", bindable: true },
-  { key: "datetime", label: "Date & Time", category: "field", kind: "field", bindable: true },
-  { key: "checkbox", label: "Checkbox", category: "field", kind: "field", bindable: true },
-  { key: "picklist", label: "Picklist / Dropdown", category: "field", kind: "field", bindable: true },
-  { key: "lookup", label: "Lookup", category: "field", kind: "field", bindable: true },
-  { key: "related_list", label: "Related List / Table", category: "record", kind: "record", bindable: true },
-  { key: "field_value", label: "Field Value", category: "record", kind: "record", bindable: true },
-  { key: "tree_view", label: "Tree View", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "process_path", label: "Process Path", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "timeline", label: "Timeline", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "kanban", label: "Kanban", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "calendar", label: "Calendar", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "scheduler", label: "Scheduler", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "gantt", label: "Gantt", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "map", label: "Map", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "hierarchy_viewer", label: "Hierarchy Viewer", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "file_viewer", label: "File Viewer", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "signature", label: "Signature", category: "record", kind: "record", bindable: true, recordBound: true },
-  { key: "button", label: "Custom Button", category: "action", kind: "action", reserved: true },
-  { key: "kpi", label: "Metric / KPI", category: "dashboard", kind: "metric", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "kpi", defaults: { title: "Metric", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, format: "number", size: "medium", dateRange: "this_month" }, layout: { w: 3, h: 2 } } },
-  { key: "bar_chart", label: "Bar Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "bar", defaults: { title: "Bar Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, seriesField: null, stacked: false, limit: 12, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
-  { key: "line_chart", label: "Line Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "line", defaults: { title: "Line Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, showMarkers: true, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
-  { key: "pie_chart", label: "Pie Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "pie", defaults: { title: "Pie Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, maxCategories: 8, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
-  { key: "donut_chart", label: "Donut Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "donut", defaults: { title: "Donut Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, maxCategories: 8, showTotal: true, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
-  { key: "gauge_chart", label: "Gauge", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "gauge", defaults: { title: "Gauge", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, targetMode: "fixed", targetValue: 100, dateRange: "this_month" }, layout: { w: 4, h: 4 } } },
-  { key: "funnel_chart", label: "Funnel", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "funnel", defaults: { title: "Funnel", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, limit: 8, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
-  { key: "scatter_chart", label: "Scatter", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "scatter", defaults: { title: "Scatter", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, xField: null, valueField: null, labelField: null, limit: 60, dateRange: "this_month" }, layout: { w: 6, h: 4 } } },
-  { key: "combo_chart", label: "Combo Chart", category: "dashboard", kind: "chart", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "combo", defaults: { title: "Combo Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, yFields: [], secondaryAxisFields: [], labelField: null, limit: 24, showLegend: true, showValues: false, showGrid: true, referenceLines: [], dateRange: "this_month" }, layout: { w: 8, h: 4 } } },
-  { key: "analytics_table", label: "Analytics Table", category: "dashboard", kind: "record", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "table", defaults: { title: "Table", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, rowLimit: 50 }, layout: { w: 12, h: 5 } } },
-  { key: "dashboard_text", label: "Dashboard Text", category: "dashboard", kind: "content", supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsDashboardContext: true, supportsPageContext: true, runtimeKind: "analytics", rendererKey: "text", defaults: { title: "Text", config: { content: "" }, layout: { w: 6, h: 3 } } },
-  { key: "dashboard_image", label: "Dashboard Image", category: "dashboard", kind: "content", supportedBuilders: ["DASHBOARD"], supportedContexts: ["dashboard"], supportsDashboardContext: true, runtimeKind: "analytics", rendererKey: "image", defaults: { title: "Image", config: { imageUrl: "", altText: "", imageFit: "contain", linkUrl: "" }, layout: { w: 6, h: 4 } } },
-
-];
+// No mirrored component catalogue is allowed in the browser.
+// The server registry is the single source of truth. Builders may show a
+// loading/error state, but they must never silently fall back to stale
+// business/component metadata.
+export const FALLBACK_COMPONENT_REGISTRY = Object.freeze([]);
 
 /* ---------------------------------------------------------------------------
  * ONE icon + category presentation map.
@@ -258,12 +210,12 @@ export function componentByKey(registry, key) {
 
 /* ---------------------------------------------------------------------------
  * ONE loader hook — the single fetch of /api/platform/component-registry.
- * Every surface starts from the fallback (never blank) and adopts the server
- * payload when it arrives; a failed request is silent by design.
+ * Every surface loads the authoritative server payload. A failed request leaves
+ * the registry empty so builders cannot persist definitions against stale metadata.
  * ------------------------------------------------------------------------ */
 
 export function useComponentRegistry() {
-  const [registry, setRegistry] = useState(FALLBACK_COMPONENT_REGISTRY);
+  const [registry, setRegistry] = useState([]);
 
   useEffect(() => {
     let alive = true;
@@ -273,7 +225,7 @@ export function useComponentRegistry() {
         const next = normalizedRegistry(response?.data);
         if (next.length) setRegistry(next);
       })
-      .catch(() => { /* fallback stays rendered */ });
+      .catch(() => { if (alive) setRegistry([]); });
     return () => { alive = false; };
   }, []);
 

@@ -306,6 +306,9 @@
       "metadataScope": "global",
       "storeScoped": true,
       "required": true,
+      "adoptFromPackageKeys": [
+        "retail_pos"
+      ],
       "config": {
         "flowWritesOnly": true
       },
@@ -411,6 +414,9 @@
       "sourceTable": "stock_return_items",
       "metadataScope": "global",
       "required": true,
+      "adoptFromPackageKeys": [
+        "retail_pos"
+      ],
       "config": {
         "flowWritesOnly": true
       },
@@ -592,6 +598,53 @@
       ],
       "actions": [
         {
+          "id": "validate_purchase",
+          "label": "Validate Purchase",
+          "apiName": "validate_purchase",
+          "key": "FORMULA",
+          "resourceName": "purchaseValid",
+          "resultType": "boolean",
+          "expression": "COUNT(items) > 0 && !ISBLANK(supplierId)",
+          "inputs": {
+            "items": {
+              "path": "variables.items"
+            },
+            "supplierId": {
+              "path": "variables.purchase.supplier_id"
+            }
+          }
+        },
+        {
+          "id": "purchase_ready",
+          "label": "Purchase Ready?",
+          "apiName": "purchase_ready",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Valid",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "variables.purchaseValid",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_purchase",
+                "create_purchase_lines"
+              ]
+            }
+          ],
+          "defaultLabel": "Invalid Purchase",
+          "defaultBranch": [
+            "purchase_invalid"
+          ]
+        },
+        {
           "id": "create_purchase",
           "label": "Create Purchase",
           "key": "CREATE_RECORD",
@@ -613,6 +666,14 @@
               "path": "steps.create_purchase.created.id"
             }
           }
+        },
+        {
+          "id": "purchase_invalid",
+          "label": "Purchase Rejected",
+          "apiName": "purchase_invalid",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "A purchase requires a supplier and at least one purchase line.",
+          "errorLocation": "record"
         }
       ],
       "variables": [
@@ -639,6 +700,211 @@
           "availableInput": true,
           "availableOutput": false,
           "objectKey": "purchase_line"
+        },
+        {
+          "value": "variables.purchaseValid",
+          "apiName": "purchaseValid",
+          "label": "Purchase Valid",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": false
+        }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "validate_purchase",
+          "key": "action",
+          "label": "Validate Purchase",
+          "apiName": "validate_purchase",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "validate_purchase",
+              "label": "Validate Purchase",
+              "apiName": "validate_purchase",
+              "key": "FORMULA",
+              "resourceName": "purchaseValid",
+              "resultType": "boolean",
+              "expression": "COUNT(items) > 0 && !ISBLANK(supplierId)",
+              "inputs": {
+                "items": {
+                  "path": "variables.items"
+                },
+                "supplierId": {
+                  "path": "variables.purchase.supplier_id"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "purchase_ready",
+          "key": "action",
+          "label": "Purchase Ready?",
+          "apiName": "purchase_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "purchase_ready",
+              "label": "Purchase Ready?",
+              "apiName": "purchase_ready",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "yes",
+                  "label": "Valid",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "variables.purchaseValid",
+                        "operator": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_purchase",
+                    "create_purchase_lines"
+                  ]
+                }
+              ],
+              "defaultLabel": "Invalid Purchase",
+              "defaultBranch": [
+                "purchase_invalid"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_purchase",
+          "key": "action",
+          "label": "Create Purchase",
+          "apiName": "create_purchase",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_purchase",
+              "label": "Create Purchase",
+              "key": "CREATE_RECORD",
+              "objectKey": "purchase",
+              "recordResource": {
+                "path": "variables.purchase"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_purchase_lines",
+          "key": "action",
+          "label": "Create Purchase Lines",
+          "apiName": "create_purchase_lines",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_purchase_lines",
+              "label": "Create Purchase Lines",
+              "key": "CREATE_RECORD",
+              "objectKey": "purchase_line",
+              "recordCollectionResource": {
+                "path": "variables.items"
+              },
+              "commonFieldValues": {
+                "purchase_id": {
+                  "path": "steps.create_purchase.created.id"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "purchase_invalid",
+          "key": "action",
+          "label": "Purchase Rejected",
+          "apiName": "purchase_invalid",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "purchase_invalid",
+              "label": "Purchase Rejected",
+              "apiName": "purchase_invalid",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "A purchase requires a supplier and at least one purchase line.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
         }
       ]
     },
@@ -662,6 +928,60 @@
       ],
       "actions": [
         {
+          "id": "get_purchase",
+          "label": "Get Purchase",
+          "apiName": "get_purchase",
+          "key": "GET_RECORDS",
+          "objectKey": "purchase",
+          "filters": [
+            {
+              "field": "id",
+              "operator": "equals",
+              "value": {
+                "path": "variables.purchase.id"
+              }
+            }
+          ],
+          "match": "all",
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "purchase_can_receive",
+          "label": "Purchase Can Be Received?",
+          "apiName": "purchase_can_receive",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Valid",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_purchase.record.id",
+                    "operator": "is_null",
+                    "value": false
+                  },
+                  {
+                    "field": "steps.get_purchase.record.status",
+                    "operator": "not_equals",
+                    "value": "RECEIVED"
+                  }
+                ]
+              },
+              "branch": [
+                "create_receipt",
+                "update_purchase"
+              ]
+            }
+          ],
+          "defaultLabel": "Cannot Receive",
+          "defaultBranch": [
+            "purchase_receive_invalid"
+          ]
+        },
+        {
           "id": "create_receipt",
           "label": "Create Purchase Receipt",
           "key": "CREATE_RECORD",
@@ -676,7 +996,7 @@
           "key": "UPDATE_RECORD",
           "objectKey": "purchase",
           "recordId": {
-            "path": "record.id"
+            "path": "variables.purchase.id"
           },
           "fieldValues": {
             "status": {
@@ -689,6 +1009,14 @@
               "path": "variables.purchase.received_at"
             }
           }
+        },
+        {
+          "id": "purchase_receive_invalid",
+          "label": "Purchase Receipt Rejected",
+          "apiName": "purchase_receive_invalid",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "The purchase is missing or has already been received.",
+          "errorLocation": "record"
         }
       ],
       "variables": [
@@ -716,6 +1044,213 @@
           "availableOutput": false,
           "objectKey": "purchase"
         }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "get_purchase",
+          "key": "action",
+          "label": "Get Purchase",
+          "apiName": "get_purchase",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "get_purchase",
+              "label": "Get Purchase",
+              "apiName": "get_purchase",
+              "key": "GET_RECORDS",
+              "objectKey": "purchase",
+              "filters": [
+                {
+                  "field": "id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "variables.purchase.id"
+                  }
+                }
+              ],
+              "match": "all",
+              "limit": 1,
+              "store": "first"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "purchase_can_receive",
+          "key": "action",
+          "label": "Purchase Can Be Received?",
+          "apiName": "purchase_can_receive",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "purchase_can_receive",
+              "label": "Purchase Can Be Received?",
+              "apiName": "purchase_can_receive",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "yes",
+                  "label": "Valid",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.get_purchase.record.id",
+                        "operator": "is_null",
+                        "value": false
+                      },
+                      {
+                        "field": "steps.get_purchase.record.status",
+                        "operator": "not_equals",
+                        "value": "RECEIVED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_receipt",
+                    "update_purchase"
+                  ]
+                }
+              ],
+              "defaultLabel": "Cannot Receive",
+              "defaultBranch": [
+                "purchase_receive_invalid"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_receipt",
+          "key": "action",
+          "label": "Create Purchase Receipt",
+          "apiName": "create_receipt",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_receipt",
+              "label": "Create Purchase Receipt",
+              "key": "CREATE_RECORD",
+              "objectKey": "purchase_receipt",
+              "recordResource": {
+                "path": "variables.receipt"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "update_purchase",
+          "key": "action",
+          "label": "Update Purchase Receipt Status",
+          "apiName": "update_purchase",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "update_purchase",
+              "label": "Update Purchase Receipt Status",
+              "key": "UPDATE_RECORD",
+              "objectKey": "purchase",
+              "recordId": {
+                "path": "variables.purchase.id"
+              },
+              "fieldValues": {
+                "status": {
+                  "path": "variables.purchase.status"
+                },
+                "received_by": {
+                  "path": "variables.purchase.received_by"
+                },
+                "received_at": {
+                  "path": "variables.purchase.received_at"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "purchase_receive_invalid",
+          "key": "action",
+          "label": "Purchase Receipt Rejected",
+          "apiName": "purchase_receive_invalid",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "purchase_receive_invalid",
+              "label": "Purchase Receipt Rejected",
+              "apiName": "purchase_receive_invalid",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "The purchase is missing or has already been received.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
       ]
     },
     {
@@ -738,6 +1273,56 @@
       ],
       "actions": [
         {
+          "id": "validate_supplier_return",
+          "label": "Validate Supplier Return",
+          "apiName": "validate_supplier_return",
+          "key": "FORMULA",
+          "resourceName": "returnValid",
+          "resultType": "boolean",
+          "expression": "COUNT(items) > 0 && !ISBLANK(purchaseId) && !ISBLANK(supplierId)",
+          "inputs": {
+            "items": {
+              "path": "variables.items"
+            },
+            "purchaseId": {
+              "path": "variables.return.purchase_id"
+            },
+            "supplierId": {
+              "path": "variables.return.supplier_id"
+            }
+          }
+        },
+        {
+          "id": "supplier_return_ready",
+          "label": "Supplier Return Ready?",
+          "apiName": "supplier_return_ready",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Valid",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "variables.returnValid",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_return",
+                "create_return_lines"
+              ]
+            }
+          ],
+          "defaultLabel": "Invalid Return",
+          "defaultBranch": [
+            "supplier_return_invalid"
+          ]
+        },
+        {
           "id": "create_return",
           "label": "Create Supplier Return",
           "key": "CREATE_RECORD",
@@ -759,6 +1344,14 @@
               "path": "steps.create_return.created.id"
             }
           }
+        },
+        {
+          "id": "supplier_return_invalid",
+          "label": "Supplier Return Rejected",
+          "apiName": "supplier_return_invalid",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "A supplier return requires a supplier, purchase, and at least one return line.",
+          "errorLocation": "record"
         }
       ],
       "variables": [
@@ -785,6 +1378,214 @@
           "availableInput": true,
           "availableOutput": false,
           "objectKey": "stock_return_line"
+        },
+        {
+          "value": "variables.returnValid",
+          "apiName": "returnValid",
+          "label": "Supplier Return Valid",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": false
+        }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "validate_supplier_return",
+          "key": "action",
+          "label": "Validate Supplier Return",
+          "apiName": "validate_supplier_return",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "validate_supplier_return",
+              "label": "Validate Supplier Return",
+              "apiName": "validate_supplier_return",
+              "key": "FORMULA",
+              "resourceName": "returnValid",
+              "resultType": "boolean",
+              "expression": "COUNT(items) > 0 && !ISBLANK(purchaseId) && !ISBLANK(supplierId)",
+              "inputs": {
+                "items": {
+                  "path": "variables.items"
+                },
+                "purchaseId": {
+                  "path": "variables.return.purchase_id"
+                },
+                "supplierId": {
+                  "path": "variables.return.supplier_id"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "supplier_return_ready",
+          "key": "action",
+          "label": "Supplier Return Ready?",
+          "apiName": "supplier_return_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "supplier_return_ready",
+              "label": "Supplier Return Ready?",
+              "apiName": "supplier_return_ready",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "yes",
+                  "label": "Valid",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "variables.returnValid",
+                        "operator": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_return",
+                    "create_return_lines"
+                  ]
+                }
+              ],
+              "defaultLabel": "Invalid Return",
+              "defaultBranch": [
+                "supplier_return_invalid"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_return",
+          "key": "action",
+          "label": "Create Supplier Return",
+          "apiName": "create_return",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_return",
+              "label": "Create Supplier Return",
+              "key": "CREATE_RECORD",
+              "objectKey": "stock_return",
+              "recordResource": {
+                "path": "variables.return"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_return_lines",
+          "key": "action",
+          "label": "Create Return Lines",
+          "apiName": "create_return_lines",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_return_lines",
+              "label": "Create Return Lines",
+              "key": "CREATE_RECORD",
+              "objectKey": "stock_return_line",
+              "recordCollectionResource": {
+                "path": "variables.items"
+              },
+              "commonFieldValues": {
+                "return_id": {
+                  "path": "steps.create_return.created.id"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "supplier_return_invalid",
+          "key": "action",
+          "label": "Supplier Return Rejected",
+          "apiName": "supplier_return_invalid",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "supplier_return_invalid",
+              "label": "Supplier Return Rejected",
+              "apiName": "supplier_return_invalid",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "A supplier return requires a supplier, purchase, and at least one return line.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
         }
       ]
     }

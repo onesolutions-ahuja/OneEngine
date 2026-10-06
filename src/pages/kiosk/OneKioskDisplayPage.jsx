@@ -55,10 +55,10 @@ export default function OneKioskDisplayPage() {
     try {
       const [response, flowResponse] = await Promise.all([
         apiRequest("/api/online/orders?platform=one_kiosk&limit=100"),
-        apiRequest("/api/kiosk/flows").catch(() => ({ data: [] })),
+        apiRequest("/api/platform/rules").catch(() => ({ data: [] })),
       ]);
       if (!response?.success) throw new Error(response?.message || "Unable to load kiosk orders");
-      const nextFlows = Array.isArray(flowResponse?.data) ? flowResponse.data : [];
+      const nextFlows = (Array.isArray(flowResponse?.data) ? flowResponse.data : []).filter((flow) => flow?.action?.type === "workflow" && flow?.action?.scope === "one_kiosk" && flow?.action?.flowType === "KIOSK_EXPERIENCE" && flow?.active !== false);
       setOrders(Array.isArray(response.data) ? response.data : []);
       setFlows(nextFlows);
       setFlowId((current) => {

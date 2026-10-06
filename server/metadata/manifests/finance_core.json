@@ -714,6 +714,90 @@
       "lifecycleStatus": "ACTIVE",
       "actions": [
         {
+          "id": "validate_invoice",
+          "label": "Validate Supplier Invoice",
+          "apiName": "validate_invoice",
+          "key": "FORMULA",
+          "resourceName": "invoiceValid",
+          "resultType": "boolean",
+          "expression": "!ISBLANK(invoiceNumber) && total >= 0 && subtotal >= 0 && tax >= 0",
+          "inputs": {
+            "invoiceNumber": {
+              "path": "record.invoiceNumber"
+            },
+            "total": {
+              "path": "record.total"
+            },
+            "subtotal": {
+              "path": "record.subtotal"
+            },
+            "tax": {
+              "path": "record.tax"
+            }
+          }
+        },
+        {
+          "id": "find_existing_invoice",
+          "label": "Find Existing Supplier Invoice",
+          "apiName": "find_existing_invoice",
+          "key": "GET_RECORDS",
+          "objectKey": "supplier_invoice",
+          "filters": [
+            {
+              "field": "supplier_id",
+              "operator": "equals",
+              "value": {
+                "path": "record.id"
+              }
+            },
+            {
+              "field": "invoice_number",
+              "operator": "equals",
+              "value": {
+                "path": "record.invoiceNumber"
+              }
+            }
+          ],
+          "match": "all",
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "invoice_ready",
+          "label": "Invoice Ready?",
+          "apiName": "invoice_ready",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Valid",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "variables.invoiceValid",
+                    "operator": "equals",
+                    "value": true
+                  },
+                  {
+                    "field": "steps.find_existing_invoice.record.id",
+                    "operator": "is_null",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_invoice",
+                "post_invoice_ledger"
+              ]
+            }
+          ],
+          "defaultLabel": "Invalid or Duplicate",
+          "defaultBranch": [
+            "invoice_invalid"
+          ]
+        },
+        {
           "id": "create_invoice",
           "label": "Create Supplier Invoice",
           "key": "CREATE_RECORD",
@@ -774,6 +858,14 @@
               "path": "record.notes"
             }
           }
+        },
+        {
+          "id": "invoice_invalid",
+          "label": "Supplier Invoice Rejected",
+          "apiName": "invoice_invalid",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Supplier invoice values are invalid or this supplier invoice number already exists.",
+          "errorLocation": "record"
         }
       ],
       "inputContract": [
@@ -826,6 +918,311 @@
           "type": "record",
           "source": "steps.create_invoice.created"
         }
+      ],
+      "variables": [
+        {
+          "value": "variables.invoiceValid",
+          "apiName": "invoiceValid",
+          "label": "Supplier Invoice Valid",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": false
+        }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "validate_invoice",
+          "key": "action",
+          "label": "Validate Supplier Invoice",
+          "apiName": "validate_invoice",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "validate_invoice",
+              "label": "Validate Supplier Invoice",
+              "apiName": "validate_invoice",
+              "key": "FORMULA",
+              "resourceName": "invoiceValid",
+              "resultType": "boolean",
+              "expression": "!ISBLANK(invoiceNumber) && total >= 0 && subtotal >= 0 && tax >= 0",
+              "inputs": {
+                "invoiceNumber": {
+                  "path": "record.invoiceNumber"
+                },
+                "total": {
+                  "path": "record.total"
+                },
+                "subtotal": {
+                  "path": "record.subtotal"
+                },
+                "tax": {
+                  "path": "record.tax"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "find_existing_invoice",
+          "key": "action",
+          "label": "Find Existing Supplier Invoice",
+          "apiName": "find_existing_invoice",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "find_existing_invoice",
+              "label": "Find Existing Supplier Invoice",
+              "apiName": "find_existing_invoice",
+              "key": "GET_RECORDS",
+              "objectKey": "supplier_invoice",
+              "filters": [
+                {
+                  "field": "supplier_id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.id"
+                  }
+                },
+                {
+                  "field": "invoice_number",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.invoiceNumber"
+                  }
+                }
+              ],
+              "match": "all",
+              "limit": 1,
+              "store": "first"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "invoice_ready",
+          "key": "action",
+          "label": "Invoice Ready?",
+          "apiName": "invoice_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "invoice_ready",
+              "label": "Invoice Ready?",
+              "apiName": "invoice_ready",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "yes",
+                  "label": "Valid",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "variables.invoiceValid",
+                        "operator": "equals",
+                        "value": true
+                      },
+                      {
+                        "field": "steps.find_existing_invoice.record.id",
+                        "operator": "is_null",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_invoice",
+                    "post_invoice_ledger"
+                  ]
+                }
+              ],
+              "defaultLabel": "Invalid or Duplicate",
+              "defaultBranch": [
+                "invoice_invalid"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_invoice",
+          "key": "action",
+          "label": "Create Supplier Invoice",
+          "apiName": "create_invoice",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_invoice",
+              "label": "Create Supplier Invoice",
+              "key": "CREATE_RECORD",
+              "objectKey": "supplier_invoice",
+              "fieldValues": {
+                "supplier_id": {
+                  "path": "record.id"
+                },
+                "invoice_number": {
+                  "path": "record.invoiceNumber"
+                },
+                "invoice_date": {
+                  "path": "record.invoiceDate"
+                },
+                "due_date": {
+                  "path": "record.dueDate"
+                },
+                "subtotal": {
+                  "path": "record.subtotal"
+                },
+                "tax": {
+                  "path": "record.tax"
+                },
+                "total": {
+                  "path": "record.total"
+                },
+                "purchase_id": {
+                  "path": "record.purchaseId"
+                },
+                "notes": {
+                  "path": "record.notes"
+                },
+                "status": "OPEN"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "post_invoice_ledger",
+          "key": "action",
+          "label": "Post Supplier Invoice Ledger",
+          "apiName": "post_invoice_ledger",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "post_invoice_ledger",
+              "label": "Post Supplier Invoice Ledger",
+              "key": "CREATE_RECORD",
+              "objectKey": "supplier_ledger",
+              "fieldValues": {
+                "supplier_id": {
+                  "path": "record.id"
+                },
+                "entry_type": "INVOICE",
+                "reference_type": "supplier_invoice",
+                "reference_id": {
+                  "path": "steps.create_invoice.created.id"
+                },
+                "reference": {
+                  "path": "record.invoiceNumber"
+                },
+                "amount": {
+                  "path": "record.total"
+                },
+                "debit": true,
+                "description": {
+                  "path": "record.notes"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "invoice_invalid",
+          "key": "action",
+          "label": "Supplier Invoice Rejected",
+          "apiName": "invoice_invalid",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "invoice_invalid",
+              "label": "Supplier Invoice Rejected",
+              "apiName": "invoice_invalid",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "Supplier invoice values are invalid or this supplier invoice number already exists.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
       ]
     },
     {
@@ -835,6 +1232,54 @@
       "active": true,
       "lifecycleStatus": "ACTIVE",
       "actions": [
+        {
+          "id": "validate_payment",
+          "label": "Validate Supplier Payment",
+          "apiName": "validate_payment",
+          "key": "FORMULA",
+          "resourceName": "paymentValid",
+          "resultType": "boolean",
+          "expression": "amount > 0 && !ISBLANK(idempotencyKey)",
+          "inputs": {
+            "amount": {
+              "path": "record.amount"
+            },
+            "idempotencyKey": {
+              "path": "record.idempotencyKey"
+            }
+          }
+        },
+        {
+          "id": "payment_ready",
+          "label": "Payment Ready?",
+          "apiName": "payment_ready",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Valid",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "variables.paymentValid",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_payment",
+                "create_allocation",
+                "post_payment_ledger"
+              ]
+            }
+          ],
+          "defaultLabel": "Invalid Payment",
+          "defaultBranch": [
+            "payment_invalid"
+          ]
+        },
         {
           "id": "create_payment",
           "label": "Create Supplier Payment",
@@ -926,6 +1371,14 @@
               "path": "record.idempotencyKey"
             }
           }
+        },
+        {
+          "id": "payment_invalid",
+          "label": "Supplier Payment Rejected",
+          "apiName": "payment_invalid",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Supplier payment requires a positive amount and an idempotency key.",
+          "errorLocation": "record"
         }
       ],
       "inputContract": [
@@ -967,6 +1420,305 @@
           "type": "record",
           "source": "steps.create_payment.created"
         }
+      ],
+      "variables": [
+        {
+          "value": "variables.paymentValid",
+          "apiName": "paymentValid",
+          "label": "Supplier Payment Valid",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": false
+        }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "validate_payment",
+          "key": "action",
+          "label": "Validate Supplier Payment",
+          "apiName": "validate_payment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "validate_payment",
+              "label": "Validate Supplier Payment",
+              "apiName": "validate_payment",
+              "key": "FORMULA",
+              "resourceName": "paymentValid",
+              "resultType": "boolean",
+              "expression": "amount > 0 && !ISBLANK(idempotencyKey)",
+              "inputs": {
+                "amount": {
+                  "path": "record.amount"
+                },
+                "idempotencyKey": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "payment_ready",
+          "key": "action",
+          "label": "Payment Ready?",
+          "apiName": "payment_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "payment_ready",
+              "label": "Payment Ready?",
+              "apiName": "payment_ready",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "yes",
+                  "label": "Valid",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "variables.paymentValid",
+                        "operator": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_payment",
+                    "create_allocation",
+                    "post_payment_ledger"
+                  ]
+                }
+              ],
+              "defaultLabel": "Invalid Payment",
+              "defaultBranch": [
+                "payment_invalid"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_payment",
+          "key": "action",
+          "label": "Create Supplier Payment",
+          "apiName": "create_payment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_payment",
+              "label": "Create Supplier Payment",
+              "key": "CREATE_RECORD",
+              "objectKey": "supplier_payment",
+              "checkMatchingRecords": true,
+              "matchAction": "skip",
+              "matchConditions": [
+                {
+                  "field": "idempotency_key",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.idempotencyKey"
+                  }
+                }
+              ],
+              "fieldValues": {
+                "supplier_id": {
+                  "path": "record.id"
+                },
+                "amount": {
+                  "path": "record.amount"
+                },
+                "payment_date": {
+                  "path": "record.paymentDate"
+                },
+                "payment_method": {
+                  "path": "record.paymentMethod"
+                },
+                "reference": {
+                  "path": "record.reference"
+                },
+                "status": "COMPLETED",
+                "idempotency_key": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_allocation",
+          "key": "action",
+          "label": "Allocate Payment To Invoice",
+          "apiName": "create_allocation",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_allocation",
+              "label": "Allocate Payment To Invoice",
+              "key": "CREATE_RECORD",
+              "objectKey": "supplier_payment_allocation",
+              "fieldValues": {
+                "payment_id": {
+                  "path": "steps.create_payment.created.id"
+                },
+                "invoice_id": {
+                  "path": "record.invoiceId"
+                },
+                "amount": {
+                  "path": "record.amount"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "post_payment_ledger",
+          "key": "action",
+          "label": "Post Supplier Payment Ledger",
+          "apiName": "post_payment_ledger",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "post_payment_ledger",
+              "label": "Post Supplier Payment Ledger",
+              "key": "CREATE_RECORD",
+              "objectKey": "supplier_ledger",
+              "checkMatchingRecords": true,
+              "matchAction": "skip",
+              "matchConditions": [
+                {
+                  "field": "idempotency_key",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.idempotencyKey"
+                  }
+                }
+              ],
+              "fieldValues": {
+                "supplier_id": {
+                  "path": "record.id"
+                },
+                "entry_type": "PAYMENT",
+                "reference_type": "supplier_payment",
+                "reference_id": {
+                  "path": "steps.create_payment.created.id"
+                },
+                "reference": {
+                  "path": "record.reference"
+                },
+                "amount": {
+                  "path": "record.amount"
+                },
+                "debit": false,
+                "idempotency_key": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "payment_invalid",
+          "key": "action",
+          "label": "Supplier Payment Rejected",
+          "apiName": "payment_invalid",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "payment_invalid",
+              "label": "Supplier Payment Rejected",
+              "apiName": "payment_invalid",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "Supplier payment requires a positive amount and an idempotency key.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
       ]
     },
     {
@@ -976,6 +1728,52 @@
       "active": true,
       "lifecycleStatus": "ACTIVE",
       "actions": [
+        {
+          "id": "validate_credit",
+          "label": "Validate Supplier Credit",
+          "apiName": "validate_credit",
+          "key": "FORMULA",
+          "resourceName": "creditValid",
+          "resultType": "boolean",
+          "expression": "amount > 0 && !ISBLANK(idempotencyKey)",
+          "inputs": {
+            "amount": {
+              "path": "record.amount"
+            },
+            "idempotencyKey": {
+              "path": "record.idempotencyKey"
+            }
+          }
+        },
+        {
+          "id": "credit_ready",
+          "label": "Supplier Credit Ready?",
+          "apiName": "credit_ready",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Valid",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "variables.creditValid",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_ledger_adjustment"
+              ]
+            }
+          ],
+          "defaultLabel": "Invalid",
+          "defaultBranch": [
+            "credit_invalid"
+          ]
+        },
         {
           "id": "create_ledger_adjustment",
           "label": "Supplier Credit Create",
@@ -1011,6 +1809,14 @@
               "path": "record.idempotencyKey"
             }
           }
+        },
+        {
+          "id": "credit_invalid",
+          "label": "Supplier Credit Rejected",
+          "apiName": "credit_invalid",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Supplier Credit requires a positive amount and an idempotency key.",
+          "errorLocation": "record"
         }
       ],
       "inputContract": [
@@ -1044,6 +1850,203 @@
           "type": "record",
           "source": "steps.create_ledger_adjustment.created"
         }
+      ],
+      "variables": [
+        {
+          "value": "variables.creditValid",
+          "apiName": "creditValid",
+          "label": "Supplier Credit Valid",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": false
+        }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "validate_credit",
+          "key": "action",
+          "label": "Validate Supplier Credit",
+          "apiName": "validate_credit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "validate_credit",
+              "label": "Validate Supplier Credit",
+              "apiName": "validate_credit",
+              "key": "FORMULA",
+              "resourceName": "creditValid",
+              "resultType": "boolean",
+              "expression": "amount > 0 && !ISBLANK(idempotencyKey)",
+              "inputs": {
+                "amount": {
+                  "path": "record.amount"
+                },
+                "idempotencyKey": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "credit_ready",
+          "key": "action",
+          "label": "Supplier Credit Ready?",
+          "apiName": "credit_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "credit_ready",
+              "label": "Supplier Credit Ready?",
+              "apiName": "credit_ready",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "yes",
+                  "label": "Valid",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "variables.creditValid",
+                        "operator": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_ledger_adjustment"
+                  ]
+                }
+              ],
+              "defaultLabel": "Invalid",
+              "defaultBranch": [
+                "credit_invalid"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_ledger_adjustment",
+          "key": "action",
+          "label": "Supplier Credit Create",
+          "apiName": "create_ledger_adjustment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_ledger_adjustment",
+              "label": "Supplier Credit Create",
+              "key": "CREATE_RECORD",
+              "objectKey": "supplier_ledger",
+              "checkMatchingRecords": true,
+              "matchAction": "skip",
+              "matchConditions": [
+                {
+                  "field": "idempotency_key",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.idempotencyKey"
+                  }
+                }
+              ],
+              "fieldValues": {
+                "supplier_id": {
+                  "path": "record.id"
+                },
+                "entry_type": "RETURN_CREDIT",
+                "reference": {
+                  "path": "record.reference"
+                },
+                "amount": {
+                  "path": "record.amount"
+                },
+                "debit": false,
+                "description": {
+                  "path": "record.description"
+                },
+                "idempotency_key": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "credit_invalid",
+          "key": "action",
+          "label": "Supplier Credit Rejected",
+          "apiName": "credit_invalid",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "credit_invalid",
+              "label": "Supplier Credit Rejected",
+              "apiName": "credit_invalid",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "Supplier Credit requires a positive amount and an idempotency key.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
       ]
     },
     {
@@ -1053,6 +2056,52 @@
       "active": true,
       "lifecycleStatus": "ACTIVE",
       "actions": [
+        {
+          "id": "validate_debit",
+          "label": "Validate Supplier Debit",
+          "apiName": "validate_debit",
+          "key": "FORMULA",
+          "resourceName": "debitValid",
+          "resultType": "boolean",
+          "expression": "amount > 0 && !ISBLANK(idempotencyKey)",
+          "inputs": {
+            "amount": {
+              "path": "record.amount"
+            },
+            "idempotencyKey": {
+              "path": "record.idempotencyKey"
+            }
+          }
+        },
+        {
+          "id": "debit_ready",
+          "label": "Supplier Debit Ready?",
+          "apiName": "debit_ready",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Valid",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "variables.debitValid",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_ledger_adjustment"
+              ]
+            }
+          ],
+          "defaultLabel": "Invalid",
+          "defaultBranch": [
+            "debit_invalid"
+          ]
+        },
         {
           "id": "create_ledger_adjustment",
           "label": "Supplier Debit Create",
@@ -1088,6 +2137,14 @@
               "path": "record.idempotencyKey"
             }
           }
+        },
+        {
+          "id": "debit_invalid",
+          "label": "Supplier Debit Rejected",
+          "apiName": "debit_invalid",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Supplier Debit requires a positive amount and an idempotency key.",
+          "errorLocation": "record"
         }
       ],
       "inputContract": [
@@ -1121,6 +2178,203 @@
           "type": "record",
           "source": "steps.create_ledger_adjustment.created"
         }
+      ],
+      "variables": [
+        {
+          "value": "variables.debitValid",
+          "apiName": "debitValid",
+          "label": "Supplier Debit Valid",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": false
+        }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "validate_debit",
+          "key": "action",
+          "label": "Validate Supplier Debit",
+          "apiName": "validate_debit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "validate_debit",
+              "label": "Validate Supplier Debit",
+              "apiName": "validate_debit",
+              "key": "FORMULA",
+              "resourceName": "debitValid",
+              "resultType": "boolean",
+              "expression": "amount > 0 && !ISBLANK(idempotencyKey)",
+              "inputs": {
+                "amount": {
+                  "path": "record.amount"
+                },
+                "idempotencyKey": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "debit_ready",
+          "key": "action",
+          "label": "Supplier Debit Ready?",
+          "apiName": "debit_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "debit_ready",
+              "label": "Supplier Debit Ready?",
+              "apiName": "debit_ready",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "yes",
+                  "label": "Valid",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "variables.debitValid",
+                        "operator": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_ledger_adjustment"
+                  ]
+                }
+              ],
+              "defaultLabel": "Invalid",
+              "defaultBranch": [
+                "debit_invalid"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_ledger_adjustment",
+          "key": "action",
+          "label": "Supplier Debit Create",
+          "apiName": "create_ledger_adjustment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_ledger_adjustment",
+              "label": "Supplier Debit Create",
+              "key": "CREATE_RECORD",
+              "objectKey": "supplier_ledger",
+              "checkMatchingRecords": true,
+              "matchAction": "skip",
+              "matchConditions": [
+                {
+                  "field": "idempotency_key",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.idempotencyKey"
+                  }
+                }
+              ],
+              "fieldValues": {
+                "supplier_id": {
+                  "path": "record.id"
+                },
+                "entry_type": "OPENING",
+                "reference": {
+                  "path": "record.reference"
+                },
+                "amount": {
+                  "path": "record.amount"
+                },
+                "debit": true,
+                "description": {
+                  "path": "record.description"
+                },
+                "idempotency_key": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "debit_invalid",
+          "key": "action",
+          "label": "Supplier Debit Rejected",
+          "apiName": "debit_invalid",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "debit_invalid",
+              "label": "Supplier Debit Rejected",
+              "apiName": "debit_invalid",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "Supplier Debit requires a positive amount and an idempotency key.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
       ]
     },
     {
@@ -1130,6 +2384,52 @@
       "active": true,
       "lifecycleStatus": "ACTIVE",
       "actions": [
+        {
+          "id": "validate_credit_note",
+          "label": "Validate Supplier Credit Note",
+          "apiName": "validate_credit_note",
+          "key": "FORMULA",
+          "resourceName": "credit_noteValid",
+          "resultType": "boolean",
+          "expression": "amount > 0 && !ISBLANK(idempotencyKey)",
+          "inputs": {
+            "amount": {
+              "path": "record.amount"
+            },
+            "idempotencyKey": {
+              "path": "record.idempotencyKey"
+            }
+          }
+        },
+        {
+          "id": "credit_note_ready",
+          "label": "Supplier Credit Note Ready?",
+          "apiName": "credit_note_ready",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Valid",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "variables.credit_noteValid",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_ledger_adjustment"
+              ]
+            }
+          ],
+          "defaultLabel": "Invalid",
+          "defaultBranch": [
+            "credit_note_invalid"
+          ]
+        },
         {
           "id": "create_ledger_adjustment",
           "label": "Supplier Credit Note Create",
@@ -1165,6 +2465,14 @@
               "path": "record.idempotencyKey"
             }
           }
+        },
+        {
+          "id": "credit_note_invalid",
+          "label": "Supplier Credit Note Rejected",
+          "apiName": "credit_note_invalid",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Supplier Credit Note requires a positive amount and an idempotency key.",
+          "errorLocation": "record"
         }
       ],
       "inputContract": [
@@ -1197,6 +2505,203 @@
           "name": "ledgerEntry",
           "type": "record",
           "source": "steps.create_ledger_adjustment.created"
+        }
+      ],
+      "variables": [
+        {
+          "value": "variables.credit_noteValid",
+          "apiName": "credit_noteValid",
+          "label": "Supplier Credit Note Valid",
+          "type": "Variable",
+          "dataType": "Boolean",
+          "defaultValue": false,
+          "isCollection": false,
+          "availableInput": false,
+          "availableOutput": false
+        }
+      ],
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "validate_credit_note",
+          "key": "action",
+          "label": "Validate Supplier Credit Note",
+          "apiName": "validate_credit_note",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "validate_credit_note",
+              "label": "Validate Supplier Credit Note",
+              "apiName": "validate_credit_note",
+              "key": "FORMULA",
+              "resourceName": "credit_noteValid",
+              "resultType": "boolean",
+              "expression": "amount > 0 && !ISBLANK(idempotencyKey)",
+              "inputs": {
+                "amount": {
+                  "path": "record.amount"
+                },
+                "idempotencyKey": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "credit_note_ready",
+          "key": "action",
+          "label": "Supplier Credit Note Ready?",
+          "apiName": "credit_note_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "credit_note_ready",
+              "label": "Supplier Credit Note Ready?",
+              "apiName": "credit_note_ready",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "yes",
+                  "label": "Valid",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "variables.credit_noteValid",
+                        "operator": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_ledger_adjustment"
+                  ]
+                }
+              ],
+              "defaultLabel": "Invalid",
+              "defaultBranch": [
+                "credit_note_invalid"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_ledger_adjustment",
+          "key": "action",
+          "label": "Supplier Credit Note Create",
+          "apiName": "create_ledger_adjustment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_ledger_adjustment",
+              "label": "Supplier Credit Note Create",
+              "key": "CREATE_RECORD",
+              "objectKey": "supplier_ledger",
+              "checkMatchingRecords": true,
+              "matchAction": "skip",
+              "matchConditions": [
+                {
+                  "field": "idempotency_key",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.idempotencyKey"
+                  }
+                }
+              ],
+              "fieldValues": {
+                "supplier_id": {
+                  "path": "record.id"
+                },
+                "entry_type": "RETURN_CREDIT",
+                "reference": {
+                  "path": "record.reference"
+                },
+                "amount": {
+                  "path": "record.amount"
+                },
+                "debit": false,
+                "description": {
+                  "path": "record.description"
+                },
+                "idempotency_key": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "credit_note_invalid",
+          "key": "action",
+          "label": "Supplier Credit Note Rejected",
+          "apiName": "credit_note_invalid",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "credit_note_invalid",
+              "label": "Supplier Credit Note Rejected",
+              "apiName": "credit_note_invalid",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "Supplier Credit Note requires a positive amount and an idempotency key.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
         }
       ]
     }

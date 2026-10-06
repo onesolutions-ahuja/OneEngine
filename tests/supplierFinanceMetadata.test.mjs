@@ -25,15 +25,23 @@ test("supplier invoice payment credit and debit are complete editable metadata F
     assert.equal(flow.actions.some((action) => action.key === "RUN_SUBFLOW" && /^SUPPLIER_/.test(action.subflowApiName || "")), false, name);
   }
   const invoice = byName.get("Supplier Invoice Create");
-  assert.deepEqual(invoice.actions.map((a) => a.objectKey), ["supplier_invoice","supplier_ledger"]);
-  assert.equal(invoice.actions[1].fieldValues.reference_id.path, "steps.create_invoice.created.id");
+  const createInvoice = invoice.actions.find((a) => a.id === "create_invoice");
+  const invoiceLedger = invoice.actions.find((a) => a.id === "post_invoice_ledger");
+  assert.equal(createInvoice.objectKey, "supplier_invoice");
+  assert.equal(invoiceLedger.objectKey, "supplier_ledger");
+  assert.equal(invoiceLedger.fieldValues.reference_id.path, "steps.create_invoice.created.id");
   const payment = byName.get("Supplier Payment Execute");
-  assert.deepEqual(payment.actions.map((a) => a.objectKey), ["supplier_payment","supplier_payment_allocation","supplier_ledger"]);
-  assert.equal(payment.actions[1].fieldValues.payment_id.path, "steps.create_payment.created.id");
-  assert.equal(payment.actions[2].fieldValues.reference_id.path, "steps.create_payment.created.id");
-  assert.equal(payment.actions[0].checkMatchingRecords, true);
+  const createPayment = payment.actions.find((a) => a.id === "create_payment");
+  const allocation = payment.actions.find((a) => a.id === "create_allocation");
+  const paymentLedger = payment.actions.find((a) => a.id === "post_payment_ledger");
+  assert.equal(createPayment.objectKey, "supplier_payment");
+  assert.equal(allocation.objectKey, "supplier_payment_allocation");
+  assert.equal(paymentLedger.objectKey, "supplier_ledger");
+  assert.equal(allocation.fieldValues.payment_id.path, "steps.create_payment.created.id");
+  assert.equal(paymentLedger.fieldValues.reference_id.path, "steps.create_payment.created.id");
+  assert.equal(createPayment.checkMatchingRecords, true);
   for (const name of ["Supplier Credit Create","Supplier Debit Create","Supplier Credit Note Create"]) {
-    assert.equal(byName.get(name).actions[0].checkMatchingRecords, true, name + " idempotency");
+    assert.equal(byName.get(name).actions.find((a) => a.id === "create_ledger_adjustment").checkMatchingRecords, true, name + " idempotency");
   }
 });
 

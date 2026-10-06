@@ -4,13 +4,16 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'sharing-rules',
   'platform',
   'gptbuilder',
+  'gptappbuilder',
+  'canvas-ux-test',
   'approval-builder',
+  'gpt-page-builder',
   'page-builder',
   'dashboard-builder',
+  'report-types',
   'report-builder',
   'workflow-runs',
   'work-items',
-  'platform-apps',
   'deployments',
   'notifications',
   'value-sets',
@@ -42,7 +45,7 @@ export function readRoute() {
   }
   if (parts[0] === 'developer') {
     const requestedSection = parts[1] || 'objects'
-    const section = requestedSection === 'workflow-builder' || requestedSection === 'builder-2' ? 'gptbuilder' : requestedSection
+    const section = requestedSection === 'workflow-builder' || requestedSection === 'builder-2' ? 'gptbuilder' : requestedSection === 'platform-apps' ? 'gptappbuilder' : requestedSection
     const params = new URLSearchParams(window.location.search || '')
     const workflowId = section === 'gptbuilder'
       ? decodeURIComponent(parts[2] || params.get('workflowId') || '')
@@ -51,6 +54,8 @@ export function readRoute() {
   }
   if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
   if (parts[0] === 'till') return { app: 'till', section: null }
+  // Legacy OneKiosk runtime URLs now resolve to the metadata-owned device workspace.
+  if (parts[0] === 'kiosk' || parts[0] === 'kiosk-runtime') return { app: 'kiosk-devices', section: null }
   if (parts[0] === 'customer-display') return { app: 'customer-display', section: null }
   if (parts[0] === 'flow' && parts[1]) return { app: 'flow-runtime', section: null, sessionId: decodeURIComponent(parts[1]) }
   if (parts[0] === 'profile') return { app: 'profile', section: null }

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { evaluateCondition } from "./platformConditions.js";
 import { evaluateValidationRules } from "./platformValidation.js";
 import { createWorkflowRun, createWorkflowStepRun, resolveWorkflowActionType } from "../platform/workflow/runtime/runState.js";
@@ -1366,6 +1367,46 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       }
       workflowVariables.variables[name] = value;
       return { status: "completed", resourceName: name, resourceType: type, value };
+    },
+  },
+  {
+    key: "GENERATE_SECURE_TOKEN",
+    displayName: "Generate Secure Token",
+    description: "Generate a cryptographically secure opaque token and SHA-256 digest for metadata-driven workflows.",
+    schema: {
+      type: "object",
+      properties: {
+        tokenResourceName: { type: "string" },
+        hashResourceName: { type: "string" },
+        bytes: { type: "number" },
+      },
+      required: ["tokenResourceName","hashResourceName"],
+    },
+    validation: (action) => {
+      for (const name of [action?.tokenResourceName, action?.hashResourceName]) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]{0,79}$/.test(String(name || ""))) throw new Error("Generate Secure Token requires valid output resource names");
+      }
+      const bytes = Number(action?.bytes ?? 32);
+      if (!Number.isInteger(bytes) || bytes < 16 || bytes > 64) throw new Error("Generate Secure Token bytes must be between 16 and 64");
+    },
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ action, workflowVariables = {} }) => {
+      if (!workflowVariables.variables || typeof workflowVariables.variables !== "object") workflowVariables.variables = {};
+      const bytes = Number(action.bytes ?? 32);
+      const token = crypto.randomBytes(bytes).toString("base64url");
+      const digest = crypto.createHash("sha256").update(token, "utf8").digest("hex");
+      workflowVariables.variables[String(action.tokenResourceName)] = token;
+      workflowVariables.variables[String(action.hashResourceName)] = digest;
+      return {
+        status: "completed",
+        tokenResourceName: String(action.tokenResourceName),
+        hashResourceName: String(action.hashResourceName),
+        token,
+        hash: digest,
+        __secureFields: ["token","hash"],
+        __secureValues: [token,digest],
+      };
     },
   },
   {
@@ -4909,6 +4950,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "ROLLBACK_RECORDS",
+    displayName: "Roll Back Records",
+    description: "Roll back pending record changes in the current Screen Flow transaction.",
+    validation: () => undefined,
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async () => ({ status: "completed", rollbackTransaction: true }),
+  },
+  {
     key: "CUSTOM_ERROR",
     displayName: "Custom Error",
     description: "Stop the flow with a targeted validation error.",
@@ -5317,7 +5367,7 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "CONSTANT","FORMULA","TEXT_TEMPLATE","ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","CONDITION","LOOP","GET_RECORDS",
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
-  "SCHEDULE_PATH","RUN_SUBFLOW","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
+  "SCHEDULE_PATH","RUN_SUBFLOW","GENERATE_SECURE_TOKEN","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
   // Appointment orchestration actions are safe to execute in Debug because
   // their database writes use the Debug transaction and are rolled back.
   // SEND_COMMUNICATION is intentionally omitted so external and in-app delivery
@@ -5883,6 +5933,14 @@ export async function executeWorkflowActions({ actions, ...context }) {
         } else {
           result.branch = { outcome: outcomeName, outcomeId: result.outcomeId ?? null, stepIds: [], results: [] };
         }
+      }
+
+      if (result?.rollbackTransaction === true) {
+        if (typeof context.rollbackCurrentTransaction !== "function") {
+          throw new Error("Roll Back Records requires a Screen Flow transaction boundary");
+        }
+        await context.rollbackCurrentTransaction();
+        completed.length = 0;
       }
 
       const entry = { stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result, stepRunId: stepRun?.id || null };

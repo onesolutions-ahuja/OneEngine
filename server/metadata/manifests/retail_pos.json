@@ -874,6 +874,112 @@
           "writable": false
         }
       ]
+    },
+    {
+      "objectKey": "temporary_receipt_download",
+      "metadataScope": "global",
+      "label": "Temporary Download Token",
+      "pluralLabel": "Temporary Download Tokens",
+      "description": "Internal metadata-backed record used by flows to issue short-lived download links.",
+      "sourceTable": "temporary_receipt_downloads",
+      "config": {
+        "flowWritesOnly": true,
+        "internal": true,
+        "rbac": {
+          "view": "sale.view",
+          "create": "sale.view",
+          "edit": "sale.view",
+          "delete": "sale.view"
+        }
+      },
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": true
+        },
+        {
+          "apiName": "till_id",
+          "label": "Till",
+          "fieldType": "lookup",
+          "sourceColumn": "till_id",
+          "writable": true
+        },
+        {
+          "apiName": "sale_id",
+          "label": "Sale",
+          "fieldType": "lookup",
+          "sourceColumn": "sale_id",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "sale"
+          }
+        },
+        {
+          "apiName": "token_hash",
+          "label": "Token Hash",
+          "fieldType": "text",
+          "sourceColumn": "token_hash",
+          "required": true,
+          "writable": true,
+          "readable": false,
+          "config": {
+            "secure": true
+          }
+        },
+        {
+          "apiName": "status",
+          "label": "Status",
+          "fieldType": "picklist",
+          "sourceColumn": "status",
+          "writable": true,
+          "options": [
+            "ACTIVE",
+            "DOWNLOADED",
+            "REVOKED",
+            "EXPIRED"
+          ]
+        },
+        {
+          "apiName": "expires_at",
+          "label": "Expires At",
+          "fieldType": "datetime",
+          "sourceColumn": "expires_at",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "downloaded_at",
+          "label": "Downloaded At",
+          "fieldType": "datetime",
+          "sourceColumn": "downloaded_at",
+          "writable": true
+        },
+        {
+          "apiName": "revoked_at",
+          "label": "Revoked At",
+          "fieldType": "datetime",
+          "sourceColumn": "revoked_at",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
     }
   ],
   "relationships": [
@@ -1713,6 +1819,59 @@
         ],
         "actions": [
           {
+            "id": "find_open_session",
+            "label": "Find Open Till Session",
+            "apiName": "find_open_session",
+            "key": "GET_RECORDS",
+            "objectKey": "till_session",
+            "filters": [
+              {
+                "field": "terminal_id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.session.terminal_id"
+                }
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "open"
+              }
+            ],
+            "match": "all",
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "can_open_session",
+            "label": "Terminal Available?",
+            "apiName": "can_open_session",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.find_open_session.record.id",
+                      "operator": "is_null",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_session"
+                ]
+              }
+            ],
+            "defaultLabel": "Already Open",
+            "defaultBranch": [
+              "open_session_exists"
+            ]
+          },
+          {
             "id": "create_session",
             "label": "Create Till Session",
             "apiName": "create_session",
@@ -1721,6 +1880,179 @@
             "recordResource": {
               "path": "variables.session"
             }
+          },
+          {
+            "id": "open_session_exists",
+            "label": "Till Session Already Open",
+            "apiName": "open_session_exists",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "This terminal already has an open till session.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "find_open_session",
+            "key": "action",
+            "label": "Find Open Till Session",
+            "apiName": "find_open_session",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "find_open_session",
+                "label": "Find Open Till Session",
+                "apiName": "find_open_session",
+                "key": "GET_RECORDS",
+                "objectKey": "till_session",
+                "filters": [
+                  {
+                    "field": "terminal_id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.session.terminal_id"
+                    }
+                  },
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "open"
+                  }
+                ],
+                "match": "all",
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "can_open_session",
+            "key": "action",
+            "label": "Terminal Available?",
+            "apiName": "can_open_session",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "can_open_session",
+                "label": "Terminal Available?",
+                "apiName": "can_open_session",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.find_open_session.record.id",
+                          "operator": "is_null",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_session"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Already Open",
+                "defaultBranch": [
+                  "open_session_exists"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_session",
+            "key": "action",
+            "label": "Create Till Session",
+            "apiName": "create_session",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_session",
+                "label": "Create Till Session",
+                "apiName": "create_session",
+                "key": "CREATE_RECORD",
+                "objectKey": "till_session",
+                "recordResource": {
+                  "path": "variables.session"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "open_session_exists",
+            "key": "action",
+            "label": "Till Session Already Open",
+            "apiName": "open_session_exists",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "open_session_exists",
+                "label": "Till Session Already Open",
+                "apiName": "open_session_exists",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "This terminal already has an open till session.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -1770,6 +2102,59 @@
         ],
         "actions": [
           {
+            "id": "find_open_session",
+            "label": "Find Open Till Session",
+            "apiName": "find_open_session",
+            "key": "GET_RECORDS",
+            "objectKey": "till_session",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.session.id"
+                }
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "open"
+              }
+            ],
+            "match": "all",
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "can_close_session",
+            "label": "Open Session Found?",
+            "apiName": "can_close_session",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.find_open_session.record.id",
+                      "operator": "is_null",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_session"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Open",
+            "defaultBranch": [
+              "close_session_invalid"
+            ]
+          },
+          {
             "id": "update_session",
             "label": "Close Till Session",
             "apiName": "update_session",
@@ -1798,6 +2183,199 @@
                 "path": "variables.session.closed_by"
               }
             }
+          },
+          {
+            "id": "close_session_invalid",
+            "label": "Till Session Cannot Close",
+            "apiName": "close_session_invalid",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "The till session is missing or is not open.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "find_open_session",
+            "key": "action",
+            "label": "Find Open Till Session",
+            "apiName": "find_open_session",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "find_open_session",
+                "label": "Find Open Till Session",
+                "apiName": "find_open_session",
+                "key": "GET_RECORDS",
+                "objectKey": "till_session",
+                "filters": [
+                  {
+                    "field": "id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.session.id"
+                    }
+                  },
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "open"
+                  }
+                ],
+                "match": "all",
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "can_close_session",
+            "key": "action",
+            "label": "Open Session Found?",
+            "apiName": "can_close_session",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "can_close_session",
+                "label": "Open Session Found?",
+                "apiName": "can_close_session",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.find_open_session.record.id",
+                          "operator": "is_null",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_session"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Open",
+                "defaultBranch": [
+                  "close_session_invalid"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "update_session",
+            "key": "action",
+            "label": "Close Till Session",
+            "apiName": "update_session",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "update_session",
+                "label": "Close Till Session",
+                "apiName": "update_session",
+                "key": "UPDATE_RECORD",
+                "objectKey": "till_session",
+                "recordId": {
+                  "path": "variables.session.id"
+                },
+                "fieldValues": {
+                  "closing_cash": {
+                    "path": "variables.session.closing_cash"
+                  },
+                  "expected_cash": {
+                    "path": "variables.session.expected_cash"
+                  },
+                  "cash_difference": {
+                    "path": "variables.session.cash_difference"
+                  },
+                  "status": {
+                    "path": "variables.session.status"
+                  },
+                  "closed_at": {
+                    "path": "variables.session.closed_at"
+                  },
+                  "closed_by": {
+                    "path": "variables.session.closed_by"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "close_session_invalid",
+            "key": "action",
+            "label": "Till Session Cannot Close",
+            "apiName": "close_session_invalid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "close_session_invalid",
+                "label": "Till Session Cannot Close",
+                "apiName": "close_session_invalid",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "The till session is missing or is not open.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -1847,6 +2425,59 @@
         ],
         "actions": [
           {
+            "id": "find_open_session",
+            "label": "Find Open Till Session",
+            "apiName": "find_open_session",
+            "key": "GET_RECORDS",
+            "objectKey": "till_session",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.movement.till_session_id"
+                }
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "open"
+              }
+            ],
+            "match": "all",
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "cash_session_open",
+            "label": "Open Session Found?",
+            "apiName": "cash_session_open",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.find_open_session.record.id",
+                      "operator": "is_null",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_movement"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Open",
+            "defaultBranch": [
+              "cash_session_invalid"
+            ]
+          },
+          {
             "id": "create_movement",
             "label": "Create Cash Movement",
             "apiName": "create_movement",
@@ -1855,6 +2486,179 @@
             "recordResource": {
               "path": "variables.movement"
             }
+          },
+          {
+            "id": "cash_session_invalid",
+            "label": "Cash Movement Rejected",
+            "apiName": "cash_session_invalid",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Cash movements require an open till session.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "find_open_session",
+            "key": "action",
+            "label": "Find Open Till Session",
+            "apiName": "find_open_session",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "find_open_session",
+                "label": "Find Open Till Session",
+                "apiName": "find_open_session",
+                "key": "GET_RECORDS",
+                "objectKey": "till_session",
+                "filters": [
+                  {
+                    "field": "id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.movement.till_session_id"
+                    }
+                  },
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "open"
+                  }
+                ],
+                "match": "all",
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "cash_session_open",
+            "key": "action",
+            "label": "Open Session Found?",
+            "apiName": "cash_session_open",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "cash_session_open",
+                "label": "Open Session Found?",
+                "apiName": "cash_session_open",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.find_open_session.record.id",
+                          "operator": "is_null",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_movement"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Open",
+                "defaultBranch": [
+                  "cash_session_invalid"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_movement",
+            "key": "action",
+            "label": "Create Cash Movement",
+            "apiName": "create_movement",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_movement",
+                "label": "Create Cash Movement",
+                "apiName": "create_movement",
+                "key": "CREATE_RECORD",
+                "objectKey": "cash_movement",
+                "recordResource": {
+                  "path": "variables.movement"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "cash_session_invalid",
+            "key": "action",
+            "label": "Cash Movement Rejected",
+            "apiName": "cash_session_invalid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "cash_session_invalid",
+                "label": "Cash Movement Rejected",
+                "apiName": "cash_session_invalid",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Cash movements require an open till session.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -1949,6 +2753,56 @@
               }
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "record_drawer",
+            "key": "action",
+            "label": "Record Drawer Open",
+            "apiName": "record_drawer",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "record_drawer",
+                "label": "Record Drawer Open",
+                "key": "CREATE_RECORD",
+                "objectKey": "cash_movement",
+                "fieldValues": {
+                  "till_session_id": {
+                    "path": "variables.tillSessionId"
+                  },
+                  "terminal_id": {
+                    "path": "variables.terminalId"
+                  },
+                  "user_id": {
+                    "path": "variables.userId"
+                  },
+                  "type": "drawer_open",
+                  "amount": 0,
+                  "reason": {
+                    "path": "variables.reason"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -2017,9 +2871,93 @@
             "type": "Variable",
             "dataType": "Text",
             "availableInput": true
+          },
+          {
+            "value": "variables.amountPositive",
+            "apiName": "amountPositive",
+            "label": "Amount Positive",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": false,
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": false,
+            "objectKey": ""
           }
         ],
         "actions": [
+          {
+            "id": "validate_amount",
+            "label": "Validate Petty Cash Amount",
+            "apiName": "validate_amount",
+            "key": "FORMULA",
+            "resourceName": "amountPositive",
+            "resultType": "boolean",
+            "expression": "amount > 0",
+            "inputs": {
+              "amount": {
+                "path": "variables.amount"
+              }
+            }
+          },
+          {
+            "id": "find_open_session",
+            "label": "Find Open Till Session",
+            "apiName": "find_open_session",
+            "key": "GET_RECORDS",
+            "objectKey": "till_session",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.tillSessionId"
+                }
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "open"
+              }
+            ],
+            "match": "all",
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "petty_cash_valid",
+            "label": "Petty Cash Valid?",
+            "apiName": "petty_cash_valid",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.amountPositive",
+                      "operator": "equals",
+                      "value": true
+                    },
+                    {
+                      "field": "steps.find_open_session.record.id",
+                      "operator": "is_null",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "record_petty_cash"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid",
+            "defaultBranch": [
+              "petty_cash_invalid"
+            ]
+          },
           {
             "id": "record_petty_cash",
             "label": "Record Petty Cash",
@@ -2040,6 +2978,231 @@
                 "path": "variables.reason"
               }
             }
+          },
+          {
+            "id": "petty_cash_invalid",
+            "label": "Petty Cash Rejected",
+            "apiName": "petty_cash_invalid",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Petty cash requires a positive amount and an open till session.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "validate_amount",
+            "key": "action",
+            "label": "Validate Petty Cash Amount",
+            "apiName": "validate_amount",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "validate_amount",
+                "label": "Validate Petty Cash Amount",
+                "apiName": "validate_amount",
+                "key": "FORMULA",
+                "resourceName": "amountPositive",
+                "resultType": "boolean",
+                "expression": "amount > 0",
+                "inputs": {
+                  "amount": {
+                    "path": "variables.amount"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "find_open_session",
+            "key": "action",
+            "label": "Find Open Till Session",
+            "apiName": "find_open_session",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "find_open_session",
+                "label": "Find Open Till Session",
+                "apiName": "find_open_session",
+                "key": "GET_RECORDS",
+                "objectKey": "till_session",
+                "filters": [
+                  {
+                    "field": "id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.tillSessionId"
+                    }
+                  },
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "open"
+                  }
+                ],
+                "match": "all",
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "petty_cash_valid",
+            "key": "action",
+            "label": "Petty Cash Valid?",
+            "apiName": "petty_cash_valid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "petty_cash_valid",
+                "label": "Petty Cash Valid?",
+                "apiName": "petty_cash_valid",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "variables.amountPositive",
+                          "operator": "equals",
+                          "value": true
+                        },
+                        {
+                          "field": "steps.find_open_session.record.id",
+                          "operator": "is_null",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "record_petty_cash"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Invalid",
+                "defaultBranch": [
+                  "petty_cash_invalid"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "record_petty_cash",
+            "key": "action",
+            "label": "Record Petty Cash",
+            "apiName": "record_petty_cash",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "record_petty_cash",
+                "label": "Record Petty Cash",
+                "key": "CREATE_RECORD",
+                "objectKey": "cash_movement",
+                "fieldValues": {
+                  "till_session_id": {
+                    "path": "variables.tillSessionId"
+                  },
+                  "user_id": {
+                    "path": "variables.userId"
+                  },
+                  "type": "cash_out",
+                  "amount": {
+                    "path": "variables.amount"
+                  },
+                  "reason": {
+                    "path": "variables.reason"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "petty_cash_invalid",
+            "key": "action",
+            "label": "Petty Cash Rejected",
+            "apiName": "petty_cash_invalid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "petty_cash_invalid",
+                "label": "Petty Cash Rejected",
+                "apiName": "petty_cash_invalid",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Petty cash requires a positive amount and an open till session.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -2102,9 +3265,65 @@
             "availableInput": true,
             "availableOutput": false,
             "objectKey": "stock_return_line"
+          },
+          {
+            "value": "variables.hasReturnItems",
+            "apiName": "hasReturnItems",
+            "label": "Has Return Items",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": false,
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": false,
+            "objectKey": ""
           }
         ],
         "actions": [
+          {
+            "id": "validate_return_items",
+            "label": "Validate Return Items",
+            "apiName": "validate_return_items",
+            "key": "FORMULA",
+            "resourceName": "hasReturnItems",
+            "resultType": "boolean",
+            "expression": "COUNT(items) > 0",
+            "inputs": {
+              "items": {
+                "path": "variables.items"
+              }
+            }
+          },
+          {
+            "id": "return_has_items",
+            "label": "Return Has Items?",
+            "apiName": "return_has_items",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.hasReturnItems",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_return",
+                  "create_return_items"
+                ]
+              }
+            ],
+            "defaultLabel": "No Items",
+            "defaultBranch": [
+              "return_items_missing"
+            ]
+          },
           {
             "id": "create_return",
             "label": "Create Return",
@@ -2129,6 +3348,207 @@
                 "path": "steps.create_return.created.id"
               }
             }
+          },
+          {
+            "id": "return_items_missing",
+            "label": "Return Requires Items",
+            "apiName": "return_items_missing",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "A customer return must contain at least one return item.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "validate_return_items",
+            "key": "action",
+            "label": "Validate Return Items",
+            "apiName": "validate_return_items",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "validate_return_items",
+                "label": "Validate Return Items",
+                "apiName": "validate_return_items",
+                "key": "FORMULA",
+                "resourceName": "hasReturnItems",
+                "resultType": "boolean",
+                "expression": "!ISBLANK(items)",
+                "inputs": {
+                  "items": {
+                    "path": "variables.items"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "return_has_items",
+            "key": "action",
+            "label": "Return Has Items?",
+            "apiName": "return_has_items",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "return_has_items",
+                "label": "Return Has Items?",
+                "apiName": "return_has_items",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "variables.hasReturnItems",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_return",
+                      "create_return_items"
+                    ]
+                  }
+                ],
+                "defaultLabel": "No Items",
+                "defaultBranch": [
+                  "return_items_missing"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_return",
+            "key": "action",
+            "label": "Create Return",
+            "apiName": "create_return",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_return",
+                "label": "Create Return",
+                "apiName": "create_return",
+                "key": "CREATE_RECORD",
+                "objectKey": "stock_return",
+                "recordResource": {
+                  "path": "variables.return"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_return_items",
+            "key": "action",
+            "label": "Create Return Items",
+            "apiName": "create_return_items",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_return_items",
+                "label": "Create Return Items",
+                "apiName": "create_return_items",
+                "key": "CREATE_RECORD",
+                "objectKey": "stock_return_line",
+                "recordCollectionResource": {
+                  "path": "variables.items"
+                },
+                "commonFieldValues": {
+                  "return_id": {
+                    "path": "steps.create_return.created.id"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "return_items_missing",
+            "key": "action",
+            "label": "Return Requires Items",
+            "apiName": "return_items_missing",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "return_items_missing",
+                "label": "Return Requires Items",
+                "apiName": "return_items_missing",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "A customer return must contain at least one return item.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -2174,9 +3594,67 @@
             "availableInput": true,
             "availableOutput": true,
             "objectKey": "refund"
+          },
+          {
+            "value": "variables.refundValid",
+            "apiName": "refundValid",
+            "label": "Refund Valid",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": false,
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": false,
+            "objectKey": ""
           }
         ],
         "actions": [
+          {
+            "id": "validate_refund",
+            "label": "Validate Refund",
+            "apiName": "validate_refund",
+            "key": "FORMULA",
+            "resourceName": "refundValid",
+            "resultType": "boolean",
+            "expression": "amount > 0 && !ISBLANK(saleId)",
+            "inputs": {
+              "amount": {
+                "path": "variables.refund.amount"
+              },
+              "saleId": {
+                "path": "variables.refund.sale_id"
+              }
+            }
+          },
+          {
+            "id": "refund_is_valid",
+            "label": "Refund Valid?",
+            "apiName": "refund_is_valid",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.refundValid",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_refund"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid",
+            "defaultBranch": [
+              "refund_invalid"
+            ]
+          },
           {
             "id": "create_refund",
             "label": "Create Refund",
@@ -2186,6 +3664,172 @@
             "recordResource": {
               "path": "variables.refund"
             }
+          },
+          {
+            "id": "refund_invalid",
+            "label": "Refund Rejected",
+            "apiName": "refund_invalid",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Refunds require a positive amount and a linked sale.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "validate_refund",
+            "key": "action",
+            "label": "Validate Refund",
+            "apiName": "validate_refund",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "validate_refund",
+                "label": "Validate Refund",
+                "apiName": "validate_refund",
+                "key": "FORMULA",
+                "resourceName": "refundValid",
+                "resultType": "boolean",
+                "expression": "amount > 0 && !ISBLANK(saleId)",
+                "inputs": {
+                  "amount": {
+                    "path": "variables.refund.amount"
+                  },
+                  "saleId": {
+                    "path": "variables.refund.sale_id"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "refund_is_valid",
+            "key": "action",
+            "label": "Refund Valid?",
+            "apiName": "refund_is_valid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "refund_is_valid",
+                "label": "Refund Valid?",
+                "apiName": "refund_is_valid",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "variables.refundValid",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_refund"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Invalid",
+                "defaultBranch": [
+                  "refund_invalid"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_refund",
+            "key": "action",
+            "label": "Create Refund",
+            "apiName": "create_refund",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_refund",
+                "label": "Create Refund",
+                "apiName": "create_refund",
+                "key": "CREATE_RECORD",
+                "objectKey": "refund",
+                "recordResource": {
+                  "path": "variables.refund"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "refund_invalid",
+            "key": "action",
+            "label": "Refund Rejected",
+            "apiName": "refund_invalid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "refund_invalid",
+                "label": "Refund Rejected",
+                "apiName": "refund_invalid",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Refunds require a positive amount and a linked sale.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -2371,6 +4015,187 @@
                 "path": "steps.create_replacement_sale.created.id"
               }
             }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "create_original_return",
+            "key": "action",
+            "label": "Create Original Return",
+            "apiName": "create_original_return",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_original_return",
+                "label": "Create Original Return",
+                "apiName": "create_original_return",
+                "key": "CREATE_RECORD",
+                "objectKey": "stock_return",
+                "recordResource": {
+                  "path": "variables.originalReturn"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_return_items",
+            "key": "action",
+            "label": "Create Return Items",
+            "apiName": "create_return_items",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_return_items",
+                "label": "Create Return Items",
+                "apiName": "create_return_items",
+                "key": "CREATE_RECORD",
+                "objectKey": "stock_return_line",
+                "recordCollectionResource": {
+                  "path": "variables.returnItems"
+                },
+                "commonFieldValues": {
+                  "return_id": {
+                    "path": "steps.create_original_return.created.id"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_replacement_sale",
+            "key": "action",
+            "label": "Create Replacement Sale",
+            "apiName": "create_replacement_sale",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_replacement_sale",
+                "label": "Create Replacement Sale",
+                "apiName": "create_replacement_sale",
+                "key": "CREATE_RECORD",
+                "objectKey": "sale",
+                "recordResource": {
+                  "path": "variables.sale"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_replacement_items",
+            "key": "action",
+            "label": "Create Replacement Items",
+            "apiName": "create_replacement_items",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_replacement_items",
+                "label": "Create Replacement Items",
+                "apiName": "create_replacement_items",
+                "key": "CREATE_RECORD",
+                "objectKey": "sale_item",
+                "recordCollectionResource": {
+                  "path": "variables.items"
+                },
+                "commonFieldValues": {
+                  "sale_id": {
+                    "path": "steps.create_replacement_sale.created.id"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_exchange_payments",
+            "key": "action",
+            "label": "Create Exchange Payments",
+            "apiName": "create_exchange_payments",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_exchange_payments",
+                "label": "Create Exchange Payments",
+                "apiName": "create_exchange_payments",
+                "key": "CREATE_RECORD",
+                "objectKey": "payment",
+                "recordCollectionResource": {
+                  "path": "variables.payments"
+                },
+                "commonFieldValues": {
+                  "sale_id": {
+                    "path": "steps.create_replacement_sale.created.id"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -2633,6 +4458,130 @@
               }
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "create_sale",
+            "key": "action",
+            "label": "1. Create Sale",
+            "apiName": "create_sale",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_sale",
+                "label": "1. Create Sale",
+                "apiName": "create_sale",
+                "key": "CREATE_RECORD",
+                "objectKey": "sale",
+                "recordResource": {
+                  "path": "variables.sale"
+                },
+                "checkMatchingRecords": true,
+                "matchConditions": [
+                  {
+                    "field": "client_request_id",
+                    "value": {
+                      "path": "variables.sale.client_request_id"
+                    }
+                  }
+                ],
+                "matchAction": "skip",
+                "haltOnMatch": true,
+                "store": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_items",
+            "key": "action",
+            "label": "3. Create Sale Items",
+            "apiName": "create_items",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_items",
+                "label": "3. Create Sale Items",
+                "apiName": "create_items",
+                "key": "CREATE_RECORD",
+                "objectKey": "sale_item",
+                "recordCollectionResource": {
+                  "path": "variables.items"
+                },
+                "commonFieldValues": {
+                  "sale_id": {
+                    "path": "steps.create_sale.created.id"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_payments",
+            "key": "action",
+            "label": "4. Create Payments",
+            "apiName": "create_payments",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_payments",
+                "label": "4. Create Payments",
+                "apiName": "create_payments",
+                "key": "CREATE_RECORD",
+                "objectKey": "payment",
+                "recordCollectionResource": {
+                  "path": "variables.payments"
+                },
+                "commonFieldValues": {
+                  "sale_id": {
+                    "path": "steps.create_sale.created.id"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -2720,6 +4669,48 @@
                 "path": "variables.hasShortfall"
               }
             }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "stock_allowed",
+            "key": "action",
+            "label": "allowed",
+            "apiName": "stock_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "stock_allowed",
+                "label": "allowed",
+                "apiName": "stock_allowed",
+                "key": "FORMULA",
+                "resourceName": "allowed",
+                "resultType": "boolean",
+                "expression": "!hasShortfall",
+                "inputs": {
+                  "hasShortfall": {
+                    "path": "variables.hasShortfall"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -2837,6 +4828,51 @@
                 "path": "variables.ageVerified"
               }
             }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "age_allowed",
+            "key": "action",
+            "label": "allowed",
+            "apiName": "age_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "age_allowed",
+                "label": "allowed",
+                "apiName": "age_allowed",
+                "key": "FORMULA",
+                "resourceName": "allowed",
+                "resultType": "boolean",
+                "expression": "!requiresAgeVerification || ageVerified",
+                "inputs": {
+                  "requiresAgeVerification": {
+                    "path": "variables.requiresAgeVerification"
+                  },
+                  "ageVerified": {
+                    "path": "variables.ageVerified"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -3371,6 +5407,258 @@
                 "path": "variables.cashAllowed"
               }
             }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "payment_connection_allowed",
+            "key": "action",
+            "label": "connectionAllowed",
+            "apiName": "payment_connection_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "payment_connection_allowed",
+                "label": "connectionAllowed",
+                "apiName": "payment_connection_allowed",
+                "key": "FORMULA",
+                "resourceName": "connectionAllowed",
+                "resultType": "boolean",
+                "expression": "online || allowOffline",
+                "inputs": {
+                  "online": {
+                    "path": "variables.online"
+                  },
+                  "allowOffline": {
+                    "path": "variables.allowOffline"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "payment_connector_allowed",
+            "key": "action",
+            "label": "connectorAllowed",
+            "apiName": "payment_connector_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "payment_connector_allowed",
+                "label": "connectorAllowed",
+                "apiName": "payment_connector_allowed",
+                "key": "FORMULA",
+                "resourceName": "connectorAllowed",
+                "resultType": "boolean",
+                "expression": "!requiresConnector || connectorAvailable",
+                "inputs": {
+                  "requiresConnector": {
+                    "path": "variables.requiresConnector"
+                  },
+                  "connectorAvailable": {
+                    "path": "variables.connectorAvailable"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "payment_customer_allowed",
+            "key": "action",
+            "label": "customerAllowed",
+            "apiName": "payment_customer_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "payment_customer_allowed",
+                "label": "customerAllowed",
+                "apiName": "payment_customer_allowed",
+                "key": "FORMULA",
+                "resourceName": "customerAllowed",
+                "resultType": "boolean",
+                "expression": "!requiresCustomer || customerSelected",
+                "inputs": {
+                  "requiresCustomer": {
+                    "path": "variables.requiresCustomer"
+                  },
+                  "customerSelected": {
+                    "path": "variables.customerSelected"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "payment_gift_allowed",
+            "key": "action",
+            "label": "giftAllowed",
+            "apiName": "payment_gift_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "payment_gift_allowed",
+                "label": "giftAllowed",
+                "apiName": "payment_gift_allowed",
+                "key": "FORMULA",
+                "resourceName": "giftAllowed",
+                "resultType": "boolean",
+                "expression": "!requiresGiftCardCode || hasGiftCardCode",
+                "inputs": {
+                  "requiresGiftCardCode": {
+                    "path": "variables.requiresGiftCardCode"
+                  },
+                  "hasGiftCardCode": {
+                    "path": "variables.hasGiftCardCode"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "payment_cash_allowed",
+            "key": "action",
+            "label": "cashAllowed",
+            "apiName": "payment_cash_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "payment_cash_allowed",
+                "label": "cashAllowed",
+                "apiName": "payment_cash_allowed",
+                "key": "FORMULA",
+                "resourceName": "cashAllowed",
+                "resultType": "boolean",
+                "expression": "!requiresCashReceived || cashReceived >= total",
+                "inputs": {
+                  "requiresCashReceived": {
+                    "path": "variables.requiresCashReceived"
+                  },
+                  "cashReceived": {
+                    "path": "variables.cashReceived"
+                  },
+                  "total": {
+                    "path": "variables.total"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "payment_allowed",
+            "key": "action",
+            "label": "allowed",
+            "apiName": "payment_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "payment_allowed",
+                "label": "allowed",
+                "apiName": "payment_allowed",
+                "key": "FORMULA",
+                "resourceName": "allowed",
+                "resultType": "boolean",
+                "expression": "connectionAllowed && connectorAllowed && customerAllowed && giftAllowed && cashAllowed",
+                "inputs": {
+                  "connectionAllowed": {
+                    "path": "variables.connectionAllowed"
+                  },
+                  "connectorAllowed": {
+                    "path": "variables.connectorAllowed"
+                  },
+                  "customerAllowed": {
+                    "path": "variables.customerAllowed"
+                  },
+                  "giftAllowed": {
+                    "path": "variables.giftAllowed"
+                  },
+                  "cashAllowed": {
+                    "path": "variables.cashAllowed"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -3921,6 +6209,640 @@
                 "path": "variables.remaining"
               }
             }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "split_start_paid",
+            "key": "action",
+            "label": "1. Start Paid Total",
+            "apiName": "split_start_paid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_start_paid",
+                "label": "1. Start Paid Total",
+                "apiName": "split_start_paid",
+                "key": "ASSIGNMENT",
+                "variableName": "paidTotal",
+                "variableType": "number",
+                "operator": "set",
+                "value": 0
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_start_methods",
+            "key": "action",
+            "label": "2. Start Used Methods",
+            "apiName": "split_start_methods",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_start_methods",
+                "label": "2. Start Used Methods",
+                "apiName": "split_start_methods",
+                "key": "ASSIGNMENT",
+                "variableName": "usedMethods",
+                "variableType": "text",
+                "operator": "set",
+                "value": ""
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_start_valid",
+            "key": "action",
+            "label": "3. Start Validation",
+            "apiName": "split_start_valid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_start_valid",
+                "label": "3. Start Validation",
+                "apiName": "split_start_valid",
+                "key": "ASSIGNMENT",
+                "variableName": "allLinesValid",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_loop",
+            "key": "action",
+            "label": "4. Loop Through Payment Lines",
+            "apiName": "split_loop",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "LOOP",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_loop",
+                "label": "4. Loop Through Payment Lines",
+                "apiName": "split_loop",
+                "key": "LOOP",
+                "collection": "variables.payments",
+                "itemVariable": "paymentLine",
+                "bodyBranch": [
+                  "split_round_amount",
+                  "split_method_token",
+                  "split_amount_valid",
+                  "split_method_allowed",
+                  "split_method_duplicate",
+                  "split_line_valid",
+                  "split_update_valid",
+                  "split_set_valid",
+                  "split_add_paid",
+                  "split_next_methods",
+                  "split_add_method"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_round_amount",
+            "key": "action",
+            "label": "paymentAmount",
+            "apiName": "split_round_amount",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_round_amount",
+                "label": "paymentAmount",
+                "apiName": "split_round_amount",
+                "key": "FORMULA",
+                "resourceName": "paymentAmount",
+                "resultType": "number",
+                "expression": "ROUND(MAX(0, amount), 2)",
+                "inputs": {
+                  "amount": {
+                    "path": "variables.paymentLine.amount"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_method_token",
+            "key": "action",
+            "label": "methodToken",
+            "apiName": "split_method_token",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_method_token",
+                "label": "methodToken",
+                "apiName": "split_method_token",
+                "key": "FORMULA",
+                "resourceName": "methodToken",
+                "resultType": "text",
+                "expression": "CONCAT(\"|\", paymentMethod, \"|\")",
+                "inputs": {
+                  "paymentMethod": {
+                    "path": "variables.paymentLine.paymentMethod"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_amount_valid",
+            "key": "action",
+            "label": "amountValid",
+            "apiName": "split_amount_valid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_amount_valid",
+                "label": "amountValid",
+                "apiName": "split_amount_valid",
+                "key": "FORMULA",
+                "resourceName": "amountValid",
+                "resultType": "boolean",
+                "expression": "paymentAmount > 0",
+                "inputs": {
+                  "paymentAmount": {
+                    "path": "variables.paymentAmount"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_method_allowed",
+            "key": "action",
+            "label": "methodAllowed",
+            "apiName": "split_method_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_method_allowed",
+                "label": "methodAllowed",
+                "apiName": "split_method_allowed",
+                "key": "FORMULA",
+                "resourceName": "methodAllowed",
+                "resultType": "boolean",
+                "expression": "CONTAINS(allowedMethodsText, methodToken)",
+                "inputs": {
+                  "allowedMethodsText": {
+                    "path": "variables.allowedMethodsText"
+                  },
+                  "methodToken": {
+                    "path": "variables.methodToken"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_method_duplicate",
+            "key": "action",
+            "label": "methodDuplicate",
+            "apiName": "split_method_duplicate",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_method_duplicate",
+                "label": "methodDuplicate",
+                "apiName": "split_method_duplicate",
+                "key": "FORMULA",
+                "resourceName": "methodDuplicate",
+                "resultType": "boolean",
+                "expression": "CONTAINS(usedMethods, methodToken)",
+                "inputs": {
+                  "usedMethods": {
+                    "path": "variables.usedMethods"
+                  },
+                  "methodToken": {
+                    "path": "variables.methodToken"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_line_valid",
+            "key": "action",
+            "label": "lineValid",
+            "apiName": "split_line_valid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_line_valid",
+                "label": "lineValid",
+                "apiName": "split_line_valid",
+                "key": "FORMULA",
+                "resourceName": "lineValid",
+                "resultType": "boolean",
+                "expression": "amountValid && methodAllowed && !methodDuplicate",
+                "inputs": {
+                  "amountValid": {
+                    "path": "variables.amountValid"
+                  },
+                  "methodAllowed": {
+                    "path": "variables.methodAllowed"
+                  },
+                  "methodDuplicate": {
+                    "path": "variables.methodDuplicate"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_update_valid",
+            "key": "action",
+            "label": "nextAllLinesValid",
+            "apiName": "split_update_valid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_update_valid",
+                "label": "nextAllLinesValid",
+                "apiName": "split_update_valid",
+                "key": "FORMULA",
+                "resourceName": "nextAllLinesValid",
+                "resultType": "boolean",
+                "expression": "allLinesValid && lineValid",
+                "inputs": {
+                  "allLinesValid": {
+                    "path": "variables.allLinesValid"
+                  },
+                  "lineValid": {
+                    "path": "variables.lineValid"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_set_valid",
+            "key": "action",
+            "label": "Set Line Validation Result",
+            "apiName": "split_set_valid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_set_valid",
+                "label": "Set Line Validation Result",
+                "apiName": "split_set_valid",
+                "key": "ASSIGNMENT",
+                "variableName": "allLinesValid",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": {
+                  "path": "variables.nextAllLinesValid"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_add_paid",
+            "key": "action",
+            "label": "5. Add Payment To Paid Total",
+            "apiName": "split_add_paid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_add_paid",
+                "label": "5. Add Payment To Paid Total",
+                "apiName": "split_add_paid",
+                "key": "ASSIGNMENT",
+                "variableName": "paidTotal",
+                "variableType": "number",
+                "operator": "add",
+                "value": {
+                  "path": "variables.paymentAmount"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_next_methods",
+            "key": "action",
+            "label": "nextUsedMethods",
+            "apiName": "split_next_methods",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_next_methods",
+                "label": "nextUsedMethods",
+                "apiName": "split_next_methods",
+                "key": "FORMULA",
+                "resourceName": "nextUsedMethods",
+                "resultType": "text",
+                "expression": "CONCAT(usedMethods, methodToken)",
+                "inputs": {
+                  "usedMethods": {
+                    "path": "variables.usedMethods"
+                  },
+                  "methodToken": {
+                    "path": "variables.methodToken"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_add_method",
+            "key": "action",
+            "label": "6. Remember Used Method",
+            "apiName": "split_add_method",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_add_method",
+                "label": "6. Remember Used Method",
+                "apiName": "split_add_method",
+                "key": "ASSIGNMENT",
+                "variableName": "usedMethods",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "variables.nextUsedMethods"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_remaining",
+            "key": "action",
+            "label": "remaining",
+            "apiName": "split_remaining",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_remaining",
+                "label": "remaining",
+                "apiName": "split_remaining",
+                "key": "FORMULA",
+                "resourceName": "remaining",
+                "resultType": "number",
+                "expression": "ROUND(total - paidTotal, 2)",
+                "inputs": {
+                  "total": {
+                    "path": "variables.total"
+                  },
+                  "paidTotal": {
+                    "path": "variables.paidTotal"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "split_allowed",
+            "key": "action",
+            "label": "allowed",
+            "apiName": "split_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "split_allowed",
+                "label": "allowed",
+                "apiName": "split_allowed",
+                "key": "FORMULA",
+                "resourceName": "allowed",
+                "resultType": "boolean",
+                "expression": "allLinesValid && paidTotal > 0 && ABS(remaining) < 0.005",
+                "inputs": {
+                  "allLinesValid": {
+                    "path": "variables.allLinesValid"
+                  },
+                  "paidTotal": {
+                    "path": "variables.paidTotal"
+                  },
+                  "remaining": {
+                    "path": "variables.remaining"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -4703,6 +7625,882 @@
               }
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "sale_totals_start_gross",
+            "key": "action",
+            "label": "1. Start Gross Subtotal",
+            "apiName": "sale_totals_start_gross",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_start_gross",
+                "label": "1. Start Gross Subtotal",
+                "apiName": "sale_totals_start_gross",
+                "key": "ASSIGNMENT",
+                "variableName": "grossSubtotal",
+                "variableType": "number",
+                "operator": "set",
+                "value": 0
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_start_line_discount",
+            "key": "action",
+            "label": "2. Start Line Discount",
+            "apiName": "sale_totals_start_line_discount",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_start_line_discount",
+                "label": "2. Start Line Discount",
+                "apiName": "sale_totals_start_line_discount",
+                "key": "ASSIGNMENT",
+                "variableName": "totalLineDiscount",
+                "variableType": "number",
+                "operator": "set",
+                "value": 0
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_first_loop",
+            "key": "action",
+            "label": "3. Sum Basket Lines",
+            "apiName": "sale_totals_first_loop",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "LOOP",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_first_loop",
+                "label": "3. Sum Basket Lines",
+                "apiName": "sale_totals_first_loop",
+                "key": "LOOP",
+                "collection": "variables.basket",
+                "itemVariable": "saleLine",
+                "bodyBranch": [
+                  "sale_totals_line_gross",
+                  "sale_totals_line_discount",
+                  "sale_totals_add_gross",
+                  "sale_totals_add_line_discount"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_line_gross",
+            "key": "action",
+            "label": "lineGross",
+            "apiName": "sale_totals_line_gross",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_line_gross",
+                "label": "lineGross",
+                "apiName": "sale_totals_line_gross",
+                "key": "FORMULA",
+                "resourceName": "lineGross",
+                "resultType": "number",
+                "expression": "ROUND(MAX(0, price) * MAX(0, quantity), 2)",
+                "inputs": {
+                  "price": {
+                    "path": "variables.saleLine.price"
+                  },
+                  "quantity": {
+                    "path": "variables.saleLine.quantity"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_line_discount",
+            "key": "action",
+            "label": "lineDiscount",
+            "apiName": "sale_totals_line_discount",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_line_discount",
+                "label": "lineDiscount",
+                "apiName": "sale_totals_line_discount",
+                "key": "FORMULA",
+                "resourceName": "lineDiscount",
+                "resultType": "number",
+                "expression": "ROUND(IF(discountTypeLine == \"percent\", MIN(lineGross, lineGross * (MAX(0, discountValueLine) / 100)), IF(discountTypeLine == \"fixed\", MIN(lineGross, MAX(0, discountValueLine)), 0)), 2)",
+                "inputs": {
+                  "discountTypeLine": {
+                    "path": "variables.saleLine.discountType"
+                  },
+                  "discountValueLine": {
+                    "path": "variables.saleLine.discountValue"
+                  },
+                  "lineGross": {
+                    "path": "variables.lineGross"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_add_gross",
+            "key": "action",
+            "label": "4. Add Gross",
+            "apiName": "sale_totals_add_gross",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_add_gross",
+                "label": "4. Add Gross",
+                "apiName": "sale_totals_add_gross",
+                "key": "ASSIGNMENT",
+                "variableName": "grossSubtotal",
+                "variableType": "number",
+                "operator": "add",
+                "value": {
+                  "path": "variables.lineGross"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_add_line_discount",
+            "key": "action",
+            "label": "5. Add Line Discount",
+            "apiName": "sale_totals_add_line_discount",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_add_line_discount",
+                "label": "5. Add Line Discount",
+                "apiName": "sale_totals_add_line_discount",
+                "key": "ASSIGNMENT",
+                "variableName": "totalLineDiscount",
+                "variableType": "number",
+                "operator": "add",
+                "value": {
+                  "path": "variables.lineDiscount"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_net_subtotal",
+            "key": "action",
+            "label": "netSubtotal",
+            "apiName": "sale_totals_net_subtotal",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_net_subtotal",
+                "label": "netSubtotal",
+                "apiName": "sale_totals_net_subtotal",
+                "key": "FORMULA",
+                "resourceName": "netSubtotal",
+                "resultType": "number",
+                "expression": "MAX(0, grossSubtotal - totalLineDiscount)",
+                "inputs": {
+                  "grossSubtotal": {
+                    "path": "variables.grossSubtotal"
+                  },
+                  "totalLineDiscount": {
+                    "path": "variables.totalLineDiscount"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_order_discount",
+            "key": "action",
+            "label": "orderDiscount",
+            "apiName": "sale_totals_order_discount",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_order_discount",
+                "label": "orderDiscount",
+                "apiName": "sale_totals_order_discount",
+                "key": "FORMULA",
+                "resourceName": "orderDiscount",
+                "resultType": "number",
+                "expression": "ROUND(IF(discountType == \"percent\", MIN(netSubtotal, netSubtotal * (MAX(0, discountValue) / 100)), IF(discountType == \"fixed\", MIN(netSubtotal, MAX(0, discountValue)), 0)), 2)",
+                "inputs": {
+                  "discountType": {
+                    "path": "variables.discountType"
+                  },
+                  "discountValue": {
+                    "path": "variables.discountValue"
+                  },
+                  "netSubtotal": {
+                    "path": "variables.netSubtotal"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_start_vat",
+            "key": "action",
+            "label": "6. Start VAT",
+            "apiName": "sale_totals_start_vat",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_start_vat",
+                "label": "6. Start VAT",
+                "apiName": "sale_totals_start_vat",
+                "key": "ASSIGNMENT",
+                "variableName": "vat",
+                "variableType": "number",
+                "operator": "set",
+                "value": 0
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_second_loop",
+            "key": "action",
+            "label": "7. Calculate VAT",
+            "apiName": "sale_totals_second_loop",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "LOOP",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_second_loop",
+                "label": "7. Calculate VAT",
+                "apiName": "sale_totals_second_loop",
+                "key": "LOOP",
+                "collection": "variables.basket",
+                "itemVariable": "vatLine",
+                "bodyBranch": [
+                  "sale_totals_vat_line_gross",
+                  "sale_totals_vat_line_discount",
+                  "sale_totals_vat_line_net",
+                  "sale_totals_vat_rate",
+                  "sale_totals_discounted_line",
+                  "sale_totals_line_vat",
+                  "sale_totals_add_vat"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_vat_line_gross",
+            "key": "action",
+            "label": "vatLineGross",
+            "apiName": "sale_totals_vat_line_gross",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_vat_line_gross",
+                "label": "vatLineGross",
+                "apiName": "sale_totals_vat_line_gross",
+                "key": "FORMULA",
+                "resourceName": "vatLineGross",
+                "resultType": "number",
+                "expression": "ROUND(MAX(0, price) * MAX(0, quantity), 2)",
+                "inputs": {
+                  "price": {
+                    "path": "variables.vatLine.price"
+                  },
+                  "quantity": {
+                    "path": "variables.vatLine.quantity"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_vat_line_discount",
+            "key": "action",
+            "label": "vatLineDiscount",
+            "apiName": "sale_totals_vat_line_discount",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_vat_line_discount",
+                "label": "vatLineDiscount",
+                "apiName": "sale_totals_vat_line_discount",
+                "key": "FORMULA",
+                "resourceName": "vatLineDiscount",
+                "resultType": "number",
+                "expression": "ROUND(IF(discountTypeLine == \"percent\", MIN(vatLineGross, vatLineGross * (MAX(0, discountValueLine) / 100)), IF(discountTypeLine == \"fixed\", MIN(vatLineGross, MAX(0, discountValueLine)), 0)), 2)",
+                "inputs": {
+                  "discountTypeLine": {
+                    "path": "variables.vatLine.discountType"
+                  },
+                  "discountValueLine": {
+                    "path": "variables.vatLine.discountValue"
+                  },
+                  "vatLineGross": {
+                    "path": "variables.vatLineGross"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_vat_line_net",
+            "key": "action",
+            "label": "vatLineNet",
+            "apiName": "sale_totals_vat_line_net",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_vat_line_net",
+                "label": "vatLineNet",
+                "apiName": "sale_totals_vat_line_net",
+                "key": "FORMULA",
+                "resourceName": "vatLineNet",
+                "resultType": "number",
+                "expression": "MAX(0, vatLineGross - vatLineDiscount)",
+                "inputs": {
+                  "vatLineGross": {
+                    "path": "variables.vatLineGross"
+                  },
+                  "vatLineDiscount": {
+                    "path": "variables.vatLineDiscount"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_vat_rate",
+            "key": "action",
+            "label": "effectiveVatRate",
+            "apiName": "sale_totals_vat_rate",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_vat_rate",
+                "label": "effectiveVatRate",
+                "apiName": "sale_totals_vat_rate",
+                "key": "FORMULA",
+                "resourceName": "effectiveVatRate",
+                "resultType": "number",
+                "expression": "IF(vatEnabled && vatApplicable, IF(ISBLANK(lineVatRate), defaultVatRate, lineVatRate / 100), 0)",
+                "inputs": {
+                  "vatEnabled": {
+                    "path": "variables.vatEnabled"
+                  },
+                  "vatApplicable": {
+                    "path": "variables.vatLine.vatApplicable"
+                  },
+                  "lineVatRate": {
+                    "path": "variables.vatLine.vatRate"
+                  },
+                  "defaultVatRate": {
+                    "path": "variables.defaultVatRate"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_discounted_line",
+            "key": "action",
+            "label": "discountedVatLine",
+            "apiName": "sale_totals_discounted_line",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_discounted_line",
+                "label": "discountedVatLine",
+                "apiName": "sale_totals_discounted_line",
+                "key": "FORMULA",
+                "resourceName": "discountedVatLine",
+                "resultType": "number",
+                "expression": "MAX(0, vatLineNet - IF(netSubtotal > 0, orderDiscount * (vatLineNet / netSubtotal), 0))",
+                "inputs": {
+                  "vatLineNet": {
+                    "path": "variables.vatLineNet"
+                  },
+                  "netSubtotal": {
+                    "path": "variables.netSubtotal"
+                  },
+                  "orderDiscount": {
+                    "path": "variables.orderDiscount"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_line_vat",
+            "key": "action",
+            "label": "lineVat",
+            "apiName": "sale_totals_line_vat",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_line_vat",
+                "label": "lineVat",
+                "apiName": "sale_totals_line_vat",
+                "key": "FORMULA",
+                "resourceName": "lineVat",
+                "resultType": "number",
+                "expression": "ROUND(discountedVatLine * effectiveVatRate, 2)",
+                "inputs": {
+                  "discountedVatLine": {
+                    "path": "variables.discountedVatLine"
+                  },
+                  "effectiveVatRate": {
+                    "path": "variables.effectiveVatRate"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_add_vat",
+            "key": "action",
+            "label": "8. Add VAT",
+            "apiName": "sale_totals_add_vat",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_add_vat",
+                "label": "8. Add VAT",
+                "apiName": "sale_totals_add_vat",
+                "key": "ASSIGNMENT",
+                "variableName": "vat",
+                "variableType": "number",
+                "operator": "add",
+                "value": {
+                  "path": "variables.lineVat"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_discount_amount",
+            "key": "action",
+            "label": "discountAmount",
+            "apiName": "sale_totals_discount_amount",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_discount_amount",
+                "label": "discountAmount",
+                "apiName": "sale_totals_discount_amount",
+                "key": "FORMULA",
+                "resourceName": "discountAmount",
+                "resultType": "number",
+                "expression": "ROUND(totalLineDiscount + orderDiscount, 2)",
+                "inputs": {
+                  "totalLineDiscount": {
+                    "path": "variables.totalLineDiscount"
+                  },
+                  "orderDiscount": {
+                    "path": "variables.orderDiscount"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_subtotal",
+            "key": "action",
+            "label": "subtotal",
+            "apiName": "sale_totals_subtotal",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_subtotal",
+                "label": "subtotal",
+                "apiName": "sale_totals_subtotal",
+                "key": "FORMULA",
+                "resourceName": "subtotal",
+                "resultType": "number",
+                "expression": "ROUND(MAX(0, grossSubtotal - discountAmount), 2)",
+                "inputs": {
+                  "grossSubtotal": {
+                    "path": "variables.grossSubtotal"
+                  },
+                  "discountAmount": {
+                    "path": "variables.discountAmount"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_vat_round",
+            "key": "action",
+            "label": "vat",
+            "apiName": "sale_totals_vat_round",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_vat_round",
+                "label": "vat",
+                "apiName": "sale_totals_vat_round",
+                "key": "FORMULA",
+                "resourceName": "vat",
+                "resultType": "number",
+                "expression": "ROUND(vat, 2)",
+                "inputs": {
+                  "vat": {
+                    "path": "variables.vat"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_total",
+            "key": "action",
+            "label": "total",
+            "apiName": "sale_totals_total",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_total",
+                "label": "total",
+                "apiName": "sale_totals_total",
+                "key": "FORMULA",
+                "resourceName": "total",
+                "resultType": "number",
+                "expression": "ROUND(subtotal + vat, 2)",
+                "inputs": {
+                  "subtotal": {
+                    "path": "variables.subtotal"
+                  },
+                  "vat": {
+                    "path": "variables.vat"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sale_totals_gross_round",
+            "key": "action",
+            "label": "grossSubtotal",
+            "apiName": "sale_totals_gross_round",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sale_totals_gross_round",
+                "label": "grossSubtotal",
+                "apiName": "sale_totals_gross_round",
+                "key": "FORMULA",
+                "resourceName": "grossSubtotal",
+                "resultType": "number",
+                "expression": "ROUND(grossSubtotal, 2)",
+                "inputs": {
+                  "grossSubtotal": {
+                    "path": "variables.grossSubtotal"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -5031,6 +8829,138 @@
               }
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "cash_position_current",
+            "key": "action",
+            "label": "currentCash",
+            "apiName": "cash_position_current",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "cash_position_current",
+                "label": "currentCash",
+                "apiName": "cash_position_current",
+                "key": "FORMULA",
+                "resourceName": "currentCash",
+                "resultType": "number",
+                "expression": "ROUND(openingCash + cashIn + cashSales - cashOut - cashRefunds, 2)",
+                "inputs": {
+                  "openingCash": {
+                    "path": "variables.openingCash"
+                  },
+                  "cashIn": {
+                    "path": "variables.cashIn"
+                  },
+                  "cashOut": {
+                    "path": "variables.cashOut"
+                  },
+                  "cashSales": {
+                    "path": "variables.cashSales"
+                  },
+                  "cashRefunds": {
+                    "path": "variables.cashRefunds"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "cash_position_difference",
+            "key": "action",
+            "label": "cashDifference",
+            "apiName": "cash_position_difference",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "cash_position_difference",
+                "label": "cashDifference",
+                "apiName": "cash_position_difference",
+                "key": "FORMULA",
+                "resourceName": "cashDifference",
+                "resultType": "number",
+                "expression": "ROUND(countedCash - currentCash, 2)",
+                "inputs": {
+                  "countedCash": {
+                    "path": "variables.countedCash"
+                  },
+                  "currentCash": {
+                    "path": "variables.currentCash"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "cash_position_out_allowed",
+            "key": "action",
+            "label": "cashOutAllowed",
+            "apiName": "cash_position_out_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "cash_position_out_allowed",
+                "label": "cashOutAllowed",
+                "apiName": "cash_position_out_allowed",
+                "key": "FORMULA",
+                "resourceName": "cashOutAllowed",
+                "resultType": "boolean",
+                "expression": "requestedCashOut <= currentCash",
+                "inputs": {
+                  "requestedCashOut": {
+                    "path": "variables.requestedCashOut"
+                  },
+                  "currentCash": {
+                    "path": "variables.currentCash"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -5174,6 +9104,300 @@
                 "path": "variables.expiryMinutes"
               }
             }
+          },
+          {
+            "id": "generate_receipt_token",
+            "label": "Generate Secure Receipt Token",
+            "apiName": "generate_receipt_token",
+            "key": "GENERATE_SECURE_TOKEN",
+            "tokenResourceName": "receiptToken",
+            "hashResourceName": "receiptTokenHash",
+            "bytes": 32
+          },
+          {
+            "id": "calculate_receipt_expiry",
+            "label": "Calculate Receipt Expiry",
+            "apiName": "calculate_receipt_expiry",
+            "key": "FORMULA",
+            "resourceName": "receiptExpiresAt",
+            "resultType": "datetime",
+            "expression": "ADDMINUTES(currentTime, expiryMinutes)",
+            "inputs": {
+              "currentTime": {
+                "path": "$now"
+              },
+              "expiryMinutes": {
+                "path": "variables.expiryMinutes"
+              }
+            }
+          },
+          {
+            "id": "create_receipt_record",
+            "label": "Create Temporary Download Record",
+            "apiName": "create_receipt_record",
+            "key": "CREATE_RECORD",
+            "objectKey": "temporary_receipt_download",
+            "fieldValues": {
+              "store_id": {
+                "path": "$user.storeId"
+              },
+              "till_id": {
+                "path": "$user.tillId"
+              },
+              "sale_id": {
+                "path": "variables.saleId"
+              },
+              "token_hash": {
+                "path": "variables.receiptTokenHash"
+              },
+              "status": "ACTIVE",
+              "expires_at": {
+                "path": "variables.receiptExpiresAt"
+              }
+            }
+          },
+          {
+            "id": "build_receipt_url",
+            "label": "Build Receipt Download URL",
+            "apiName": "build_receipt_url",
+            "key": "TEXT_TEMPLATE",
+            "resourceName": "receiptUrl",
+            "templateText": "{!variables.baseUrl}/receipt/download/{!variables.receiptToken}"
+          },
+          {
+            "id": "set_receipt_output",
+            "label": "Set Receipt Output",
+            "apiName": "set_receipt_output",
+            "key": "ASSIGNMENT",
+            "variableName": "receipt",
+            "variableType": "object",
+            "operator": "set",
+            "value": {
+              "id": {
+                "path": "steps.create_receipt_record.created.id"
+              },
+              "saleId": {
+                "path": "variables.saleId"
+              },
+              "token": {
+                "path": "variables.receiptToken"
+              },
+              "url": {
+                "path": "variables.receiptUrl"
+              },
+              "expiresAt": {
+                "path": "variables.receiptExpiresAt"
+              },
+              "status": "ACTIVE",
+              "expiresMinutes": {
+                "path": "variables.expiryMinutes"
+              }
+            }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "generate_receipt_token",
+            "key": "action",
+            "label": "Generate Secure Receipt Token",
+            "apiName": "generate_receipt_token",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GENERATE_SECURE_TOKEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "generate_receipt_token",
+                "label": "Generate Secure Receipt Token",
+                "apiName": "generate_receipt_token",
+                "key": "GENERATE_SECURE_TOKEN",
+                "tokenResourceName": "receiptToken",
+                "hashResourceName": "receiptTokenHash",
+                "bytes": 32
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "calculate_receipt_expiry",
+            "key": "action",
+            "label": "Calculate Receipt Expiry",
+            "apiName": "calculate_receipt_expiry",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "calculate_receipt_expiry",
+                "label": "Calculate Receipt Expiry",
+                "apiName": "calculate_receipt_expiry",
+                "key": "FORMULA",
+                "resourceName": "receiptExpiresAt",
+                "resultType": "datetime",
+                "expression": "ADDMINUTES(currentTime, expiryMinutes)",
+                "inputs": {
+                  "currentTime": {
+                    "path": "$now"
+                  },
+                  "expiryMinutes": {
+                    "path": "variables.expiryMinutes"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_receipt_record",
+            "key": "action",
+            "label": "Create Temporary Download Record",
+            "apiName": "create_receipt_record",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_receipt_record",
+                "label": "Create Temporary Download Record",
+                "apiName": "create_receipt_record",
+                "key": "CREATE_RECORD",
+                "objectKey": "temporary_receipt_download",
+                "fieldValues": {
+                  "store_id": {
+                    "path": "$user.storeId"
+                  },
+                  "till_id": {
+                    "path": "$user.tillId"
+                  },
+                  "sale_id": {
+                    "path": "variables.saleId"
+                  },
+                  "token_hash": {
+                    "path": "variables.receiptTokenHash"
+                  },
+                  "status": "ACTIVE",
+                  "expires_at": {
+                    "path": "variables.receiptExpiresAt"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "build_receipt_url",
+            "key": "action",
+            "label": "Build Receipt Download URL",
+            "apiName": "build_receipt_url",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "TEXT_TEMPLATE",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "build_receipt_url",
+                "label": "Build Receipt Download URL",
+                "apiName": "build_receipt_url",
+                "key": "TEXT_TEMPLATE",
+                "resourceName": "receiptUrl",
+                "templateText": "{!variables.baseUrl}/receipt/download/{!variables.receiptToken}"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_receipt_output",
+            "key": "action",
+            "label": "Set Receipt Output",
+            "apiName": "set_receipt_output",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_receipt_output",
+                "label": "Set Receipt Output",
+                "apiName": "set_receipt_output",
+                "key": "ASSIGNMENT",
+                "variableName": "receipt",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "id": {
+                    "path": "steps.create_receipt_record.created.id"
+                  },
+                  "saleId": {
+                    "path": "variables.saleId"
+                  },
+                  "token": {
+                    "path": "variables.receiptToken"
+                  },
+                  "url": {
+                    "path": "variables.receiptUrl"
+                  },
+                  "expiresAt": {
+                    "path": "variables.receiptExpiresAt"
+                  },
+                  "status": "ACTIVE",
+                  "expiresMinutes": {
+                    "path": "variables.expiryMinutes"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }

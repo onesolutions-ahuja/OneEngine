@@ -17,6 +17,9 @@ for (const key of developerSet) {
   routes.add(`developer/${key}`)
   routes.add(`settings/${key}`)
 }
+// Keep legacy Developer URLs directly loadable on GitHub Pages. These aliases
+// are normalized by readRoute() to their current builders.
+for (const alias of ['workflow-builder', 'platform-apps', 'builder-2']) routes.add(`developer/${alias}`)
 for (const match of settingsVisuals.matchAll(/^\s*(?:'([a-z-]+)'|([a-z-]+))\s*:/gm)) {
   const key = match[1] || match[2]
   if (!key || developerSet.has(key)) continue

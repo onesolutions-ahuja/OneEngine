@@ -420,6 +420,49 @@
         },
         "actions": [
           {
+            "id": "validate_customer_name",
+            "label": "Validate Customer Name",
+            "apiName": "validate_customer_name",
+            "key": "FORMULA",
+            "resourceName": "nameValid",
+            "resultType": "boolean",
+            "expression": "!ISBLANK(name)",
+            "inputs": {
+              "name": {
+                "path": "variables.name"
+              }
+            }
+          },
+          {
+            "id": "customer_ready",
+            "label": "Customer Ready?",
+            "apiName": "customer_ready",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.nameValid",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_customer"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid Customer",
+            "defaultBranch": [
+              "customer_invalid"
+            ]
+          },
+          {
             "id": "create_customer",
             "label": "Create Customer",
             "apiName": "create_customer",
@@ -437,6 +480,191 @@
               },
               "active": true
             }
+          },
+          {
+            "id": "customer_invalid",
+            "label": "Customer Registration Rejected",
+            "apiName": "customer_invalid",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Customer name is required.",
+            "errorLocation": "record"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.nameValid",
+            "apiName": "nameValid",
+            "label": "Name Valid",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": false,
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": false
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "validate_customer_name",
+            "key": "action",
+            "label": "Validate Customer Name",
+            "apiName": "validate_customer_name",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "validate_customer_name",
+                "label": "Validate Customer Name",
+                "apiName": "validate_customer_name",
+                "key": "FORMULA",
+                "resourceName": "nameValid",
+                "resultType": "boolean",
+                "expression": "!ISBLANK(name)",
+                "inputs": {
+                  "name": {
+                    "path": "variables.name"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "customer_ready",
+            "key": "action",
+            "label": "Customer Ready?",
+            "apiName": "customer_ready",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "customer_ready",
+                "label": "Customer Ready?",
+                "apiName": "customer_ready",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "variables.nameValid",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_customer"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Invalid Customer",
+                "defaultBranch": [
+                  "customer_invalid"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_customer",
+            "key": "action",
+            "label": "Create Customer",
+            "apiName": "create_customer",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_customer",
+                "label": "Create Customer",
+                "apiName": "create_customer",
+                "key": "CREATE_RECORD",
+                "objectKey": "customer",
+                "fieldValues": {
+                  "name": {
+                    "path": "variables.name"
+                  },
+                  "phone": {
+                    "path": "variables.phone"
+                  },
+                  "email": {
+                    "path": "variables.email"
+                  },
+                  "active": true
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "customer_invalid",
+            "key": "action",
+            "label": "Customer Registration Rejected",
+            "apiName": "customer_invalid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "customer_invalid",
+                "label": "Customer Registration Rejected",
+                "apiName": "customer_invalid",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Customer name is required.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }

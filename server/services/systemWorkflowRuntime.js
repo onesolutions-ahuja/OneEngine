@@ -101,7 +101,8 @@ export async function executeSystemWorkflow({
   db,
   companyId,
   userId = null,
-  systemKey,
+  systemKey = null,
+  apiName = null,
   req = null,
   input = {},
   object = null,
@@ -116,7 +117,7 @@ export async function executeSystemWorkflow({
 }) {
   if (!db || typeof db !== "function") throw new Error("System workflow requires database context");
   if (!companyId) throw new Error("System workflow requires company context");
-  if (!systemKey) throw new Error("System workflow key is required");
+  if (!systemKey && !apiName) throw new Error("System workflow key or API name is required");
 
   await ensureSystemWorkflowCatalog({ db, companyId, userId });
   const actor = await resolveSystemWorkflowActor({ db, companyId, userId, req });
@@ -132,19 +133,30 @@ export async function executeSystemWorkflow({
     },
   };
 
-  const workflowResult = await db(
-    `SELECT * FROM platform_rules
-      WHERE company_id=$1
-        AND action->>'systemGenerated'='true'
-        AND action->>'systemKey'=$2
-        AND active=TRUE
-        AND lifecycle_status='ACTIVE'
-      LIMIT 1`,
-    [companyId, systemKey]
-  );
+  const workflowResult = systemKey
+    ? await db(
+      `SELECT * FROM platform_rules
+        WHERE company_id=$1
+          AND action->>'systemGenerated'='true'
+          AND action->>'systemKey'=$2
+          AND active=TRUE
+          AND lifecycle_status='ACTIVE'
+        LIMIT 1`,
+      [companyId, systemKey]
+    )
+    : await db(
+      `SELECT * FROM platform_rules
+        WHERE company_id=$1
+          AND action->>'apiName'=$2
+          AND active=TRUE
+          AND lifecycle_status='ACTIVE'
+        ORDER BY updated_at DESC,created_at DESC
+        LIMIT 1`,
+      [companyId, apiName]
+    );
   const workflow = workflowResult.rows[0];
   if (!workflow) {
-    const error = new Error(`System workflow "${systemKey}" is unavailable or inactive`);
+    const error = new Error(`Workflow "${systemKey || apiName}" is unavailable or inactive`);
     error.code = "SYSTEM_WORKFLOW_UNAVAILABLE";
     error.status = 409;
     throw error;
@@ -157,8 +169,8 @@ export async function executeSystemWorkflow({
       || randomUUID()
   );
   const sourceInfo = safeSource(req, source);
-  const capabilityType = workflow.action?.capabilityType || null;
-  const capabilityKey = workflow.action?.capabilityKey || null;
+  const capabilityType = workflow.action?.capabilityType || (workflow.action?.type === "workflow" ? "workflow" : null);
+  const capabilityKey = workflow.action?.capabilityKey || workflow.action?.apiName || apiName || null;
   const actions = (workflow.action?.actions || []).map((action) =>
     runtimeAction(action, capabilityType, input)
   );
@@ -185,7 +197,8 @@ export async function executeSystemWorkflow({
     parentRunId: parentRunId || null,
     status: "RUNNING",
     metadata: {
-      systemKey,
+      systemKey: systemKey || null,
+      apiName: workflow.action?.apiName || apiName || null,
       capabilityType,
       capabilityKey,
       actorUserId: actor.id,
@@ -236,6 +249,129 @@ export async function executeSystemWorkflow({
       }
     }
     return { runId: run.id, correlationId, status: waiting ? "WAITING" : "COMPLETED", results, result, workflowVariables };
+  } catch (error) {
+    await db(
+      `UPDATE platform_workflow_runs
+          SET status='FAILED',error_text=COALESCE(error_text,$1),completed_at=NOW(),
+              metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb,updated_at=NOW()
+        WHERE id=$3 AND company_id=$4`,
+      [
+        String(error?.message || error).slice(0, 2000),
+        JSON.stringify({ correlationId, source: sourceInfo }),
+        run.id,
+        companyId,
+      ]
+    );
+    error.workflowRunId = run.id;
+    error.correlationId = correlationId;
+    throw error;
+  }
+}
+
+
+export async function executeSystemAction({
+  db,
+  companyId,
+  userId = null,
+  actionKey,
+  req = null,
+  input = {},
+  object = null,
+  record = null,
+  recordId = null,
+  storeId = null,
+  tillId = null,
+  connectorDrivers = null,
+  writeAudit = null,
+  source = null,
+  extraContext = {},
+}) {
+  if (!db || typeof db !== "function") throw new Error("System action requires database context");
+  if (!companyId) throw new Error("System action requires company context");
+  const normalizedActionKey = String(actionKey || "").trim().toUpperCase();
+  if (!normalizedActionKey) throw new Error("System action key is required");
+
+  const actor = await resolveSystemWorkflowActor({ db, companyId, userId, req });
+  const runtimeReq = {
+    ...(req || {}),
+    user: {
+      ...(req?.user || {}),
+      id: actor.id,
+      roleId: actor.role_id,
+      companyId,
+      storeId: storeId || actor.store_id || req?.user?.storeId || null,
+      tillId: tillId || actor.till_id || req?.user?.tillId || null,
+    },
+  };
+  const correlationId = String(
+    req?.businessCommandCorrelationId
+      || req?.headers?.["x-request-id"]
+      || req?.headers?.["x-correlation-id"]
+      || randomUUID()
+  );
+  const sourceInfo = safeSource(req, source);
+  const parentRunId = req?.ensureBusinessCommandRun
+    ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, tillId })
+    : (req?.businessCommandRunId || null);
+  const run = await createWorkflowRun({
+    db,
+    companyId,
+    workflowId: null,
+    workflowName: `System Action · ${normalizedActionKey}`,
+    workflowVersion: 1,
+    objectId: object?.id || null,
+    recordId: recordId || record?.id || null,
+    triggerKey: "system_action",
+    parentRunId: parentRunId || null,
+    status: "RUNNING",
+    metadata: {
+      capabilityType: "action",
+      capabilityKey: normalizedActionKey,
+      actorUserId: actor.id,
+      storeId: runtimeReq.user.storeId || null,
+      tillId: runtimeReq.user.tillId || null,
+      correlationId,
+      source: sourceInfo,
+    },
+  });
+
+  try {
+    const workflowVariables = { variables: {}, steps: {} };
+    const actions = [{ ...(input || {}), type: normalizedActionKey, systemTemplate: true }];
+    const results = await executeWorkflowActions({
+      actions,
+      db,
+      req: runtimeReq,
+      companyId,
+      object,
+      record,
+      recordId: recordId || record?.id || null,
+      storeId: runtimeReq.user.storeId || null,
+      tillId: runtimeReq.user.tillId || null,
+      connectorDrivers,
+      writeAudit,
+      actorUserId: actor.id,
+      runId: run?.id || null,
+      workflowVersion: 1,
+      trigger: "system_action",
+      workflowVariables,
+      ...extraContext,
+    });
+    const waiting = workflowResultsContainStatus(results, "waiting");
+    if (!waiting) {
+      await db(
+        "UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1 AND company_id=$2",
+        [run.id, companyId]
+      );
+    }
+    return {
+      runId: run.id,
+      correlationId,
+      status: waiting ? "WAITING" : "COMPLETED",
+      results,
+      result: results.at(-1)?.result ?? null,
+      workflowVariables,
+    };
   } catch (error) {
     await db(
       `UPDATE platform_workflow_runs

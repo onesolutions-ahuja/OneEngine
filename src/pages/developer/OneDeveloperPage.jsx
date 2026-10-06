@@ -6,31 +6,33 @@ import {
 import { apiRequest, getActingCompanyId, getStoredSessionPermissions, getStoredUser, loadSessionPermissions, setActingCompanyId } from '../../services/api'
 import { clearSettingsContextCache } from '../../services/settings'
 import OneBuilder from '../settings/OneBuilder'
+import GPTPageBuilder from './GPTPageBuilder'
 import { ReportTypeManager } from '../reports/ReportTypeDesigner.jsx'
 import ObjectsSettingsPane from '../settings/ObjectsSettingsPane'
 import WorkflowRunsAdmin from '../settings/Platform/WorkflowRunsAdmin'
 import WorkItemsAdmin from '../settings/Platform/WorkItemsAdmin'
-import PackageBuilderAdmin from '../settings/Platform/PackageBuilderAdmin'
 import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
 import DebugCodesAdmin from './DebugCodesAdmin'
 import GPTBuilderPage from './gptbuilder/GPTBuilderPage'
+import GPTAppBuilderPage from './gptappbuilder/GPTAppBuilderPage'
 import ReactFlowCanvasUXTest from './ReactFlowCanvasUXTest'
 import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
   { key: 'gptbuilder', label: 'GPT Builder', icon: Workflow },
+  { key: 'gptappbuilder', label: 'GPTAppBuilder', icon: AppWindow },
   { key: 'canvas-ux-test', label: 'Canvas UX Test', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
-  { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
+  { key: 'gpt-page-builder', label: 'GPT Page Builder', icon: AppWindow },
+    { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
   { key: 'dashboard-builder', label: 'Dashboard Builder', icon: LayoutDashboard },
   { key: 'report-types', label: 'Report Types', icon: ListChecks },
   { key: 'report-builder', label: 'Report Builder', icon: BarChart3 },
   { key: 'workflow-runs', label: 'Workflow Runs', icon: Workflow },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
-  { key: 'platform-apps', label: 'Package Builder', icon: LayoutGrid },
   { key: 'deployments', label: 'Deployments', icon: Rocket },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'value-sets', label: 'Value Sets', icon: ListChecks },
@@ -39,7 +41,7 @@ const DEVELOPER_ITEMS = [
 
 function normalizeSection(value) {
   const raw = String(value || '').trim().toLowerCase()
-  const migrated = raw === 'workflow-builder' || raw === 'builder-2' ? 'gptbuilder' : raw
+  const migrated = raw === 'workflow-builder' || raw === 'builder-2' ? 'gptbuilder' : raw === 'platform-apps' ? 'gptappbuilder' : raw
   return DEVELOPER_ITEMS.some((item) => item.key === migrated) ? migrated : 'objects'
 }
 
@@ -206,16 +208,16 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
           {current.key === 'objects' ? <ObjectsSettingsPane />
             : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
+            : current.key === 'gptappbuilder' ? <GPTAppBuilderPage />
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
-            : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
+            : current.key === 'gpt-page-builder' ? <GPTPageBuilder /> :
+          current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
             : current.key === 'report-types' ? <ReportTypeManager />
             : current.key === 'report-builder' ? <OneBuilder initialTab="report" singleBuilder />
             : current.key === 'workflow-runs' ? <WorkflowRunsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-            : current.key === 'work-items' ? <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-            : current.key === 'platform-apps' ? <PackageBuilderAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
-            : current.key === 'deployments' ? <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
+            : current.key === 'work-items' ? <WorkItemsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />            : current.key === 'deployments' ? <DeploymentAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'notifications' ? <NotificationSubscriptionsAdmin onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'value-sets' ? <ValueSetList onMessage={() => {}} onError={(value) => setError(value || '')} />
             : current.key === 'debug' ? <DebugCodesAdmin onError={(value) => setError(value || '')} />

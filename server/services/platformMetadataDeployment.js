@@ -194,7 +194,13 @@ export function validateDeploymentManifest(manifest = {}) {
     });
     return { ...definition, dashboardKey, access: normalizePrincipals(item.access), default_assignments: normalizePrincipals(item.defaultAssignments || item.default_assignments) };
   }) : [];
-  if (!objects.length && !dashboards.length) throw new Error("Deployment package must contain at least one object or dashboard");
+  const resourceCount = objects.length + relationships.length + layouts.length + recordTypes.length +
+    rules.length + apps.length + pages.length + packages.length + dashboards.length +
+    (manifest.listViews || []).length + (manifest.reports || []).length +
+    (manifest.actions || []).length + (manifest.buttons || []).length +
+    (manifest.permissions || []).length + (manifest.fieldPermissions || []).length +
+    (manifest.connectors || []).length + (manifest.templates || []).length;
+  if (!resourceCount) throw new Error("Deployment package must contain at least one supported metadata resource");
   const objectKeys = new Set();
   for (const object of objects) {
     if (!SAFE_KEY.test(objectKey(object) || "") || typeof object.label !== "string") throw new Error("Every object needs a safe API key and label");
@@ -222,7 +228,11 @@ export function validateDeploymentManifest(manifest = {}) {
   for (const app of apps) if (!SAFE_KEY.test(app.appKey || app.app_key || "") || typeof app.label !== "string") throw new Error("Apps need safe API keys and labels");
   for (const page of pages) if (!appKeys.has(page.appKey || page.app_key) || !SAFE_KEY.test(page.pageKey || page.page_key || "") || typeof page.label !== "string") throw new Error(`Page references a missing app: ${page.pageKey || page.page_key || "(missing)"}`);
   for (const type of recordTypes) if (!objectKeys.has(objectKey(type)) || !SAFE_KEY.test(type.recordTypeKey || type.record_type_key || "")) throw new Error(`Record Type references a missing object: ${type.recordTypeKey || type.record_type_key || "(missing)"}`);
-  for (const rule of rules) if (!objectKeys.has(objectKey(rule)) || !rule.name) throw new Error(`Workflow references a missing object: ${rule.name || "(missing)"}`);
+  for (const rule of rules) {
+    const owner = objectKey(rule);
+    if (owner && !objectKeys.has(owner)) throw new Error(`Workflow references a missing object: ${rule.name || "(missing)"}`);
+    if (!rule.name) throw new Error("Workflow name is required");
+  }
   return { objects, fields, relationships, layouts, rules, reports: manifest.reports || [], recordTypes, listViews: manifest.listViews || [], apps, pages, packages, dashboards };
 }
 
