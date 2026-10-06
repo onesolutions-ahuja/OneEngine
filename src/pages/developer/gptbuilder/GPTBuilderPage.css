@@ -452,3 +452,21 @@
   width:330px;
 }
 .gptb-reactflow-picker .gptb-element-picker{position:relative;top:auto;left:auto;right:auto;width:100%}
+
+.gptb-rf-group-node .rfux-node-copy{padding-right:18px}
+.gptb-rf-group-toggle{
+  position:absolute;
+  right:30px;
+  top:50%;
+  transform:translateY(-50%);
+  width:22px;
+  height:22px;
+  display:grid;
+  place-items:center;
+  border:0;
+  border-radius:6px;
+  background:#f4f4f5;
+  color:#52525b;
+  cursor:pointer;
+}
+.gptb-rf-group-toggle:hover{background:#e4e4e7}
