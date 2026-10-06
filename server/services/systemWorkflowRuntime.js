@@ -137,10 +137,10 @@ export async function executeSystemWorkflow({
     ? await db(
       `SELECT * FROM platform_rules
         WHERE company_id=$1
-          AND action->>'systemGenerated'='true'
           AND action->>'systemKey'=$2
           AND active=TRUE
           AND lifecycle_status='ACTIVE'
+        ORDER BY (source_package_id IS NOT NULL) DESC,updated_at DESC
         LIMIT 1`,
       [companyId, systemKey]
     )
