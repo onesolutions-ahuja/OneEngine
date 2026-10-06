@@ -98,7 +98,6 @@ import {
 const SETTINGS_VISUALS = {
   general: { icon: Settings2, tone: 'orange', searchTerms: ['date format', 'currency', 'timezone', 'regional'] },
   company: { icon: Building2, tone: 'blue', searchTerms: ['company name', 'legal name', 'company email', 'company phone', 'logo'] },
-  'store-till': { icon: Store, tone: 'blue', searchTerms: ['store', 'till', 'terminal', 'terminal number', 'product view', 'invoice'] },
   'client-web-shop': { icon: ShoppingCart, tone: 'green' },
   'tax-vat': { icon: ReceiptText, tone: 'green', searchTerms: ['vat', 'tax', 'vat enabled', 'default vat rate', 'rate'] },
   receipts: { icon: ReceiptText, tone: 'green' },
@@ -638,14 +637,9 @@ function SettingsPage({ onOpenProfile }) {
       else if (field === 'batchDefaultMfgRule') cloneSection('inventory').batchDefaultMfgRule = value
       else if (field === 'batchDefaultExpiryRule') cloneSection('inventory').batchDefaultExpiryRule = value
       else if (field === 'batchDefaultExpiryDays') cloneSection('inventory').batchDefaultExpiryDays = Number(value)
-      else if (field === 'productView') cloneSection('till').productView = value
       else if (field === 'dockQuickAccess') cloneSection('dock').quickAccess = Array.isArray(value) ? [...value] : []
-      else if (field === 'customerDisplayEnabled') cloneSection('customerDisplay').enabled = value
       else if (field === 'onlineOrderingEnabled') cloneSection('onlineOrdering').enabled = value
       else if (field === 'onlinePaymentMethods') cloneSection('onlineOrdering').paymentMethods = Array.isArray(value) ? [...value] : []
-      else if (field === 'tillInvoicePrefix') cloneSection('invoicePrefixes').till = value
-      else if (field === 'deliveryInvoicePrefix') cloneSection('invoicePrefixes').delivery = value
-      else if (field === 'selfCheckoutInvoicePrefix') cloneSection('invoicePrefixes').selfCheckout = value
     }
 
     return { ...baseContext, settings: nextSettings }
@@ -1114,11 +1108,6 @@ function SettingsPage({ onOpenProfile }) {
                     ) : null}
                   </section>
                 </div>
-              ) : current?.key === 'store-till' ? (
-                <>
-                  <MetadataSettingsSection section="Store & Till" />
-                  <StoreTillSettingsPage />
-                </>
               ) : current?.key === 'client-web-shop' ? (
                 <MetadataSettingsSection section="Client Web Shop" />
               ) : current?.key === 'tax-vat' ? (
