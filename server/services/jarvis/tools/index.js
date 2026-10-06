@@ -121,7 +121,7 @@ async function todaysSales(context, { db, canViewCompanyCustomers }) {
     WITH sales_total AS (
       SELECT COALESCE(SUM(s.total),0) gross_sales, COUNT(*)::int transactions,
         COALESCE(SUM(s.tax),0) vat, COALESCE(SUM(s.discount),0) discounts
-      FROM sales s INNER JOIN companies c ON c.id=s.company_id
+      FROM sale_ledger s INNER JOIN companies c ON c.id=s.company_id
       WHERE s.company_id=$1 AND s.store_id=$2 AND s.status='completed'
         AND (s.created_at AT TIME ZONE c.timezone)::date = $3::date
     ), returns_total AS (
