@@ -20,12 +20,6 @@ function matchesRule(rule, record) {
   return true;
 }
 
-export function actionKeyForButton(button) {
-  const configured = String(button?.config?.uiAction || "").trim();
-  if (configured) return configured;
-  return String(button?.action_key || button?.target_key || "").trim();
-}
-
 export function buttonStyle(button) {
   switch (String(button?.variant || "").toLowerCase()) {
     case "danger": return "bg-red-50 text-red-600 hover:bg-red-100";
@@ -49,7 +43,7 @@ export default function useOnlineOrderMetadata() {
       .then((response) => {
         if (!live) return;
         if (!response?.success) throw new Error(response?.message || "Unable to load Online Order actions");
-        setButtons((response.data || []).filter((button) => button?.config?.hiddenFromProviderQueue !== true && actionKeyForButton(button)));
+        setButtons((response.data || []).filter((button) => button?.config?.hiddenFromProviderQueue !== true && (button?.button_key || button?.buttonKey)));
       })
       .catch((reason) => {
         if (live) setError(reason?.message || "Unable to load Online Order actions");
