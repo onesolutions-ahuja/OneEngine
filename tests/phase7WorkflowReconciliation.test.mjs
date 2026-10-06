@@ -87,3 +87,35 @@ test("Phase 7 no hidden workflow executors return", async () => {
     assert.equal(source.includes("RUN_ASSISTANT_SUBFLOW"), false, file);
   }
 });
+
+
+test("Phase 7 reports the exact remaining short-flow denominator", () => {
+  const packageFlows = [];
+  for (const pkg of packageDefinitions()) {
+    for (const flow of pkg.manifest?.workflows || []) {
+      packageFlows.push({
+        source: `package:${pkg.packageKey}`,
+        name: flow.name || flow.label || flow.key || "(unnamed)",
+        steps: actionsOf(flow).length,
+      });
+    }
+  }
+  const systemFlows = systemWorkflowDefinitions().map((flow) => ({
+    source: "system",
+    name: flow.name || flow.systemKey || "(unnamed)",
+    steps: actionsOf(flow).length,
+  }));
+  const unique = new Map();
+  for (const item of [...packageFlows, ...systemFlows]) {
+    const key = `${item.source}|${item.name}`;
+    unique.set(key, item);
+  }
+  const all = [...unique.values()];
+  const short = all.filter((item) => item.steps <= 2);
+  console.log("PHASE7_WORKFLOW_COUNTS", JSON.stringify({
+    total: all.length,
+    shortCount: short.length,
+    short,
+  }));
+  assert.equal(short.some((item) => item.steps === 0), false, "zero-step workflows are forbidden");
+});
