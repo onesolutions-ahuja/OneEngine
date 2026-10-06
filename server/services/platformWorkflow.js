@@ -9,7 +9,7 @@ import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
 import { executeRegisteredAction } from "./platformActions.js";
-import { isSafeIdentifier } from "./platformMetadata.js";
+import { isSafeIdentifier } from "./platformCoreMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { effectiveManifest, resolvePersistedConnectorCapability } from "./connectorRuntime.js";
