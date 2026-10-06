@@ -129,10 +129,16 @@ const clone=(value)=>JSON.parse(JSON.stringify(value))
 const apiFromElement=(label)=>apiName(label||'Element')
 const snapshot=(nodes,edges)=>({nodes:clone(nodes),edges:clone(edges)})
 
-function CanvasPicker({onPick,onClose}) {
+function CanvasPicker({flowKey,onPick,onClose}) {
   const [query,setQuery]=useState('')
   const needle=query.trim().toLowerCase()
-  const rows=CANVAS_ELEMENTS.filter((row)=>!needle||row.label.toLowerCase().includes(needle))
+  const capability=FLOW_CAPABILITIES[flowKey]||{}
+  const rows=CANVAS_ELEMENTS.filter((row)=>{
+    if(row.key==='screen'&&capability.screens!==true)return false
+    if(['wait_conditions','wait_amount','wait_date'].includes(row.key)&&capability.waits!==true)return false
+    if(row.key==='rollback'&&capability.screens!==true)return false
+    return !needle||row.label.toLowerCase().includes(needle)
+  })
   return <aside className="gptbn-element-picker" aria-label="Add Element">
     <header><strong>Add Element</strong><button aria-label="Close element picker" onClick={onClose}><X size={16}/></button></header>
     <label><Search size={14}/><input autoFocus value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search elements..."/></label>
@@ -536,7 +542,7 @@ function Builder({flow,onBack}) {
       {layout==='free'?<button className="gptbn-free-add" onClick={(e)=>{e.stopPropagation();setPicker(true)}}><Plus size={16}/> Add Element</button>:null}
     </div>
     <div className="gptbn-flow-name"><label>Flow Label<input value={label} onChange={(e)=>setLabel(e.target.value)}/></label><label>API Name<input value={apiName(label)} readOnly/></label></div>
-    {picker?<CanvasPicker onPick={(definition)=>addNode(definition)} onClose={()=>setPicker(false)}/>:null}
+    {picker?<CanvasPicker flowKey={flow.key} onPick={(definition)=>addNode(definition)} onClose={()=>setPicker(false)}/>:null}
     {resourceOpen?<ResourceEditor resources={resources} objects={objects} initialResource={editingResource} onCancel={()=>{setEditingResource(null);setResourceOpen(false)}} onSave={saveResource}/>:null}
     {executionMode?<ExecutionPanel mode={executionMode} workflowId={savedId} flowType={flow.key} resources={availableResources} nodes={nodes} onClose={()=>setExecutionMode(null)}/>:null}
     {editing?<ElementEditor element={nodes.find((node)=>node.id===editing.id)} nodes={nodes} objects={objects} resources={availableResources} onResourcesChange={setResources} onSave={saveElement} onCancel={()=>{if(editing.isNew){const id=editing.id;setNodes((rows)=>rows.filter((node)=>node.id!==id));setEdges((rows)=>rows.filter((edge)=>edge.source!==id&&edge.target!==id))}setEditing(null)}}/>:null}
