@@ -1147,7 +1147,7 @@
       "label": "Open Till",
       "targetType": "workflow",
       "targetKey": "Open Till Session",
-      "placement": "till_session",
+      "placement": "device_session",
       "requiredPermission": "workflow.execute",
       "inputMappings": {}
     },
