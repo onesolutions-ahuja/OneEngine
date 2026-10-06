@@ -2006,6 +2006,12 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
       action: {
         ...(workflow.action || {}),
         type: "workflow",
+        apiName: workflow.apiName || workflow.action?.apiName || null,
+        flowType: workflow.flowType || workflow.action?.flowType || null,
+        capabilityKey: workflow.capabilityKey || workflow.action?.capabilityKey || workflow.apiName || null,
+        inputContract: workflow.inputContract || workflow.action?.inputContract || [],
+        outputContract: workflow.outputContract || workflow.action?.outputContract || [],
+        resources: workflow.resources || workflow.variables || workflow.action?.resources || [],
         match: workflow.match || workflow.action?.match || "all",
         scope: workflow.scope || workflow.action?.scope || null,
         channel: workflow.channel || workflow.action?.channel || null,
