@@ -3383,36 +3383,61 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (type === "action") {
         const actionKey = String(interaction.actionKey || "").trim();
         if (!actionKey) return res.status(400).json({ success: false, message: "A registered action key is required" });
-        const core = listRegisteredPlatformActions().find((item) => item.key === actionKey);
-        if (!core) return res.status(404).json({ success: false, message: "Registered action not found" });
-        if (["RECORD_SAVE", "RECORD_DELETE"].includes(core.key)) {
+
+        /* Resolve through the SAME Action Registry contract used by metadata
+           object buttons. A page stores the stable action key only; an
+           object-scoped metadata action may map that key to a generic core
+           handler without teaching the page runtime any business vocabulary. */
+        let action = listRegisteredPlatformActions().find((item) => item.key === actionKey) || null;
+        let handlerKey = action?.key || null;
+        if (!action) {
+          if (!object) return res.status(422).json({ success: false, message: "Object context is required for an object-scoped registered action" });
+          const custom = await db(
+            "SELECT * FROM platform_registered_actions WHERE action_key=$1 AND object_id=$2 AND (company_id IS NULL OR company_id=$3) AND active=true LIMIT 1",
+            [actionKey, object.id, req.user.companyId]
+          );
+          action = custom.rows[0] || null;
+          handlerKey = action?.handler_key || null;
+        }
+        if (!action || !handlerKey) return res.status(404).json({ success: false, message: "Registered action not found" });
+        if (["RECORD_SAVE", "RECORD_DELETE"].includes(String(handlerKey).toUpperCase())) {
           return res.status(409).json({ success: false, message: "RECORD_SAVE and RECORD_DELETE belong to the canonical record page lifecycle" });
         }
-        if (core.key === "WORKFLOW") return res.status(422).json({ success: false, message: "Use the Workflow interaction type to run workflows" });
-        for (const requiredPermission of core.requiredPermissions || []) {
+        if (String(handlerKey).toUpperCase() === "WORKFLOW") return res.status(422).json({ success: false, message: "Use the Workflow interaction type to run workflows" });
+
+        const requiredPermissions = [
+          ...(Array.isArray(action.requiredPermissions) ? action.requiredPermissions : []),
+          ...(action.required_permission ? [action.required_permission] : []),
+        ];
+        for (const requiredPermission of [...new Set(requiredPermissions.filter(Boolean))]) {
           if (!(await hasExecutionPermission(req, requiredPermission))) {
-            return res.status(403).json({ success: false, message: `You do not have permission to execute ${core.displayName || core.key}` });
+            return res.status(403).json({ success: false, message: `You do not have permission to execute ${action.displayName || action.label || actionKey}` });
           }
         }
-        const definition = getWorkflowActionDefinition(core.key);
+        const definition = getWorkflowActionDefinition(handlerKey);
         if (!definition) return res.status(422).json({ success: false, message: "Registered action handler is unavailable" });
+        for (const requiredPermission of definition.requiredPermissions || []) {
+          if (!(await hasExecutionPermission(req, requiredPermission))) {
+            return res.status(403).json({ success: false, message: `You do not have permission to execute ${handlerKey}` });
+          }
+        }
         try {
-          definition.validation?.({ type: core.key });
+          definition.validation?.({ type: handlerKey });
         } catch { /* argument-shape validation happens inside the executor. */ }
         const execution = await executeSystemWorkflow({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
-          systemKey: `action:${core.key}`,
+          systemKey: `action:${handlerKey}`,
           req,
-          input: { ...(interaction.config || {}) },
+          input: { ...(action.config || {}), ...(interaction.config || {}) },
           object,
           record,
           recordId: record?.id || null,
           storeId: req.user.storeId || null,
           connectorDrivers: req.app?.locals?.connectorDrivers || null,
           writeAudit: req.app?.locals?.writeAudit || null,
-          source: { type: "page_interaction", method: req.method, path: req.originalUrl || req.path, capability: core.key },
+          source: { type: "page_interaction", method: req.method, path: req.originalUrl || req.path, capability: handlerKey, actionKey },
           extraContext: { pool },
         });
         return res.json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
