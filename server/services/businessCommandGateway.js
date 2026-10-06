@@ -109,7 +109,7 @@ export function createWorkflowTraceGateway({ db }) {
   };
 }
 
-export async function purgeOldBusinessCommandRuns({ db, retentionDays = 90, batchSize = 5000 }) {
+export async function purgeOldWorkflowTraceRuns({ db, retentionDays = 90, batchSize = 5000 }) {
   const days = Math.max(7, Math.min(3650, Number(retentionDays) || 90));
   const limit = Math.max(100, Math.min(20000, Number(batchSize) || 5000));
   return db(
