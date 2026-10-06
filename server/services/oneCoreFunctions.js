@@ -261,11 +261,15 @@ export async function oneApiRequest({ req, method = "GET", path = "/", headers =
     const text = await response.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    const safeResponse = redactValue(data);
     return {
       status: "completed",
       success: response.ok,
       statusCode: response.status,
-      data: redactValue(data),
+      data: safeResponse && typeof safeResponse === "object" && !Array.isArray(safeResponse) && Object.prototype.hasOwnProperty.call(safeResponse, "data")
+        ? safeResponse.data
+        : safeResponse,
+      response: safeResponse,
       request: { method: requestMethod, path: renderedPath, headers: redactHeadersForLog(requestHeaders) },
     };
   } catch (error) {
