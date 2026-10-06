@@ -4482,10 +4482,9 @@
             "id": "create_receipt",
             "label": "Create Temporary Receipt Download",
             "apiName": "create_receipt",
-            "key": "CALL_FUNCTION",
-            "functionKey": "temporary.receipt.download.create",
+            "key": "CREATE_TEMPORARY_DOCUMENT_LINK",
             "inputs": {
-              "saleId": {
+              "recordId": {
                 "path": "variables.saleId"
               },
               "expiryMinutes": {
