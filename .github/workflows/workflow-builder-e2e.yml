@@ -2,9 +2,6 @@ name: Workflow Builder E2E Gate
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Deploy OneEngine to GitHub Pages"]
-    types: [completed]
 
 concurrency:
   group: oneengine-live-e2e
@@ -15,9 +12,6 @@ permissions:
 
 jobs:
   workflow-builder-e2e:
-    # Optional browser regression only; architecture/deployment gates live in Validate + Deployment Smoke.
-    # Missing/invalid E2E credentials must not mark a successful production deployment as failed.
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -27,11 +21,8 @@ jobs:
       PLAYWRIGHT_BASE_URL: https://onesolutions-ahuja.github.io/OneEngine/
       ONEPOS_API_URL: https://oneengine-6gas.onrender.com
       ONEPOS_E2E_ORIGIN: https://onesolutions-ahuja.github.io
-      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.DEPLOY_SHA }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -55,28 +46,22 @@ jobs:
           set -euo pipefail
           EXPECTED_BUILDER_SHA="$(node scripts/workflow-builder-fingerprint.mjs)"
           for i in {1..90}; do
-            DEPLOYED_SHA="$(curl -fsS "${PLAYWRIGHT_BASE_URL}deploy-sha.txt" 2>/dev/null || true)"
             DEPLOYED_BUILDER_SHA="$(curl -fsS "${PLAYWRIGHT_BASE_URL}workflow-builder-sha.txt" 2>/dev/null || true)"
-            if [ "$DEPLOYED_SHA" = "$DEPLOY_SHA" ] && [ "$DEPLOYED_BUILDER_SHA" = "$EXPECTED_BUILDER_SHA" ] && curl -fsS "$ONEPOS_API_URL/api/health" >/dev/null; then
-              echo "Testing deployed commit $DEPLOYED_SHA with Workflow Builder fingerprint $DEPLOYED_BUILDER_SHA"
+            if [ "$DEPLOYED_BUILDER_SHA" = "$EXPECTED_BUILDER_SHA" ] && curl -fsS "$ONEPOS_API_URL/api/health" >/dev/null; then
+              echo "Testing deployed Workflow Builder fingerprint $DEPLOYED_BUILDER_SHA"
               exit 0
             fi
-            echo "Waiting for deployed commit $DEPLOY_SHA / Builder fingerprint $EXPECTED_BUILDER_SHA (currently ${DEPLOYED_SHA:-unavailable} / ${DEPLOYED_BUILDER_SHA:-unavailable})..."
+            echo "Waiting for Workflow Builder fingerprint $EXPECTED_BUILDER_SHA (currently ${DEPLOYED_BUILDER_SHA:-unavailable})..."
             sleep 5
           done
           echo "Matching Workflow Builder frontend/API did not become ready" >&2
           exit 1
-      - name: Check E2E credentials
-        id: credentials
+      - name: Verify E2E credentials
         shell: bash
         run: |
-          if [ -z "$ONEPOS_E2E_USERNAME" ] || [ -z "$ONEPOS_E2E_PASSWORD" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "E2E credentials are not configured; skipping optional browser regression."
-            exit 0
-          fi
-          echo "available=true" >> "$GITHUB_OUTPUT"
           set -euo pipefail
+          test -n "$ONEPOS_E2E_USERNAME"
+          test -n "$ONEPOS_E2E_PASSWORD"
           for i in {1..60}; do
             STATUS=$(curl -sS -o /tmp/e2e-login.json -w "%{http_code}" \
               -H "Content-Type: application/json" \
@@ -87,8 +72,8 @@ jobs:
               exit 0
             fi
             MESSAGE=$(node -e 'const fs=require("fs"); try { const x=JSON.parse(fs.readFileSync("/tmp/e2e-login.json","utf8")||"{}"); process.stdout.write(String(x.message||"")); } catch {}')
-            if [ "$STATUS" = "502" ] || [ "$STATUS" = "504" ] || { [ "$STATUS" = "503" ] && echo "$MESSAGE" | grep -qi "starting"; }; then
-              echo "OneEngine authentication endpoint is temporarily unavailable (HTTP $STATUS); retrying..."
+            if [ "$STATUS" = "503" ] && echo "$MESSAGE" | grep -qi "starting"; then
+              echo "OneEngine is still starting; retrying authentication readiness..."
               sleep 5
               continue
             fi
@@ -99,13 +84,10 @@ jobs:
           echo "OneEngine did not become authentication-ready in time" >&2
           exit 1
       - name: Run Workflow Builder regression
-        if: steps.credentials.outputs.available == 'true'
         run: npx playwright test tests/e2e/gptbuilder-foundation.spec.mjs --project=desktop-chromium
       - name: Run appointment Workflow Debug scenarios
-        if: steps.credentials.outputs.available == 'true'
         run: npx playwright test tests/e2e/appointment-workflow-debug.spec.mjs --project=desktop-chromium
       - name: Run Uber Eats Workflow Debug scenarios
-        if: steps.credentials.outputs.available == 'true'
         run: npx playwright test tests/e2e/uber-eats-workflow-debug.spec.mjs --project=desktop-chromium
       - name: Upload Playwright report and traces
         if: always()

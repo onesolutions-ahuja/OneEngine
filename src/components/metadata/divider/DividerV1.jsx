@@ -1,1 +1,0 @@
-export default function DividerV1(){return <hr style={{borderColor:"var(--border-color,#e5e7eb)",margin:0}}/>}

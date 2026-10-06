@@ -15,24 +15,24 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   // Custom Page Builder layout components. `multi_container` is record-bound:
   // it renders a Record Collection through the shared page renderer and never
   // embeds its own query logic (collection → existing Platform record APIs).
-  { key: "container", api: "container.v1", version: 1, label: "Container", category: "layout", kind: "layout", bindable: false, containsChildren: true, rendererKey: "container", defaults: { columns: 2, spacing: 3 }, configurable: [{ key: "columns", type: "number", label: "Columns", min: 1, max: 4 }, { key: "spacing", type: "number", label: "Spacing", min: 1, max: 6 }] },
-  { key: "multi_container", api: "multi_container.v1", version: 1, label: "MultiContainer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "table", api: "table.v1", version: 1, label: "Table / List", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, rendererKey: "table", defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "tree_view", api: "tree_view.v1", version: 1, label: "Tree View", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "parentField", "labelField", "secondaryField", "rootFilter", "sort", "maxDepth", "showCounts", "allowCollapse", "defaultExpandedDepth", "clickAction"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "process_path", api: "process_path.v1", version: 1, label: "Process Path", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["fieldKey", "stages", "guidance", "keyFields"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 1, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "timeline", api: "timeline.v1", version: 1, label: "Timeline", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "dateField", "titleField", "subtitleField", "iconField", "sort", "groupBy", "maxRecords", "filters", "clickAction"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "kanban", api: "kanban.v1", version: 1, label: "Kanban", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "groupField", "cardTitleField", "subtitleFields", "imageField", "secondaryValues", "sort", "columnOrder", "maxRecords", "allowDragDrop", "clickAction"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "calendar", api: "calendar.v1", version: 1, label: "Calendar", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "startDateField", "endDateField", "titleField", "subtitleField", "categoryField", "filters", "defaultView", "clickAction", "createAction"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "scheduler", api: "scheduler.v1", version: 1, label: "Scheduler", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "resourceField", "startDateField", "endDateField", "titleField", "statusField", "resourceLabelField", "workingHours", "slotInterval", "filters", "clickAction"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "gantt", api: "gantt.v1", version: 1, label: "Gantt", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "taskLabelField", "startDateField", "endDateField", "progressField", "parentRelationship", "statusField", "filters", "sort", "scale", "clickAction"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "map", api: "map.v1", version: 1, label: "Map", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "latitudeField", "longitudeField", "addressFields", "labelField", "descriptionField", "popupFields", "filters", "maxRecords", "defaultZoom", "clickAction"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "hierarchy_viewer", api: "hierarchy_viewer.v1", version: 1, label: "Hierarchy Viewer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "parentField", "titleField", "subtitleFields", "imageField", "statusField", "maxDepth", "orientation", "clickAction"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "file_viewer", api: "file_viewer.v1", version: 1, label: "File Viewer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "fileRelation", "displayMode", "filenameField", "typeField", "dateField", "uploaderField", "allowedFileTypes", "maxItems"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "signature", api: "signature.v1", version: 1, label: "Signature", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "fieldKey", "label", "required", "clearPermission", "displayMode", "width", "height"], defaults: { collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] }, interaction: { type: "none" } }, interactions: true },
-  { key: "header", api: "header.v1", version: 1, label: "Header", category: "content", kind: "content", bindable: false, defaults: { text: "Heading" }, configurable: [{ key: "text", type: "text", label: "Heading text" }] },
-  { key: "text", api: "text.v1", version: 1, label: "Information Text", category: "content", kind: "content", bindable: false, defaults: { text: "Text" }, configurable: [{ key: "text", type: "text", label: "Text" }] },
-  { key: "divider", api: "divider.v1", version: 1, label: "Divider", category: "layout", kind: "layout", bindable: false },
-  { key: "spacer", api: "spacer.v1", version: 1, label: "Spacer", category: "layout", kind: "layout", bindable: false, defaults: { spacing: 3 }, configurable: [{ key: "spacing", type: "number", label: "Spacing", min: 1, max: 6 }] },
+  { key: "container", label: "Container", category: "layout", kind: "layout", bindable: false, containsChildren: true },
+  { key: "multi_container", label: "MultiContainer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false },
+  { key: "table", label: "Table / List", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false },
+  { key: "tree_view", label: "Tree View", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "parentField", "labelField", "secondaryField", "rootFilter", "sort", "maxDepth", "showCounts", "allowCollapse", "defaultExpandedDepth", "clickAction"] },
+  { key: "process_path", label: "Process Path", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["fieldKey", "stages", "guidance", "keyFields"] },
+  { key: "timeline", label: "Timeline", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "dateField", "titleField", "subtitleField", "iconField", "sort", "groupBy", "maxRecords", "filters", "clickAction"] },
+  { key: "kanban", label: "Kanban", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "groupField", "cardTitleField", "subtitleFields", "imageField", "secondaryValues", "sort", "columnOrder", "maxRecords", "allowDragDrop", "clickAction"] },
+  { key: "calendar", label: "Calendar", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "startDateField", "endDateField", "titleField", "subtitleField", "categoryField", "filters", "defaultView", "clickAction", "createAction"] },
+  { key: "scheduler", label: "Scheduler", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "resourceField", "startDateField", "endDateField", "titleField", "statusField", "resourceLabelField", "workingHours", "slotInterval", "filters", "clickAction"] },
+  { key: "gantt", label: "Gantt", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "taskLabelField", "startDateField", "endDateField", "progressField", "parentRelationship", "statusField", "filters", "sort", "scale", "clickAction"] },
+  { key: "map", label: "Map", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "latitudeField", "longitudeField", "addressFields", "labelField", "descriptionField", "popupFields", "filters", "maxRecords", "defaultZoom", "clickAction"] },
+  { key: "hierarchy_viewer", label: "Hierarchy Viewer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "parentField", "titleField", "subtitleFields", "imageField", "statusField", "maxDepth", "orientation", "clickAction"] },
+  { key: "file_viewer", label: "File Viewer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "fileRelation", "displayMode", "filenameField", "typeField", "dateField", "uploaderField", "allowedFileTypes", "maxItems"] },
+  { key: "signature", label: "Signature", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "fieldKey", "label", "required", "clearPermission", "displayMode", "width", "height"] },
+  { key: "header", label: "Header", category: "content", kind: "content", bindable: false },
+  { key: "text", label: "Information Text", category: "content", kind: "content", bindable: false },
+  { key: "divider", label: "Divider", category: "layout", kind: "layout", bindable: false },
+  { key: "spacer", label: "Spacer", category: "layout", kind: "layout", bindable: false },
   { key: "text_input", label: "Text Box", category: "field", kind: "field", bindable: true, fieldTypes: ["text", "email", "phone", "url", "time", "auto_number"] },
   { key: "long_text", label: "Long Text", category: "field", kind: "field", bindable: true, fieldTypes: ["long_text", "rich_text", "textarea"] },
   { key: "number", label: "Number", category: "field", kind: "field", bindable: true, fieldTypes: ["number", "percent"] },
@@ -43,8 +43,8 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   { key: "picklist", label: "Picklist / Dropdown", category: "field", kind: "field", bindable: true, fieldTypes: ["select", "picklist", "multiselect"] },
   { key: "lookup", label: "Lookup", category: "field", kind: "field", bindable: true, fieldTypes: ["lookup"] },
   { key: "structured_field", label: "Address / Location", category: "field", kind: "field", bindable: true, fieldTypes: ["address", "location", "json"] },
-  { key: "related_list", api: "related_list.v1", version: 1, label: "Related List / Table", category: "record", kind: "record", bindable: true, relationship: true, defaults: { relationshipKey: "", limit: 10 }, configurable: [{ key: "relationshipKey", type: "text", label: "Relationship key" }, { key: "limit", type: "number", label: "Limit", min: 1, max: 50 }] },
-  { key: "field_value", api: "field_value.v1", version: 1, label: "Field Value", category: "record", kind: "record", bindable: true, displayOnly: true, defaults: { field: "" }, configurable: [{ key: "field", type: "text", label: "Field API name" }] },
+  { key: "related_list", label: "Related List / Table", category: "record", kind: "record", bindable: true, relationship: true },
+  { key: "field_value", label: "Field Value", category: "record", kind: "record", bindable: true, displayOnly: true },
   // Dashboard Builder / runtime components. Every entry is GENERIC: a rendering
   // shape plus the configuration an administrator supplies (datasource, metric,
   // grouping, date range). None of them is Sales- or Product-specific, and all
@@ -57,79 +57,72 @@ export const PLATFORM_COMPONENTS = Object.freeze([
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "kpi",
     configurable: ["report","metric","aggregation","filters","filterLogic","dateRange","format","size","conditionalFormatting","drillAction"],
-    defaults: { title: "Metric", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, format: "number", size: "medium", dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 3, h: 2 } },
+    defaults: { title: "Metric", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, format: "number", size: "medium", dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 3, h: 2 } },
   },
   {
     key: "bar_chart", label: "Bar Chart", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "bar",
     configurable: ["report","categoryField","metric","aggregation","seriesField","orientation","stacked","filters","filterLogic","sort","limit","dateRange","conditionalFormatting","drillAction"],
-    defaults: { title: "Bar Chart", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, seriesField: null, orientation: "vertical", stacked: false, limit: 12, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 6, h: 4 } },
+    defaults: { title: "Bar Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, seriesField: null, orientation: "vertical", stacked: false, limit: 12, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 6, h: 4 } },
   },
   {
     key: "line_chart", label: "Line Chart", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "line",
-    defaults: { title: "Line Chart", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, seriesField: null, limit: 24, showMarkers: true, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 6, h: 4 } },
+    defaults: { title: "Line Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, seriesField: null, limit: 24, showMarkers: true, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 6, h: 4 } },
   },
   {
     key: "pie_chart", label: "Pie Chart", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "pie",
-    defaults: { title: "Pie Chart", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, maxCategories: 8, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 6, h: 4 } },
+    defaults: { title: "Pie Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, maxCategories: 8, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 6, h: 4 } },
   },
   {
     key: "donut_chart", label: "Donut Chart", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "donut",
-    defaults: { title: "Donut Chart", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, maxCategories: 8, showTotal: true, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 6, h: 4 } },
+    defaults: { title: "Donut Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, maxCategories: 8, showTotal: true, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 6, h: 4 } },
   },
   {
     key: "gauge_chart", label: "Gauge", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "gauge",
-    defaults: { title: "Gauge", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, format: "number", targetMode: "fixed", targetValue: 100, targetField: null, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 4, h: 4 } },
+    defaults: { title: "Gauge", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, format: "number", targetMode: "fixed", targetValue: 100, targetField: null, dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 4, h: 4 } },
   },
   {
     key: "funnel_chart", label: "Funnel", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "funnel",
-    defaults: { title: "Funnel", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, limit: 8, dateRange: "this_month", drillAction: null }, layout: { w: 6, h: 4 } },
+    defaults: { title: "Funnel", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, labelField: null, limit: 8, dateRange: "this_month", drillAction: null }, layout: { w: 6, h: 4 } },
   },
   {
     key: "scatter_chart", label: "Scatter", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "scatter",
-    defaults: { title: "Scatter", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, xField: null, valueField: null, labelField: null, limit: 60, dateRange: "this_month", drillAction: null }, layout: { w: 6, h: 4 } },
+    defaults: { title: "Scatter", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, xField: null, valueField: null, labelField: null, limit: 60, dateRange: "this_month", drillAction: null }, layout: { w: 6, h: 4 } },
   },
   {
     key: "combo_chart", label: "Combo Chart", category: "dashboard", kind: "chart", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "combo",
     configurable: ["report","categoryField","metrics","secondaryAxisFields","filters","filterLogic","sort","limit","dateRange","referenceLines","conditionalFormatting","drillAction"],
-    defaults: { title: "Combo Chart", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, yFields: [], secondaryAxisFields: [], labelField: null, limit: 24, showLegend: true, showValues: false, showGrid: true, referenceLines: [], dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 8, h: 4 } },
+    defaults: { title: "Combo Chart", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, valueField: null, yFields: [], secondaryAxisFields: [], labelField: null, limit: 24, showLegend: true, showValues: false, showGrid: true, referenceLines: [], dateRange: "this_month", conditionalFormatting: [], drillAction: null }, layout: { w: 8, h: 4 } },
   },
   {
     key: "analytics_table", label: "Analytics Table", category: "dashboard", kind: "record", bindable: false, dashboard: true,
     supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true,
     runtimeKind: "analytics", rendererKey: "table",
-    defaults: { title: "Table", config: { report: { dataSource: "", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, rowLimit: 50, conditionalFormatting: [], drillAction: null }, layout: { w: 12, h: 5 } },
+    defaults: { title: "Table", config: { report: { dataSource: "sales", fields: [], groupBy: [], filters: [], filterLogic: "all", sort: [] }, rowLimit: 50, conditionalFormatting: [], drillAction: null }, layout: { w: 12, h: 5 } },
   },
   { key: "dashboard_text", label: "Dashboard Text", category: "dashboard", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true, runtimeKind: "analytics", rendererKey: "text", defaults: { title: "Text", config: { content: "" }, layout: { w: 6, h: 3 } }, configurable: ["content"] },
   { key: "dashboard_image", label: "Dashboard Image", category: "dashboard", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["DASHBOARD"], supportedContexts: ["dashboard"], supportsPageContext: false, supportsDashboardContext: true, runtimeKind: "analytics", rendererKey: "image", defaults: { title: "Image", config: { imageUrl: "", altText: "", imageFit: "contain", linkUrl: "" }, layout: { w: 6, h: 4 } }, configurable: ["imageUrl","altText","imageFit","linkUrl"] },
   // Reserved canonical trigger component. Behaviour/variants are configured in UI Batch 2.
-  { key: "button", api: "button.v1", version: 1, label: "Custom Button", category: "action", kind: "action", bindable: false, reserved: true, rendererKey: "button", defaults: { label: "Button", variant: "primary", size: "medium", interaction: { type: "none" } }, configurable: [{ key: "label", type: "text", label: "Label" }, { key: "variant", type: "select", label: "Style", options: ["primary","secondary","ghost","danger"] }, { key: "size", type: "select", label: "Size", options: ["small","medium","large"] }], interactions: true },
+  { key: "button", label: "Custom Button", category: "action", kind: "action", bindable: false, reserved: true },
   { key: "jarves", label: "JARVES", category: "action", kind: "assistant", bindable: false, registered: true, behaviours: ["behaviour_1", "behaviour_2", "behaviour_3"], interactions: ["voice", "message", "ask_input"] },
 ]);
 
-const componentApi = (component) => component.api || `${component.key}.v${Number(component.version) || 1}`;
-const COMPONENT_MAP = new Map();
-for (const component of PLATFORM_COMPONENTS) {
-  const normalized = Object.freeze({ ...component, api: componentApi(component), version: Number(component.version) || 1 });
-  // Versioned API is canonical. Legacy key remains an alias during migration.
-  COMPONENT_MAP.set(normalized.api, normalized);
-  COMPONENT_MAP.set(normalized.key, normalized);
-}
+const COMPONENT_MAP = new Map(PLATFORM_COMPONENTS.map((component) => [component.key, component]));
 
 const FLOW_SCREEN_RENDERABLE_COMPONENTS = new Set([
   "header","text","divider","spacer",
@@ -138,14 +131,11 @@ const FLOW_SCREEN_RENDERABLE_COMPONENTS = new Set([
 ]);
 
 export function listPlatformComponents() {
-  return PLATFORM_COMPONENTS.map((source) => {
-    const component = COMPONENT_MAP.get(source.key);
-    return ({
+  return PLATFORM_COMPONENTS.map((component) => ({
     ...component,
     fieldTypes: component.fieldTypes ? [...component.fieldTypes] : undefined,
     flowScreenSupported: FLOW_SCREEN_RENDERABLE_COMPONENTS.has(component.key) || component.supportedBuilders?.includes("FLOW"),
-  });
-  });
+  }));
 }
 
 export function getPlatformComponent(key) {
@@ -157,19 +147,7 @@ export function componentForFieldType(fieldType) {
   return PLATFORM_COMPONENTS.find((component) => component.kind === "field" && component.fieldTypes?.includes(type)) || getPlatformComponent("text_input");
 }
 
-export function resolvePlatformComponentApi(value) {
-  const component = COMPONENT_MAP.get(String(value || "").trim());
-  return component?.api || null;
-}
-
 export function validateComponentRegistry() {
   const keys = PLATFORM_COMPONENTS.map((component) => component.key);
-  const apis = PLATFORM_COMPONENTS.map((component) => componentApi(component));
-  const versioned = apis.every((api) => /^[a-z][a-z0-9_]*\.v[1-9][0-9]*$/.test(api));
-  return {
-    valid: new Set(keys).size === keys.length && new Set(apis).size === apis.length && versioned,
-    count: keys.length,
-    aliases: keys.length,
-    versioned,
-  };
+  return { valid: new Set(keys).size === keys.length, count: keys.length };
 }

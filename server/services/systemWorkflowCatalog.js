@@ -1,4 +1,5 @@
 import { PACKAGE_RUNTIME_FLOWS } from "../packages/runtimeFlowManifests.js";
+import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 import { TRUSTED_JOB_KINDS } from "./trustedJobKinds.js";
 
@@ -114,377 +115,7 @@ const tillFlow = (spec) => {
   return { ...flow, name: `OneTill - ${spec.name}` };
 };
 
-const TILL_SYSTEM_WORKFLOWS = Object.freeze([
-  tillFlow({
-    key: "till.stock.validate",
-    name: "Validate Stock",
-    inputs: [
-      creditInput("hasShortfall", "boolean", { required: true }),
-    ],
-    outputs: [
-      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
-    ],
-    actions: [
-      creditFormula(
-        "stock_allowed",
-        "allowed",
-        "boolean",
-        "!hasShortfall",
-        {
-          hasShortfall: { path: "variables.hasShortfall" },
-        }
-      ),
-    ],
-  }),
-  tillFlow({
-    key: "till.age.verify",
-    name: "Age Verification",
-    inputs: [
-      creditInput("requiresAgeVerification", "boolean", { required: true }),
-      creditInput("ageVerified", "boolean", { required: true }),
-    ],
-    outputs: [
-      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
-    ],
-    actions: [
-      creditFormula(
-        "age_allowed",
-        "allowed",
-        "boolean",
-        "!requiresAgeVerification || ageVerified",
-        {
-          requiresAgeVerification: { path: "variables.requiresAgeVerification" },
-          ageVerified: { path: "variables.ageVerified" },
-        }
-      ),
-    ],
-  }),
-  tillFlow({
-    key: "till.payment.validate",
-    name: "Validate Payment Method",
-    inputs: [
-      creditInput("paymentMode", "text", { required: true }),
-      creditInput("online", "boolean", { required: true }),
-      creditInput("allowOffline", "boolean", { required: true }),
-      creditInput("requiresConnector", "boolean", { required: true }),
-      creditInput("connectorAvailable", "boolean", { required: true }),
-      creditInput("requiresCustomer", "boolean", { required: true }),
-      creditInput("customerSelected", "boolean", { required: true }),
-      creditInput("requiresGiftCardCode", "boolean", { required: true }),
-      creditInput("hasGiftCardCode", "boolean", { required: true }),
-      creditInput("requiresCashReceived", "boolean", { required: true }),
-      creditInput("cashReceived", "number", { required: true }),
-      creditInput("total", "number", { required: true }),
-    ],
-    outputs: [
-      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
-    ],
-    actions: [
-      creditFormula("payment_connection_allowed", "connectionAllowed", "boolean", "online || allowOffline", {
-        online: { path: "variables.online" },
-        allowOffline: { path: "variables.allowOffline" },
-      }),
-      creditFormula("payment_connector_allowed", "connectorAllowed", "boolean", "!requiresConnector || connectorAvailable", {
-        requiresConnector: { path: "variables.requiresConnector" },
-        connectorAvailable: { path: "variables.connectorAvailable" },
-      }),
-      creditFormula("payment_customer_allowed", "customerAllowed", "boolean", "!requiresCustomer || customerSelected", {
-        requiresCustomer: { path: "variables.requiresCustomer" },
-        customerSelected: { path: "variables.customerSelected" },
-      }),
-      creditFormula("payment_gift_allowed", "giftAllowed", "boolean", "!requiresGiftCardCode || hasGiftCardCode", {
-        requiresGiftCardCode: { path: "variables.requiresGiftCardCode" },
-        hasGiftCardCode: { path: "variables.hasGiftCardCode" },
-      }),
-      creditFormula("payment_cash_allowed", "cashAllowed", "boolean", "!requiresCashReceived || cashReceived >= total", {
-        requiresCashReceived: { path: "variables.requiresCashReceived" },
-        cashReceived: { path: "variables.cashReceived" },
-        total: { path: "variables.total" },
-      }),
-      creditFormula("payment_allowed", "allowed", "boolean", "connectionAllowed && connectorAllowed && customerAllowed && giftAllowed && cashAllowed", {
-        connectionAllowed: { path: "variables.connectionAllowed" },
-        connectorAllowed: { path: "variables.connectorAllowed" },
-        customerAllowed: { path: "variables.customerAllowed" },
-        giftAllowed: { path: "variables.giftAllowed" },
-        cashAllowed: { path: "variables.cashAllowed" },
-      }),
-    ],
-  }),
-  tillFlow({
-    key: "till.split.payment.validate",
-    name: "Validate Split Payment",
-    inputs: [
-      creditInput("payments", "collection", { required: true, defaultValue: [] }),
-      creditInput("total", "number", { required: true }),
-      creditInput("allowedMethodsText", "text", { required: true }),
-    ],
-    outputs: [
-      { name: "paidTotal", label: "Paid Total", type: "number", source: "variables.paidTotal" },
-      { name: "remaining", label: "Remaining", type: "number", source: "variables.remaining" },
-      { name: "allowed", label: "Allowed", type: "boolean", source: "variables.allowed" },
-    ],
-    actions: [
-      assignment("split_start_paid", "1. Start Paid Total", "paidTotal", "number", 0),
-      assignment("split_start_methods", "2. Start Used Methods", "usedMethods", "text", ""),
-      assignment("split_start_valid", "3. Start Validation", "allLinesValid", "boolean", true),
-      {
-        id: "split_loop",
-        label: "4. Loop Through Payment Lines",
-        apiName: "split_loop",
-        key: "LOOP",
-        collection: "variables.payments",
-        itemVariable: "paymentLine",
-        bodyBranch: [
-          "split_round_amount",
-          "split_method_token",
-          "split_amount_valid",
-          "split_method_allowed",
-          "split_method_duplicate",
-          "split_line_valid",
-          "split_update_valid",
-          "split_set_valid",
-          "split_add_paid",
-          "split_next_methods",
-          "split_add_method",
-        ],
-      },
-      creditFormula("split_round_amount", "paymentAmount", "number", "ROUND(MAX(0, amount), 2)", {
-        amount: { path: "variables.paymentLine.amount" },
-      }),
-      creditFormula("split_method_token", "methodToken", "text", 'CONCAT("|", paymentMethod, "|")', {
-        paymentMethod: { path: "variables.paymentLine.paymentMethod" },
-      }),
-      creditFormula("split_amount_valid", "amountValid", "boolean", "paymentAmount > 0", {
-        paymentAmount: { path: "variables.paymentAmount" },
-      }),
-      creditFormula("split_method_allowed", "methodAllowed", "boolean", "CONTAINS(allowedMethodsText, methodToken)", {
-        allowedMethodsText: { path: "variables.allowedMethodsText" },
-        methodToken: { path: "variables.methodToken" },
-      }),
-      creditFormula("split_method_duplicate", "methodDuplicate", "boolean", "CONTAINS(usedMethods, methodToken)", {
-        usedMethods: { path: "variables.usedMethods" },
-        methodToken: { path: "variables.methodToken" },
-      }),
-      creditFormula("split_line_valid", "lineValid", "boolean", "amountValid && methodAllowed && !methodDuplicate", {
-        amountValid: { path: "variables.amountValid" },
-        methodAllowed: { path: "variables.methodAllowed" },
-        methodDuplicate: { path: "variables.methodDuplicate" },
-      }),
-      creditFormula("split_update_valid", "nextAllLinesValid", "boolean", "allLinesValid && lineValid", {
-        allLinesValid: { path: "variables.allLinesValid" },
-        lineValid: { path: "variables.lineValid" },
-      }),
-      assignment("split_set_valid", "Set Line Validation Result", "allLinesValid", "boolean", { path: "variables.nextAllLinesValid" }),
-      {
-        ...assignment("split_add_paid", "5. Add Payment To Paid Total", "paidTotal", "number", { path: "variables.paymentAmount" }),
-        operator: "add",
-      },
-      creditFormula("split_next_methods", "nextUsedMethods", "text", 'CONCAT(usedMethods, methodToken)', {
-        usedMethods: { path: "variables.usedMethods" },
-        methodToken: { path: "variables.methodToken" },
-      }),
-      assignment("split_add_method", "6. Remember Used Method", "usedMethods", "text", { path: "variables.nextUsedMethods" }),
-      creditFormula("split_remaining", "remaining", "number", "ROUND(total - paidTotal, 2)", {
-        total: { path: "variables.total" },
-        paidTotal: { path: "variables.paidTotal" },
-      }),
-      creditFormula("split_allowed", "allowed", "boolean", "allLinesValid && paidTotal > 0 && ABS(remaining) < 0.005", {
-        allLinesValid: { path: "variables.allLinesValid" },
-        paidTotal: { path: "variables.paidTotal" },
-        remaining: { path: "variables.remaining" },
-      }),
-    ],
-  }),
-  tillFlow({
-    key: "sale.totals.calculate",
-    name: "Calculate Sale Totals",
-    inputs: [
-      creditInput("basket", "collection", { required: true, defaultValue: [] }),
-      creditInput("vatEnabled", "boolean", { required: true }),
-      creditInput("defaultVatRate", "number", { required: true }),
-      creditInput("discountType", "text"),
-      creditInput("discountValue", "number", { defaultValue: 0 }),
-    ],
-    outputs: [
-      { name: "grossSubtotal", label: "Gross Subtotal", type: "number", source: "variables.grossSubtotal" },
-      { name: "orderDiscount", label: "Order Discount", type: "number", source: "variables.orderDiscount" },
-      { name: "discountAmount", label: "Discount Amount", type: "number", source: "variables.discountAmount" },
-      { name: "subtotal", label: "Subtotal", type: "number", source: "variables.subtotal" },
-      { name: "vat", label: "VAT", type: "number", source: "variables.vat" },
-      { name: "total", label: "Total", type: "number", source: "variables.total" },
-    ],
-    actions: [
-      assignment("sale_totals_start_gross", "1. Start Gross Subtotal", "grossSubtotal", "number", 0),
-      assignment("sale_totals_start_line_discount", "2. Start Line Discount", "totalLineDiscount", "number", 0),
-      {
-        id: "sale_totals_first_loop",
-        label: "3. Sum Basket Lines",
-        apiName: "sale_totals_first_loop",
-        key: "LOOP",
-        collection: "variables.basket",
-        itemVariable: "saleLine",
-        bodyBranch: [
-          "sale_totals_line_gross",
-          "sale_totals_line_discount",
-          "sale_totals_add_gross",
-          "sale_totals_add_line_discount",
-        ],
-      },
-      creditFormula("sale_totals_line_gross", "lineGross", "number", "ROUND(MAX(0, price) * MAX(0, quantity), 2)", {
-        price: { path: "variables.saleLine.price" },
-        quantity: { path: "variables.saleLine.quantity" },
-      }),
-      creditFormula("sale_totals_line_discount", "lineDiscount", "number",
-        'ROUND(IF(discountTypeLine == "percent", MIN(lineGross, lineGross * (MAX(0, discountValueLine) / 100)), IF(discountTypeLine == "fixed", MIN(lineGross, MAX(0, discountValueLine)), 0)), 2)', {
-          discountTypeLine: { path: "variables.saleLine.discountType" },
-          discountValueLine: { path: "variables.saleLine.discountValue" },
-          lineGross: { path: "variables.lineGross" },
-        }),
-      { ...assignment("sale_totals_add_gross", "4. Add Gross", "grossSubtotal", "number", { path: "variables.lineGross" }), operator: "add" },
-      { ...assignment("sale_totals_add_line_discount", "5. Add Line Discount", "totalLineDiscount", "number", { path: "variables.lineDiscount" }), operator: "add" },
-      creditFormula("sale_totals_net_subtotal", "netSubtotal", "number", "MAX(0, grossSubtotal - totalLineDiscount)", {
-        grossSubtotal: { path: "variables.grossSubtotal" },
-        totalLineDiscount: { path: "variables.totalLineDiscount" },
-      }),
-      creditFormula("sale_totals_order_discount", "orderDiscount", "number",
-        'ROUND(IF(discountType == "percent", MIN(netSubtotal, netSubtotal * (MAX(0, discountValue) / 100)), IF(discountType == "fixed", MIN(netSubtotal, MAX(0, discountValue)), 0)), 2)', {
-          discountType: { path: "variables.discountType" },
-          discountValue: { path: "variables.discountValue" },
-          netSubtotal: { path: "variables.netSubtotal" },
-        }),
-      assignment("sale_totals_start_vat", "6. Start VAT", "vat", "number", 0),
-      {
-        id: "sale_totals_second_loop",
-        label: "7. Calculate VAT",
-        apiName: "sale_totals_second_loop",
-        key: "LOOP",
-        collection: "variables.basket",
-        itemVariable: "vatLine",
-        bodyBranch: [
-          "sale_totals_vat_line_gross",
-          "sale_totals_vat_line_discount",
-          "sale_totals_vat_line_net",
-          "sale_totals_vat_rate",
-          "sale_totals_discounted_line",
-          "sale_totals_line_vat",
-          "sale_totals_add_vat",
-        ],
-      },
-      creditFormula("sale_totals_vat_line_gross", "vatLineGross", "number", "ROUND(MAX(0, price) * MAX(0, quantity), 2)", {
-        price: { path: "variables.vatLine.price" },
-        quantity: { path: "variables.vatLine.quantity" },
-      }),
-      creditFormula("sale_totals_vat_line_discount", "vatLineDiscount", "number",
-        'ROUND(IF(discountTypeLine == "percent", MIN(vatLineGross, vatLineGross * (MAX(0, discountValueLine) / 100)), IF(discountTypeLine == "fixed", MIN(vatLineGross, MAX(0, discountValueLine)), 0)), 2)', {
-          discountTypeLine: { path: "variables.vatLine.discountType" },
-          discountValueLine: { path: "variables.vatLine.discountValue" },
-          vatLineGross: { path: "variables.vatLineGross" },
-        }),
-      creditFormula("sale_totals_vat_line_net", "vatLineNet", "number", "MAX(0, vatLineGross - vatLineDiscount)", {
-        vatLineGross: { path: "variables.vatLineGross" },
-        vatLineDiscount: { path: "variables.vatLineDiscount" },
-      }),
-      creditFormula("sale_totals_vat_rate", "effectiveVatRate", "number",
-        "IF(vatEnabled && vatApplicable, IF(ISBLANK(lineVatRate), defaultVatRate, lineVatRate / 100), 0)", {
-          vatEnabled: { path: "variables.vatEnabled" },
-          vatApplicable: { path: "variables.vatLine.vatApplicable" },
-          lineVatRate: { path: "variables.vatLine.vatRate" },
-          defaultVatRate: { path: "variables.defaultVatRate" },
-        }),
-      creditFormula("sale_totals_discounted_line", "discountedVatLine", "number",
-        "MAX(0, vatLineNet - IF(netSubtotal > 0, orderDiscount * (vatLineNet / netSubtotal), 0))", {
-          vatLineNet: { path: "variables.vatLineNet" },
-          netSubtotal: { path: "variables.netSubtotal" },
-          orderDiscount: { path: "variables.orderDiscount" },
-        }),
-      creditFormula("sale_totals_line_vat", "lineVat", "number", "ROUND(discountedVatLine * effectiveVatRate, 2)", {
-        discountedVatLine: { path: "variables.discountedVatLine" },
-        effectiveVatRate: { path: "variables.effectiveVatRate" },
-      }),
-      { ...assignment("sale_totals_add_vat", "8. Add VAT", "vat", "number", { path: "variables.lineVat" }), operator: "add" },
-      creditFormula("sale_totals_discount_amount", "discountAmount", "number", "ROUND(totalLineDiscount + orderDiscount, 2)", {
-        totalLineDiscount: { path: "variables.totalLineDiscount" },
-        orderDiscount: { path: "variables.orderDiscount" },
-      }),
-      creditFormula("sale_totals_subtotal", "subtotal", "number", "ROUND(MAX(0, grossSubtotal - discountAmount), 2)", {
-        grossSubtotal: { path: "variables.grossSubtotal" },
-        discountAmount: { path: "variables.discountAmount" },
-      }),
-      creditFormula("sale_totals_vat_round", "vat", "number", "ROUND(vat, 2)", {
-        vat: { path: "variables.vat" },
-      }),
-      creditFormula("sale_totals_total", "total", "number", "ROUND(subtotal + vat, 2)", {
-        subtotal: { path: "variables.subtotal" },
-        vat: { path: "variables.vat" },
-      }),
-      creditFormula("sale_totals_gross_round", "grossSubtotal", "number", "ROUND(grossSubtotal, 2)", {
-        grossSubtotal: { path: "variables.grossSubtotal" },
-      }),
-    ],
-  }),
-  tillFlow({
-    key: "till.cash.position",
-    name: "Calculate Cash Position",
-    inputs: [
-      creditInput("openingCash", "number", { required: true }),
-      creditInput("cashIn", "number", { required: true }),
-      creditInput("cashOut", "number", { required: true }),
-      creditInput("cashSales", "number", { required: true }),
-      creditInput("cashRefunds", "number", { required: true }),
-      creditInput("countedCash", "number", { defaultValue: 0 }),
-      creditInput("requestedCashOut", "number", { defaultValue: 0 }),
-    ],
-    outputs: [
-      { name: "currentCash", label: "Current Cash", type: "number", source: "variables.currentCash" },
-      { name: "cashDifference", label: "Cash Difference", type: "number", source: "variables.cashDifference" },
-      { name: "cashOutAllowed", label: "Cash Out Allowed", type: "boolean", source: "variables.cashOutAllowed" },
-    ],
-    actions: [
-      creditFormula("cash_position_current", "currentCash", "number",
-        "ROUND(openingCash + cashIn + cashSales - cashOut - cashRefunds, 2)", {
-          openingCash: { path: "variables.openingCash" },
-          cashIn: { path: "variables.cashIn" },
-          cashOut: { path: "variables.cashOut" },
-          cashSales: { path: "variables.cashSales" },
-          cashRefunds: { path: "variables.cashRefunds" },
-        }),
-      creditFormula("cash_position_difference", "cashDifference", "number", "ROUND(countedCash - currentCash, 2)", {
-        countedCash: { path: "variables.countedCash" },
-        currentCash: { path: "variables.currentCash" },
-      }),
-      creditFormula("cash_position_out_allowed", "cashOutAllowed", "boolean", "requestedCashOut <= currentCash", {
-        requestedCashOut: { path: "variables.requestedCashOut" },
-        currentCash: { path: "variables.currentCash" },
-      }),
-    ],
-  }),
-  tillFlow({
-    key: "till.receipt.qr",
-    name: "Create Receipt QR",
-    inputs: [
-      creditInput("saleId", "text", { required: true }),
-      creditInput("expiryMinutes", "number", { required: true }),
-      creditInput("baseUrl", "text"),
-    ],
-    outputs: [
-      { name: "receipt", label: "Receipt QR", type: "object", source: "steps.create_receipt" },
-    ],
-    actions: [
-      {
-        id: "create_receipt",
-        label: "Create Temporary Receipt Download",
-        apiName: "create_receipt",
-        key: "SECURE_RESOURCE_LINK_MANAGE",
-        operation: "CREATE",
-        inputs: {
-          saleId: { path: "variables.saleId" },
-          expiryMinutes: { path: "variables.expiryMinutes" },
-          baseUrl: { path: "variables.baseUrl" },
-        },
-      },
-    ],
-  }),
-]);
+const TILL_SYSTEM_WORKFLOWS = Object.freeze([]);
 
 const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
   {
@@ -708,6 +339,28 @@ function titleCase(value = "") {
     .trim();
 }
 
+function functionWorkflow(fn) {
+  return {
+    systemKey: `function:${fn.key}`,
+    name: `System · Function · ${titleCase(fn.key)}`,
+    triggerKey: "system_function",
+    action: {
+      type: "workflow",
+      systemGenerated: true,
+      systemKey: `function:${fn.key}`,
+      scope: "system",
+      capabilityType: "function",
+      capabilityKey: fn.key,
+      actions: [{
+        type: "CALL_FUNCTION",
+        functionKey: fn.key,
+        inputs: {},
+        label: fn.description || fn.key,
+      }],
+    },
+  };
+}
+
 function actionWorkflow(action) {
   return {
     systemKey: `action:${action.key}`,
@@ -754,11 +407,12 @@ function jobWorkflow(kind) {
 }
 
 export function systemWorkflowDefinitions() {
+  const functions = PLATFORM_FUNCTIONS.map(functionWorkflow);
   const actions = PLATFORM_ACTION_REGISTRY
     .filter((item) => item?.key && item.key !== "WORKFLOW" && item.systemVisible !== false)
     .map(actionWorkflow);
   const jobs = TRUSTED_JOB_KINDS.map(jobWorkflow);
-  return [...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS];
+  return [...functions, ...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS];
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {

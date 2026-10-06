@@ -1,33 +1,36 @@
+import { actionKeyForButton } from "./useOnlineOrderMetadata.js";
 import { useRef, useState } from "react";
 import { apiRequest } from "../../services/api.js";
 
-/**
- * Generic metadata-button coordinator for record cards.
- * Business lifecycle, validation, confirmation requirements and status changes
- * belong to button/action/Flow metadata, never this hook.
- */
-export default function useOnlineOrderActions({ applyOrderUpdate, setError }) {
+// UI request coordination only. The existing endpoints remain responsible for
+// permissions, lifecycle validation, ORDER_BUSY, OTP and sale creation.
+export default function useOnlineOrderActions({ applyOrderUpdate, otpRequired, setError, setMessage }) {
   const inFlight = useRef(new Set());
   const [busyActions, setBusyActions] = useState({});
+  const [completeTarget, setCompleteTarget] = useState(null);
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpBusy, setOtpBusy] = useState(false);
 
-  const runAction = async (order, button, inputs = {}) => {
-    const buttonKey = button?.button_key || button?.buttonKey;
-    if (!order?.id || !buttonKey || inFlight.current.has(order.id)) return null;
+  const requestAction = async (order, action, body = {}) => {
+    if (inFlight.current.has(order.id)) return null;
     inFlight.current.add(order.id);
-    setBusyActions((current) => ({ ...current, [order.id]: buttonKey }));
-    setError?.("");
+    setBusyActions((current) => ({ ...current, [order.id]: typeof action === "string" ? action : actionKeyForButton(action) }));
     try {
-      const response = await apiRequest(`/api/platform/objects/online_order/records/${encodeURIComponent(order.id)}/buttons/${encodeURIComponent(buttonKey)}/execute`, {
+      const button = action;
+      const buttonKey = String(button?.button_key || button?.buttonKey || button || "").trim();
+      if (!buttonKey) throw new Error("Online Order metadata action is missing");
+      const data = await apiRequest(`/api/platform/runtime/objects/online_order/buttons/${encodeURIComponent(buttonKey)}/execute`, {
         method: "POST",
-        body: JSON.stringify({ inputs }),
+        body: JSON.stringify({ recordId: order.id, input: body }),
       });
-      if (response?.success === false) throw new Error(response.message || "Configured action failed");
-      const updated = response?.data?.record || response?.data?.order || null;
-      if (updated) applyOrderUpdate?.(updated);
-      return response;
-    } catch (error) {
-      setError?.(error?.message || "Configured action failed");
-      return null;
+      if (!data.success) {
+        throw Object.assign(new Error(data.message || "Action failed"), { code: data.code });
+      }
+      applyOrderUpdate(data.data && data.data.order);
+      /* No success toast: the card itself reflects the new status. Only
+         failures surface messages (see runAction / submitComplete). */
+      return data;
     } finally {
       inFlight.current.delete(order.id);
       setBusyActions((current) => {
@@ -38,5 +41,63 @@ export default function useOnlineOrderActions({ applyOrderUpdate, setError }) {
     }
   };
 
-  return { busyActions, runAction };
+  const showOtp = (order, notice = "") => {
+    setCompleteTarget(order);
+    setOtpInput("");
+    setOtpError(notice);
+  };
+
+  const runAction = async (order, action) => {
+    if (inFlight.current.has(order.id)) return;
+    if (action === "cancel" && !window.confirm("Cancel this order and release reserved stock?")) return;
+    if (action === "complete" && otpRequired[order.platform]) {
+      showOtp(order);
+      return;
+    }
+    let collectionReference = "";
+    if (
+      action === "complete"
+      && order?.platform === "one_kiosk"
+      && order?.platform_data?.collectionVerificationRequired === true
+    ) {
+      collectionReference = window.prompt("Enter the customer's collection reference to confirm handover:") || "";
+      if (!collectionReference.trim()) return;
+    }
+    setError("");
+    const body = action === "cancel" ? { reason: "Cancelled by store" }
+      : action === "reject" ? { reason: "Rejected by store" }
+      : action === "complete" && collectionReference ? { collectionReference: collectionReference.trim() }
+      : {};
+    try {
+      await requestAction(order, action, body);
+    } catch (err) {
+      if (err.code === "OTP_REQUIRED" && action === "complete") {
+        showOtp(order, "The platform requires the handover OTP to complete this order.");
+      } else {
+        setError(err.message || "Action failed");
+      }
+    }
+  };
+
+  const submitComplete = async (event) => {
+    event.preventDefault();
+    if (!completeTarget || inFlight.current.has(completeTarget.id) || !otpInput.trim()) return;
+    setOtpBusy(true);
+    setOtpError("");
+    try {
+      const data = await requestAction(completeTarget, "complete", { otp: otpInput.trim() });
+      if (data) setCompleteTarget(null);
+    } catch (err) {
+      setOtpError(err.code === "INVALID_OTP"
+        ? "The platform rejected this OTP. Enter the correct handover code."
+        : err.message || "Unable to complete order");
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  return {
+    busyActions, runAction, completeTarget, setCompleteTarget,
+    otpInput, setOtpInput, otpError, otpBusy, submitComplete,
+  };
 }

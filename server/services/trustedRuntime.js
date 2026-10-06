@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 import { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
 export { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
@@ -11,12 +12,11 @@ const PRIVILEGED_ROUTES = Object.freeze([
   { id: "security.manage", prefixes: ["/api/platform/security", "/api/security/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "admin.manage", prefixes: ["/api/admin/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "settings.manage", prefixes: ["/api/settings/"], methods: ["POST","PUT","PATCH","DELETE"] },
-  { id: "payment.execute", prefixes: ["/api/payments", "/api/payment", "/api/checkout", "/api/till/payment"], methods: ["POST","PUT","PATCH","DELETE"] },
-  { id: "refund.execute", prefixes: ["/api/refunds", "/api/returns", "/api/exchanges"], methods: ["POST","PUT","PATCH","DELETE"] },
 ].map((item) => Object.freeze({ ...item, prefixes: Object.freeze(item.prefixes), methods: Object.freeze(item.methods) })));
 
 const definitions = [
   ...PRIVILEGED_ROUTES.map((item) => ({ id: item.id, type: "route" })),
+  ...PLATFORM_FUNCTIONS.map((item) => ({ id: `function:${item.key}`, type: "function" })),
   ...PLATFORM_ACTION_REGISTRY.map((item) => ({ id: `action:${item.key}`, type: "action" })),
   ...TRUSTED_JOB_KINDS.map((kind) => ({ id: `job:${kind}`, type: "job" })),
 ];
@@ -53,11 +53,17 @@ export function isPrivilegedMutation(path, method = "GET") {
   return pathname.startsWith("/api/appointments") || pathname.startsWith("/api/platform/") || pathname.startsWith("/api/security/") || pathname.startsWith("/api/packages/")
     || pathname.startsWith("/api/admin/") || pathname.startsWith("/api/settings/")
     || pathname.startsWith("/api/payments") || pathname.startsWith("/api/payment")
-    || pathname.startsWith("/api/refunds") || pathname.startsWith("/api/returns")
-    || pathname.startsWith("/api/exchanges");
+    || pathname.startsWith("/api/platform/objects/stock_return");
 }
 
 export function validateTrustedRuntime() {
+  for (const fn of PLATFORM_FUNCTIONS) {
+    const requiredPermissions = Array.isArray(fn?.permissions) ? fn.permissions.filter(Boolean) : [];
+    const alternativePermissions = Array.isArray(fn?.permissionsAny) ? fn.permissionsAny.filter(Boolean) : [];
+    if (!fn?.key || typeof fn.handler !== "function" || (!requiredPermissions.length && !alternativePermissions.length)) {
+      throw new Error(`Invalid registered platform function: ${fn?.key || "(missing key)"}`);
+    }
+  }
   for (const action of PLATFORM_ACTION_REGISTRY) if (!action?.key) throw new Error("Invalid registered platform action");
   return Object.freeze({ version: TRUSTED_RUNTIME_VERSION, count: TRUSTED_CAPABILITIES.length });
 }

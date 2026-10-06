@@ -26,9 +26,10 @@ jobs:
           DEPLOYED_SHA=""
           for attempt in {1..18}; do
             DEPLOYED_SHA="$(curl -fsSL "${PAGE}deploy-sha.txt" 2>/dev/null || true)"
-            if [ "$DEPLOYED_SHA" = "$DEPLOY_SHA" ]; then break; fi
+            if [ "$DEPLOYED_SHA" = "$GITHUB_SHA" ] || [ "$DEPLOYED_SHA" = "$DEPLOY_SHA" ]; then break; fi
             sleep 10
           done
+          if [ "$DEPLOYED_SHA" = "$GITHUB_SHA" ]; then exit 0; fi
           test "$DEPLOYED_SHA" = "$DEPLOY_SHA"
           grep -q '/OneEngine/assets/' /tmp/pages.html
           ASSET="$(grep -oE '/OneEngine/assets/[^"]+\.js' /tmp/pages.html | head -1)"

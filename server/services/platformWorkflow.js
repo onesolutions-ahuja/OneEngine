@@ -1,4 +1,5 @@
 import { evaluateCondition } from "./platformConditions.js";
+import { evaluateValidationRules } from "./platformValidation.js";
 import { createWorkflowRun, createWorkflowStepRun, resolveWorkflowActionType } from "../platform/workflow/runtime/runState.js";
 export { createWorkflowRun, createWorkflowStepRun, resolveWorkflowActionType } from "../platform/workflow/runtime/runState.js";
 import { renderMessageTemplate } from "./messageTemplates.js";
@@ -6,6 +7,7 @@ import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationC
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
+import { executeRegisteredAction } from "./platformActions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
@@ -14,18 +16,36 @@ import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
-import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
+import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
-import { issueAccountToken } from "./accountPolicy.js";
-import { createTemporaryReceiptDownload, revokeTemporaryReceiptDownloadsForSale, buildReceiptQrDownloadUrl } from "./receiptQr.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
+const globalProductLookupService = createGlobalProductLookupService();
+
+async function executeGlobalProductLookupAction(context, providerKey = null) {
+  const companyId = context.companyId || context.req?.user?.companyId;
+  const barcode = context.action?.barcode ?? context.action?.code ?? context.record?.barcode ?? context.trigger?.barcode;
+  try {
+    const result = await globalProductLookupService.lookup({
+      db: context.db,
+      companyId,
+      reqCompanyId: context.req?.user?.companyId || null,
+      barcode,
+      providerKey,
+    });
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, code: error?.code || "LOOKUP_FAILED", message: error?.code === "INVALID_BARCODE" ? error.message : "Unable to look up this barcode" };
+  }
+}
+
 function redact(value, depth = 0, inheritedSecureValues = new Set()) {
   if (depth > 5 || value == null) return value;
   const secureValues = new Set(inheritedSecureValues);
@@ -60,83 +80,6 @@ function errorDetails(error) {
   });
 }
 
-async function loadProviderConnection(context, providerKey, requestedConnectionId = null) {
-  const requestCompanyId = context.req?.user?.companyId || null;
-  const companyId = context.companyId || requestCompanyId;
-  if (!context.db || typeof context.db !== "function" || !companyId) {
-    throw new Error(`${providerKey} action requires a company-scoped database context`);
-  }
-  if (requestCompanyId && String(requestCompanyId) !== String(companyId)) {
-    throw new Error(`${providerKey} action company context is invalid`);
-  }
-  const storeId = context.storeId || context.req?.user?.storeId || null;
-  const connectionPredicate = requestedConnectionId ? "AND id=$4" : "";
-  const values = [companyId, providerKey, storeId];
-  if (requestedConnectionId) values.push(requestedConnectionId);
-  const result = await context.db(
-    `SELECT id, company_id, store_id, base_url, credentials_encrypted
-       FROM integration_connections
-      WHERE company_id=$1 AND LOWER(provider_name)=LOWER($2) AND enabled=true
-        AND (store_id IS NULL OR store_id=$3)
-        ${connectionPredicate}
-      ORDER BY (store_id IS NULL), updated_at DESC
-      LIMIT 1`,
-    values
-  );
-  const connection = result.rows?.[0];
-  if (!connection?.credentials_encrypted) return null;
-  let credentials = decryptCredentials(connection.credentials_encrypted) || {};
-  const expiry = Date.parse(credentials.tokenExpiry || credentials.token_expiry || "");
-  if (Number.isFinite(expiry) && expiry <= Date.now() + 60_000) {
-    const clientId = credentials.clientId || credentials.client_id;
-    const clientSecret = credentials.clientSecret || credentials.client_secret;
-    let refreshed;
-    if (providerKey === "quickbooks") {
-      refreshed = await createQuickBooksAdapter().refreshAuthentication({
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
-        clientId,
-        clientSecret,
-      });
-    }
-    if (!refreshed) throw new Error(`${providerKey} token refresh is unavailable`);
-    credentials = {
-      ...credentials,
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000).toISOString(),
-      ...(refreshed.refreshTokenExpiresIn
-        ? { refreshTokenExpiry: new Date(Date.now() + refreshed.refreshTokenExpiresIn * 1000).toISOString() }
-        : {}),
-      ...(refreshed.scopes?.length ? { scopes: refreshed.scopes } : {}),
-    };
-    const saved = await context.db(
-      `UPDATE integration_connections
-          SET credentials_encrypted=$1, last_error=NULL, updated_at=NOW()
-        WHERE id=$2 AND company_id=$3 AND enabled=true
-        RETURNING id`,
-      [encryptCredentials(credentials), connection.id, companyId]
-    );
-    if (!saved.rows?.length) throw new Error(`${providerKey} connection changed during token refresh`);
-  }
-  return { connection, credentials };
-}
-
-async function quickBooksPackageAvailability(db, companyId) {
-  const entitlements = await getCompanyEntitlements(db, companyId);
-  if (!hasEntitlement(entitlements, "integrations")) {
-    return { success: false, code: "NOT_LICENSED", retryable: false, message: "QuickBooks is not licensed for this company" };
-  }
-  const installed = await db(
-    `SELECT 1 FROM company_package_installations i
-       JOIN package_registry p ON p.id=i.package_id
-      WHERE i.company_id=$1 AND p.package_key='quickbooks'
-        AND i.status='active' AND i.suspended_by_entitlement=false LIMIT 1`,
-    [companyId],
-  );
-  if (!installed.rows.length) return { success: false, code: "NOT_INSTALLED", retryable: false, message: "QuickBooks is not installed for this company" };
-  return null;
-}
-
 export class WorkflowExecutionError extends Error {
   constructor(details, compensationFailures = []) {
     super(details.message);
@@ -147,12 +90,6 @@ export class WorkflowExecutionError extends Error {
     this.compensationFailures = compensationFailures;
   }
 }
-
-const COMMUNICATION_PROVIDER_ALIASES = {
-  EMAIL: ["email", "smtp", "mail", "sendgrid", "mailgun", "postmark", "ses"],
-  SMS: ["sms", "twilio", "textlocal", "messagebird", "vonage", "nexmo", "clickatell"],
-  WHATSAPP: ["whatsapp", "whatsapp_business", "meta_whatsapp"],
-};
 
 const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
@@ -731,35 +668,6 @@ function resolveCommunicationWorkflowAction(action, record, object = null, workf
   };
 }
 
-export async function hasConfiguredCommunicationProvider({ db, companyId, providerKind }) {
-  if (!db || typeof db !== "function" || !companyId || !providerKind) return false;
-  const providerName = String(providerKind).trim().toUpperCase();
-  const providers = COMMUNICATION_PROVIDER_ALIASES[providerName] || [normalizeProviderName(providerKind)];
-  if (!providers.length) return false;
-
-  const result = await db(
-    `SELECT provider, active, configuration FROM integrations WHERE company_id = $1 AND lower(provider) = ANY($2::text[]) LIMIT 1`,
-    [companyId, providers]
-  );
-
-  if (!result.rows.length) return false;
-  const row = result.rows[0];
-  const config = row.configuration && typeof row.configuration === "object" ? row.configuration : {};
-  if (row.active !== true) return false;
-
-  const hasConfig = Object.keys(config).length > 0;
-  if (providerName === "EMAIL") {
-    return hasConfig && ["host", "server", "api_key", "auth_token", "username", "smtp_host", "from_email", "from", "sender"].some((key) => config[key] != null && String(config[key]).trim() !== "");
-  }
-  if (providerName === "SMS") {
-    return hasConfig && ["account_sid", "auth_token", "api_key", "from", "sender", "phone_number", "provider_key", "sid"].some((key) => config[key] != null && String(config[key]).trim() !== "");
-  }
-  if (providerName === "WHATSAPP") {
-    return hasConfig && ["phone_number_id", "app_id", "access_token", "webhook_verify_token", "business_account_id", "token"].some((key) => config[key] != null && String(config[key]).trim() !== "");
-  }
-  return hasConfig;
-}
-
 export async function updateWorkflowStepRunStatus({ db, stepRunId, status, errorText = null, metadata = {} }) {
   if (!db || typeof db !== "function" || !stepRunId) return null;
   const row = await db(
@@ -774,17 +682,6 @@ export async function updateWorkflowStepRunStatus({ db, stepRunId, status, error
     [String(status || "FAILED").toUpperCase(), errorText || null, JSON.stringify(metadata || {}), stepRunId]
   );
   return row.rows[0] || null;
-}
-
-export async function ensureCommunicationProvider({ db, companyId, providerKind, stepRunId = null }) {
-  const configured = await hasConfiguredCommunicationProvider({ db, companyId, providerKind });
-  if (configured) return { configured: true, providerKind };
-  const label = String(providerKind || "provider").toUpperCase();
-  const message = `${label} provider not configured`;
-  if (stepRunId) {
-    await updateWorkflowStepRunStatus({ db, stepRunId, status: "FAILED", errorText: message, metadata: { provider: label, providerConfigured: false } });
-  }
-  return { configured: false, providerKind: label, error: message };
 }
 
 /**
@@ -1210,53 +1107,6 @@ async function loadRelatedGetRecordsCollections({ db, relatedRecords, targetObje
 export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   ...GENERIC_CONNECTOR_ACTIONS,
   {
-    key: "ACCOUNT_TOKEN_ISSUE",
-    displayName: "Security - Issue Account Token",
-    description: "Issue a tenant-scoped account token. Flow metadata owns eligibility, purpose, timing, recipients and communication.",
-    validation: (action) => {
-      if (!action?.purpose) throw new Error("Account token issue requires a purpose");
-    },
-    async: false,
-    requiredPermissions: ["user.manage"],
-    executor: async ({ action, db, companyId, req, record, workflowVariables = {} }) => {
-      const context = { record, req, workflowVariables };
-      const userId = resolveConfiguredResource(action.userId || action.inputs?.userId || { path: "$record.id" }, context, { preserveMissing: false });
-      const purpose = String(resolveConfiguredResource(action.purpose || action.inputs?.purpose, context, { preserveMissing: false }) || "").toUpperCase();
-      if (!["PASSWORD_RESET","REGISTRATION"].includes(purpose)) throw new Error("Unsupported account token purpose");
-      const expiresRaw = resolveConfiguredResource(action.expiresMinutes || action.inputs?.expiresMinutes, context, { preserveMissing: false });
-      const expiresMinutes = Math.max(1, Math.min(Number(expiresRaw) || (purpose === "PASSWORD_RESET" ? 60 : 1440), 10080));
-      const token = await issueAccountToken(db, { companyId: companyId || req?.user?.companyId, userId, purpose, expiresMinutes });
-      return { token, userId, purpose, expiresMinutes };
-    },
-  },
-  {
-    key: "SECURE_RESOURCE_LINK_MANAGE",
-    displayName: "Security - Manage Secure Resource Link",
-    description: "Create or revoke a short-lived secure resource link. Flow metadata owns when and why the link is managed.",
-    validation: (action) => {
-      const operation = String(action?.operation || "").toUpperCase();
-      if (!["CREATE","REVOKE"].includes(operation)) throw new Error("Secure resource link requires CREATE or REVOKE");
-    },
-    async: false,
-    requiredPermissions: ["sale.view"],
-    executor: async ({ action, db, companyId, req, record, workflowVariables = {} }) => {
-      const context = { record, req, workflowVariables };
-      const operation = String(action.operation).toUpperCase();
-      const saleId = resolveConfiguredResource(action.saleId || action.inputs?.saleId || { path: "$record.id" }, context, { preserveMissing: false });
-      const tenantId = companyId || req?.user?.companyId;
-      if (operation === "REVOKE") return revokeTemporaryReceiptDownloadsForSale({ db, companyId: tenantId, saleId });
-      const expiryRaw = resolveConfiguredResource(action.expiryMinutes || action.inputs?.expiryMinutes, context, { preserveMissing: false });
-      const result = await createTemporaryReceiptDownload({
-        db, companyId: tenantId, storeId: req?.user?.storeId || null, tillId: req?.user?.tillId || null,
-        saleId, expiryMinutes: Math.max(1, Number(expiryRaw) || 5),
-      });
-      if (!result.ok) throw Object.assign(new Error(result.message || "Unable to create secure resource link"), { status: result.status || 500 });
-      const baseUrl = resolveConfiguredResource(action.baseUrl || action.inputs?.baseUrl, context, { preserveMissing: false }) || null;
-      const url = buildReceiptQrDownloadUrl(result.token, baseUrl);
-      return { ...result, url, qrcodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}` };
-    },
-  },
-  {
     key: "PACKAGE_LIFECYCLE",
     displayName: "Package - Apply Lifecycle",
     description: "Apply the technical install, activate, deactivate, uninstall or upgrade operation for the current Tenant App record.",
@@ -1284,6 +1134,30 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     async: true,
     requiredPermissions: ["package.manage"],
     executor: (context) => executeLicenceRequestPackageAction(context),
+  },
+  {
+    key: "GLOBAL_PRODUCT_LOOKUP_BARCODE",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
+    displayName: "Global Product - Lookup Barcode",
+    description: "Resolve an external barcode using enabled, installed product lookup providers in configured priority order.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["global_product.view"],
+    executor: (context) => executeGlobalProductLookupAction(context),
+  },
+  {
+    key: "GO_UPC_LOOKUP_PRODUCT",
+    builderVisible: false,
+    systemVisible: false,
+    internalAdapter: true,
+    displayName: "Go-UPC - Lookup Product",
+    description: "Look up a barcode using the installed Go-UPC connector and company credential.",
+    validation: () => undefined,
+    async: true,
+    requiredPermissions: ["global_product.view"],
+    executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
   },
   {
     key: "CALL_CONNECTOR_CAPABILITY",
@@ -1351,28 +1225,27 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       required: ["connectionId", "operation"],
     },
     validation: (action) => {
-      if (typeof action?.connectionId !== "string" && typeof action?.connectionId !== "object") throw new Error("Call Connector requires a connectionId or resource binding");
-      if (typeof action?.operation !== "string" && typeof action?.operation !== "object") throw new Error("Call Connector requires an operation key or resource binding");
+      if (typeof action?.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
+        throw new Error("Call Connector requires a valid connectionId");
+      }
+      if (typeof action?.operation !== "string" || !/^[a-zA-Z0-9_.-]{1,100}$/.test(action.operation)) {
+        throw new Error("Call Connector requires a valid operation key");
+      }
       if (action.input !== undefined && (!action.input || typeof action.input !== "object" || Array.isArray(action.input))) {
         throw new Error("Call Connector input must be an object");
       }
     },
     async: false,
     requiredPermissions: ["integration.manage"],
-    executor: async ({ action, db, companyId, req, workflowVariables, record, object }) => {
-      const context = { workflowVariables, record, object, req };
-      const connectionId = String(resolveConfiguredResource(action.connectionId, context, { preserveMissing: false }) || "").trim();
-      const operation = String(resolveConfiguredResource(action.operation, context, { preserveMissing: false }) || "").trim();
-      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) throw new Error("Call Connector resolved an invalid connectionId");
-      if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(operation)) throw new Error("Call Connector resolved an invalid operation key");
+    executor: async ({ action, db, companyId, req }) => {
       const execute = createConnectorActionExecutor({ db });
       return {
         status: "completed",
         ...(await execute({
           companyId: companyId || req?.user?.companyId,
-          connectionId,
-          operation,
-          input: resolveFieldValueMap(action.input || {}, context) || {},
+          connectionId: action.connectionId,
+          operation: action.operation,
+          input: action.input || {},
           platformCredentialAccess:
             Array.isArray(req?.user?.permissions) && req.user.permissions.includes("oneengine.manage"),
           actorUserId: req?.user?.id || null,
@@ -1443,27 +1316,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         interaction: action.interaction,
         content: action.content || "",
         responseVariable: action.responseVariable || null,
-      },
-    }),
-  },
-  {
-    key: "UI_ACTION",
-    displayName: "UI Action",
-    description: "Dispatch a metadata-defined UI directive without embedding domain-specific behaviour in the Flow engine.",
-    validation: (action) => {
-      const component = String(action?.component || "").trim();
-      const uiAction = String(action?.uiAction || action?.ui_action || "").trim();
-      if (!component || !/^[a-z0-9_.-]{1,80}$/i.test(component)) throw new Error("UI Action requires a valid component");
-      if (!uiAction || !/^[a-z0-9_.-]{1,80}$/i.test(uiAction)) throw new Error("UI Action requires a valid uiAction");
-    },
-    async: false,
-    requiredPermissions: [],
-    executor: async ({ action }) => ({
-      status: "completed",
-      uiDirective: {
-        component: String(action.component),
-        action: String(action.uiAction || action.ui_action),
-        config: action.config || {},
       },
     }),
   },
@@ -2647,6 +2499,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         fieldValues: { type: "object" },
         recordResource: {},
         recordCollectionResource: {},
+        commonFieldValues: { type: "object" },
         updateExisting: { type: "boolean" },
         matchField: { type: "string" },
         checkMatchingRecords: { type: "boolean" },
@@ -2707,6 +2560,11 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         payloads = [resolveFieldValueMap(action.fieldValues || {}, context)];
       }
 
+      if (action.commonFieldValues && typeof action.commonFieldValues === "object" && !Array.isArray(action.commonFieldValues)) {
+        const commonFields = resolveFieldValueMap(action.commonFieldValues, context);
+        payloads = payloads.map((payload) => ({ ...(payload || {}), ...commonFields }));
+      }
+
       const findExisting = async (payload) => {
         const conditions = [];
         const params = [];
@@ -2752,6 +2610,24 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
       const insertRecord = async (payload) => {
         const entries = Object.entries(payload || {}).filter(([key]) => key !== "id");
+        const ruleResult = await db(
+          "SELECT * FROM platform_rules WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) AND trigger_key IN ('before_create','before_save') AND action->>'type'='validation' ORDER BY id",
+          [targetObject.id, runtimeCompanyId]
+        );
+        if (ruleResult.rows?.length) {
+          const fieldRows = metadataResult.rows || [];
+          const candidate = Object.fromEntries(entries.map(([name, value]) => {
+            const field = fieldRows.find((item) => String(item.api_name) === String(name) || String(item.source_column) === String(name));
+            return [field?.api_name || name, value];
+          }));
+          const validationErrors = evaluateValidationRules(ruleResult.rows, fieldRows, candidate);
+          if (validationErrors.length) {
+            const error = new Error(validationErrors.map((item) => item.message).join("; "));
+            error.status = 422;
+            error.code = "VALIDATION_RULE_FAILED";
+            throw error;
+          }
+        }
         if (!entries.length) throw new Error("Create Record requires at least one field value");
         const mappedFields = await resolveWorkflowWritableFields({ db, object: targetObject, entries, req });
         const duplicateAction = await checkWorkflowDuplicateRules({ db, object: targetObject, entries, companyId: runtimeCompanyId, req });
@@ -2776,7 +2652,22 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (existing) {
           const shouldUpdate = action.updateExisting === true || String(action.matchAction || "skip").toLowerCase() === "update";
           if (shouldUpdate) updated.push(await updateExistingRecord(existing, payload));
-          else skipped.push(existing);
+          else {
+            skipped.push(existing);
+            if (sourceVariableName && workflowVariables.variables) workflowVariables.variables[sourceVariableName] = existing;
+            return {
+              status: "matched",
+              created: null,
+              createdRecords: [],
+              updated: null,
+              updatedRecords: [],
+              skippedRecords: [existing],
+              matched: existing,
+              count: 0,
+              duplicateWarning,
+              haltWorkflow: action.haltOnMatch === true,
+            };
+          }
           continue;
         }
         const inserted = await insertRecord(payload);
@@ -3457,98 +3348,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "completed", channel: "IN_APP", recipients: recipientUserIds };
       }
 
-      if (channel === "WHATSAPP") {
-        if (!tenantId) return { status: "failed", code: "COMPANY_CONTEXT_REQUIRED", retryable: false };
-        const recipient = String(forwarded.recipient || forwarded.to || "").replace(/[^0-9]/g, "");
-        const message = String(forwarded.message || forwarded.body || forwarded.text || "").trim();
-        if (!recipient || !message) {
-          return { status: "failed", code: "COMMUNICATION_RECIPIENT_OR_MESSAGE_REQUIRED", channel, retryable: false };
-        }
-
-        // Backfill pre-metadata WhatsApp settings once, so existing tenants do
-        // not need to re-enter credentials after moving transport to ONE_HTTP_REQUEST.
-        const existingConnection = await db(
-          "SELECT id FROM integration_connections WHERE company_id=$1 AND LOWER(provider_name)='whatsapp' AND enabled=TRUE LIMIT 1",
-          [tenantId]
-        );
-        if (!existingConnection.rows?.length) {
-          const legacy = await db(
-            "SELECT active,configuration FROM integrations WHERE company_id=$1 AND LOWER(provider) IN ('whatsapp','whatsapp_business') AND active=TRUE ORDER BY updated_at DESC LIMIT 1",
-            [tenantId]
-          );
-          const configuration = legacy.rows?.[0]?.configuration || {};
-          const token = decryptSecret(configuration.access_token);
-          const phoneNumberId = configuration.phone_number_id || null;
-          if (token && phoneNumberId) {
-            await db(
-              `INSERT INTO integration_connections
-                (company_id,name,provider_name,integration_type,base_url,connector_package_key,connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by)
-               VALUES ($1,'WhatsApp Business Connection','whatsapp','communication','https://graph.facebook.com/v21.0','whatsapp',$2::jsonb,'bearer',$3,TRUE,'CONNECTED',$4)`,
-              [tenantId, JSON.stringify({
-                phoneNumberId,
-                businessAccountId: configuration.business_account_id || null,
-                defaultCountryCode: configuration.default_country_code || null,
-              }), encryptCredentials({ token }), req?.user?.id || null]
-            );
-          }
-        }
-
-        // WhatsApp is transport metadata, not a platform job/function. Execute
-        // through the generic ONE_HTTP_REQUEST core using the tenant's stored
-        // API connection metadata, encrypted credentials and phone-number metadata.
-        const http = oneHttpRequestDefinition();
-        const result = await http.executor({
-          ...context,
-          companyId: tenantId,
-          action: {
-            providerKey: "whatsapp",
-            method: "POST",
-            endpoint: "/{{phoneNumberId}}/messages",
-            body: {
-              messaging_product: "whatsapp",
-              recipient_type: "individual",
-              to: recipient,
-              type: "text",
-              text: { preview_url: false, body: message },
-            },
-          },
-        });
-        if (result?.success !== true) {
-          return {
-            status: "failed",
-            code: "COMMUNICATION_PROVIDER_FAILED",
-            channel,
-            retryable: Number(result?.statusCode || 0) >= 500,
-            statusCode: result?.statusCode || 0,
-            data: result?.data || null,
-          };
-        }
-        await recordCommunicationEvent({
-          db,
-          companyId: tenantId,
-          channel: "WHATSAPP",
-          eventType: COMMUNICATION_EVENTS.SENT,
-          direction: "OUTBOUND",
-          provider: "whatsapp",
-          recipient,
-          objectId: forwarded.objectId || null,
-          recordId: forwarded.recordId || null,
-          body: message,
-          metadata: {
-            actionType: "SEND_COMMUNICATION",
-            providerMessageId: result?.data?.messages?.[0]?.id || null,
-            conversationId: forwarded.conversationId || null,
-          },
-        }).catch(() => null);
-        return {
-          status: "completed",
-          channel: "WHATSAPP",
-          provider: "whatsapp",
-          statusCode: result.statusCode,
-          reference: result?.data?.messages?.[0]?.id || null,
-        };
-      }
-
+      // External communication providers are selected by metadata. The generic
+      // communication runtime delegates transport without provider-specific behavior.
       const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS" }[channel] || null;
       if (!legacyKey) {
         return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
@@ -3583,108 +3384,43 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: true };
     },
   },
+
+
+
   {
-    key: "SEND_EMAIL",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send Email",
-    description: "Queue an email using the configured email provider.",
+    key: "CALL_FUNCTION",
+    displayName: "Call Function",
+    description: "Invoke a registered, approved onePOS function.",
     validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send Email requires a recipient");
+      if (!action?.functionKey && !action?.key) throw new Error("Call Function requires a functionKey");
     },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.email",
-    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
-      const company = companyId || req?.user?.companyId;
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
-      if (!provider.configured) {
-        return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
+    async: false,
+    requiredPermissions: ["functions.execute"],
+    executor: async ({ action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields, workflowVariables = {} }) => {
+      const functionKey = action.functionKey || action.key;
+      const functionDefinition = getRegisteredFunction(functionKey);
+      if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
+      if (typeof functionDefinition.handler !== "function") {
+        throw new Error(`Function "${functionKey}" has no handler`);
       }
-      const resolvedAction = await resolveEmailWorkflowAction({ db, companyId: company, action, record, previousRecord, object, workflowVariables, req });
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
-    },
-  },
-  {
-    key: "EMAIL_ALERT",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Email Alert",
-    description: "Send a reusable email-template alert through the configured email provider.",
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Email Alert requires a recipient");
-      if (!action?.templateId && !action?.template) throw new Error("Email Alert requires an email template");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.email",
-    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
-      const company = companyId || req?.user?.companyId;
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
-      if (!provider.configured) {
-        return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
-      }
-      const resolvedAction = await resolveEmailWorkflowAction({ db, companyId: company, action: { ...action, type: "SEND_EMAIL", contentMode: "TEMPLATE" }, record, previousRecord, object, workflowVariables, req });
-      const job = await enqueuePlatformJob({
-        db,
-        companyId: company,
-        kind: "SEND_EMAIL",
-        payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId },
-        runAt: new Date(),
-        idempotencyKey: action.idempotencyKey || `${company}:email-alert:${stepRunId || action.id || JSON.stringify(action)}`,
+      const inputs = Object.fromEntries(Object.entries(action.inputs || {}).map(([key, value]) => [
+        key,
+        resolveConfiguredResource(value, { record, previousRecord, req, object, workflowVariables }),
+      ]));
+      return functionDefinition.handler({
+        action,
+        inputs,
+        db: businessDb || db,
+        pool,
+        client,
+        req,
+        companyId,
+        userId,
+        record,
+        previousRecord,
+        object,
+        fields,
       });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
-    },
-  },
-  {
-    key: "SEND_SMS",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send SMS",
-    description: "Queue an SMS using the configured SMS provider.",
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send SMS requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.sms",
-    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
-      const company = companyId || req?.user?.companyId;
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "SMS", stepRunId });
-      if (!provider.configured) {
-        return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
-      }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
-    },
-  },
-  {
-    key: "SEND_WHATSAPP",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send WhatsApp",
-    description: "Queue a WhatsApp message using the configured provider.",
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send WhatsApp requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.whatsapp",
-    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
-      const company = companyId || req?.user?.companyId;
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "WHATSAPP", stepRunId });
-      if (!provider.configured) {
-        return { status: "failed", provider: "WHATSAPP", error: provider.error, jobId: null };
-      }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
   },
   {
@@ -3692,12 +3428,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     displayName: "Run Subflow",
     description: "Run another approved workflow as a child workflow.",
     validation: (action) => {
-      if (!action?.workflowId && !action?.subflowId && !action?.subflowApiName && !action?.subflowCapability && !(action?.workflow && Array.isArray(action.workflow.actions))) throw new Error("Run Subflow requires a workflowId, subflowApiName, or subflowCapability");
+      if (!action?.workflowId && !action?.subflowId && !action?.subflowApiName && !(action?.workflow && Array.isArray(action.workflow.actions))) throw new Error("Run Subflow requires a workflowId or subflowApiName");
     },
     async: true,
     requiredPermissions: ["workflow.execute"],
     executor: async ({ action, db, traceDb = null, debugMode = false, companyId, req, record, previousRecord, object, fields, workflowVariables = {}, workflowDepth = 0, workflowStack = [], runId = null, stepRunId = null, ...context }) => {
-      const workflowKey = action.workflowId || action.subflowId || action.subflowApiName || action.subflowCapability || action.workflow?.id || action.workflow?.key || "inline-subflow";
+      const workflowKey = action.workflowId || action.subflowId || action.subflowApiName || action.workflow?.id || action.workflow?.key || "inline-subflow";
       const runDb = debugMode && traceDb && typeof traceDb === "function" ? traceDb : db;
       const stack = Array.isArray(workflowStack) ? workflowStack.slice() : [];
       if (stack.includes(workflowKey)) {
@@ -3713,9 +3449,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
             if (!db || typeof db !== "function") return null;
             const id = action.workflowId || action.subflowId;
             if (id) return db(`SELECT * FROM platform_rules WHERE id=$1 AND active=true LIMIT 1`, [id]).then((result) => result.rows[0] || null);
-            const apiName = action.subflowApiName || action.subflowCapability;
+            const apiName = action.subflowApiName;
             if (!apiName) return null;
-            return db(`SELECT * FROM platform_rules WHERE company_id=$1 AND active=true AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2 OR action->>'subflowCapability'=$2) ORDER BY updated_at DESC LIMIT 1`, [companyId || req?.user?.companyId, apiName]).then((result) => result.rows[0] || null);
+            return db(`SELECT * FROM platform_rules WHERE company_id=$1 AND active=true AND (action->>'apiName'=$2 OR action->>'capabilityKey'=$2) ORDER BY updated_at DESC LIMIT 1`, [companyId || req?.user?.companyId, apiName]).then((result) => result.rows[0] || null);
           })();
       const definition = await Promise.resolve(subflowDefinition);
       if (!definition) {
@@ -5297,6 +5033,21 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
 export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
 
+// Re-export registry bindings without eagerly reading them during module
+// initialization. platformFunctionRegistry participates in the workflow import
+// graph, so assigning these imported bindings to new consts can hit the ESM
+// temporal dead zone during startup.
+export { PLATFORM_FUNCTIONS as REGISTERED_FUNCTIONS, PLATFORM_FUNCTION_MAP as REGISTERED_FUNCTIONS_MAP } from "./platformFunctionRegistry.js";
+
+export async function executeMediatedRegisteredAction({ db, companyId, userId = null, req = null, action }) {
+  return executeRegisteredAction({
+    db,
+    companyId,
+    userId,
+    req: req || { user: { id: userId, companyId } },
+    action,
+  });
+}
 
 export function getWorkflowActionRegistry() {
   return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
@@ -5326,6 +5077,13 @@ export function validateWorkflowAction(action) {
   return definition;
 }
 
+export function getRegisteredFunction(functionKey) {
+  return PLATFORM_FUNCTION_MAP.get(String(functionKey || "")) || null;
+}
+
+export function getRegisteredFunctionsRegistry() {
+  return PLATFORM_FUNCTIONS.slice();
+}
 
 async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId }) {
   if (!db || typeof db !== "function" || !companyId) return null;
@@ -6212,7 +5970,7 @@ export async function executeWorkflowActions({ actions, ...context }) {
         });
       }
 
-      if (result?.status === "stopped" || result?.status === "waiting" || branchPaused) break;
+      if (result?.haltWorkflow === true || result?.status === "stopped" || result?.status === "waiting" || branchPaused) break;
       if (context.branchExecution !== true && item.nextStepId) {
         const targetIndex = actions.findIndex((candidate) => String(candidate?.id || "") === String(item.nextStepId));
         if (targetIndex > actionIndex) actionIndex = targetIndex - 1;

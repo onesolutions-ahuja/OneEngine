@@ -4,7 +4,7 @@ import { registerPlatformDeveloperRoutes } from "./platform/developerRoutes.js";
 import express from "express";
 import { createHash } from "node:crypto";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
-import { defaultObjectPageDefinition, normalizeObjectPageDefinition, objectNavigationEntries, objectRuntimeRoute, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
+import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
 import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, workflowFormulaReferences } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
@@ -14,6 +14,8 @@ import {
   createWorkflowRun,
   executeWorkflowAction,
   executeWorkflowActions,
+  getRegisteredFunction,
+  getRegisteredFunctionsRegistry,
   getWorkflowActionDefinition,
   getWorkflowActionRegistry,
   getWorkflowBuilderActionRegistry,
@@ -2195,6 +2197,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         const module = await db("SELECT id FROM platform_modules WHERE id=$1", [moduleId]);
         if (!module.rows.length) return res.status(400).json({ success: false, message: "Module not found" });
       }
+      const storageTable = sourceTable || await ensureCustomObjectStorage(db, objectKey);
       const rawObjectConfig = req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {};
       const { historicalTrending: _tenantHistoricalTrending, ...baseObjectConfig } = rawObjectConfig;
       const objectConfig = {
@@ -2203,81 +2206,22 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         allowSearch: req.body?.allowSearch !== false,
         trackHistory: req.body?.trackHistory !== false,
       };
-
-      /*
-       * Object creation is a metadata composition operation: the Object and its
-       * default Object Page are created together. No object-specific React
-       * route or business handler is generated. The generic page/runtime later
-       * resolves definition.objectKey.
-       */
-      const client = await pool.connect();
-      let createdObject;
-      let defaultPage;
-      try {
-        await client.query("BEGIN");
-        const storageTable = sourceTable || await ensureCustomObjectStorage((sql, params = []) => client.query(sql, params), objectKey);
-        const result = await client.query(
-          "INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id,config) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *",
-          [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, storageTable, moduleId, req.user.companyId, JSON.stringify(objectConfig)]
-        );
-        createdObject = result.rows[0];
-
-        await client.query(
-          `INSERT INTO platform_object_permissions
-             (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete,can_import,can_export)
-           SELECT $1,r.id,$2,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
-             FROM roles r
-             JOIN role_permissions rp ON rp.role_id=r.id
-             JOIN permissions p ON p.id=rp.permission_id
-            WHERE r.company_id=$2 AND p.code='oneengine.manage'
-           ON CONFLICT (object_id,role_id,company_id)
-           DO UPDATE SET can_view=TRUE,can_create=TRUE,can_edit=TRUE,can_delete=TRUE,can_import=TRUE,can_export=TRUE`,
-          [createdObject.id, req.user.companyId]
-        );
-
-        // Reuse a tenant app when one exists; otherwise create the generic
-        // metadata app container. This is presentation metadata, not business code.
-        let app = (await client.query(
-          "SELECT * FROM platform_apps WHERE company_id=$1 AND app_key='oneengine_objects' AND active=true LIMIT 1",
-          [req.user.companyId]
-        )).rows[0];
-        if (!app) {
-          app = (await client.query(
-            "INSERT INTO platform_apps (company_id,app_key,label,description,config,active) VALUES ($1,'oneengine_objects','Objects','Metadata-driven object pages','{}'::jsonb,true) RETURNING *",
-            [req.user.companyId]
-          )).rows[0];
-        }
-
-        const pageKeyBase = toSafeApiName(`${createdObject.object_key}_page`, "object_page");
-        const pageKey = (await client.query(
-          "SELECT 1 FROM platform_pages WHERE page_key=$1 AND company_id=$2 LIMIT 1",
-          [pageKeyBase, req.user.companyId]
-        )).rows.length ? `${pageKeyBase}_${String(createdObject.id).replace(/-/g, "").slice(0, 8)}` : pageKeyBase;
-        const definition = defaultObjectPageDefinition(createdObject.object_key);
-        defaultPage = (await client.query(
-          `INSERT INTO platform_pages
-             (app_id,company_id,page_key,label,route_path,page_type,definition,draft_definition,active,lifecycle_status,version,draft_version,active_version)
-           VALUES ($1,$2,$3,$4,$5,'object',$6::jsonb,NULL,true,'ACTIVE',1,NULL,1)
-           RETURNING *`,
-          [app.id, req.user.companyId, pageKey, createdObject.label, objectRuntimeRoute(createdObject.object_key), JSON.stringify(definition)]
-        )).rows[0];
-        await client.query(
-          `INSERT INTO platform_page_versions
-             (page_id,company_id,version,definition,lifecycle_status,created_by)
-           VALUES ($1,$2,1,$3::jsonb,'ACTIVE',$4)`,
-          [defaultPage.id, req.user.companyId, JSON.stringify(definition), req.user.id || null]
-        );
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-
-      res.status(201).json({ success: true, data: createdObject, defaultPage });
+      const result = await db("INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id,config) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *", [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, storageTable, moduleId, req.user.companyId, JSON.stringify(objectConfig)]);
+      await db(
+        `INSERT INTO platform_object_permissions
+           (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete,can_import,can_export)
+         SELECT $1,r.id,$2,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
+           FROM roles r
+           JOIN role_permissions rp ON rp.role_id=r.id
+           JOIN permissions p ON p.id=rp.permission_id
+          WHERE r.company_id=$2 AND p.code='oneengine.manage'
+         ON CONFLICT (object_id,role_id,company_id)
+         DO UPDATE SET can_view=TRUE,can_create=TRUE,can_edit=TRUE,can_delete=TRUE,can_import=TRUE,can_export=TRUE`,
+        [result.rows[0].id, req.user.companyId]
+      );
+      res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "An object or default page with this key already exists" });
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "An object with this key already exists" });
       console.error("Platform object create error:", error);
       res.status(500).json({ success: false, message: "Unable to create platform object" });
     }
@@ -3218,6 +3162,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       let conditionClauses = conditionClauseCount > 0 ? clauses.splice(scopeClauseCount, conditionClauseCount) : [];
       if (conditionClauses.length && conditionMatch === "any") conditionClauses = [`(${conditionClauses.join(" OR ")})`];
       clauses.push(...conditionClauses);
+      if (["customers"].includes(object.source_table) && !req.platformCompanyCustomers) {
+        /* Mirror the appendSystemReadScope customer-store rule for record feeds. */
+        if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
+        params.push(req.user.storeId, req.user.companyId);
+        clauses.push(`EXISTS (SELECT 1 FROM customer_stores cs WHERE cs.customer_id="customers".id AND cs.store_id=$${params.length - 1} AND cs.company_id=$${params.length} AND cs.active=true)`);
+      }
       appendSystemReadScope(object, req, clauses, params);
 
       /* Sort entries must name readable fields. */
@@ -3375,61 +3325,36 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (type === "action") {
         const actionKey = String(interaction.actionKey || "").trim();
         if (!actionKey) return res.status(400).json({ success: false, message: "A registered action key is required" });
-
-        /* Resolve through the SAME Action Registry contract used by metadata
-           object buttons. A page stores the stable action key only; an
-           object-scoped metadata action may map that key to a generic core
-           handler without teaching the page runtime any business vocabulary. */
-        let action = listRegisteredPlatformActions().find((item) => item.key === actionKey) || null;
-        let handlerKey = action?.key || null;
-        if (!action) {
-          if (!object) return res.status(422).json({ success: false, message: "Object context is required for an object-scoped registered action" });
-          const custom = await db(
-            "SELECT * FROM platform_registered_actions WHERE action_key=$1 AND object_id=$2 AND (company_id IS NULL OR company_id=$3) AND active=true LIMIT 1",
-            [actionKey, object.id, req.user.companyId]
-          );
-          action = custom.rows[0] || null;
-          handlerKey = action?.handler_key || null;
-        }
-        if (!action || !handlerKey) return res.status(404).json({ success: false, message: "Registered action not found" });
-        if (["RECORD_SAVE", "RECORD_DELETE"].includes(String(handlerKey).toUpperCase())) {
+        const core = listRegisteredPlatformActions().find((item) => item.key === actionKey);
+        if (!core) return res.status(404).json({ success: false, message: "Registered action not found" });
+        if (["RECORD_SAVE", "RECORD_DELETE"].includes(core.key)) {
           return res.status(409).json({ success: false, message: "RECORD_SAVE and RECORD_DELETE belong to the canonical record page lifecycle" });
         }
-        if (String(handlerKey).toUpperCase() === "WORKFLOW") return res.status(422).json({ success: false, message: "Use the Workflow interaction type to run workflows" });
-
-        const requiredPermissions = [
-          ...(Array.isArray(action.requiredPermissions) ? action.requiredPermissions : []),
-          ...(action.required_permission ? [action.required_permission] : []),
-        ];
-        for (const requiredPermission of [...new Set(requiredPermissions.filter(Boolean))]) {
+        if (core.key === "WORKFLOW") return res.status(422).json({ success: false, message: "Use the Workflow interaction type to run workflows" });
+        for (const requiredPermission of core.requiredPermissions || []) {
           if (!(await hasExecutionPermission(req, requiredPermission))) {
-            return res.status(403).json({ success: false, message: `You do not have permission to execute ${action.displayName || action.label || actionKey}` });
+            return res.status(403).json({ success: false, message: `You do not have permission to execute ${core.displayName || core.key}` });
           }
         }
-        const definition = getWorkflowActionDefinition(handlerKey);
+        const definition = getWorkflowActionDefinition(core.key);
         if (!definition) return res.status(422).json({ success: false, message: "Registered action handler is unavailable" });
-        for (const requiredPermission of definition.requiredPermissions || []) {
-          if (!(await hasExecutionPermission(req, requiredPermission))) {
-            return res.status(403).json({ success: false, message: `You do not have permission to execute ${handlerKey}` });
-          }
-        }
         try {
-          definition.validation?.({ type: handlerKey });
+          definition.validation?.({ type: core.key });
         } catch { /* argument-shape validation happens inside the executor. */ }
         const execution = await executeSystemWorkflow({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
-          systemKey: `action:${handlerKey}`,
+          systemKey: `action:${core.key}`,
           req,
-          input: { ...(action.config || {}), ...(interaction.config || {}) },
+          input: { ...(interaction.config || {}) },
           object,
           record,
           recordId: record?.id || null,
           storeId: req.user.storeId || null,
           connectorDrivers: req.app?.locals?.connectorDrivers || null,
           writeAudit: req.app?.locals?.writeAudit || null,
-          source: { type: "page_interaction", method: req.method, path: req.originalUrl || req.path, capability: handlerKey, actionKey },
+          source: { type: "page_interaction", method: req.method, path: req.originalUrl || req.path, capability: core.key },
           extraContext: { pool },
         });
         return res.json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
@@ -4671,20 +4596,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     res.json({ success: true, data });
   });
 
-  router.get("/platform/rules/:ruleId", ...manage, async (req, res) => {
-    const result = await db(
-      `SELECT r.*, o.object_key, o.label AS object_label
-         FROM platform_rules r
-         LEFT JOIN platform_objects o
-           ON o.id=COALESCE(NULLIF(r.draft_definition->>'object_id','')::uuid,r.object_id)
-        WHERE r.id=$1 AND (r.company_id IS NULL OR r.company_id=$2)
-        LIMIT 1`,
-      [req.params.ruleId, req.user.companyId]
-    );
-    if (!result.rows.length) return res.status(404).json({ success: false, message: "Workflow not found" });
-    return res.json({ success: true, data: workflowAuthoringRow(result.rows[0]) });
-  });
-
   async function assignmentTargetExists(companyId, targetType, targetId) {
     if (!companyId || !targetId) return false;
     if (targetType === "USER") {
@@ -5067,7 +4978,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   router.get("/platform/function-registry", ...manage, async (req, res) => {
     res.json({
       success: true,
-      data: [],
+      data: getRegisteredFunctionsRegistry().map(({ handler, validation, ...definition }) => definition),
     });
   });
 
@@ -7799,7 +7710,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const actionType = workflowAction.type || workflowAction.key;
       if (String(actionType || "").toUpperCase() === "CALL_FUNCTION") {
         const functionKey = workflowAction.functionKey || workflowAction.function_key;
-        const functionDefinition = null;
+        const functionDefinition = getRegisteredFunction(functionKey);
         if (!functionDefinition) {
           const error = new Error(`Function "${functionKey}" is not registered`);
           error.status = 422;
@@ -7944,19 +7855,49 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           },
         });
 
-        const results = await executeWorkflowActions({
-          actions,
-          db,
-          pool,
-          req,
-          object,
-          record: virtualRecord,
-          recordId: null,
-          companyId: req.user.companyId,
-          runId: run?.id || null,
-          workflowVersion: Number(workflow.active_version || workflow.version || 1),
-          trigger: "till_button",
-        });
+        const workflowVariables = {
+          variables: req.body?.inputs && typeof req.body.inputs === "object" && !Array.isArray(req.body.inputs)
+            ? { ...req.body.inputs }
+            : {},
+          steps: {},
+        };
+        const transactionClient = await pool.connect();
+        let results;
+        try {
+          await transactionClient.query("BEGIN");
+          const transactionDb = transactionClient.query.bind(transactionClient);
+          results = await executeWorkflowActions({
+            actions,
+            db: transactionDb,
+            pool,
+            req,
+            object,
+            record: virtualRecord,
+            recordId: null,
+            companyId: req.user.companyId,
+            runId: run?.id || null,
+            workflowVersion: Number(workflow.active_version || workflow.version || 1),
+            trigger: "till_button",
+            workflowVariables,
+          });
+          await transactionClient.query("COMMIT");
+        } catch (error) {
+          await transactionClient.query("ROLLBACK");
+          if (run?.id) {
+            await db(
+              `UPDATE platform_workflow_runs
+                  SET status='FAILED',
+                      completed_at=NOW(),
+                      updated_at=NOW(),
+                      metadata=COALESCE(metadata,'{}'::jsonb) || $1::jsonb
+                WHERE id=$2 AND company_id=$3`,
+              [JSON.stringify({ error: String(error?.message || error) }), run.id, req.user.companyId]
+            );
+          }
+          throw error;
+        } finally {
+          transactionClient.release();
+        }
         const waiting = workflowResultsContainStatus(results, "waiting");
         if (run?.id) {
           await db(
@@ -8276,7 +8217,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       if (action === "call_function") {
         const functionKey = component.functionKey || component.function_key;
-        const definition = null;
+        const definition = getRegisteredFunction(functionKey);
         if (!definition) return res.status(422).json({ success: false, message: "Configured registered function is unavailable" });
         const execution = await executeSystemWorkflow({
           db,
@@ -9248,7 +9189,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const fields = await applyFieldSecurity(db, metadataFields, req);
       if (!object) return res.status(404).json({ success: false, message: "Unknown object" });
       if (!(await hasPlatformObjectPermission(db, req, object.id, "create"))) return res.status(403).json({ success: false, message: "You do not have permission to create records for this object" });
-      if (object?.config?.protectedWrites === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
+      if (object?.config?.flowWritesOnly === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
       if (!object.active) return res.status(400).json({ success: false, message: "Object is inactive" });
       if (!object.source_table || !isSafeIdentifier(object.source_table)) return res.status(400).json({ success: false, message: "Object records are not available" });
       if (object.store_scoped && !req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
@@ -9281,7 +9222,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const fields = await applyFieldSecurity(db, metadataFields, req);
       if (!object) return res.status(404).json({ success: false, message: "Unknown object" });
       if (!(await hasPlatformObjectPermission(db, req, object.id, "edit"))) return res.status(403).json({ success: false, message: "You do not have permission to edit records for this object" });
-      if (object?.config?.protectedWrites === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
+      if (object?.config?.flowWritesOnly === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
       if (!object.active) return res.status(400).json({ success: false, message: "Object is inactive" });
       if (!object.source_table || !isSafeIdentifier(object.source_table)) return res.status(400).json({ success: false, message: "Object records are not available" });
       if (object.store_scoped && !req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
@@ -9312,7 +9253,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const fields = await applyFieldSecurity(db, metadataFields, req);
       if (!object) return res.status(404).json({ success: false, message: "Unknown object" });
       if (!(await hasPlatformObjectPermission(db, req, object.id, "delete"))) return res.status(403).json({ success: false, message: "You do not have permission to delete records for this object" });
-      if (object?.config?.protectedWrites === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
+      if (object?.config?.flowWritesOnly === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
       if (!object.active) return res.status(400).json({ success: false, message: "Object is inactive" });
       if (!object.source_table || !isSafeIdentifier(object.source_table)) return res.status(404).json({ success: false, message: "Object records are not available" });
       if (object.store_scoped && !req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });

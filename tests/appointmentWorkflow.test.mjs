@@ -436,13 +436,14 @@ test("resource fallback resolves through null overrides", () => {
 
 
 
-test("provider HTTP and WhatsApp delivery status are observable without secrets", () => {
+test("provider HTTP and communication delivery status are observable without secrets", () => {
   const core = readFileSync(new URL("../server/services/oneCoreFunctions.js", import.meta.url), "utf8");
-  const whatsapp = readFileSync(new URL("../server/routes/whatsapp.js", import.meta.url), "utf8");
+  const communication = readFileSync(new URL("../server/services/communicationCore.js", import.meta.url), "utf8");
   assert.match(core, /Provider HTTP request completed/);
   assert.match(core, /providerMessageId/);
-  assert.match(whatsapp, /WhatsApp delivery status/);
-  assert.match(whatsapp, /trackedMessage/);
+  assert.match(communication, /communication\.message_delivered/);
+  assert.match(communication, /providerMessageId/);
+  assert.doesNotMatch(communication, /accessToken|clientSecret|api[_-]?key/i);
 });
 
 

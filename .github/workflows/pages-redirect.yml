@@ -12,9 +12,7 @@ permissions:
 
 concurrency:
   group: github-pages
-  # Queue Pages deployments. Concurrent main pushes must not cancel the deployment
-  # that is currently publishing, otherwise the live site can remain stale.
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:

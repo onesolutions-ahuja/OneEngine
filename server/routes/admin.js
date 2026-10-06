@@ -1,4 +1,5 @@
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "../services/platformPermissionSets.js";
+import { withDomainSave } from "../services/platformDomainRecords.js";
 import express from "express";
 import { DUPLICATE_EMAIL_MESSAGE, normalizeEmail } from "../services/userIdentity.js";
 import { domainAllowed } from "../services/accountPolicy.js";

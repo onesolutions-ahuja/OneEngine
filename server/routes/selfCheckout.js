@@ -158,7 +158,7 @@ export function createSelfCheckoutRouter({
       if (!pairedStore) {
         return res.status(401).json({ success: false, message: "Invalid Self-Checkout device key" });
       }
-      await req.ensureWorkflowTraceRun?.({ companyId: pairedStore.company_id, userId: null, storeId: pairedStore.id });
+      await req.ensureBusinessCommandRun?.({ companyId: pairedStore.company_id, userId: null, storeId: pairedStore.id });
       if (typeof getCompanyEntitlements === "function") {
         const entitlements = await getCompanyEntitlements(pairedStore.company_id);
         if (entitlements.self_checkout !== true) {
@@ -284,8 +284,9 @@ export default createSelfCheckoutRouter;
  */
 /* path prefix -> allowed methods (empty array = all methods for that prefix) */
 const SCO_ALLOWED = [
-  { prefix: "/api/sales", methods: ["GET", "POST"] },          // basket pricing lookups + sale creation
-  { prefix: "/api/products", methods: ["GET"] },               // product search only — no create/edit/delete
+  { prefix: "/api/platform/runtime/objects/sale", methods: ["GET", "POST"] }, // metadata-driven Sale actions
+  { prefix: "/api/platform/objects/sale", methods: ["GET", "POST"] },         // Sale records + record actions
+  { prefix: "/api/platform/objects/product", methods: ["GET"] }, // metadata-driven product records
   { prefix: "/api/settings", methods: ["GET"] },               // VAT/store context only — no configuration writes
   { prefix: "/api/self-checkout", methods: ["DELETE", "POST"] }, // auditable exit + customer lookup
 ];

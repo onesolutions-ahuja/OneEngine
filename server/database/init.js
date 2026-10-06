@@ -4338,30 +4338,6 @@ ON secure_invoice_links(company_id, created_at DESC);
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(app_id, page_key)
       );
-      ALTER TABLE platform_pages DROP CONSTRAINT IF EXISTS platform_pages_page_type_check;
-      ALTER TABLE platform_pages ADD CONSTRAINT platform_pages_page_type_check
-        CHECK (page_type IN ('page','dashboard','modal','object','list_view','report'));
-      ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
-      ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
-      ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS active_version INTEGER;
-      ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS draft_version INTEGER;
-      ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS draft_definition JSONB;
-      ALTER TABLE platform_pages ADD COLUMN IF NOT EXISTS user_modified BOOLEAN NOT NULL DEFAULT FALSE;
-      CREATE TABLE IF NOT EXISTS platform_page_versions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        page_id UUID NOT NULL REFERENCES platform_pages(id) ON DELETE CASCADE,
-        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-        version INTEGER NOT NULL,
-        definition JSONB NOT NULL,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        assignments JSONB NOT NULL DEFAULT '[]'::jsonb,
-        lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
-        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE(page_id, company_id, version)
-      );
-      CREATE INDEX IF NOT EXISTS idx_platform_page_versions_page
-        ON platform_page_versions(page_id, company_id, version DESC);
       CREATE TABLE IF NOT EXISTS platform_automation_logs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(), rule_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
         object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL, record_id UUID,

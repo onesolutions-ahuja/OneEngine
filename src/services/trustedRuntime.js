@@ -6,8 +6,6 @@ const DEFINITIONS = [
   { id: 'security.manage', prefixes: ['/api/platform/security', '/api/security/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'admin.manage', prefixes: ['/api/admin/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'settings.manage', prefixes: ['/api/settings/'], methods: ['POST','PUT','PATCH','DELETE'] },
-  { id: 'payment.execute', prefixes: ['/api/payments', '/api/payment', '/api/checkout', '/api/till/payment'], methods: ['POST','PUT','PATCH','DELETE'] },
-  { id: 'refund.execute', prefixes: ['/api/refunds', '/api/returns', '/api/exchanges'], methods: ['POST','PUT','PATCH','DELETE'] },
 ]
 
 function canonicalPath(value) {
@@ -96,9 +94,7 @@ export function isPrivilegedMutation(path, method = 'GET') {
     || pathname.startsWith('/api/settings/')
     || pathname.startsWith('/api/payments')
     || pathname.startsWith('/api/payment')
-    || pathname.startsWith('/api/refunds')
-    || pathname.startsWith('/api/returns')
-    || pathname.startsWith('/api/exchanges')
+    || pathname.startsWith('/api/platform/objects/stock_return')
 }
 
 export function trustedRuntimeHeaders(capability) {

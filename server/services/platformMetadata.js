@@ -1060,14 +1060,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
   console.log("onePOS: platform bootstrap step ready: package registry");
 
   /*
-   * Sale is the single exposed transaction Object. Physical sale_items rows
-   * remain authoritative internal invoice-line storage, but they are not a
-   * second Platform Object and cannot own actions/workflows/layouts.
-   *
-   * Remove metadata left by older builds before reseeding. Delete relationships
-   * first because child_field_id is RESTRICT; then delete package ownership
-   * snapshots for the obsolete object/fields/relationships and finally the
-   * object itself. This never touches the sale_items business table.
+   * Retail transaction storage is exposed through canonical metadata Objects:
+   * Sale, Sale Item, Payment, Refund, Till Session and Cash Movement.
+   * Remove only the obsolete legacy sale_line alias before package metadata is
+   * provisioned; the canonical sale_item object owns sale_items metadata.
    */
   const obsoleteSaleLine = await pool.query(
     "SELECT id FROM platform_objects WHERE object_key='sale_line' AND source_table='sale_items' AND company_id IS NULL LIMIT 1"
@@ -1412,7 +1408,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       if (object.key === "onestore_app") {
         await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
       }
-      if (object.key === "till_session" || object.key === "cash_ledger" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
+      if (object.key === "till_session" || object.key === "cash_movement" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
         await pool.query("UPDATE platform_objects SET company_scoped=true,store_scoped=true WHERE id=$1", [result.rows[0].id]);
       }
       for (let index = 0; index < object.fields.length; index += 1) {
@@ -1533,7 +1529,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const cashLedgerValidationObject = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='cash_movement' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (cashLedgerValidationObject.rows[0]?.id) {
       await pool.query(
@@ -1563,7 +1559,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       );
     }
     const cashLedgerObjectForOptions = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='cash_movement' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (cashLedgerObjectForOptions.rows[0]?.id) {
       await pool.query(
@@ -1606,7 +1602,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
     await grantObjectPermissionFromCodes("held_sale", ["sale.hold"], { view: true, create: true, delete: true });
     await grantObjectPermissionFromCodes("till_session", ["till.open","till.close"], { view: true, create: true, edit: true });
-    await grantObjectPermissionFromCodes("cash_ledger", ["cash.adjustment","cash.payout"], { view: true, create: true });
+    await grantObjectPermissionFromCodes("cash_movement", ["cash.adjustment","cash.payout"], { view: true, create: true });
     await grantObjectPermissionFromCodes("product_modifier_group", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("product_modifier_option", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("payment_method", ["sale.create"], { view: true });
@@ -1887,6 +1883,21 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
+          name: "OneTill - Open Drawer",
+          apiName: "ONETILL_OPEN_DRAWER",
+          inputContract: [
+            { name: "tillSessionId", label: "Till Session", type: "text", required: true },
+            { name: "userId", label: "User", type: "text", required: true },
+            { name: "terminalId", label: "Terminal", type: "text", required: true },
+            { name: "reason", label: "Reason", type: "text", required: false },
+          ],
+          outputContract: [],
+          actions: [
+            { id: "create_drawer_open", label: "Record Drawer Open", apiName: "create_drawer_open", key: "CREATE_RECORD", objectKey: "cash_movement",
+              fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, terminal_id: { path: "$record.terminalId" }, type: "drawer_open", amount: 0, reason: { path: "$record.reason" } } },
+          ],
+        },
+        {
           name: "OneTill - Open Till Session",
           apiName: "ONETILL_OPEN_SESSION",
           inputContract: [
@@ -1911,7 +1922,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_cash_in", label: "Create Cash In", apiName: "create_cash_in", key: "CREATE_RECORD", objectKey: "cash_ledger",
+            { id: "create_cash_in", label: "Create Cash In", apiName: "create_cash_in", key: "CREATE_RECORD", objectKey: "cash_movement",
               fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_in", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
           ],
         },
@@ -1926,7 +1937,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_cash_out", label: "Create Cash Out", apiName: "create_cash_out", key: "CREATE_RECORD", objectKey: "cash_ledger",
+            { id: "create_cash_out", label: "Create Cash Out", apiName: "create_cash_out", key: "CREATE_RECORD", objectKey: "cash_movement",
               fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_out", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
           ],
         },
@@ -1994,10 +2005,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
               inputs: { amount: { path: "$record.amount" } } },
             { id: "validate_amount", label: "Validate Petty Cash", apiName: "validate_amount", key: "CONDITION",
               outcomes: [{ id: "valid", label: "Valid Amount", condition: { match: "all", conditions: [{ field: "variables.amountIsValid", operator: "equals", value: true }] },
-                branch: ["create_cash_ledger"] }],
+                branch: ["create_cash_movement"] }],
               defaultLabel: "Invalid Amount", defaultBranch: ["invalid_amount"] },
-            { id: "create_cash_ledger", label: "Create Cash Ledger Entry", apiName: "create_cash_ledger", key: "CREATE_RECORD",
-              objectKey: "cash_ledger",
+            { id: "create_cash_movement", label: "Create Cash Movement", apiName: "create_cash_movement", key: "CREATE_RECORD",
+              objectKey: "cash_movement",
               fieldValues: {
                 till_session_id: { path: "$record.tillSessionId" },
                 user_id: { path: "$record.userId" },
@@ -2195,8 +2206,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "SECURE_RESOURCE_LINK_MANAGE",
-              operation: "CREATE",
+            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "CALL_FUNCTION",
+              functionKey: "temporary.receipt.download.create",
               inputs: {
                 saleId: { path: "$record.id" },
                 expiryMinutes: { path: "$record.expiryMinutes" },
@@ -2238,8 +2249,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           inputContract: [],
           outputContract: [],
           actions: [
-            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "SECURE_RESOURCE_LINK_MANAGE",
-              operation: "REVOKE",
+            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "CALL_FUNCTION",
+              functionKey: "temporary.receipt.download.revoke_for_sale",
               inputs: { saleId: { path: "$record.id" } } },
           ],
         },
@@ -2328,7 +2339,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_cash_out","Cash Out","till.cash_out","till_session","cash.payout","cash_out","minus",40]
       ];
       for (const [buttonKey,label,actionKey,placement,permission,uiAction,icon,order] of tillButtons) {
-        const handlerKey = actionKey === "till.print" ? "PRINT_RECEIPT" : "UI_ACTION";
+        const handlerKey = actionKey === "till.print" ? "PRINT_RECEIPT" : "TILL_UI_ACTION";
         await pool.query(
           `INSERT INTO platform_registered_actions
             (company_id,object_id,action_key,label,description,handler_key,required_permission,config,active,managed)
@@ -2338,7 +2349,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
              handler_key=EXCLUDED.handler_key,required_permission=EXCLUDED.required_permission,
              config=CASE WHEN platform_registered_actions.user_modified THEN platform_registered_actions.config ELSE EXCLUDED.config END,
              active=TRUE,managed=TRUE,updated_at=NOW()`,
-          [saleObjectId, actionKey, label, `Retail POS ${label} interaction.`, handlerKey, permission, JSON.stringify({ component: "till", uiAction })]
+          [saleObjectId, actionKey, label, `Retail POS ${label} interaction.`, handlerKey, permission, JSON.stringify({ uiAction })]
         );
         await pool.query(
           `INSERT INTO platform_buttons
@@ -2370,7 +2381,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_print","command","print_receipt", { command: "print_receipt", recordContext: "last_sale" }],
         ["till_receipt_qr","workflow", tillWorkflowIds.get("ONETILL_RECEIPT_QR"), { recordContext: "last_sale", policyButtonKey: "till_receipt_qr_policy", policyEvent: "MANUAL" }],
         ["till_customer_display","command","customer_display", { command: "customer_display" }],
-        ["till_open_drawer","command","open_drawer", { command: "open_drawer" }],
+        ["till_open_drawer","workflow",tillWorkflowIds.get("ONETILL_OPEN_DRAWER"), {}],
         ["till_price_override","modal","price_override", { modal: "price_override", submitButtonKey: "till_price_override_apply" }],
         ["till_open_session","workflow",tillWorkflowIds.get("ONETILL_OPEN_SESSION"), { modal: "till" }],
         ["till_close_session","workflow",tillWorkflowIds.get("ONETILL_CLOSE_SESSION"), { modal: "till" }],

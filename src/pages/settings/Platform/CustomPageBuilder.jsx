@@ -11,7 +11,6 @@ import {
 } from "./componentRegistry.js";
 import CustomPageRenderer from "../../../components/platform/CustomPageRenderer.jsx";
 import ActionWorkflowPicker, { describeInteraction } from "./ActionWorkflowPicker.jsx";
-import MetadataComponentProperties from "./MetadataComponentProperties.jsx";
 import { CONDITION_OPERATORS } from "./conditionOperators.js";
 import {
   CONTAINER_SIZES,
@@ -264,21 +263,82 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
 
   const newNodeFor = (componentKey) => {
     const meta = componentMeta(componentKey);
-    const registered = createRegisteredComponent(meta, "PAGE");
-    // Component-specific presentation defaults belong to Component Registry
-    // metadata. The builder only adds generic page binding shells.
-    return {
-      ...registered,
-      id: registered.id || uid(componentKey),
-      componentKey: meta.key || componentKey,
-      componentApi: meta.api || `${componentKey}.v1`,
-      ...(meta.containsChildren ? { children: [] } : {}),
-      ...(meta.recordBound ? {
-        collection: registered.collection || {},
-        interaction: registered.interaction || { type: "none" },
-      } : {}),
-      ...(meta.kind === "action" ? { interaction: registered.interaction || { type: "none" } } : {}),
-    };
+    if (meta.runtimeKind === "analytics") return createRegisteredComponent(meta, "PAGE");
+    if (componentKey === "container") return { id: uid("container"), componentKey, label: meta.label, size: "medium", columns: 2, spacing: 3, children: [] };
+    if (componentKey === "multi_container") {
+      return {
+        id: uid("multi_container"), componentKey, label: meta.label, containerSize: "medium", spacing: 3, clickable: true,
+        collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [], titleField: "", subtitleField: "" },
+        interaction: { type: "none" },
+      };
+    }
+    if (componentKey === "table") {
+      /* Same Record Collection datasource as MultiContainer — configured by
+         the SAME properties groups, just without card sizing. */
+      return {
+        id: uid("table"), componentKey, label: meta.label, clickable: true,
+        collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
+        interaction: { type: "none" },
+      };
+    }
+    if (componentKey === "tree_view") {
+      return {
+        id: uid("tree_view"), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
+        config: {
+          parentField: "parent_id",
+          labelField: "name",
+          secondaryField: "status",
+          maxDepth: 3,
+          showCounts: true,
+          allowCollapse: true,
+          defaultExpandedDepth: 1,
+        },
+        interaction: { type: "none" },
+      };
+    }
+    if (componentKey === "process_path") {
+      return {
+        id: uid("process_path"),
+        componentKey,
+        label: meta.label,
+        collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 1, pagination: false, fields: [] },
+        config: {
+          statusField: "status",
+          titleField: "name",
+          stages: [],
+          allowStageChange: false,
+          keyFields: [],
+          guidance: {},
+        },
+        interaction: { type: "none" },
+      };
+    }
+    if (["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"].includes(componentKey)) {
+      const defaults = {
+        timeline: { dateField: "created_at", titleField: "name", secondaryField: "status", groupBy: "day", maxRecords: 10 },
+        kanban: { groupField: "status", titleField: "name", subtitleField: "status", maxRecords: 12, allowDragDrop: true },
+        calendar: { startField: "start_date", endField: "end_date", titleField: "name", subtitleField: "status", categoryField: "status", defaultView: "month" },
+        scheduler: { resourceField: "assignee_id", resourceLabelField: "name", startField: "start_at", endField: "end_at", titleField: "name", statusField: "status", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
+        gantt: { taskLabelField: "name", startField: "start_date", endField: "end_date", progressField: "progress", scale: "week" },
+        map: { locationMode: "latlng", latitudeField: "latitude", longitudeField: "longitude", labelField: "name", defaultZoom: 10 },
+        hierarchy_viewer: { parentField: "parent_id", titleField: "name", maxDepth: 3, orientation: "vertical" },
+        file_viewer: { displayMode: "grid", filenameField: "filename", typeField: "file_type", maxItems: 12 },
+        signature: { fieldKey: "signature", label: "Signature", displayMode: "capture", width: 320, height: 180 },
+      }[componentKey];
+      return {
+        id: uid(componentKey), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
+        config: { ...defaults },
+        interaction: { type: "none" },
+      };
+    }
+    if (componentKey === "button") return { id: uid("button"), componentKey, label: meta.label || "Button", variant: "primary", size: "medium", interaction: { type: "none" } };
+    if (componentKey === "header") return { id: uid("header"), componentKey, text: meta.label || "Heading" };
+    if (componentKey === "text") return { id: uid("text"), componentKey, text: meta.label || "Text" };
+    if (componentKey === "divider") return { id: uid("divider"), componentKey };
+    if (componentKey === "spacer") return { id: uid("spacer"), componentKey, spacing: 3 };
+    if (componentKey === "field_value") return { id: uid("field_value"), componentKey, field: "" };
+    if (componentKey === "related_list") return { id: uid("related_list"), componentKey, relationshipKey: "", limit: 10 };
+    return { id: uid(componentKey), componentKey, label: meta.label };
   };
 
   const dropIntoSection = (sectionId, payload, index = null) => {
@@ -364,15 +424,6 @@ const updateNode = (nodeId, changes) => {
 
   /* ------------------------------- save ---------------------------------- */
 
-  const withComponentApis = (nodes = []) => nodes.map((node) => {
-    const meta = componentMeta(node.componentKey);
-    return {
-      ...node,
-      componentApi: node.componentApi || meta.api || `${node.componentKey}.v1`,
-      children: Array.isArray(node.children) ? withComponentApis(node.children) : node.children,
-    };
-  });
-
   const definitionForSave = () => normalizeCustomPageTree({
     device: draft.device,
     presentation_mode: draft.presentation_mode,
@@ -380,7 +431,7 @@ const updateNode = (nodeId, changes) => {
       id: section.id,
       width: section.width,
       visible: section.visible !== false,
-      children: withComponentApis(section.children),
+      children: section.children,
     })),
   });
 
@@ -655,8 +706,6 @@ const updateNode = (nodeId, changes) => {
     }
     if (!selectedNode) return <p className="text-xs text-slate-400">Select a component on the canvas.</p>;
     const node = selectedNode;
-    const nodeMetadata = componentByKey(registry, node.componentApi || node.componentKey);
-    const metadataPropertyEditor = Array.isArray(nodeMetadata?.configurable) && nodeMetadata.configurable.some((entry) => entry && typeof entry === "object" && entry.key);
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
@@ -666,15 +715,6 @@ const updateNode = (nodeId, changes) => {
             <button type="button" className="rounded p-1 text-slate-400 hover:text-red-600" title="Delete" aria-label="Delete component" onClick={removeSelectedNode}><Trash2 size={13} /></button>
           </span>
         </div>
-
-        {metadataPropertyEditor ? (
-          <MetadataComponentProperties
-            node={node}
-            metadata={nodeMetadata}
-            onChange={(changes) => updateNode(node.id, changes)}
-            interactionEditor={nodeMetadata?.interactions ? <InteractionProperties node={node} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
-          />
-        ) : null}
 
         {node.componentKey === "multi_container" ? <MultiContainerProperties node={node} objects={objects} registry={registry} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
         {node.componentKey === "table" ? <TableProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
@@ -745,7 +785,7 @@ const updateNode = (nodeId, changes) => {
             }}
           </RecordCollectionDataGroup>
         ) : null}
-        {!metadataPropertyEditor && node.componentKey === "container" ? (
+        {node.componentKey === "container" ? (
           <div className="space-y-3">
             <div className="space-y-1">
               <label className={labelClass}>Columns</label>
@@ -761,7 +801,7 @@ const updateNode = (nodeId, changes) => {
             </div>
           </div>
         ) : null}
-        {!metadataPropertyEditor && node.componentKey === "button" ? (
+        {node.componentKey === "button" ? (
           <div className="space-y-3">
             <div className="space-y-1">
               <label className={labelClass}>Label</label>
@@ -788,25 +828,25 @@ const updateNode = (nodeId, changes) => {
             </div>
           </div>
         ) : null}
-        {!metadataPropertyEditor && ["text", "header"].includes(node.componentKey) ? (
+        {["text", "header"].includes(node.componentKey) ? (
           <div className="space-y-1">
             <label className={labelClass}>{node.componentKey === "header" ? "Heading text" : "Text"}</label>
             <input className={inputClass} value={node.text || ""} onChange={(event) => updateNode(node.id, { text: event.target.value })} />
           </div>
         ) : null}
-        {!metadataPropertyEditor && node.componentKey === "spacer" ? (
+        {node.componentKey === "spacer" ? (
           <div className="space-y-1">
             <label className={labelClass}>Spacing</label>
             <select className={inputClass} value={node.spacing || 3} onChange={(event) => updateNode(node.id, { spacing: Number(event.target.value) })}>{[1, 2, 3, 4, 5, 6].map((value) => <option key={value} value={value}>{value}</option>)}</select>
           </div>
         ) : null}
-        {!metadataPropertyEditor && node.componentKey === "field_value" ? (
+        {node.componentKey === "field_value" ? (
           <div className="space-y-1">
             <label className={labelClass}>Field</label>
             <input className={inputClass} value={node.field || ""} onChange={(event) => updateNode(node.id, { field: event.target.value })} placeholder="field api name" />
           </div>
         ) : null}
-        {!metadataPropertyEditor && node.componentKey === "related_list" ? (
+        {node.componentKey === "related_list" ? (
           <div className="space-y-1">
             <label className={labelClass}>Relationship key</label>
             <input className={inputClass} value={node.relationshipKey || ""} onChange={(event) => updateNode(node.id, { relationshipKey: event.target.value })} placeholder="relationship_key" />

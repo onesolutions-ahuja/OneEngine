@@ -333,7 +333,7 @@ export default function createPlatformEventsRouter({
         authenticateInbound,
       });
       if (!result.accepted) return res.status(result.status).json({ success: false, message: result.message });
-      await req.ensureWorkflowTraceRun?.({ companyId: result.companyId, userId: null });
+      await req.ensureBusinessCommandRun?.({ companyId: result.companyId, userId: null });
       res.status(result.status).json({ success: true, duplicate: result.duplicate, inboundEventId: result.inboundEventId });
     } catch (error) {
       console.error("Inbound webhook acceptance error:", error);

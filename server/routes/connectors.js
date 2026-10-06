@@ -1678,7 +1678,7 @@ export default function createConnectorsRouter({
         return res.status(409).json({ success: false, message: "Run a successful connection test before sending SMS" });
       }
 
-      await req.ensureWorkflowTraceRun?.({
+      await req.ensureBusinessCommandRun?.({
         companyId: req.user.companyId,
         userId: req.user.id || null,
         storeId: instance.store_id || null,
@@ -1733,14 +1733,38 @@ export default function createConnectorsRouter({
     }
   });
 
-  router.get("/connector-capabilities/:capabilityKey", authenticate, async (req, res) => {
+  router.get("/connector-capabilities/:capabilityKey", authenticate, authorize("sale.create"), async (req, res) => {
     try {
+      let session = await db(
+        `SELECT terminal_id,store_id FROM till_sessions
+          WHERE company_id=$1 AND store_id=$2 AND status='open'
+          ORDER BY opened_at DESC LIMIT 1`,
+        [req.user.companyId, req.user.storeId]
+      );
+      if (!session.rows[0] && req.user.id) {
+        session = await db(
+          `SELECT ts.terminal_id,ts.store_id
+             FROM till_sessions ts
+             JOIN integration_connections c
+               ON c.company_id=ts.company_id
+              AND c.till_id=ts.terminal_id
+              AND c.enabled=TRUE
+              AND (c.store_id IS NULL OR c.store_id=ts.store_id)
+            WHERE ts.company_id=$1
+              AND ts.user_id=$2
+              AND ts.status='open'
+            ORDER BY ts.opened_at DESC
+            LIMIT 1`,
+          [req.user.companyId, req.user.id]
+        );
+      }
+      if (!session.rows[0]) return res.json({ success: true, data: { available: false, code: "DEVICE_OFFLINE" } });
       const result = await resolvePersistedConnectorCapability({
         db,
         drivers,
         companyId: req.user.companyId,
-        storeId: req.user.storeId || null,
-        tillId: req.user.tillId || req.query?.tillId || null,
+        storeId: session.rows[0].store_id,
+        tillId: session.rows[0].terminal_id,
         capabilityKey: req.params.capabilityKey,
         selfCheckout: req.user.mode === "self_checkout",
       });

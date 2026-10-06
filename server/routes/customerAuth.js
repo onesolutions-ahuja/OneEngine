@@ -1,4 +1,3 @@
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -142,19 +141,65 @@ router.post("/customer-auth/login", async (req, res) => {
 });
 
 /*
- * POST /api/customer-auth/register
- * Customer-facing registration.
- * Creates a new customer account using the existing customer model.
+ * Customer registration is a business record-creation process and is intentionally
+ * not implemented in this technical authentication adapter. Registration is owned
+ * by Customer metadata + Flow and invoked through the generic metadata runtime.
  */
-router.post("/customer-auth/register", async (req, res) => {
+/*
+ * GET /api/customer-auth/me
+ * Get current customer profile from token
+ */
+router.get("/customer-auth/me", async (req, res) => {
   const { pool } = req.app.locals;
-  if (!pool) return res.status(500).json({ success:false, message:"DATABASE_URL is not configured" });
+  if (!pool) {
+    return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
+  }
+
   try {
-    const companyId=String(req.body?.companyId||"").trim();
-    if(!companyId) return res.status(400).json({success:false,message:"Company ID required"});
-    const execution=await executeSystemWorkflow({db:(sql,params)=>pool.query(sql,params),companyId,userId:null,systemKey:"flow:customer.register",req,input:{name:req.body?.name||"",phone:req.body?.phone||null,email:req.body?.email||null,password:req.body?.password||""},source:{type:"api",method:req.method,path:req.path,capability:"CUSTOMER_REGISTER"}});
-    return res.status(201).json({success:true,data:execution.result});
-  } catch(error){return res.status(error?.status||400).json({success:false,code:error?.code||"CUSTOMER_REGISTER_FAILED",message:error?.message||"Unable to register customer"});}
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return res.status(401).json({ success: false, message: "Authentication required" });
+    }
+
+    const token = header.substring(7);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      return res.status(401).json({ success: false, message: "Invalid or expired session" });
+    }
+
+    if (!decoded.customerId) {
+      return res.status(401).json({ success: false, message: "Invalid customer token" });
+    }
+
+    const result = await pool.query(
+      `SELECT id, name, phone, email, company_id, active, created_at
+       FROM customers WHERE id = $1 AND active = true`,
+      [decoded.customerId]
+    );
+
+    if (!result.rows.length) {
+      return res.status(401).json({ success: false, message: "Customer not found" });
+    }
+
+    const customer = result.rows[0];
+    res.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        companyId: customer.company_id,
+        createdAt: customer.created_at
+      }
+    });
+  } catch (error) {
+    console.error("Customer me error:", error);
+    res.status(500).json({ success: false, message: "Unable to load profile" });
+  }
 });
+
 
 export default router;

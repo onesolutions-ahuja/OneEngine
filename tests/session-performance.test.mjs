@@ -155,7 +155,7 @@ test('deployment smoke accepts ready health state', async () => {
 test('deployment smoke waits for the exact GitHub Pages commit instead of assuming fixed deploy time', async () => {
   const source = await read('../.github/workflows/deployment-smoke.yml')
   assert.match(source, /for attempt in \{1\.\.18\}/)
-  assert.match(source, /if \[ "\$DEPLOYED_SHA" = "\$DEPLOY_SHA" \]/)
+  assert.match(source, /if \[ "\$DEPLOYED_SHA" = "\$GITHUB_SHA" \]/)
 })
 
 
@@ -163,8 +163,9 @@ test('automatic CI does not run competing live E2E suites against production', a
   const playwright = await read('../.github/workflows/playwright-e2e.yml')
   const workflowBuilder = await read('../.github/workflows/workflow-builder-e2e.yml')
   const cypress = await read('../.github/workflows/cypress-deep-e2e.yml')
+  const appointment = await read('../.github/workflows/appointment-debug.yml')
   const validate = await read('../.github/workflows/validate.yml')
-  for (const source of [playwright, workflowBuilder, cypress]) {
+  for (const source of [playwright, workflowBuilder, cypress, appointment]) {
     assert.match(source, /group: oneengine-live-e2e/)
     assert.match(source, /cancel-in-progress: false/)
   }
@@ -290,10 +291,12 @@ test('normal password login runs security, Google readiness and permissions conc
 })
 
 
-test('bandwidth-heavy production E2E workflows are manual-only', async () => {
+test('all production-facing live E2E workflows are manual-only', async () => {
   for (const path of [
     '../.github/workflows/playwright-e2e.yml',
     '../.github/workflows/cypress-deep-e2e.yml',
+    '../.github/workflows/workflow-builder-e2e.yml',
+    '../.github/workflows/appointment-debug.yml',
   ]) {
     const source = await read(path)
     assert.match(source, /on:\n\s+workflow_dispatch:/)
@@ -303,8 +306,10 @@ test('bandwidth-heavy production E2E workflows are manual-only', async () => {
 })
 
 
-test('legacy package function registry stays retired', async () => {
-  await assert.rejects(read('../server/services/platformFunctionRegistry.js'))
+test('core package function registry has no top-level-await discovery loop', async () => {
+  const source = await read('../server/services/platformFunctionRegistry.js')
+  assert.match(source, /packages\/functionsIndex\.js/)
+  assert.equal(source.includes('for (const directory of await readdir'), false)
 })
 
 test('Render shutdown is bounded against stale keep-alive connections', async () => {
@@ -315,9 +320,11 @@ test('Render shutdown is bounded against stale keep-alive connections', async ()
 })
 
 
-test('trusted runtime no longer depends on package function permission aliases', async () => {
+test('trusted runtime accepts package functions protected by permissionsAny', async () => {
   const source = await read('../server/services/trustedRuntime.js')
-  assert.doesNotMatch(source, /PLATFORM_FUNCTIONS|platformFunctionRegistry|permissionsAny/)
+  assert.match(source, /alternativePermissions/)
+  assert.match(source, /fn\?\.permissionsAny/)
+  assert.match(source, /!requiredPermissions\.length && !alternativePermissions\.length/)
 })
 
 
@@ -345,7 +352,7 @@ test('final loading verification waits for backend readiness before live login',
   assert.match(source, /\/api\/health/)
   assert.match(source, /STATUS.*ready.*online/s)
   assert.match(source, /diagnostics\.buildCommit/)
-  assert.match(source, /COMMIT.*DEPLOY_SHA/s)
+  assert.match(source, /COMMIT.*GITHUB_SHA/s)
 })
 
 
@@ -358,12 +365,16 @@ test('workspace app routes use cached metadata instead of forcing a blocking ref
   assert.equal(block.includes('forceRefresh: true'), false)
 })
 
-test('Till delegates startup to the generic metadata page runtime', async () => {
+test('Till starts till-session lookup alongside its bootstrap requests', async () => {
   const source = await read('../src/pages/till/TillPage.jsx')
-  assert.match(source, /MetadataPageRuntime/)
-  assert.match(source, /pageKey=.*till/)
-  assert.equal(source.includes('loadTill()'), false)
+  const start = source.indexOf('const tillPromise = loadTill()')
+  const end = source.indexOf('await tillPromise', start)
+  const block = source.slice(start, end)
+  assert.notEqual(start, -1)
+  assert.notEqual(end, -1)
+  assert.match(block, /Promise\.all\(\[/)
 })
+
 test('stale cache revalidation is deduped by cache key', async () => {
   const source = await read('../src/services/cachedApi.js')
   assert.match(source, /const refreshInFlight = new Map\(\)/)

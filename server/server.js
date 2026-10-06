@@ -34,32 +34,27 @@ import {
 import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
-import { createWorkflowTraceGateway, purgeOldWorkflowTraceRuns } from "./services/workflowTraceGateway.js";
-import createTillRouter from "./routes/till.js";
-import createCustomersRouter from "./routes/customers.js";
-import createProductsRouter from "./routes/products.js";
+import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
 
-import createSalesRouter from "./routes/sales.js";
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReportsRouter from "./routes/reports.js";
 import createSecureInvoiceRouter from "./routes/secureInvoice.js";
+import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
-import createWhatsAppSettingsRouter from "./routes/whatsapp.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
 import createIntegrationsRouter from "./routes/integrations.js";
-import createProviderOAuthRouter from "./routes/providerOAuth.js";
-import createShopifyWebhooksRouter from "./routes/shopifyWebhooks.js";
 import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
+import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
 import createCustomerAuthRouter from "./routes/customerAuth.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
@@ -75,13 +70,13 @@ import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enfor
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
+import createPaypalQrRouter from "./routes/paypalQr.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
 import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
 import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
 import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
-import { ONE_CONNECT_PROVIDER_DRIVER_KEYS, createOneConnectProviderDriver } from "./services/oneConnectProviders.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
 import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
@@ -104,9 +99,6 @@ import { companyAdministrativeAccess, permissionAllows } from "./services/author
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
 import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname } from "./services/tenantResolver.js";
 import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool } from "./services/tenantDatabase.js";
-/* Inventory primitives live in services/inventory.js (shared with every
- * stock writer: POS sales, purchases, returns, adjustments). */
-
 
 const { Pool } = pg;
 
@@ -161,8 +153,8 @@ app.use(cors({
     if (isAllowedOrigin(origin)) return callback(null, true);
     if (!origin) return callback(null, true);
     db("SELECT 1 FROM security_trusted_origins WHERE origin=$1 AND origin_type='CORS' AND active=TRUE LIMIT 1", [origin])
-      .then((result) => callback(null, result.rows.length > 0))
-      .catch(() => callback(null, false));
+      .then((result) => callback(result.rows.length ? null : new Error("CORS origin not allowed"), result.rows.length > 0))
+      .catch(() => callback(new Error("CORS origin not allowed"), false));
   },
   credentials: true,
   allowedHeaders: [
@@ -376,9 +368,6 @@ app.use((req, res, next) => {
   req.tenantPool = pool;
   next();
 });
-/* T10P: Scan & Go checkout deducts stock through the SAME inventory ledger
- * helper the till and online orders use (no second inventory mechanism). */
-// Inventory mutations are mediated by metadata Flows.
 
 /*
  * A backend error on an idle pool connection (network blip, Postgres restart,
@@ -469,9 +458,6 @@ connectorDrivers.register(createPaypalQrDriver());
 connectorDrivers.register(createSmsGateDriver());
 connectorDrivers.register(createBrevoDriver());
 connectorDrivers.register(createMailjetDriver());
-for (const providerKey of ONE_CONNECT_PROVIDER_DRIVER_KEYS) {
-  connectorDrivers.register(createOneConnectProviderDriver(providerKey));
-}
 app.locals.connectorDrivers = connectorDrivers;
 
 async function testPaymentTerminal(terminal) {
@@ -493,18 +479,19 @@ async function testPaymentTerminal(terminal) {
  * services/auditLog.js (unknown users are nulled to satisfy the FK; other
  * failures are logged and swallowed so a committed business action stands).
  */
-app.use("/api", createWorkflowTraceGateway({ db }));
+app.use("/api", createBusinessCommandGateway({ db }));
 
 const writeAudit = createAuditWriter({ db });
 app.locals.writeAudit = writeAudit;
 const workflowTraceRetentionDays = Math.max(7, Number(process.env.WORKFLOW_TRACE_RETENTION_DAYS || 90));
-const purgeWorkflowTraceBatch = () => purgeOldWorkflowTraceRuns({
+const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
   db,
   retentionDays: workflowTraceRetentionDays,
   batchSize: 5000,
 }).catch((error) => console.error("Workflow trace retention cleanup error:", error?.message || error));
 setTimeout(purgeWorkflowTraceBatch, 60_000).unref?.();
 setInterval(purgeWorkflowTraceBatch, 6 * 60 * 60 * 1000).unref?.();
+const globalProductLookupService = createGlobalProductLookupService();
 
 /*
 |--------------------------------------------------------------------------
@@ -592,7 +579,7 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
       }
       req.user = { ...req.user, storeId: requestedStoreId };
     }
-    await req.ensureWorkflowTraceRun?.({
+    await req.ensureBusinessCommandRun?.({
       companyId: req.user?.companyId || null,
       userId: req.user?.id || null,
       storeId: req.user?.storeId || null,
@@ -1870,20 +1857,6 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 |--------------------------------------------------------------------------
 */
 
-app.use(
-  "/api",
-  createCustomersRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    canViewCompanyCustomers,
-    hasCompanyAdminAccess,
-    associateCustomerWithStore,
-    savePlatformRecord: saveDomainConfiguration,
-    requireLoyaltyEntitlement: requireEntitlement(db, "loyalty"),
-  })
-);
 
 /*
 
@@ -1893,7 +1866,7 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-app.use("/api", createEanLookupRouter({ authenticate, db }));
+app.use("/api", createEanLookupRouter({ authenticate, db, lookupService: globalProductLookupService }));
 
 /* T10D: Self-Checkout session routes (enter/exit the restricted mode). */
 app.use("/api", createSelfCheckoutRouter({
@@ -1916,6 +1889,7 @@ app.use("/api", createGlobalProductLookupRouter({
   authorize,
   db,
   writeAudit,
+  lookupService: globalProductLookupService,
   connectorDrivers,
 }));
 
@@ -1952,6 +1926,7 @@ app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeA
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
+app.use("/api", createPaypalQrRouter({ authenticate, authorize, db, connectorDrivers, writeAudit }));
 app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
 app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
@@ -2006,8 +1981,20 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
+app.use("/api", createSettingsRouter({
+  authenticate,
+  authorize,
+  db,
+  pool,
+  writeAudit,
+  testPaymentTerminal,
+  requireLoyaltyEntitlement: (req, res, next) => {
+    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
+    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
+    return requireEntitlement(db, "loyalty")(req, res, next);
+  },
+}));
 app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
-app.use("/api", createWhatsAppSettingsRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createSmsGateWebhookRouter({ pool }));
 app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool, writeAudit }));
 
@@ -2016,9 +2003,8 @@ app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool,
 | CATEGORIES & PRODUCTS
 |--------------------------------------------------------------------------
 |
-| Product and category routes are registered via routes/products.js,
-| receiving the existing authenticate, authorize, db, pool and
-| createInventoryMovement functions so behaviour is unchanged.
+| Product and category records are served by the generic platform object runtime.
+| Product and category business writes are owned by metadata Objects and Flows.
 |
 | Route ordering preserved:
 |   GET  /api/categories            (product.view)
@@ -2033,18 +2019,6 @@ app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool,
 */
 app.use(
   "/api",
-  createProductsRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    writeAudit,
-    canAccessStore,
-    savePlatformRecord: saveDomainConfiguration,
-  })
-);
-app.use(
-  "/api",
   createProductFeaturesRouter({
     authenticate,
     authorize,
@@ -2053,10 +2027,8 @@ app.use(
   })
 );
 
-app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers }));
 
-
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt }));
+app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
 /* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
 app.use(
@@ -2080,7 +2052,7 @@ app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStor
 | Public token-based invoice download at GET /i/:token (outside /api - the
 | opaque token is the only credential; no IDs in the URL, hash-only token
 | storage, generic 404s) plus admin create/revoke endpoints under
-| /api/sales/:saleId/secure-links using the existing permission model.
+| Secure invoice links use the Sale platform object and existing permission model.
 */
 app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudit }));
 
@@ -2088,21 +2060,6 @@ app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudi
 | T9A - generic integration foundation (provider-agnostic). Credentials are
 | encrypted at rest; no Sales/Purchases data is sent anywhere by this module.
 */
-app.use(
-  "/api",
-  createShopifyWebhooksRouter({ db, writeAudit })
-);
-
-app.use(
-  "/api",
-  createProviderOAuthRouter({
-    authenticate,
-    authorize,
-    db,
-    writeAudit,
-  })
-);
-
 app.use(
   "/api",
   createIntegrationsRouter({
@@ -2132,32 +2089,6 @@ app.use(
 | sale.hold permission gate and company/store/user scoping as before.
 */
 
-/*
-|--------------------------------------------------------------------------
-| TILL SESSIONS & CASH MANAGEMENT
-|--------------------------------------------------------------------------
-|
-| A till session is opened per terminal (till) for a store. One open session
-| is allowed per terminal. Sales created while a session is open are linked
-| to the session's terminal; cash sales contribute to expected cash at close,
-| card sales do not. Cash movements record manual cash-in / cash-out.
-|
-| Routes are registered via routes/till.js, receiving the existing
-| authenticate, authorize, db, getRolePermissionCodes and
-| canViewCompanyCustomers functions so behaviour is unchanged.
-*/
-
-app.use(
-  "/api",
-  createTillRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    getRolePermissionCodes,
-    canViewCompanyCustomers,
-  })
-);
 
 /*
 |--------------------------------------------------------------------------
@@ -2867,6 +2798,13 @@ async function startServer() {
                   [subscriptionId, job.company_id]
                 );
               }
+            }
+            if (["QUICKBOOKS_PROVIDER_SYNC", "SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
+              await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
+                kind: job.kind,
+                status: failed?.status || "FAILED",
+                attempts: failed?.attempts || 0,
+              });
             }
           },
           handler: async (job) => {
@@ -3729,18 +3667,71 @@ async function startServer() {
               }
             }
             if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
-            if (job.kind === "PLATFORM_FLOW_EXECUTION") {
-              const systemKey = String(payload.systemKey || "");
-              if (!systemKey.startsWith("flow:")) throw Object.assign(new Error("Generic flow job requires a metadata Flow system key"), { retryable:false });
-              const input = payload.input && typeof payload.input === "object" ? payload.input : {};
+            if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
               const execution = await executeSystemWorkflow({
-                db, companyId:job.company_id, userId:payload.actorUserId||null, systemKey,
-                req:{method:"JOB",path:"PLATFORM_FLOW_EXECUTION",user:{companyId:job.company_id,storeId:payload.storeId||null,id:payload.actorUserId||null}},
-                input:{...input,_executeFromJob:true}, storeId:payload.storeId||null, writeAudit,
-                source:{type:"job",method:"JOB",path:"PLATFORM_FLOW_EXECUTION",capability:systemKey}, extraContext:{pool},
+                db,
+                companyId: job.company_id,
+                userId: payload.actorUserId || null,
+                systemKey: "action:SHOPIFY_PROCESS_WEBHOOK",
+                req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
+                input: { ...payload, _executeFromJob: true },
+                storeId: payload.storeId || null,
+                writeAudit,
+                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
+                extraContext: { pool },
               });
-              if (execution.result?.success === false) throw Object.assign(new Error(execution.result.message || execution.result.code || "Metadata Flow job failed"), {retryable:execution.result.retryable!==false});
-              return execution.result;
+              const outcome = execution.result;
+              if (outcome?.success === false) {
+                throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
+                  retryable: outcome.retryable === true,
+                });
+              }
+              return outcome;
+            }
+            if (job.kind === "QUICKBOOKS_PROVIDER_SYNC") {
+              const actionKey = String(payload.type || payload.key || "").toUpperCase();
+              if (!actionKey) throw Object.assign(new Error("QuickBooks provider job is missing an action key"), { retryable: false });
+              const execution = await executeSystemWorkflow({
+                db,
+                companyId: job.company_id,
+                userId: payload.actorUserId || null,
+                systemKey: `action:${actionKey}`,
+                req: { method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", user: { companyId: job.company_id, id: payload.actorUserId || null } },
+                input: { ...payload, _executeFromJob: true },
+                writeAudit,
+                source: { type: "job", method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", capability: actionKey },
+                extraContext: { pool },
+              });
+              const outcome = execution.result;
+              if (outcome?.success === false) {
+                throw Object.assign(new Error(outcome.message || outcome.code || "QuickBooks sync failed"), {
+                  retryable: outcome.retryable !== false,
+                });
+              }
+              return outcome;
+            }
+            if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
+              const actionKey = String(payload.type || payload.key || "").toUpperCase();
+              if (!actionKey) throw Object.assign(new Error("Shopify provider job is missing an action key"), { retryable: false });
+              const execution = await executeSystemWorkflow({
+                db,
+                companyId: job.company_id,
+                userId: payload.actorUserId || null,
+                systemKey: `action:${actionKey}`,
+                req: { method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
+                input: { ...payload, _executeFromJob: true },
+                storeId: payload.storeId || null,
+                writeAudit,
+                source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: actionKey },
+                extraContext: { pool },
+              });
+              const outcome = execution.result;
+              if (outcome?.success === false) {
+                throw Object.assign(new Error(outcome.message || outcome.code || "Shopify sync failed"), {
+                  retryable: outcome.retryable !== false,
+                });
+              }
+              return outcome;
             }
             const actionKey = String(payload.type || payload.key || "").toUpperCase();
             if (!actionKey) throw Object.assign(new Error("Platform action job is missing an action key"), { retryable: false });

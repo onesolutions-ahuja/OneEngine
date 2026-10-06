@@ -6,7 +6,7 @@
  *          API surface) and carries no IDs: the opaque token is the sole
  *          credential and the sole lookup key (hash-only storage).
  *
- * ADMIN:   GET/DELETE under /api/sales/:saleId/secure-links so the existing
+ * ADMIN:   GET/DELETE under /api/platform/objects/sale/records/:saleId/secure-links so the existing
  *          sales permission model can create/revoke links in a later batch.
  *
  * Enumeration protection: invalid, expired, revoked and unknown tokens all
@@ -237,10 +237,132 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
 
   /* ---------------- ADMIN: link management for later batches ---------------- */
 
-  const metadataRequired=(_req,res)=>res.status(410).json({success:false,code:"METADATA_ACTION_REQUIRED",message:"Receipt/invoice link business actions execute through metadata Actions/Flows; secure-token validation remains protocol infrastructure."});
-  router.post("/receipt-qr",authenticate,authorize("sale.view"),metadataRequired);
-  router.post("/secure-invoice",authenticate,authorize("sale.view"),metadataRequired);
-  router.delete("/receipt-qr/:saleId",authenticate,authorize("sale.view"),metadataRequired);
-  router.delete("/secure-invoice/:saleId",authenticate,authorize("sale.view"),metadataRequired);
+  router.post(
+    "/api/platform/objects/sale/records/:saleId/secure-links",
+    authenticate,
+    authorize("sale.refund"),
+    async (req, res) => {
+      try {
+        const result = await createSecureInvoiceLink({
+          db,
+          companyId: req.user.companyId,
+          storeId: req.user.storeId ?? null,
+          saleId: req.params.saleId,
+          createdBy: req.user.id ?? null,
+          expiryDays: Number.isFinite(Number(req.body?.expiryDays))
+            ? Number(req.body.expiryDays)
+            : undefined,
+        });
+        if (!result.ok) {
+          return res.status(result.status).json({ success: false, message: result.message });
+        }
+        await writeAudit(req.user.companyId, req.user.id, "secure_invoice_link_created", "secure_invoice_link", result.linkId, {
+          saleId: req.params.saleId,
+          expiresAt: result.expiresAt,
+        });
+        res.status(201).json({
+          success: true,
+          data: {
+            linkId: result.linkId,
+            token: result.token, // plaintext shown exactly once
+            url: `/i/${result.token}`,
+            expiresAt: result.expiresAt,
+            defaultExpiryDays: SECURE_LINK_DEFAULT_EXPIRY_DAYS,
+          },
+        });
+      } catch (error) {
+        console.error("Create secure invoice link error:", error);
+        res.status(500).json({ success: false, message: "Unable to create secure link" });
+      }
+    }
+  );
+
+  router.post(
+    "/api/platform/objects/sale/records/:saleId/receipt-qr",
+    authenticate,
+    authorize("sale.refund"),
+    async (req, res) => {
+      try {
+        const expiryMinutes = Number.isFinite(Number(req.body?.expiryMinutes)) ? Number(req.body.expiryMinutes) : 5;
+        const execution = await executeSystemWorkflow({
+          db,
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "flow:till.receipt.qr",
+          req,
+          input: {
+            saleId: req.params.saleId,
+            expiryMinutes,
+            baseUrl: req.protocol === "https" ? `https://${req.get("host")}` : `http://${req.get("host")}`,
+          },
+          storeId: req.user.storeId || null,
+          tillId: req.user.tillId || null,
+          source: {
+            type: "api",
+            method: req.method,
+            path: req.originalUrl || req.path,
+            capability: "till.receipt.qr",
+          },
+        });
+        const result = execution?.result?.receipt || null;
+        if (!result?.id || !result?.url) {
+          return res.status(503).json({ success: false, message: "Receipt QR Flow did not return a receipt link" });
+        }
+
+        await writeAudit?.(req.user.companyId, req.user.id, "temporary_receipt_qr_created", "temporary_receipt_download", result.id, {
+          saleId: req.params.saleId,
+          expiresAt: result.expiresAt,
+          downloadUrl: result.url,
+          workflowRunId: execution.runId || null,
+        });
+
+        res.status(201).json({ success: true, data: result });
+      } catch (error) {
+        console.error("Create receipt QR error:", error);
+        res.status(500).json({ success: false, message: "Unable to create receipt QR link" });
+      }
+    }
+  );
+
+  router.delete(
+    "/api/platform/objects/sale/records/:saleId/receipt-qr",
+    authenticate,
+    authorize("sale.refund"),
+    async (req, res) => {
+      try {
+        const result = await revokeTemporaryReceiptDownloadsForSale({
+          db,
+          companyId: req.user.companyId,
+          saleId: req.params.saleId,
+        });
+        res.json({ success: true, data: { revoked: result.revoked || 0 }, message: "Receipt QR revoked" });
+      } catch (error) {
+        console.error("Revoke receipt QR error:", error);
+        res.status(500).json({ success: false, message: "Unable to revoke receipt QR" });
+      }
+    }
+  );
+
+  router.delete(
+    "/api/platform/objects/sale/records/:saleId/secure-links",
+    authenticate,
+    authorize("sale.refund"),
+    async (req, res) => {
+      try {
+        const result = await revokeSecureInvoiceLinksForSale({ db, companyId: req.user.companyId, saleId: req.params.saleId });
+        await writeAudit(req.user.companyId, req.user.id, "secure_invoice_links_revoked", "sale", req.params.saleId, {
+          revoked: result.revoked,
+        });
+        res.json({ success: true, message: "Secure links revoked", data: { revoked: result.revoked } });
+      } catch (error) {
+        console.error("Revoke secure links error:", error);
+        res.status(500).json({ success: false, message: "Unable to revoke links" });
+      }
+    }
+  );
+
   return router;
 }
+
+/* Internal re-export for tests; not part of the public surface. */
+export { genericNotFound, rateLimited, buildInvoiceHtml };

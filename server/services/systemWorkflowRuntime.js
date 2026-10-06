@@ -52,6 +52,9 @@ async function resolveSystemWorkflowActor({ db, companyId, userId = null, req = 
 
 function runtimeAction(action, capabilityType, runtimeInput = {}) {
   if (!action || typeof action !== "object") return action;
+  if (capabilityType === "function" && action.type === "CALL_FUNCTION") {
+    return { ...action, inputs: { ...(action.inputs || {}), ...(runtimeInput || {}) } };
+  }
   if (action.systemTemplate === true) {
     return { ...action, ...(runtimeInput || {}) };
   }
@@ -151,7 +154,7 @@ export async function executeSystemWorkflow({
   }
 
   const correlationId = String(
-    req?.workflowTraceCorrelationId
+    req?.businessCommandCorrelationId
       || req?.headers?.["x-request-id"]
       || req?.headers?.["x-correlation-id"]
       || randomUUID()
@@ -169,9 +172,9 @@ export async function executeSystemWorkflow({
     steps: {},
   };
 
-  const parentRunId = req?.ensureWorkflowTraceRun
-    ? await req.ensureWorkflowTraceRun({ companyId, userId, storeId, tillId })
-    : (req?.workflowTraceRunId || null);
+  const parentRunId = req?.ensureBusinessCommandRun
+    ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, tillId })
+    : (req?.businessCommandRunId || null);
 
   const run = await createWorkflowRun({
     db,

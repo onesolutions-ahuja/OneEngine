@@ -1,1 +1,0 @@
-export default function FieldValueV1({node,value}){const shown=value!==undefined?value:node?.field?String(node.field).replace(/_/g," "):"Field value";return <div className="text-sm" style={{color:"var(--text-primary,#374151)"}}>{shown==null||shown===""?"—":String(shown)}</div>}

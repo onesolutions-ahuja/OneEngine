@@ -162,6 +162,7 @@ export function toPublicIntegration(row) {
     baseUrl: row.base_url,
     providerAccountId: row.provider_account_id || null,
     authType: row.auth_type,
+    connectorConfiguration: row.connector_configuration || {},
     hasCredentials,
     credentialsPreview: hasCredentials ? { [REDACTED]: REDACTED } : null,
     enabled: row.enabled,

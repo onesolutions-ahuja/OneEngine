@@ -26,10 +26,11 @@ import {
   toPublicIntegration,
 } from "../services/integrationCredentials.js";
 import { buildPayload } from "../services/integrationFieldResolver.js";
+import { getIntegrationDispatchStatus } from "../services/integrationDispatcher.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const AUTH_TYPES = ["none", "api_key", "bearer", "basic"];
+const AUTH_TYPES = ["none", "api_key", "bearer", "basic", "oauth2", "oauth2_client_credentials"];
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const ENTITY_TYPES = ["custom"];
 const MAPPING_TYPES = ["direct", "constant", "template"];
@@ -141,6 +142,30 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
     }
   );
 
+  // Dispatch status for the Integration management UI (T9M, read-only).
+  // One row per configured endpoint: connection, event, last attempt /
+  // success / failure, HTTP status, error message and trace (correlation)
+  // ID. Credentials never appear. Registered before "/integrations/:id"
+  // so the literal "dispatch-status" segment is not captured as an id.
+  router.get(
+    "/integrations/dispatch-status",
+    authenticate,
+    authorize("integration.manage"),
+    async (req, res) => {
+      try {
+        const rows = await getIntegrationDispatchStatus({
+          deps: { db },
+          companyId: req.user.companyId,
+          storeId: req.user.storeId ?? null,
+        });
+        res.json({ success: true, data: rows });
+      } catch (error) {
+        console.error("Integration dispatch status error:", error);
+        res.status(500).json({ success: false, message: "Unable to load dispatch status" });
+      }
+    }
+  );
+
   // Get a single integration (company-scoped).
   router.get(
     "/integrations/:id",
@@ -181,6 +206,8 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           storeId,
           store_id,
           enabled,
+          connectorConfiguration,
+          connector_configuration,
         } = req.body || {};
 
         if (!name || typeof name !== "string" || !name.trim()) {
@@ -220,8 +247,8 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
 
         const result = await db(
           `INSERT INTO integration_connections
-             (company_id, store_id, name, provider_name, integration_type, base_url, auth_type, credentials_encrypted, enabled, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             (company_id, store_id, name, provider_name, integration_type, base_url, auth_type, credentials_encrypted, connector_configuration, enabled, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
            RETURNING *`,
           [
             req.user.companyId,
@@ -232,6 +259,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
             url,
             auth,
             encryptCredentials(credentials ?? null),
+            connectorConfiguration ?? connector_configuration ?? {},
             enabled !== false,
             req.user.id,
           ]
@@ -275,6 +303,8 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           storeId,
           store_id,
           enabled,
+          connectorConfiguration,
+          connector_configuration,
         } = req.body || {};
 
         const nextAuthType = authType ?? auth_type ?? existing.auth_type;
@@ -347,6 +377,7 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
           }
           set("store_id", nextStoreId);
         }
+        if (connectorConfiguration !== undefined || connector_configuration !== undefined) set("connector_configuration", connectorConfiguration ?? connector_configuration ?? {});
         if (enabled !== undefined) set("enabled", Boolean(enabled));
 
         if (updates.length === 0) {

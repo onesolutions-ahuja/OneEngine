@@ -193,75 +193,74 @@ export async function cleanupExpiredTemporaryReceipts(db) {
   }
 }
 
-export function buildReceiptQrDownloadUrl(token, baseUrl = null) {
-  if (!token) return "/receipt/download/";
-  const prefix = typeof baseUrl === "string" && baseUrl.trim() ? baseUrl.replace(/\/+$/, "") : "";
-  return `${prefix || ""}/receipt/download/${encodeURIComponent(token)}`;
-}
-
-
-/**
- * Load tenant-scoped receipt data for the public temporary receipt endpoint.
- * This is document-delivery infrastructure only; it does not mutate Sale business state.
- */
 export async function loadPublicReceiptData({ db, companyId, saleId }) {
   if (!db || !companyId || !saleId) return null;
   try {
     const saleResult = await db(
-      `SELECT s.id, s.company_id, s.store_id, s.receipt_number, s.subtotal,
-              s.tax, s.discount, s.total, s.status, s.created_at, s.completed_at,
-              c.timezone AS company_timezone, c.currency AS company_currency
-         FROM sales s
-         INNER JOIN companies c ON c.id=s.company_id
-        WHERE s.id=$1 AND s.company_id=$2
-        LIMIT 1`,
+      `SELECT s.*, st.name AS store_name, st.address_line1, st.address_line2, st.city, st.postcode, st.phone AS store_phone,
+              u.username AS cashier, cst.name AS customer_name, cst.phone AS customer_phone, cst.email AS customer_email,
+              c.name AS company_name, c.email AS company_email, c.phone AS company_phone, c.currency AS company_currency, c.timezone AS company_timezone
+       FROM sales s
+       LEFT JOIN stores st ON st.id = s.store_id
+       LEFT JOIN companies c ON c.id = s.company_id
+       LEFT JOIN users u ON u.id = s.user_id
+       LEFT JOIN customers cst ON cst.id = s.customer_id
+       WHERE s.id = $1 AND s.company_id = $2 LIMIT 1`,
       [saleId, companyId]
     );
-    const row = saleResult.rows?.[0];
-    if (!row) return null;
-    const [itemsResult, paymentsResult, companyResult, storeResult] = await Promise.all([
-      db(`SELECT product_name,quantity,unit_price,discount,tax,total
-            FROM sale_items WHERE sale_id=$1 ORDER BY id ASC`, [row.id]),
-      db(`SELECT payment_method,amount,status FROM payments WHERE sale_id=$1 ORDER BY created_at ASC`, [row.id]),
-      db(`SELECT name,email,phone,currency FROM companies WHERE id=$1 LIMIT 1`, [row.company_id]),
-      db(`SELECT name,phone,address_line1,city,postcode FROM stores WHERE id=$1 LIMIT 1`, [row.store_id]),
-    ]);
+    if (!saleResult.rows?.[0]) return null;
+    const sale = saleResult.rows[0];
+    const items = await db("SELECT * FROM sale_items WHERE sale_id = $1 ORDER BY id ASC", [saleId]);
+    const payments = await db("SELECT payment_method, amount, status FROM payments WHERE sale_id = $1 ORDER BY created_at ASC", [saleId]);
     return {
+      company: {
+        name: sale.company_name || "onePOS",
+        email: sale.company_email || null,
+        phone: sale.company_phone || null,
+      },
+      store: {
+        name: sale.store_name || "Store",
+        phone: sale.store_phone || null,
+        addressLine1: sale.address_line1 || null,
+        city: sale.city || null,
+        postcode: sale.postcode || null,
+      },
       sale: {
-        ...row,
-        receiptNumber: row.receipt_number,
-        createdAt: row.created_at,
-        completedAt: row.completed_at,
-        companyTimezone: row.company_timezone,
-        companyCurrency: row.company_currency,
-        items: (itemsResult.rows || []).map(item => ({
-          name: item.product_name,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unit_price),
-          discount: Number(item.discount),
-          tax: Number(item.tax),
-          total: Number(item.total),
+        ...sale,
+        receiptNumber: sale.receipt_number || sale.id,
+        createdAt: sale.created_at,
+        completedAt: sale.completed_at || sale.created_at,
+        companyCurrency: sale.company_currency || "GBP",
+        companyTimezone: sale.company_timezone || "Europe/London",
+        subtotal: Number(sale.subtotal || 0),
+        tax: Number(sale.tax || 0),
+        discount: Number(sale.discount || 0),
+        total: Number(sale.total || 0),
+        items: (items.rows || []).map((item) => ({
+          name: item.product_name || item.description || "Item",
+          quantity: Number(item.quantity || 0),
+          unitPrice: Number(item.unit_price || 0),
+          discount: Number(item.discount || 0),
+          tax: Number(item.tax || 0),
+          total: Number(item.total || 0),
         })),
-        payments: (paymentsResult.rows || []).map(payment => ({
-          method: payment.payment_method,
-          amount: Number(payment.amount),
-          status: payment.status,
+        payments: (payments.rows || []).map((pay) => ({
+          method: pay.payment_method || "Unknown",
+          amount: Number(pay.amount || 0),
         })),
       },
-      company: companyResult.rows?.[0] || null,
-      store: storeResult.rows?.[0]
-        ? {
-            ...storeResult.rows[0],
-            addressLine1: storeResult.rows[0].address_line1,
-          }
-        : null,
     };
   } catch {
     return null;
   }
 }
 
-/** Render receipt PDF bytes using the shared generic document renderer. */
+export function buildReceiptQrDownloadUrl(token, baseUrl = null) {
+  if (!token) return "/receipt/download/";
+  const prefix = typeof baseUrl === "string" && baseUrl.trim() ? baseUrl.replace(/\/+$/, "") : "";
+  return `${prefix || ""}/receipt/download/${encodeURIComponent(token)}`;
+}
+
 export function buildReceiptPdfBytes({ sale, company, store }) {
   return buildInvoicePdf({ sale, company, store });
 }

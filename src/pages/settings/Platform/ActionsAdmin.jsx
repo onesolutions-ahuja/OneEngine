@@ -34,6 +34,7 @@ function actionKindLabel(item) {
   }
   if (["ADD_RELATIONSHIP", "REMOVE_RELATIONSHIP"].includes(item.key)) return "Relationship";
   if (item.key === "IN_APP_NOTIFICATION") return "Notification";
+  if (item.key === "CALL_FUNCTION") return "Registered function";
   if (item.key === "RUN_SUBFLOW") return "Subflow";
   if (item.key === "WEBHOOK") return "Webhook";
   if (item.key === "CONDITION") return "Logic";

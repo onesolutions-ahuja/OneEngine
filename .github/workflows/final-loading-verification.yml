@@ -50,8 +50,9 @@ jobs:
           for attempt in {1..36}; do
             BODY="$(curl -fsSL "$API/api/health" 2>/dev/null || true)"
             STATUS="$(printf '%s' "$BODY" | jq -r '.status // empty' 2>/dev/null || true)"
+            GITHUB_SHA="$DEPLOY_SHA"
             COMMIT="$(printf '%s' "$BODY" | jq -r '.diagnostics.buildCommit // empty' 2>/dev/null || true)"
-            if { [ "$STATUS" = "ready" ] || [ "$STATUS" = "online" ]; } && [ "$COMMIT" = "$DEPLOY_SHA" ]; then
+            if { [ "$STATUS" = "ready" ] || [ "$STATUS" = "online" ]; } && [ "$COMMIT" = "$GITHUB_SHA" ]; then
               exit 0
             fi
             sleep 5

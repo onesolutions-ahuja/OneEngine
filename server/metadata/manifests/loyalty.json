@@ -1,0 +1,464 @@
+{
+  "objects": [
+    {
+      "objectKey": "loyalty_configuration",
+      "metadataScope": "global",
+      "label": "Loyalty Configuration",
+      "pluralLabel": "Loyalty Configurations",
+      "description": "Company-level loyalty programme settings. Values remain authoritative in company_settings.",
+      "sourceTable": "company_settings",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "loyalty_enabled",
+          "label": "Enabled",
+          "fieldType": "boolean",
+          "writable": true
+        },
+        {
+          "apiName": "loyalty_earning_rate",
+          "label": "Earn Rate",
+          "fieldType": "decimal",
+          "writable": true
+        },
+        {
+          "apiName": "loyalty_min_sale_total",
+          "label": "Minimum Qualifying Sale",
+          "fieldType": "currency",
+          "writable": true
+        },
+        {
+          "apiName": "loyalty_redeem_value_per_point",
+          "label": "Redemption Value per Point",
+          "fieldType": "decimal",
+          "writable": true
+        },
+        {
+          "apiName": "loyalty_min_points_redeem",
+          "label": "Minimum Redemption Points",
+          "fieldType": "number",
+          "writable": true
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ],
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "loyalty_account",
+      "metadataScope": "global",
+      "label": "Loyalty Account",
+      "pluralLabel": "Loyalty Accounts",
+      "description": "Customer loyalty balance. The balance remains authoritative in customer_loyalty_balances.",
+      "sourceTable": "customer_loyalty_balances",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "customer_id",
+          "label": "Customer",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "balance",
+          "label": "Balance",
+          "fieldType": "decimal",
+          "writable": true
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ],
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "loyalty_activity",
+      "metadataScope": "global",
+      "label": "Loyalty Activity",
+      "pluralLabel": "Loyalty Activity",
+      "description": "Canonical loyalty earn, redemption, reversal and adjustment ledger.",
+      "sourceTable": "customer_loyalty_transactions",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "customer_id",
+          "label": "Customer",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "transaction_type",
+          "label": "Entry Type",
+          "fieldType": "picklist",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "amount",
+          "label": "Points",
+          "fieldType": "decimal",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "balance_after",
+          "label": "Balance After",
+          "fieldType": "decimal",
+          "writable": true
+        },
+        {
+          "apiName": "reference_type",
+          "label": "Reference Type",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "reference_id",
+          "label": "Reference",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "description",
+          "label": "Reason",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "created_by",
+          "label": "Operator",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ],
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "loyalty_adjustment",
+      "metadataScope": "global",
+      "label": "Loyalty Adjustment",
+      "pluralLabel": "Loyalty Adjustments",
+      "description": "Auditable manual loyalty adjustments.",
+      "sourceTable": "customer_loyalty_adjustments",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "customer_id",
+          "label": "Customer",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "points",
+          "label": "Points",
+          "fieldType": "decimal",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "reason",
+          "label": "Reason",
+          "fieldType": "text",
+          "writable": true
+        },
+        {
+          "apiName": "reference_id",
+          "label": "Reference",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "created_by",
+          "label": "Operator",
+          "fieldType": "lookup",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ],
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "customer",
+      "childObjectKey": "loyalty_account",
+      "relationshipKey": "loyalty_account",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "customer_id"
+    },
+    {
+      "parentObjectKey": "customer",
+      "childObjectKey": "loyalty_activity",
+      "relationshipKey": "loyalty_activity",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "customer_id"
+    },
+    {
+      "parentObjectKey": "loyalty_activity",
+      "childObjectKey": "customer",
+      "relationshipKey": "customer",
+      "relationshipType": "lookup",
+      "childFieldApiName": "customer_id"
+    },
+    {
+      "parentObjectKey": "loyalty_activity",
+      "childObjectKey": "sale",
+      "relationshipKey": "sale",
+      "relationshipType": "lookup",
+      "childFieldApiName": "reference_id",
+      "referenceType": "sale"
+    },
+    {
+      "parentObjectKey": "sale",
+      "childObjectKey": "loyalty_activity",
+      "relationshipKey": "loyalty_activity",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "reference_id",
+      "referenceType": "sale"
+    }
+  ],
+  "permissionDeclarations": [
+    {
+      "key": "view",
+      "permission": "customer.view",
+      "access": "read"
+    },
+    {
+      "key": "adjust",
+      "permission": "loyalty.adjust",
+      "access": "execute"
+    },
+    {
+      "key": "configure",
+      "permission": "settings.manage",
+      "access": "write"
+    }
+  ],
+  "actions": [
+    {
+      "actionKey": "loyalty.adjust",
+      "objectKey": "loyalty_account",
+      "label": "Adjust Loyalty",
+      "description": "Run the editable loyalty adjustment Flow.",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "loyalty.adjust",
+      "config": {
+        "subflowApiName": "LOYALTY_ADJUST"
+      }
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "loyalty_account",
+      "viewKey": "all",
+      "label": "Customer Loyalty",
+      "columns": [
+        "customer_id",
+        "balance",
+        "updated_at"
+      ],
+      "isDefault": true
+    },
+    {
+      "objectKey": "loyalty_activity",
+      "viewKey": "all",
+      "label": "Loyalty Activity",
+      "columns": [
+        "customer_id",
+        "transaction_type",
+        "amount",
+        "reference_type",
+        "created_at"
+      ],
+      "isDefault": true
+    }
+  ],
+  "references": [
+    {
+      "packageKey": "retail_pos",
+      "objectKey": "sale",
+      "purpose": "Sale reference for earning, redemption and reversal activity"
+    },
+    {
+      "packageKey": "retail_pos",
+      "objectKey": "payment",
+      "purpose": "Loyalty redemption remains a Payment Core tender"
+    }
+  ],
+  "packageKey": "loyalty",
+  "buttons": [
+    {
+      "buttonKey": "loyalty_adjust",
+      "objectKey": "loyalty_account",
+      "label": "Adjust Loyalty",
+      "actionKey": "loyalty.adjust",
+      "requiredPermission": "loyalty.adjust",
+      "variant": "primary"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Adjust Loyalty",
+      "triggerKey": "manual",
+      "action": {
+        "type": "workflow",
+        "apiName": "LOYALTY_ADJUST",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": {
+          "customerId": {
+            "type": "text",
+            "required": true
+          },
+          "points": {
+            "type": "number",
+            "required": true
+          },
+          "reason": {
+            "type": "text",
+            "required": true
+          },
+          "referenceId": {
+            "type": "text"
+          }
+        },
+        "outputContract": {
+          "adjustment": {
+            "type": "record"
+          }
+        },
+        "actions": [
+          {
+            "id": "get_account",
+            "label": "Get Loyalty Account",
+            "apiName": "get_account",
+            "key": "GET_RECORDS",
+            "objectKey": "loyalty_account",
+            "filters": [
+              {
+                "field": "customer_id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.customerId"
+                }
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "create_adjustment",
+            "label": "Create Loyalty Adjustment",
+            "apiName": "create_adjustment",
+            "key": "CREATE_RECORD",
+            "objectKey": "loyalty_adjustment",
+            "fieldValues": {
+              "customer_id": {
+                "path": "variables.customerId"
+              },
+              "points": {
+                "path": "variables.points"
+              },
+              "reason": {
+                "path": "variables.reason"
+              },
+              "reference_id": {
+                "path": "variables.referenceId"
+              }
+            }
+          },
+          {
+            "id": "create_activity",
+            "label": "Create Loyalty Activity",
+            "apiName": "create_activity",
+            "key": "CREATE_RECORD",
+            "objectKey": "loyalty_activity",
+            "fieldValues": {
+              "customer_id": {
+                "path": "variables.customerId"
+              },
+              "transaction_type": "ADJUSTMENT",
+              "amount": {
+                "path": "variables.points"
+              },
+              "reference_type": "loyalty_adjustment",
+              "reference_id": {
+                "path": "steps.create_adjustment.created.id"
+              },
+              "description": {
+                "path": "variables.reason"
+              }
+            }
+          },
+          {
+            "id": "update_balance",
+            "label": "Update Loyalty Balance",
+            "apiName": "update_balance",
+            "key": "UPDATE_RECORD",
+            "objectKey": "loyalty_account",
+            "recordId": {
+              "path": "steps.get_account.record.id"
+            },
+            "fieldValues": {
+              "balance": {
+                "path": "steps.create_activity.created.balance_after"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

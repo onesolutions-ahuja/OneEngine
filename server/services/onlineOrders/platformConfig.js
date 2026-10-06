@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { sanitizeUberMenuMapping } from "./uberMenuMapping.js";
 
 /*
  * Online platform configuration storage (Uber Eats / Deliveroo)
@@ -43,33 +42,6 @@ export function sanitizeUberStoreMappings(value) {
     }
     externalIds.add(uberStoreId);
     return { uber_store_id: uberStoreId, onepos_store_id: oneposStoreId };
-  });
-}
-
-export function sanitizeUberStoreMenuMappings(value) {
-  if (!Array.isArray(value)) {
-    const error = new Error("Uber store menu configurations must be an array");
-    error.code = "INVALID_UBER_STORE_MENU_MAPPINGS";
-    throw error;
-  }
-  const externalIds = new Set();
-  return value.map((configuration) => {
-    const uberStoreId = String(configuration?.uber_store_id || "").trim();
-    if (!uberStoreId || !configuration?.menu_mapping || typeof configuration.menu_mapping !== "object") {
-      const error = new Error("Each Uber store menu configuration requires uber_store_id and menu_mapping");
-      error.code = "INVALID_UBER_STORE_MENU_MAPPINGS";
-      throw error;
-    }
-    if (externalIds.has(uberStoreId)) {
-      const error = new Error(`Uber store ${uberStoreId} has more than one menu configuration`);
-      error.code = "INVALID_UBER_STORE_MENU_MAPPINGS";
-      throw error;
-    }
-    externalIds.add(uberStoreId);
-    return {
-      uber_store_id: uberStoreId,
-      menu_mapping: sanitizeUberMenuMapping(configuration.menu_mapping),
-    };
   });
 }
 

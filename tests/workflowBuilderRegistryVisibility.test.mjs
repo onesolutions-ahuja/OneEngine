@@ -29,7 +29,8 @@ const REMOVED_PROVIDER_TEST_ADAPTERS = [
 const INTERNAL = [
   "PAYMENT_START",
   "PAYMENT_CANCEL",
-  "ONLINE_ORDER_TRANSITION",
+  "GLOBAL_PRODUCT_LOOKUP_BARCODE",
+  "GO_UPC_LOOKUP_PRODUCT",
 ];
 
 
@@ -42,14 +43,13 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
   }
 
   for (const key of INTERNAL) {
-    if (key === "ONLINE_ORDER_TRANSITION") {
-      assert.equal(all.has(key), false, key + " must stay removed after metadata/subflow migration");
-      assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as a hidden business executor");
-    } else {
-      assert.ok(all.has(key), key + " must remain executable for compatibility/runtime callers");
-      assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
-      assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
-    }
+    assert.ok(all.has(key), key + " must remain executable for generic runtime callers");
+    assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
+    assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
+  }
+  for (const key of ["ONLINE_ORDER_TRANSITION","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_EXPORT_REFUND"]) {
+    assert.equal(all.has(key), false, key + " business/provider adapter must remain removed");
+    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as hidden business code");
   }
 });
 
@@ -62,7 +62,7 @@ test("staff lifecycle orchestration stays in editable Flow metadata", () => {
   const packages = readFileSync(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(packages, /apiName:\s*"STAFF_SEND_PASSWORD_RESET"/);
   assert.match(packages, /apiName:\s*"STAFF_SEND_INVITATION"/);
-  assert.match(packages, /key:\s*"ACCOUNT_TOKEN_ISSUE"/);
+  assert.match(packages, /functionKey:\s*"account\.lifecycle\.token\.issue"/);
   assert.match(packages, /handlerKey:\s*"RUN_SUBFLOW"/);
 });
 

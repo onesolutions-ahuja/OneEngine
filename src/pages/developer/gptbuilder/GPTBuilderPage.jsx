@@ -300,7 +300,7 @@ function StartPanel({ flowType, value, onChange, objects, eventTypes, onDone, on
       {flowType === 'platform_event' ? <section><h3>Select Platform Event</h3><label>Platform Event<select value={value.eventKey || ''} onChange={(event) => onChange({ ...value, eventKey: event.target.value })}><option value="">Select an event</option>{eventTypes.map((item) => <option key={item.event_type} value={item.event_type}>{item.event_type}</option>)}</select></label>{value.eventKey ? <p className="gptb-help-text">{eventTypes.find((item) => item.event_type === value.eventKey)?.description || 'The flow runs when this event message is received.'}</p> : null}</section> : null}
     </div>
     {attemptedDone && errors.length ? <div className="gptb-start-errors" role="alert"><AlertTriangle size={14}/><span>{errors.map((error) => <small key={error}>{error}</small>)}</span></div> : null}
-    <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" disabled={errors.length > 0} aria-disabled={errors.length > 0} onClick={finish}>Done</button></footer>
+    <footer><button className="gptb-button" onClick={onCancel}>Cancel</button><button className="gptb-button is-brand" onClick={finish}>Done</button></footer>
   </aside>
 }
 
@@ -380,16 +380,6 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
   const [dataType, setDataType] = useState('text')
   const [value, setValue] = useState('')
   const [formula, setFormula] = useState('')
-  const [choiceValue, setChoiceValue] = useState('')
-  const [choiceLabel, setChoiceLabel] = useState('')
-  const [sourceObject, setSourceObject] = useState('')
-  const [sourceField, setSourceField] = useState('')
-  const [stageOrder, setStageOrder] = useState('')
-  const [valueMapSource, setValueMapSource] = useState('')
-  const [valueMapTarget, setValueMapTarget] = useState('')
-  const [criteriaResource, setCriteriaResource] = useState('')
-  const [criteriaOperator, setCriteriaOperator] = useState('equals')
-  const [criteriaValue, setCriteriaValue] = useState('')
   const [isCollection, setIsCollection] = useState(false)
   const [availableForInput, setAvailableForInput] = useState(false)
   const [availableForOutput, setAvailableForOutput] = useState(false)
@@ -408,13 +398,6 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       value: resourceType === 'constant' ? value : undefined,
       formula: resourceType === 'formula' ? formula : undefined,
       text: resourceType === 'text_template' ? value : undefined,
-      choiceValue: resourceType === 'choice' ? choiceValue : undefined,
-      choiceLabel: resourceType === 'choice' ? (choiceLabel || apiName.trim()) : undefined,
-      sourceObject: ['record_choice_set','picklist_choice_set'].includes(resourceType) ? sourceObject : undefined,
-      sourceField: ['collection_choice_set','record_choice_set','picklist_choice_set'].includes(resourceType) ? sourceField : undefined,
-      stageOrder: resourceType === 'stage' ? Number(stageOrder || 0) : undefined,
-      valueMap: resourceType === 'value_map' ? { source: valueMapSource, target: valueMapTarget } : undefined,
-      criteria: resourceType === 'collection_filter_criteria' ? { resource: criteriaResource, operator: criteriaOperator, value: criteriaValue } : undefined,
       isCollection: resourceType === 'variable' ? isCollection : false,
       availableForInput: resourceType === 'variable' ? availableForInput : false,
       availableForOutput: resourceType === 'variable' ? availableForOutput : false,
@@ -429,15 +412,8 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       <label><span>Description</span><textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)}/></label>
       {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option></select></label> : null}
       {resourceType === 'constant' ? <label><span>Value</span><input value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
-      {resourceType === 'formula' ? <div className="gptb-manager-formula"><span>Formula</span><GPTBuilderFormulaBuilder object={null} value={formula} onChange={setFormula}/></div> : null}
+      {resourceType === 'formula' ? <label><span>Formula</span><textarea rows={5} value={formula} onChange={(event) => setFormula(event.target.value)}/></label> : null}
       {resourceType === 'text_template' ? <label><span>Body</span><textarea rows={7} value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
-      {resourceType === 'choice' ? <><label><span>Choice Label</span><input value={choiceLabel} onChange={(event)=>setChoiceLabel(event.target.value)}/></label><label><span>Choice Value</span><input value={choiceValue} onChange={(event)=>setChoiceValue(event.target.value)}/></label></> : null}
-      {resourceType === 'collection_choice_set' ? <label><span>Source Collection / Field</span><input value={sourceField} onChange={(event)=>setSourceField(event.target.value)} placeholder="Resource or field API name"/></label> : null}
-      {resourceType === 'record_choice_set' ? <><label><span>Object API Name</span><input value={sourceObject} onChange={(event)=>setSourceObject(event.target.value)}/></label><label><span>Label / Value Field</span><input value={sourceField} onChange={(event)=>setSourceField(event.target.value)}/></label></> : null}
-      {resourceType === 'picklist_choice_set' ? <><label><span>Object API Name</span><input value={sourceObject} onChange={(event)=>setSourceObject(event.target.value)}/></label><label><span>Picklist Field</span><input value={sourceField} onChange={(event)=>setSourceField(event.target.value)}/></label></> : null}
-      {resourceType === 'stage' ? <label><span>Stage Order</span><input type="number" min="0" value={stageOrder} onChange={(event)=>setStageOrder(event.target.value)}/></label> : null}
-      {resourceType === 'value_map' ? <><label><span>Source Resource</span><input value={valueMapSource} onChange={(event)=>setValueMapSource(event.target.value)}/></label><label><span>Target Resource</span><input value={valueMapTarget} onChange={(event)=>setValueMapTarget(event.target.value)}/></label></> : null}
-      {resourceType === 'collection_filter_criteria' ? <><label><span>Resource</span><input value={criteriaResource} onChange={(event)=>setCriteriaResource(event.target.value)}/></label><label><span>Operator</span><select value={criteriaOperator} onChange={(event)=>setCriteriaOperator(event.target.value)}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="less_than">Less Than</option><option value="is_empty">Is Empty</option></select></label>{criteriaOperator==='is_empty'?null:<label><span>Value</span><input value={criteriaValue} onChange={(event)=>setCriteriaValue(event.target.value)}/></label>}</> : null}
       {resourceType === 'variable' ? <>
         <label className="gptb-properties-check"><input type="checkbox" checked={isCollection} onChange={(event) => setIsCollection(event.target.checked)}/><span>Allow multiple values (collection)</span></label>
         <label className="gptb-properties-check"><input type="checkbox" checked={availableForInput} onChange={(event) => setAvailableForInput(event.target.checked)}/><span>Available for input</span></label>
@@ -448,30 +424,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
   </section></div>
 }
 
-function ManagerEditResource({ resource, resources, onSave, onClose }) {
-  const [draft, setDraft] = useState(() => structuredClone(resource))
-  const duplicate = resources.some((row) => row.id !== resource.id && String(row.apiName || '').toLowerCase() === String(draft.apiName || '').trim().toLowerCase())
-  const validName = /^[A-Za-z][A-Za-z0-9_]*$/.test(String(draft.apiName || '')) && !String(draft.apiName || '').endsWith('_') && !String(draft.apiName || '').includes('__') && !duplicate
-  const patch = (changes) => setDraft((current)=>({ ...current, ...changes }))
-  return <div className="gptb-modal-backdrop" role="presentation"><section className="gptb-properties-modal gptb-manager-resource-dialog" role="dialog" aria-modal="true" aria-label="Edit Resource">
-    <header><strong>Edit Resource</strong><button className="gptb-icon-button" aria-label="Close Edit Resource" onClick={onClose}><X size={16}/></button></header>
-    <div className="gptb-properties-body">
-      <label><span>API Name <b>*</b></span><input value={draft.apiName || ''} onChange={(event)=>patch({apiName:event.target.value,label:event.target.value})}/>{duplicate?<small className="gptb-manager-error">API Name must be unique in the flow.</small>:null}</label>
-      <label><span>Description</span><textarea rows={3} value={draft.description || ''} onChange={(event)=>patch({description:event.target.value})}/></label>
-      {draft.resourceType==='formula'?<div className="gptb-manager-formula"><span>Formula</span><GPTBuilderFormulaBuilder object={null} value={draft.formula || ''} onChange={(formula)=>patch({formula})}/></div>:null}
-      {draft.resourceType==='choice'?<><label><span>Choice Label</span><input value={draft.choiceLabel || ''} onChange={(event)=>patch({choiceLabel:event.target.value})}/></label><label><span>Choice Value</span><input value={draft.choiceValue || ''} onChange={(event)=>patch({choiceValue:event.target.value})}/></label></>:null}
-      {draft.resourceType==='collection_choice_set'?<label><span>Source Collection / Field</span><input value={draft.sourceField || ''} onChange={(event)=>patch({sourceField:event.target.value})}/></label>:null}
-      {draft.resourceType==='record_choice_set'?<><label><span>Object API Name</span><input value={draft.sourceObject || ''} onChange={(event)=>patch({sourceObject:event.target.value})}/></label><label><span>Label / Value Field</span><input value={draft.sourceField || ''} onChange={(event)=>patch({sourceField:event.target.value})}/></label></>:null}
-      {draft.resourceType==='picklist_choice_set'?<><label><span>Object API Name</span><input value={draft.sourceObject || ''} onChange={(event)=>patch({sourceObject:event.target.value})}/></label><label><span>Picklist Field</span><input value={draft.sourceField || ''} onChange={(event)=>patch({sourceField:event.target.value})}/></label></>:null}
-      {draft.resourceType==='stage'?<label><span>Stage Order</span><input type="number" min="0" value={draft.stageOrder ?? ''} onChange={(event)=>patch({stageOrder:Number(event.target.value || 0)})}/></label>:null}
-      {draft.resourceType==='value_map'?<><label><span>Source Resource</span><input value={draft.valueMap?.source || ''} onChange={(event)=>patch({valueMap:{...(draft.valueMap||{}),source:event.target.value}})}/></label><label><span>Target Resource</span><input value={draft.valueMap?.target || ''} onChange={(event)=>patch({valueMap:{...(draft.valueMap||{}),target:event.target.value}})}/></label></>:null}
-      {draft.resourceType==='collection_filter_criteria'?<><label><span>Resource</span><input value={draft.criteria?.resource || ''} onChange={(event)=>patch({criteria:{...(draft.criteria||{}),resource:event.target.value}})}/></label><label><span>Operator</span><select value={draft.criteria?.operator || 'equals'} onChange={(event)=>patch({criteria:{...(draft.criteria||{}),operator:event.target.value}})}><option value="equals">Equals</option><option value="not_equals">Does Not Equal</option><option value="greater_than">Greater Than</option><option value="less_than">Less Than</option><option value="is_empty">Is Empty</option></select></label>{draft.criteria?.operator==='is_empty'?null:<label><span>Value</span><input value={draft.criteria?.value ?? ''} onChange={(event)=>patch({criteria:{...(draft.criteria||{}),value:event.target.value}})}/></label>}</>:null}
-    </div>
-    <footer><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!validName} onClick={()=>onSave(draft)}>Done</button></footer>
-  </section></div>
-}
-
-function ManagerPanel({ elements, resources, goToConnections, onNewResource, onOpenElement, onEditResource }) {
+function ManagerPanel({ elements, resources, goToConnections, onNewResource, onOpenElement }) {
   const [query, setQuery] = useState('')
   const [showUnusedOnly, setShowUnusedOnly] = useState(false)
   const [selected, setSelected] = useState(null)
@@ -514,7 +467,7 @@ function ManagerPanel({ elements, resources, goToConnections, onNewResource, onO
         <div><dt>Description</dt><dd>{selected.row.description || '—'}</dd></div>
         {selected.kind === 'element' ? <><div><dt>Outputs</dt><dd>{outputsForElement(selected.row).length ? outputsForElement(selected.row).join(', ') : 'None'}</dd></div><div><dt>Incoming Go To Connections</dt><dd>{incomingForElement(selected.row).length ? incomingForElement(selected.row).join(', ') : 'None'}</dd></div></> : null}
       </dl>
-      {selected.kind === 'element' ? <button className="gptb-inline-action" onClick={() => onOpenElement(selected.row)}>Open Element</button> : <button className="gptb-inline-action" onClick={() => onEditResource(selected.row)}>Edit Resource</button>}
+      {selected.kind === 'element' ? <button className="gptb-inline-action" onClick={() => onOpenElement(selected.row)}>Open Element</button> : null}
     </div> : <>
       <section className="gptb-manager-section"><h3>Elements <span>{elementRows.length}</span></h3>{elementRows.length ? elementRows.map((element) => <button className="gptb-manager-row" key={element.id} onClick={() => setSelected({ kind:'element', row:element })}><span><strong>{element.label}</strong><small>{elementByKey(element.key)?.label || element.key}</small></span><ChevronRight size={14}/></button>) : <p>No elements found.</p>}</section>
       <section className="gptb-manager-section"><h3>Resources <span>{resourceRows.length}</span></h3>{resourceRows.length ? resourceRows.map((resource) => <button className="gptb-manager-row" key={resource.id || resource.apiName} onClick={() => setSelected({ kind:'resource', row:resource })}><span><strong>{resource.label || resource.apiName}</strong><small>{typeLabel(resource)}</small></span><ChevronRight size={14}/></button>) : <p>No resources found.</p>}</section>
@@ -525,16 +478,14 @@ function ManagerPanel({ elements, resources, goToConnections, onNewResource, onO
 function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, goToConnections, onResourcesChange, onOpenElement }) {
   const [tab, setTab] = useState(layout === 'free' ? 'elements' : 'manager')
   const [newResourceOpen, setNewResourceOpen] = useState(false)
-  const [editingResource, setEditingResource] = useState(null)
   const effectiveTab = layout === 'auto' ? 'manager' : tab
   const availableResources = Array.isArray(resources) ? resources : []
   return <aside className="gptb-toolbox" aria-label="Toolbox">
     <div className="gptb-toolbox-tabs">{layout === 'free' ? <button className={effectiveTab === 'elements' ? 'is-active' : ''} onClick={() => setTab('elements')}>Elements</button> : null}<button className={effectiveTab === 'manager' ? 'is-active' : ''} onClick={() => setTab('manager')}>Manager</button><button className="gptb-toolbox-close" aria-label="Close toolbox" onClick={onClose}><X size={15}/></button></div>
     {effectiveTab === 'elements'
       ? <FreeFormElements flowType={flowType} startConfig={startConfig}/>
-      : <ManagerPanel elements={elements} resources={availableResources} goToConnections={goToConnections} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement} onEditResource={(resource)=>setEditingResource(resource)}/>}
+      : <ManagerPanel elements={elements} resources={availableResources} goToConnections={goToConnections} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement}/>}
     {newResourceOpen ? <ManagerNewResource resources={availableResources} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
-    {editingResource ? <ManagerEditResource resource={editingResource} resources={availableResources} onClose={()=>setEditingResource(null)} onSave={(next)=>{onResourcesChange(resources.map((resource)=>resource.id===next.id?next:resource));setEditingResource(null)}}/> : null}
   </aside>
 }
 
@@ -939,27 +890,12 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     if (flow.key === 'platform_event') common.push({ id:'auto-event-record', apiName:'$Record', path:'$Record', label:'Platform Event Record', dataType:'record', resourceType:'automatic', writable:false })
     return common
   }, [flow.key, startConfig.objectKey])
-  const availableResources = useMemo(() => {
-    const rows = [...automaticResources, ...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])]
-    const seen = new Set()
-    return rows.filter((resource) => {
-      const key = String(resource?.apiName || resource?.path || resource?.id || '')
-      if (!key || seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }, [automaticResources, resources, providerResources])
+  const availableResources = useMemo(
+    () => [...automaticResources, ...(Array.isArray(resources) ? resources : []), ...(Array.isArray(providerResources) ? providerResources : [])],
+    [automaticResources, resources, providerResources],
+  )
   const applyResourceChanges = (next) => {
-    const automaticNames = new Set(automaticResources.map((resource)=>String(resource.apiName || resource.path || '')))
-    const deduped = []
-    const seen = new Set()
-    for (const resource of (Array.isArray(next) ? next : [])) {
-      const key = String(resource?.apiName || resource?.path || resource?.id || '')
-      if (resource?.providerResource === true || resource?.resourceType === 'automatic' || automaticNames.has(key) || !key || seen.has(key)) continue
-      seen.add(key)
-      deduped.push(resource)
-    }
-    setResources(deduped)
+    setResources((Array.isArray(next) ? next : []).filter((resource) => resource?.providerResource !== true))
     setDirty(true)
   }
   const [editingElement, setEditingElement] = useState(null)
@@ -1068,14 +1004,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     ]).then(([objectResponse, eventResponse, rulesResponse, providerResponse]) => {
       if (!live) return
       setObjects(objectResponse?.data?.objects || objectResponse?.data || [])
-      setEventTypes((() => {
-        const payload = eventResponse?.data
-        if (Array.isArray(payload)) return payload
-        if (Array.isArray(payload?.eventTypes)) return payload.eventTypes
-        if (Array.isArray(payload?.events)) return payload.events
-        if (Array.isArray(payload?.data)) return payload.data
-        return []
-      })())
+      setEventTypes(Array.isArray(eventResponse?.data) ? eventResponse.data : [])
       setAvailableFlows((Array.isArray(rulesResponse?.data) ? rulesResponse.data : []).filter((item) => item?.action?.type === 'workflow'))
       const providers = Array.isArray(providerResponse?.data) ? providerResponse.data : []
       setProviderResources(providers.flatMap((provider) => (provider.fields || []).map((field) => ({
@@ -1376,21 +1305,25 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     setMessage('')
   }
   const handleSaveRequest = () => {
-    let startForSave = startConfig
+    // Save must never validate a stale committed Start while the user is editing a
+    // valid draft. Commit the current draft first, then open first-save properties.
     if (startOpen && flow.startNeedsConfiguration) {
       const errors = startConfigurationErrors(flow.key, startDraft)
       if (errors.length) {
         setDiagnosticsOpen(false)
         return
       }
-      startForSave = structuredClone(startDraft)
-      setStartConfig(startForSave)
-      setStartDraft(startForSave)
+      const committedStart = structuredClone(startDraft)
+      setStartConfig(committedStart)
+      setStartDraft(committedStart)
       setStartOpen(false)
       setDiagnosticsOpen(false)
       setDirty(true)
     }
     if (workflowId) {
+      // Pass the committed draft directly. React state updates are asynchronous, so
+      // deferring with a microtask can still serialize the previous Start snapshot.
+      const startForSave = startOpen && flow.startNeedsConfiguration ? structuredClone(startDraft) : startConfig
       void save(flowProps, {}, startForSave)
     } else {
       setPropertiesOpen(true)
@@ -1880,7 +1813,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <button aria-label="View Properties" title="View Properties" onClick={() => setPropertiesOpen(true)}><Settings2 size={16}/></button>
         <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={switchToAutoLayout}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={switchToFreeForm}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
-        <button className="gptb-text-tool" disabled={saving || !workflowId || dirty || issues.some((issue) => issue.level === 'error')} title={workflowId ? 'Run the most recent saved version.' : 'Save the flow before running it.'} onClick={() => setExecutionMode('run')}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={saving || !workflowId || dirty || issues.some((issue) => issue.level === 'error')} title={workflowId ? 'View and run tests for the most recent saved version.' : 'Save the flow before testing it.'} onClick={() => setExecutionMode('test')}><Eye size={14}/> View Tests</button> : <button className="gptb-text-tool" disabled={saving || !workflowId || dirty || issues.some((issue) => issue.level === 'error')} title={workflowId ? 'Debug the most recent saved version.' : 'Save the flow before debugging it.'} onClick={() => setExecutionMode('debug')}><Eye size={14}/> Debug</button>}
+        <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'Run the most recent saved version.' : 'Save the flow before running it.'} onClick={() => setExecutionMode('run')}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'View and run tests for the most recent saved version.' : 'Save the flow before testing it.'} onClick={() => setExecutionMode('test')}><Eye size={14}/> View Tests</button> : <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'Debug the most recent saved version.' : 'Save the flow before debugging it.'} onClick={() => setExecutionMode('debug')}><Eye size={14}/> Debug</button>}
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={handleSaveRequest}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>
         <GPTBuilderSaveAsMenu open={saveAsOpen} disabled={!workflowId || saving} onToggle={() => setSaveAsOpen((value) => !value)} onNewVersion={() => void save(flowProps, { forceNewVersion: true })} onNewFlow={() => { setSaveAsOpen(false); setSaveAsFlowOpen(true) }}/>
         {editHistorySupported ? <><button aria-label="Edit History" title="Edit History" disabled={!workflowId || saving} onClick={() => void openEditHistory()}><History size={16}/></button><button className="gptb-text-tool" disabled={!workflowId || saving} onClick={() => void openCompareVersions()}>Compare Versions</button><button className="gptb-text-tool" disabled={!workflowId || analyticsLoading} onClick={() => void openAnalytics()}>{analyticsLoading?'Loading…':'Analytics'}</button></> : null}
@@ -2172,10 +2105,11 @@ export default function GPTBuilderPage({ initialWorkflowId = '', onWorkflowOpen 
     }
     setLoadingExisting(true)
     setOpenError('')
-    apiRequest(`/api/platform/rules/${encodeURIComponent(id)}`)
+    apiRequest('/api/platform/rules')
       .then((response) => {
         if (!live) return
-        const saved = response?.data
+        const rows = Array.isArray(response?.data) ? response.data : []
+        const saved = rows.find((item) => String(item?.id || '') === id)
         if (!saved) throw new Error('Saved GPT Builder flow not found.')
         if (saved.action?.gptBuilder !== true) throw new Error('This workflow was not created by GPT Builder.')
         const definition = FLOW_TYPES.find((item) => item.key === saved.action?.flowType)

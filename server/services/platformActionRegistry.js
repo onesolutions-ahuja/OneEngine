@@ -2,10 +2,12 @@ import { getWorkflowActionRegistry } from "./platformWorkflow.js";
 
 // Canonical executable capability registry. UI buttons, workflows and event
 // bindings reference keys here; they do not embed business implementations.
-// Flow/metadata uses the canonical CRUD action keys exposed by the workflow
-// runtime. Do not add generic save/delete aliases here: canonical CRUD action keys
-// keep Builder metadata explicit and unambiguous.
-const definitions = [...getWorkflowActionRegistry()];
+const CORE_ACTIONS = Object.freeze([
+  { key: "RECORD_SAVE", displayName: "Save Record", description: "Run the canonical create/update record save pipeline." },
+  { key: "RECORD_DELETE", displayName: "Delete Record", description: "Run the canonical record delete pipeline." },
+]);
+
+const definitions = [...CORE_ACTIONS, ...getWorkflowActionRegistry()];
 const duplicateKeys = definitions.map((item) => item.key).filter((key, index, all) => all.indexOf(key) !== index);
 if (duplicateKeys.length) throw new Error(`Duplicate registered action keys: ${[...new Set(duplicateKeys)].join(", ")}`);
 

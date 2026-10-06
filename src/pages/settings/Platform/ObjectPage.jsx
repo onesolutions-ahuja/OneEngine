@@ -837,9 +837,8 @@ export default function ObjectPage({
   async function handleMetadataButton(button) {
     const targetType = button?.target_type || "action";
     const targetKey = button?.target_key || button?.action_key;
-    if (targetType === "action" && targetKey === "CREATE_RECORD") return setRecordModal({ type: "create" });
-    if (targetType === "action" && targetKey === "UPDATE_RECORD") return setRecordModal({ type: "edit" });
-    if (targetType === "action" && targetKey === "DELETE_RECORD") return deleteSelectedRecord();
+    if (targetType === "action" && targetKey === "RECORD_SAVE") return setRecordModal({ type: "edit" });
+    if (targetType === "action" && targetKey === "RECORD_DELETE") return deleteSelectedRecord();
     if (targetType === "url") {
       const resolved = resolveMetadataUrl(targetKey, selectedRecord || {});
       if (!resolved) return setError("This button has an unsafe or invalid URL.");
@@ -874,7 +873,7 @@ export default function ObjectPage({
       if (first && onSelectRecord) return onSelectRecord(first, related.relationship?.child_object_key);
       return setError("Open Related List requires a related-record navigation handler.");
     }
-    if (component.action === "run_workflow" || component.action === ) {
+    if (component.action === "run_workflow" || component.action === "call_function") {
       const components = detailLayout?.definition?.components || [];
       const index = components.indexOf(component);
       const actionKey = component.id || component.key || `${component.action}:${index}`;

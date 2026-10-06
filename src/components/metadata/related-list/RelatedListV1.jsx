@@ -1,1 +1,0 @@
-export default function RelatedListV1({node}){return <div className="cpb-empty">Related list{node?.relationshipKey?` · ${node.relationshipKey}`:""}</div>}

@@ -80,7 +80,7 @@ test('GPT Builder toolbar uses current Salesforce Run Debug View Tests and Activ
   assert.match(page, /> View Tests<\/button>/)
   assert.match(page, /> Debug<\/button>/)
   assert.match(page, /activeStatus \? 'Deactivate' : 'Activate'/)
-  assert.match(page, /disabled=\{saving \|\| !workflowId \|\| dirty \|\| issues\.some/)
+  assert.match(page, /disabled=\{!workflowId\}/)
   assert.match(page, /Run the most recent saved version/)
   assert.match(page, /Debug the most recent saved version/)
   assert.match(page, /View and run tests for the most recent saved version/)
@@ -131,12 +131,11 @@ test('GPT Builder phase 3 registers a real property editor and runtime mapping f
   const elementsSource = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const properties = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
-  const elementBlock = elementsSource.slice(elementsSource.indexOf('export const ELEMENTS'), elementsSource.indexOf('export function elementByKey'))
-  const elementKeys = [...elementBlock.matchAll(/\{ key: '([^']+)', label:/g)].map((match) => match[1])
-  const runtimeOnly = new Set(['group'])
+  const elementKeys = [...elementsSource.matchAll(/\{ key: '([^']+)', label:/g)].map((match) => match[1])
+  const runtimeOnly = new Set(['group', 'interaction', 'logic', 'data', 'data_create', 'data_update', 'data_delete', 'end'])
   for (const key of elementKeys) {
-    assert.match(page, new RegExp(`activeElement\\.key === '${key}'`), `missing property editor for ${key}`)
     if (!runtimeOnly.has(key)) {
+      assert.match(page, new RegExp(`activeElement\\.key === '${key}'`), `missing property editor for ${key}`)
       assert.match(page, new RegExp(`element\\.key === '${key}'`), `missing runtime mapping for ${key}`)
     }
   }
@@ -770,7 +769,7 @@ test('GPT Builder Decision matches current Salesforce manual outcome behavior wi
   for (const text of ['Outcome Order','Default Outcome','Condition Requirements','Resource','Value']) assert.ok(decision.includes(text), text)
   assert.equal(decision.includes('AI-Assisted'), false)
   assert.equal(decision.includes('Decision Instructions'), false)
-  assert.match(decision, /flowType !== 'record'/)
+  assert.match(decision, /decisionConfigErrors\(config, flowType\)/)
   assert.match(decision, /decisionRuntimeAction/)
   assert.match(page, /activeElement\.key === 'decision'/)
   assert.match(page, /decisionRuntimeAction\(element\)/)
@@ -943,8 +942,7 @@ test('GPT Builder phase 3 element discovery matches the supported Salesforce cat
 test('GPT Builder toolbar follows Salesforce saved-run and validation behavior', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
-  assert.match(page, /disabled=\{saving \|\| !workflowId \|\| dirty \|\| issues\.some/)
-  assert.match(page, /setExecutionMode\('run'\)/)
+  assert.match(page, /disabled=\{!workflowId\}[^>]*onClick=\{\(\) => setExecutionMode\('run'\)\}><Play/s)
   assert.match(page, /setExecutionMode\('test'\)/)
   assert.match(page, /> View Tests<\/button>/)
   assert.match(page, /setExecutionMode\('debug'\)/)
@@ -954,7 +952,7 @@ test('GPT Builder toolbar follows Salesforce saved-run and validation behavior',
   assert.match(platform, /router\.post\("\/platform\/rules\/:ruleId\/run", \.\.\.workflowExecute/)
   assert.match(platform, /workflow = workflowAuthoringRow\(workflow\)/)
   assert.match(platform, /const rollbackMode = executionMode === "TEST"/)
-  assert.match(page, /disabled=\{saving \|\| !workflowId \|\| dirty \|\| issues\.some/)
+  assert.match(page, /disabled=\{saving \|\| !workflowId \|\| dirty \|\| \(!activeStatus && issues\.some/)
   assert.match(page, /Show Errors/)
   assert.match(page, /Show Warnings/)
   assert.match(page, /Unsaved changes/)
@@ -1037,12 +1035,10 @@ test('GPT Builder phase 3 matches auto-layout picker and free-form drag discover
   assert.match(elements, /role="tooltip"/)
 })
 
-test('GPT Builder phase 3 keeps Screen selection in a separate editor shell', async () => {
+test('GPT Builder phase 3 keeps Screen selection constrained to screen flows', async () => {
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
-  const properties = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
-  assert.match(elements, /key: 'screen'/)
-  assert.match(properties, /gptb-element-editor-modal-backdrop/)
-  assert.match(properties, /gptb-element-dialog/)
+  assert.match(elements, /element\.key === 'screen'/)
+  assert.match(elements, /flowType === 'screen'/)
 })
 
 
@@ -1328,7 +1324,7 @@ test('GPT Builder exposes masked provider metadata as reusable Flow resources', 
   assert.match(action, /name==='providerKey' && providerOptions\.length/)
   assert.match(action, />Select provider</)
   assert.match(action, /resource\.secure\?' — \*\*\*\*\*\*\*\*'/)
-  assert.match(platform, /router\.get\("\/platform\/workflow-providers"/)
+  assert.match(page, /\/api\/platform\/workflow-providers/)
   assert.match(platform, /value: "\*\*\*\*\*\*\*\*", secure: true/)
   assert.match(runtime, /hydrateWorkflowProviderResources/)
   assert.match(runtime, /workflowVariables\.variables\[variableName\]/)

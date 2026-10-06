@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 import { apiRequest, loadSessionPermissions } from "../../../services/api.js";
+import WorkflowAdmin from "./WorkflowAdmin.jsx";
 import {
   NAVIGATION_TARGET_TYPES,
   describeNavigationTarget,
@@ -301,24 +302,10 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
     apiRequest("/api/platform/rules")
       .then((response) => setWorkflows(Array.isArray(response?.data) ? response.data.filter((rule) => rule?.action?.type === "workflow" && rule.active !== false) : []))
       .catch(() => setWorkflows([]));
-    Promise.all([
-      apiRequest("/api/platform/action-registry").catch(() => null),
-      objectKey ? apiRequest("/api/platform/objects").catch(() => null) : Promise.resolve(null),
-    ]).then(async ([registryResponse, objectsResponse]) => {
-      const core = Array.isArray(registryResponse?.data) ? registryResponse.data : [];
-      if (!objectKey) { setActions(core); return; }
-      const objects = Array.isArray(objectsResponse?.data?.objects) ? objectsResponse.data.objects : Array.isArray(objectsResponse?.data) ? objectsResponse.data : [];
-      const object = objects.find((item) => String(item.object_key || item.api_name || item.key) === String(objectKey));
-      if (!object?.id) { setActions(core); return; }
-      const customResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/registered-actions`).catch(() => null);
-      const custom = Array.isArray(customResponse?.data) ? customResponse.data.map((item) => ({
-        key: item.action_key,
-        displayName: item.label || item.action_key,
-        metadataAction: true,
-      })) : [];
-      setActions([...core, ...custom.filter((item) => !core.some((entry) => entry.key === item.key))]);
-    }).catch(() => setActions([]));
-  }, [objectKey]);
+    apiRequest("/api/platform/action-registry")
+      .then((response) => setActions(Array.isArray(response?.data) ? response.data : []))
+      .catch(() => setActions([]));
+  }, []);
 
   const rankedWorkflows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -587,8 +574,8 @@ function WorkflowAdminOverlayHost({ contextObjectKey, baseline, onClose, onCreat
 /*
  * A minimal creation form over the SAME /api/platform/rules pipeline the
  * Workflow Builder uses. It creates the workflow shell (name + object +
- * manual trigger). The shell contains no hardcoded business or UI step; the
- * administrator authors every step in the metadata Flow Builder.
+ * manual trigger) with a Show-Form-Layout style first step the admin can
+ * extend immediately in WorkflowAdmin; complex step authoring stays there.
  * This guarantees: no navigation away, unsaved page state preserved, and the
  * new workflow auto-selected by UUID in the picker.
  */
@@ -596,6 +583,8 @@ function InlineNewWorkflowForm({ contextObjectKey, baseline, onCreated, onCancel
   const [name, setName] = useState("New Workflow");
   const [objectKey, setObjectKey] = useState(contextObjectKey || "");
   const [objects, setObjects] = useState([]);
+  const [layouts, setLayouts] = useState([]);
+  const [layoutId, setLayoutId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -603,6 +592,9 @@ function InlineNewWorkflowForm({ contextObjectKey, baseline, onCreated, onCancel
     apiRequest("/api/platform/objects")
       .then((response) => setObjects(Array.isArray(response?.data?.objects) ? response.data.objects : Array.isArray(response?.data) ? response.data : []))
       .catch(() => setObjects([]));
+    apiRequest("/api/platform/layouts")
+      .then((response) => setLayouts(Array.isArray(response?.data) ? response.data.filter((layout) => layout.active !== false) : []))
+      .catch(() => setLayouts([]));
   }, []);
 
   const create = async () => {
@@ -619,7 +611,10 @@ function InlineNewWorkflowForm({ contextObjectKey, baseline, onCreated, onCancel
         action: {
           type: "workflow",
           match: "all",
-          actions: [],
+          actions: [
+            /* UI invocation steps; extended later in the full Workflow Builder. */
+            { type: "SHOW_MESSAGE", message: `Opened ${name.trim()}` },
+          ],
         },
       };
       const response = await apiRequest("/api/platform/rules", { method: "POST", body: JSON.stringify(payload) });
@@ -658,6 +653,13 @@ function InlineNewWorkflowForm({ contextObjectKey, baseline, onCreated, onCancel
       <div className="space-y-1">
         <label className="block text-xs font-medium text-slate-500">Invocation Type</label>
         <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" value="UI Action · Input: Current Record" disabled readOnly />
+      </div>
+      <div className="space-y-1">
+        <label className="block text-xs font-medium text-slate-500">First step (optional) — Show Form Layout</label>
+        <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" value={layoutId} onChange={(event) => setLayoutId(event.target.value)}>
+          <option value="">None — add steps later in Workflow Builder</option>
+          {layouts.map((layout) => <option key={layout.id} value={layout.id}>{layout.name}</option>)}
+        </select>
       </div>
       <div className="flex items-center justify-end gap-2 pt-1">
         <button type="button" className="onepos-btn onepos-btn-secondary" onClick={onCancel}>Cancel</button>

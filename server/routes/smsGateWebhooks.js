@@ -85,7 +85,7 @@ export default function createSmsGateWebhookRouter({ pool } = {}) {
       // Only authenticated provider callbacks become business-command traces.
       // Rejected/stale webhook attempts must not pollute Workflow Runs as
       // failed business commands.
-      await req.ensureWorkflowTraceRun?.({
+      await req.ensureBusinessCommandRun?.({
         companyId: connection.company_id,
         userId: null,
         storeId: null,
