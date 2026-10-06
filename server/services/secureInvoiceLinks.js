@@ -78,8 +78,8 @@ export async function createSecureInvoiceLink({
   // The link may only ever be created by/for a sale the caller's tenant owns.
   const saleCheck = await db(
     `SELECT s.id, s.company_id, s.store_id, s.customer_id
-     FROM sales s
-     WHERE s.id = $1 AND s.company_id = $2
+     FROM sale_ledger s
+     WHERE s.id = $1 AND s.company_id = $2 AND s.source_record_type='SALE_HEADER'
      ${storeId ? "AND s.store_id = $3" : ""}
      LIMIT 1`,
     storeId ? [saleId, companyId, storeId] : [saleId, companyId]
@@ -144,9 +144,9 @@ export async function validateSecureInvoiceToken({ db, token, includeSale = true
       `SELECT s.id, s.company_id, s.store_id, s.receipt_number, s.subtotal,
               s.tax, s.discount, s.total, s.status, s.created_at, s.completed_at,
               c.timezone AS company_timezone, c.currency AS company_currency
-       FROM sales s
+       FROM sale_ledger s
        INNER JOIN companies c ON c.id = s.company_id
-       WHERE s.id = $1 AND s.company_id = $2
+       WHERE s.id = $1 AND s.company_id = $2 AND s.source_record_type='SALE_HEADER'
        ${link.store_id ? "AND s.store_id = $3" : ""}
        LIMIT 1`,
       link.store_id ? [link.sale_id, link.company_id, link.store_id] : [link.sale_id, link.company_id]
@@ -158,7 +158,7 @@ export async function validateSecureInvoiceToken({ db, token, includeSale = true
       const itemResult = await db(
         `SELECT product_name, quantity, unit_price, discount, discount_type, discount_value,
            original_unit_price, tax, total
-         FROM sale_items WHERE sale_id = $1 ORDER BY id ASC`,
+         FROM sale_ledger WHERE transaction_id = $1 AND source_record_type='SALE_LINE' ORDER BY id ASC`,
         [sale.id]
       );
       sale.items = itemResult.rows.map((item) => ({
@@ -173,7 +173,7 @@ export async function validateSecureInvoiceToken({ db, token, includeSale = true
         total: Number(item.total),
       }));
       const payResult = await db(
-        `SELECT payment_method, amount, status FROM payments WHERE sale_id = $1 ORDER BY created_at ASC`,
+        `SELECT payment_method, amount, status FROM sale_ledger WHERE transaction_id = $1 AND source_record_type='PAYMENT' ORDER BY created_at ASC`,
         [sale.id]
       );
       sale.payments = payResult.rows.map((pay) => ({
