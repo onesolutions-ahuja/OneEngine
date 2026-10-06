@@ -1,4 +1,4 @@
-import { buildCustomSalesQuery, customDateRange, validateCustomReportDefinition } from "./reportSalesDefinition.js";
+import { validateCustomReportDefinition } from "./reportDefinition.js";
 import { buildPlatformObjectQuery } from "./reportableSources.js";
 import { DATE_RANGES, mergeDashboardFilters } from "./dashboardBuilder.js";
 import { applyDashboardGlobalFilters } from "./analyticsManagement.js";
@@ -102,29 +102,7 @@ export function createDashboardExecution({ db, canViewCompanyCustomers, canAcces
           ...definition.summaries.map((summary) => `${String(summary.aggregate).toLowerCase()}_${summary.field}`),
         ];
       } else {
-        if (!hasPermission || !(await hasPermission(req, "reports.custom.view"))) {
-          throw Object.assign(new Error("You do not have permission to view this dashboard data source"), { status: 403 });
-        }
-        const requestedStores = [...new Set([
-          ...(definition.storeIds || []),
-          ...definition.filters
-            .filter((filter) => filter.field === "store")
-            .flatMap((filter) => Array.isArray(filter.value) ? filter.value : [filter.value])
-            .filter(Boolean),
-        ].map(String))];
-        for (const storeId of requestedStores) {
-          if (!canAccessStore || !(await canAccessStore(req.user, storeId))) throw new Error("You do not have access to one or more stores");
-        }
-        if (!requestedStores.length && req.user.storeId && (!canAccessStore || !(await canAccessStore(req.user, String(req.user.storeId))))) {
-          throw new Error("You do not have access to the current store");
-        }
-        if (!requestedStores.length && !req.user.storeId && !(canViewCompanyCustomers && await canViewCompanyCustomers(req.user))) {
-          throw new Error("A store assignment is required to run this dashboard");
-        }
-        const stores = requestedStores.length ? requestedStores : (req.user.storeId ? [String(req.user.storeId)] : []);
-        built = buildCustomSalesQuery(definition, customDateRange(definition.filters), stores, definition.userIds || []);
-        built.params[2] = req.user.companyId;
-        columns = definition.fields;
+        throw new Error("Dashboard reports must use Platform Object metadata");
       }
 
       const result = await db(built.sql, built.params);
