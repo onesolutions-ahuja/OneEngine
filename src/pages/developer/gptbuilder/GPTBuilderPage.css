@@ -410,3 +410,24 @@
 @media (prefers-reduced-motion:reduce){
   .gptb-add-slot.is-running .gptb-connector{animation:none}
 }
+
+.gptb-auto-decision.is-running .gptb-decision-branches:before,
+.gptb-auto-decision.is-running .gptb-decision-branches:after,
+.gptb-auto-decision.is-running .gptb-decision-branch:before,
+.gptb-auto-decision.is-running .gptb-decision-branch-line,
+.gptb-auto-decision.is-running .gptb-decision-branch-member:after{
+  background:repeating-linear-gradient(to bottom,#2563eb 0 4px,transparent 4px 12px);
+  background-size:2px 24px;
+  animation:gptb-running-connector .42s linear infinite;
+}
+.gptb-auto-decision.is-running .gptb-decision-branches:after{
+  background:repeating-linear-gradient(to right,#2563eb 0 4px,transparent 4px 12px);
+  background-size:24px 2px;
+}
+@media (prefers-reduced-motion:reduce){
+  .gptb-auto-decision.is-running .gptb-decision-branches:before,
+  .gptb-auto-decision.is-running .gptb-decision-branches:after,
+  .gptb-auto-decision.is-running .gptb-decision-branch:before,
+  .gptb-auto-decision.is-running .gptb-decision-branch-line,
+  .gptb-auto-decision.is-running .gptb-decision-branch-member:after{animation:none}
+}
