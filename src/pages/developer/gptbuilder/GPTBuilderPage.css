@@ -388,3 +388,28 @@
   .gptb-toolbar{overflow-x:auto}
   .gptb-screen-dialog{width:calc(100vw - 16px);max-width:none;height:calc(100dvh - 16px);max-height:none}
 }
+
+/* GPT Builder narrow viewport containment */
+.gptb-buttonbar{min-width:0}
+.gptb-brand,.gptb-status{flex:0 0 auto}
+.gptb-toolbar{max-width:100%}
+.gptb-workspace{max-width:100%;max-height:100%}
+.gptb-config-panel,.gptb-diagnostics,.gptb-element-properties-panel,.gptb-element-editor-shell{max-width:100%}
+.gptb-manager-formula{display:grid;gap:5px;margin:0 0 12px;color:#3e3e3c;font-size:10px;font-weight:700}
+@media(max-width:760px){
+  .gptb-buttonbar{overflow:hidden}
+  .gptb-toolbar{flex:1 1 auto;min-width:0;max-width:calc(100vw - 54px);overflow-x:auto;overscroll-behavior-x:contain}
+  .gptb-workspace,.gptb-workspace.has-toolbox{display:grid;grid-template-columns:minmax(0,1fr);overflow:hidden}
+  .gptb-canvas{min-width:0;width:100%;overflow:auto}
+  .gptb-canvas-stage{min-width:640px}
+  .gptb-config-panel,.gptb-diagnostics,.gptb-element-properties-panel,.gptb-element-editor-shell{position:absolute;inset:0;width:100%;max-width:none;box-sizing:border-box}
+  .gptb-config-body,.gptb-element-properties-body{min-width:0}
+  .gptb-screen-builder{grid-template-columns:minmax(0,1fr);min-width:0;width:100%}
+  .gptb-screen-preview{min-width:0;width:100%;overflow:auto}
+  .gptb-screen-palette,.gptb-screen-properties{width:100%;box-sizing:border-box}
+}
+@media(max-width:520px){
+  .gptb-brand{display:none}
+  .gptb-toolbar{max-width:100vw}
+  .gptb-canvas-stage{min-width:560px;padding-left:28px;padding-right:28px}
+}
