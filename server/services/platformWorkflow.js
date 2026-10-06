@@ -23,29 +23,9 @@ import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
-import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
-const globalProductLookupService = createGlobalProductLookupService();
-
-async function executeGlobalProductLookupAction(context, providerKey = null) {
-  const companyId = context.companyId || context.req?.user?.companyId;
-  const barcode = context.action?.barcode ?? context.action?.code ?? context.record?.barcode ?? context.trigger?.barcode;
-  try {
-    const result = await globalProductLookupService.lookup({
-      db: context.db,
-      companyId,
-      reqCompanyId: context.req?.user?.companyId || null,
-      barcode,
-      providerKey,
-    });
-    return { success: true, ...result };
-  } catch (error) {
-    return { success: false, code: error?.code || "LOOKUP_FAILED", message: error?.code === "INVALID_BARCODE" ? error.message : "Unable to look up this barcode" };
-  }
-}
-
 function redact(value, depth = 0, inheritedSecureValues = new Set()) {
   if (depth > 5 || value == null) return value;
   const secureValues = new Set(inheritedSecureValues);
@@ -95,7 +75,7 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
     key: "CONNECTOR_HEALTH_CHECK",
     displayName: "Connector - Health Check",
-    description: "Execute the installed connector health check for the current company/store/till scope.",
+    description: "Execute health check for a metadata-selected connector.",
     validation: () => undefined,
     async: true,
     requiredPermissions: ["connector.view"],
@@ -105,7 +85,7 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
     key: "CONNECTOR_ENABLE",
     displayName: "Connector - Enable",
-    description: "Enable the installed connector instance for the current tenant scope if supported.",
+    description: "Enable a metadata-selected connector instance.",
     validation: () => undefined,
     async: true,
     requiredPermissions: ["connector.manage"],
@@ -115,7 +95,7 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
     key: "CONNECTOR_DISABLE",
     displayName: "Connector - Disable",
-    description: "Disable the installed connector instance for the current tenant scope if supported.",
+    description: "Disable a metadata-selected connector instance.",
     validation: () => undefined,
     async: true,
     requiredPermissions: ["connector.manage"],
@@ -123,91 +103,9 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
     executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "CONNECTOR_DISABLE" } }),
   },
   {
-    key: "PAYMENT_START",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Payment - Start",
-    description: "Start a payment through the assigned connector instance for the current till.",
-    validation: (action) => {
-      if (!action || typeof action !== "object") throw new Error("Payment action payload is required");
-      if (action.amount === undefined && action.total === undefined) throw new Error("Payment action requires an amount or total");
-    },
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "payment.sale",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_START" } }),
-  },
-  {
-    key: "PAYMENT_CANCEL",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Payment - Cancel",
-    description: "Cancel an in-flight payment through the assigned connector instance.",
-    validation: (action) => {
-      if (!action?.providerTransactionId && !action?.transactionId && !action?.paymentId) {
-        throw new Error("Payment cancellation requires a transaction reference");
-      }
-    },
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "payment.cancel",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_CANCEL" } }),
-  },
-  {
-    key: "PRINT_RECEIPT",
-    displayName: "Print - Receipt",
-    description: "Print a receipt using the active printer connector on the assigned till.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["sale.invoice.reprint"],
-    capability: "printer.print",
-    executor: async (context) => executeConnectorWorkflowAction({
-      ...context,
-      action: { ...context.action, key: "PRINT_RECEIPT" },
-      payload: context.action?.payload || {
-        saleId: context.record?.id || context.recordId || context.action?.inputs?.saleId || null,
-        receiptNumber: context.record?.receipt_number || context.record?.receiptNumber || null,
-        sale: context.record || null,
-        inputs: context.action?.inputs || {},
-      },
-    }),
-  },
-  {
-    key: "PRINT_KITCHEN_TICKET",
-    displayName: "Print - Kitchen Ticket",
-    description: "Print a kitchen ticket using the active kitchen printer connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "printer.kitchen.print",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PRINT_KITCHEN_TICKET" } }),
-  },
-  {
-    key: "OPEN_CASH_DRAWER",
-    displayName: "Cash Drawer - Open",
-    description: "Open the assigned cash drawer connector if the current till supports it.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["till.open"],
-    capability: "drawer.open",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "OPEN_CASH_DRAWER" } }),
-  },
-  {
-    key: "SCANNER_STATUS",
-    displayName: "Scanner - Status",
-    description: "Return the status of the assigned barcode scanner connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage"],
-    capability: "scanner.status",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "SCANNER_STATUS" } }),
-  },
-  {
     key: "CONNECTOR_TEST_CONNECTION",
     displayName: "Connector - Test Connection",
-    description: "Run the connector test connection routine for the assigned instance.",
+    description: "Test a metadata-selected connector instance.",
     validation: () => undefined,
     async: true,
     requiredPermissions: ["connector.test"],
@@ -1030,30 +928,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         tenantAppId: record?.id || recordId,
         operation: action.operation,
       }),
-  },
-  {
-    key: "GLOBAL_PRODUCT_LOOKUP_BARCODE",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Global Product - Lookup Barcode",
-    description: "Resolve an external barcode using enabled, installed product lookup providers in configured priority order.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context),
-  },
-  {
-    key: "GO_UPC_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Go-UPC - Lookup Product",
-    description: "Look up a barcode using the installed Go-UPC connector and company credential.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
   },
   {
     key: "CALL_CONNECTOR_CAPABILITY",
