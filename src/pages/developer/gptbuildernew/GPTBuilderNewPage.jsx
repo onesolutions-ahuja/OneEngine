@@ -3,6 +3,7 @@ import { CalendarClock, ChevronLeft, Copy, MousePointer2, Play, Plus, Redo2, Sea
 import { apiRequest } from '../../../services/api'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderNewFormulaBuilder'
 import { executionInputValue } from './executionInputs'
+import { FLOW_CAPABILITIES, flowElementAllowed } from './flowCapabilities'
 import './GPTBuilderNewPage.css'
 
 export const FLOW_TYPES = [
@@ -28,10 +29,6 @@ export const FLOW_TYPES = [
 
 const CATEGORIES = [['triggered','Triggered'],['scheduled','Scheduled'],['screen','Screen'],['autolaunched','Autolaunched']]
 const FREQUENT = ['screen','record','schedule','autolaunched']
-const FLOW_CAPABILITIES={
- screen:{start:'invoked',screens:true,waits:false},record:{start:'record',screens:false,waits:false},schedule:{start:'schedule',screens:false,waits:true},platform_event:{start:'platform_event',screens:false,waits:true},autolaunched:{start:'invoked',screens:false,waits:true},
- automation_event:{start:'automation_event',screens:false,waits:true},user_provisioning:{start:'user_provisioning',screens:true,waits:false},contact_request:{start:'contact_request',screens:true,waits:false},cart_async:{start:'invoked',screens:false,waits:true},recommendation_strategy:{start:'invoked',screens:false,waits:false},autolaunched_orchestration:{start:'invoked',screens:false,waits:true},record_orchestration:{start:'record',screens:false,waits:true},evaluation:{start:'invoked',screens:false,waits:false},cms_orchestration:{start:'invoked',screens:false,waits:true},individual_linking:{start:'invoked',screens:true,waits:false},autolaunched_approval:{start:'invoked',screens:false,waits:true},record_approval:{start:'record',screens:false,waits:true},identity_registration:{start:'identity_provider',screens:false,waits:false}
-}
 
 const objectKey = (row) => String(row?.object_key || row?.api_name || row?.apiName || row?.key || row?.id || '')
 const objectLabel = (row) => row?.label || row?.name || objectKey(row)
@@ -132,13 +129,7 @@ const snapshot=(nodes,edges)=>({nodes:clone(nodes),edges:clone(edges)})
 function CanvasPicker({flowKey,onPick,onClose}) {
   const [query,setQuery]=useState('')
   const needle=query.trim().toLowerCase()
-  const capability=FLOW_CAPABILITIES[flowKey]||{}
-  const rows=CANVAS_ELEMENTS.filter((row)=>{
-    if(row.key==='screen'&&capability.screens!==true)return false
-    if(['wait_conditions','wait_amount','wait_date'].includes(row.key)&&capability.waits!==true)return false
-    if(row.key==='rollback'&&capability.screens!==true)return false
-    return !needle||row.label.toLowerCase().includes(needle)
-  })
+  const rows=CANVAS_ELEMENTS.filter((row)=>flowElementAllowed(flowKey,row.key)&&(!needle||row.label.toLowerCase().includes(needle)))
   return <aside className="gptbn-element-picker" aria-label="Add Element">
     <header><strong>Add Element</strong><button aria-label="Close element picker" onClick={onClose}><X size={16}/></button></header>
     <label><Search size={14}/><input autoFocus value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search elements..."/></label>
