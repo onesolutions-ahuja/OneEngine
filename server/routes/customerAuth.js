@@ -1,5 +1,4 @@
 import express from "express";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -175,7 +174,7 @@ router.post("/customer-auth/register", async (req, res) => {
 
     const companyCheck = await pool.query("SELECT id FROM companies WHERE id=$1 AND active=true", [companyId]);
     if (!companyCheck.rows.length) return res.status(400).json({ success: false, message: "Company is not available" });
-    await req.ensureWorkflowTraceRun?.({ companyId, userId: null });
+    await req.ensureBusinessCommandRun?.({ companyId, userId: null });
 
     const client = await pool.connect();
     try {
@@ -206,13 +205,23 @@ router.post("/customer-auth/register", async (req, res) => {
       }
 
       const passwordHash = await bcrypt.hash(password, 12);
-      const creation = await executeSystemWorkflow({
-        db:(sql,params=[])=>client.query(sql,params), companyId, userId:null, systemKey:"flow:customer.register", req,
-        input:{ customer:{ company_id:companyId,name:String(name).trim(),phone:phone||null,email:email||null,password_hash:passwordHash,active:true } },
-        source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"customer.register"},
-      });
+
+      const created = await client.query(
+        `INSERT INTO customers (company_id, name, phone, email, password_hash, active) 
+         VALUES ($1,$2,$3,$4,$5,TRUE) 
+         RETURNING id, name, phone, email, company_id`,
+        [
+          companyId,
+          String(name).trim(),
+          phone || null,
+          email || null,
+          await bcrypt.hash(password, 12)
+        ]
+      );
+
       await client.query("COMMIT");
-      customer = creation.result?.customer;
+
+      customer = created.rows[0];
       const token = jwt.sign(
         {
           customerId: customer.id,
