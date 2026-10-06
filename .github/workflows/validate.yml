@@ -35,6 +35,7 @@ jobs:
       - run: npm run audit:gptbuilder-sfdc-parity
       - run: npm run audit:gptbuilder-functional-contract
       - run: npm run test:gptbuilder-contract
+      - run: npm run test:gptbuilder-negative
 
   playwright-smoke:
     if: github.event_name == 'workflow_dispatch'
