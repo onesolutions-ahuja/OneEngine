@@ -23,7 +23,6 @@ const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
-const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
@@ -32,7 +31,6 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
@@ -1826,7 +1824,6 @@ function Desktop({ onLock, onSignOut }) {
   </div>
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
-  const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 'till'
 
   useEffect(() => {
     if (!isTillUser || activeApp !== 'home') return
@@ -2093,7 +2090,7 @@ function Desktop({ onLock, onSignOut }) {
       'kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','categories',
-      'global-products','products','sales','workspace','till',
+      'workspace',
     ])
 
     if (target === 'developer') {
