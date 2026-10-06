@@ -1,0 +1,6 @@
+import test from "node:test";import assert from "node:assert/strict";import {readFile,access} from "node:fs/promises";
+const root=new URL("../",import.meta.url);const read=p=>readFile(new URL(p,root),"utf8");
+test("final metadata manifests own migrated business domains",async()=>{for(const f of ["retail_pos","purchasing_core","products","inventory","batch_expiry","customers","customer_credit","loyalty","gift_cards","online_orders","uber_eats"]){const o=JSON.parse(await read("server/metadata/manifests/"+f+".json"));assert.ok(o.objects?.length||o.workflows?.length,f)}});
+test("package registry has no inline migrated domain/provider implementations",async()=>{const s=await read("server/services/packageRegistry.js");for(const k of ["products","batch_expiry","customers","customer_credit","loyalty","online_orders","uber_eats"])assert.equal(s.includes(`entry.key === "${k}"`),false,k)});
+test("deleted inventory business engines stay deleted",async()=>{for(const p of ["server/services/inventory.js","server/services/inventoryPlatform.js","server/services/adjustmentReasons.js"]){await assert.rejects(access(new URL(p,root))) }});
+test("no phantom loyalty handler returns",async()=>{const s=await read("server/metadata/manifests/loyalty.json");assert.equal(s.includes("CUSTOMER_LOYALTY_ADJUST"),false);assert.match(s,/LOYALTY_ADJUST/)});
