@@ -312,7 +312,7 @@ function capabilityDefinition(manifest, capabilityKey) {
 }
 
 async function loadPersistedCandidates({ db, companyId, storeId, tillId }) {
-  if (!companyId || !storeId || !tillId) return [];
+  if (!companyId) return [];
   const result = await db(
     `SELECT c.id, c.company_id, c.store_id, c.till_id, c.connector_package_key,
             c.connector_configuration, c.connector_capabilities, c.enabled,
