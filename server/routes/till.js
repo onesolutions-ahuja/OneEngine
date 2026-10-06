@@ -621,59 +621,7 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
    * returns an ack for the POS to trigger the local hardware kick it already
    * owns. Permission: cash.open_drawer (admin bypass per authorize()).
    */
-  router.post(
-    "/till/drawer/open",
-    authenticate,
-    authorize("cash.open_drawer"),
-    async (req, res) => {
-      try {
-        const reason = req.body?.reason ? String(req.body.reason).slice(0, 255) : null;
-        let terminalId = req.body?.terminalId ?? null;
-        if (terminalId) {
-          const t = await db(
-            "SELECT id FROM terminals WHERE id = $1 AND store_id = $2 AND active = true",
-            [terminalId, req.user.storeId]
-          );
-          if (!t.rows.length) {
-            return res.status(400).json({
-              success: false,
-              message: "Requested till does not belong to this store",
-            });
-          }
-        } else {
-          const t = await db(
-            "SELECT id FROM terminals WHERE store_id = $1 AND active = true ORDER BY created_at LIMIT 1",
-            [req.user.storeId]
-          );
-          terminalId = t.rows[0]?.id ?? null;
-          if (!terminalId) {
-            return res.status(400).json({ success: false, message: "No active till configured for this store" });
-          }
-        }
 
-        /* No open session needed for a no-sale drawer opening, but when one
-         * exists the event is attributed to it. */
-        const session = await db(
-          "SELECT id FROM till_sessions WHERE terminal_id = $1 AND status = 'open' LIMIT 1",
-          [terminalId]
-        );
-
-        await db(
-          `INSERT INTO cash_movements (till_session_id, user_id, type, amount, reason, store_id, terminal_id)
-           VALUES ($1, $2, 'drawer_open', $3, $4, $5, $6)`,
-          [session.rows[0]?.id ?? null, req.user.id, 0, reason, req.user.storeId, terminalId]
-        );
-        res.json({
-          success: true,
-          message: "Drawer open recorded",
-          data: { terminalId, sessionId: session.rows[0]?.id ?? null, reason },
-        });
-      } catch (error) {
-        console.error("Open drawer error:", error);
-        res.status(500).json({ success: false, message: "Unable to open drawer" });
-      }
-    }
-  );
 
   return router;
 }
