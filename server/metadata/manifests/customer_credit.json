@@ -25,11 +25,11 @@
       }
     },
     {
-      "objectKey": "customer_credit_ledger",
+      "objectKey": "customer_ledger",
       "label": "Customer Credit Ledger Entry",
       "pluralLabel": "Customer Credit Ledger Entries",
       "description": "Immutable customer credit transactions.",
-      "sourceTable": "customer_credit_ledger",
+      "sourceTable": "customer_ledger",
       "fields": [
         {
           "apiName": "customer_id",
@@ -118,7 +118,7 @@
     },
     {
       "parentObjectKey": "customer_credit_account",
-      "childObjectKey": "customer_credit_ledger",
+      "childObjectKey": "customer_ledger",
       "relationshipKey": "ledger_entries",
       "relationshipType": "one_to_many",
       "childFieldApiName": "customer_id"
@@ -152,7 +152,7 @@
       }
     },
     {
-      "objectKey": "customer_credit_ledger",
+      "objectKey": "customer_ledger",
       "viewKey": "all",
       "label": "Credit Ledger Activity",
       "columns": [
@@ -202,7 +202,7 @@
       }
     },
     {
-      "objectKey": "customer_credit_ledger",
+      "objectKey": "customer_ledger",
       "name": "Credit payment received notification",
       "triggerKey": "after_save",
       "conditions": [
@@ -218,7 +218,7 @@
       }
     },
     {
-      "objectKey": "customer_credit_ledger",
+      "objectKey": "customer_ledger",
       "name": "Credit ledger amount must be positive",
       "triggerKey": "before_save",
       "conditions": [
@@ -326,7 +326,7 @@
             "label": "Find Existing Credit Entry",
             "apiName": "find_existing_credit_entry",
             "key": "GET_RECORDS",
-            "objectKey": "customer_credit_ledger",
+            "objectKey": "customer_ledger",
             "filters": [
               {
                 "field": "idempotency_key",
@@ -384,7 +384,7 @@
             "label": "Create Customer Credit Ledger Entry",
             "apiName": "create_entry",
             "key": "CREATE_RECORD",
-            "objectKey": "customer_credit_ledger",
+            "objectKey": "customer_ledger",
             "idempotency": {
               "key": {
                 "path": "variables.idempotencyKey"
@@ -555,7 +555,7 @@
                 "label": "Find Existing Credit Entry",
                 "apiName": "find_existing_credit_entry",
                 "key": "GET_RECORDS",
-                "objectKey": "customer_credit_ledger",
+                "objectKey": "customer_ledger",
                 "filters": [
                   {
                     "field": "idempotency_key",
@@ -657,7 +657,7 @@
                 "label": "Create Customer Credit Ledger Entry",
                 "apiName": "create_entry",
                 "key": "CREATE_RECORD",
-                "objectKey": "customer_credit_ledger",
+                "objectKey": "customer_ledger",
                 "idempotency": {
                   "key": {
                     "path": "variables.idempotencyKey"
