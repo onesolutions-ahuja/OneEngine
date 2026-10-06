@@ -141,10 +141,18 @@ export default function GPTBuilderAction({ draft, updateConfig, resources = [], 
     return()=>{live=false}
   },[])
   const selected=actions.find((action)=>action.key===config.actionKey)
+  const httpCalloutAction=actions.find((action)=>['ONE_HTTP_REQUEST','HTTP_REQUEST'].includes(String(action.key||'').toUpperCase()))
+  const selectAction=(action)=>{
+    if(!action)return
+    const inputs={},modes={},included={},transforms={}
+    const required=new Set(action?.schema?.required||[])
+    for(const [name,schema] of Object.entries(action?.schema?.properties||{})){inputs[name]=inputDefault(schema);modes[name]='value';included[name]=required.has(name)?'specified':'omit';transforms[name]={source:'',mappings:[]}}
+    patch({actionKey:action.key,inputs,inputModes:modes,inputIncluded:included,transforms,outputMode:'automatic',manualOutputs:[],actionLabel:action.displayName||action.key})
+  }
   const errors=useMemo(()=>actionConfigErrors(config,actions,resources),[JSON.stringify(config),JSON.stringify(actions),JSON.stringify(resources)])
   useEffect(()=>{onConfiguredChange?.(errors.length===0,errors)},[JSON.stringify(errors)])
   const patch=(changes)=>updateConfig({...config,...changes})
-  const matches=actions.filter((action)=>!query.trim() || `${action.displayName||''} ${action.key||''} ${action.description||''}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,60)
+  const matches=actions.filter((action)=>!query.trim() || `${action.displayName||''} ${action.key||''} ${action.description||''}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0,110)
   const requiredSet=new Set(selected?.schema?.required||[])
   const outputFields=Object.keys(selected?.outputSchema?.properties||{})
   useEffect(()=>{
@@ -158,15 +166,10 @@ export default function GPTBuilderAction({ draft, updateConfig, resources = [], 
   },[draft.id,draft.apiName,draft.label,config.actionKey,config.outputMode])
 
   return <div className="gptb-gr gptb-action-editor">
-    <section><h3>Action</h3>
+    <section><h3>All Actions <small>{loading?'':actions.length}</small></h3>
+      {httpCalloutAction?<button type="button" className="gptb-inline-action" onClick={()=>selectAction(httpCalloutAction)}><Plus size={12}/> Create HTTP Callout</button>:null}
       <div className="gptb-action-search"><Search size={13}/><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search actions..."/></div>
-      <label><span>Action <b>*</b></span><select value={config.actionKey} disabled={loading} onChange={(event)=>{
-        const next=actions.find((action)=>action.key===event.target.value)
-        const inputs={},modes={},included={},transforms={}
-        const required=new Set(next?.schema?.required||[])
-        for(const [name,schema] of Object.entries(next?.schema?.properties||{})){inputs[name]=inputDefault(schema);modes[name]='value';included[name]=required.has(name)?'specified':'omit';transforms[name]={source:'',mappings:[]}}
-        patch({actionKey:event.target.value,inputs,inputModes:modes,inputIncluded:included,transforms,outputMode:'automatic',manualOutputs:[],actionLabel:next?.displayName||event.target.value})
-      }}><option value="">{loading?'Loading actions...':'Select an action'}</option>{matches.map((action)=><option key={action.key} value={action.key}>{action.displayName||action.key}</option>)}</select>{selected?.description?<small>{selected.description}</small>:null}</label>
+      <label><span>Action <b>*</b></span><select value={config.actionKey} disabled={loading} onChange={(event)=>selectAction(actions.find((action)=>action.key===event.target.value))}><option value="">{loading?'Loading actions...':'Select an action'}</option>{matches.map((action)=><option key={action.key} value={action.key}>{action.displayName||action.key}</option>)}</select>{selected?.description?<small>{selected.description}</small>:null}</label>
     </section>
     {selected?<section><h3>Set Input Values</h3>
       {Object.entries(selected.schema?.properties||{}).map(([name,schema])=><ActionInput key={name} name={name} schema={schema} description={schema.description} required={requiredSet.has(name)} includeState={config.inputIncluded[name]||'omit'} mode={config.inputModes[name]||'value'} value={config.inputs[name]} transform={config.transforms[name]} resources={resources} object={object} onInclude={(state)=>patch({inputIncluded:{...config.inputIncluded,[name]:state}})} onMode={(mode)=>patch({inputModes:{...config.inputModes,[name]:mode},inputs:{...config.inputs,[name]:mode==='resource'||mode==='formula'?'':config.inputs[name]}})} onValue={(value)=>patch({inputs:{...config.inputs,[name]:value}})} onTransform={(value)=>patch({transforms:{...config.transforms,[name]:value}})}/>)}
