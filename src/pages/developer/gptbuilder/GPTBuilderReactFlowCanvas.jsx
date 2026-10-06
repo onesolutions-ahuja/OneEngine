@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Controls,
@@ -9,7 +9,7 @@ import {
   useNodesState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Plus, Minus, Sparkles, WandSparkles, Zap } from 'lucide-react'
+import { ChevronDown, ChevronRight, Minus, Plus, Sparkles, WandSparkles, Zap } from 'lucide-react'
 import { elementByKey } from './GPTBuilderElements'
 import '../ReactFlowCanvasUXTest.css'
 
@@ -44,20 +44,43 @@ function toneFor(element) {
   return 'gray'
 }
 
+function labelFor(element) {
+  return element?.label || element?.apiName || elementByKey(element?.key)?.label || 'Flow element'
+}
+
+function subtitleFor(element) {
+  const label = elementByKey(element?.key)?.label || element?.key || 'Element'
+  return element?.configured ? label : `${label} · Not fully configured`
+}
+
 function BuilderNode({ id, data, selected }) {
   const definition = data.kind === 'start' ? null : elementByKey(data.element?.key)
   const Icon = data.kind === 'start' ? Zap : (definition?.icon || Sparkles)
   const removable = data.kind !== 'start' && data.kind !== 'end'
+  const elementId = data.kind === 'start' ? 'start' : data.element?.id
 
   return (
-    <div className={`rfux-node rfux-node--${data.tone || 'blue'} ${selected ? 'is-selected' : ''}`}>
+    <div
+      className={`rfux-node rfux-node--${data.tone || 'blue'} ${selected ? 'is-selected' : ''} ${data.kind === 'group' ? 'gptb-rf-group-node' : ''}`}
+      data-gptb-auto-focus="true"
+      data-gptb-element-id={elementId}
+      data-gptb-description={data.description || data.subtitle || ''}
+      tabIndex={-1}
+    >
       {data.kind !== 'start' ? <Handle type="target" position={Position.Top} className="rfux-handle" /> : null}
       <div className={`rfux-node-icon ${data.element?.key === 'decision' ? 'rfux-node-icon--decision' : ''}`}><Icon size={16}/></div>
       <div className="rfux-node-copy" onDoubleClick={() => data.onOpen?.(data.element)}>
         <strong>{data.title}</strong>
         <span>{data.subtitle}</span>
       </div>
-      {removable ? <button type="button" className="rfux-node-remove nodrag" aria-label={`Remove ${data.title}`} title="Remove" onClick={(event) => { event.stopPropagation(); data.onRemove?.(id) }}><Minus size={14}/></button> : null}
+      {data.kind === 'group' ? <button
+        type="button"
+        className="gptb-rf-group-toggle nodrag"
+        aria-label={data.groupCollapsed ? `Expand ${data.title}` : `Collapse ${data.title}`}
+        title={data.groupCollapsed ? 'Expand group' : 'Collapse group'}
+        onClick={(event) => { event.stopPropagation(); data.onToggleGroup?.() }}
+      >{data.groupCollapsed ? <ChevronRight size={13}/> : <ChevronDown size={13}/>}</button> : null}
+      {removable ? <button type="button" className="rfux-node-remove nodrag" aria-label={`Remove ${data.title}`} title="Remove" onClick={(event) => { event.stopPropagation(); data.onRemove?.(data.element?.id || id) }}><Minus size={14}/></button> : null}
       {data.kind !== 'end' ? <button type="button" className="rfux-node-add nodrag" aria-label={`Add after ${data.title}`} title="Add element" onClick={(event) => { event.stopPropagation(); data.onAdd?.() }}><Plus size={14}/></button> : null}
       {data.kind !== 'end' ? <Handle type="source" position={Position.Bottom} className="rfux-handle" /> : null}
     </div>
@@ -66,70 +89,122 @@ function BuilderNode({ id, data, selected }) {
 
 const nodeTypes = { workflow: BuilderNode }
 
-function buildGraph(elements, startLabel, onOpen, onRemove, onAddAt, onAddDecisionBranch) {
+function buildGraph({
+  elements,
+  startLabel,
+  collapsedGroups,
+  onOpen,
+  onRemove,
+  onAddAt,
+  onAddDecisionBranch,
+  onAddGroupMember,
+  onToggleGroup,
+}) {
   const auto = elements.filter((element) => element.source === 'auto')
-  const nested = new Set([
-    ...auto.filter((item) => item.key === 'group').flatMap((item) => item.config?.memberIds || []),
-    ...auto.filter((item) => item.key === 'decision').flatMap((item) => [
-      ...(item.config?.outcomes || []).flatMap((outcome) => outcome.branch || []),
-      ...(item.config?.defaultBranch || []),
-    ]),
+  const groupMemberIds = auto.filter((element) => element.key === 'group').flatMap((group) => Array.isArray(group.config?.memberIds) ? group.config.memberIds : [])
+  const decisionMemberIds = auto.filter((element) => element.key === 'decision').flatMap((decision) => [
+    ...(decision.config?.outcomes || []).flatMap((outcome) => Array.isArray(outcome.branch) ? outcome.branch : []),
+    ...(Array.isArray(decision.config?.defaultBranch) ? decision.config.defaultBranch : []),
   ])
-  const top = auto.filter((item) => !nested.has(item.id))
+  const nested = new Set([...groupMemberIds, ...decisionMemberIds].map(String))
+  const top = auto.filter((element) => !nested.has(String(element.id)))
   const byId = new Map(auto.map((item) => [String(item.id), item]))
   const nodes = [{
     id: '__start__',
     type: 'workflow',
     position: { x: 420, y: 50 },
-    data: { kind: 'start', title: 'Start', subtitle: startLabel || 'Trigger', tone: 'blue', onAdd: () => onAddAt(0) },
+    data: {
+      kind: 'start',
+      title: 'Start',
+      subtitle: startLabel || 'Trigger',
+      description: 'The Start element defines when and how the flow begins.',
+      tone: 'blue',
+      onAdd: () => onAddAt(0),
+    },
   }]
   const edges = []
   const MAIN_X = 420
-  const ROW = 155
+  const ROW = 165
   const BRANCH_X = 300
-  let y = 205
-  let previous = '__start__'
+  let y = 215
+  let terminals = [{ id: '__start__', key: 'start', label: '' }]
 
   const edge = (id, source, target, label = '') => ({
-    id, source, target, type: 'smoothstep', label,
+    id,
+    source,
+    target,
+    type: 'smoothstep',
+    label,
     markerEnd: { type: MarkerType.ArrowClosed },
   })
 
-  top.forEach((element, index) => {
+  const connectTerminals = (targetId) => {
+    terminals.forEach((terminal, terminalIndex) => {
+      edges.push(edge(
+        `join:${terminal.key || terminal.id}:${targetId}:${terminalIndex}`,
+        terminal.id,
+        targetId,
+        terminal.label || '',
+      ))
+    })
+  }
+
+  top.forEach((element, topIndex) => {
     const nodeId = String(element.id)
+    const groupMembers = element.key === 'group'
+      ? (element.config?.memberIds || []).map((id) => byId.get(String(id))).filter(Boolean)
+      : []
+    const groupCollapsed = element.key === 'group' && collapsedGroups[nodeId] === true
+
     nodes.push({
       id: nodeId,
       type: 'workflow',
       position: { x: MAIN_X, y },
       data: {
+        kind: element.key === 'group' ? 'group' : 'element',
         element,
-        title: element.label || element.apiName || elementByKey(element.key)?.label || 'Flow element',
-        subtitle: element.configured ? (elementByKey(element.key)?.label || element.key) : `${elementByKey(element.key)?.label || element.key} · Not fully configured`,
+        title: labelFor(element),
+        subtitle: element.key === 'group'
+          ? `Group · ${groupMembers.length} element${groupMembers.length === 1 ? '' : 's'}`
+          : subtitleFor(element),
+        description: element.description || subtitleFor(element),
         tone: toneFor(element),
+        groupCollapsed,
+        onToggleGroup: element.key === 'group' ? () => onToggleGroup(nodeId) : undefined,
         onOpen,
         onRemove,
-        onAdd: () => onAddAt(index + 1),
+        onAdd: element.key === 'group'
+          ? () => onAddGroupMember?.(element.id)
+          : () => onAddAt(topIndex + 1),
       },
     })
-    edges.push(edge(`main:${previous}:${nodeId}`, previous, nodeId))
+    connectTerminals(nodeId)
 
     if (element.key === 'decision') {
       const outcomes = [
         ...(element.config?.outcomes || []).map((outcome, outcomeIndex) => ({
           id: outcome.id || `outcome-${outcomeIndex + 1}`,
           label: outcome.label || `Outcome ${outcomeIndex + 1}`,
-          ids: outcome.branch || [],
+          ids: Array.isArray(outcome.branch) ? outcome.branch : [],
         })),
-        { id: '__DEFAULT__', label: element.config?.defaultLabel || 'Default Outcome', ids: element.config?.defaultBranch || [] },
+        {
+          id: '__DEFAULT__',
+          label: element.config?.defaultLabel || 'Default Outcome',
+          ids: Array.isArray(element.config?.defaultBranch) ? element.config.defaultBranch : [],
+        },
       ]
       const branchStartY = y + ROW
       let maxDepth = 0
+      const nextTerminals = []
       outcomes.forEach((outcome, pathIndex) => {
         const members = outcome.ids.map((id) => byId.get(String(id))).filter(Boolean)
         maxDepth = Math.max(maxDepth, members.length)
         const x = MAIN_X + (pathIndex - (outcomes.length - 1) / 2) * BRANCH_X
-        if (!members.length) return
-        let branchPrevious = nodeId
+        if (!members.length) {
+          nextTerminals.push({ id: nodeId, key: `${nodeId}:${outcome.id}:empty`, label: outcome.label })
+          return
+        }
+        let previousId = nodeId
         members.forEach((member, memberIndex) => {
           const memberNodeId = `branch:${nodeId}:${outcome.id}:${member.id}`
           nodes.push({
@@ -137,24 +212,62 @@ function buildGraph(elements, startLabel, onOpen, onRemove, onAddAt, onAddDecisi
             type: 'workflow',
             position: { x, y: branchStartY + memberIndex * ROW },
             data: {
+              kind: 'element',
               element: member,
-              title: member.label || member.apiName || elementByKey(member.key)?.label || 'Flow element',
-              subtitle: member.configured ? (elementByKey(member.key)?.label || member.key) : `${elementByKey(member.key)?.label || member.key} · Not fully configured`,
+              title: labelFor(member),
+              subtitle: subtitleFor(member),
+              description: member.description || subtitleFor(member),
               tone: toneFor(member),
               onOpen,
-              onRemove: () => onRemove(member.id),
+              onRemove,
               onAdd: () => onAddDecisionBranch?.(element.id, outcome.id),
             },
           })
-          edges.push(edge(`branch:${nodeId}:${outcome.id}:${member.id}`, branchPrevious, memberNodeId, memberIndex === 0 ? outcome.label : ''))
-          branchPrevious = memberNodeId
+          edges.push(edge(
+            `branch:${nodeId}:${outcome.id}:${member.id}`,
+            previousId,
+            memberNodeId,
+            memberIndex === 0 ? outcome.label : '',
+          ))
+          previousId = memberNodeId
         })
+        nextTerminals.push({ id: previousId, key: `${nodeId}:${outcome.id}:${previousId}`, label: '' })
       })
-      y = branchStartY + Math.max(1, maxDepth) * ROW
-    } else {
-      y += ROW
+      terminals = nextTerminals.length ? nextTerminals : [{ id: nodeId, key: nodeId, label: '' }]
+      y = branchStartY + Math.max(1, maxDepth) * ROW + 20
+      return
     }
-    previous = nodeId
+
+    if (element.key === 'group' && groupMembers.length && !groupCollapsed) {
+      let previousId = nodeId
+      groupMembers.forEach((member, memberIndex) => {
+        const memberNodeId = `group:${nodeId}:${member.id}`
+        nodes.push({
+          id: memberNodeId,
+          type: 'workflow',
+          position: { x: MAIN_X, y: y + (memberIndex + 1) * ROW },
+          data: {
+            kind: 'element',
+            element: member,
+            title: labelFor(member),
+            subtitle: subtitleFor(member),
+            description: member.description || subtitleFor(member),
+            tone: toneFor(member),
+            onOpen,
+            onRemove,
+            onAdd: () => onAddGroupMember?.(element.id),
+          },
+        })
+        edges.push(edge(`group:${nodeId}:${member.id}`, previousId, memberNodeId))
+        previousId = memberNodeId
+      })
+      terminals = [{ id: previousId, key: `${nodeId}:group-terminal`, label: '' }]
+      y += (groupMembers.length + 1) * ROW
+      return
+    }
+
+    terminals = [{ id: nodeId, key: nodeId, label: '' }]
+    y += ROW
   })
 
   const endId = '__end__'
@@ -162,9 +275,9 @@ function buildGraph(elements, startLabel, onOpen, onRemove, onAddAt, onAddDecisi
     id: endId,
     type: 'workflow',
     position: { x: MAIN_X, y },
-    data: { kind: 'end', title: 'End', subtitle: 'Flow complete', tone: 'gray' },
+    data: { kind: 'end', title: 'End', subtitle: 'Flow complete', description: 'End of flow', tone: 'gray' },
   })
-  edges.push(edge(`main:${previous}:${endId}`, previous, endId))
+  connectTerminals(endId)
   return { nodes, edges }
 }
 
@@ -175,9 +288,11 @@ function computeLayout(nodes, edges) {
     if (trail.has(id)) return 0
     const parents = edges.filter((edge) => edge.target === id).map((edge) => edge.source)
     if (!parents.length) { depth.set(id, 0); return 0 }
-    const nextTrail = new Set(trail); nextTrail.add(id)
+    const nextTrail = new Set(trail)
+    nextTrail.add(id)
     const value = Math.max(...parents.map((parentId) => resolveDepth(parentId, nextTrail))) + 1
-    depth.set(id, value); return value
+    depth.set(id, value)
+    return value
   }
   nodes.forEach((node) => resolveDepth(node.id))
   const grouped = new Map()
@@ -195,6 +310,14 @@ function computeLayout(nodes, edges) {
   })
 }
 
+function initialCollapsedGroups(elements) {
+  const state = {}
+  for (const group of elements.filter((element) => element.source === 'auto' && element.key === 'group')) {
+    try { state[String(group.id)] = localStorage.getItem(`gptbuilder.group.${group.id}.collapsed`) === 'true' } catch { state[String(group.id)] = false }
+  }
+  return state
+}
+
 export default function GPTBuilderReactFlowCanvas({
   elements,
   selectedId,
@@ -203,9 +326,42 @@ export default function GPTBuilderReactFlowCanvas({
   onRemove,
   onAddAt,
   onAddDecisionBranch,
+  onAddGroupMember,
   onOpenStart,
 }) {
-  const graph = useMemo(() => buildGraph(elements, startLabel, onOpen, onRemove, onAddAt, onAddDecisionBranch), [elements, startLabel, onOpen, onRemove, onAddAt, onAddDecisionBranch])
+  const [collapsedGroups, setCollapsedGroups] = useState(() => initialCollapsedGroups(elements))
+
+  useEffect(() => {
+    setCollapsedGroups((current) => {
+      const next = { ...current }
+      for (const group of elements.filter((element) => element.source === 'auto' && element.key === 'group')) {
+        if (Object.prototype.hasOwnProperty.call(next, String(group.id))) continue
+        try { next[String(group.id)] = localStorage.getItem(`gptbuilder.group.${group.id}.collapsed`) === 'true' } catch { next[String(group.id)] = false }
+      }
+      return next
+    })
+  }, [elements])
+
+  const toggleGroup = useCallback((groupId) => {
+    setCollapsedGroups((current) => {
+      const nextValue = current[groupId] !== true
+      try { localStorage.setItem(`gptbuilder.group.${groupId}.collapsed`, String(nextValue)) } catch {}
+      return { ...current, [groupId]: nextValue }
+    })
+  }, [])
+
+  const graph = useMemo(() => buildGraph({
+    elements,
+    startLabel,
+    collapsedGroups,
+    onOpen,
+    onRemove,
+    onAddAt,
+    onAddDecisionBranch,
+    onAddGroupMember,
+    onToggleGroup: toggleGroup,
+  }), [elements, startLabel, collapsedGroups, onOpen, onRemove, onAddAt, onAddDecisionBranch, onAddGroupMember, toggleGroup])
+
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges)
   const [instance, setInstance] = useState(null)
@@ -217,7 +373,7 @@ export default function GPTBuilderReactFlowCanvas({
 
   const displayNodes = useMemo(() => nodes.map((node) => ({
     ...node,
-    selected: node.id === selectedId || node.data?.element?.id === selectedId,
+    selected: String(node.data?.element?.id || node.id) === String(selectedId),
   })), [nodes, selectedId])
 
   const displayEdges = useMemo(() => {
@@ -226,7 +382,9 @@ export default function GPTBuilderReactFlowCanvas({
     return edges.map((edge) => {
       const sourceNode = nodes.find((node) => node.id === edge.source)
       const sourceElementId = sourceNode?.data?.element?.id || edge.source
-      if (String(sourceElementId) !== String(selectedId)) return { ...edge, className: '', style: undefined, markerEnd: { type: MarkerType.ArrowClosed } }
+      if (String(sourceElementId) !== String(selectedId)) {
+        return { ...edge, className: '', style: undefined, markerEnd: { type: MarkerType.ArrowClosed } }
+      }
       const color = colors[index++ % colors.length]
       return {
         ...edge,
