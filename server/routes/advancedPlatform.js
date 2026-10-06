@@ -1,6 +1,6 @@
 import express from "express";
 import { CHANNELS, extractMergeFields, renderMessageTemplate, validateTemplateChannel } from "../services/messageTemplates.js";
-import { toSafeApiName } from "../services/platformMetadata.js";
+import { toSafeApiName } from "../services/platformIdentifiers.js";
 
 const SENSITIVE_KEYS = new Set(["password", "passwd", "pass", "secret", "token", "api_key", "apiKey", "client_secret", "clientSecret", "access_token", "accessToken"]);
 
