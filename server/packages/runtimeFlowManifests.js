@@ -175,5 +175,9 @@ export const PACKAGE_RUNTIME_FLOWS=[
 ,
  flow("flow:customer.register","Customer · Register",[input("customer","object")],[output("customer","object")],[
   {id:"create_customer",label:"Create Customer",key:"CREATE_RECORD",objectKey:"customer",recordResource:{path:"$record.customer"},store:"customer"}
+ ]),
+ flow("flow:communication.send","Communication · Send",[input("channel"),input("recipient"),input("subject","text",false),input("message"),input("attachments","collection",false)],[output("status")],[
+  {id:"send",label:"Send Communication",key:"SEND_COMMUNICATION",channel:{path:"$record.channel"},recipient:{path:"$record.recipient"},subject:{path:"$record.subject"},message:{path:"$record.message"},attachments:{path:"$record.attachments"}},
+  {id:"status",label:"Return Status",key:"ASSIGNMENT",variableName:"status",variableType:"text",operator:"set",value:{path:"steps.send.status"}}
  ])
 ];
