@@ -2038,9 +2038,36 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
         inputContract: workflow.inputContract || workflow.action?.inputContract || [],
         outputContract: workflow.outputContract || workflow.action?.outputContract || [],
         resources: workflow.resources || workflow.variables || workflow.action?.resources || [],
-        gptBuilderElements: workflow.gptBuilderElements || workflow.action?.gptBuilderElements || [],
+        gptBuilderElements: (() => {
+          const actions = workflow.actions || workflow.action?.actions || [];
+          const existing = workflow.gptBuilderElements || workflow.action?.gptBuilderElements || [];
+          if (Array.isArray(existing) && existing.length === actions.length) return existing;
+          return actions.map((step, index) => ({
+            id: step.id || `package-step-${index + 1}`,
+            key: "action",
+            label: step.label || step.apiName || step.key || `Step ${index + 1}`,
+            apiName: step.apiName || step.id || `Package_Step_${index + 1}`,
+            description: step.description || "",
+            labelSource: "manual",
+            apiNameSource: "manual",
+            config: {
+              actionKey: step.key || step.type || "",
+              inputs: {},
+              inputModes: {},
+              inputIncluded: {},
+              transforms: {},
+              outputMode: "automatic",
+              manualOutputs: [],
+              importedRuntimeAction: step,
+              importedRuntimeActionText: "",
+            },
+            configured: true,
+            source: "runtime_import",
+            position: null,
+          }));
+        })(),
         layout: workflow.layout || workflow.action?.layout || { mode: "AUTO" },
-        gptBuilder: workflow.gptBuilder === true || workflow.action?.gptBuilder === true || Array.isArray(workflow.gptBuilderElements) || Array.isArray(workflow.action?.gptBuilderElements),
+        gptBuilder: true,
         actions: workflow.actions || workflow.action?.actions || [],
       },
     })) : []),
