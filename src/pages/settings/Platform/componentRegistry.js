@@ -63,7 +63,19 @@ import {
   MessageSquareWarning,
   BadgeCheck,
   LoaderCircle,
-  ArrowLeft,\n  X,\n  RefreshCw,\n  ExternalLink,\n  Clock,\n  CalendarDays,\n  Menu,\n  ChevronRight,\n  ListOrdered,\n  MessageCircleQuestion,\n  Bell,\n  AppWindow,\n  PanelBottom,\n} from "lucide-react";
+  ArrowLeft,
+  X,
+  RefreshCw,
+  ExternalLink,
+  Clock,
+  Menu,
+  ChevronRight,
+  ListOrdered,
+  MessageCircleQuestion,
+  Bell,
+  AppWindow,
+  PanelBottom,
+} from "lucide-react";
 
 // Client fallback mirrors the server registry so the builder remains usable
 // during transient API failures. The server /platform/component-registry is
@@ -265,6 +277,9 @@ export function normalizeComponent(component) {
     permissions: normalizeArray(source.permissions || source.requiredPermissions || source.required_permissions),
     packageOwnership: source.packageOwnership || source.package_ownership || "shared",
     configurable: Array.isArray(source.configurable) ? source.configurable : [],
+    tenantStatus: ["ACTIVE", "DEPRECATED", "REMOVED"].includes(String(source.tenantStatus || source.tenant_status || "").toUpperCase())
+      ? String(source.tenantStatus || source.tenant_status).toUpperCase()
+      : "ACTIVE",
   };
 }
 
@@ -310,6 +325,7 @@ export function useComponentRegistry() {
 export function registryForBuilder(registry = FALLBACK_COMPONENT_REGISTRY, builder = "DASHBOARD") {
   const target = String(builder || "DASHBOARD").toUpperCase();
   return normalizedRegistry(registry).filter((component) => {
+    if (component.tenantStatus !== "ACTIVE") return false;
     const supported = (component.supportedBuilders || []).map((item) => String(item).toUpperCase());
     if (supported.length) return supported.includes(target);
     const category = component.category || "";
