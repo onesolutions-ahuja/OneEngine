@@ -2403,6 +2403,7 @@ export function packageDefinition(entry) {
           { objectKey:"stock_return_line",name:"Return quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Return quantity must be greater than zero"} },
           { objectKey:"sale",name:"Sale total cannot be negative",triggerKey:"before_save",conditions:[{field:"total",operator:"less_than",value:0}],action:{type:"validation",message:"Sale total cannot be negative"} },
           { objectKey:"sale",name:"Sale must contain at least one line",triggerKey:"before_save",conditions:[{field:"line_count",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"A sale must contain at least one line"} },
+          { objectKey:"sale",name:"Sale request key required",triggerKey:"before_save",conditions:[{field:"client_request_id",operator:"is_blank"}],action:{type:"validation",message:"A sale requires a client request id for idempotency"} },
           { objectKey:"sale_item",name:"Sale item quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Sale item quantity must be greater than zero"} },
           { objectKey:"payment",name:"Payment amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Payment amount must be greater than zero"} },
         ],
