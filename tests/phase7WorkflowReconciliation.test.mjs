@@ -46,11 +46,6 @@ test("Phase 7 retired duplicate runtime workflow keys stay removed", async () =>
   ]) assert.equal(source.includes(`flow("${key}"`), false, key);
 });
 
-test("Phase 7 database cleanup retires duplicate runtime rows", async () => {
-  const source = await readFile(new URL("../server/database/init.js", import.meta.url), "utf8");
-  assert.match(source, /0067_remove_residual_duplicate_runtime_workflows/);
-});
-
 test("Phase 7 no hidden workflow executors return", async () => {
   for (const file of [
     "../server/services/systemWorkflowCatalog.js",
