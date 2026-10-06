@@ -2910,6 +2910,18 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           else {
             skipped.push(existing);
             if (sourceVariableName && workflowVariables.variables) workflowVariables.variables[sourceVariableName] = existing;
+            return {
+              status: "matched",
+              created: null,
+              createdRecords: [],
+              updated: null,
+              updatedRecords: [],
+              skippedRecords: [existing],
+              matched: existing,
+              count: 0,
+              duplicateWarning,
+              haltWorkflow: action.haltOnMatch === true,
+            };
           }
           continue;
         }
