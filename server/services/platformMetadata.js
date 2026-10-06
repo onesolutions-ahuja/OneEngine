@@ -1421,7 +1421,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       if (object.key === "onestore_app") {
         await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
       }
-      if (object.key === "till_session" || object.key === "cash_movement" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
+      if (object.key === "device_session" || object.key === "cash_ledger" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
         await pool.query("UPDATE platform_objects SET company_scoped=true,store_scoped=true WHERE id=$1", [result.rows[0].id]);
       }
       for (let index = 0; index < object.fields.length; index += 1) {
@@ -1614,8 +1614,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     };
 
     await grantObjectPermissionFromCodes("held_sale", ["sale.hold"], { view: true, create: true, delete: true });
-    await grantObjectPermissionFromCodes("till_session", ["till.open","till.close"], { view: true, create: true, edit: true });
-    await grantObjectPermissionFromCodes("cash_movement", ["cash.adjustment","cash.payout"], { view: true, create: true });
+    await grantObjectPermissionFromCodes("device_session", ["till.open","till.close"], { view: true, create: true, edit: true });
+    await grantObjectPermissionFromCodes("cash_ledger", ["cash.adjustment","cash.payout"], { view: true, create: true });
     await grantObjectPermissionFromCodes("product_modifier_group", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("product_modifier_option", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("payment_method", ["sale.create"], { view: true });
@@ -2507,7 +2507,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         );
       }
 
-      const inventoryMovement = byKey.get("inventory_movement");
+      const inventoryMovement = byKey.get("inventory_ledger");
       if (inventoryMovement?.id) {
         const movementTypeField = await pool.query(
           "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='movement_type' AND company_id IS NULL LIMIT 1",
