@@ -529,7 +529,7 @@ export default function OneKioskPage({ publicMode = false }) {
     }
     let live = true;
     const timer = window.setTimeout(() => {
-      apiRequest("/api/kiosk/availability", {
+      apiRequest(kioskEndpoint("availability"), {
         method: "POST",
         body: JSON.stringify({
           items: basket.map((line) => ({ productId: line.id, quantity: Number(line.quantity) || 1 })),
@@ -670,7 +670,7 @@ export default function OneKioskPage({ publicMode = false }) {
     let live = true;
     const timer = window.setTimeout(() => {
       setQuoteLoading(true);
-      apiRequest("/api/kiosk/quote", {
+      apiRequest(kioskEndpoint("quote"), {
         method: "POST",
         body: JSON.stringify({
           items: basket.map((line) => ({
@@ -792,7 +792,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setPendingAgeProduct(product);
     setError("");
     try {
-      const response = await apiRequest("/api/kiosk/age-approval/request", {
+      const response = await apiRequest(kioskEndpoint("ageApproval"), {
         method: "POST",
         body: JSON.stringify({ deviceKey: kioskDeviceKey() }),
       });
@@ -840,7 +840,7 @@ export default function OneKioskPage({ publicMode = false }) {
       setSelectedModifiers({});
       if (!demoMode) {
         try {
-          const response = await apiRequest(`/api/kiosk/products/${product.id}/options`);
+          const response = await apiRequest(kioskEndpoint("productOptions", { productId: product.id }));
           if (!response?.success) throw new Error(response?.message || "Unable to load product options");
           setProductOptions(response.data || null);
           const variants = Array.isArray(response.data?.variants) ? response.data.variants : [];
@@ -888,7 +888,7 @@ export default function OneKioskPage({ publicMode = false }) {
   };
 
   const createFulfilmentFromPaidSale = async (sale) => {
-    const fulfilment = await apiRequest("/api/kiosk/orders/from-sale", {
+    const fulfilment = await apiRequest(kioskEndpoint("orderFromSale"), {
       method: "POST",
       body: JSON.stringify({
         saleId: sale.id,
@@ -938,12 +938,12 @@ export default function OneKioskPage({ publicMode = false }) {
         return;
       }
 
-      const runtime = await apiRequest(`/api/kiosk/runtime?deviceKey=${encodeURIComponent(kioskDeviceKey())}`);
+      const runtime = await apiRequest(kioskEndpoint("runtime", { deviceKey: kioskDeviceKey() }));
       const exactPayment = runtime?.data?.payment || paymentRuntime;
       if (!exactPayment?.connectorInstanceId) {
         throw new Error("No One Connect card machine is assigned to this kiosk");
       }
-      if (["NOT_CONFIGURED","DISABLED"].includes(String(exactPayment.status || "").toUpperCase())) {
+      if ((kioskValue("paymentUnavailableStatuses", []) || []).includes(String(exactPayment.status || "").toUpperCase())) {
         throw new Error(exactPayment.error || "The assigned card machine is not available");
       }
 
@@ -962,9 +962,9 @@ export default function OneKioskPage({ publicMode = false }) {
         discount: 0,
         total: Number(total || 0),
         lineCount: Number(basket.length),
-        status: "COMPLETED",
+        status: kioskValue("saleStatusCompleted"),
         offlineCreated: false,
-        syncStatus: "SYNCED",
+        syncStatus: kioskValue("syncStatusSynced"),
         clientRequestId,
         completedAt: new Date().toISOString(),
       });
@@ -976,19 +976,19 @@ export default function OneKioskPage({ publicMode = false }) {
         discount: 0,
         tax: 0,
         total: (Number(line.price) || 0) * (Number(line.quantity) || 1),
-        itemType: "PRODUCT",
+        itemType: kioskValue("itemTypeProduct"),
         modifierData: Array.isArray(line.modifiers) ? line.modifiers : [],
         bundleComponents: [],
       }));
       const paymentInputs = [mapRuntimePayload(mappings.payment, {
         customerId: customer?.id || null,
-        direction: "IN",
-        paymentMethod: "card",
+        direction: kioskValue("paymentDirectionIn"),
+        paymentMethod: kioskValue("paymentMethodCard"),
         amount: Number(total || 0),
         provider: exactPayment.providerKey || exactPayment.provider || null,
         terminalId: exactPayment.terminalId || exactPayment.terminal_id || null,
         idempotencyKey: clientRequestId,
-        status: "COMPLETED",
+        status: kioskValue("paymentStatusCompleted"),
       })];
       const saleResponse = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(transactionObjectKey)}/buttons/${encodeURIComponent(completeSaleAction)}/execute`, {
         method: "POST",
@@ -1026,7 +1026,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setCustomerLookupBusy(true);
     setError("");
     try {
-      const response = await apiRequest("/api/kiosk/customer-lookup", {
+      const response = await apiRequest(kioskEndpoint("customerLookup"), {
         method: "POST",
         body: JSON.stringify({ query }),
       });
@@ -1080,7 +1080,7 @@ export default function OneKioskPage({ publicMode = false }) {
       return;
     }
     try {
-      const response = await apiRequest("/api/kiosk/receipt/print", {
+      const response = await apiRequest(kioskEndpoint("receiptPrint"), {
         method: "POST",
         body: JSON.stringify({ saleId, deviceKey: kioskDeviceKey() }),
       });
@@ -1107,7 +1107,7 @@ export default function OneKioskPage({ publicMode = false }) {
     setReceiptEmailBusy(true);
     setError("");
     try {
-      const response = await apiRequest("/api/kiosk/receipt/email", {
+      const response = await apiRequest(kioskEndpoint("receiptEmail"), {
         method: "POST",
         body: JSON.stringify({ saleId, email: receiptEmail.trim(), deviceKey: kioskDeviceKey() }),
       });
@@ -1122,7 +1122,7 @@ export default function OneKioskPage({ publicMode = false }) {
 
   const requestAssistance = async () => {
     try {
-      const response = await apiRequest("/api/kiosk/assistance", {
+      const response = await apiRequest(kioskEndpoint("assistance"), {
         method: "POST",
         body: JSON.stringify({ deviceKey: kioskDeviceKey(), note: "Customer requested assistance from the kiosk screen" }),
       });
