@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 // Small, bounded expression language. Never evaluate JavaScript or generate SQL.
 const TYPES = new Set(["number", "decimal", "currency", "percent", "text", "text_area", "long_text", "rich_text", "url", "time", "auto_number", "boolean", "date", "datetime", "email", "phone", "select", "picklist"]);
 const STRING_TYPES = new Set(["text", "text_area", "long_text", "rich_text", "url", "time", "auto_number", "date", "datetime", "email", "phone", "select", "picklist"]);
@@ -6,7 +7,7 @@ const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
 const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "&": 5, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
-const ARITY = { IF: [3, 3], AND: [2, 20], OR: [2, 20], NOT: [1, 1], ISBLANK: [1, 1], ISPICKVAL: [2, 2], TEXT: [1, 1], BEGINS: [2, 2], CONTAINS: [2, 2], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], PARSEDATE: [1, 1], MINUTESBETWEEN: [2, 2], TRIM: [1, 1], UPPER: [1, 1] };
+const ARITY = { IF: [3, 3], AND: [2, 20], OR: [2, 20], NOT: [1, 1], ISBLANK: [1, 1], ISPICKVAL: [2, 2], TEXT: [1, 1], BEGINS: [2, 2], CONTAINS: [2, 2], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], ADDMINUTES: [2, 2], PARSEDATE: [1, 1], MINUTESBETWEEN: [2, 2], TRIM: [1, 1], UPPER: [1, 1], SECURETOKEN: [0, 0], SHA256: [1, 1], URLENCODE: [1, 1] };
 export const ROLLUP_OPERATIONS = new Set(["COUNT", "SUM", "MIN", "MAX", "AVG"]);
 const baseType = type => ["number", "decimal", "currency", "percent"].includes(type) ? "number" : type;
 const formulaType = type => STRING_TYPES.has(type) ? "string" : baseType(type);
@@ -168,10 +169,11 @@ function infer(node, resolve, depth = 0) {
   if (["BEGINS", "CONTAINS"].includes(node.name)) return "boolean";
   if (node.name === "COALESCE") return common(types);
   if (node.name === "CONCAT") return "string";
-  if (["PARSEDATE", "TRIM", "UPPER"].includes(node.name)) { requireType(types[0], "string"); return "string"; }
+  if (["PARSEDATE", "TRIM", "UPPER", "SHA256", "URLENCODE"].includes(node.name)) { requireType(types[0], "string"); return "string"; }
+  if (node.name === "SECURETOKEN") return "string";
   if (node.name === "MINUTESBETWEEN") { requireType(types[0], "string"); requireType(types[1], "string"); return "number"; }
-  if (["TODAY", "NOW", "ADDDAYS"].includes(node.name)) {
-    if (node.name === "ADDDAYS") {
+  if (["TODAY", "NOW", "ADDDAYS", "ADDMINUTES"].includes(node.name)) {
+    if (["ADDDAYS", "ADDMINUTES"].includes(node.name)) {
       requireType(types[0], "string");
       requireType(types[1], "number");
     }
@@ -221,10 +223,13 @@ function evaluate(node, get) {
   if (node.name === "COALESCE") { for (const arg of node.args) { const value = run(arg); if (value !== null) return value; } return null; }
   if (node.name === "TODAY") return new Date().toISOString().slice(0, 10);
   if (node.name === "NOW") return new Date().toISOString();
+  if (node.name === "SECURETOKEN") return crypto.randomBytes(32).toString("base64url");
   const args = node.args.map(run);
   if (node.name === "CONCAT") return args.map(value => value ?? "").join("").slice(0, 10000);
   if (node.name === "TRIM") return args[0] == null ? null : String(args[0]).trim();
   if (node.name === "UPPER") return args[0] == null ? null : String(args[0]).toUpperCase();
+  if (node.name === "SHA256") return args[0] == null ? null : crypto.createHash("sha256").update(String(args[0]), "utf8").digest("hex");
+  if (node.name === "URLENCODE") return args[0] == null ? null : encodeURIComponent(String(args[0]));
   if (node.name === "PARSEDATE") {
     const text = String(args[0] || '').trim();
     const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
@@ -244,6 +249,13 @@ function evaluate(node, get) {
     if (Number.isNaN(date.getTime())) return null;
     date.setUTCDate(date.getUTCDate() + Number(args[1]));
     return String(args[0]).includes("T") ? date.toISOString() : date.toISOString().slice(0, 10);
+  }
+  if (node.name === "ADDMINUTES") {
+    if (args.includes(null) || !Number.isFinite(Number(args[1]))) return null;
+    const date = new Date(args[0]);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setTime(date.getTime() + Number(args[1]) * 60000);
+    return date.toISOString();
   }
   if (args.includes(null)) return null;
   switch (node.name) {
