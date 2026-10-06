@@ -2427,10 +2427,9 @@ export function packageDefinition(entry) {
               ],
               outputContract:[{name:"sale",type:"record",source:"variables.sale"}],
               resources:[
-                {value:"variables.sale",apiName:"sale",label:"Sale",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:false,objectKey:"sale"},
+                {value:"variables.sale",apiName:"sale",label:"Sale",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:true,objectKey:"sale"},
                 {value:"variables.items",apiName:"items",label:"Sale Items",type:"Variable",dataType:"Collection",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"sale_item"},
-                {value:"variables.payments",apiName:"payments",label:"Payments",type:"Variable",dataType:"Collection",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"payment"},
-                {value:"variables.sale",apiName:"sale",label:"Created Sale",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:true,objectKey:"sale"}
+                {value:"variables.payments",apiName:"payments",label:"Payments",type:"Variable",dataType:"Collection",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"payment"}
               ],
               actions:[
                 {id:"create_sale",label:"1. Create Sale",apiName:"create_sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"variables.sale"},store:"record"},
