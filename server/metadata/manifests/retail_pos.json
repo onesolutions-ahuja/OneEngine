@@ -6847,7 +6847,7 @@
             "id": "call_payment_connector",
             "label": "12. Call Payment Connector",
             "apiName": "call_payment_connector",
-            "key": "CALL_CONNECTOR_CAPABILITY",
+            "key": "CALL_CONNECTOR",
             "packageKey": {
               "path": "steps.get_payment_method.record.config.connectorPackageKey"
             },
@@ -6874,7 +6874,8 @@
               "selfCheckout": {
                 "path": "$record.selfCheckout"
               }
-            }
+            },
+            "capabilityKey": null
           },
           {
             "id": "connector_status",
