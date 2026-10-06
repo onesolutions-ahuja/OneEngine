@@ -23,74 +23,9 @@ import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
-import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
-const globalProductLookupService = createGlobalProductLookupService();
-
-async function executeGlobalProductLookupAction(context, providerKey = null) {
-  const companyId = context.companyId || context.req?.user?.companyId;
-  const barcode = context.action?.barcode ?? context.action?.code ?? context.record?.barcode ?? context.trigger?.barcode;
-  try {
-    const result = await globalProductLookupService.lookup({
-      db: context.db,
-      companyId,
-      reqCompanyId: context.req?.user?.companyId || null,
-      barcode,
-      providerKey,
-    });
-    return { success: true, ...result };
-  } catch (error) {
-    return { success: false, code: error?.code || "LOOKUP_FAILED", message: error?.code === "INVALID_BARCODE" ? error.message : "Unable to look up this barcode" };
-  }
-}
-
-function redact(value, depth = 0, inheritedSecureValues = new Set()) {
-  if (depth > 5 || value == null) return value;
-  const secureValues = new Set(inheritedSecureValues);
-  if (value && typeof value === "object" && Array.isArray(value.__secureValues)) {
-    for (const secret of value.__secureValues) {
-      const text = String(secret ?? "");
-      if (text.length >= 4) secureValues.add(text);
-    }
-  }
-  if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1, secureValues));
-  if (typeof value !== "object") {
-    let text = String(value);
-    for (const secret of secureValues) {
-      if (secret && text.includes(secret)) text = text.split(secret).join("********");
-    }
-    return text;
-  }
-  const secureFields = new Set(Array.isArray(value.__secureFields) ? value.__secureFields.map(String) : []);
-  return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => key !== "__secureFields" && key !== "__secureValues")
-    .map(([key, item]) => [key, (SECRET_KEY.test(key) || secureFields.has(key)) ? "********" : redact(item, depth + 1, secureValues)]));
-}
-
-function errorDetails(error) {
-  const status = error?.status || error?.statusCode || 500;
-  return redact({
-    message: String(error?.message || error || "Workflow execution failed").slice(0, 2000),
-    code: error?.code || null,
-    oeCode: classifyDebugCode(error, Number(status || 500)),
-    status,
-    retryable: error?.retryable ?? null,
-  });
-}
-
-export class WorkflowExecutionError extends Error {
-  constructor(details, compensationFailures = []) {
-    super(details.message);
-    this.name = "WorkflowExecutionError";
-    this.code = details.code || "WORKFLOW_EXECUTION_FAILED";
-    this.oeCode = details.oeCode || classifyDebugCode(this, Number(details.status || 500));
-    this.details = { ...details, oeCode: this.oeCode };
-    this.compensationFailures = compensationFailures;
-  }
-}
-
 const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
     key: "CONNECTOR_HEALTH_CHECK",
@@ -1031,30 +966,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         operation: action.operation,
       }),
   },
-  {
-    key: "GLOBAL_PRODUCT_LOOKUP_BARCODE",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Global Product - Lookup Barcode",
-    description: "Resolve an external barcode using enabled, installed product lookup providers in configured priority order.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context),
-  },
-  {
-    key: "GO_UPC_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Go-UPC - Lookup Product",
-    description: "Look up a barcode using the installed Go-UPC connector and company credential.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
-  },
+
   {
     key: "CALL_CONNECTOR_CAPABILITY",
     displayName: "Call Connector Capability",
@@ -5264,8 +5176,6 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   "CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD",
   "DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
   "SCHEDULE_PATH","RUN_SUBFLOW","GENERATE_SECURE_TOKEN","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP",
-  // Appointment orchestration actions are safe to execute in Debug because
-  // their database writes use the Debug transaction and are rolled back.
   // SEND_COMMUNICATION is intentionally omitted so external and in-app delivery
   // remains simulated during Debug.
   ]);
