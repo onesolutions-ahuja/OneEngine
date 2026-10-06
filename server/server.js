@@ -79,7 +79,7 @@ import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
 import createDebugCodesRouter from "./routes/debugCodes.js";
 import { buildDebugPayload, classifyDebugCode, builtinDebugCode, createDebugReference, normalizeDebugCode, writeDebugEvent } from "./services/debugCodes.js";
-import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformMetadata.js";
+import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformBootstrap.js";
 import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
 import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
@@ -2110,7 +2110,7 @@ app.use((req, res) => {
 function platformBootstrapFingerprint() {
   const hash = createHash("sha256");
   for (const relativePath of [
-    "./services/platformMetadata.js",
+    "./services/platformBootstrap.js",
     "./services/internalAppCatalog.js",
     "./services/packageRegistry.js",
   ]) {
