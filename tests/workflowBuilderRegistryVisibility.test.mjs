@@ -31,9 +31,6 @@ const INTERNAL = [
   "PAYMENT_CANCEL",
   "GLOBAL_PRODUCT_LOOKUP_BARCODE",
   "GO_UPC_LOOKUP_PRODUCT",
-  "ONLINE_ORDER_TRANSITION",
-  "SHOPIFY_SYNC_PRODUCTS",
-  "SHOPIFY_EXPORT_REFUND",
 ];
 
 
@@ -46,9 +43,13 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
   }
 
   for (const key of INTERNAL) {
-    assert.ok(all.has(key), key + " must remain executable for compatibility/runtime callers");
+    assert.ok(all.has(key), key + " must remain executable for generic runtime callers");
     assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
     assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
+  }
+  for (const key of ["ONLINE_ORDER_TRANSITION","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_EXPORT_REFUND"]) {
+    assert.equal(all.has(key), false, key + " business/provider adapter must remain removed");
+    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as hidden business code");
   }
 });
 
