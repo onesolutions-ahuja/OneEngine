@@ -19,7 +19,7 @@ async function resolveSystemWorkflowActor({ db, companyId, userId = null, req = 
   const requestedId = userId || req?.user?.id || null;
   if (requestedId) {
     const preferred = await db(
-      `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS till_id
+      `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS device_session_id
          FROM users u
          JOIN roles r ON r.id=u.role_id
         WHERE u.id=$1 AND u.company_id=$2 AND u.active=true
@@ -31,7 +31,7 @@ async function resolveSystemWorkflowActor({ db, companyId, userId = null, req = 
     if (preferred.rows[0]) return preferred.rows[0];
   }
   const fallback = await db(
-    `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS till_id
+    `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS device_session_id
        FROM users u
        JOIN roles r ON r.id=u.role_id
       WHERE u.company_id=$1 AND u.active=true
@@ -109,7 +109,7 @@ export async function executeSystemWorkflow({
   record = null,
   recordId = null,
   storeId = null,
-  tillId = null,
+  deviceSessionId = null,
   connectorDrivers = null,
   writeAudit = null,
   source = null,
@@ -129,7 +129,7 @@ export async function executeSystemWorkflow({
       roleId: actor.role_id,
       companyId,
       storeId: storeId || actor.store_id || req?.user?.storeId || null,
-      tillId: tillId || actor.till_id || req?.user?.tillId || null,
+      deviceSessionId: deviceSessionId || actor.device_session_id || req?.user?.deviceSessionId || null,
     },
   };
 
@@ -182,7 +182,7 @@ export async function executeSystemWorkflow({
   };
 
   const parentRunId = req?.ensureBusinessCommandRun
-    ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, tillId })
+    ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, deviceSessionId })
     : (req?.businessCommandRunId || null);
 
   const run = await createWorkflowRun({
@@ -203,7 +203,7 @@ export async function executeSystemWorkflow({
       capabilityKey,
       actorUserId: actor.id,
       storeId: runtimeReq.user.storeId || null,
-      tillId: runtimeReq.user.tillId || null,
+      deviceSessionId: runtimeReq.user.deviceSessionId || null,
       correlationId,
       source: sourceInfo,
       inputNames: Object.keys(workflowVariables.variables),
@@ -220,7 +220,7 @@ export async function executeSystemWorkflow({
       record,
       recordId: recordId || record?.id || null,
       storeId: runtimeReq.user.storeId || null,
-      tillId: runtimeReq.user.tillId || null,
+      deviceSessionId: runtimeReq.user.deviceSessionId || null,
       connectorDrivers,
       writeAudit,
       actorUserId: actor.id,
@@ -280,7 +280,7 @@ export async function executeSystemAction({
   record = null,
   recordId = null,
   storeId = null,
-  tillId = null,
+  deviceSessionId = null,
   connectorDrivers = null,
   writeAudit = null,
   source = null,
@@ -300,7 +300,7 @@ export async function executeSystemAction({
       roleId: actor.role_id,
       companyId,
       storeId: storeId || actor.store_id || req?.user?.storeId || null,
-      tillId: tillId || actor.till_id || req?.user?.tillId || null,
+      deviceSessionId: deviceSessionId || actor.device_session_id || req?.user?.deviceSessionId || null,
     },
   };
   const correlationId = String(
@@ -311,7 +311,7 @@ export async function executeSystemAction({
   );
   const sourceInfo = safeSource(req, source);
   const parentRunId = req?.ensureBusinessCommandRun
-    ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, tillId })
+    ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, deviceSessionId })
     : (req?.businessCommandRunId || null);
   const run = await createWorkflowRun({
     db,
@@ -329,7 +329,7 @@ export async function executeSystemAction({
       capabilityKey: normalizedActionKey,
       actorUserId: actor.id,
       storeId: runtimeReq.user.storeId || null,
-      tillId: runtimeReq.user.tillId || null,
+      deviceSessionId: runtimeReq.user.deviceSessionId || null,
       correlationId,
       source: sourceInfo,
     },
@@ -347,7 +347,7 @@ export async function executeSystemAction({
       record,
       recordId: recordId || record?.id || null,
       storeId: runtimeReq.user.storeId || null,
-      tillId: runtimeReq.user.tillId || null,
+      deviceSessionId: runtimeReq.user.deviceSessionId || null,
       connectorDrivers,
       writeAudit,
       actorUserId: actor.id,
