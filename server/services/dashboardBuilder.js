@@ -1,6 +1,6 @@
 /* Dashboard definitions are deliberately data-only. Reports remain the sole
  * SQL/query engine; this module only validates the dashboard composition. */
-import { toSafeApiName } from "./platformMetadata.js";
+import { toSafeApiName } from "./platformCoreMetadata.js";
 import {
   normalizeDashboardGlobalFilters,
   normalizeResponsiveLayouts,
