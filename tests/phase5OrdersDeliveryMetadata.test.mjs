@@ -15,10 +15,11 @@ test("Phase 5 Online Orders is not inline in package registry",async()=>{
  assert.equal(s.includes('entry.key === "online_orders"'),false);
  assert.equal(/INSERT INTO online_orders|UPDATE online_orders|DELETE FROM online_orders/.test(s),false);
 });
-test("Phase 5 UI executes Online Order buttons through generic metadata runtime",async()=>{
- const s=await read("src/pages/online/useOnlineOrderActions.js");
- assert.match(s,/api\/platform\/runtime\/objects\/online_order\/buttons/);
- assert.equal(s.includes("/api/online/orders/"),false);
+test("Phase 5 legacy Online Orders bespoke UI stays removed after generic Workspace migration",async()=>{
+ await assert.rejects(access(new URL("src/pages/online/useOnlineOrderActions.js",root)));
+ const app=await read("src/App.jsx");
+ assert.equal(app.includes("activeApp === 'online-orders'"),false);
+ assert.equal(app.includes("/api/online/orders"),false);
 });
 test("Phase 5 legacy Online Orders provider lifecycle services stay deleted",async()=>{
  for(const p of ["server/services/onlineOrders/index.js","server/services/onlineOrders/genericOrderTypes.js","server/services/onlineOrders/platformServiceBase.js","server/services/onlineOrders/uber.js","server/services/onlineOrders/deliveroo.js","server/services/onlineOrders/uberClient.js","server/services/onlineOrders/uberMenuMapping.js"]){
