@@ -1060,14 +1060,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
   console.log("onePOS: platform bootstrap step ready: package registry");
 
   /*
-   * Sale is the single exposed transaction Object. Physical sale_items rows
-   * remain authoritative internal invoice-line storage, but they are not a
-   * second Platform Object and cannot own actions/workflows/layouts.
-   *
-   * Remove metadata left by older builds before reseeding. Delete relationships
-   * first because child_field_id is RESTRICT; then delete package ownership
-   * snapshots for the obsolete object/fields/relationships and finally the
-   * object itself. This never touches the sale_items business table.
+   * Retail transaction storage is exposed through canonical metadata Objects:
+   * Sale, Sale Item, Payment, Refund, Till Session and Cash Movement.
+   * Remove only the obsolete legacy sale_line alias before package metadata is
+   * provisioned; the canonical sale_item object owns sale_items metadata.
    */
   const obsoleteSaleLine = await pool.query(
     "SELECT id FROM platform_objects WHERE object_key='sale_line' AND source_table='sale_items' AND company_id IS NULL LIMIT 1"
