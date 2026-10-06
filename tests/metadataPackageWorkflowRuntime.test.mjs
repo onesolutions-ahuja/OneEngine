@@ -32,5 +32,7 @@ test("package workflow provisioning preserves contracts resources and Builder me
   assert.match(source, /inputContract: workflow\.inputContract \|\| workflow\.action\?\.inputContract \|\| \[\]/);
   assert.match(source, /outputContract: workflow\.outputContract \|\| workflow\.action\?\.outputContract \|\| \[\]/);
   assert.match(source, /resources: workflow\.resources \|\| workflow\.variables \|\| workflow\.action\?\.resources \|\| \[\]/);
-  assert.match(source, /const withPackageBuilderMetadata =/);\n  assert.match(source, /gptBuilderElements: \(\(\) => \{/);\n  assert.match(source, /importedRuntimeAction: step/);
+  assert.match(source, /const withPackageBuilderMetadata =/);
+  assert.match(source, /gptBuilderElements: \(\(\) => \{/);
+  assert.match(source, /importedRuntimeAction: step/);
 });
