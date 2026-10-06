@@ -2065,7 +2065,7 @@
     },
     {
       "objectKey": "sale",
-      "name": "OneTill - Validate Stock",
+      "name": "Retail POS - Validate Stock",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
@@ -2153,7 +2153,7 @@
     },
     {
       "objectKey": "sale",
-      "name": "OneTill - Age Verification",
+      "name": "Retail POS - Age Verification",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
@@ -2270,7 +2270,7 @@
     },
     {
       "objectKey": "sale",
-      "name": "OneTill - Validate Payment Method",
+      "name": "Retail POS - Validate Payment Method",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
@@ -2804,7 +2804,7 @@
     },
     {
       "objectKey": "sale",
-      "name": "OneTill - Validate Split Payment",
+      "name": "Retail POS - Validate Split Payment",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
@@ -3354,7 +3354,7 @@
     },
     {
       "objectKey": "sale",
-      "name": "OneTill - Calculate Sale Totals",
+      "name": "Retail POS - Calculate Sale Totals",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
@@ -4135,7 +4135,7 @@
     },
     {
       "objectKey": "sale",
-      "name": "OneTill - Calculate Cash Position",
+      "name": "Retail POS - Calculate Cash Position",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
@@ -4463,7 +4463,7 @@
     },
     {
       "objectKey": "sale",
-      "name": "OneTill - Create Receipt QR",
+      "name": "Retail POS - Create Receipt QR",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
@@ -4678,7 +4678,7 @@
     },
     {
       "objectKey": "sale",
-      "name": "OneTill - Revoke Receipt QR",
+      "name": "Retail POS - Revoke Receipt QR",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
