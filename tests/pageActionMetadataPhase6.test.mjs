@@ -4,6 +4,7 @@ const picker=fs.readFileSync("src/pages/settings/Platform/ActionWorkflowPicker.j
 const page=fs.readFileSync("src/platform/pages/CustomPageRuntimePage.jsx","utf8");
 const button=fs.readFileSync("src/components/metadata/button/ButtonV1.jsx","utf8");
 const renderer=fs.readFileSync("src/components/platform/CustomPageRenderer.jsx","utf8");
+const tree=fs.readFileSync("src/pages/settings/Platform/customPageTree.js","utf8");
 
 test("phase 6 page actions resolve core and object-scoped metadata actions through one registry contract",()=>{
  assert.match(runtime,/platform_registered_actions WHERE action_key=\$1 AND object_id=\$2/);
@@ -24,4 +25,6 @@ test("phase 6 clickable metadata components dispatch references instead of busin
 test("phase 6 workflow references remain stable UUID metadata",()=>{
  assert.match(picker,/workflowUuid/);
  assert.match(runtime,/Configured workflow not found/);
+ assert.match(tree,/workflowUuid/);
+ assert.match(tree,/actionKey/);
 });
