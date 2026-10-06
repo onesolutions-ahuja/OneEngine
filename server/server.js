@@ -2884,7 +2884,6 @@ async function startServer() {
                   [subscriptionId, job.company_id]
                 );
               }
-            });
             }
           },
           handler: async (job) => {
