@@ -387,11 +387,12 @@ const MANAGER_RESOURCE_TYPES = [
   ['Collection Filter Criteria', 'collection_filter_criteria'],
 ]
 
-function ManagerNewResource({ resources, onCreate, onClose }) {
+function ManagerNewResource({ resources, objects = [], onCreate, onClose }) {
   const [resourceType, setResourceType] = useState('variable')
   const [apiName, setApiName] = useState('')
   const [description, setDescription] = useState('')
   const [dataType, setDataType] = useState('text')
+  const [recordObjectKey, setRecordObjectKey] = useState('')
   const [value, setValue] = useState('')
   const [formula, setFormula] = useState('')
   const [isCollection, setIsCollection] = useState(false)
@@ -399,6 +400,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
   const [availableForOutput, setAvailableForOutput] = useState(false)
   const duplicate = resources.some((resource) => String(resource.apiName || '').toLowerCase() === apiName.trim().toLowerCase())
   const validName = /^[A-Za-z][A-Za-z0-9_]*$/.test(apiName) && !apiName.endsWith('_') && !apiName.includes('__') && !duplicate
+  const resourceValid = validName && (dataType !== 'record' || Boolean(recordObjectKey))
   const supportsDataType = ['variable','constant','formula'].includes(resourceType)
   const create = () => {
     if (!validName) return
@@ -409,6 +411,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       label: apiName.trim(),
       description: description.trim(),
       dataType: supportsDataType ? dataType : resourceType === 'text_template' ? 'text' : ['value_map','collection_filter_criteria'].includes(resourceType) ? 'object' : 'choice',
+      objectKey: supportsDataType && dataType === 'record' ? recordObjectKey : undefined,
       value: resourceType === 'constant' ? value : undefined,
       formula: resourceType === 'formula' ? formula : undefined,
       text: resourceType === 'text_template' ? value : undefined,
@@ -424,7 +427,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
       <label><span>Resource Type</span><select value={resourceType} onChange={(event) => setResourceType(event.target.value)}>{MANAGER_RESOURCE_TYPES.map(([label,key]) => <option key={key} value={key}>{label}</option>)}</select></label>
       <label><span>API Name <b>*</b></span><input autoFocus value={apiName} onChange={(event) => setApiName(event.target.value)}/>{duplicate ? <small className="gptb-manager-error">API Name must be unique in the flow.</small> : null}</label>
       <label><span>Description</span><textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)}/></label>
-      {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option></select></label> : null}
+      {supportsDataType ? <label><span>Data Type</span><select value={dataType} onChange={(event) => setDataType(event.target.value)}><option value="text">Text</option><option value="record">Record</option><option value="number">Number</option><option value="currency">Currency</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="time">Time</option><option value="picklist">Picklist</option><option value="multiselect">Multi-Select Picklist</option><option value="apex_defined">Apex-Defined</option></select></label> : null}{supportsDataType && dataType === 'record' ? <label><span>Object <b>*</b></span><select value={recordObjectKey} onChange={(event)=>setRecordObjectKey(event.target.value)}><option value="">Select an object</option>{objects.map((item)=><option key={item.id||objectKey(item)} value={objectKey(item)}>{objectLabel(item)}</option>)}</select></label> : null}
       {resourceType === 'constant' ? <label><span>Value</span><input value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
       {resourceType === 'formula' ? <label><span>Formula</span><textarea rows={5} value={formula} onChange={(event) => setFormula(event.target.value)}/></label> : null}
       {resourceType === 'text_template' ? <label><span>Body</span><textarea rows={7} value={value} onChange={(event) => setValue(event.target.value)}/></label> : null}
@@ -434,7 +437,7 @@ function ManagerNewResource({ resources, onCreate, onClose }) {
         <label className="gptb-properties-check"><input type="checkbox" checked={availableForOutput} onChange={(event) => setAvailableForOutput(event.target.checked)}/><span>Available for output</span></label>
       </> : null}
     </div>
-    <footer><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!validName} onClick={create}>Done</button></footer>
+    <footer><button className="gptb-button" onClick={onClose}>Cancel</button><button className="gptb-button is-brand" disabled={!resourceValid} onClick={create}>Done</button></footer>
   </section></div>
 }
 
@@ -489,7 +492,7 @@ function ManagerPanel({ elements, resources, goToConnections, onNewResource, onO
   </div>
 }
 
-function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, goToConnections, onResourcesChange, onOpenElement }) {
+function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, objects, goToConnections, onResourcesChange, onOpenElement }) {
   const [tab, setTab] = useState(layout === 'free' ? 'elements' : 'manager')
   const [newResourceOpen, setNewResourceOpen] = useState(false)
   const effectiveTab = layout === 'auto' ? 'manager' : tab
@@ -499,7 +502,7 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
     {effectiveTab === 'elements'
       ? <FreeFormElements flowType={flowType} startConfig={startConfig}/>
       : <ManagerPanel elements={elements} resources={availableResources} goToConnections={goToConnections} onNewResource={() => setNewResourceOpen(true)} onOpenElement={onOpenElement}/>}
-    {newResourceOpen ? <ManagerNewResource resources={availableResources} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
+    {newResourceOpen ? <ManagerNewResource resources={availableResources} objects={objects} onClose={() => setNewResourceOpen(false)} onCreate={(resource) => { onResourcesChange([...resources, resource]); setNewResourceOpen(false) }}/> : null}
   </aside>
 }
 
@@ -1839,7 +1842,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
     {saveError ? <div className="gptb-toast is-error">{saveError}<button aria-label="Dismiss error" onClick={() => setSaveError('')}><X size={13}/></button></div> : null}
     {layoutSwitchError ? <div className="gptb-toast is-error" role="alert">{layoutSwitchError}<button aria-label="Dismiss layout error" onClick={() => setLayoutSwitchError('')}><X size={13}/></button></div> : null}
     <div className={`gptb-workspace ${toolboxOpen ? 'has-toolbox' : ''} ${editHistoryOpen ? 'is-history-mode' : ''}`}>
-      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={availableResources} goToConnections={goToConnections} onResourcesChange={applyResourceChanges} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
+      {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={availableResources} objects={objects} goToConnections={goToConnections} onResourcesChange={applyResourceChanges} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
       <main
         ref={canvasRef}
         className="gptb-canvas"
