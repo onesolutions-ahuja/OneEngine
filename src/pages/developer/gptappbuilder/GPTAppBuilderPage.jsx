@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppWindow, Plus, Search } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 import CustomPageBuilder from "../../settings/Platform/CustomPageBuilder.jsx";
@@ -39,7 +39,7 @@ export default function GPTAppBuilderPage() {
     setApps(Array.isArray(response?.data) ? response.data : []);
   };
 
-  useState(() => { void loadApps().catch((e) => setError(e?.message || "Unable to load app metadata")); });
+  useEffect(() => { void loadApps().catch((e) => setError(e?.message || "Unable to load app metadata")); }, []);
 
   const visibleApps = useMemo(() => {
     const needle = query.trim().toLowerCase();
