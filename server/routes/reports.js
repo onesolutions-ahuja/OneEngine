@@ -9,7 +9,7 @@ import { normalizeFolder, normalizeSubscription, subscriptionConditionMatches, s
 import { normalizeReportType } from "../services/reportTypeDefinition.js";
 import { normalizeHistoricalTrend, normalizePreviewPreference, normalizeReportExport, normalizeReportTypeExperience } from "../services/reportExperience.js";
 import { buildDetailsCsv, buildFormattedXlsx } from "../services/reportExport.js";
-import { CUSTOM_DATE_FILTERS, CUSTOM_REPORT_FIELDS, buildCustomSalesQuery, customDateRange, validateCustomReportDefinition } from "../services/reportSalesDefinition.js";
+import { normalizeAdvancedReportDefinition } from "../services/reportAnalyticsDefinition.js";
 import { resolveAnalyticsPrincipalAccess } from "../services/analyticsSecurity.js";
 import { claimDueReportSubscriptions } from "../services/reportSubscriptionScheduler.js";
 import { loadReportSubscriptionExecutionUser, resolveReportSubscriptionRecipients } from "../services/reportSubscriptionDelivery.js";
@@ -28,6 +28,53 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
 
   async function platformReportContext(req, objectId, relationshipPlan = null) {
     return loadPlatformReportContext(db, req, objectId, relationshipPlan);
+  }
+
+
+  async function executeCustomDefinition(req, definition, { preview = false } = {}) {
+    const normalized = normalizeAdvancedReportDefinition({
+      ...definition,
+      dataSource: "platform_object",
+    });
+    if (!normalized.objectId) throw new Error("Select a report object");
+    const executeBase = async (baseDefinition) => {
+      const reportType = await resolveCustomReportType(req, baseDefinition.reportTypeId || baseDefinition.report_type_id || null);
+      const context = reportType?.context || await platformReportContext(req, baseDefinition.objectId);
+      const validated = validatePlatformReportDefinition(
+        { ...baseDefinition, dataSource: "platform_object" },
+        context.object,
+        context.fields,
+        context.relationships
+      );
+      const trend = validateHistoricalTrendForObject(validated.historicalTrend || {}, context.object, context.fields);
+      const built = buildPlatformObjectQuery(validated, context.object, context.fields, req.user.companyId, preview ? 100 : 1000, {
+        storeId: req.user.storeId,
+        visibilitySql: context.visibilitySql,
+        visibilityParams: context.visibilityParams,
+        includeRecordId: trend.enabled === true,
+      }, context.relationships);
+      const result = await db(built.sql, built.params);
+      const rows = trend.enabled === true
+        ? await reconstructHistoricalRows({ db, companyId:req.user.companyId, objectId:context.object.id, currentRows:result.rows, trend })
+        : result.rows;
+      const allFields = [
+        ...(context.fields || []),
+        ...(context.relationships || []).flatMap((relationship) =>
+          (relationship.fields || []).map((field) => ({
+            ...field,
+            key: `${relationship.relationship_key}.${field.api_name}`,
+          }))
+        ),
+      ];
+      return {
+        columns: validated.fields.map((key) => {
+          const field = allFields.find((candidate) => String(candidate.key || candidate.api_name) === String(key));
+          return { key, label: field?.label || key };
+        }),
+        rows,
+      };
+    };
+    return executeAnalyticsDefinition(normalized, executeBase, { preview });
   }
 
   const canManageReports = async (req) => (
@@ -197,8 +244,8 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         db("SELECT o.id,o.object_key,o.label,o.source_table,o.company_id,COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config FROM platform_objects o LEFT JOIN platform_object_settings s ON s.object_id=o.id AND s.company_id=$1 WHERE o.active=true AND o.source_table IS NOT NULL AND (o.company_id IS NULL OR o.company_id=$1) ORDER BY o.label", [req.user.companyId]),
       ]);
       res.json({ success: true, data: {
-        fields: CUSTOM_REPORT_FIELDS.map(({ key,label,groupable,aggregate }) => ({ key,label,groupable:!!groupable,aggregate:!!aggregate,type:aggregate?"number":key==="date"?"date":"text" })),
-        filters: CUSTOM_DATE_FILTERS,
+        fields: [],
+        filters: [],
         stores: stores.rows,
         users: users.rows,
         roles: manage ? roles.rows : [],
@@ -245,7 +292,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
   router.post("/reports/custom/preview", authenticate, authorize("reports.custom.view"), async (req, res) => {
     try {
       const previewPreference=normalizePreviewPreference(req.body?.previewPreference||{});
-      const definition=validateCustomReportDefinition({...req.body,rowLimit:Math.min(Number(req.body?.rowLimit||previewPreference.sampleLimit),previewPreference.sampleLimit)});
+      const definition=normalizeAdvancedReportDefinition({...req.body,rowLimit:Math.min(Number(req.body?.rowLimit||previewPreference.sampleLimit),previewPreference.sampleLimit)});
       const data=await executeCustomDefinition(req,definition,{preview:true});
       res.json({success:true,data});
     } catch(error){res.status(400).json({success:false,message:error.message||"Unable to preview custom report"});}
@@ -262,7 +309,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     try {
       const report=await reportById(req,req.params.id);
       if(!report)return res.status(404).json({success:false,message:"Custom report not found"});
-      const definition=validateCustomReportDefinition(report.definition||{});
+      const definition=normalizeAdvancedReportDefinition(report.definition||{});
       if(definition.historicalTrend?.enabled===true)return res.status(400).json({success:false,message:"Historical Trending reports do not support export"});
       const exportConfig=normalizeReportExport({view:req.query.view,format:req.query.format},definition.format||"tabular");
       const data=await executeCustomDefinition(req,definition);
@@ -303,7 +350,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     try {
       const report=await reportById(req,req.params.id);
       if(!report)return res.status(404).json({success:false,message:"Custom report not found"});
-      const reportDefinition=validateCustomReportDefinition(report.definition||{});
+      const reportDefinition=normalizeAdvancedReportDefinition(report.definition||{});
       if(reportDefinition.format==="joined")return res.status(400).json({success:false,message:"Joined reports do not support subscriptions"});
       if(reportDefinition.historicalTrend?.enabled===true)return res.status(400).json({success:false,message:"Historical trend reports do not support subscriptions"});
       const definition=normalizeSubscription(req.body);
@@ -364,11 +411,11 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       if(!name||name.length>150)return res.status(400).json({success:false,message:"A report name up to 150 characters is required"});
       const reportType=await resolveCustomReportType(req,req.body?.reportTypeId||req.body?.report_type_id||null);
       const sourceInput=reportType?{...req.body,dataSource:"platform_object",objectId:reportType.definition.primaryObjectId,reportTypeId:reportType.row.id}:req.body;
-      const definition=validateCustomReportDefinition(sourceInput);
+      const definition=normalizeAdvancedReportDefinition(sourceInput);
       if(definition.dataSource==="platform_object"){const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
-      const stores=definition.dataSource==="platform_object"?[]:await accessibleStores(req,requestedStoreIds(definition));
+      const stores=[];
       const result=await db("INSERT INTO custom_reports(company_id,created_by,name,description,data_source,report_type_id,definition) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING *",
-        [req.user.companyId,req.user.id,name,String(req.body.description||"").slice(0,500),definition.dataSource||"sales",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
+        [req.user.companyId,req.user.id,name,String(req.body.description||"").slice(0,500),definition.dataSource||"platform_object",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
       res.status(201).json({success:true,data:result.rows[0]});
     } catch(error){res.status(400).json({success:false,message:error.message||"Unable to create custom report"});}
   });
@@ -381,11 +428,11 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const name=String(req.body?.name||report.name).trim();
       const reportType=await resolveCustomReportType(req,req.body?.reportTypeId||req.body?.report_type_id||report.report_type_id||null);
       const sourceInput=reportType?{...req.body,dataSource:"platform_object",objectId:reportType.definition.primaryObjectId,reportTypeId:reportType.row.id}:req.body;
-      const definition=validateCustomReportDefinition(sourceInput);
+      const definition=normalizeAdvancedReportDefinition(sourceInput);
       if(definition.dataSource==="platform_object"){const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
       const stores=definition.dataSource==="platform_object"?[]:await accessibleStores(req,requestedStoreIds(definition));
       const result=await db("UPDATE custom_reports SET name=$3,description=$4,data_source=$5,report_type_id=$6,definition=$7::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *",
-        [req.params.id,req.user.companyId,name,String(req.body.description||report.description||"").slice(0,500),definition.dataSource||"sales",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
+        [req.params.id,req.user.companyId,name,String(req.body.description||report.description||"").slice(0,500),definition.dataSource||"platform_object",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
       res.json({success:true,data:result.rows[0]});
     } catch(error){res.status(400).json({success:false,message:error.message||"Unable to update custom report"});}
   });
@@ -412,7 +459,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const definition=report.definition||{};
       const data=await executeCustomDefinition(req,definition);
       await recordReportView(req,req.params.id);
-      const normalized=validateCustomReportDefinition(definition);
+      const normalized=normalizeAdvancedReportDefinition(definition);
       if(normalized.snapshot===true&&normalized.historicalTrend?.enabled!==true){
         await db("INSERT INTO report_snapshots(company_id,report_id,period_key,summary,row_count) VALUES($1,$2,$3,$4::jsonb,$5)",
           [req.user.companyId,req.params.id,String(normalized.snapshotPeriod||new Date().toISOString().slice(0,10)),JSON.stringify(data.totals||{}),(data.rows||[]).length]);
