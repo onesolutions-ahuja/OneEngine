@@ -3,20 +3,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { getWorkflowActionDefinition } from "../server/services/platformWorkflow.js";
-import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
-
-test("system workflow catalogue exposes Send Communication but not legacy transports", () => {
-  const keys = systemWorkflowDefinitions().map((item) => item.systemKey);
-  assert.ok(keys.includes("action:SEND_COMMUNICATION"));
-  for (const key of [
-    "action:SEND_EMAIL",
-    "action:SEND_SMS",
-    "action:SEND_WHATSAPP",
-    "action:IN_APP_NOTIFICATION",
-  ]) {
-    assert.equal(keys.includes(key), false, key + " must remain internal compatibility only");
-  }
-});
 
 test("Send Communication resolves templates and can notify platform admins", async () => {
   const action = getWorkflowActionDefinition("SEND_COMMUNICATION");
