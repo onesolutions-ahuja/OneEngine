@@ -8,10 +8,14 @@ const BUILDER_FILES=[
   "src/pages/settings/OneBuilder.jsx",
   "src/pages/settings/ObjectsSettingsPane.jsx",
   "src/pages/settings/Platform/ActionWorkflowPicker.jsx",
+  "src/pages/settings/Platform/ActionsAdmin.jsx",
+  "src/pages/settings/Platform/ObjectButtonEditor.jsx",
+  "src/pages/settings/Platform/RuleEditor.jsx",
   "src/pages/settings/Platform/PageBuilder.jsx",
   "src/pages/settings/Platform/CustomPageBuilder.jsx",
   "src/pages/settings/Platform/componentRegistry.js",
   "src/pages/developer/OneDeveloperPage.jsx",
+  "src/pages/developer/OneEngineManager.jsx",
   "src/pages/developer/GPTPageBuilder.jsx",
   "src/pages/developer/gptappbuilder/GPTAppBuilderPage.jsx",
   "src/pages/developer/gptappbuilder/platformMetadataResolver.js",
@@ -22,6 +26,7 @@ const BUILDER_FILES=[
   "src/components/dashboard/DashboardComponentProperties.jsx",
   "src/components/dashboard/platformDashboard.js",
   "src/pages/reports/CustomReportsAdmin.jsx",
+  "src/pages/reports/ReportAdvancedEditors.jsx",
   "server/services/dashboardBuilder.js"
 ];
 
