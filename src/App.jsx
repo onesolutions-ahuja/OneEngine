@@ -12,7 +12,6 @@ import JarvisOrb, { ORB_STATES } from './shell/jarvis/JarvisOrb'
 import JarvisPanel from './shell/jarvis/JarvisPanel'
 const RecordListView = lazyWithRecovery(() => import('./platform/records/RecordListView'))
 const MetadataRecordFormModal = lazyWithRecovery(() => import('./platform/forms/MetadataRecordFormModal'))
-const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
 const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
