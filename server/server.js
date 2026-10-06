@@ -712,37 +712,6 @@ async function hasPermission(req, code) {
   return codes.includes(code) || permissionSetAllowsSystemPermission(permissionSets, code);
 }
 
-async function associateCustomerWithStore(client, customerId, storeId, companyId, lastPurchaseAt = null) {
-  const customer = await client.query(
-    `SELECT id FROM customers WHERE id = $1 AND company_id = $2 AND active = true`,
-    [customerId, companyId]
-  );
-  if (!customer.rows.length) throw new Error("Customer not found");
-
-  const store = await client.query(
-    `SELECT id FROM stores WHERE id = $1 AND company_id = $2 AND active = true`,
-    [storeId, companyId]
-  );
-  if (!store.rows.length) throw new Error("Store not found");
-
-  const result = await client.query(
-    `
-    INSERT INTO customer_stores (customer_id, store_id, last_purchase_at)
-    VALUES ($1,$2,$3)
-    ON CONFLICT (customer_id, store_id) DO UPDATE SET
-      active = true,
-      last_purchase_at = CASE
-        WHEN EXCLUDED.last_purchase_at IS NULL THEN customer_stores.last_purchase_at
-        WHEN customer_stores.last_purchase_at IS NULL THEN EXCLUDED.last_purchase_at
-        WHEN EXCLUDED.last_purchase_at > customer_stores.last_purchase_at THEN EXCLUDED.last_purchase_at
-        ELSE customer_stores.last_purchase_at
-      END
-    RETURNING id, customer_id, store_id, created_at, last_purchase_at, active
-    `,
-    [customerId, storeId, lastPurchaseAt]
-  );
-  return result.rows[0];
-}
 
 async function canViewCompanyCustomers(user, request = null) {
   if (!user?.id || !user?.companyId) return false;

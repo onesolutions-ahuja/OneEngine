@@ -22,6 +22,9 @@ const exempt = new Set([
 ]);
 const declarativePrefixes=["server/packages/","server/metadata/"];
 const retired = new Set(["server/routes/dashboard.js","server/services/reportSalesDefinition.js"]);
+// Temporary compatibility inventory: these adapters are allowed to touch the
+// authoritative POS tables, but every entry is named here so additions cannot
+// silently expand the exception surface.
 const legacyBusinessRuntime = new Set([
   "server/services/receiptQr.js","server/services/secureInvoiceLinks.js","server/services/invoiceDelivery.js",
   "server/routes/invoiceDelivery.js","server/routes/secureInvoice.js","server/routes/selfCheckout.js",
@@ -33,6 +36,7 @@ const legacyBusinessRuntime = new Set([
   "server/services/paypalQrConnector.js","server/services/integrationFieldResolver.js"
 ]);
 const businessTables=["sales","sale_items","customers","payments","products","suppliers","purchases","purchase_items","refunds"];
+const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
 const findings=[];
 
 for(const file of roots.flatMap(walk)){
@@ -55,9 +59,10 @@ for(const file of roots.flatMap(walk)){
   }
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
+  if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
-const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,findings:unique};
+const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
 fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
 fs.writeFileSync(path.join(ROOT,"artifacts","metadata-architecture-audit.json"),JSON.stringify(report,null,2)+"\n");
 if(unique.length){

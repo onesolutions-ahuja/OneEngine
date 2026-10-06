@@ -1759,6 +1759,33 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        let handled = true
+        if (layoutOpen) setLayoutOpen(false)
+        else if (saveAsOpen) setSaveAsOpen(false)
+        else if (shortcutHelpOpen) setShortcutHelpOpen(false)
+        else if (groupDeleteTarget) setGroupDeleteTarget(null)
+        else if (compareVersionsOpen) setCompareVersionsOpen(false)
+        else if (analyticsOpen) setAnalyticsOpen(false)
+        else if (editHistoryOpen) setEditHistoryOpen(false)
+        else if (editHistoryPending) setEditHistoryPending(false)
+        else if (saveAsFlowOpen) setSaveAsFlowOpen(false)
+        else if (propertiesOpen) setPropertiesOpen(false)
+        else if (diagnosticsOpen) setDiagnosticsOpen(false)
+        else if (startOpen) setStartOpen(false)
+        else if (elementPickerOpen) {
+          setElementPickerOpen(false)
+          setAutoInsertIndex(null)
+          setDecisionInsertTarget(null)
+          setGroupInsertTarget(null)
+        } else if (executionMode) setExecutionMode(null)
+        else handled = false
+        if (handled) {
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+      }
       const tag = event.target?.tagName
       if (['INPUT','TEXTAREA','SELECT'].includes(tag) || event.target?.isContentEditable) return
       const primary = event.ctrlKey || event.metaKey
@@ -1831,7 +1858,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       window.removeEventListener('keydown', onKeyDown)
       canvas?.removeEventListener('wheel', onWheel)
     }
-  }, [layout, freeSelectedIds, selectedElementIds, copiedElements, zoom, elements, toolboxOpen])
+  }, [layout, freeSelectedIds, selectedElementIds, copiedElements, zoom, elements, toolboxOpen, layoutOpen, saveAsOpen, shortcutHelpOpen, groupDeleteTarget, compareVersionsOpen, analyticsOpen, editHistoryOpen, editHistoryPending, saveAsFlowOpen, propertiesOpen, diagnosticsOpen, startOpen, elementPickerOpen, executionMode])
 
   const flowName = workflowId ? flowProps.label : flow.label
   const editHistorySupported = ['autolaunched','schedule','platform_event'].includes(flow.key)
@@ -1859,7 +1886,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         <button aria-label="Undo" title="Undo" disabled={!historyRef.current.length} onClick={undoFlowChange}><Undo2 size={16}/></button><button aria-label="Redo" title="Redo" disabled={!futureRef.current.length} onClick={redoFlowChange}><Redo2 size={16}/></button>
         {issues.length ? <button className={issues.some((issue) => issue.level === 'error') ? 'has-issues is-error' : 'has-issues is-warning'} aria-label={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} title={issues.some((issue) => issue.level === 'error') ? 'Show Errors' : 'Show Warnings'} onClick={() => { setDiagnosticsOpen((value) => !value); setStartOpen(false); setEditingElement(null) }}><AlertTriangle size={16}/><em>{issues.filter((issue) => issue.level === (issues.some((row) => row.level === 'error') ? 'error' : 'warning')).length}</em></button> : null}
         <button aria-label="View Properties" title="View Properties" onClick={() => setPropertiesOpen(true)}><Settings2 size={16}/></button>
-        <div className="gptb-layout-picker"><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={switchToAutoLayout}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={switchToFreeForm}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
+        <div className="gptb-layout-picker" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setLayoutOpen(false) }}><button className="gptb-layout-button" aria-haspopup="menu" aria-expanded={layoutOpen} onClick={() => setLayoutOpen((value) => !value)}>{layout === 'auto' ? 'Auto-Layout' : 'Free-Form'} <ChevronDown size={13}/></button>{layoutOpen ? <div className="gptb-layout-menu" role="menu"><button role="menuitemradio" aria-checked={layout === 'auto'} onClick={switchToAutoLayout}><span>{layout === 'auto' ? '✓' : ''}</span>Auto-Layout</button><button role="menuitemradio" aria-checked={layout === 'free'} onClick={switchToFreeForm}><span>{layout === 'free' ? '✓' : ''}</span>Free-Form</button></div> : null}</div>
         <span className="gptb-toolbar-separator"/>
         <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'Run the most recent saved version.' : 'Save the flow before running it.'} onClick={() => setExecutionMode('run')}><Play size={14}/> Run</button>{['record','autolaunched'].includes(flow.key) ? <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'View and run tests for the most recent saved version.' : 'Save the flow before testing it.'} onClick={() => setExecutionMode('test')}><Eye size={14}/> View Tests</button> : <button className="gptb-text-tool" disabled={!workflowId} title={workflowId ? 'Debug the most recent saved version.' : 'Save the flow before debugging it.'} onClick={() => setExecutionMode('debug')}><Eye size={14}/> Debug</button>}
         <button className="gptb-text-tool" disabled={saving || hasUnsavableIncomplete} title={saveBlockedReason} onClick={handleSaveRequest}><Save size={14}/> {saving ? 'Saving…' : 'Save'}</button>

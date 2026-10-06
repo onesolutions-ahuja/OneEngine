@@ -29,6 +29,16 @@ export default function GPTBuilderNewAutomation({ flowTypes, onCreate, onClose }
   const [templateLoadError, setTemplateLoadError] = useState('')
 
   useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose?.()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  useEffect(() => {
     let live = true
     setTemplateLoading(true)
     setTemplateLoadError('')

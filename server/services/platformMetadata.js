@@ -2404,31 +2404,6 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           gptBuilder: true,
           layout: { mode: "AUTO" },
-          gptBuilderElements: flow.actions.map((step, index) => ({
-            id: step.id || `onetill-step-${index + 1}`,
-            key: "action",
-            label: step.label || step.apiName || step.key || `Step ${index + 1}`,
-            apiName: step.apiName || step.id || `OneTill_Step_${index + 1}`,
-            description: step.description || "",
-            labelSource: "manual",
-            apiNameSource: "manual",
-            config: {
-              actionKey: step.key || step.type || "",
-              inputs: {},
-              inputModes: {},
-              inputIncluded: {},
-              transforms: {},
-              outputMode: "automatic",
-              manualOutputs: [],
-              importedRuntimeAction: step,
-              importedRuntimeActionText: "",
-            },
-            configured: true,
-            source: "runtime_import",
-            position: null,
-          })),
-          gptBuilder: true,
-          layout: { mode: "AUTO" },
           gptBuilderElements: (flow.actions || []).map((step, index) => ({
             id: step.id || `onetill-step-${index + 1}`,
             key: "action",
@@ -2478,7 +2453,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       }
 
       const tillButtons = [
-        ["device_session","Till","till.session","till_action_header","till.open","device_session","badge-pound-sterling",10],
+        ["device_session","Till","till.session","till_action_header","till.open","till_session","badge-pound-sterling",10],
         ["till_customer","Customer","till.customer","till_action_header","customer.view","customer","user-round",20],
         ["till_hold","Hold","till.hold","till_action_bar","sale.hold","hold","pause",10],
         ["till_resume","Resume","till.resume","till_action_bar","sale.hold","resume","file-text",20],
