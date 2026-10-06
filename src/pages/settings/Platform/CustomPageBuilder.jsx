@@ -57,7 +57,7 @@ const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py
 const labelClass = "block text-xs font-medium text-slate-500";
 
 const BUILDER_CSS = `
-  .cpb-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 12px; align-items: start; width: 100%; min-width: 0; }
+  .cpb-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 12px; align-items: start; width: 100%; min-width: 0; min-height: 0; }\n  .cpb-palette { display: flex; flex-direction: column; max-height: calc(100vh - 190px); min-height: 0; overflow: hidden; }\n  .cpb-palette-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: 2px; }
   @media (max-width: 1100px) { .cpb-shell { grid-template-columns: 180px minmax(0, 1fr); } .cpb-properties { grid-column: 1 / -1; } }
   .cpb-panel { border: 1px solid var(--border-color, #e5e7eb); border-radius: 12px; background: var(--card-background, #fff); }
   .cpb-palette-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; background: var(--card-background, #fff); padding: 8px 10px; text-align: left; font-size: 12.5px; color: var(--text-primary, #334155); cursor: grab; }
@@ -947,42 +947,44 @@ const updateNode = (nodeId, changes) => {
       ) : (
         <div className="cpb-shell">
           {/* PALETTE — populated from the Component Registry. */}
-          <aside className="cpb-panel p-3 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Components</p>
-            {paletteGroups(registry).map((group) => (
-              <div key={group.label} className="space-y-1">
-                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{group.label}</p>
-                {group.items.map((component) => {
-                  const Icon = componentIcon(component);
-                  return (
-                  <button
-                    key={component.key}
-                    type="button"
-                    className="cpb-palette-item"
-                    draggable
-                    onDragStart={(event) => {
-                      if (component.key === "section") event.dataTransfer.setData(DRAG_MIME_PALETTE, JSON.stringify({ kind: "section-palette", componentKey: "section" }));
-                      else event.dataTransfer.setData(DRAG_MIME_PALETTE, JSON.stringify({ kind: "palette", componentKey: component.key }));
-                    }}
-                    onClick={() => {
-                      if (component.key === "section") addSection("full");
-                      else if (draft.sections.length) dropIntoSection(draft.sections[draft.sections.length - 1].id, { kind: "palette", componentKey: component.key });
-                      else addSection("full");
-                    }}
-                    title={`Drag onto the canvas${component.key === "section" ? "" : " or into a Section"}`}
-                  >
-                    <Icon size={12} className="shrink-0 text-slate-400" aria-hidden="true" /> {component.label}
-                  </button>
-                  );
-                })}
-              </div>
-            ))}
-            <div className="space-y-1 border-t border-slate-100 pt-2">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Sections</p>
-              <div className="grid grid-cols-3 gap-1">
-                {Object.values(SECTION_WIDTHS).map((width) => (
-                  <button key={width.key} type="button" className="cpb-device-btn justify-center" style={{ padding: "4px 2px", fontSize: 10 }} onClick={() => addSection(width.key)}>{widthMetaShort(width.key)}</button>
-                ))}
+          <aside className="cpb-panel cpb-palette p-3">
+            <p className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Components</p>
+            <div className="cpb-palette-scroll space-y-3">
+              {paletteGroups(registry).map((group) => (
+                <div key={group.label} className="space-y-1">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{group.label}</p>
+                  {group.items.map((component) => {
+                    const Icon = componentIcon(component);
+                    return (
+                    <button
+                      key={component.key}
+                      type="button"
+                      className="cpb-palette-item"
+                      draggable
+                      onDragStart={(event) => {
+                        if (component.key === "section") event.dataTransfer.setData(DRAG_MIME_PALETTE, JSON.stringify({ kind: "section-palette", componentKey: "section" }));
+                        else event.dataTransfer.setData(DRAG_MIME_PALETTE, JSON.stringify({ kind: "palette", componentKey: component.key }));
+                      }}
+                      onClick={() => {
+                        if (component.key === "section") addSection("full");
+                        else if (draft.sections.length) dropIntoSection(draft.sections[draft.sections.length - 1].id, { kind: "palette", componentKey: component.key });
+                        else addSection("full");
+                      }}
+                      title={`Drag onto the canvas${component.key === "section" ? "" : " or into a Section"}`}
+                    >
+                      <Icon size={12} className="shrink-0 text-slate-400" aria-hidden="true" /> {component.label}
+                    </button>
+                    );
+                  })}
+                </div>
+              ))}
+              <div className="space-y-1 border-t border-slate-100 pt-2">
+                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Sections</p>
+                <div className="grid grid-cols-3 gap-1">
+                  {Object.values(SECTION_WIDTHS).map((width) => (
+                    <button key={width.key} type="button" className="cpb-device-btn justify-center" style={{ padding: "4px 2px", fontSize: 10 }} onClick={() => addSection(width.key)}>{widthMetaShort(width.key)}</button>
+                  ))}
+                </div>
               </div>
             </div>
           </aside>
