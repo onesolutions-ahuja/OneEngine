@@ -74,7 +74,7 @@ export async function upsertMetadataRecord(db, {
   if (companyId && object.fieldMap.has("company_id") && merged.company_id === undefined) merged.company_id = companyId;
   const entries = Object.entries(merged).filter(([apiName]) => {
     const field = object.fieldMap.get(apiName);
-    return field && (field.writable !== false || field.config?.runtimeWritable === true);
+    return field && (field.writable !== false || field.config?.runtimeWritable === true || (apiName === "company_id" && companyId && String(value) === String(companyId)));
   });
   if (!entries.length) throw new Error(`No writable metadata fields supplied for ${objectKey}`);
   const params = entries.map(([, value]) => value);
