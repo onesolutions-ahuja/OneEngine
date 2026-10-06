@@ -11,7 +11,6 @@ import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { effectiveManifest, resolvePersistedConnectorCapability } from "./connectorRuntime.js";
-import { createInventoryMovement } from "./inventory.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
