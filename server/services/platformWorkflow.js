@@ -23,8 +23,7 @@ import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAl
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
-import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
-import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
+import { oneApiRequestDefinition, oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
@@ -3388,42 +3387,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
 
   {
-    key: "CALL_FUNCTION",
-    displayName: "Call Function",
-    description: "Invoke a registered, approved onePOS function.",
-    validation: (action) => {
-      if (!action?.functionKey && !action?.key) throw new Error("Call Function requires a functionKey");
-    },
-    async: false,
-    requiredPermissions: ["functions.execute"],
-    executor: async ({ action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields, workflowVariables = {} }) => {
-      const functionKey = action.functionKey || action.key;
-      const functionDefinition = getRegisteredFunction(functionKey);
-      if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
-      if (typeof functionDefinition.handler !== "function") {
-        throw new Error(`Function "${functionKey}" has no handler`);
-      }
-      const inputs = Object.fromEntries(Object.entries(action.inputs || {}).map(([key, value]) => [
-        key,
-        resolveConfiguredResource(value, { record, previousRecord, req, object, workflowVariables }),
-      ]));
-      return functionDefinition.handler({
-        action,
-        inputs,
-        db: businessDb || db,
-        pool,
-        client,
-        req,
-        companyId,
-        userId,
-        record,
-        previousRecord,
-        object,
-        fields,
-      });
-    },
-  },
-  {
     key: "RUN_SUBFLOW",
     displayName: "Run Subflow",
     description: "Run another approved workflow as a child workflow.",
@@ -3650,6 +3613,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
   },
   oneHttpRequestDefinition(),
+  oneApiRequestDefinition(),
   {
     key: "HTTP_REQUEST",
     displayName: "HTTP Request",
@@ -5033,12 +4997,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
 export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
 
-// Re-export registry bindings without eagerly reading them during module
-// initialization. platformFunctionRegistry participates in the workflow import
-// graph, so assigning these imported bindings to new consts can hit the ESM
-// temporal dead zone during startup.
-export { PLATFORM_FUNCTIONS as REGISTERED_FUNCTIONS, PLATFORM_FUNCTION_MAP as REGISTERED_FUNCTIONS_MAP } from "./platformFunctionRegistry.js";
-
 export async function executeMediatedRegisteredAction({ db, companyId, userId = null, req = null, action }) {
   return executeRegisteredAction({
     db,
@@ -5075,14 +5033,6 @@ export function validateWorkflowAction(action) {
     definition.validation(action);
   }
   return definition;
-}
-
-export function getRegisteredFunction(functionKey) {
-  return PLATFORM_FUNCTION_MAP.get(String(functionKey || "")) || null;
-}
-
-export function getRegisteredFunctionsRegistry() {
-  return PLATFORM_FUNCTIONS.slice();
 }
 
 async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId }) {
