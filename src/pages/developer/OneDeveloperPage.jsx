@@ -53,7 +53,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
   const [clients, setClients] = useState([])
   const [clientQuery, setClientQuery] = useState('')
   const [selectedClient, setSelectedClient] = useState(() => loggedInCompanyId || getActingCompanyId() || '')
-  const [canManageEngine, setCanManageEngine] = useState(() => Boolean(getStoredSessionPermissions()?.permissions?.includes('oneengine.manage')))
+  const [canManageEngine, setCanManageEngine] = useState(() => {\n    const stored = getStoredSessionPermissions()\n    const codes = Array.isArray(stored?.permissions) ? stored.permissions : Array.isArray(stored?.codes) ? stored.codes : []\n    return codes.includes('oneengine.manage')\n  })
   const [clientsLoading, setClientsLoading] = useState(false)
 
   useEffect(() => { setActive(normalizeSection(initialSection)) }, [initialSection])
@@ -64,7 +64,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
       try {
         const cachedPermissions = getStoredSessionPermissions()
         const permissions = cachedPermissions || await loadSessionPermissions()
-        const mayManage = Boolean(permissions?.permissions?.includes('oneengine.manage'))
+        const permissionCodes = Array.isArray(permissions?.permissions) ? permissions.permissions : Array.isArray(permissions?.codes) ? permissions.codes : []\n        const mayManage = permissionCodes.includes('oneengine.manage')
         if (!alive) return
         setCanManageEngine(mayManage)
         if (!mayManage) return
