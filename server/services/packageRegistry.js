@@ -660,8 +660,8 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     const actionKey = button.actionKey || button.action_key || null;
     const targetKey = button.targetKey || button.target_key || actionKey;
     if (!objectId || !safeMetadataKey(buttonKey) || typeof button.label !== "string" || !button.label.trim() ||
-        !["action", "workflow"].includes(targetType) || !targetKey) {
-      throw new Error("Package buttons require an available object, safe key, label and action/workflow target");
+        !["action","workflow","modal","navigation","command"].includes(targetType) || !targetKey) {
+      throw new Error("Package buttons require an available object, safe key, label and supported metadata target");
     }
     const registered = await db(
       `INSERT INTO platform_buttons
