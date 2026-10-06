@@ -11,7 +11,7 @@ import {
   loadReportSubscriptionExecutionUser,
   resolveReportSubscriptionRecipients,
 } from "./reportSubscriptionDelivery.js";
-import { buildCustomSalesQuery, customDateRange, validateCustomReportDefinition } from "./reportSalesDefinition.js";
+import { validateCustomReportDefinition } from "./reportDefinition.js";
 
 async function userHasPermission(db, user, permission) {
   if (!user?.role_id && !user?.roleId) return false;
@@ -106,14 +106,7 @@ async function executeSavedReport(db, report, executionUser) {
       };
     }
 
-    const storeIds = await loadStoreIds(db, executionUser, baseDefinition.storeIds || []);
-    const built = buildCustomSalesQuery(baseDefinition, customDateRange(baseDefinition.filters), storeIds, baseDefinition.userIds || []);
-    built.params[2] = executionUser.company_id;
-    const result = await db(built.sql, built.params);
-    return {
-      columns: (baseDefinition.fields || []).map((key) => ({ key, label: key })),
-      rows: result.rows,
-    };
+    throw new Error("Report subscriptions require Platform Object metadata");
   };
   return executeAnalyticsDefinition(definition, executeBase);
 }
