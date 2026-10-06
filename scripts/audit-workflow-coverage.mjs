@@ -80,32 +80,32 @@ const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/tru
 const actionRegistry = read("server/services/platformActionRegistry.js");
 const systemWorkflowCatalog = read("server/services/systemWorkflowCatalog.js");
 
-const workflowBuilderSource = read("src/pages/settings/Platform/WorkflowAdmin.jsx");
+const workflowBuilderSource = read("src/pages/developer/gptbuilder/GPTBuilderPage.jsx");
 const forbiddenExecutableDefaults = [
   {
     key: "HARDCODED_EMAIL_RECIPIENT_DEFAULT",
     pattern: /recipient:\s*["'](?:record\.)?customer\.email["']/,
-    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+    file: "src/pages/developer/gptbuilder/GPTBuilderPage.jsx",
   },
   {
     key: "HARDCODED_PHONE_RECIPIENT_DEFAULT",
     pattern: /recipient:\s*["'](?:record\.)?customer\.phone["']/,
-    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+    file: "src/pages/developer/gptbuilder/GPTBuilderPage.jsx",
   },
   {
     key: "HARDCODED_SAMPLE_FUNCTION_INPUT",
     pattern: /inputs:\s*\{\s*value:\s*["']hello["']\s*\}/,
-    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+    file: "src/pages/developer/gptbuilder/GPTBuilderPage.jsx",
   },
   {
     key: "HARDCODED_SCHEDULE_TIMEZONE_DEFAULT",
     pattern: /schedule:\s*\{[^}]*timezone:\s*["']Europe\/London["']/,
-    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+    file: "src/pages/developer/gptbuilder/GPTBuilderPage.jsx",
   },
   {
     key: "HARDCODED_SCHEDULE_TIME_DEFAULT",
     pattern: /schedule:\s*\{[^}]*definition:\s*\{\s*time:\s*["']09:00["']/,
-    file: "src/pages/settings/Platform/WorkflowAdmin.jsx",
+    file: "src/pages/developer/gptbuilder/GPTBuilderPage.jsx",
   },
 ];
 
