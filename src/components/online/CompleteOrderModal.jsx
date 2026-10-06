@@ -24,8 +24,8 @@ export default function CompleteOrderModal({
 }) {
   if (!order) return null;
 
-  const platformName = order.platform === "uber" ? "Uber Eats" : "Deliveroo";
-  const platformShort = order.platform === "uber" ? "Uber" : "Deliveroo";
+  const platformName = String(order.platform_label || order.platformLabel || order.provider_label || order.providerLabel || order.platform || order.provider || "Online");
+  const platformShort = String(order.platform_short_label || order.platformShortLabel || order.provider_short_label || order.providerShortLabel || platformName);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !otpBusy && onClose()}>
