@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { Toggle } from "../../components/ui.jsx";
-import { ENTITY_TYPES, ENTITY_EVENT_HINT } from "./shared.jsx";
+import { ENTITY_EVENT_HINT } from "./shared.jsx";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
@@ -18,7 +18,12 @@ export default function EndpointFormModal({ integration, endpoint, onClose, onSa
   const [name, setName] = useState(endpoint?.name || "");
   const [method, setMethod] = useState(endpoint?.method || "POST");
   const [path, setPath] = useState(endpoint?.path || "");
-  const [entityType, setEntityType] = useState(endpoint?.entity_type || "sale");
+  const eventKeys = Array.from(new Set([
+    ...(Array.isArray(integration?.events) ? integration.events : []),
+    ...(Array.isArray(integration?.manifest?.events) ? integration.manifest.events : []),
+    endpoint?.entity_type,
+  ].filter(Boolean).map(String)));
+  const [entityType, setEntityType] = useState(endpoint?.entity_type || eventKeys[0] || "custom");
   const [enabled, setEnabled] = useState(endpoint?.enabled ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -64,14 +69,16 @@ export default function EndpointFormModal({ integration, endpoint, onClose, onSa
               <label className="block">
                 <span className="block text-xs font-medium text-slate-600 mb-1">Entity / event type</span>
                 <select value={entityType} onChange={(e) => setEntityType(e.target.value)} className="w-full h-9 px-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {ENTITY_TYPES.map((t) => <option key={t}>{t}</option>)}
+                  {eventKeys.length
+                    ? eventKeys.map((t) => <option key={t} value={t}>{t}</option>)
+                    : <option value="custom">custom</option>}
                 </select>
               </label>
             </div>
             <p className="text-xs text-slate-400 -mt-1.5">{ENTITY_EVENT_HINT}</p>
             <label className="block">
               <span className="block text-xs font-medium text-slate-600 mb-1">URL / path *</span>
-              <input required value={path} onChange={(e) => setPath(e.target.value)} placeholder="/v3/sales" className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input required value={path} onChange={(e) => setPath(e.target.value)} placeholder="/v1/resource" className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </label>
             <p className="text-xs text-slate-400">Authentication is inherited from the connection.</p>
             <label className="flex items-center gap-2 text-sm text-slate-700">
