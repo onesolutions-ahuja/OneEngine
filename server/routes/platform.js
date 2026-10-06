@@ -4554,7 +4554,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   }
 
   router.get("/platform/rules", ...manage, async (req, res) => {
-    await ensureSystemWorkflowCatalog({ db, companyId: req.user.companyId, userId: req.user.id || null });
     const result = await db(
       `SELECT r.*, o.object_key, o.label AS object_label
          FROM platform_rules r
