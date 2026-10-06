@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
-import { DASHBOARD_DATE_RANGES, DASHBOARD_SALES_FIELDS, DATE_FILTER_FIELDS, SUMMARY_COLUMN, aggregatesForFieldType, operatorsForFieldType, platformFieldChoices } from "./platformDashboard.js";
+import { DASHBOARD_DATE_RANGES, DATE_FILTER_FIELDS, SUMMARY_COLUMN, aggregatesForFieldType, operatorsForFieldType, platformFieldChoices } from "./platformDashboard.js";
 import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";
 
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
@@ -91,10 +91,10 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const { objects, error: objectsError } = useObjects();
   const { fields, loading, error: fieldsError } = useFields(isPlatform ? report.objectId : null);
   const choices = platformFieldChoices(fields);
-  const metrics = isPlatform ? choices.metricFields : DASHBOARD_SALES_FIELDS.filter((field) => field.aggregate);
-  const groups = isPlatform ? choices.groupFields : DASHBOARD_SALES_FIELDS.filter((field) => field.groupable);
-  const typeOf = (key) => (isPlatform ? choices.all.find((field) => field.key === key)?.type : DASHBOARD_SALES_FIELDS.find((field) => field.key === key)?.type) || "text";
-  const aggregates = isPlatform ? aggregatesForFieldType(typeOf(config.valueField)) : ["SUM"];
+  const metrics = choices.metricFields;
+  const groups = choices.groupFields;
+  const typeOf = (key) => choices.all.find((field) => field.key === key)?.type || "text";
+  const aggregates = aggregatesForFieldType(typeOf(config.valueField));
   const setConfig = (patch) => onChange({ ...component, config: { ...config, ...patch } });
   const setReport = (patch) => onChange({ ...component, config: { ...config, report: { ...report, ...patch } } });
   const num = (patch) => (event) => setConfig({ [patch]: Number(event.target.value) });
@@ -170,7 +170,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
           rules={config.conditionalFormatting || []}
           onChange={(conditionalFormatting) => setConfig({ conditionalFormatting })}
           fields={[
-            ...(isPlatform ? choices.all : DASHBOARD_SALES_FIELDS),
+            ...choices.all,
             ...(config.valueField && config.aggregate ? [{ key: SUMMARY_COLUMN(config.aggregate, config.valueField), label: "Calculated metric" }] : []),
           ]}
         />
@@ -180,7 +180,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
           action={config.drillAction}
           onChange={(drillAction) => setConfig({ drillAction })}
           reports={drillReports}
-          fields={isPlatform ? choices.all : DASHBOARD_SALES_FIELDS}
+          fields={choices.all}
         />
       </div>
     </>}
