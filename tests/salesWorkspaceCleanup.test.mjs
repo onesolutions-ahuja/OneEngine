@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-test("Sales app list surface uses generic sale Workspace runtime", async () => {
+test("Sales app list surface is routed through generic Object Workspace metadata", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  assert.match(app, /const SalesPage = lazyWithRecovery\(\(\) => import\('\.\/platform\/workspace\/WorkspacePage'\)\)/);
-  assert.match(app, /<SalesPage initialObjectKey="sale" appKey="sales" \/>/);
+  const packages = await readFile(new URL("../server/packages/packageManifestCatalog.js", import.meta.url), "utf8");
+
+  assert.equal(app.includes("const SalesPage ="), false);
+  assert.equal(app.includes("<SalesPage"), false);
   assert.equal(app.includes("./pages/sales/SalesPage"), false);
+  assert.match(packages, /key:\s*"retail_pos"[\s\S]*?route:\s*"\/app\/objects\/sale\?appKey=retail_pos"/);
 });
 
 test("Sales cleanup removes legacy page-owned return and delivery actions", async () => {
