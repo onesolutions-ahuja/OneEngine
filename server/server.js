@@ -24,8 +24,7 @@ import { processReportSubscriptionDeliveryJob } from "./services/reportSubscript
 import { claimDueDashboardSubscriptions } from "./services/dashboardSubscriptionScheduler.js";
 import { processDashboardSubscriptionDeliveryJob } from "./services/dashboardSubscriptionRuntime.js";
 import { deliverPlatformWebhook, verifyWebhookSignature } from "./services/platformEvents.js";
-import { decryptSecret, encryptSecret } from "./services/onlineOrders/platformConfig.js";
-import { decryptCredentials, encryptCredentials } from "./services/integrationCredentials.js";
+import { decryptCredentials, encryptCredentials, decryptSecret, encryptSecret } from "./services/integrationCredentials.js";
 import {
   createWorkflowRun,
   executeWorkflowAction,
