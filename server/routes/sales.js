@@ -4,7 +4,6 @@ import { allocateBatchConsumption } from "../services/inventory.js";
 import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
 import { getRequestPool } from "../services/tenantDatabase.js";
-import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes, listPaymentMethods } from "../services/paymentMethods.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { executeWorkflowActions } from "../services/platformWorkflow.js";
@@ -44,7 +43,6 @@ export default function createSalesRouter({
   getRolePermissionCodes = null,
   canViewCompanyCustomers = null,
   requestPool = null,
-  canonicalTransactionWriter = null,
   connectorDrivers = null,
   savePlatformRecord = null,
 }) {
@@ -1282,14 +1280,17 @@ export default function createSalesRouter({
 
 
 
-        if (typeof canonicalTransactionWriter === "function") {
-          await canonicalTransactionWriter(client, {
-            saleId,
-            companyId: req.user.companyId,
-            storeId: req.user.storeId,
-            transactionType: "SALE",
-          });
-        }
+        await executeSystemWorkflow({
+          db: (sql, params=[]) => client.query(sql, params),
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "flow:sale.canonical.post",
+          req,
+          input: { saleId, companyId:req.user.companyId, storeId:req.user.storeId, transactionType:"SALE" },
+          storeId: req.user.storeId,
+          writeAudit,
+          source: { type:"sale", method:req.method, path:req.path, capability:"SALE_CANONICAL_POST" },
+        });
 
         /*
          * Platform record lifecycle hook. This keeps the protected Sales
