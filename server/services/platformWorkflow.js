@@ -6,7 +6,6 @@ import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationC
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
-import { executeRegisteredAction } from "./platformActions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
@@ -5344,14 +5343,8 @@ export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definit
 // temporal dead zone during startup.
 export { PLATFORM_FUNCTIONS as REGISTERED_FUNCTIONS, PLATFORM_FUNCTION_MAP as REGISTERED_FUNCTIONS_MAP } from "./platformFunctionRegistry.js";
 
-export async function executeMediatedRegisteredAction({ db, companyId, userId = null, req = null, action }) {
-  return executeRegisteredAction({
-    db,
-    companyId,
-    userId,
-    req: req || { user: { id: userId, companyId } },
-    action,
-  });
+export async function executeMediatedRegisteredAction() {
+  return { status:"UNAVAILABLE", code:"METADATA_FLOW_REQUIRED", retryable:false };
 }
 
 export function getWorkflowActionRegistry() {
