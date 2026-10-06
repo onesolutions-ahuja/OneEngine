@@ -1,0 +1,41 @@
+{
+  "connectors": [
+    {
+      "connectorKey": "shopify",
+      "name": "shopify Connection",
+      "description": "Metadata-driven connection for shopify.",
+      "publisher": "OneSolutions",
+      "authType": "api_key",
+      "baseUrl": "https://example.myshopify.com",
+      "credentialsSchema": [
+        {
+          "key": "apiKey",
+          "type": "secret",
+          "required": true,
+          "label": "Admin API access token"
+        },
+        {
+          "key": "headerName",
+          "type": "string",
+          "required": false,
+          "label": "Authentication header"
+        }
+      ],
+      "operations": [
+        {
+          "key": "test_connection",
+          "name": "Test Connection",
+          "method": "GET",
+          "path": "/admin/api/2025-01/shop.json"
+        }
+      ],
+      "timeoutMs": 15000,
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "backoffMs": 0
+      },
+      "required": true
+    }
+  ],
+  "iconAssetKey": "shopify"
+}
