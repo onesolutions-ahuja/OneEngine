@@ -2206,22 +2206,87 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         allowSearch: req.body?.allowSearch !== false,
         trackHistory: req.body?.trackHistory !== false,
       };
-      const result = await db("INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id,config) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *", [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, storageTable, moduleId, req.user.companyId, JSON.stringify(objectConfig)]);
-      await db(
-        `INSERT INTO platform_object_permissions
-           (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete,can_import,can_export)
-         SELECT $1,r.id,$2,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
-           FROM roles r
-           JOIN role_permissions rp ON rp.role_id=r.id
-           JOIN permissions p ON p.id=rp.permission_id
-          WHERE r.company_id=$2 AND p.code='oneengine.manage'
-         ON CONFLICT (object_id,role_id,company_id)
-         DO UPDATE SET can_view=TRUE,can_create=TRUE,can_edit=TRUE,can_delete=TRUE,can_import=TRUE,can_export=TRUE`,
-        [result.rows[0].id, req.user.companyId]
-      );
-      res.status(201).json({ success: true, data: result.rows[0] });
+
+      /*
+       * Object creation is a metadata composition operation: the Object and its
+       * default Object Page are created together. No object-specific React
+       * route or business handler is generated. The generic page/runtime later
+       * resolves definition.objectKey.
+       */
+      const client = await pool.connect();
+      let createdObject;
+      let defaultPage;
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(
+          "INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id,config) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *",
+          [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, storageTable, moduleId, req.user.companyId, JSON.stringify(objectConfig)]
+        );
+        createdObject = result.rows[0];
+
+        await client.query(
+          `INSERT INTO platform_object_permissions
+             (object_id,role_id,company_id,can_view,can_create,can_edit,can_delete,can_import,can_export)
+           SELECT $1,r.id,$2,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
+             FROM roles r
+             JOIN role_permissions rp ON rp.role_id=r.id
+             JOIN permissions p ON p.id=rp.permission_id
+            WHERE r.company_id=$2 AND p.code='oneengine.manage'
+           ON CONFLICT (object_id,role_id,company_id)
+           DO UPDATE SET can_view=TRUE,can_create=TRUE,can_edit=TRUE,can_delete=TRUE,can_import=TRUE,can_export=TRUE`,
+          [createdObject.id, req.user.companyId]
+        );
+
+        // Reuse a tenant app when one exists; otherwise create the generic
+        // metadata app container. This is presentation metadata, not business code.
+        let app = (await client.query(
+          "SELECT * FROM platform_apps WHERE company_id=$1 AND active=true ORDER BY CASE WHEN app_key='oneengine_objects' THEN 0 ELSE 1 END, created_at ASC LIMIT 1",
+          [req.user.companyId]
+        )).rows[0];
+        if (!app) {
+          app = (await client.query(
+            "INSERT INTO platform_apps (company_id,app_key,label,description,config,active) VALUES ($1,'oneengine_objects','Objects','Metadata-driven object pages','{}'::jsonb,true) RETURNING *",
+            [req.user.companyId]
+          )).rows[0];
+        }
+
+        const pageKeyBase = toSafeApiName(`${createdObject.object_key}_page`, "object_page");
+        const pageKey = (await client.query(
+          "SELECT 1 FROM platform_pages WHERE page_key=$1 AND company_id=$2 LIMIT 1",
+          [pageKeyBase, req.user.companyId]
+        )).rows.length ? `${pageKeyBase}_${String(createdObject.id).replace(/-/g, "").slice(0, 8)}` : pageKeyBase;
+        const definition = normalizePageDefinition({
+          objectKey: createdObject.object_key,
+          showInNavigation: true,
+          icon: "box",
+          order: DEFAULT_OBJECT_NAV_ORDER,
+          sections: [],
+          components: [],
+        });
+        defaultPage = (await client.query(
+          `INSERT INTO platform_pages
+             (app_id,company_id,page_key,label,route_path,page_type,definition,draft_definition,active,lifecycle_status,version,draft_version,active_version)
+           VALUES ($1,$2,$3,$4,$5,'object',$6::jsonb,NULL,true,'ACTIVE',1,NULL,1)
+           RETURNING *`,
+          [app.id, req.user.companyId, pageKey, createdObject.label, objectRuntimeRoute(createdObject.object_key), JSON.stringify(definition)]
+        )).rows[0];
+        await client.query(
+          `INSERT INTO platform_page_versions
+             (page_id,company_id,version,definition,lifecycle_status,created_by)
+           VALUES ($1,$2,1,$3::jsonb,'ACTIVE',$4)`,
+          [defaultPage.id, req.user.companyId, JSON.stringify(definition), req.user.id || null]
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      res.status(201).json({ success: true, data: createdObject, defaultPage });
     } catch (error) {
-      if (error.code === "23505") return res.status(409).json({ success: false, message: "An object with this key already exists" });
+      if (error.code === "23505") return res.status(409).json({ success: false, message: "An object or default page with this key already exists" });
       console.error("Platform object create error:", error);
       res.status(500).json({ success: false, message: "Unable to create platform object" });
     }
