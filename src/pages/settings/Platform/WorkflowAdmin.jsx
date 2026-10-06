@@ -9015,12 +9015,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   }, [scopeKey]);
 
   useEffect(() => {
-    apiRequest("/api/platform/function-registry")
-      .then((response) => setFunctionRegistry(Array.isArray(response?.data) ? response.data : []))
-      .catch((error) => onError?.(error.message || "Unable to load registered functions"));
-  }, [onError]);
-
-  useEffect(() => {
     apiRequest("/api/platform/message-templates")
       .then((response) => setMessageTemplates(Array.isArray(response?.data) ? response.data.filter((item) => item.active !== false) : []))
       .catch((error) => {
