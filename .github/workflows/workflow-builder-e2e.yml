@@ -80,8 +80,8 @@ jobs:
               exit 0
             fi
             MESSAGE=$(node -e 'const fs=require("fs"); try { const x=JSON.parse(fs.readFileSync("/tmp/e2e-login.json","utf8")||"{}"); process.stdout.write(String(x.message||"")); } catch {}')
-            if [ "$STATUS" = "503" ] && echo "$MESSAGE" | grep -qi "starting"; then
-              echo "OneEngine is still starting; retrying authentication readiness..."
+            if [ "$STATUS" = "502" ] || [ "$STATUS" = "504" ] || { [ "$STATUS" = "503" ] && echo "$MESSAGE" | grep -qi "starting"; }; then
+              echo "OneEngine authentication endpoint is temporarily unavailable (HTTP $STATUS); retrying..."
               sleep 5
               continue
             fi
