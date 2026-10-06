@@ -40,7 +40,16 @@ const PACKAGE_CATALOG = [
           sessionStatus: "status",
           sessionOpenValue: "open",
           sessionTerminalId: "terminal_id",
+          sessionTerminalNumber: "terminal_number",
           sessionStoreId: "store_id",
+          transactionReceiptNumber: "receipt_number",
+          transactionChangeDue: "change_due",
+          transactionTotal: "total",
+          heldCustomerName: "customer_name",
+          heldCreatedAt: "created_at",
+          heldItems: "items",
+          heldDiscountType: "discount_type",
+          heldDiscountValue: "discount_value",
           catalogueActive: "active",
           modifierGroupProductId: "product_id",
           modifierGroupActive: "active",
@@ -69,6 +78,27 @@ const PACKAGE_CATALOG = [
           receiptQrShowCountdownPath: "receiptQr.showCountdown",
         },
         recordMappings: {
+          transaction: {
+            id: ["id"],
+            receiptNumber: ["receipt_number"],
+            changeDue: ["change_due"],
+            total: ["total"]
+          },
+          heldTransaction: {
+            id: ["id"],
+            customerName: ["customer_name"],
+            createdAt: ["created_at"],
+            items: ["items"],
+            discountType: ["discount_type"],
+            discountValue: ["discount_value"]
+          },
+          paymentInput: {
+            providerTransactionId: ["providerTransactionId", "provider_transaction_id"],
+            idempotencyKey: ["idempotencyKey", "idempotency_key"]
+          },
+          lineInput: {
+            productId: ["id", "productId", "product_id"]
+          },
           catalogue: {
             id: ["id"],
             name: ["name", "product_name"],
