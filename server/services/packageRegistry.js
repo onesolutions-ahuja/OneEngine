@@ -1499,7 +1499,6 @@ export function packageDefinition(entry) {
           },
         ],
         workflows: [
-          ...uberEatsWorkflowDefinitions(),
           {
             key: "uber_eats_menu_sync_after_product_save",
             label: "Uber Eats menu sync after product save",
