@@ -4,7 +4,7 @@ import {
   permissionAllows,
 } from "./authorization.js";
 import { isPackageLicensed } from "./licensing.js";
-import { isSafeIdentifier } from "./platformMetadata.js";
+import { isSafeIdentifier } from "./platformCoreMetadata.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 
 /*
