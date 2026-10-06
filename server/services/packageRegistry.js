@@ -2466,7 +2466,7 @@ export function packageDefinition(entry) {
                 {value:"variables.payments",apiName:"payments",label:"Payments",type:"Variable",dataType:"Collection",defaultValue:[],isCollection:true,availableInput:true,availableOutput:false,objectKey:"payment"}
               ],
               actions:[
-                {id:"create_sale",label:"1. Create Sale",apiName:"create_sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"variables.sale"},store:"record"},
+                {id:"create_sale",label:"1. Create Sale",apiName:"create_sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"variables.sale"},checkMatchingRecords:true,matchConditions:[{field:"client_request_id",value:{path:"variables.sale.client_request_id"}}],matchAction:"skip",store:"record"},
                 {id:"create_items",label:"3. Create Sale Items",apiName:"create_items",key:"CREATE_RECORD",objectKey:"sale_item",recordCollectionResource:{path:"variables.items"},commonFieldValues:{sale_id:{path:"variables.sale.id"}}},
                 {id:"create_payments",label:"4. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"},commonFieldValues:{sale_id:{path:"variables.sale.id"}}}
               ]
