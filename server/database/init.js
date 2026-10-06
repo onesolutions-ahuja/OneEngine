@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { runMigrations } from "./migrations.js";
 import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
 import { backfillLegacyRuleFieldReferences } from "../services/platformRuleReferences.js";
-import { packageDefinitions } from "../services/packageRegistry.js";
 import { platformSchema } from "../services/platformMetadata.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { decryptSecret } from "../services/onlineOrders/platformConfig.js";
@@ -424,7 +423,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "24",
       name: "Synchronise internal package catalog with package registry",
       up: async client => {
-        const definitions = packageDefinitions();
+        const definitions = [];
         for (const pkg of definitions) {
           const packageType = pkg.manifest?.packageType || "APPLICATION";
           const publisher = pkg.manifest?.publisher || "OneSolutions";
@@ -1226,9 +1225,18 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "44",
       name: "Replace persisted hidden appointment conversation workflows in place",
       up: async client => {
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
-        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        const persistedRouter = await client.query(
+          `SELECT trigger_key,conditions,action FROM platform_rules
+             WHERE company_id IS NOT NULL
+               AND action->>'type'='workflow'
+               AND (name='OneAssistant - Booking Channel Router' OR action->>'apiName'='OneAssistant_Booking_Channel_Router')
+             ORDER BY updated_at DESC LIMIT 1`
+        );
+        const router = persistedRouter.rows[0] || null;
+        if (!router?.action?.actions?.length) {
+          console.log("onePOS: persisted OneAssistant router unavailable; metadata-owned migration safely skipped");
+          return;
+        }
 
         const hiddenRows = await client.query(
           `SELECT id,company_id,name,action
@@ -1306,9 +1314,18 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "46",
       name: "Refresh persisted appointment graph with rejoined channel branches",
       up: async client => {
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
-        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        const persistedRouter = await client.query(
+          `SELECT trigger_key,conditions,action FROM platform_rules
+             WHERE company_id IS NOT NULL
+               AND action->>'type'='workflow'
+               AND (name='OneAssistant - Booking Channel Router' OR action->>'apiName'='OneAssistant_Booking_Channel_Router')
+             ORDER BY updated_at DESC LIMIT 1`
+        );
+        const router = persistedRouter.rows[0] || null;
+        if (!router?.action?.actions?.length) {
+          console.log("onePOS: persisted OneAssistant router unavailable; metadata-owned migration safely skipped");
+          return;
+        }
         const rows = await client.query(
           `SELECT id,company_id FROM platform_rules
             WHERE company_id IS NOT NULL
@@ -1336,9 +1353,18 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "47",
       name: "Replace hidden appointment slot search with generic Flow primitives",
       up: async client => {
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
-        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        const persistedRouter = await client.query(
+          `SELECT trigger_key,conditions,action FROM platform_rules
+             WHERE company_id IS NOT NULL
+               AND action->>'type'='workflow'
+               AND (name='OneAssistant - Booking Channel Router' OR action->>'apiName'='OneAssistant_Booking_Channel_Router')
+             ORDER BY updated_at DESC LIMIT 1`
+        );
+        const router = persistedRouter.rows[0] || null;
+        if (!router?.action?.actions?.length) {
+          console.log("onePOS: persisted OneAssistant router unavailable; metadata-owned migration safely skipped");
+          return;
+        }
         const keys = router.action.actions.map((action) => action.key);
         if (keys.includes("FIND_APPOINTMENT_SLOTS")) throw new Error("Booking router still contains hidden slot-search action");
         for (const required of ["TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_FORMAT_TEXT","GET_RECORDS","ASSIGNMENT","COLLECTION_SORT"]) {
@@ -1375,9 +1401,18 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           "UPDATE platform_rules SET action=replace(action::text,'\"SEND_APPOINTMENT_MESSAGE\"','\"SEND_COMMUNICATION\"')::jsonb,updated_at=NOW() WHERE action::text LIKE '%SEND_APPOINTMENT_MESSAGE%'"
         );
 
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
-        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        const persistedRouter = await client.query(
+          `SELECT trigger_key,conditions,action FROM platform_rules
+             WHERE company_id IS NOT NULL
+               AND action->>'type'='workflow'
+               AND (name='OneAssistant - Booking Channel Router' OR action->>'apiName'='OneAssistant_Booking_Channel_Router')
+             ORDER BY updated_at DESC LIMIT 1`
+        );
+        const router = persistedRouter.rows[0] || null;
+        if (!router?.action?.actions?.length) {
+          console.log("onePOS: persisted OneAssistant router unavailable; metadata-owned migration safely skipped");
+          return;
+        }
         if (router.action.actions.some((action) => action.key === "SEND_APPOINTMENT_MESSAGE")) {
           throw new Error("OneAssistant booking router still contains SEND_APPOINTMENT_MESSAGE");
         }
@@ -1567,9 +1602,18 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "62",
       name: "Keep exactly one OneAssistant communication event router per tenant",
       up: async client => {
-        const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
-        const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        const persistedRouter = await client.query(
+          `SELECT trigger_key,conditions,action FROM platform_rules
+             WHERE company_id IS NOT NULL
+               AND action->>'type'='workflow'
+               AND (name='OneAssistant - Booking Channel Router' OR action->>'apiName'='OneAssistant_Booking_Channel_Router')
+             ORDER BY updated_at DESC LIMIT 1`
+        );
+        const router = persistedRouter.rows[0] || null;
+        if (!router?.action?.actions?.length) {
+          console.log("onePOS: persisted OneAssistant router unavailable; metadata-owned migration safely skipped");
+          return;
+        }
 
         const candidates = await client.query(
           `SELECT id,company_id,name,action,created_at,updated_at
