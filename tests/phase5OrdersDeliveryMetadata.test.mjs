@@ -5,8 +5,12 @@ const root=new URL("../",import.meta.url);
 const read=(p)=>readFile(new URL(p,root),"utf8");
 test("Phase 5 Online Orders metadata is manifest-owned and Flow-write-only",async()=>{
  const m=JSON.parse(await read("server/metadata/manifests/online_orders.json"));
- assert.deepEqual(m.objects.map(x=>x.objectKey).sort(),["online_order","online_order_line"]);
+ assert.deepEqual(m.objects.map(x=>x.objectKey).sort(),["sales_order","sales_order_line"]);
  for(const o of m.objects) assert.equal(o.config?.flowWritesOnly,true,o.objectKey);
+ const line=m.objects.find(o=>o.objectKey==="sales_order_line");
+ assert.equal(line.config?.internal,true);
+ assert.equal(line.config?.childStorage,true);
+ assert.equal(line.config?.generateOneId,false);
  assert.ok(m.workflows.some(x=>x.apiName==="ONLINE_ORDER_TRANSITION"));
  assert.ok(m.actions.every(x=>x.handlerKey==="RUN_SUBFLOW"));
 });
@@ -17,7 +21,7 @@ test("Phase 5 Online Orders is not inline in package registry",async()=>{
 });
 test("Phase 5 UI executes Online Order buttons through generic metadata runtime",async()=>{
  const s=await read("src/pages/online/useOnlineOrderActions.js");
- assert.match(s,/api\/platform\/runtime\/objects\/online_order\/buttons/);
+ assert.match(s,/api\/platform\/runtime\/objects\/sales_order\/buttons/);
  assert.equal(s.includes("/api/online/orders/"),false);
 });
 test("Phase 5 legacy Online Orders provider lifecycle services stay deleted",async()=>{

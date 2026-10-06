@@ -238,7 +238,7 @@ CREATE INDEX IF NOT EXISTS idx_payment_terminals_device
 -- HARDWARE CONFIGURATION
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS hardware_configurations (
+CREATE TABLE IF NOT EXISTS hardware_devices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
@@ -258,10 +258,10 @@ CREATE TABLE IF NOT EXISTS hardware_configurations (
     UNIQUE (company_id, store_id, device_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_hardware_configurations_store
-ON hardware_configurations(company_id, store_id);
+CREATE INDEX IF NOT EXISTS idx_hardware_devices_store
+ON hardware_devices(company_id, store_id);
 
-ALTER TABLE hardware_configurations
+ALTER TABLE hardware_devices
   ADD COLUMN IF NOT EXISTS device_key VARCHAR(120) NOT NULL DEFAULT 'legacy-unassigned';
 
 CREATE TABLE IF NOT EXISTS server_settings (
@@ -775,7 +775,7 @@ WHERE sku = 'MISC'
 -- INVENTORY MOVEMENTS / STOCK LEDGER
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS inventory_movements (
+CREATE TABLE IF NOT EXISTS inventory_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id),
@@ -809,27 +809,27 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_product
-ON inventory_movements(product_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_product
+ON inventory_ledger(product_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_company
-ON inventory_movements(company_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_company
+ON inventory_ledger(company_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_type
-ON inventory_movements(movement_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_type
+ON inventory_ledger(movement_type, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_batch
-ON inventory_movements(batch_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_batch
+ON inventory_ledger(batch_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_transaction
-ON inventory_movements(transaction_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_transaction
+ON inventory_ledger(transaction_id, created_at);
 
 -- ------------------------------------------------------------
 -- STOCK BY STORE — store/location-level stock positions.
 -- Products stay company-level; the quantity physically living at each
 -- store is tracked here, one row per (company, store, product). Updated
 -- only via services/inventory.js createInventoryMovement, in step with
--- inventory_movements and products.stock_quantity in the same transaction.
+-- inventory_ledger and products.stock_quantity in the same transaction.
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS product_store_stock (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -957,7 +957,7 @@ ON suppliers(company_id);
 -- PURCHASES / GOODS RECEIVED
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS purchases (
+CREATE TABLE IF NOT EXISTS purchase_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID NOT NULL REFERENCES stores(id),
@@ -981,7 +981,7 @@ CREATE TABLE IF NOT EXISTS purchases (
 
 CREATE TABLE IF NOT EXISTS purchase_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    purchase_id UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    purchase_id UUID NOT NULL REFERENCES purchase_ledger(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id),
     quantity NUMERIC(12,3) NOT NULL CHECK (quantity > 0),
     received_quantity NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (received_quantity >= 0 AND received_quantity <= quantity),
@@ -995,7 +995,7 @@ CREATE TABLE IF NOT EXISTS purchase_items (
 CREATE TABLE IF NOT EXISTS purchase_receipts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    purchase_id UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    purchase_id UUID NOT NULL REFERENCES purchase_ledger(id) ON DELETE CASCADE,
     store_id UUID NOT NULL REFERENCES stores(id),
     received_by UUID REFERENCES users(id) ON DELETE SET NULL,
     received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1018,7 +1018,7 @@ CREATE TABLE IF NOT EXISTS purchase_receipt_items (
 CREATE INDEX IF NOT EXISTS idx_purchase_receipts_purchase ON purchase_receipts(purchase_id, received_at);
 
 CREATE INDEX IF NOT EXISTS idx_purchases_company_date
-ON purchases(company_id, purchase_date DESC);
+ON purchase_ledger(company_id, purchase_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase
 ON purchase_items(purchase_id);
@@ -1091,7 +1091,7 @@ CREATE TABLE IF NOT EXISTS supplier_invoices (
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
     store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
-    purchase_id UUID REFERENCES purchases(id) ON DELETE SET NULL,
+    purchase_id UUID REFERENCES purchase_ledger(id) ON DELETE SET NULL,
     invoice_number VARCHAR(100) NOT NULL,
     invoice_date DATE NOT NULL DEFAULT CURRENT_DATE,
     due_date DATE,
@@ -1289,7 +1289,7 @@ CREATE TABLE IF NOT EXISTS customers (
     /*
      * T10Y — Customer credit account fields. Credit is OFF for every
      * existing customer (default FALSE); balance is DERIVED from the
-     * customer_credit_ledger (never stored/mutated here).
+     * customer_ledger (never stored/mutated here).
      */
     credit_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     credit_limit NUMERIC(12,2) NULL
@@ -1309,7 +1309,7 @@ ON customers(company_id);
 -- payment or adjustment that produced it.
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS customer_credit_ledger (
+CREATE TABLE IF NOT EXISTS customer_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID NULL REFERENCES stores(id) ON DELETE SET NULL,
@@ -1336,10 +1336,10 @@ CREATE TABLE IF NOT EXISTS customer_credit_ledger (
 );
 
 CREATE INDEX IF NOT EXISTS idx_credit_ledger_customer
-ON customer_credit_ledger(company_id, customer_id, created_at DESC);
+ON customer_ledger(company_id, customer_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_credit_ledger_reference
-ON customer_credit_ledger(reference_type, reference_id);
+ON customer_ledger(reference_type, reference_id);
 CREATE TABLE IF NOT EXISTS customer_stores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -1372,7 +1372,7 @@ CREATE TABLE IF NOT EXISTS customer_loyalty_balances (
 CREATE INDEX IF NOT EXISTS idx_loyalty_balances_customer
 ON customer_loyalty_balances(customer_id);
 
-CREATE TABLE IF NOT EXISTS customer_loyalty_transactions (
+CREATE TABLE IF NOT EXISTS customer_loyalty_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -1387,16 +1387,16 @@ CREATE TABLE IF NOT EXISTS customer_loyalty_transactions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_customer
-ON customer_loyalty_transactions(customer_id, created_at DESC);
+ON customer_loyalty_ledger(customer_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_reference
-ON customer_loyalty_transactions(reference_type, reference_id);
+ON customer_loyalty_ledger(reference_type, reference_id);
 
 -- T10R: idempotent earning. At most one EARN per sale, enforced by the
 -- database so a retried/lost-acknowledgement sale can never award points
 -- twice. Balance upserts must be reversed when this fires.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_loyalty_earn_per_sale
-ON customer_loyalty_transactions (company_id, reference_id)
+ON customer_loyalty_ledger (company_id, reference_id)
 WHERE transaction_type = 'EARN' AND reference_type = 'sale';
 
 -- T10R: manual/admin point adjustments - permission-controlled,
@@ -1433,7 +1433,7 @@ CREATE TABLE IF NOT EXISTS gift_cards (
     UNIQUE (company_id, code)
 );
 
-CREATE TABLE IF NOT EXISTS gift_card_transactions (
+CREATE TABLE IF NOT EXISTS gift_card_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     gift_card_id UUID NOT NULL REFERENCES gift_cards(id) ON DELETE CASCADE,
@@ -1447,8 +1447,8 @@ CREATE TABLE IF NOT EXISTS gift_card_transactions (
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_gift_card_transactions_card ON gift_card_transactions(company_id, gift_card_id, created_at);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_gift_card_redeem_sale ON gift_card_transactions(company_id, gift_card_id, reference_id)
+CREATE INDEX IF NOT EXISTS idx_gift_card_ledger_card ON gift_card_ledger(company_id, gift_card_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_gift_card_redeem_sale ON gift_card_ledger(company_id, gift_card_id, reference_id)
 WHERE transaction_type = 'redeem' AND reference_type = 'sale';
 
 -- ============================================================
@@ -1600,7 +1600,7 @@ CREATE TABLE IF NOT EXISTS hospitality_table_merge_tickets (
 -- SALES
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS sales (
+CREATE TABLE IF NOT EXISTS sale_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id),
     store_id UUID NOT NULL REFERENCES stores(id),
@@ -1626,27 +1626,27 @@ CREATE TABLE IF NOT EXISTS sales (
     /*
      * ONLINE ORDER -> POS SALE: set when an Uber Eats / Deliveroo order is
      * completed. UNIQUE (below) makes duplicate sales on retry impossible.
-     * The FK itself is added after online_orders exists (see ONLINE ORDERS
+     * The FK itself is added after sales_orders exists (see ONLINE ORDERS
      * section) because this table is created earlier in this script.
      */
     online_order_id UUID
 );
-ALTER TABLE sales ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(20) NOT NULL DEFAULT 'SALE';
-ALTER TABLE sales ADD COLUMN IF NOT EXISTS original_transaction_id UUID REFERENCES sales(id) ON DELETE SET NULL;
-ALTER TABLE sales ADD COLUMN IF NOT EXISTS net_amount NUMERIC(12,2);
-ALTER TABLE sales ADD COLUMN IF NOT EXISTS hospitality_service_charge_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
-ALTER TABLE sales ADD COLUMN IF NOT EXISTS hospitality_service_charge_tax NUMERIC(12,2) NOT NULL DEFAULT 0;
-ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sales(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS idx_sales_transaction_type ON sales(company_id, transaction_type, created_at);
-CREATE INDEX IF NOT EXISTS idx_sales_original_transaction ON sales(original_transaction_id);
+ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(20) NOT NULL DEFAULT 'SALE';
+ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS original_transaction_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
+ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS net_amount NUMERIC(12,2);
+ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS hospitality_service_charge_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS hospitality_service_charge_tax NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_sales_transaction_type ON sale_ledger(company_id, transaction_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_sales_original_transaction ON sale_ledger(original_transaction_id);
 
-ALTER TABLE sales
+ALTER TABLE sale_ledger
     ADD COLUMN IF NOT EXISTS client_request_id UUID;
-ALTER TABLE sales
+ALTER TABLE sale_ledger
     ADD COLUMN IF NOT EXISTS client_request_fingerprint TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_client_request
-ON sales(company_id, client_request_id);
+ON sale_ledger(company_id, client_request_id);
 
 /*
  * Receipt numbers are authoritative and sequential per terminal per
@@ -1654,24 +1654,24 @@ ON sales(company_id, client_request_id);
  * (terminal_id IS NULL) are exempt from the pattern entirely.
  */
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_terminal_receipt
-ON sales(terminal_id, receipt_number)
+ON sale_ledger(terminal_id, receipt_number)
 WHERE terminal_id IS NOT NULL
   AND receipt_number LIKE '%-%-%';
 
 CREATE INDEX IF NOT EXISTS idx_sales_company
-ON sales(company_id);
+ON sale_ledger(company_id);
 
 CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date
-ON sales(company_id, store_id, status, created_at DESC);
+ON sale_ledger(company_id, store_id, status, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_sales_store
-ON sales(store_id);
+ON sale_ledger(store_id);
 
 CREATE INDEX IF NOT EXISTS idx_sales_created
-ON sales(created_at);
+ON sale_ledger(created_at);
 
 CREATE INDEX IF NOT EXISTS idx_sales_receipt
-ON sales(receipt_number);
+ON sale_ledger(receipt_number);
 
 -- ============================================================
 -- SALE ITEMS
@@ -1679,7 +1679,7 @@ ON sales(receipt_number);
 
 CREATE TABLE IF NOT EXISTS sale_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sale_id UUID REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id UUID REFERENCES sale_ledger(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id),
     product_name VARCHAR(255) NOT NULL,
     quantity NUMERIC(12,3) NOT NULL,
@@ -1745,12 +1745,12 @@ ON CONFLICT (company_id,code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
     company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
     customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
     supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
-    transaction_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+    transaction_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
     direction VARCHAR(20) NOT NULL DEFAULT 'IN',
     reference VARCHAR(100),
 
@@ -1793,7 +1793,7 @@ CREATE TABLE IF NOT EXISTS payment_attempts (
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID NOT NULL REFERENCES stores(id) ON DELETE RESTRICT,
     till_id UUID NOT NULL REFERENCES terminals(id) ON DELETE RESTRICT,
-    sale_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+    sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
     session_reference VARCHAR(200),
     connector_instance_id UUID,
     connector_package_key VARCHAR(100) NOT NULL,
@@ -1832,8 +1832,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_hospitality_open_bill_per_session
     ON hospitality_bills(company_id,store_id,session_id) WHERE status='OPEN';
 CREATE TABLE IF NOT EXISTS hospitality_bill_sales (
     bill_id UUID NOT NULL REFERENCES hospitality_bills(id) ON DELETE CASCADE,
-    sale_id UUID NOT NULL UNIQUE REFERENCES sales(id) ON DELETE RESTRICT,
-    source_sale_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+    sale_id UUID NOT NULL UNIQUE REFERENCES sale_ledger(id) ON DELETE RESTRICT,
+    source_sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
     split_mode VARCHAR(20),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (bill_id, sale_id)
@@ -1871,7 +1871,7 @@ CREATE TABLE IF NOT EXISTS financial_ledger_entries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
-    transaction_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+    transaction_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
     payment_id UUID REFERENCES payments(id) ON DELETE SET NULL,
     customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
     supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
@@ -1910,7 +1910,7 @@ CREATE TABLE IF NOT EXISTS layaways (
       CHECK (status IN ('OPEN', 'COMPLETED', 'CANCELLED')),
     due_date DATE,
     notes TEXT,
-    completed_sale_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+    completed_sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
     completed_at TIMESTAMPTZ,
     completed_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1969,7 +1969,7 @@ ON held_sales(company_id, store_id, created_at);
 
 CREATE TABLE IF NOT EXISTS refunds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sale_id UUID NOT NULL REFERENCES sales(id),
+    sale_id UUID NOT NULL REFERENCES sale_ledger(id),
     user_id UUID NOT NULL REFERENCES users(id),
     amount NUMERIC(12,2) NOT NULL,
     reason TEXT,
@@ -2001,7 +2001,7 @@ CREATE TABLE IF NOT EXISTS discounts (
 
 CREATE TABLE IF NOT EXISTS sale_discounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
     item_id UUID REFERENCES sale_items(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id),
     type VARCHAR(20) NOT NULL,
@@ -2020,7 +2020,7 @@ ON sale_discounts(sale_id);
 
 CREATE TABLE IF NOT EXISTS sale_price_overrides (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
     item_id UUID NOT NULL REFERENCES sale_items(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id),
     user_id UUID NOT NULL REFERENCES users(id),
@@ -2037,7 +2037,7 @@ ON sale_price_overrides(sale_id);
 -- TILL SESSIONS
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS till_sessions (
+CREATE TABLE IF NOT EXISTS device_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     terminal_id UUID NOT NULL REFERENCES terminals(id),
@@ -2057,22 +2057,22 @@ CREATE TABLE IF NOT EXISTS till_sessions (
     closed_by UUID REFERENCES users(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_till_sessions_terminal
-ON till_sessions(terminal_id);
+CREATE INDEX IF NOT EXISTS idx_device_sessions_terminal
+ON device_sessions(terminal_id);
 
 -- T-TILL: at most one open session per till — makes the API's
 -- "no two simultaneously open sessions" rule atomic.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_till_sessions_open_per_terminal
-ON till_sessions(terminal_id)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_device_sessions_open_per_terminal
+ON device_sessions(terminal_id)
 WHERE status = 'open';
 
 -- ============================================================
 -- CASH MOVEMENTS
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS cash_movements (
+CREATE TABLE IF NOT EXISTS cash_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    till_session_id UUID NOT NULL REFERENCES till_sessions(id),
+    till_session_id UUID NOT NULL REFERENCES device_sessions(id),
     user_id UUID NOT NULL REFERENCES users(id),
 
     type VARCHAR(50) NOT NULL,
@@ -2084,7 +2084,7 @@ CREATE TABLE IF NOT EXISTS cash_movements (
 
 -- T-TILL: who/where recorded the movement (denormalised for audit;
 -- the session row carries till+store via its terminal).
-ALTER TABLE cash_movements
+ALTER TABLE cash_ledger
     ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS terminal_id UUID REFERENCES terminals(id) ON DELETE SET NULL;
 
@@ -2288,7 +2288,7 @@ CREATE INDEX IF NOT EXISTS idx_mobile_scanner_events_pending
 -- ONLINE ORDERS (UBER EATS / DELIVEROO)
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS online_orders (
+CREATE TABLE IF NOT EXISTS sales_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
@@ -2355,26 +2355,26 @@ CREATE TABLE IF NOT EXISTS online_orders (
 
 
 
-ALTER TABLE online_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
-ALTER TABLE online_orders ADD CONSTRAINT online_orders_status_check CHECK (
+ALTER TABLE sales_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
+ALTER TABLE sales_orders ADD CONSTRAINT online_orders_status_check CHECK (
     status IN ('RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'DRIVER_ACCEPTED', 'COLLECTED', 'OUT_FOR_DELIVERY', 'COMPLETED', 'FAILED_DELIVERY', 'RETURNED', 'REJECTED', 'CANCELLED')
 );
-ALTER TABLE online_orders
+ALTER TABLE sales_orders
     DROP CONSTRAINT IF EXISTS online_orders_platform_check;
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
-        WHERE conrelid = 'online_orders'::regclass
+        WHERE conrelid = 'sales_orders'::regclass
           AND conname = 'online_orders_platform_format_check'
     ) THEN
-        ALTER TABLE online_orders
+        ALTER TABLE sales_orders
             ADD CONSTRAINT online_orders_platform_format_check
             CHECK (platform ~ '^[a-z][a-z0-9_]{0,19}$');
     END IF;
 END $$;
 
-UPDATE online_orders AS o
+UPDATE sales_orders AS o
 SET customer_id = c.id
 FROM customers AS c
 WHERE o.customer_id IS NULL
@@ -2382,41 +2382,41 @@ WHERE o.customer_id IS NULL
   AND c.company_id = o.company_id;
 
 CREATE INDEX IF NOT EXISTS idx_online_orders_company
-ON online_orders(company_id, created_at);
+ON sales_orders(company_id, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_online_orders_status
-ON online_orders(company_id, status, created_at);
+ON sales_orders(company_id, status, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_online_orders_customer
-ON online_orders(company_id, customer_id);
+ON sales_orders(company_id, customer_id);
 CREATE INDEX IF NOT EXISTS idx_online_orders_delivery_driver
-ON online_orders(company_id, store_id, delivery_driver_id, status, delivery_route_order);
+ON sales_orders(company_id, store_id, delivery_driver_id, status, delivery_route_order);
 
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_online_order_id_fkey') THEN
         ALTER TABLE payments ADD CONSTRAINT payments_online_order_id_fkey
-            FOREIGN KEY (online_order_id) REFERENCES online_orders(id) ON DELETE SET NULL;
+            FOREIGN KEY (online_order_id) REFERENCES sales_orders(id) ON DELETE SET NULL;
     END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_payments_online_order ON payments(company_id,online_order_id);
 
 /*
  * ONLINE ORDER -> POS SALE link (column declared on the sales table above,
- * before online_orders existed; the FK is added here). The UNIQUE index is
+ * before sales_orders existed; the FK is added here). The UNIQUE index is
  * the database-level guarantee that completing an order can never create a
  * second sale, no matter how completion is retried.
  */
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_online_order
-ON sales(online_order_id);
+ON sale_ledger(online_order_id);
 
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sales_online_order') THEN
-        ALTER TABLE sales
+        ALTER TABLE sale_ledger
             ADD CONSTRAINT fk_sales_online_order
-            FOREIGN KEY (online_order_id) REFERENCES online_orders(id);
+            FOREIGN KEY (online_order_id) REFERENCES sales_orders(id);
     END IF;
 END $$;
 
@@ -2427,9 +2427,9 @@ END $$;
  * mapping_status records whether the link exists (MAPPED / UNMAPPED). Items
  * are matched by product_id and by external_item_id (the platform POS id).
  */
-CREATE TABLE IF NOT EXISTS online_order_items (
+CREATE TABLE IF NOT EXISTS sales_order_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
     product_id UUID REFERENCES products(id),
     external_item_id VARCHAR(255),
     product_name VARCHAR(255) NOT NULL,
@@ -2443,14 +2443,14 @@ CREATE TABLE IF NOT EXISTS online_order_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_online_order_items_order
-ON online_order_items(order_id);
+ON sales_order_items(order_id);
 
 CREATE INDEX IF NOT EXISTS idx_online_order_items_external
-ON online_order_items(external_item_id);
+ON sales_order_items(external_item_id);
 
 CREATE TABLE IF NOT EXISTS online_order_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
     event_type VARCHAR(50) NOT NULL,
     from_status VARCHAR(30),
     to_status VARCHAR(30),
@@ -2508,7 +2508,7 @@ CREATE TABLE IF NOT EXISTS platform_api_logs (
     success BOOLEAN,
     error_message TEXT,
     duration_ms INTEGER,
-    order_id UUID REFERENCES online_orders(id) ON DELETE SET NULL,
+    order_id UUID REFERENCES sales_orders(id) ON DELETE SET NULL,
     product_id UUID REFERENCES products(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -2602,7 +2602,7 @@ VALUES
 ('reports.products.view', 'Product Sales Report', 'View the product sales report'),
 ('reports.customers.view', 'Customer Report', 'View the customer spend report'),
 ('reports.inventory.view', 'Inventory Overview', 'View the inventory overview report'),
-('reports.inventory_movements.view', 'Stock Movement Ledger', 'View the stock movement ledger report'),
+('reports.inventory_ledger.view', 'Stock Movement Ledger', 'View the stock movement ledger report'),
 ('reports.low_stock.view', 'Low Stock Report', 'View the low stock report (included in inventory overview)'),
 ('reports.payments.view', 'Payments Report', 'View the payment method breakdown report'),
 ('reports.purchases.view', 'Purchase Report', 'View the purchase orders report'),
@@ -2811,7 +2811,7 @@ CREATE TABLE IF NOT EXISTS secure_invoice_links (
 
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID REFERENCES stores(id),
-    sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
 
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
 
@@ -2834,7 +2834,7 @@ CREATE TABLE IF NOT EXISTS temporary_receipt_downloads (
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
     till_id UUID REFERENCES terminals(id) ON DELETE SET NULL,
-    sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
     token_hash VARCHAR(64) NOT NULL UNIQUE,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DOWNLOADED', 'EXPIRED', 'REVOKED')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -3976,7 +3976,7 @@ LEFT JOIN LATERAL (
         (SELECT SUM(p.amount)::numeric FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS paid,
         (SELECT string_agg(DISTINCT p.payment_method, ', ' ORDER BY p.payment_method) FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS payment_method,
         (SELECT COUNT(*)::int FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS payment_count
-    FROM hospitality_bills b JOIN hospitality_bill_sales bs ON bs.bill_id=b.id JOIN sales sa ON sa.id=bs.sale_id
+    FROM hospitality_bills b JOIN hospitality_bill_sales bs ON bs.bill_id=b.id JOIN sale_ledger sa ON sa.id=bs.sale_id
     WHERE b.session_id=s.id AND b.company_id=s.company_id AND b.store_id=s.store_id
 ) bill_totals ON TRUE
 LEFT JOIN LATERAL (

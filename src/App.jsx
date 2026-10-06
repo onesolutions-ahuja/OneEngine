@@ -2341,7 +2341,7 @@ function Desktop({ onLock, onSignOut }) {
             onNavigate={openItem}
           />
         ) : activeApp === 'sales' ? (
-          <SalesPage initialObjectKey="sale" appKey="sales" />
+          <SalesPage initialObjectKey="sale_ledger" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
           <SupplierReturnsPage />
         ) : activeApp === 'products' ? (
@@ -2378,9 +2378,9 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'accounting' ? (
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'online-orders' ? (
-          <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
+          <WorkspacePage initialObjectKey="sales_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
-          <WorkspacePage initialObjectKey="online_order" appKey="own-delivery" />
+          <WorkspacePage initialObjectKey="sales_order" appKey="own-delivery" />
         ) : activeApp === 'kiosk-display' ? (
           <OneKioskDisplayPage />
         ) : activeApp === 'kiosk-devices' ? (

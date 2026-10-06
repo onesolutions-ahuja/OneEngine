@@ -16,8 +16,8 @@
       "template"
     ],
     "objects": [
-      "online_order",
-      "online_order_line"
+      "sales_order",
+      "sales_order_line"
     ],
     "relationships": [
       "order_lines",
@@ -71,12 +71,12 @@
   },
   "objects": [
     {
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "metadataScope": "global",
-      "label": "Online Order",
-      "pluralLabel": "Online Orders",
-      "description": "Canonical provider-neutral online order record.",
-      "sourceTable": "online_orders",
+      "label": "Sales Order",
+      "pluralLabel": "Sales Orders",
+      "description": "Canonical sales order record.",
+      "sourceTable": "sales_orders",
       "required": true,
       "fields": [
         {
@@ -236,12 +236,12 @@
       }
     },
     {
-      "objectKey": "online_order_line",
+      "objectKey": "sales_order_line",
       "metadataScope": "global",
       "label": "Online Order Line",
       "pluralLabel": "Online Order Lines",
       "description": "Existing online order item rows and Product Core references.",
-      "sourceTable": "online_order_items",
+      "sourceTable": "sales_order_items",
       "required": true,
       "fields": [
         {
@@ -336,21 +336,24 @@
         }
       ],
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       }
     }
   ],
   "relationships": [
     {
-      "parentObjectKey": "online_order",
-      "childObjectKey": "online_order_line",
+      "parentObjectKey": "sales_order",
+      "childObjectKey": "sales_order_line",
       "relationshipKey": "order_lines",
       "relationshipType": "one_to_many",
       "childFieldApiName": "order_id",
       "required": true
     },
     {
-      "parentObjectKey": "online_order_line",
+      "parentObjectKey": "sales_order_line",
       "childObjectKey": "product",
       "relationshipKey": "product",
       "relationshipType": "lookup",
@@ -358,14 +361,14 @@
     },
     {
       "parentObjectKey": "customer",
-      "childObjectKey": "online_order",
+      "childObjectKey": "sales_order",
       "relationshipKey": "online_orders",
       "relationshipType": "one_to_many",
       "childFieldApiName": "customer_id"
     },
     {
       "parentObjectKey": "store",
-      "childObjectKey": "online_order",
+      "childObjectKey": "sales_order",
       "relationshipKey": "online_orders",
       "relationshipType": "one_to_many",
       "childFieldApiName": "store_id"
@@ -373,7 +376,7 @@
   ],
   "listViews": [
     {
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "viewKey": "all",
       "label": "All Online Orders",
       "columns": [
@@ -396,7 +399,7 @@
   ],
   "layouts": [
     {
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "layoutKey": "online_order_detail",
       "pageType": "detail",
       "name": "Online Order Details",
@@ -546,7 +549,7 @@
   ],
   "forms": [
     {
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "formKey": "online_order_create",
       "pageType": "create",
       "name": "Online Order Create",
@@ -560,7 +563,7 @@
       ]
     },
     {
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "formKey": "online_order_edit",
       "pageType": "edit",
       "name": "Online Order Edit",
@@ -578,7 +581,7 @@
   ],
   "validationRules": [
     {
-      "objectKey": "online_order_line",
+      "objectKey": "sales_order_line",
       "name": "online_order_line_quantity_positive",
       "triggerKey": "before_create",
       "conditions": [
@@ -608,7 +611,7 @@
   ],
   "workflows": [
     {
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "name": "Online Order Transition",
       "apiName": "ONLINE_ORDER_TRANSITION",
       "triggerKey": "manual",
@@ -634,7 +637,7 @@
           "label": "Get Online Order",
           "apiName": "get_online_order",
           "key": "GET_RECORDS",
-          "objectKey": "online_order",
+          "objectKey": "sales_order",
           "filters": [
             {
               "field": "id",
@@ -1061,7 +1064,7 @@
           "label": "Update Online Order Status",
           "apiName": "update_online_order_status",
           "key": "UPDATE_RECORD",
-          "objectKey": "online_order",
+          "objectKey": "sales_order",
           "recordId": {
             "path": "variables.orderId"
           },
@@ -1106,7 +1109,7 @@
               "label": "Get Online Order",
               "apiName": "get_online_order",
               "key": "GET_RECORDS",
-              "objectKey": "online_order",
+              "objectKey": "sales_order",
               "filters": [
                 {
                   "field": "id",
@@ -1577,7 +1580,7 @@
               "label": "Update Online Order Status",
               "apiName": "update_online_order_status",
               "key": "UPDATE_RECORD",
-              "objectKey": "online_order",
+              "objectKey": "sales_order",
               "recordId": {
                 "path": "variables.orderId"
               },
@@ -1629,7 +1632,7 @@
   "actions": [
     {
       "actionKey": "online_order.accept",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Accept Order",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1645,7 +1648,7 @@
     },
     {
       "actionKey": "online_order.reject",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Reject Order",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1661,7 +1664,7 @@
     },
     {
       "actionKey": "online_order.prepare",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Prepare Order",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1677,7 +1680,7 @@
     },
     {
       "actionKey": "online_order.mark_ready",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Mark Ready",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1693,7 +1696,7 @@
     },
     {
       "actionKey": "online_order.mark_ready_for_pickup",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Mark Ready for Pickup",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1709,7 +1712,7 @@
     },
     {
       "actionKey": "online_order.mark_ready_for_delivery",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Mark Ready for Delivery",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1725,7 +1728,7 @@
     },
     {
       "actionKey": "online_order.collect",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Collect Order",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1741,7 +1744,7 @@
     },
     {
       "actionKey": "online_order.complete",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Complete Order",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1757,7 +1760,7 @@
     },
     {
       "actionKey": "online_order.cancel",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Cancel Order",
       "handlerKey": "RUN_SUBFLOW",
       "requiredPermission": "online_orders.manage",
@@ -1775,7 +1778,7 @@
   "buttons": [
     {
       "buttonKey": "online_order_accept",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Accept Order",
       "actionKey": "online_order.accept",
       "requiredPermission": "online_orders.manage",
@@ -1794,7 +1797,7 @@
     },
     {
       "buttonKey": "online_order_reject",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Reject",
       "actionKey": "online_order.reject",
       "requiredPermission": "online_orders.manage",
@@ -1813,7 +1816,7 @@
     },
     {
       "buttonKey": "online_order_ready",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Mark Ready",
       "actionKey": "online_order.mark_ready",
       "requiredPermission": "online_orders.manage",
@@ -1835,7 +1838,7 @@
     },
     {
       "buttonKey": "online_order_complete",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Complete Order",
       "actionKey": "online_order.complete",
       "requiredPermission": "online_orders.manage",
@@ -1854,7 +1857,7 @@
     },
     {
       "buttonKey": "online_order_cancel",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Cancel",
       "actionKey": "online_order.cancel",
       "requiredPermission": "online_orders.manage",
@@ -1878,7 +1881,7 @@
     },
     {
       "buttonKey": "online_order_prepare",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Prepare",
       "actionKey": "online_order.prepare",
       "requiredPermission": "online_orders.manage",
@@ -1896,7 +1899,7 @@
     },
     {
       "buttonKey": "online_order_ready_pickup",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Ready for Pickup",
       "actionKey": "online_order.mark_ready_for_pickup",
       "requiredPermission": "online_orders.manage",
@@ -1914,7 +1917,7 @@
     },
     {
       "buttonKey": "online_order_ready_delivery",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Ready for Delivery",
       "actionKey": "online_order.mark_ready_for_delivery",
       "requiredPermission": "online_orders.manage",
@@ -1932,7 +1935,7 @@
     },
     {
       "buttonKey": "online_order_collect",
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "label": "Collect",
       "actionKey": "online_order.collect",
       "requiredPermission": "online_orders.manage",

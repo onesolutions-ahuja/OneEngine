@@ -200,7 +200,7 @@ export async function loadPublicReceiptData({ db, companyId, saleId }) {
       `SELECT s.*, st.name AS store_name, st.address_line1, st.address_line2, st.city, st.postcode, st.phone AS store_phone,
               u.username AS cashier, cst.name AS customer_name, cst.phone AS customer_phone, cst.email AS customer_email,
               c.name AS company_name, c.email AS company_email, c.phone AS company_phone, c.currency AS company_currency, c.timezone AS company_timezone
-       FROM sales s
+       FROM sale_ledger s
        LEFT JOIN stores st ON st.id = s.store_id
        LEFT JOIN companies c ON c.id = s.company_id
        LEFT JOIN users u ON u.id = s.user_id

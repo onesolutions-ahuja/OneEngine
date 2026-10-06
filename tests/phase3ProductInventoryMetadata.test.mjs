@@ -7,7 +7,7 @@ const readJson = async (name) => JSON.parse(await readFile(new URL(`../server/me
 test("Phase 3 Product and Inventory metadata has canonical ownership", async () => {
   const [products, inventory, batch] = await Promise.all([readJson("products"), readJson("inventory"), readJson("batch_expiry")]);
   assert.deepEqual(products.objects.map(x => x.objectKey).sort(), ["category","product"]);
-  for (const key of ["inventory_movement","store_stock","inventory_balance"]) assert.ok(inventory.objects.some(x => x.objectKey === key), key);
+  for (const key of ["inventory_ledger","store_stock","inventory_balance"]) assert.ok(inventory.objects.some(x => x.objectKey === key), key);
   assert.ok(batch.objects.some(x => x.objectKey === "inventory_batch"));
   for (const manifest of [products, inventory, batch]) {
     for (const object of manifest.objects) assert.equal(object.config?.flowWritesOnly, true, object.objectKey + " must reject direct generic writes outside Flow");
@@ -31,6 +31,6 @@ test("Phase 3 legacy inventory business engine and server injection stay removed
 test("Phase 3 inventory validation is metadata owned", async () => {
   const inventory = await readJson("inventory");
   const batch = await readJson("batch_expiry");
-  assert.ok(inventory.rules.some(x => x.objectKey === "inventory_movement" && /cannot be zero/i.test(x.name)));
+  assert.ok(inventory.rules.some(x => x.objectKey === "inventory_ledger" && /cannot be zero/i.test(x.name)));
   assert.ok(batch.rules.some(x => x.objectKey === "inventory_batch" && /quantity cannot be negative/i.test(x.name)));
 });

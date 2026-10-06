@@ -6,10 +6,10 @@
   "description": "Canonical inventory ledger and store stock metadata.",
   "objects": [
     {
-      "objectKey": "inventory_movement",
+      "objectKey": "inventory_ledger",
       "label": "Inventory Movement",
       "pluralLabel": "Inventory Movements",
-      "sourceTable": "inventory_movements",
+      "sourceTable": "inventory_ledger",
       "config": {
         "flowWritesOnly": true
       },
@@ -226,15 +226,15 @@
   "relationships": [
     {
       "parentObjectKey": "product",
-      "childObjectKey": "inventory_movement",
-      "relationshipKey": "inventory_movements",
+      "childObjectKey": "inventory_ledger",
+      "relationshipKey": "inventory_ledger",
       "relationshipType": "one_to_many",
       "childFieldApiName": "product_id"
     },
     {
       "parentObjectKey": "store",
-      "childObjectKey": "inventory_movement",
-      "relationshipKey": "inventory_movements",
+      "childObjectKey": "inventory_ledger",
+      "relationshipKey": "inventory_ledger",
       "relationshipType": "one_to_many",
       "childFieldApiName": "store_id"
     },
@@ -255,7 +255,7 @@
   ],
   "listViews": [
     {
-      "objectKey": "inventory_movement",
+      "objectKey": "inventory_ledger",
       "viewKey": "all",
       "label": "Inventory Ledger",
       "columns": [
@@ -284,7 +284,7 @@
   ],
   "rules": [
     {
-      "objectKey": "inventory_movement",
+      "objectKey": "inventory_ledger",
       "name": "Inventory movement quantity cannot be zero",
       "triggerKey": "before_save",
       "conditions": [

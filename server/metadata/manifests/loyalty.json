@@ -101,7 +101,7 @@
       "label": "Loyalty Activity",
       "pluralLabel": "Loyalty Activity",
       "description": "Canonical loyalty earn, redemption, reversal and adjustment ledger.",
-      "sourceTable": "customer_loyalty_transactions",
+      "sourceTable": "customer_loyalty_ledger",
       "fields": [
         {
           "apiName": "company_id",
@@ -255,14 +255,14 @@
     },
     {
       "parentObjectKey": "loyalty_activity",
-      "childObjectKey": "sale",
+      "childObjectKey": "sale_ledger",
       "relationshipKey": "sale",
       "relationshipType": "lookup",
       "childFieldApiName": "reference_id",
       "referenceType": "sale"
     },
     {
-      "parentObjectKey": "sale",
+      "parentObjectKey": "sale_ledger",
       "childObjectKey": "loyalty_activity",
       "relationshipKey": "loyalty_activity",
       "relationshipType": "one_to_many",
@@ -329,7 +329,7 @@
   "references": [
     {
       "packageKey": "retail_pos",
-      "objectKey": "sale",
+      "objectKey": "sale_ledger",
       "purpose": "Sale reference for earning, redemption and reversal activity"
     },
     {

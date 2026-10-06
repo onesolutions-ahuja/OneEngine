@@ -78,7 +78,7 @@ export async function createSecureInvoiceLink({
   // The link may only ever be created by/for a sale the caller's tenant owns.
   const saleCheck = await db(
     `SELECT s.id, s.company_id, s.store_id, s.customer_id
-     FROM sales s
+     FROM sale_ledger s
      WHERE s.id = $1 AND s.company_id = $2
      ${storeId ? "AND s.store_id = $3" : ""}
      LIMIT 1`,
@@ -144,7 +144,7 @@ export async function validateSecureInvoiceToken({ db, token, includeSale = true
       `SELECT s.id, s.company_id, s.store_id, s.receipt_number, s.subtotal,
               s.tax, s.discount, s.total, s.status, s.created_at, s.completed_at,
               c.timezone AS company_timezone, c.currency AS company_currency
-       FROM sales s
+       FROM sale_ledger s
        INNER JOIN companies c ON c.id = s.company_id
        WHERE s.id = $1 AND s.company_id = $2
        ${link.store_id ? "AND s.store_id = $3" : ""}

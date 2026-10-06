@@ -1736,7 +1736,7 @@ export default function createConnectorsRouter({
   router.get("/connector-capabilities/:capabilityKey", authenticate, authorize("sale.create"), async (req, res) => {
     try {
       let session = await db(
-        `SELECT terminal_id,store_id FROM till_sessions
+        `SELECT terminal_id,store_id FROM device_sessions
           WHERE company_id=$1 AND store_id=$2 AND status='open'
           ORDER BY opened_at DESC LIMIT 1`,
         [req.user.companyId, req.user.storeId]
@@ -1744,7 +1744,7 @@ export default function createConnectorsRouter({
       if (!session.rows[0] && req.user.id) {
         session = await db(
           `SELECT ts.terminal_id,ts.store_id
-             FROM till_sessions ts
+             FROM device_sessions ts
              JOIN integration_connections c
                ON c.company_id=ts.company_id
               AND c.till_id=ts.terminal_id

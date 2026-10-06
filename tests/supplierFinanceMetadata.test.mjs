@@ -58,6 +58,17 @@ test("bootstrap foundations honor dependency order", async () => {
 });
 
 
+test("supplier finance child storage is hidden from standalone OneIDs", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../server/metadata/manifests/finance_core.json", import.meta.url), "utf8"));
+  for (const key of ["supplier_invoice","supplier_payment","supplier_payment_allocation"]) {
+    const object = manifest.objects.find((item) => item.objectKey === key);
+    assert.ok(object, key);
+    assert.equal(object.config?.internal, true, key);
+    assert.equal(object.config?.childStorage, true, key);
+    assert.equal(object.config?.generateOneId, false, key);
+  }
+});
+
 test("supplier finance legacy route is removed and writes remain Flow-owned", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/supplierAccounts.js"), false);

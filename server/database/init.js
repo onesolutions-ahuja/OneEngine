@@ -295,7 +295,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         await client.query("ALTER TABLE terminals ALTER COLUMN company_id SET NOT NULL");
         await client.query("CREATE INDEX IF NOT EXISTS idx_terminals_company_store ON terminals(company_id,store_id)");
-        await client.query("CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date ON sales(company_id,store_id,status,created_at DESC)");
+        await client.query("CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date ON sale_ledger(company_id,store_id,status,created_at DESC)");
       },
     },
     {
@@ -849,7 +849,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
             payment_terminal_id UUID REFERENCES payment_terminals(id) ON DELETE SET NULL,
             payment_connector_id UUID REFERENCES integration_connections(id) ON DELETE SET NULL,
             printer_connector_id UUID REFERENCES integration_connections(id) ON DELETE SET NULL,
-            printer_hardware_id UUID REFERENCES hardware_configurations(id) ON DELETE SET NULL,
+            printer_hardware_id UUID REFERENCES hardware_devices(id) ON DELETE SET NULL,
             printer_name VARCHAR(150),
             printer_connection_type VARCHAR(50),
             printer_connection_address VARCHAR(500),
@@ -881,15 +881,15 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       name: "Scope configured hardware and payment terminals to a workstation device key",
       up: async client => {
         await client.query(`
-          ALTER TABLE hardware_configurations
+          ALTER TABLE hardware_devices
             ADD COLUMN IF NOT EXISTS device_key VARCHAR(120) NOT NULL DEFAULT 'legacy-unassigned';
           ALTER TABLE payment_terminals
             ADD COLUMN IF NOT EXISTS device_key VARCHAR(120) NOT NULL DEFAULT 'legacy-unassigned';
-          ALTER TABLE hardware_configurations
-            DROP CONSTRAINT IF EXISTS hardware_configurations_company_id_store_id_device_type_key;
-          DROP INDEX IF EXISTS hardware_configurations_company_id_store_id_device_type_key;
-          CREATE UNIQUE INDEX IF NOT EXISTS uq_hardware_configurations_device
-            ON hardware_configurations(company_id, store_id, device_key, device_type);
+          ALTER TABLE hardware_devices
+            DROP CONSTRAINT IF EXISTS hardware_devices_company_id_store_id_device_type_key;
+          DROP INDEX IF EXISTS hardware_devices_company_id_store_id_device_type_key;
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_hardware_devices_device
+            ON hardware_devices(company_id, store_id, device_key, device_type);
           CREATE INDEX IF NOT EXISTS idx_payment_terminals_device
             ON payment_terminals(company_id, store_id, device_key, active);
         `);
@@ -1946,7 +1946,7 @@ async function initializeLegacyDatabase(pool) {
     /* Order-level discount audit trail for any discount applied to a sale. */
     CREATE TABLE IF NOT EXISTS sale_discounts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      sale_id UUID REFERENCES sales(id) ON DELETE CASCADE,
+      sale_id UUID REFERENCES sale_ledger(id) ON DELETE CASCADE,
       item_id UUID REFERENCES sale_items(id) ON DELETE CASCADE,
       user_id UUID NOT NULL REFERENCES users(id),
       type VARCHAR(20) NOT NULL,
@@ -1959,7 +1959,7 @@ async function initializeLegacyDatabase(pool) {
     /* Manual price override audit trail (sale.price_change permission). */
     CREATE TABLE IF NOT EXISTS sale_price_overrides (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
       item_id UUID NOT NULL REFERENCES sale_items(id) ON DELETE CASCADE,
       product_id UUID NOT NULL REFERENCES products(id),
       user_id UUID NOT NULL REFERENCES users(id),
@@ -2105,7 +2105,7 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_payment_terminals_company
     ON payment_terminals(company_id, store_id);
 
-    CREATE TABLE IF NOT EXISTS hardware_configurations (
+    CREATE TABLE IF NOT EXISTS hardware_devices (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
@@ -2125,8 +2125,8 @@ async function initializeLegacyDatabase(pool) {
       UNIQUE (company_id, store_id, device_type)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_hardware_configurations_store
-    ON hardware_configurations(company_id, store_id);
+    CREATE INDEX IF NOT EXISTS idx_hardware_devices_store
+    ON hardware_devices(company_id, store_id);
     ALTER TABLE kiosk_devices
       DROP CONSTRAINT IF EXISTS kiosk_devices_payment_terminal_id_fkey;
     ALTER TABLE kiosk_devices
@@ -2136,7 +2136,7 @@ async function initializeLegacyDatabase(pool) {
       DROP CONSTRAINT IF EXISTS kiosk_devices_printer_hardware_id_fkey;
     ALTER TABLE kiosk_devices
       ADD CONSTRAINT kiosk_devices_printer_hardware_id_fkey
-      FOREIGN KEY (printer_hardware_id) REFERENCES hardware_configurations(id) ON DELETE SET NULL;
+      FOREIGN KEY (printer_hardware_id) REFERENCES hardware_devices(id) ON DELETE SET NULL;
 
     CREATE TABLE IF NOT EXISTS server_settings (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2597,7 +2597,7 @@ async function initializeLegacyDatabase(pool) {
      * session); receipt_number is prefixed SCANANDGO-<session> so reporting
      * can identify the channel without a schema change. */
 
-    CREATE TABLE IF NOT EXISTS inventory_movements (
+    CREATE TABLE IF NOT EXISTS inventory_ledger (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       product_id UUID NOT NULL REFERENCES products(id),
@@ -2631,11 +2631,11 @@ async function initializeLegacyDatabase(pool) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    ALTER TABLE inventory_movements
-      DROP CONSTRAINT IF EXISTS inventory_movements_movement_type_check;
+    ALTER TABLE inventory_ledger
+      DROP CONSTRAINT IF EXISTS inventory_ledger_movement_type_check;
 
-    ALTER TABLE inventory_movements
-      ADD CONSTRAINT inventory_movements_movement_type_check CHECK (
+    ALTER TABLE inventory_ledger
+      ADD CONSTRAINT inventory_ledger_movement_type_check CHECK (
         movement_type IN (
           'OPENING', 'PURCHASE', 'SALE', 'CUSTOMER_RETURN',
           'SUPPLIER_RETURN', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT',
@@ -2647,23 +2647,23 @@ async function initializeLegacyDatabase(pool) {
 
     /* Legacy installations may have been created before batch/transaction
        tracking was introduced; add columns before creating their indexes. */
-    ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS batch_id UUID;
-    ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS transaction_id UUID;
+    ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS batch_id UUID;
+    ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS transaction_id UUID;
 
-    CREATE INDEX IF NOT EXISTS idx_inventory_movements_product
-    ON inventory_movements(product_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_inventory_ledger_product
+    ON inventory_ledger(product_id, created_at);
 
-    CREATE INDEX IF NOT EXISTS idx_inventory_movements_company
-    ON inventory_movements(company_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_inventory_ledger_company
+    ON inventory_ledger(company_id, created_at);
 
-    CREATE INDEX IF NOT EXISTS idx_inventory_movements_type
-    ON inventory_movements(movement_type, created_at);
+    CREATE INDEX IF NOT EXISTS idx_inventory_ledger_type
+    ON inventory_ledger(movement_type, created_at);
 
-    CREATE INDEX IF NOT EXISTS idx_inventory_movements_batch
-    ON inventory_movements(batch_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_inventory_ledger_batch
+    ON inventory_ledger(batch_id, created_at);
 
-    CREATE INDEX IF NOT EXISTS idx_inventory_movements_transaction
-    ON inventory_movements(transaction_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_inventory_ledger_transaction
+    ON inventory_ledger(transaction_id, created_at);
 
     /*
      * STOCK BY STORE — store/location-level stock positions.
@@ -2673,7 +2673,7 @@ async function initializeLegacyDatabase(pool) {
      * the unique constraint prevents duplicate stock records for the same
      * product at the same store. product_store_stock is updated only via
      * services/inventory.js createInventoryMovement, which keeps it in step
-     * with the inventory_movements ledger and the products.stock_quantity
+     * with the inventory_ledger ledger and the products.stock_quantity
      * company aggregate in the same transaction.
      */
     CREATE TABLE IF NOT EXISTS product_store_stock (
@@ -2748,8 +2748,8 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_inventory_batches_expiry
     ON inventory_batches(company_id, store_id, expiry_date);
 
-    ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS batch_id UUID;
-    ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS transaction_id UUID;
+    ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS batch_id UUID;
+    ALTER TABLE inventory_ledger ADD COLUMN IF NOT EXISTS transaction_id UUID;
     ALTER TABLE inventory_batches ADD COLUMN IF NOT EXISTS manufacturing_date DATE;
     ALTER TABLE inventory_batches ADD COLUMN IF NOT EXISTS manufacturing_date_source VARCHAR(10);
     ALTER TABLE inventory_batches ADD COLUMN IF NOT EXISTS expiry_date_source VARCHAR(10);
@@ -2795,7 +2795,7 @@ async function initializeLegacyDatabase(pool) {
      * same products.stock_quantity pool the POS uses, via ONLINE_RESERVE /
      * ONLINE_RELEASE inventory movements.
      */
-    CREATE TABLE IF NOT EXISTS online_orders (
+    CREATE TABLE IF NOT EXISTS sales_orders (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
@@ -2845,30 +2845,30 @@ async function initializeLegacyDatabase(pool) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT online_orders_platform_external_unique UNIQUE (company_id, platform, external_order_id)
     );
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_assigned_at TIMESTAMPTZ;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_route_order INTEGER;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_status_note TEXT;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS out_for_delivery_at TIMESTAMPTZ;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS failed_delivery_at TIMESTAMPTZ;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ;
-    ALTER TABLE online_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
-    ALTER TABLE online_orders ADD CONSTRAINT online_orders_status_check CHECK (
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_assigned_at TIMESTAMPTZ;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_route_order INTEGER;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_status_note TEXT;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS out_for_delivery_at TIMESTAMPTZ;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS failed_delivery_at TIMESTAMPTZ;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ;
+    ALTER TABLE sales_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
+    ALTER TABLE sales_orders ADD CONSTRAINT online_orders_status_check CHECK (
       status IN ('RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'DRIVER_ACCEPTED', 'COLLECTED', 'OUT_FOR_DELIVERY', 'COMPLETED', 'FAILED_DELIVERY', 'RETURNED', 'REJECTED', 'CANCELLED')
     );
 
     CREATE INDEX IF NOT EXISTS idx_online_orders_company
-    ON online_orders(company_id, created_at);
+    ON sales_orders(company_id, created_at);
 
     CREATE INDEX IF NOT EXISTS idx_online_orders_status
-    ON online_orders(company_id, status, created_at);
+    ON sales_orders(company_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_online_orders_delivery_driver
-    ON online_orders(company_id, store_id, delivery_driver_id, status, delivery_route_order);
+    ON sales_orders(company_id, store_id, delivery_driver_id, status, delivery_route_order);
 
-    CREATE TABLE IF NOT EXISTS online_order_items (
+    CREATE TABLE IF NOT EXISTS sales_order_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      order_id UUID NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+      order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
       product_id UUID REFERENCES products(id),
       external_item_id VARCHAR(255),
       product_name VARCHAR(255) NOT NULL,
@@ -2882,31 +2882,31 @@ async function initializeLegacyDatabase(pool) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_online_order_items_order
-    ON online_order_items(order_id);
+    ON sales_order_items(order_id);
 
     CREATE INDEX IF NOT EXISTS idx_online_order_items_external
-    ON online_order_items(external_item_id);
+    ON sales_order_items(external_item_id);
 
     /*
      * Incoming platform items may arrive WITHOUT a onePOS product mapping;
      * those are stored (never dropped) with product_id NULL and
      * mapping_status 'UNMAPPED' so the mapping UI can be built later.
      */
-    ALTER TABLE online_order_items
+    ALTER TABLE sales_order_items
       ALTER COLUMN product_id DROP NOT NULL;
 
-    ALTER TABLE online_order_items
+    ALTER TABLE sales_order_items
       ADD COLUMN IF NOT EXISTS mapping_status VARCHAR(20) NOT NULL DEFAULT 'MAPPED';
-    ALTER TABLE online_orders
+    ALTER TABLE sales_orders
       ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL;
-    ALTER TABLE online_orders
+    ALTER TABLE sales_orders
       ADD COLUMN IF NOT EXISTS customer_data JSONB;
     CREATE INDEX IF NOT EXISTS idx_online_orders_customer
-      ON online_orders(company_id, customer_id);
+      ON sales_orders(company_id, customer_id);
 
     CREATE TABLE IF NOT EXISTS online_order_events (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      order_id UUID NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+      order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
       event_type VARCHAR(50) NOT NULL,
       from_status VARCHAR(30),
       to_status VARCHAR(30),
@@ -2943,7 +2943,7 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_deliveroo_item_mappings_company
     ON deliveroo_item_mappings(company_id, external_item_id);
 
-    ALTER TABLE online_orders
+    ALTER TABLE sales_orders
       ADD COLUMN IF NOT EXISTS inventory_reserved BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS inventory_released BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50),
@@ -2976,7 +2976,7 @@ async function initializeLegacyDatabase(pool) {
       success BOOLEAN,
       error_message TEXT,
       duration_ms INTEGER,
-      order_id UUID REFERENCES online_orders(id) ON DELETE SET NULL,
+      order_id UUID REFERENCES sales_orders(id) ON DELETE SET NULL,
       product_id UUID REFERENCES products(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -2990,7 +2990,7 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_platform_api_logs_order
     ON platform_api_logs(order_id);
 
-    INSERT INTO inventory_movements (
+    INSERT INTO inventory_ledger (
       company_id, product_id, store_id, movement_type,
       quantity_change, balance_after, reference_type, reason
     )
@@ -3009,7 +3009,7 @@ async function initializeLegacyDatabase(pool) {
     ) store ON true
     WHERE NOT EXISTS (
       SELECT 1
-      FROM inventory_movements existing
+      FROM inventory_ledger existing
       WHERE existing.product_id = p.id
     );
 
@@ -3034,7 +3034,7 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_suppliers_company
     ON suppliers(company_id);
 
-    CREATE TABLE IF NOT EXISTS purchases (
+    CREATE TABLE IF NOT EXISTS purchase_ledger (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID NOT NULL REFERENCES stores(id),
@@ -3058,7 +3058,7 @@ async function initializeLegacyDatabase(pool) {
 
     CREATE TABLE IF NOT EXISTS purchase_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      purchase_id UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+      purchase_id UUID NOT NULL REFERENCES purchase_ledger(id) ON DELETE CASCADE,
       product_id UUID NOT NULL REFERENCES products(id),
       quantity NUMERIC(12,3) NOT NULL CHECK (quantity > 0),
       received_quantity NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (received_quantity >= 0 AND received_quantity <= quantity),
@@ -3071,7 +3071,7 @@ async function initializeLegacyDatabase(pool) {
     ALTER TABLE purchase_items ADD COLUMN IF NOT EXISTS manufacturing_date DATE;
 
     CREATE INDEX IF NOT EXISTS idx_purchases_company_date
-    ON purchases(company_id, purchase_date DESC);
+    ON purchase_ledger(company_id, purchase_date DESC);
 
     CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase
     ON purchase_items(purchase_id);
@@ -3083,14 +3083,14 @@ async function initializeLegacyDatabase(pool) {
       ADD COLUMN IF NOT EXISTS expiry_date DATE;
     ALTER TABLE purchase_items
       ADD COLUMN IF NOT EXISTS received_quantity NUMERIC(12,3) NOT NULL DEFAULT 0;
-    ALTER TABLE purchases DROP CONSTRAINT IF EXISTS purchases_status_check;
-    ALTER TABLE purchases ADD CONSTRAINT purchases_status_check
+    ALTER TABLE purchase_ledger DROP CONSTRAINT IF EXISTS purchases_status_check;
+    ALTER TABLE purchase_ledger ADD CONSTRAINT purchases_status_check
       CHECK (status IN ('DRAFT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'));
 
     CREATE TABLE IF NOT EXISTS purchase_receipts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-      purchase_id UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+      purchase_id UUID NOT NULL REFERENCES purchase_ledger(id) ON DELETE CASCADE,
       store_id UUID NOT NULL REFERENCES stores(id),
       received_by UUID REFERENCES users(id) ON DELETE SET NULL,
       received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -3174,7 +3174,7 @@ async function initializeLegacyDatabase(pool) {
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
       store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
-      purchase_id UUID REFERENCES purchases(id) ON DELETE SET NULL,
+      purchase_id UUID REFERENCES purchase_ledger(id) ON DELETE SET NULL,
       invoice_number VARCHAR(100) NOT NULL,
       invoice_date DATE NOT NULL DEFAULT CURRENT_DATE, due_date DATE,
       subtotal NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
@@ -3251,7 +3251,7 @@ async function initializeLegacyDatabase(pool) {
     );
 
     /* T10Y — customer credit account (credit OFF by default; balance is
-       derived from customer_credit_ledger, never stored here). */
+       derived from customer_ledger, never stored here). */
     ALTER TABLE customers
       ADD COLUMN IF NOT EXISTS credit_enabled BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12,2) NULL;
@@ -3281,7 +3281,7 @@ async function initializeLegacyDatabase(pool) {
 
     /* T10Y — immutable customer credit ledger; balance is derived via
        SUM(amount * sign) over transaction_type (see services/customerCredit.js). */
-    CREATE TABLE IF NOT EXISTS customer_credit_ledger (
+    CREATE TABLE IF NOT EXISTS customer_ledger (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID NULL REFERENCES stores(id) ON DELETE SET NULL,
@@ -3305,10 +3305,10 @@ async function initializeLegacyDatabase(pool) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_credit_ledger_customer
-    ON customer_credit_ledger(company_id, customer_id, created_at DESC);
+    ON customer_ledger(company_id, customer_id, created_at DESC);
 
     CREATE INDEX IF NOT EXISTS idx_credit_ledger_reference
-    ON customer_credit_ledger(reference_type, reference_id);
+    ON customer_ledger(reference_type, reference_id);
     CREATE TABLE IF NOT EXISTS customer_loyalty_balances (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -3321,7 +3321,7 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_loyalty_balances_customer
     ON customer_loyalty_balances(customer_id);
 
-    CREATE TABLE IF NOT EXISTS customer_loyalty_transactions (
+    CREATE TABLE IF NOT EXISTS customer_loyalty_ledger (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -3336,16 +3336,16 @@ async function initializeLegacyDatabase(pool) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_customer
-    ON customer_loyalty_transactions(customer_id, created_at DESC);
+    ON customer_loyalty_ledger(customer_id, created_at DESC);
 
     CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_reference
-    ON customer_loyalty_transactions(reference_type, reference_id);
+    ON customer_loyalty_ledger(reference_type, reference_id);
 
     /* T10R: idempotent earning. At most one EARN per sale, enforced by the
      * database so a retried/lost-acknowledgement sale can never award
      * points twice. Balance upserts must be reversed when this fires. */
     CREATE UNIQUE INDEX IF NOT EXISTS uq_loyalty_earn_per_sale
-    ON customer_loyalty_transactions (company_id, reference_id)
+    ON customer_loyalty_ledger (company_id, reference_id)
     WHERE transaction_type = 'EARN' AND reference_type = 'sale';
 
     /* T10R: manual/admin point adjustments - permission-controlled,
@@ -3377,7 +3377,7 @@ async function initializeLegacyDatabase(pool) {
       issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (company_id, code)
     );
-    CREATE TABLE IF NOT EXISTS gift_card_transactions (
+    CREATE TABLE IF NOT EXISTS gift_card_ledger (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       gift_card_id UUID NOT NULL REFERENCES gift_cards(id) ON DELETE CASCADE,
@@ -3391,11 +3391,11 @@ async function initializeLegacyDatabase(pool) {
       created_by UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_gift_card_transactions_card ON gift_card_transactions(company_id, gift_card_id, created_at);
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_gift_card_redeem_sale ON gift_card_transactions(company_id, gift_card_id, reference_id)
+    CREATE INDEX IF NOT EXISTS idx_gift_card_ledger_card ON gift_card_ledger(company_id, gift_card_id, created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_gift_card_redeem_sale ON gift_card_ledger(company_id, gift_card_id, reference_id)
     WHERE transaction_type = 'redeem' AND reference_type = 'sale';
 
-    CREATE TABLE IF NOT EXISTS sales (
+    CREATE TABLE IF NOT EXISTS sale_ledger (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id),
       store_id UUID NOT NULL REFERENCES stores(id),
@@ -3414,26 +3414,26 @@ async function initializeLegacyDatabase(pool) {
       completed_at TIMESTAMPTZ,
       /*
        * ONLINE ORDER -> POS SALE: set when an Uber Eats / Deliveroo order is
-       * completed (online_orders exists further up in this script). The
+       * completed (sales_orders exists further up in this script). The
        * UNIQUE index below makes duplicate sales on retry impossible.
        */
       online_order_id UUID
     );
-    ALTER TABLE sales ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(20) NOT NULL DEFAULT 'SALE';
-    ALTER TABLE sales ADD COLUMN IF NOT EXISTS original_transaction_id UUID REFERENCES sales(id) ON DELETE SET NULL;
-    ALTER TABLE sales ADD COLUMN IF NOT EXISTS net_amount NUMERIC(12,2);
-    ALTER TABLE sales ADD COLUMN IF NOT EXISTS hospitality_service_charge_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
-    ALTER TABLE sales ADD COLUMN IF NOT EXISTS hospitality_service_charge_tax NUMERIC(12,2) NOT NULL DEFAULT 0;
-    CREATE INDEX IF NOT EXISTS idx_sales_transaction_type ON sales(company_id, transaction_type, created_at);
-    CREATE INDEX IF NOT EXISTS idx_sales_original_transaction ON sales(original_transaction_id);
+    ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(20) NOT NULL DEFAULT 'SALE';
+    ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS original_transaction_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
+    ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS net_amount NUMERIC(12,2);
+    ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS hospitality_service_charge_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+    ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS hospitality_service_charge_tax NUMERIC(12,2) NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_sales_transaction_type ON sale_ledger(company_id, transaction_type, created_at);
+    CREATE INDEX IF NOT EXISTS idx_sales_original_transaction ON sale_ledger(original_transaction_id);
 
-    ALTER TABLE sales
+    ALTER TABLE sale_ledger
       ADD COLUMN IF NOT EXISTS client_request_id UUID;
-    ALTER TABLE sales
+    ALTER TABLE sale_ledger
       ADD COLUMN IF NOT EXISTS client_request_fingerprint TEXT;
 
     CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_client_request
-    ON sales(company_id, client_request_id);
+    ON sale_ledger(company_id, client_request_id);
 
     /*
      * Receipt numbers are authoritative and sequential per terminal per
@@ -3441,22 +3441,22 @@ async function initializeLegacyDatabase(pool) {
      * (terminal_id IS NULL) are exempt from the pattern entirely.
      */
     CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_terminal_receipt
-    ON sales(terminal_id, receipt_number)
+    ON sale_ledger(terminal_id, receipt_number)
     WHERE terminal_id IS NOT NULL
       AND receipt_number LIKE '%-%-%';
 
-    ALTER TABLE sales
+    ALTER TABLE sale_ledger
       ADD COLUMN IF NOT EXISTS online_order_id UUID;
 
     CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_online_order
-    ON sales(online_order_id);
+    ON sale_ledger(online_order_id);
 
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sales_online_order') THEN
-        ALTER TABLE sales
+        ALTER TABLE sale_ledger
           ADD CONSTRAINT fk_sales_online_order
-          FOREIGN KEY (online_order_id) REFERENCES online_orders(id);
+          FOREIGN KEY (online_order_id) REFERENCES sales_orders(id);
       END IF;
     END $$;
 
@@ -3465,7 +3465,7 @@ async function initializeLegacyDatabase(pool) {
       s.customer_id,
       s.store_id,
       MAX(COALESCE(s.completed_at, s.created_at))
-    FROM sales s
+    FROM sale_ledger s
     INNER JOIN customers c ON c.id = s.customer_id
     WHERE s.customer_id IS NOT NULL
       AND s.store_id IS NOT NULL
@@ -3479,7 +3479,7 @@ async function initializeLegacyDatabase(pool) {
 
     CREATE TABLE IF NOT EXISTS sale_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
       product_id UUID NOT NULL REFERENCES products(id),
       product_name VARCHAR(255) NOT NULL,
       quantity NUMERIC(12,3) NOT NULL,
@@ -3512,12 +3512,12 @@ async function initializeLegacyDatabase(pool) {
 
     CREATE TABLE IF NOT EXISTS payments (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
       company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
       customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
       supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
-      transaction_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+      transaction_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
       direction VARCHAR(20) NOT NULL DEFAULT 'IN',
       reference VARCHAR(100),
       payment_method VARCHAR(50) NOT NULL,
@@ -3525,7 +3525,7 @@ async function initializeLegacyDatabase(pool) {
       provider VARCHAR(100),
       terminal_id VARCHAR(100),
       provider_transaction_id VARCHAR(255),
-      online_order_id UUID REFERENCES online_orders(id) ON DELETE SET NULL,
+      online_order_id UUID REFERENCES sales_orders(id) ON DELETE SET NULL,
       idempotency_key VARCHAR(200),
       status VARCHAR(50) NOT NULL DEFAULT 'completed',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -3535,17 +3535,17 @@ async function initializeLegacyDatabase(pool) {
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL;
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL;
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL;
-    ALTER TABLE payments ADD COLUMN IF NOT EXISTS transaction_id UUID REFERENCES sales(id) ON DELETE SET NULL;
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS transaction_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS direction VARCHAR(20) NOT NULL DEFAULT 'IN';
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS reference VARCHAR(100);
-    ALTER TABLE payments ADD COLUMN IF NOT EXISTS online_order_id UUID REFERENCES online_orders(id) ON DELETE SET NULL;
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS online_order_id UUID REFERENCES sales_orders(id) ON DELETE SET NULL;
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(200);
     CREATE TABLE IF NOT EXISTS payment_attempts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID NOT NULL REFERENCES stores(id) ON DELETE RESTRICT,
       till_id UUID NOT NULL REFERENCES terminals(id) ON DELETE RESTRICT,
-      sale_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+      sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
       session_reference VARCHAR(200), connector_instance_id UUID,
       connector_package_key VARCHAR(100) NOT NULL,
       environment VARCHAR(10) NOT NULL CHECK (environment IN ('DEMO','SANDBOX','LIVE')),
@@ -3566,7 +3566,7 @@ async function initializeLegacyDatabase(pool) {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
-      transaction_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+      transaction_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
       payment_id UUID REFERENCES payments(id) ON DELETE SET NULL,
       customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
       supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
@@ -3600,7 +3600,7 @@ async function initializeLegacyDatabase(pool) {
       status VARCHAR(20) NOT NULL DEFAULT 'OPEN'
         CHECK (status IN ('OPEN', 'COMPLETED', 'CANCELLED')),
       due_date DATE, notes TEXT,
-      completed_sale_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+      completed_sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
       completed_at TIMESTAMPTZ,
       completed_by UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -3669,7 +3669,7 @@ async function initializeLegacyDatabase(pool) {
 
     CREATE TABLE IF NOT EXISTS refunds (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      sale_id UUID NOT NULL REFERENCES sales(id),
+      sale_id UUID NOT NULL REFERENCES sale_ledger(id),
       user_id UUID NOT NULL REFERENCES users(id),
       amount NUMERIC(12,2) NOT NULL,
       reason TEXT,
@@ -3679,7 +3679,7 @@ async function initializeLegacyDatabase(pool) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    CREATE TABLE IF NOT EXISTS till_sessions (
+    CREATE TABLE IF NOT EXISTS device_sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
       terminal_id UUID NOT NULL REFERENCES terminals(id),
@@ -3695,7 +3695,7 @@ async function initializeLegacyDatabase(pool) {
       closed_by UUID REFERENCES users(id) ON DELETE SET NULL
     );
 
-    ALTER TABLE till_sessions
+    ALTER TABLE device_sessions
       ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
       ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS closed_by UUID REFERENCES users(id) ON DELETE SET NULL;
@@ -3704,13 +3704,13 @@ async function initializeLegacyDatabase(pool) {
      * sessions. The partial unique index makes "at most one open session per
      * terminal" atomic — the API's SELECT-then-INSERT guard alone is racy
      * under concurrent opens. */
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_till_sessions_open_per_terminal
-    ON till_sessions(terminal_id)
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_device_sessions_open_per_terminal
+    ON device_sessions(terminal_id)
     WHERE status = 'open';
 
-     CREATE TABLE IF NOT EXISTS cash_movements (
+     CREATE TABLE IF NOT EXISTS cash_ledger (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      till_session_id UUID NOT NULL REFERENCES till_sessions(id),
+      till_session_id UUID NOT NULL REFERENCES device_sessions(id),
       user_id UUID NOT NULL REFERENCES users(id),
       type VARCHAR(50) NOT NULL,
       amount NUMERIC(12,2) NOT NULL,
@@ -3720,7 +3720,7 @@ async function initializeLegacyDatabase(pool) {
 
     /* T-TILL: who/where recorded a cash movement (session row already
      * carries till+store via terminal; these denormalise for audit). */
-    ALTER TABLE cash_movements
+    ALTER TABLE cash_ledger
       ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS terminal_id UUID REFERENCES terminals(id) ON DELETE SET NULL;
 
@@ -3983,7 +3983,7 @@ async function initializeLegacyDatabase(pool) {
     ["reports.products.view", "Product Sales Report"],
     ["reports.customers.view", "Customer Report"],
     ["reports.inventory.view", "Inventory Overview"],
-    ["reports.inventory_movements.view", "Stock Movement Ledger"],
+    ["reports.inventory_ledger.view", "Stock Movement Ledger"],
     ["reports.low_stock.view", "Low Stock Report"],
     ["reports.payments.view", "Payments Report"],
     ["reports.purchases.view", "Purchase Report"],
@@ -4222,7 +4222,7 @@ CREATE TABLE IF NOT EXISTS secure_invoice_links (
 
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID REFERENCES stores(id),
-    sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
 
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
 
@@ -4367,7 +4367,7 @@ ON secure_invoice_links(company_id, created_at DESC);
      */
     CREATE TABLE IF NOT EXISTS sale_combo_applications (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
       deal_id UUID REFERENCES combo_deals(id) ON DELETE SET NULL,
@@ -4394,14 +4394,14 @@ ON secure_invoice_links(company_id, created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_layouts_default_scope
         ON platform_layouts(object_id, page_type, COALESCE(company_id, '00000000-0000-0000-0000-000000000000'::uuid))
         WHERE is_default=true AND role_id IS NULL AND active=true;
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         DROP CONSTRAINT IF EXISTS online_orders_platform_check;
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         DROP CONSTRAINT IF EXISTS online_orders_platform_format_check;
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         ADD CONSTRAINT online_orders_platform_format_check
         CHECK (platform ~ '^[a-z][a-z0-9_]{0,19}$');
-      UPDATE online_orders AS o
+      UPDATE sales_orders AS o
          SET customer_id = c.id
         FROM customers AS c
        WHERE o.customer_id IS NULL
@@ -4796,17 +4796,17 @@ ON secure_invoice_links(company_id, created_at DESC);
       CREATE TABLE IF NOT EXISTS hospitality_qr_orders (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(), company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
         store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE, table_id UUID NOT NULL REFERENCES hospitality_tables(id) ON DELETE CASCADE,
-        session_id UUID REFERENCES hospitality_table_sessions(id) ON DELETE SET NULL, sale_id UUID REFERENCES sales(id) ON DELETE SET NULL,
+        session_id UUID REFERENCES hospitality_table_sessions(id) ON DELETE SET NULL, sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
         order_number VARCHAR(50) NOT NULL, items JSONB NOT NULL, subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
         tax NUMERIC(12,2) NOT NULL DEFAULT 0, discount NUMERIC(12,2) NOT NULL DEFAULT 0, total NUMERIC(12,2) NOT NULL DEFAULT 0,
         payment_mode VARCHAR(20) NOT NULL DEFAULT 'PAY_AT_TILL', payment_status VARCHAR(30) NOT NULL DEFAULT 'UNPAID',
         status VARCHAR(30) NOT NULL DEFAULT 'SUBMITTED', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
       ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES hospitality_table_sessions(id) ON DELETE SET NULL;
-      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sales(id) ON DELETE SET NULL;
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
       ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS client_request_id VARCHAR(120);
       CREATE UNIQUE INDEX IF NOT EXISTS uq_hospitality_order_client_request ON hospitality_qr_orders(company_id,store_id,client_request_id) WHERE client_request_id IS NOT NULL;
-      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sales(id) ON DELETE SET NULL;
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
       ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS subtotal NUMERIC(12,2) NOT NULL DEFAULT 0;
       ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS tax NUMERIC(12,2) NOT NULL DEFAULT 0;
       ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS discount NUMERIC(12,2) NOT NULL DEFAULT 0;
@@ -4824,8 +4824,8 @@ ON secure_invoice_links(company_id, created_at DESC);
         ON hospitality_bills(company_id,store_id,session_id) WHERE status='OPEN';
       CREATE TABLE IF NOT EXISTS hospitality_bill_sales (
         bill_id UUID NOT NULL REFERENCES hospitality_bills(id) ON DELETE CASCADE,
-        sale_id UUID NOT NULL UNIQUE REFERENCES sales(id) ON DELETE RESTRICT,
-        source_sale_id UUID REFERENCES sales(id) ON DELETE SET NULL, split_mode VARCHAR(20),
+        sale_id UUID NOT NULL UNIQUE REFERENCES sale_ledger(id) ON DELETE RESTRICT,
+        source_sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL, split_mode VARCHAR(20),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (bill_id,sale_id)
       );
       CREATE TABLE IF NOT EXISTS hospitality_bill_splits (
@@ -4908,7 +4908,7 @@ ON secure_invoice_links(company_id, created_at DESC);
           (SELECT SUM(p.amount)::numeric FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS paid,
           (SELECT string_agg(DISTINCT p.payment_method, ', ' ORDER BY p.payment_method) FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS payment_method,
           (SELECT COUNT(*)::int FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS payment_count
-        FROM hospitality_bills b JOIN hospitality_bill_sales bs ON bs.bill_id=b.id JOIN sales sa ON sa.id=bs.sale_id
+        FROM hospitality_bills b JOIN hospitality_bill_sales bs ON bs.bill_id=b.id JOIN sale_ledger sa ON sa.id=bs.sale_id
         WHERE b.session_id=s.id AND b.company_id=s.company_id AND b.store_id=s.store_id
       ) bill_totals ON TRUE
       LEFT JOIN LATERAL (
@@ -4919,9 +4919,9 @@ ON secure_invoice_links(company_id, created_at DESC);
     `);
 
     await pool.query(`
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         DROP CONSTRAINT IF EXISTS online_orders_status_check;
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         ADD CONSTRAINT online_orders_status_check
         CHECK (status IN ('RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'DRIVER_ACCEPTED', 'COLLECTED', 'OUT_FOR_DELIVERY', 'COMPLETED', 'FAILED_DELIVERY', 'RETURNED', 'REJECTED', 'CANCELLED'));
     `);

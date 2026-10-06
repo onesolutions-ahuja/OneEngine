@@ -1780,7 +1780,7 @@
       }
     },
     {
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "name": "GPT - Uber Eats - Accept Order",
       "triggerKey": "manual",
       "active": true,
@@ -2165,7 +2165,7 @@
       }
     },
     {
-      "objectKey": "online_order",
+      "objectKey": "sales_order",
       "name": "GPT - Uber Eats - Deny Order",
       "triggerKey": "manual",
       "active": true,

@@ -1285,14 +1285,14 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
 
   export async function initializeStandardObjectEcosystem(pool) {
     await pool.query(`
-      ALTER TABLE sales ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2);
-      ALTER TABLE sales ADD COLUMN IF NOT EXISTS line_count INTEGER NOT NULL DEFAULT 0;
-      ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
-      ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
-      UPDATE cash_movements cm
+      ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2);
+      ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS line_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE cash_ledger ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+      ALTER TABLE cash_ledger ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
+      UPDATE cash_ledger cm
          SET company_id=ts.company_id,
              store_id=ts.store_id
-        FROM till_sessions ts
+        FROM device_sessions ts
        WHERE ts.id=cm.till_session_id
          AND (cm.company_id IS NULL OR cm.store_id IS NULL);
     `);
@@ -1408,7 +1408,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       if (object.key === "onestore_app") {
         await pool.query("UPDATE platform_objects SET company_scoped=false,store_scoped=false WHERE id=$1", [result.rows[0].id]);
       }
-      if (object.key === "till_session" || object.key === "cash_movement" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
+      if (object.key === "device_session" || object.key === "cash_ledger" || object.key === "held_sale" || object.key === "product_modifier_group" || object.key === "payment_method") {
         await pool.query("UPDATE platform_objects SET company_scoped=true,store_scoped=true WHERE id=$1", [result.rows[0].id]);
       }
       for (let index = 0; index < object.fields.length; index += 1) {
@@ -1465,7 +1465,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const saleObjectForFormula = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='sale_ledger' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (saleObjectForFormula.rows[0]?.id) {
       await pool.query(
@@ -1529,7 +1529,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const cashLedgerValidationObject = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='cash_movement' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (cashLedgerValidationObject.rows[0]?.id) {
       await pool.query(
@@ -1549,7 +1549,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const tillSessionObjectForOptions = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='till_session' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='device_session' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (tillSessionObjectForOptions.rows[0]?.id) {
       await pool.query(
@@ -1559,7 +1559,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       );
     }
     const cashLedgerObjectForOptions = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='cash_movement' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (cashLedgerObjectForOptions.rows[0]?.id) {
       await pool.query(
@@ -1601,8 +1601,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     };
 
     await grantObjectPermissionFromCodes("held_sale", ["sale.hold"], { view: true, create: true, delete: true });
-    await grantObjectPermissionFromCodes("till_session", ["till.open","till.close"], { view: true, create: true, edit: true });
-    await grantObjectPermissionFromCodes("cash_movement", ["cash.adjustment","cash.payout"], { view: true, create: true });
+    await grantObjectPermissionFromCodes("device_session", ["till.open","till.close"], { view: true, create: true, edit: true });
+    await grantObjectPermissionFromCodes("cash_ledger", ["cash.adjustment","cash.payout"], { view: true, create: true });
     await grantObjectPermissionFromCodes("product_modifier_group", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("product_modifier_option", ["sale.create"], { view: true });
     await grantObjectPermissionFromCodes("payment_method", ["sale.create"], { view: true });
@@ -1949,7 +1949,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
        uiAction to the existing native POS implementation; labels, placement,
        visibility and permissions come from these Platform metadata rows. */
     const saleObjectResult = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=TRUE LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='sale_ledger' AND company_id IS NULL AND active=TRUE LIMIT 1"
     );
     const saleObjectId = saleObjectResult.rows[0]?.id || null;
     if (saleObjectId) {
@@ -1996,7 +1996,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_drawer_open", label: "Record Drawer Open", apiName: "create_drawer_open", key: "CREATE_RECORD", objectKey: "cash_movement",
+            { id: "create_drawer_open", label: "Record Drawer Open", apiName: "create_drawer_open", key: "CREATE_RECORD", objectKey: "cash_ledger",
               fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, terminal_id: { path: "$record.terminalId" }, type: "drawer_open", amount: 0, reason: { path: "$record.reason" } } },
           ],
         },
@@ -2010,9 +2010,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id:"find_open_session",label:"Find Open Till Session",apiName:"find_open_session",key:"GET_RECORDS",objectKey:"till_session",filters:[{field:"terminal_id",operator:"equals",value:{path:"$record.terminalId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
+            { id:"find_open_session",label:"Find Open Till Session",apiName:"find_open_session",key:"GET_RECORDS",objectKey:"device_session",filters:[{field:"terminal_id",operator:"equals",value:{path:"$record.terminalId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
             { id:"can_open_till",label:"Terminal Available?",apiName:"can_open_till",key:"CONDITION",outcomes:[{id:"yes",label:"Available",condition:{match:"all",conditions:[{field:"steps.find_open_session.record.id",operator:"is_empty"}]},branch:["create_till_session"]}],defaultLabel:"Already Open",defaultBranch:["open_till_invalid"] },
-            { id: "create_till_session", label: "Create Till Session", apiName: "create_till_session", key: "CREATE_RECORD", objectKey: "till_session",
+            { id: "create_till_session", label: "Create Till Session", apiName: "create_till_session", key: "CREATE_RECORD", objectKey: "device_session",
               fieldValues: { terminal_id: { path: "$record.terminalId" }, user_id: { path: "$record.userId" }, opening_cash: { path: "$record.openingCash" }, status: "open" } },
             { id:"open_till_invalid",label:"Till Already Open",apiName:"open_till_invalid",key:"CUSTOM_ERROR",errorMessage:"This terminal already has an open till session.",errorLocation:"record" },
           ],
@@ -2029,9 +2029,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           outputContract: [],
           actions: [
             { id:"validate_amount",label:"Validate Amount",apiName:"validate_amount",key:"FORMULA",resourceName:"cashAmountValid",resultType:"boolean",expression:"amount > 0",inputs:{amount:{path:"$record.amount"}} },
-            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"till_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
+            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"device_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
             { id:"cash_movement_ready",label:"Cash Movement Ready?",apiName:"cash_movement_ready",key:"CONDITION",outcomes:[{id:"yes",label:"Valid",condition:{match:"all",conditions:[{field:"variables.cashAmountValid",operator:"equals",value:true},{field:"steps.get_open_session.record.id",operator:"is_not_empty"}]},branch:["create_cash_movement"]}],defaultLabel:"Invalid",defaultBranch:["cash_movement_invalid"] },
-            { id:"create_cash_movement",label:"Create Cash In",apiName:"create_cash_movement",key:"CREATE_RECORD",objectKey:"cash_movement",fieldValues:{till_session_id:{path:"$record.tillSessionId"},user_id:{path:"$record.userId"},type:"cash_in",amount:{path:"$record.amount"},reason:{path:"$record.reason"}} },
+            { id:"create_cash_movement",label:"Create Cash In",apiName:"create_cash_movement",key:"CREATE_RECORD",objectKey:"cash_ledger",fieldValues:{till_session_id:{path:"$record.tillSessionId"},user_id:{path:"$record.userId"},type:"cash_in",amount:{path:"$record.amount"},reason:{path:"$record.reason"}} },
             { id:"cash_movement_invalid",label:"Cash Movement Rejected",apiName:"cash_movement_invalid",key:"CUSTOM_ERROR",errorMessage:"Cash movement requires a positive amount and an open till session.",errorLocation:"record" },
           ],
         },
@@ -2047,9 +2047,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           outputContract: [],
           actions: [
             { id:"validate_amount",label:"Validate Amount",apiName:"validate_amount",key:"FORMULA",resourceName:"cashAmountValid",resultType:"boolean",expression:"amount > 0",inputs:{amount:{path:"$record.amount"}} },
-            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"till_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
+            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"device_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
             { id:"cash_movement_ready",label:"Cash Movement Ready?",apiName:"cash_movement_ready",key:"CONDITION",outcomes:[{id:"yes",label:"Valid",condition:{match:"all",conditions:[{field:"variables.cashAmountValid",operator:"equals",value:true},{field:"steps.get_open_session.record.id",operator:"is_not_empty"}]},branch:["create_cash_movement"]}],defaultLabel:"Invalid",defaultBranch:["cash_movement_invalid"] },
-            { id:"create_cash_movement",label:"Create Cash Out",apiName:"create_cash_movement",key:"CREATE_RECORD",objectKey:"cash_movement",fieldValues:{till_session_id:{path:"$record.tillSessionId"},user_id:{path:"$record.userId"},type:"cash_out",amount:{path:"$record.amount"},reason:{path:"$record.reason"}} },
+            { id:"create_cash_movement",label:"Create Cash Out",apiName:"create_cash_movement",key:"CREATE_RECORD",objectKey:"cash_ledger",fieldValues:{till_session_id:{path:"$record.tillSessionId"},user_id:{path:"$record.userId"},type:"cash_out",amount:{path:"$record.amount"},reason:{path:"$record.reason"}} },
             { id:"cash_movement_invalid",label:"Cash Movement Rejected",apiName:"cash_movement_invalid",key:"CUSTOM_ERROR",errorMessage:"Cash movement requires a positive amount and an open till session.",errorLocation:"record" },
           ],
         },
@@ -2064,9 +2064,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"till_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
+            { id:"get_open_session",label:"Get Open Till Session",apiName:"get_open_session",key:"GET_RECORDS",objectKey:"device_session",filters:[{field:"id",operator:"equals",value:{path:"$record.tillSessionId"}},{field:"status",operator:"equals",value:"open"}],match:"all",limit:1,store:"first" },
             { id:"can_close_till",label:"Open Session Found?",apiName:"can_close_till",key:"CONDITION",outcomes:[{id:"yes",label:"Open",condition:{match:"all",conditions:[{field:"steps.get_open_session.record.id",operator:"is_not_empty"}]},branch:["close_till_session"]}],defaultLabel:"Not Open",defaultBranch:["close_till_invalid"] },
-            { id: "close_till_session", label: "Close Till Session", apiName: "close_till_session", key: "UPDATE_RECORD", objectKey: "till_session",
+            { id: "close_till_session", label: "Close Till Session", apiName: "close_till_session", key: "UPDATE_RECORD", objectKey: "device_session",
               recordId: { path: "$record.tillSessionId" },
               fieldValues: { status: "closed", closing_cash: { path: "$record.countedCash" }, closed_by: { path: "$record.userId" }, closed_at: { path: "$record.closedAt" } } },
             { id:"close_till_invalid",label:"Till Close Rejected",apiName:"close_till_invalid",key:"CUSTOM_ERROR",errorMessage:"The till session is missing or is not open.",errorLocation:"record" },
@@ -2123,7 +2123,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
                 branch: ["create_cash_movement"] }],
               defaultLabel: "Invalid Amount", defaultBranch: ["invalid_amount"] },
             { id: "create_cash_movement", label: "Create Cash Movement", apiName: "create_cash_movement", key: "CREATE_RECORD",
-              objectKey: "cash_movement",
+              objectKey: "cash_ledger",
               fieldValues: {
                 till_session_id: { path: "$record.tillSessionId" },
                 user_id: { path: "$record.userId" },
@@ -2453,7 +2453,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       }
 
       const tillButtons = [
-        ["till_session","Till","till.session","till_action_header","till.open","till_session","badge-pound-sterling",10],
+        ["device_session","Till","till.session","till_action_header","till.open","till_session","badge-pound-sterling",10],
         ["till_customer","Customer","till.customer","till_action_header","customer.view","customer","user-round",20],
         ["till_hold","Hold","till.hold","till_action_bar","sale.hold","hold","pause",10],
         ["till_resume","Resume","till.resume","till_action_bar","sale.hold","resume","file-text",20],
@@ -2473,10 +2473,10 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_pay_card","Card","till.pay_card","till_payment","sale.create","pay_card","credit-card",20],
         ["till_pay_more","More","till.pay_more","till_payment","sale.create","pay_more","layers",30],
         ["till_price_override","Change Price","till.price_override","till_line_action","sale.price_change","price_override","pencil",10],
-        ["till_open_session","Open Till","till.open_session","till_session","till.open","open_till","badge-pound-sterling",10],
-        ["till_close_session","Close Till","till.close_session","till_session","till.close","close_till","x",20],
-        ["till_cash_in","Cash In","till.cash_in","till_session","cash.adjustment","cash_in","plus",30],
-        ["till_cash_out","Cash Out","till.cash_out","till_session","cash.payout","cash_out","minus",40]
+        ["till_open_session","Open Till","till.open_session","device_session","till.open","open_till","badge-pound-sterling",10],
+        ["till_close_session","Close Till","till.close_session","device_session","till.close","close_till","x",20],
+        ["till_cash_in","Cash In","till.cash_in","device_session","cash.adjustment","cash_in","plus",30],
+        ["till_cash_out","Cash Out","till.cash_out","device_session","cash.payout","cash_out","minus",40]
       ];
       for (const [buttonKey,label,actionKey,placement,permission,uiAction,icon,order] of tillButtons) {
         const handlerKey = actionKey === "till.print" ? "PRINT_RECEIPT" : "TILL_UI_ACTION";
@@ -2506,7 +2506,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       }
 
       const targetUpdates = [
-        ["till_session","modal","till", { modal: "till" }],
+        ["device_session","modal","till", { modal: "till" }],
         ["till_customer","modal","customer", { modal: "customer" }],
         ["till_hold","workflow",tillWorkflowIds.get("ONETILL_HOLD_SALE"), {}],
         ["till_resume","modal","held", { modal: "held", consumeButtonKey: "till_resume_consume" }],
@@ -2634,7 +2634,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         );
       }
 
-      const inventoryMovement = byKey.get("inventory_movement");
+      const inventoryMovement = byKey.get("inventory_ledger");
       if (inventoryMovement?.id) {
         const movementTypeField = await pool.query(
           "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='movement_type' AND company_id IS NULL LIMIT 1",
@@ -2741,7 +2741,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           AND r.relationship_key='category' AND p.company_id IS NULL AND c.company_id IS NULL`
     );
 
-    const sale = byKey.get("sale");
+    const sale = byKey.get("sale_ledger");
     if (sale) {
       const transactionTypeField = await pool.query(
         "SELECT id FROM platform_fields WHERE object_id=$1 AND api_name='transaction_type' AND company_id IS NULL LIMIT 1",

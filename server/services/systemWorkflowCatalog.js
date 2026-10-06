@@ -272,7 +272,7 @@ const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
       outputs:["externalId","syncToken","mappingId"],
       resources:[outputVariable("purchaseId","Text",{availableInput:true}),outputVariable("integrationId","Text",{availableInput:true}),outputVariable("expenseAccountId","Text",{availableInput:true}),outputVariable("externalId"),outputVariable("syncToken"),outputVariable("mappingId")],
       actions:[
-        {id:"get_purchase",label:"Get Purchase",apiName:"get_purchase",key:"GET_RECORDS",objectKey:"purchase",filters:[{field:"id",operator:"equals",value:{path:"variables.purchaseId"}}],limit:1,store:"first"},
+        {id:"get_purchase",label:"Get Purchase",apiName:"get_purchase",key:"GET_RECORDS",objectKey:"purchase_ledger",filters:[{field:"id",operator:"equals",value:{path:"variables.purchaseId"}}],limit:1,store:"first"},
         {id:"get_vendor_mapping",label:"Get Supplier QuickBooks Mapping",apiName:"get_vendor_mapping",key:"GET_RECORDS",objectKey:"integration_entity_mapping",
           filters:[{field:"integration_id",operator:"equals",value:{path:"variables.integrationId"}},{field:"entity_type",operator:"equals",value:"supplier"},{field:"local_entity_id",operator:"equals",value:{path:"steps.get_purchase.record.supplier_id"}}],limit:1,store:"first"},
         {id:"get_purchase_mapping",label:"Get Purchase QuickBooks Mapping",apiName:"get_purchase_mapping",key:"GET_RECORDS",objectKey:"integration_entity_mapping",

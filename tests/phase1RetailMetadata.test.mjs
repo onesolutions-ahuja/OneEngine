@@ -6,16 +6,22 @@ const manifest = JSON.parse(readFileSync(new URL("../server/metadata/manifests/r
 const objects = new Map((manifest.objects || []).map((object) => [object.objectKey, object]));
 const flows = new Map((manifest.workflows || []).map((flow) => [flow.action?.systemKey || flow.name, flow]));
 
-test("Phase 1 retail objects are metadata-backed and flow-write-only", () => {
-  for (const key of ["sale","sale_item","payment","till_session","cash_movement","refund","stock_return","stock_return_line"]) {
+test("Phase 1 exposes sale_ledger as the canonical sale business object", () => {
+  for (const key of ["sale_ledger","device_session","cash_ledger","stock_return","stock_return_line"]) {
     assert.ok(objects.has(key), `missing metadata object ${key}`);
     assert.equal(objects.get(key).config?.flowWritesOnly, true, `${key} must write through Flow`);
+  }
+  for (const key of ["sale_item","payment","refund"]) {
+    assert.ok(objects.has(key), `missing internal child storage ${key}`);
+    assert.equal(objects.get(key).config?.internal, true, `${key} must be hidden from business object surfaces`);
+    assert.equal(objects.get(key).config?.childStorage, true, `${key} must be marked child storage`);
+    assert.equal(objects.get(key).config?.generateOneId, false, `${key} must not receive a separate OneID`);
   }
 });
 
 test("Phase 1 validations are metadata rules", () => {
   const rules = manifest.rules || [];
-  for (const objectKey of ["sale","sale_item","payment","till_session","cash_movement","refund","stock_return","stock_return_line"]) {
+  for (const objectKey of ["sale_ledger","sale_item","payment","device_session","cash_ledger","refund","stock_return","stock_return_line"]) {
     assert.ok(rules.some((rule) => rule.objectKey === objectKey), `missing validation metadata for ${objectKey}`);
   }
 });

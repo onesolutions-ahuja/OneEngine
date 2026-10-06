@@ -218,7 +218,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       const [catalogueDelta, settingsResponse, buttonResponse, paymentResponse, permissionResponse] = await Promise.all([
         apiRequest(cataloguePath),
         apiRequest('/api/settings'),
-        apiRequest('/api/platform/runtime/objects/sale/buttons'),
+        apiRequest('/api/platform/runtime/objects/sale_ledger/buttons'),
         apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
         loadSessionPermissions().catch(() => ({ permissions: [] })),
       ])
@@ -316,7 +316,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         vatRate: Number(line.vatRate || 0) * 100,
       })),
     ]
-    apiRequest(`/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+    apiRequest(`/api/platform/runtime/objects/sale_ledger/buttons/${encodeURIComponent(button.button_key)}/execute`, {
       method: 'POST',
       body: JSON.stringify({ context: {
         lines,
@@ -674,7 +674,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       const response = await executeMetadataButton(completeButton, { sale: payload.sale, items: payload.items, payments: payload.payments })
       const saleId = deepFind(response?.data, 'created')?.id || deepFind(response?.data, 'matched')?.id
       if (!response?.success || !saleId) throw new Error(response?.message || 'Sale could not be confirmed')
-      const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`)
+      const savedResponse = await apiRequest(`/api/platform/objects/sale_ledger/records/${encodeURIComponent(saleId)}`)
       const sale = savedResponse?.record || savedResponse?.data || { id: saleId, total: payload.sale.total }
       if (durableCashEntry) await removeOfflineCashSale(durableCashEntry.id)
       setLastSale(sale)
@@ -683,7 +683,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       let savedSale = sale
       if (sale.id) {
         try {
-          const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(sale.id)}`)
+          const savedResponse = await apiRequest(`/api/platform/objects/sale_ledger/records/${encodeURIComponent(sale.id)}`)
           savedSale = savedResponse?.record || savedResponse?.data || sale
         } catch {}
       }
@@ -786,7 +786,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const executeRecordButton = async (button, recordId) => {
     if (!button?.button_key || !recordId) throw new Error('A synced sale is required for this action.')
-    const response = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(recordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+    const response = await apiRequest(`/api/platform/objects/sale_ledger/records/${encodeURIComponent(recordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
       method: 'POST',
       body: JSON.stringify({}),
     })
@@ -907,8 +907,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       }
 
       const endpoint = useRecordScope && scopedRecordId
-        ? `/api/platform/objects/sale/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
-        : `/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`
+        ? `/api/platform/objects/sale_ledger/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
+        : `/api/platform/runtime/objects/sale_ledger/buttons/${encodeURIComponent(button.button_key)}/execute`
 
       const response = await apiRequest(endpoint, {
         method: 'POST',
@@ -1169,7 +1169,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       {modal === 'petty' ? <Modal title={meta.petty?.label || 'Petty Cash'} onClose={() => setModal(null)}><PettyForm onSubmit={recordPettyCash}/></Modal> : null}
       {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
-      {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError} onExecute={executeMetadataButton}/></Modal> : null}
+      {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'device_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError} onExecute={executeMetadataButton}/></Modal> : null}
       {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingCheckout(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingCheckout || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingCheckout(null); setModal(null); if (pending?.paymentMethod) window.setTimeout(() => completeSale(pending.paymentMethod, pending.options || { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
       {modal === 'payment' ? <Modal title="Payment" onClose={() => { setPaymentModalMethod(''); setModal(null) }} wide><PaymentSheet total={total} methods={paymentMethods} initialMethod={paymentModalMethod} onPay={async (method, paymentInputs) => {
         if (method === 'split') await completeSale(method, { payments: paymentInputs?.payments || [] })
