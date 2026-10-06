@@ -241,7 +241,7 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
     if (!terminalId) return res.status(400).json({ success: false, message: "Till assignment required" });
     try {
       const activeTill = await db(
-        `SELECT id FROM till_sessions WHERE company_id = $1 AND store_id = $2 AND terminal_id = $3
+        `SELECT id FROM device_sessions WHERE company_id = $1 AND store_id = $2 AND terminal_id = $3
          AND user_id = $4 AND status = 'open' LIMIT 1`,
         [req.user.companyId, req.user.storeId, terminalId, req.user.id]
       );
