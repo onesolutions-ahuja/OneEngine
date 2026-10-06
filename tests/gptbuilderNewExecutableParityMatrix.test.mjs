@@ -102,3 +102,38 @@ test('Subflow resolution executes active definition or latest saved snapshot whe
  assert.ok(subflow.includes("action->>'type'='workflow'"))
  assert.ok(subflow.includes("r.company_id=$2"))
 })
+
+test('Subflow executes active definition and maps outputs behaviorally',async()=>{
+ const calls=[]
+ const db=async(sql,params=[])=>{
+  const s=String(sql);calls.push(s)
+  if(s.includes('FROM role_permissions')&&s.includes('p.code = ANY'))return{rows:(params[2]||[]).map(code=>({code}))}
+  if(s.includes('FROM platform_permission_set_assignments'))return{rows:[]}
+  if(s.includes('FROM platform_rules'))return{rows:[{id:'child1',company_id:'c1',name:'Child',active:true,active_version:3,version:3,action:{type:'workflow',actions:[{id:'set',type:'ASSIGNMENT',variableName:'answer',variableType:'text',value:'ACTIVE'}],outputContract:[{name:'answer',source:'variables.answer'}]}}]}
+  if(s.includes('INSERT INTO platform_workflow_runs'))return{rows:[{id:'child-run'}]}
+  if(s.includes('INSERT INTO platform_workflow_step_runs'))return{rows:[{id:'step'}]}
+  return{rows:[]}
+ }
+ const c=ctx({db,workflowVariables:{variables:{},steps:{}}})
+ const result=await executeWorkflowAction({action:{id:'sub',type:'RUN_SUBFLOW',workflowId:'child1',outputMappings:{answer:'variables.childAnswer'}},...c})
+ assert.equal(result.status,'completed')
+ assert.equal(c.workflowVariables.variables.childAnswer,'ACTIVE')
+ assert.ok(!calls.some(s=>s.includes('FROM platform_workflow_versions')))
+})
+
+test('Subflow falls back to latest saved version snapshot when no version is active',async()=>{
+ const db=async(sql,params=[])=>{
+  const s=String(sql)
+  if(s.includes('FROM role_permissions')&&s.includes('p.code = ANY'))return{rows:(params[2]||[]).map(code=>({code}))}
+  if(s.includes('FROM platform_permission_set_assignments'))return{rows:[]}
+  if(s.includes('FROM platform_rules'))return{rows:[{id:'child1',company_id:'c1',name:'Child',active:false,active_version:null,version:1,action:{type:'workflow',actions:[{id:'old',type:'ASSIGNMENT',variableName:'answer',variableType:'text',value:'OLD'}]}}]}
+  if(s.includes('FROM platform_workflow_versions'))return{rows:[{definition:{name:'Child',version:5,action:{type:'workflow',actions:[{id:'new',type:'ASSIGNMENT',variableName:'answer',variableType:'text',value:'LATEST'}],outputContract:[{name:'answer',source:'variables.answer'}]}}}]}
+  if(s.includes('INSERT INTO platform_workflow_runs'))return{rows:[{id:'child-run'}]}
+  if(s.includes('INSERT INTO platform_workflow_step_runs'))return{rows:[{id:'step'}]}
+  return{rows:[]}
+ }
+ const c=ctx({db,workflowVariables:{variables:{},steps:{}}})
+ const result=await executeWorkflowAction({action:{id:'sub',type:'RUN_SUBFLOW',workflowId:'child1',outputMappings:{answer:'variables.childAnswer'}},...c})
+ assert.equal(result.status,'completed')
+ assert.equal(c.workflowVariables.variables.childAnswer,'LATEST')
+})
