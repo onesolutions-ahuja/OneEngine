@@ -545,7 +545,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       storeId: recordValue(till, 'sessionStoreId', null) || settingValue('storeIdPath', null) || getStoredUser()?.storeId || null,
       terminalId: recordValue(till, 'sessionTerminalId', null) || null,
       userId: getStoredUser()?.id || getStoredUser()?.userId || null,
-      customerId: selectedCustomer?.id || null,
+      customerId: mappedValue(selectedCustomer, 'customer', 'id', null),
       subtotal: Number(subtotal || 0),
       tax: Number(vat || 0),
       discount: Number(discountAmount || 0),
@@ -574,7 +574,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       ...miscLines.map((line) => mapRuntimePayload(mappings.item, itemValues(line, surfaceValue('itemTypeMisc')))),
     ]
     const paymentValue = (row, defaultMethod = paymentMethod) => ({
-      customerId: selectedCustomer?.id || null,
+      customerId: mappedValue(selectedCustomer, 'customer', 'id', null),
       direction: surfaceValue('paymentDirectionIn'),
       paymentMethod: row?.method || row?.paymentMethod || defaultMethod,
       amount: Number(row?.amount ?? total ?? 0),
@@ -747,7 +747,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     try {
       await executeMetadataButton(button, {
         userId: user.id || user.userId || null,
-        customerId: selectedCustomer?.id || null,
+        customerId: mappedValue(selectedCustomer, 'customer', 'id', null),
         items: { items: basket, miscLines },
         discountType: discount.type,
         discountValue: Number(discount.value || 0),
@@ -904,7 +904,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         tillSessionId: till?.id || null,
         online,
         userId: getStoredUser()?.id || getStoredUser()?.userId || null,
-        customerId: selectedCustomer?.id || null,
+        customerId: mappedValue(selectedCustomer, 'customer', 'id', null),
         subtotal,
         vat,
         discount: discountAmount,
@@ -946,7 +946,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const paymentFlowInputs = (paymentMode, options = {}, { executeConnector = false, clientRequestId = '', terminalId = null } = {}) => ({
     paymentMode,
     online,
-    customerSelected: Boolean(selectedCustomer?.id),
+    customerSelected: Boolean(mappedValue(selectedCustomer, 'customer', 'id', null)),
     hasGiftCardCode: Boolean(String(options.giftCardCode || '').trim()),
     cashReceived: Number(options.cashReceivedOverride ?? total ?? 0),
     total,
@@ -1121,7 +1121,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
           </main>
 
           <aside className="till-cart">
-            <div className="till-cart-head"><div><strong>Current Sale</strong><span>{selectedCustomer?.name || 'Walk-in Customer'}</span></div><ReceiptText size={18}/></div>
+            <div className="till-cart-head"><div><strong>Current Sale</strong><span>{mappedValue(selectedCustomer, 'customer', 'name', 'Walk-in Customer') || 'Walk-in Customer'}</span></div><ReceiptText size={18}/></div>
             <div className="till-cart-lines">
               {!basket.length && !miscLines.length ? <div className="till-cart-empty"><ShoppingBag size={32}/><strong>No items</strong><span>Select a product to begin</span></div> : null}
               {basket.map((item) => (
@@ -1189,7 +1189,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         } catch (err) { setError(err?.message || 'Unable to add Misc Item') }
       }}/></Modal> : null}
       {modal === 'petty' ? <Modal title={meta.petty?.label || 'Petty Cash'} onClose={() => setModal(null)}><PettyForm onSubmit={recordPettyCash}/></Modal> : null}
-      {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
+      {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={mappedValue(customer, 'customer', 'id', '')} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{mappedValue(customer, 'customer', 'name', 'Customer')}</strong><span>{mappedValue(customer, 'customer', 'phone', null) || mappedValue(customer, 'customer', 'email', '')}</span></button>)}</div></Modal> : null}
       {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{mappedValue(sale, 'heldTransaction', 'customerName', 'Held Sale') || 'Held Sale'}</strong><span>{mappedValue(sale, 'heldTransaction', 'createdAt', null) ? new Date(mappedValue(sale, 'heldTransaction', 'createdAt')).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
       {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError} onExecute={executeMetadataButton}/></Modal> : null}
       {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingCheckout(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingCheckout || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingCheckout(null); setModal(null); if (pending?.paymentMethod) window.setTimeout(() => completeSale(pending.paymentMethod, pending.options || { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
