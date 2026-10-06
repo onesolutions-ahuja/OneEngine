@@ -57,20 +57,87 @@ const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-2.5 py
 const labelClass = "block text-xs font-medium text-slate-500";
 
 const BUILDER_CSS = `
-  .cpb-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 12px; align-items: start; width: 100%; min-width: 0; }
-  @media (max-width: 1100px) { .cpb-shell { grid-template-columns: 180px minmax(0, 1fr); } .cpb-properties { grid-column: 1 / -1; } }
-  .cpb-panel { border: 1px solid var(--border-color, #e5e7eb); border-radius: 12px; background: var(--card-background, #fff); }
-  .cpb-palette-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; background: var(--card-background, #fff); padding: 8px 10px; text-align: left; font-size: 12.5px; color: var(--text-primary, #334155); cursor: grab; }
-  .cpb-palette-item:hover { border-color: var(--primary-color, #176f6a); }
-  .cpb-canvas { border: 1px solid var(--border-color, #e5e7eb); border-radius: 12px; background: var(--muted-background, #f8fafc); padding: 14px; min-height: 480px; overflow: auto; }
-  .cpb-dropzone { outline: 2px dashed var(--primary-color, #176f6a); outline-offset: 2px; border-radius: 8px; }
-  .cpb-node-selected { outline: 2px solid var(--primary-color, #176f6a); outline-offset: 3px; border-radius: 8px; }
-  .cpb-section-selected { outline: 2px solid var(--primary-color, #176f6a); outline-offset: 3px; }
-  .cpb-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .cpb-device-btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; background: var(--card-background, #fff); padding: 6px 10px; font-size: 12px; color: var(--text-secondary, #475569); }
-  .cpb-device-btn.active { background: var(--primary-color, #176f6a); border-color: var(--primary-color, #176f6a); color: #fff; }
-  .cpb-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: var(--muted-background, #f1f5f9); padding: 2px 8px; font-size: 10.5px; color: var(--text-secondary, #64748b); }
-`;
+  .cpb-builder{display:flex;flex-direction:column;gap:10px;min-width:0;color:#17212b}
+  .cpb-toolbar{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;padding:0 2px}
+  .cpb-shell{
+    display:grid;
+    grid-template-columns:minmax(230px,260px) minmax(420px,1fr) minmax(280px,320px);
+    gap:10px;
+    width:100%;
+    min-width:0;
+    height:clamp(540px,calc(100dvh - 205px),860px);
+    min-height:0;
+    align-items:stretch;
+  }
+  .cpb-panel{
+    min-width:0;
+    min-height:0;
+    border:1px solid #e4e7eb;
+    border-radius:12px;
+    background:#fff;
+    box-shadow:0 1px 2px rgba(15,23,42,.03);
+  }
+  .cpb-palette{display:flex;flex-direction:column;overflow:hidden;padding:0!important}
+  .cpb-palette-head{flex:0 0 auto;padding:14px 14px 10px;border-bottom:1px solid #eef0f2;background:#fff}
+  .cpb-palette-title{margin:0 0 10px;font-size:13px;font-weight:700;color:#222b33}
+  .cpb-palette-search{display:flex;align-items:center;height:36px;border:1px solid #d9dde2;border-radius:9px;background:#fff;padding:0 10px}
+  .cpb-palette-search input{width:100%;border:0;outline:0;background:transparent;font:inherit;font-size:12px;color:#25313b}
+  .cpb-palette-search input::placeholder{color:#98a1aa}
+  .cpb-palette-scroll{min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 10px 14px;overscroll-behavior:contain;scrollbar-gutter:stable}
+  .cpb-palette-scroll::-webkit-scrollbar,.cpb-properties-scroll::-webkit-scrollbar,.cpb-canvas::-webkit-scrollbar{width:8px;height:8px}
+  .cpb-palette-scroll::-webkit-scrollbar-thumb,.cpb-properties-scroll::-webkit-scrollbar-thumb,.cpb-canvas::-webkit-scrollbar-thumb{background:#c8cdd3;border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+  .cpb-palette-group{padding:4px 0 8px}
+  .cpb-palette-group-title{display:flex;align-items:center;justify-content:space-between;margin:0 2px 7px;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#68727d}
+  .cpb-palette-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .cpb-palette-item{
+    display:flex;min-width:0;min-height:54px;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;
+    border:1px solid #e2e5e9;border-radius:9px;background:#fff;padding:8px 9px;text-align:left;font-size:11px;font-weight:600;color:#36414b;cursor:grab;
+    transition:border-color .14s ease,background .14s ease,box-shadow .14s ease,transform .14s ease;
+  }
+  .cpb-palette-item:hover{border-color:#9dbeb8;background:#f8fbfa;box-shadow:0 2px 8px rgba(20,80,70,.06);transform:translateY(-1px)}
+  .cpb-palette-item svg{color:#237c72!important}
+  .cpb-palette-empty{padding:18px 8px;text-align:center;font-size:11px;color:#89939d}
+  .cpb-section-tools{border-top:1px solid #edf0f2;margin-top:3px;padding-top:9px}
+  .cpb-canvas{
+    min-width:0;min-height:0;height:100%;overflow:auto;
+    border:1px solid #e2e5e9;border-radius:12px;background:#f7f8f9;padding:12px;
+    overscroll-behavior:contain;
+  }
+  .cpb-tree{min-height:100%;padding:2px}
+  .cpb-canvas .onepos-card{border-color:#dfe3e7!important;box-shadow:none!important;background:#fff!important}
+  .cpb-empty{display:grid;place-items:center;min-height:110px;border:1px dashed #cfd5da;border-radius:10px;background:#fbfcfc;color:#76808a;text-align:center;font-size:12px}
+  .cpb-dropzone{outline:2px dashed #2d8b80;outline-offset:2px;border-radius:8px}
+  .cpb-node-selected{outline:2px solid #2d8b80;outline-offset:3px;border-radius:8px}
+  .cpb-section-selected{outline:2px solid #2d8b80;outline-offset:3px}
+  .cpb-device-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:32px;
+    border:1px solid #dde1e5;border-radius:8px;background:#fff;padding:6px 10px;font-size:11px;font-weight:600;color:#4e5964;
+    transition:background .14s ease,border-color .14s ease,color .14s ease;
+  }
+  .cpb-device-btn:hover:not(:disabled){border-color:#b9c2ca;background:#f7f8f9}
+  .cpb-device-btn.active{background:#147d70;border-color:#147d70;color:#fff}
+  .cpb-device-btn:disabled{opacity:.45;cursor:not-allowed}
+  .cpb-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid #e2e5e9;border-radius:999px;background:#f7f8f9;padding:4px 9px;font-size:10.5px;color:#65707a}
+  .cpb-properties{display:flex;flex-direction:column;overflow:hidden;padding:0!important}
+  .cpb-properties-tabs{display:flex;align-items:center;gap:4px;flex:0 0 auto;height:48px;padding:0 10px;border-bottom:1px solid #edf0f2;background:#fff}
+  .cpb-properties-tabs button{height:34px;border:0;border-bottom:2px solid transparent;background:transparent;padding:0 10px;font-size:11px;font-weight:700;color:#68727d;cursor:pointer}
+  .cpb-properties-tabs button.active{border-bottom-color:#147d70;color:#166e65}
+  .cpb-properties-scroll{min-height:0;overflow-y:auto;padding:14px;overscroll-behavior:contain}
+  .cpb-properties-scroll fieldset{border-color:#e3e6e9!important}
+  .cpb-properties-scroll input,.cpb-properties-scroll select,.cpb-properties-scroll textarea{border-color:#d9dde2!important}
+  .cpb-properties-scroll input:focus,.cpb-properties-scroll select:focus,.cpb-properties-scroll textarea:focus{outline:none;border-color:#5b9f97!important;box-shadow:0 0 0 2px rgba(20,125,112,.10)}
+  .cpb-page-settings{display:grid;gap:13px}
+  .cpb-page-settings h3{margin:0;font-size:13px;color:#26313a}
+  .cpb-page-settings p{margin:0;font-size:10.5px;line-height:1.45;color:#7a848e}
+  @media(max-width:1180px){
+    .cpb-shell{grid-template-columns:220px minmax(380px,1fr);height:clamp(540px,calc(100dvh - 205px),860px)}
+    .cpb-properties{position:absolute;z-index:80;right:12px;width:min(320px,88vw);height:calc(100% - 24px);box-shadow:0 18px 50px rgba(15,23,42,.16)}
+  }
+  @media(max-width:760px){
+    .cpb-shell{grid-template-columns:minmax(180px,220px) minmax(340px,1fr);overflow-x:auto}
+    .cpb-palette-grid{grid-template-columns:1fr}
+  }
+`
 
 function uid(prefix) { return makeNodeId(prefix); }
 function targetPageFromList(response, pageId) { return (Array.isArray(response?.data) ? response.data : []).find((row) => String(row.id) === String(pageId)) || null; }
@@ -131,7 +198,17 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const [pageId, setPageId] = useState(() => String(initialPageId || ""));
   const [page, setPage] = useState(null);
   const [draft, setDraft] = useState(() => newPageDraft());
+  const [paletteQuery, setPaletteQuery] = useState("");
   const registry = useComponentRegistry();
+  const visiblePaletteGroups = useMemo(() => {
+    const query = paletteQuery.trim().toLowerCase();
+    return paletteGroups(registry)
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((component) => !query || [component.label, component.key, group.label].some((value) => String(value || "").toLowerCase().includes(query))),
+      }))
+      .filter((group) => group.items.length);
+  }, [registry, paletteQuery]);
   const [objects, setObjects] = useState([]);
   const [selectedSectionId, setSelectedSectionId] = useState(null);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
@@ -140,6 +217,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [versions, setVersions] = useState([]);
   const [showVersions, setShowVersions] = useState(false);
+  const [panelMode, setPanelMode] = useState("properties");
   const [dirty, setDirty] = useState(false);
   /* Undo/redo: bounded snapshot stack of draft trees. Every mutation pushes. */
   const [undoStack, setUndoStack] = useState([]);
@@ -882,8 +960,41 @@ const updateNode = (nodeId, changes) => {
     );
   };
 
+  const renderPageSettings = () => (
+    <div className="cpb-page-settings">
+      <div>
+        <h3>Page Settings</h3>
+        <p>Page-level metadata. These settings are stored with the page definition and used by the runtime.</p>
+      </div>
+      <div className="space-y-1">
+        <label className={labelClass}>Page name</label>
+        <input className={inputClass} value={draft.label || ""} onChange={(event) => applyDraft((current) => ({ ...current, label: event.target.value }))} />
+      </div>
+      <div className="space-y-1">
+        <label className={labelClass}>Page key</label>
+        <input className={inputClass} value={draft.pageKey || ""} onChange={(event) => applyDraft((current) => ({ ...current, pageKey: event.target.value }))} placeholder="page_key" />
+      </div>
+      <div className="space-y-1">
+        <label className={labelClass}>Presentation</label>
+        <select className={inputClass} value={draft.presentation_mode || "landing"} onChange={(event) => applyDraft((current) => ({ ...current, presentation_mode: event.target.value }))}>
+          <option value="landing">Landing</option>
+          <option value="workspace">Workspace</option>
+          <option value="record">Record</option>
+        </select>
+      </div>
+      <div className="space-y-1">
+        <label className={labelClass}>Default device</label>
+        <select className={inputClass} value={draft.device || "desktop"} onChange={(event) => applyDraft((current) => ({ ...current, device: event.target.value }), { history: false })}>
+          <option value="desktop">Desktop</option>
+          <option value="tablet">Tablet</option>
+          <option value="mobile">Mobile</option>
+        </select>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-3">
+    <div className="cpb-builder">
       <style>{BUILDER_CSS}</style>
 
       {/* Toolbar — page name, device modes, preview, undo/redo, save. */}
@@ -947,11 +1058,18 @@ const updateNode = (nodeId, changes) => {
       ) : (
         <div className="cpb-shell">
           {/* PALETTE — populated from the Component Registry. */}
-          <aside className="cpb-panel p-3 space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Components</p>
-            {paletteGroups(registry).map((group) => (
-              <div key={group.label} className="space-y-1">
-                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{group.label}</p>
+          <aside className="cpb-panel cpb-palette">
+            <div className="cpb-palette-head">
+              <p className="cpb-palette-title">Components</p>
+              <label className="cpb-palette-search">
+                <input value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Search components..." aria-label="Search components" />
+              </label>
+            </div>
+            <div className="cpb-palette-scroll">
+            {visiblePaletteGroups.map((group) => (
+              <div key={group.label} className="cpb-palette-group">
+                <p className="cpb-palette-group-title">{group.label}</p>
+                <div className="cpb-palette-grid">
                 {group.items.map((component) => {
                   const Icon = componentIcon(component);
                   return (
@@ -975,15 +1093,18 @@ const updateNode = (nodeId, changes) => {
                   </button>
                   );
                 })}
+                </div>
               </div>
             ))}
-            <div className="space-y-1 border-t border-slate-100 pt-2">
+            {!visiblePaletteGroups.length ? <div className="cpb-palette-empty">No components match “{paletteQuery}”.</div> : null}
+            <div className="cpb-section-tools">
               <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Sections</p>
               <div className="grid grid-cols-3 gap-1">
                 {Object.values(SECTION_WIDTHS).map((width) => (
                   <button key={width.key} type="button" className="cpb-device-btn justify-center" style={{ padding: "4px 2px", fontSize: 10 }} onClick={() => addSection(width.key)}>{widthMetaShort(width.key)}</button>
                 ))}
               </div>
+            </div>
             </div>
           </aside>
 
@@ -1015,8 +1136,14 @@ const updateNode = (nodeId, changes) => {
           </main>
 
           {/* PROPERTIES — relevant settings for the selection only. */}
-          <aside className="cpb-panel cpb-properties p-3">
-            {renderProperties()}
+          <aside className="cpb-panel cpb-properties">
+            <div className="cpb-properties-tabs" role="tablist" aria-label="Builder side panel">
+              <button type="button" className={panelMode === "properties" ? "active" : ""} onClick={() => setPanelMode("properties")} role="tab" aria-selected={panelMode === "properties"}>Properties</button>
+              <button type="button" className={panelMode === "page" ? "active" : ""} onClick={() => setPanelMode("page")} role="tab" aria-selected={panelMode === "page"}>Page Settings</button>
+            </div>
+            <div className="cpb-properties-scroll">
+              {panelMode === "page" ? renderPageSettings() : renderProperties()}
+            </div>
           </aside>
         </div>
       )}
