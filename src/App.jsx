@@ -29,14 +29,8 @@ const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/Worksp
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const SalesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
-const ProductsPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const CategoriesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
-const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
-const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
-const CustomersPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
@@ -2189,14 +2183,6 @@ function Desktop({ onLock, onSignOut }) {
             onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
             onNavigate={openItem}
           />
-        ) : activeApp === 'sales' ? (
-          <SalesPage initialObjectKey="sale" appKey="sales" />
-        ) : activeApp === 'supplier-returns' ? (
-          <SupplierReturnsPage />
-        ) : activeApp === 'products' ? (
-          <ProductsPage initialObjectKey="product" appKey="products" />
-        ) : activeApp === 'categories' ? (
-          <CategoriesPage initialObjectKey="category" appKey="categories" />
         ) : activeApp === 'global-products' ? (
           <GlobalProductLookupPage
             onBack={() => openItem('products')}
@@ -2204,21 +2190,7 @@ function Desktop({ onLock, onSignOut }) {
               setAppSearch('')
               setTopPanel('store')
             }}
-          />
-
-        ) : activeApp === 'purchases' ? (
-          <PurchasesPage />
-        ) : activeApp === 'suppliers' ? (
-          <SuppliersPage />
-        ) : activeApp === 'customers' ? (
-          <CustomersPage initialObjectKey="customer" appKey="customers" />
-        ) : activeApp === 'gift-cards' ? (
-          <WorkspacePage initialObjectKey="gift_card" appKey="gift-cards" />
-        ) : activeApp === 'employees' ? (
-          <WorkspacePage initialObjectKey="employee" appKey="employees" />
-        ) : activeApp === 'stores' ? (
-          <WorkspacePage initialObjectKey="store" appKey="stores" />
-        ) : activeApp === 'reports' ? (
+          />        ) : activeApp === 'reports' ? (
           <ReportsPage />
         ) : activeApp === 'custom-reports' ? (
           <CustomReportsPage onBack={() => openItem('reports')} />
@@ -2226,16 +2198,13 @@ function Desktop({ onLock, onSignOut }) {
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'accounting' ? (
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
-        ) : activeApp === 'online-orders' ? (
-          <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
-        ) : activeApp === 'own-delivery' ? (
-          <WorkspacePage initialObjectKey="online_order" appKey="own-delivery" />
+
+
         ) : activeApp === 'kiosk' ? (
           <OneKioskPage />
         ) : activeApp === 'kiosk-display' ? (
           <OneKioskDisplayPage />
-        ) : activeApp === 'kiosk-devices' ? (
-          <WorkspacePage initialObjectKey="kiosk_device" appKey="one_kiosk" />
+
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
