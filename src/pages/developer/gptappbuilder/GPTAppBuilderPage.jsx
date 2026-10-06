@@ -79,7 +79,7 @@ export default function GPTAppBuilderPage() {
           body: JSON.stringify({
             pageKey: page.pageKey,
             label: page.label,
-            pageType: "page",
+            pageType: "object",
             routePath: `/app/custom/${appKey}/${page.pageKey}`,
             definition: { schemaVersion: 1, device: page.device, sections: [] },
             active: true,
