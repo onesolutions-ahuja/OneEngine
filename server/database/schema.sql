@@ -957,7 +957,7 @@ ON suppliers(company_id);
 -- PURCHASES / GOODS RECEIVED
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS purchases (
+CREATE TABLE IF NOT EXISTS purchase_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID NOT NULL REFERENCES stores(id),
@@ -981,7 +981,7 @@ CREATE TABLE IF NOT EXISTS purchases (
 
 CREATE TABLE IF NOT EXISTS purchase_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    purchase_id UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    purchase_id UUID NOT NULL REFERENCES purchase_ledger(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id),
     quantity NUMERIC(12,3) NOT NULL CHECK (quantity > 0),
     received_quantity NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (received_quantity >= 0 AND received_quantity <= quantity),
@@ -995,7 +995,7 @@ CREATE TABLE IF NOT EXISTS purchase_items (
 CREATE TABLE IF NOT EXISTS purchase_receipts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    purchase_id UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    purchase_id UUID NOT NULL REFERENCES purchase_ledger(id) ON DELETE CASCADE,
     store_id UUID NOT NULL REFERENCES stores(id),
     received_by UUID REFERENCES users(id) ON DELETE SET NULL,
     received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1018,7 +1018,7 @@ CREATE TABLE IF NOT EXISTS purchase_receipt_items (
 CREATE INDEX IF NOT EXISTS idx_purchase_receipts_purchase ON purchase_receipts(purchase_id, received_at);
 
 CREATE INDEX IF NOT EXISTS idx_purchases_company_date
-ON purchases(company_id, purchase_date DESC);
+ON purchase_ledger(company_id, purchase_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase
 ON purchase_items(purchase_id);
@@ -1091,7 +1091,7 @@ CREATE TABLE IF NOT EXISTS supplier_invoices (
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
     store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
-    purchase_id UUID REFERENCES purchases(id) ON DELETE SET NULL,
+    purchase_id UUID REFERENCES purchase_ledger(id) ON DELETE SET NULL,
     invoice_number VARCHAR(100) NOT NULL,
     invoice_date DATE NOT NULL DEFAULT CURRENT_DATE,
     due_date DATE,
@@ -1626,7 +1626,7 @@ CREATE TABLE IF NOT EXISTS sale_ledger (
     /*
      * ONLINE ORDER -> POS SALE: set when an Uber Eats / Deliveroo order is
      * completed. UNIQUE (below) makes duplicate sales on retry impossible.
-     * The FK itself is added after online_orders exists (see ONLINE ORDERS
+     * The FK itself is added after sales_orders exists (see ONLINE ORDERS
      * section) because this table is created earlier in this script.
      */
     online_order_id UUID
@@ -2288,7 +2288,7 @@ CREATE INDEX IF NOT EXISTS idx_mobile_scanner_events_pending
 -- ONLINE ORDERS (UBER EATS / DELIVEROO)
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS online_orders (
+CREATE TABLE IF NOT EXISTS sales_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
@@ -2355,26 +2355,26 @@ CREATE TABLE IF NOT EXISTS online_orders (
 
 
 
-ALTER TABLE online_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
-ALTER TABLE online_orders ADD CONSTRAINT online_orders_status_check CHECK (
+ALTER TABLE sales_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
+ALTER TABLE sales_orders ADD CONSTRAINT online_orders_status_check CHECK (
     status IN ('RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'DRIVER_ACCEPTED', 'COLLECTED', 'OUT_FOR_DELIVERY', 'COMPLETED', 'FAILED_DELIVERY', 'RETURNED', 'REJECTED', 'CANCELLED')
 );
-ALTER TABLE online_orders
+ALTER TABLE sales_orders
     DROP CONSTRAINT IF EXISTS online_orders_platform_check;
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
-        WHERE conrelid = 'online_orders'::regclass
+        WHERE conrelid = 'sales_orders'::regclass
           AND conname = 'online_orders_platform_format_check'
     ) THEN
-        ALTER TABLE online_orders
+        ALTER TABLE sales_orders
             ADD CONSTRAINT online_orders_platform_format_check
             CHECK (platform ~ '^[a-z][a-z0-9_]{0,19}$');
     END IF;
 END $$;
 
-UPDATE online_orders AS o
+UPDATE sales_orders AS o
 SET customer_id = c.id
 FROM customers AS c
 WHERE o.customer_id IS NULL
@@ -2382,28 +2382,28 @@ WHERE o.customer_id IS NULL
   AND c.company_id = o.company_id;
 
 CREATE INDEX IF NOT EXISTS idx_online_orders_company
-ON online_orders(company_id, created_at);
+ON sales_orders(company_id, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_online_orders_status
-ON online_orders(company_id, status, created_at);
+ON sales_orders(company_id, status, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_online_orders_customer
-ON online_orders(company_id, customer_id);
+ON sales_orders(company_id, customer_id);
 CREATE INDEX IF NOT EXISTS idx_online_orders_delivery_driver
-ON online_orders(company_id, store_id, delivery_driver_id, status, delivery_route_order);
+ON sales_orders(company_id, store_id, delivery_driver_id, status, delivery_route_order);
 
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_online_order_id_fkey') THEN
         ALTER TABLE payments ADD CONSTRAINT payments_online_order_id_fkey
-            FOREIGN KEY (online_order_id) REFERENCES online_orders(id) ON DELETE SET NULL;
+            FOREIGN KEY (online_order_id) REFERENCES sales_orders(id) ON DELETE SET NULL;
     END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_payments_online_order ON payments(company_id,online_order_id);
 
 /*
  * ONLINE ORDER -> POS SALE link (column declared on the sales table above,
- * before online_orders existed; the FK is added here). The UNIQUE index is
+ * before sales_orders existed; the FK is added here). The UNIQUE index is
  * the database-level guarantee that completing an order can never create a
  * second sale, no matter how completion is retried.
  */
@@ -2416,7 +2416,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sales_online_order') THEN
         ALTER TABLE sale_ledger
             ADD CONSTRAINT fk_sales_online_order
-            FOREIGN KEY (online_order_id) REFERENCES online_orders(id);
+            FOREIGN KEY (online_order_id) REFERENCES sales_orders(id);
     END IF;
 END $$;
 
@@ -2427,9 +2427,9 @@ END $$;
  * mapping_status records whether the link exists (MAPPED / UNMAPPED). Items
  * are matched by product_id and by external_item_id (the platform POS id).
  */
-CREATE TABLE IF NOT EXISTS online_order_items (
+CREATE TABLE IF NOT EXISTS sales_order_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
     product_id UUID REFERENCES products(id),
     external_item_id VARCHAR(255),
     product_name VARCHAR(255) NOT NULL,
@@ -2443,14 +2443,14 @@ CREATE TABLE IF NOT EXISTS online_order_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_online_order_items_order
-ON online_order_items(order_id);
+ON sales_order_items(order_id);
 
 CREATE INDEX IF NOT EXISTS idx_online_order_items_external
-ON online_order_items(external_item_id);
+ON sales_order_items(external_item_id);
 
 CREATE TABLE IF NOT EXISTS online_order_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+    order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
     event_type VARCHAR(50) NOT NULL,
     from_status VARCHAR(30),
     to_status VARCHAR(30),
@@ -2508,7 +2508,7 @@ CREATE TABLE IF NOT EXISTS platform_api_logs (
     success BOOLEAN,
     error_message TEXT,
     duration_ms INTEGER,
-    order_id UUID REFERENCES online_orders(id) ON DELETE SET NULL,
+    order_id UUID REFERENCES sales_orders(id) ON DELETE SET NULL,
     product_id UUID REFERENCES products(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
