@@ -809,9 +809,16 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const openDrawer = async () => {
+    const button = buttons.find((row) => row.button_key === 'till_open_drawer')
+    if (!button) return setError('Open Drawer Flow is not configured.')
     try {
-      const response = await apiRequest('/api/till/drawer/open', { method: 'POST', body: JSON.stringify({ terminalId: till?.terminal_id || till?.terminalId || null, reason: 'No-sale drawer open from Till' }) })
-      setMessage(response?.message || 'Drawer open recorded.')
+      await executeMetadataButton(button, {
+        tillSessionId: till?.id || null,
+        terminalId: till?.terminal_id || till?.terminalId || null,
+        userId: getStoredUser()?.id || getStoredUser()?.userId || null,
+        reason: 'No-sale drawer open from Till',
+      })
+      setMessage('Drawer open recorded.')
     } catch (err) { setError(err?.message || 'Unable to open drawer') }
   }
 
