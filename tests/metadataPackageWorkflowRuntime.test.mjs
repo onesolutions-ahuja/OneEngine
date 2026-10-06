@@ -19,8 +19,9 @@ test("package buttons support workflow targets", async () => {
   assert.match(source, /targetType/);
 });
 
-test("metadata button flows use registered function permissions", async () => {
+test("metadata button flows use registered generic action permissions", async () => {
   const source = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
   assert.match(source, /assertWorkflowActionPermissions/);
-  assert.match(source, /functionDefinition\.permissionsAny/);
+  assert.match(source, /getWorkflowActionDefinition/);
+  assert.equal(source.includes("CALL_FUNCTION is retired"), false);
 });
