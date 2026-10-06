@@ -20,15 +20,8 @@ const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDev
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
 const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
-const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
-const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const MetadataPageRuntime = lazyWithRecovery(() => import('./platform/pages/MetadataPageRuntime'))
-const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
-const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
-const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
-const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
@@ -2378,7 +2371,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'kiosk-devices' ? (
           <MetadataPageRuntime objectKey="kiosk_device" appKey="one_kiosk" />
         ) : activeApp === 'audit-log' ? (
-          <AuditLogPage />
+          <MetadataPageRuntime pageKey="audit-log" />
         ) : activeApp === 'licensing' ? (
           enginePermissionStatus === 'ready' && canManageOneEngine ? <div className="superadmin-theme"><LicensingAdmin /></div> : enginePermissionNotice
         ) : activeApp === 'app-releases' ? (
@@ -2421,7 +2414,7 @@ function Desktop({ onLock, onSignOut }) {
 export default function App() {
   const route = readRoute()
   if (route.app === 'customer-display') {
-    return <div data-oneengine-route="customer-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary></div>
+    return <div data-oneengine-route="customer-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><MetadataPageRuntime objectKey="sale" appKey="customer-display" /></Suspense></LazyLoadBoundary></div>
   }
   if (route.app === 'flow-runtime') {
     return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
