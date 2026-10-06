@@ -2206,10 +2206,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "CALL_FUNCTION",
-              functionKey: "temporary.receipt.download.create",
-              inputs: {
-                saleId: { path: "$record.id" },
+            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "CREATE_SECURE_LINK", adapter: "receipt_download", inputs: {
+                recordId: { path: "$record.id" },
                 expiryMinutes: { path: "$record.expiryMinutes" },
                 baseUrl: { path: "$record.baseUrl" }
               } },
@@ -2249,9 +2247,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           inputContract: [],
           outputContract: [],
           actions: [
-            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "CALL_FUNCTION",
-              functionKey: "temporary.receipt.download.revoke_for_sale",
-              inputs: { saleId: { path: "$record.id" } } },
+            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "REVOKE_SECURE_LINKS", adapter: "receipt_download", recordId: { path: "$record.id" } },
           ],
         },
       ];
