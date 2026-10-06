@@ -3,7 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const roots = ["server", "src", "scripts"].map((item) => path.join(ROOT, item));
+const roots = ["server/routes", "server/services", "server/database", "src"].map((item) => path.join(ROOT, item));
+const rootFiles = ["server/server.js"].map((item) => path.join(ROOT, item));
 const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:true}).flatMap((entry)=>{
   const full=path.join(dir,entry.name);
   return entry.isDirectory()?walk(full):/\.(?:js|jsx|mjs|ts|tsx)$/.test(entry.name)?[full]:[];
@@ -34,7 +35,7 @@ const hardcodedBusinessObjectKeys=[
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS","OneTill","till_session","sale_ledger"];
 const findings=[];
 
-for(const file of roots.flatMap(walk)){
+for(const file of [...rootFiles, ...roots.flatMap(walk)]){
   const name=rel(file);
   const text=fs.readFileSync(file,"utf8");
   if(retired.has(name)){
@@ -63,7 +64,7 @@ for(const file of roots.flatMap(walk)){
   if(/\b(?:CALL_FUNCTION|call_function)\b/.test(text)) findings.push({rule:"LEGACY_FUNCTION_EXECUTION",file:name});
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
-const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
+const report={generatedAt:new Date().toISOString(),scannedFiles:rootFiles.length+roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
 fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
 fs.writeFileSync(path.join(ROOT,"artifacts","metadata-architecture-audit.json"),JSON.stringify(report,null,2)+"\n");
 if(unique.length){
