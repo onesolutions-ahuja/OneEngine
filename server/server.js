@@ -38,6 +38,7 @@ import { executeSystemAction } from "./services/systemWorkflowRuntime.js";
 import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
+import createIntegrationsRouter from "./routes/integrations.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
@@ -416,31 +417,11 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-const paymentProviders = new Map();
-const connectorDrivers = new ConnectorDriverRegistry();
-app.locals.connectorDrivers = connectorDrivers;
-
-async function testPaymentTerminal(terminal) {
-  if (!terminal || !terminal.active || !terminal.provider || !terminal.connection_url) {
-    return { status: "NOT_CONFIGURED", message: "Not configured" };
-  }
-
-  const provider = paymentProviders.get(terminal.provider.toLowerCase());
-
-  if (!provider) {
-    return { status: "PROVIDER_NOT_SUPPORTED", message: "Provider not supported" };
-  }
-
-  return provider.testConnection(terminal);
-}
-
 /*
  * Audit logging must never break the operation being audited - see
  * services/auditLog.js (unknown users are nulled to satisfy the FK; other
  * failures are logged and swallowed so a committed business action stands).
  */
-app.use("/api", createBusinessCommandGateway({ db }));
-
 const writeAudit = createAuditWriter({ db });
 app.locals.writeAudit = writeAudit;
 const workflowTraceRetentionDays = Math.max(7, Number(process.env.WORKFLOW_TRACE_RETENTION_DAYS || 90));
@@ -583,7 +564,7 @@ app.locals.oneEngineAgent = jarvis;
 | permission codes granted to `req.user.roleId` via `role_permissions` and
 | requires the user to hold at least one of the supplied codes.
 |
-| Administrator/Owner roles (as defined by `canViewCompanyCustomers`) retain
+| Administrator/Owner roles (as defined by `hasCompanyWideScope`) retain
 | full access, matching the existing behaviour for those accounts.
 */
 
@@ -673,7 +654,7 @@ async function hasPermission(req, code) {
 }
 
 
-async function canViewCompanyCustomers(user, request = null) {
+async function hasCompanyWideScope(user, request = null) {
   if (!user?.id || !user?.companyId) return false;
   const codes = user.roleId ? await getRolePermissionCodes(user.roleId, request) : [];
   const permissionSets = await loadEffectivePermissionSets(db, user, request);
@@ -1517,34 +1498,7 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 |--------------------------------------------------------------------------
 */
 
-app.use("/api", createEanLookupRouter({ authenticate, db, lookupService: globalProductLookupService }));
-
-/* T10D: Self-Checkout session routes (enter/exit the restricted mode). */
-app.use("/api", createSelfCheckoutRouter({
-  authenticate,
-  authorize,
-  db,
-  bcrypt,
-  writeAudit,
-  requireSelfCheckoutEntitlement: requireEntitlement(db, "self_checkout"),
-  getCompanyEntitlements: (companyId) => getCompanyEntitlements(db, companyId),
-}));
-
-/* T10P: Scan & Go — customer scan sessions (token-authenticated, store/company
- * resolved server-side from the session; see routes/scanAndGo.js). */
-
-app.use("/api", createMobileScannerRouter({ authenticate, authorize, db, writeAudit }));
-
-app.use("/api", createGlobalProductLookupRouter({
-  authenticate,
-  authorize,
-  db,
-  writeAudit,
-  lookupService: globalProductLookupService,
-  connectorDrivers,
-}));
-
-app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
+app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, hasCompanyWideScope, canAccessStore, writeAudit, hasPermission }));
 
 /*
  * JARVIS AI assistant (V1) - POST /api/jarvis, GET /api/jarvis/status.
@@ -1563,7 +1517,7 @@ app.use(
   })
 );
 app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
-app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasPermission }));
+app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, hasCompanyWideScope, hasPermission }));
 app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
@@ -1576,8 +1530,6 @@ app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeA
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
-app.use("/api", createPaypalQrRouter({ authenticate, authorize, db, connectorDrivers, writeAudit }));
-app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
 app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
 app.use("/api", createPlatformSchedulesRouter({ authenticate, authorize, db }));
@@ -1629,72 +1581,6 @@ app.use("/api", createPlatformEventsRouter({
     return false;
   },
 }));
-app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
-
-app.use("/api", createSettingsRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  writeAudit,
-  testPaymentTerminal,
-  requireLoyaltyEntitlement: (req, res, next) => {
-    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
-    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
-    return requireEntitlement(db, "loyalty")(req, res, next);
-  },
-}));
-app.use("/api", createSmsGateWebhookRouter({ pool }));
-app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool, writeAudit }));
-
-/*
-|--------------------------------------------------------------------------
-| CATEGORIES & PRODUCTS
-|--------------------------------------------------------------------------
-|
-| Product and category records are served by the generic platform object runtime.
-| Product and category business writes are owned by metadata Objects and Flows.
-|
-| Route ordering preserved:
-|   GET  /api/categories            (product.view)
-|   POST /api/categories            (product.create)
-|   PUT  /api/categories/:id        (product.edit)
-|   DEL  /api/categories/:id        (product.delete)
-|   GET  /api/products              (product.view)
-|   GET  /api/products/:id          (product.view)
-|   POST /api/products              (product.create)
-|   PUT  /api/products/:id          (product.edit)
-|   DEL  /api/products/:id          (product.delete)
-*/
-
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
-
-/* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
-app.use(
-  "/api",
-  createAuditRouter({
-    authenticate,
-    authorize,
-    db,
-    canViewCompanyCustomers,
-    canAccessStore,
-  })
-);
-
-app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyCustomers, hasPermission }));
-
-/*
-|--------------------------------------------------------------------------
-| SECURE INVOICE LINKS (T9P)
-|--------------------------------------------------------------------------
-|
-| Public token-based invoice download at GET /i/:token (outside /api - the
-| opaque token is the only credential; no IDs in the URL, hash-only token
-| storage, generic 404s) plus admin create/revoke endpoints under
-| Secure invoice links use the Sale platform object and existing permission model.
-*/
-app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudit }));
-
 /*
 | T9A - generic integration foundation (provider-agnostic). Credentials are
 | encrypted at rest; no Sales/Purchases data is sent anywhere by this module.
@@ -1710,23 +1596,6 @@ app.use(
   })
 );
 
-/*
-| T10V - accounting integration export: wires the T10W normalizers + T10X
-| dispatcher to real sale data over the existing T9A connection system.
-| All routes are accounting.export gated and company-scoped.
-*/
-
-
-
-/*
-|--------------------------------------------------------------------------
-| HELD SALES (SUSPENDED TRANSACTIONS) — hardened (routes/heldSales.js)
-|--------------------------------------------------------------------------
-|
-| Atomic resume claim (POST /api/held-sales/:id/resume), optional
-| store-wide listing (?scope=store), payload limits. Same authentication,
-| sale.hold permission gate and company/store/user scoping as before.
-*/
 
 
 /*
@@ -2137,88 +2006,6 @@ async function startServer() {
       BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
     });
     console.log("onePOS: identity bootstrap ready");
-
-    // Reconcile SMSGate inbound webhooks after the HTTP listener is live. This
-    // is idempotent: existing callbacks are reused, while missing callbacks
-    // are created. Signing keys stay encrypted in integration credentials.
-    setTimeout(async () => {
-      try {
-        const rows = await pool.query(
-          `SELECT id,connector_configuration,credentials_encrypted,enabled
-             FROM integration_connections
-            WHERE connector_package_key='smsgate_connector'
-              AND enabled=TRUE`
-        );
-        for (const row of rows.rows) {
-          try {
-          const configuration = typeof row.connector_configuration === "string"
-            ? JSON.parse(row.connector_configuration || "{}")
-            : (row.connector_configuration || {});
-          const secrets = (() => {
-            try { return decryptCredentials(row.credentials_encrypted) || {}; }
-            catch { return {}; }
-          })();
-          const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
-          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}/${webhookToken}`;
-
-          const webhook = await configureSmsGateInboundWebhook(
-            { ...configuration, ...secrets },
-            { webhookUrl }
-          );
-
-          const nextSecrets = { ...secrets, webhookToken };
-          await pool.query(
-            `UPDATE integration_connections
-                SET credentials_encrypted=$1,
-                    connector_configuration=connector_configuration - 'webhookSigningKey',
-                    enabled=CASE
-                      WHEN COALESCE((connector_configuration->>'enabled')::boolean,FALSE)=TRUE THEN TRUE
-                      ELSE enabled
-                    END,
-                    updated_at=NOW()
-              WHERE id=$2`,
-            [encryptCredentials(nextSecrets), row.id]
-          );
-
-          console.log(`onePOS: SMSGate inbound webhook ready (${webhook.created ? "created" : "existing"}) connection=${row.id} staleRemoved=${webhook.removedStale || 0}`);
-          const diagnostics = await getSmsGateDiagnostics({ ...configuration, ...nextSecrets }).catch((error) => ({ error: error?.message || String(error) }));
-          const webhookRows = Array.isArray(diagnostics?.webhooks)
-            ? diagnostics.webhooks
-            : Array.isArray(diagnostics?.webhooks?.data)
-              ? diagnostics.webhooks.data
-              : Array.isArray(diagnostics?.webhooks?.webhooks)
-                ? diagnostics.webhooks.webhooks
-                : [];
-          const relevantWebhook = webhookRows.find((item) =>
-            String(item?.url || "") === webhookUrl
-              && String(item?.event || "").toLowerCase() === "sms:received"
-          );
-          const logRows = Array.isArray(diagnostics?.logs)
-            ? diagnostics.logs
-            : Array.isArray(diagnostics?.logs?.data)
-              ? diagnostics.logs.data
-              : Array.isArray(diagnostics?.logs?.logs)
-                ? diagnostics.logs.logs
-                : [];
-          console.log("onePOS: SMSGate diagnostics", {
-            webhookRegistered: Boolean(relevantWebhook),
-            webhookCount: webhookRows.length,
-            recentProviderLogs: logRows.slice(-8).map((entry) => ({
-              level: entry?.level || entry?.type || null,
-              message: String(entry?.message || entry?.event || entry?.action || "").slice(0, 180),
-              createdAt: entry?.createdAt || entry?.created_at || entry?.timestamp || null,
-            })),
-            providerLogError: diagnostics?.logs?.error || diagnostics?.error || null,
-          });
-          } catch (rowError) {
-            console.error(`onePOS: SMSGate inbound webhook reconciliation failed connection=${row.id}:`, rowError?.message || rowError);
-          }
-        }
-      } catch (error) {
-        console.error("onePOS: SMSGate inbound webhook reconciliation failed:", error?.message || error);
-      }
-    }, 1500).unref?.();
-
 
     // The metadata bootstrap is expensive and used to run on every Render restart,
     // including frontend-only commits. Persist a fingerprint of the source files
@@ -3039,7 +2826,7 @@ async function startServer() {
               return processDashboardSubscriptionDeliveryJob({
                 db,
                 payload: { ...(payload || {}), companyId: job.company_id },
-                canViewCompanyCustomers,
+                hasCompanyWideScope,
                 canAccessStore,
                 hasPermission,
               });
