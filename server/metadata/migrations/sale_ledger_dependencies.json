@@ -1,0 +1,56 @@
+{
+  "canonicalObject": "sale_ledger",
+  "legacyObjectKeys": [
+    "sale",
+    "sale_item",
+    "payment",
+    "refund"
+  ],
+  "status": "DEPENDENCY_AUDIT",
+  "references": {
+    "sale_item": [
+      "server/database/init.js",
+      "server/database/schema.sql",
+      "server/metadata/manifests/purchasing_core.json",
+      "server/metadata/manifests/retail_pos.json",
+      "server/services/jarvis/tools/index.js",
+      "server/services/platformMetadata.js",
+      "server/services/receiptQr.js",
+      "server/services/reportSalesDefinition.js",
+      "server/services/secureInvoiceLinks.js",
+      "tests/phase1RetailMetadata.test.mjs"
+    ],
+    "sale_items": [
+      "server/database/init.js",
+      "server/database/schema.sql",
+      "server/metadata/manifests/retail_pos.json",
+      "server/services/jarvis/tools/index.js",
+      "server/services/platformMetadata.js",
+      "server/services/receiptQr.js",
+      "server/services/reportSalesDefinition.js",
+      "server/services/secureInvoiceLinks.js"
+    ],
+    "payment_runtime": [
+      "server/routes/secureInvoice.js",
+      "server/routes/selfCheckout.js",
+      "server/services/receiptQr.js",
+      "server/services/reportSalesDefinition.js",
+      "server/services/secureInvoiceLinks.js",
+      "src/pages/kiosk/OneKioskPage.jsx",
+      "src/pages/till/TillPage.jsx",
+      "src/services/tillOffline.js"
+    ],
+    "refund_runtime": [
+      "server/database/init.js",
+      "server/database/schema.sql",
+      "server/metadata/manifests/retail_pos.json",
+      "server/services/jarvis/tools/index.js",
+      "tests/tillFlowDebug.test.mjs"
+    ]
+  },
+  "rules": {
+    "doNotAssignOneIdsToLegacyObjects": true,
+    "doNotDeletePhysicalStorageUntilReferencesMigrated": true,
+    "doNotTreatTestsOrStaleReferencesAsCanonicalUsage": true
+  }
+}
