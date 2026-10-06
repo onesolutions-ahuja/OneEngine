@@ -547,6 +547,7 @@ key: "one_connect_google",
     name: "Google Connect",
     description: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users with tenant-specific OAuth configuration.",
     route: "/app/connector-settings/one_connect_google",
+    navigationAliases: [{ slug: "google-connect", route: "/app/connector-settings/one_connect_google" }],
     runtimeSurfaces: {
       connectorSettings: {
         endpoints: {
