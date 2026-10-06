@@ -22,8 +22,6 @@ const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/
 const MetadataPageRuntime = lazyWithRecovery(() => import('./platform/pages/MetadataPageRuntime'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
-const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
-const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
@@ -2354,9 +2352,9 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'audit-log' ? (
           <MetadataPageRuntime pageKey="audit-log" />
         ) : activeApp === 'licensing' ? (
-          enginePermissionStatus === 'ready' && canManageOneEngine ? <div className="superadmin-theme"><LicensingAdmin /></div> : enginePermissionNotice
+          enginePermissionStatus === 'ready' && canManageOneEngine ? <MetadataPageRuntime pageKey="licensing" /> : enginePermissionNotice
         ) : activeApp === 'app-releases' ? (
-          enginePermissionStatus === 'ready' && canManageOneEngine ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : enginePermissionNotice
+          enginePermissionStatus === 'ready' && canManageOneEngine ? <MetadataPageRuntime pageKey="app-releases" /> : enginePermissionNotice
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
             const next = { app: 'settings', section: 'company' }
