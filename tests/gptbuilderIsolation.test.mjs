@@ -132,7 +132,7 @@ test('GPT Builder phase 3 registers a real property editor and runtime mapping f
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const properties = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
   const elementKeys = [...elementsSource.matchAll(/\{ key: '([^']+)', label:/g)].map((match) => match[1])
-  const runtimeOnly = new Set(['group', 'interaction', 'logic', 'data', 'data_create', 'data_update', 'data_delete'])
+  const runtimeOnly = new Set(['group', 'interaction', 'logic', 'data', 'data_create', 'data_update', 'data_delete', 'end'])
   for (const key of elementKeys) {
     if (!runtimeOnly.has(key)) {
       assert.match(page, new RegExp(`activeElement\\.key === '${key}'`), `missing property editor for ${key}`)
