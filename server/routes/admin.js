@@ -679,46 +679,5 @@ export default function createAdminRouter({
       res.status(500).json({ success: false, message: 'Unable to deactivate store' });
     }
   });
-
-  /* GET /api/admin/stores/:id/stats
-   * Returns today's sales, transaction count and low-stock item count for a store.
-   */
-  router.get('/admin/stores/:id/stats', authenticate, authorize("store.view"), async (req, res) => {
-    if (!(await hasCompanyAdminAccess(req))) return res.status(403).json({ success: false, message: "Administrator permission required" });
-    try {
-      const storeCheck = await db('SELECT 1 FROM stores WHERE id=$1 AND company_id=$2', [req.params.id, req.user.companyId]);
-      if (!storeCheck.rows.length) return res.status(404).json({ success: false, message: 'Store not found' });
-      const result = await db(
-        `
-        WITH business_day AS (
-          SELECT (CURRENT_TIMESTAMP AT TIME ZONE c.timezone)::date AS today
-          FROM companies c
-          WHERE c.id = $1
-        )
-        SELECT
-          COALESCE((SELECT SUM(s.total) FROM sales s
-            INNER JOIN companies c ON c.id = s.company_id
-            CROSS JOIN business_day d
-            WHERE s.company_id = $1 AND s.store_id = $2
-            AND s.status = 'completed'
-            AND (s.created_at AT TIME ZONE c.timezone)::date = d.today), 0) AS today_sales,
-          (SELECT COUNT(*) FROM sales s
-            INNER JOIN companies c ON c.id = s.company_id
-            CROSS JOIN business_day d
-            WHERE s.company_id = $1 AND s.store_id = $2
-            AND s.status = 'completed'
-            AND (s.created_at AT TIME ZONE c.timezone)::date = d.today) AS today_transactions,
-          (SELECT COUNT(*) FROM products p
-            WHERE p.company_id = $1
-            AND p.active = true AND p.track_stock = true
-            AND p.stock_quantity <= p.low_stock_level AND p.low_stock_level > 0) AS low_stock_count
-        `,
-        [req.user.companyId, req.params.id]
-      );
-      res.json({ success: true, data: result.rows[0] });
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Unable to load store statistics' });
-    }
-  });
   return router;
 }
