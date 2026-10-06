@@ -1934,5 +1934,53 @@
       "isDefault": true
     }
   ],
-  "packageKey": "uber_eats"
+  "packageKey": "uber_eats",
+  "connectors": [
+    {
+      "connectorKey": "uber_eats",
+      "name": "Uber Eats Connection",
+      "description": "Metadata-driven connection for Uber Eats.",
+      "publisher": "OneSolutions",
+      "authType": "oauth2_client_credentials",
+      "baseUrl": "https://api.uber.com",
+      "credentialsSchema": [
+        {
+          "key": "clientId",
+          "type": "string",
+          "required": true,
+          "label": "Client ID"
+        },
+        {
+          "key": "clientSecret",
+          "type": "secret",
+          "required": true,
+          "label": "Client Secret"
+        }
+      ],
+      "operations": [
+        {
+          "key": "oauth_client_credentials",
+          "name": "OAuth Client Credentials",
+          "method": "POST",
+          "tokenUrls": {
+            "sandbox": "https://sandbox-login.uber.com/oauth/v2/token",
+            "production": "https://auth.uber.com/oauth/v2/token"
+          },
+          "scope": "eats.store eats.order eats.pos_provisioning"
+        },
+        {
+          "key": "test_connection",
+          "name": "Test Connection",
+          "method": "GET",
+          "path": "/v1/eats/stores"
+        }
+      ],
+      "timeoutMs": 15000,
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "backoffMs": 0
+      },
+      "required": true
+    }
+  ]
 }
