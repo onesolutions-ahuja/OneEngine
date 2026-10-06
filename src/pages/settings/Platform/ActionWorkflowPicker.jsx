@@ -466,7 +466,7 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
                   className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm"
                   value={interaction?.sourceField || ""}
                   onChange={(event) => patch({ sourceField: event.target.value })}
-                  placeholder="e.g. customer_id"
+                  placeholder="e.g. source_id"
                 />
               </div>
               <div className="space-y-1">
@@ -475,7 +475,7 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
                   className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm"
                   value={interaction?.targetField || ""}
                   onChange={(event) => patch({ targetField: event.target.value })}
-                  placeholder="e.g. customer_id"
+                  placeholder="e.g. source_id"
                 />
               </div>
             </>
