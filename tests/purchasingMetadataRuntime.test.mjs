@@ -10,7 +10,13 @@ test("purchasing transactions are metadata Flow owned", async () => {
   const objectKeys = new Set(manifest.objects.map((item) => item.objectKey));
   for (const key of ["purchase_ledger","purchase_line","purchase_receipt","stock_return","stock_return_line"]) assert.ok(objectKeys.has(key), key);
   for (const object of manifest.objects) assert.equal(object.config?.flowWritesOnly, true, object.objectKey);
-  for (const key of ["purchase_line","purchase_receipt"]) {\n    const object = manifest.objects.find((item) => item.objectKey === key);\n    assert.equal(object.config?.internal, true, key);\n    assert.equal(object.config?.childStorage, true, key);\n    assert.equal(object.config?.generateOneId, false, key);\n  }\n  const names = new Set(manifest.workflows.map((flow) => flow.name));
+  for (const key of ["purchase_line","purchase_receipt"]) {
+    const object = manifest.objects.find((item) => item.objectKey === key);
+    assert.equal(object.config?.internal, true, key);
+    assert.equal(object.config?.childStorage, true, key);
+    assert.equal(object.config?.generateOneId, false, key);
+  }
+  const names = new Set(manifest.workflows.map((flow) => flow.name));
   for (const name of ["Purchase Create","Purchase Receive","Supplier Return Execute"]) assert.ok(names.has(name), name);
   for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
 });
