@@ -54,6 +54,23 @@ const PACKAGE_CATALOG = [
           modifierOptionActive: "active",
           modifierOptionOrder: "display_order",
         },
+        recordMappings: {
+          catalogue: {
+            id: ["id"],
+            name: ["name", "product_name"],
+            sku: ["sku", "code"],
+            barcode: ["barcode", "ean"],
+            price: ["price", "selling_price", "unit_price"],
+            vatRate: ["vat_rate", "vatRate"],
+            vatApplicable: ["vat_applicable", "vatApplicable"],
+            ageRestricted: ["age_restricted", "ageRestricted"],
+            trackStock: ["track_stock", "trackStock"],
+            imageUrl: ["image_url", "imageUrl"],
+            category: ["category", "category_name"],
+            stock: ["stock_quantity", "stock", "quantity"],
+            active: ["active", "is_active"],
+          },
+        },
         payloadMappings: {
           sale: {
             storeId: "store_id",
