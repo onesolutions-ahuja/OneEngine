@@ -7,7 +7,7 @@ import {
   platformLabel,
   timeAgo,
 } from "../../pages/online/onlineOrdersShared.js";
-import { actionKeyForButton, busyLabel, buttonStyle } from "../../pages/online/useOnlineOrderMetadata.js";
+import { busyLabel, buttonStyle } from "../../pages/online/useOnlineOrderMetadata.js";
 import { fmt } from "../../utils/formatters.js";
 
 /*
@@ -119,13 +119,13 @@ export default function OnlineOrderCard({
 
         {actions.length ? (
           actions.map((button) => {
-            const action = actionKeyForButton(button);
-            const isBusy = busyForOrder === action;
+            const buttonKey = button.button_key || button.buttonKey;
+            const isBusy = busyForOrder === buttonKey;
             return (
               <button
-                key={button.button_key || action}
+                key={buttonKey}
                 type="button"
-                onClick={() => onAction && onAction(order, action)}
+                onClick={() => onAction && onAction(order, button)}
                 disabled={Boolean(busyForOrder)}
                 aria-busy={isBusy}
                 className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1 ${buttonStyle(button)} disabled:opacity-60 disabled:cursor-not-allowed`}
