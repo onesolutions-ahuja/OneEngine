@@ -11,9 +11,9 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Frequently Used' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /^Triggered/ })).toBeVisible()
-    await expect(page.getByRole('button', { name: /^Screen/ })).toBeVisible()
-    await expect(page.getByRole('button', { name: /^Autolaunched/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Triggered$/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Screen$/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Autolaunched$/ })).toBeVisible()
 
     await page.getByLabel('Search automations').fill('screen')
     await expect(page.getByRole('button', { name: /Screen Flow/i })).toBeVisible()
