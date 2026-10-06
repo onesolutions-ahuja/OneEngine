@@ -77,13 +77,13 @@ test("provider-specific adapters stay removed in favor of metadata workflows", (
   assert.ok(all.has("CONNECTOR_TEST_CONNECTION"), "generic connector test action must remain executable");
 });
 
-test("internal adapters do not get generated System workflows", () => {
-  const systemKeys = new Set(systemWorkflowDefinitions().map((item) => item.systemKey));
-  for (const key of INTERNAL) {
-    assert.equal(systemKeys.has("action:" + key), false, key + " must not generate a System Action workflow");
-  }
-  for (const key of ["CREATE_RECORD","SEND_COMMUNICATION","CALL_CONNECTOR"]) {
-    assert.ok(systemKeys.has("action:" + key), key + " should remain a visible System Action workflow");
+test("registered actions and jobs never become one-step System workflows", () => {
+  const definitions = systemWorkflowDefinitions();
+  for (const flow of definitions) {
+    assert.equal(String(flow.systemKey || "").startsWith("action:"), false, flow.systemKey);
+    assert.equal(String(flow.systemKey || "").startsWith("job:"), false, flow.systemKey);
+    assert.notEqual(flow.action?.capabilityType, "action", flow.systemKey);
+    assert.notEqual(flow.action?.capabilityType, "job", flow.systemKey);
   }
 });
 
