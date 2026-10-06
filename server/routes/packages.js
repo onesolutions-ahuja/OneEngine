@@ -9,6 +9,7 @@ import { packageVersionHasEntitlement, reconcileCompanyPackageEntitlements } fro
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { executeWorkflowActions } from "../services/platformWorkflow.js";
 import { assertTrustedPackageManifest } from "../services/trustedPackages.js";
+import { permissionAllows } from "../services/authorization.js";
 
 
 
@@ -355,6 +356,51 @@ export default function createPackagesRouter({ authenticate, authorize, db, pool
   });
 
 
+
+  router.get("/packages/runtime-navigation", authenticate, async (req, res) => {
+    try {
+      const [rows, entitlements, permissionResult] = await Promise.all([
+        registry(db).then((entries) => packageState(entries, req.user.companyId)),
+        getCompanyEntitlements(db, req.user.companyId),
+        db(
+          `SELECT p.code
+             FROM role_permissions rp
+             JOIN permissions p ON p.id=rp.permission_id
+            WHERE rp.role_id=$1`,
+          [req.user.roleId]
+        ),
+      ]);
+      const permissions = permissionResult.rows.map((row) => row.code);
+      const data = rows
+        .filter((item) => String(item.publication_state || "").toUpperCase() === "PUBLISHED")
+        .filter((item) => String(item.company_installation?.status || "").toLowerCase() === "active")
+        .filter((item) => permissionAllows({
+          permissions,
+          requiredPermissions: Array.isArray(item.manifest?.permissions)
+            ? item.manifest.permissions
+            : [],
+        }))
+        .filter((item) => isPackageLicensed(entitlements, {
+          ...item,
+          licence_required: item.licence_mode !== "TECHNICAL" && item.manifest?.licenceRequired !== false,
+        }))
+        .map((item) => ({
+          package_key: item.package_key,
+          name: item.name,
+          route: item.manifest?.route || item.route || null,
+          manifest: {
+            route: item.manifest?.route || item.route || null,
+            navigationAliases: Array.isArray(item.manifest?.navigationAliases) ? item.manifest.navigationAliases : [],
+            runtimeSurfaces: item.manifest?.runtimeSurfaces || {},
+          },
+        }))
+        .filter((item) => item.route || item.manifest.navigationAliases.length);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error("Runtime package navigation error:", error);
+      res.status(500).json({ success: false, message: "Unable to load runtime navigation" });
+    }
+  });
 
   router.get("/packages/marketplace", authenticate, async (req, res) => {
     try {
