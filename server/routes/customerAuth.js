@@ -1,4 +1,5 @@
 import express from "express";
+import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -205,23 +206,13 @@ router.post("/customer-auth/register", async (req, res) => {
       }
 
       const passwordHash = await bcrypt.hash(password, 12);
-
-      const created = await client.query(
-        `INSERT INTO customers (company_id, name, phone, email, password_hash, active) 
-         VALUES ($1,$2,$3,$4,$5,TRUE) 
-         RETURNING id, name, phone, email, company_id`,
-        [
-          companyId,
-          String(name).trim(),
-          phone || null,
-          email || null,
-          await bcrypt.hash(password, 12)
-        ]
-      );
-
+      const creation = await executeSystemWorkflow({
+        db:(sql,params=[])=>client.query(sql,params), companyId, userId:null, systemKey:"flow:customer.register", req,
+        input:{ customer:{ company_id:companyId,name:String(name).trim(),phone:phone||null,email:email||null,password_hash:passwordHash,active:true } },
+        source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"customer.register"},
+      });
       await client.query("COMMIT");
-
-      customer = created.rows[0];
+      customer = creation.result?.customer;
       const token = jwt.sign(
         {
           customerId: customer.id,
