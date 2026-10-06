@@ -5,7 +5,7 @@ import {
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor, RefreshCw, ArrowLeftRight,
 } from 'lucide-react'
 import { apiRequest, getStoredUser, loadSessionPermissions } from '../../services/api'
-import { loadRuntimeSurface, mapRuntimePayload, mappedRecordValue, readCachedRuntimeSurface, surfacePath } from '../../services/runtimeSurface'
+import { loadRuntimeSurface, mapRuntimePayload, mappedRecordValue, readCachedRuntimeSurface, runtimeEndpoint, surfacePath } from '../../services/runtimeSurface'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
@@ -159,6 +159,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const surfaceActions = runtimeSurface?.actions || {}
   const surfacePermissions = runtimeSurface?.permissions || {}
   const surfaceValues = runtimeSurface?.values || {}
+  const surfaceRecordMappings = runtimeSurface?.recordMappings || {}
   const surfaceValue = (slot, fallback = undefined) => surfaceValues?.[slot] ?? fallback
   const objectKey = (slot) => String(surfaceObjects?.[slot] || '')
   const actionKey = (slot) => String(surfaceActions?.[slot] || '')
@@ -166,6 +167,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const settingValue = (slot, fallback) => surfacePath(settings, surfaceSettings?.[slot], fallback)
   const surfaceField = (slot, fallback = '') => String(surfaceFields?.[slot] || fallback)
   const recordValue = (record, slot, fallback = undefined) => record?.[surfaceField(slot)] ?? fallback
+  const mappedValue = (record, group, key, fallback = undefined) => mappedRecordValue(record, surfaceRecordMappings?.[group] || {}, key, fallback)
   const currency = settingValue('currencyPath', 'GBP')
   const meta = useMemo(() => buttonMap(buttons), [buttons])
 
@@ -466,7 +468,9 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     let timer
     const poll = async () => {
       try {
-        const response = await apiRequest(`/api/mobile-scanner/events?terminalId=${encodeURIComponent(till.terminal_id)}`)
+        const scannerEndpoint = runtimeEndpoint(runtimeSurface, 'scannerEvents', { terminalId: recordValue(till, 'sessionTerminalId', '') })
+        if (!scannerEndpoint) return
+        const response = await apiRequest(scannerEndpoint)
         if (!stopped && response?.success) {
           for (const event of response.data || []) {
             const barcode = String(event?.barcode || '').trim()
@@ -554,7 +558,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       completedAt: new Date().toISOString(),
     })
     const itemValues = (line, itemType = surfaceValue('itemTypeProduct')) => ({
-      productId: line.id || line.productId || line.product_id || null,
+      productId: mappedValue(line, 'lineInput', 'productId', null),
       productName: line.name || line.description || 'Misc Item',
       quantity: Number(line.quantity || 0),
       unitPrice: Number(line.price || 0),
@@ -576,8 +580,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       amount: Number(row?.amount ?? total ?? 0),
       provider: row?.provider || null,
       terminalId: recordValue(till, 'sessionTerminalId', null) || null,
-      providerTransactionId: row?.providerTransactionId || row?.provider_transaction_id || null,
-      idempotencyKey: row?.idempotencyKey || row?.idempotency_key || clientRequestId,
+      providerTransactionId: mappedValue(row, 'paymentInput', 'providerTransactionId', null),
+      idempotencyKey: mappedValue(row, 'paymentInput', 'idempotencyKey', clientRequestId) || clientRequestId,
       status: row?.status || surfaceValue('paymentStatusCompleted'),
     })
     const paymentRows = Array.isArray(options.payments) && options.payments.length
@@ -678,12 +682,12 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     const showChange = methodConfig.showChange === true
     try {
       if (offlineQueueEnabled) {
-        durableCashEntry = await enqueueOfflineCashSale(payload, till?.terminal_number || till?.terminalNumber || 'T')
+        durableCashEntry = await enqueueOfflineCashSale(payload, recordValue(till, 'sessionTerminalNumber', 'T') || 'T')
       }
       if (!online && offlineQueueEnabled) {
         const entry = durableCashEntry
         clearSale()
-        setLastSale({ id: null, receipt_number: entry.provisionalReceipt, total, offline: true })
+        setLastSale({ id: null, receiptNumber: entry.provisionalReceipt, total, offline: true })
         setMessage(`Cash sale saved offline · ${entry.provisionalReceipt} · Pending sync.`)
         setSaleCompleteNotice({ receiptNumber: entry.provisionalReceipt, total, received, change: null, pendingSync: true })
         await refreshOfflineCount()
@@ -699,7 +703,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       if (durableCashEntry) await removeOfflineCashSale(durableCashEntry.id)
       setLastSale(sale)
       clearSale()
-      const serverTotal = Number(sale.total || 0)
+      const serverTotal = Number(mappedValue(sale, 'transaction', 'total', 0) || 0)
       let savedSale = sale
       if (sale.id) {
         try {
@@ -707,23 +711,23 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
           savedSale = savedResponse?.record || savedResponse?.data || sale
         } catch {}
       }
-      const change = showChange ? Number(savedSale?.change_due || 0) : null
+      const change = showChange ? Number(mappedValue(savedSale, 'transaction', 'changeDue', 0) || 0) : null
       setSaleCompleteNotice({
-        receiptNumber: sale.receipt_number || null,
+        receiptNumber: mappedValue(sale, 'transaction', 'receiptNumber', null),
         total: serverTotal,
         received: methodConfig.requiresCashReceived === true ? received : null,
         change,
         pendingSync: false,
       })
       setMessage(showChange && change != null
-        ? `Sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''} · Change ${money(change, currency)}`
-        : `${selectedMethod?.label || paymentMethod} sale complete${sale.receipt_number ? ` · ${sale.receipt_number}` : ''}`)
+        ? `Sale complete${mappedValue(sale, 'transaction', 'receiptNumber', null) ? ` · ${mappedValue(sale, 'transaction', 'receiptNumber', null)}` : ''} · Change ${money(change, currency)}`
+        : `${selectedMethod?.label || paymentMethod} sale complete${mappedValue(sale, 'transaction', 'receiptNumber', null) ? ` · ${mappedValue(sale, 'transaction', 'receiptNumber', null)}` : ''}`)
       await maybeShowReceiptQr(sale)
       await load()
     } catch (err) {
       if (offlineQueueEnabled && durableCashEntry && (err instanceof TypeError || err?.status >= 500 || navigator.onLine === false)) {
         clearSale()
-        setLastSale({ id: null, receipt_number: durableCashEntry.provisionalReceipt, total, offline: true })
+        setLastSale({ id: null, receiptNumber: durableCashEntry.provisionalReceipt, total, offline: true })
         setOnline(false)
         setMessage(`Cash sale saved offline · ${durableCashEntry.provisionalReceipt} · Pending sync.`)
         setSaleCompleteNotice({ receiptNumber: durableCashEntry.provisionalReceipt, total, received, change: null, pendingSync: true })
@@ -766,15 +770,15 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     try {
       const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('heldTransaction'))}/records/${encodeURIComponent(id)}`)
       const held = response?.record || response?.data || response || {}
-      const heldItems = held.items || {}
+      const heldItems = mappedValue(held, 'heldTransaction', 'items', {}) || {}
       if (Array.isArray(heldItems)) {
         setBasket(heldItems)
         setMiscLines([])
       } else {
-        setBasket(Array.isArray(heldItems.items) ? heldItems.items : [])
-        setMiscLines(Array.isArray(heldItems.miscLines) ? heldItems.miscLines : [])
+        setBasket(Array.isArray(heldItems?.[surfaceValue('heldBasketKey')]) ? heldItems[surfaceValue('heldBasketKey')] : [])
+        setMiscLines(Array.isArray(heldItems?.[surfaceValue('heldMiscLinesKey')]) ? heldItems[surfaceValue('heldMiscLinesKey')] : [])
       }
-      setDiscount({ type: held.discount_type || null, value: Number(held.discount_value || 0) })
+      setDiscount({ type: mappedValue(held, 'heldTransaction', 'discountType', null), value: Number(mappedValue(held, 'heldTransaction', 'discountValue', 0) || 0) })
       const consumeButton = buttonFor('resumeConsume')
       if (!consumeButton) throw new Error('Resume Sale Flow is not configured.')
       await executeMetadataButton(consumeButton, { heldSaleId: id })
@@ -1186,7 +1190,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       }}/></Modal> : null}
       {modal === 'petty' ? <Modal title={meta.petty?.label || 'Petty Cash'} onClose={() => setModal(null)}><PettyForm onSubmit={recordPettyCash}/></Modal> : null}
       {modal === 'customer' ? <Modal title={meta.customer?.label || 'Select Customer'} onClose={() => setModal(null)} wide><label className="till-modal-search"><Search size={15}/><input value={customerSearch} onChange={(e) => searchCustomers(e.target.value)} placeholder="Search name, phone or email"/></label><div className="till-customer-results"><button type="button" onClick={() => { setSelectedCustomer(null); setModal(null) }}>Walk-in Customer</button>{customers.map((customer) => <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setModal(null) }}><strong>{customer.name}</strong><span>{customer.phone || customer.email || ''}</span></button>)}</div></Modal> : null}
-      {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{sale.customer_name || 'Held Sale'}</strong><span>{sale.created_at ? new Date(sale.created_at).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
+      {modal === 'held' ? <Modal title={meta.resume?.label || 'Held Sales'} onClose={() => setModal(null)} wide><div className="till-held-list">{heldSales.map((sale) => <button key={sale.id} type="button" onClick={() => resumeHeld(sale.id)}><strong>{mappedValue(sale, 'heldTransaction', 'customerName', 'Held Sale') || 'Held Sale'}</strong><span>{mappedValue(sale, 'heldTransaction', 'createdAt', null) ? new Date(mappedValue(sale, 'heldTransaction', 'createdAt')).toLocaleString() : ''}</span></button>)}{!heldSales.length ? <div className="till-empty">No held sales.</div> : null}</div></Modal> : null}
       {modal === 'till' ? <Modal title={meta.till_session?.label || 'Till Session'} onClose={() => setModal(null)} wide><TillSessionPanel till={till} buttons={buttons.filter((button) => button.placement === 'till_session')} currency={currency} onChanged={loadTill} onMessage={setMessage} onError={setError} onExecute={executeMetadataButton}/></Modal> : null}
       {modal === 'age' ? <Modal title="Age Verification" onClose={() => { setPendingPayment(null); setPendingCheckout(null); setModal(null) }}><div className="till-form"><p>Confirm that the required age check has been completed for this sale.</p><button type="button" className="till-primary" onClick={() => { const pending = pendingCheckout || { paymentMethod: pendingPayment, options: { verifiedOverride: true } }; setAgeVerified(true); setPendingPayment(null); setPendingCheckout(null); setModal(null); if (pending?.paymentMethod) window.setTimeout(() => completeSale(pending.paymentMethod, pending.options || { verifiedOverride: true }), 0) }}>Age verified</button></div></Modal> : null}
       {modal === 'payment' ? <Modal title="Payment" onClose={() => { setPaymentModalMethod(''); setModal(null) }} wide><PaymentSheet total={total} methods={paymentMethods} initialMethod={paymentModalMethod} onPay={async (method, paymentInputs) => {
