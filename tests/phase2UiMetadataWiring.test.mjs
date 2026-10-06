@@ -95,3 +95,13 @@ test("Phase 2 shell resolves hidden foundation navigation from the server-filter
   assert.match(packages,/permissionAllows/);
   assert.match(packages,/isPackageLicensed/);
 });
+
+
+test("Phase 2 Dashboard and Reports presentation settings are metadata-owned", async()=>{
+  for(const path of ["src/pages/dashboard/DashboardPage.jsx","src/pages/reports/CustomReportsAdmin.jsx"]){
+    const source=await read(path);
+    assert.equal(source.includes("/api/settings"),false,path);
+    assert.equal(source.includes("data?.company?.currency"),false,path);
+    assert.match(source,/loadRuntimeSurfaceSettings/);
+  }
+});
