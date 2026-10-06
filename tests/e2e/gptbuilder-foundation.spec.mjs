@@ -25,6 +25,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     // and never intercept actions rendered by configuration/diagnostic panels.
     const newAutomationLink = page.getByRole('button', { name: /^New Automation$/ })
     await expect(newAutomationLink).toBeVisible()
+    const saveButton = page.getByRole('button', { name: /^Save$/ })
     await expect(saveButton).toBeEnabled()
 
     await page.getByRole('button', { name: 'View Properties' }).click()
