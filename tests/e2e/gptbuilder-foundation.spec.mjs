@@ -316,4 +316,60 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     expect(calls.find((call) => call.kind === 'debug')?.body?.mode).toBe('debug')
     expect(failures, failures.join('\n')).toEqual([])
   })
+
+  test('every supported Builder element is exposed in the correct real flow context', async ({ page }) => {
+    if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
+    const failures = watchRuntimeFailures(page)
+
+    await page.route('**/api/platform/objects', async (route) => {
+      if (!route.request().url().endsWith('/api/platform/objects')) return route.continue()
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [{ id: 'obj-contract', object_key: 'contract_record', label: 'Contract Record' }] }),
+      })
+    })
+
+    const openFlow = async (label) => {
+      await page.goto('developer/gptbuilder')
+      await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+      await page.getByRole('button', { name: /^New Flow$/ }).click()
+      await page.getByLabel('Search automations').fill(label)
+      await page.locator('.gptb-type-card').filter({ has: page.getByText(label, { exact: true }) }).click()
+      await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
+    }
+
+    const openPalette = async () => {
+      await page.getByRole('button', { name: 'Add after Start' }).click()
+      return page.getByRole('dialog', { name: 'Add Element' })
+    }
+
+    await openFlow('Screen Flow')
+    let palette = await openPalette()
+    for (const label of [
+      'Action','Run Agent','Screen','Subflow','Assignment','Decision','Loop',
+      'Collection Filter','Collection Sort','Transform','Group',
+      'Get Records','Create Records','Update Records','Delete Records','Roll Back Records',
+    ]) {
+      await expect(palette.getByRole('button', { name: label, exact: true })).toBeVisible()
+    }
+    await palette.getByRole('button', { name: 'Close Add Element' }).click()
+
+    await openFlow('Autolaunched Flow (No Trigger)')
+    palette = await openPalette()
+    for (const label of ['Wait for Amount of Time','Wait for Conditions','Wait Until Date']) {
+      await expect(palette.getByRole('button', { name: label, exact: true })).toBeVisible()
+    }
+    await palette.getByRole('button', { name: 'Close Add Element' }).click()
+
+    await openFlow('Record-Triggered Flow')
+    const startPanel = page.getByLabel('Configure Start')
+    await startPanel.locator('label').filter({ hasText: /^Object/ }).getByRole('combobox').selectOption('contract_record')
+    await startPanel.getByRole('button', { name: /^Done$/ }).click()
+    palette = await openPalette()
+    await expect(palette.getByRole('button', { name: 'Custom Error', exact: true })).toBeVisible()
+
+    expect(failures, failures.join('\n')).toEqual([])
+  })
+
 })
