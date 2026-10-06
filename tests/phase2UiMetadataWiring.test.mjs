@@ -14,7 +14,7 @@ test("Phase 2 App shell has no business object routing table", async()=>{
     'initialObjectKey="sale"','initialObjectKey="product"','initialObjectKey="customer"',
     'initialObjectKey="supplier"','initialObjectKey="online_order"'
   ]) assert.equal(source.includes(token),false,token);
-  assert.match(source,/catalogAppForNavigation\(storeApps, target\)/);
+  assert.match(source,/catalogAppForNavigation\(\[\.\.\.runtimeApps, \.\.\.storeApps\], target\)/);
   assert.match(source,/resolveCatalogNavigationRoute\(metadataApp, target\)/);
 });
 
