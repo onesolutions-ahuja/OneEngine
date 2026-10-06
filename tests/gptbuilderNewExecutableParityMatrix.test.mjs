@@ -57,3 +57,18 @@ test('screen observable contract validates metadata and persists a resumable wai
 test('captured core elements are backed by runtime primitives, not picker-only stubs',()=>{
  for(const key of ['SCREEN','ASSIGNMENT','CONDITION','LOOP','TRANSFORM','COLLECTION_SORT','COLLECTION_FILTER','GET_RECORDS','CREATE_RECORD','UPDATE_RECORD','DELETE_RECORD','ROLLBACK_RECORDS','WAIT']) assert.ok(runtime.includes('key: "'+key+'"'),key)
 })
+
+test('activation preserves record-entry runtime semantics',()=>{
+ assert.ok(page.includes("entryFormula:start.conditionMode==='formula'"))
+ assert.ok(page.includes("entryTransition:start.updatedRequirement==='newly_meets'?'UPDATED_TO_MEET':'EVERY_TIME'"))
+ assert.ok(page.includes("flowCapabilities:FLOW_CAPABILITIES[flow.key]||{}"))
+})
+
+test('run debug and saved tests coerce declared input resource types',()=>{
+ assert.ok(page.includes('function executionInputValue(resource,raw)'))
+ assert.ok(page.includes("['number','currency'].includes(type)"))
+ assert.ok(page.includes("type==='boolean'"))
+ assert.ok(page.includes('resource?.isCollection'))
+ assert.ok(page.includes("['record','apex-defined'].includes(type)"))
+ assert.ok(page.includes('inputs:Object.fromEntries(resources.filter((r)=>r.availableForInput)'))
+})
