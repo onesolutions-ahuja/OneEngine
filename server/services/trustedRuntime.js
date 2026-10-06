@@ -13,7 +13,6 @@ const PRIVILEGED_ROUTES = Object.freeze([
   { id: "admin.manage", prefixes: ["/api/admin/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "settings.manage", prefixes: ["/api/settings/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "payment.execute", prefixes: ["/api/payments", "/api/payment", "/api/checkout", "/api/till/payment"], methods: ["POST","PUT","PATCH","DELETE"] },
-  { id: "refund.execute", prefixes: ["/api/refunds", "/api/returns", "/api/exchanges"], methods: ["POST","PUT","PATCH","DELETE"] },
 ].map((item) => Object.freeze({ ...item, prefixes: Object.freeze(item.prefixes), methods: Object.freeze(item.methods) })));
 
 const definitions = [
@@ -55,8 +54,7 @@ export function isPrivilegedMutation(path, method = "GET") {
   return pathname.startsWith("/api/appointments") || pathname.startsWith("/api/platform/") || pathname.startsWith("/api/security/") || pathname.startsWith("/api/packages/")
     || pathname.startsWith("/api/admin/") || pathname.startsWith("/api/settings/")
     || pathname.startsWith("/api/payments") || pathname.startsWith("/api/payment")
-    || pathname.startsWith("/api/refunds") || pathname.startsWith("/api/returns")
-    || pathname.startsWith("/api/exchanges");
+    || pathname.startsWith("/api/platform/objects/stock_return");
 }
 
 export function validateTrustedRuntime() {
