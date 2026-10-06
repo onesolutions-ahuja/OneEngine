@@ -2066,7 +2066,7 @@ app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStor
 | Public token-based invoice download at GET /i/:token (outside /api - the
 | opaque token is the only credential; no IDs in the URL, hash-only token
 | storage, generic 404s) plus admin create/revoke endpoints under
-| /api/sales/:saleId/secure-links using the existing permission model.
+| Secure invoice links use the Sale platform object and existing permission model.
 */
 app.use(createSecureInvoiceRouter({ db, pool, authenticate, authorize, writeAudit }));
 
