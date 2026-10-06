@@ -8,6 +8,7 @@ const PACKAGE_CATALOG = [
     navigationAliases: [
       { slug: "sales", route: "/app/objects/sale?appKey=retail_pos" },
       { slug: "gift-cards", route: "/app/objects/gift_card?appKey=retail_pos" },
+      { slug: "stores", route: "/app/objects/store?appKey=retail_pos" },
       { slug: "till", route: "/app/till" },
     ],
     runtimeSurfaces: {
@@ -312,7 +313,11 @@ const PACKAGE_CATALOG = [
     key: "online_orders",
     name: "Online Orders",
     description: "Provider-neutral online order records, fulfilment and lifecycle foundation.",
-    route: "/app/order-prep",
+    route: "/app/objects/online_order?appKey=online_orders",
+    navigationAliases: [
+      { slug: "online-orders", route: "/app/objects/online_order?appKey=online_orders" },
+      { slug: "order-prep", route: "/app/objects/online_order?appKey=online_orders" },
+    ],
     version: "1.0.0",
     packageType: "FOUNDATION",
     technical: true,
