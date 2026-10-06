@@ -279,7 +279,7 @@ function portableIdentity(item = {}) {
     item.relationshipKey || item.relationship_key || item.layoutKey || item.layout_key ||
     item.viewKey || item.view_key || item.actionKey || item.action_key ||
     item.buttonKey || item.button_key || item.connectorKey || item.connector_key ||
-    item.appKey || item.app_key || item.pageKey || item.page_key || item.key || item.id || "");
+    item.pageKey || item.page_key || item.appKey || item.app_key || item.key || item.id || "");
 }
 
 export function validatePortableArtifact(artifact = {}) {
