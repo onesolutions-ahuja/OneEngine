@@ -42,7 +42,6 @@ const RECORD_ACTIONS = [
   ["create_related", "Create Related Record"],
   ["open_related", "Open Related List"],
   ["run_workflow", "Run Workflow"],
-  ["call_function", "Call Registered Function"],
 ];
 
 /* Same operator vocabulary the Field editor already uses, so a condition
@@ -1941,7 +1940,7 @@ export default function LayoutEditor({
             <input type="text" className="onepos-input" value={component.workflow_id || ""} placeholder="Existing workflow ID" onChange={(event) => updateComponent(index, "workflow_id", event.target.value)} />
           </label>
         ) : null}
-        {component.action === "call_function" ? (
+        {false ? (
           <label className="pfb-field">
             <span className="pfb-field-label">Registered Function Key</span>
             <input type="text" className="onepos-input" value={component.function_key || ""} placeholder="Registered function key" onChange={(event) => updateComponent(index, "function_key", event.target.value)} />
