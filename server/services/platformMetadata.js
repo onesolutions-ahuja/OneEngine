@@ -2206,12 +2206,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "CALL_FUNCTION",
-              functionKey: "temporary.receipt.download.create",
-              inputs: {
-                saleId: { path: "$record.id" },
-                expiryMinutes: { path: "$record.expiryMinutes" },
-                baseUrl: { path: "$record.baseUrl" }
+            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "ONE_API_REQUEST",
+              method: "POST", path: "/api/platform/runtime/document-links", requireSuccess: true,
+              body: {
+                documentType: "RECEIPT",
+                resourceId: { path: "$record.id" },
+                expiryMinutes: { path: "$record.expiryMinutes" }
               } },
           ],
         },
@@ -2249,9 +2249,9 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           inputContract: [],
           outputContract: [],
           actions: [
-            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "CALL_FUNCTION",
-              functionKey: "temporary.receipt.download.revoke_for_sale",
-              inputs: { saleId: { path: "$record.id" } } },
+            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "ONE_API_REQUEST",
+              method: "DELETE", path: "/api/platform/runtime/document-links", requireSuccess: true,
+              body: { documentType: "RECEIPT", resourceId: { path: "$record.id" } } },
           ],
         },
       ];
