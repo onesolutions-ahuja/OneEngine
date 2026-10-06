@@ -4482,8 +4482,7 @@
             "id": "create_receipt",
             "label": "Create Temporary Receipt Download",
             "apiName": "create_receipt",
-            "key": "CALL_FUNCTION",
-            "functionKey": "temporary.receipt.download.create",
+            "key": "SECURE_RESOURCE_LINK_MANAGE",
             "inputs": {
               "saleId": {
                 "path": "variables.saleId"
@@ -4494,7 +4493,8 @@
               "baseUrl": {
                 "path": "variables.baseUrl"
               }
-            }
+            },
+            "operation": "CREATE"
           }
         ]
       }
