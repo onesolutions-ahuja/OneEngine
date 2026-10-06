@@ -8,7 +8,7 @@ import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
 import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, workflowFormulaReferences } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
-import { executePlatformAutomations } from "../services/platformAutomation.js";
+import { executePlatformAutomations, normalizeStartFormula, startFormulaInputs } from "../services/platformAutomation.js";
 import { hasConfiguredCommunicationProvider } from "../services/platformWorkflow.js";
 import {
   createWorkflowRun,
@@ -5695,7 +5695,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (record && req.body?.skipStartConditionRequirements !== true) {
         let startMatched = true;
         if (workflow.action?.start?.conditionMode === "formula" && workflow.action?.startFormula) {
-          startMatched = Boolean(resolveWorkflowResource(workflow.action.startFormula, { record, variables: {}, steps: {}, user: req.user }));
+          startMatched = evaluateWorkflowFormula(normalizeStartFormula(workflow.action.startFormula), startFormulaInputs(fields, record, null)) === true;
         } else if (Array.isArray(workflow.conditions) && workflow.conditions.length) {
           startMatched = evaluateCondition(
             { match: workflow.action?.match || "all", conditionLogic: workflow.action?.customConditionLogic || "", conditions: workflow.conditions },
