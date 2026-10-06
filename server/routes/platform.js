@@ -3308,6 +3308,22 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
+      if (type === "record_save") {
+        if (!object) return res.status(422).json({ success: false, message: "Object context is required for record save" });
+        const metadataFieldsResult = await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order", [object.id, req.user.companyId]);
+        const metadataFields = metadataFieldsResult.rows;
+        const fields = await applyFieldSecurity(db, metadataFields, req);
+        const action = recordId ? "update" : "create";
+        if (!(await hasPlatformObjectPermission(db, req, object.id, recordId ? "edit" : "create"))) {
+          return res.status(403).json({ success: false, message: `You do not have permission to ${action} records for this object` });
+        }
+        if (object?.config?.protectedWrites === true) return res.status(409).json({ success: false, code: "SYSTEM_OBJECT_OPERATION_REQUIRED", message: "This Object uses a protected metadata action or Flow for writes" });
+        const values = interaction.values && typeof interaction.values === "object" ? interaction.values : {};
+        const saved = await executeCanonicalRecordWrite({ req, object, metadataFields, fields, input: values, action, recordId });
+        if (saved.status !== 200) return res.status(saved.status).json({ success: false, code: saved.code, message: saved.message, errors: saved.errors, duplicateAction: saved.duplicateAction });
+        return res.status(recordId ? 200 : 201).json({ success: true, data: saved.data, messages: saved.messages, automationExecutions: saved.automationExecutions });
+      }
+
       if (type === "workflow") {
         const workflowUuid = String(interaction.workflowUuid || "");
         if (!recordIdIsValid(workflowUuid)) return res.status(400).json({ success: false, message: "A valid workflow reference is required" });
