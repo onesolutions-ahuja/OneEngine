@@ -87,50 +87,6 @@ export function normalizeDashboardIdentity(input = {}, fallbackName = "dashboard
   };
 }
 
-/*
- * The canonical dashboard component vocabulary. Every entry is GENERIC: it
- * describes a rendering shape plus the configuration an administrator supplies
- * (a saved report or an inline report definition reusing the existing custom
- * report engine). No Sales-, Product- or payment-specific component exists.
- */
-export const DASHBOARD_COMPONENTS = Object.freeze([
-  { key: "kpi", label: "Metric / KPI", kind: "metric", valueField: true, labelField: true, formats: VALUE_FORMATS, sizes: KPI_SIZES },
-  { key: "pie", label: "Pie Chart", kind: "chart", categoryField: true, valueField: true, maxCategories: true },
-  { key: "donut", label: "Donut Chart", kind: "chart", categoryField: true, valueField: true, maxCategories: true },
-  { key: "bar", label: "Bar Chart", kind: "chart", categoryField: true, valueField: true, sort: true, limit: true },
-  { key: "line", label: "Line Chart", kind: "chart", categoryField: true, valueField: true, limit: true },
-  { key: "gauge", label: "Gauge", kind: "chart", valueField: true },
-  { key: "funnel", label: "Funnel", kind: "chart", categoryField: true, valueField: true, limit: true },
-  { key: "scatter", label: "Scatter", kind: "chart", categoryField: true, valueField: true, limit: true },
-  { key: "combo", label: "Combo Chart", kind: "chart", categoryField: true, valueField: true, limit: true },
-  { key: "table", label: "Table / List", kind: "record" },
-  { key: "text", label: "Text", kind: "content" },
-  { key: "image", label: "Image", kind: "content" },
-  { key: "clock_widget", label: "Clock / Watch", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "calendar_widget", label: "Calendar", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "weather_widget", label: "Weather", kind: "content", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "folder_card", label: "Folder Card", kind: "card", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "avatar_group", label: "Avatar Group", kind: "avatar", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "modern_app_card", label: "Modern App Card", kind: "card", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "modern_kpi_card", label: "Modern KPI Card", kind: "metric", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "modern_section_header", label: "Modern Section Header", kind: "section", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "modern_data_card", label: "Modern Data Card", kind: "card", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-  { key: "icon_action_tile", label: "Action Tile", kind: "action", supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"] },
-]);
-const DASHBOARD_COMPONENT_MAP = new Map(DASHBOARD_COMPONENTS.map((component) => [component.key, component]));
-
-export function getDashboardComponent(key) {
-  return DASHBOARD_COMPONENT_MAP.get(String(key || "")) || null;
-}
-
-/*
- * THE dashboard layout algorithm. This is deliberately duplicated in
- * src/components/dashboard/platformDashboard.js (`packLayout`) because that
- * module is also imported by browser code and must not pull server modules into
- * the bundle. Both implementations are byte-for-byte equivalent and a unit
- * test asserts they agree, so the Builder canvas and the persisted metadata can
- * never drift.
- */
 export const DASHBOARD_COLUMNS = 12;
 export const clampWidth = (value) => Math.min(DASHBOARD_COLUMNS, Math.max(1, Number(value) || 1));
 export const clampHeight = (value) => Math.min(12, Math.max(1, Number(value) || 1));
