@@ -2101,7 +2101,7 @@ async function startServer() {
       if (!companyId) throw Object.assign(new Error("Workflow automation requires a company context"), { retryable: false });
       if (preferredUserId) {
         const preferred = await db(
-          `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS device_session_id
+          `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS terminal_id
              FROM users u
              JOIN roles r ON r.id=u.role_id
             WHERE u.id=$1 AND u.company_id=$2 AND u.active=true
@@ -2117,7 +2117,7 @@ async function startServer() {
         );
       }
       const fallback = await db(
-        `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS device_session_id
+        `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS terminal_id
            FROM users u
            JOIN roles r ON r.id=u.role_id
           WHERE u.company_id=$1 AND u.active=true
@@ -2285,7 +2285,7 @@ async function startServer() {
                     roleId: actor.role_id || null,
                     companyId: job.company_id,
                     storeId: actor.store_id || parentRun?.metadata?.storeId || null,
-                    deviceSessionId: actor.device_session_id || parentRun?.metadata?.deviceSessionId || null,
+                    terminalId: actor.terminal_id || parentRun?.metadata?.terminalId || null,
                   },
                 };
                 try {
@@ -2307,7 +2307,7 @@ async function startServer() {
                     record,
                     recordId,
                     storeId: req.user.storeId,
-                    deviceSessionId: req.user.deviceSessionId,
+                    terminalId: req.user.terminalId,
                     connectorDrivers,
                     writeAudit,
                     runId: childRun.id,
@@ -2606,7 +2606,7 @@ async function startServer() {
                   roleId: actor.role_id || null,
                   companyId: job.company_id,
                   storeId: actor.store_id || run.metadata?.storeId || null,
-                  deviceSessionId: actor.device_session_id || run.metadata?.deviceSessionId || null,
+                  terminalId: actor.terminal_id || run.metadata?.terminalId || null,
                 },
               };
 
@@ -2637,7 +2637,7 @@ async function startServer() {
                   previousRecord: run.metadata?.initialPreviousRecord || null,
                   recordId: run.record_id || null,
                   storeId: req.user.storeId,
-                  deviceSessionId: req.user.deviceSessionId,
+                  terminalId: req.user.terminalId,
                   connectorDrivers,
                   writeAudit,
                   runId: run.id,
@@ -2863,11 +2863,11 @@ async function startServer() {
                     roleId: actor.role_id,
                     companyId,
                     storeId: actor.store_id || null,
-                    deviceSessionId: actor.device_session_id || null,
+                    terminalId: actor.terminal_id || null,
                   } },
                   userId: actor.id,
                   storeId: actor.store_id || null,
-                  deviceSessionId: actor.device_session_id || null,
+                  terminalId: actor.terminal_id || null,
                   companyId,
                   object: objectResult.rows[0] || null,
                   record: null,
@@ -2987,12 +2987,12 @@ async function startServer() {
                     id: actor.id,
                     roleId: actor.role_id,
                     storeId: actor.store_id || payload.storeId || null,
-                    deviceSessionId: actor.device_session_id || null,
+                    terminalId: actor.terminal_id || null,
                   } },
                   companyId: job.company_id,
                   userId: actor.id,
                   storeId: actor.store_id || payload.storeId || null,
-                  deviceSessionId: actor.device_session_id || null,
+                  terminalId: actor.terminal_id || null,
                   object: objectResult.rows[0] || null,
                   fields: triggerFields.rows,
                   record: payload.record || null,
