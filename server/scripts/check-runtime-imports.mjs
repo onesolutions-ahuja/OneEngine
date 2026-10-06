@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -77,4 +77,25 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`Runtime syntax/import check passed (${sourceFiles.length} source files scanned).`);
+// node --check cannot detect a named ESM import that no longer exists in the
+// target module. Every route module is linked during server startup, so import
+// the complete route set in an isolated process as a startup-link check.
+const routeDir = path.join(root, "routes");
+const routeFiles = fs.existsSync(routeDir)
+  ? fs.readdirSync(routeDir).filter((name) => name.endsWith(".js")).map((name) => path.join(routeDir, name))
+  : [];
+const routeImportScript = routeFiles
+  .map((file) => `await import(${JSON.stringify(pathToFileURL(file).href)});`)
+  .join("\n");
+const routeLink = spawnSync(process.execPath, ["--input-type=module", "-e", routeImportScript], {
+  encoding: "utf8",
+  cwd: root,
+  env: { ...process.env, NODE_ENV: "test" },
+});
+if (routeLink.status !== 0) {
+  console.error("Runtime route-module link failure:");
+  console.error(String(routeLink.stderr || routeLink.stdout || "Route import check failed").trim());
+  process.exit(1);
+}
+
+console.log(`Runtime syntax/import check passed (${sourceFiles.length} source files scanned; ${routeFiles.length} route modules linked).`);
