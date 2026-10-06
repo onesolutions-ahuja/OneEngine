@@ -111,8 +111,8 @@ const BUILDER_CSS = `
   .cpb-canvas.is-panning{cursor:grabbing}
   .cpb-canvas input,.cpb-canvas select,.cpb-canvas textarea,.cpb-canvas button,.cpb-canvas a{user-select:auto}
   .cpb-node{position:relative;min-width:90px;min-height:38px;max-width:100%;cursor:default;resize:both;overflow:auto}
-  .cpb-node-actions{position:absolute;top:-14px;right:36px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
-  .cpb-node-remove{position:absolute;top:-14px;right:4px;z-index:9;width:28px;height:28px;display:grid;place-items:center;border:1px solid #d2d7dc;border-radius:999px;background:#fff;color:#5f6972;box-shadow:0 2px 8px rgba(15,23,42,.10);cursor:pointer}
+  .cpb-node-actions{position:absolute;top:4px;right:38px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
+  .cpb-node-remove{position:absolute;top:4px;right:6px;z-index:9;width:28px;height:28px;display:grid;place-items:center;border:1px solid #d2d7dc;border-radius:999px;background:#fff;color:#5f6972;box-shadow:0 2px 8px rgba(15,23,42,.10);cursor:pointer}
   .cpb-node-remove:hover{border-color:#fecaca;background:#fff1f2;color:#dc2626}
   .cpb-node-actions button{width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#53606a;cursor:pointer}
   .cpb-node-actions button:hover{background:#f0f4f3;color:#176f6a}
@@ -245,6 +245,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const skipHistoryRef = useRef(false);
   const canvasViewportRef = useRef(null);
   const panRef = useRef(null);
+  const resizeNodeRef = useRef(null);
   const [canvasPanning, setCanvasPanning] = useState(false);
 
   useEffect(() => {
@@ -541,13 +542,22 @@ const updateNode = (nodeId, changes) => {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
+  const beginNodeResize = (nodeId, event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const nearResizeCorner = event.clientX >= rect.right - 22 && event.clientY >= rect.bottom - 22;
+    resizeNodeRef.current = nearResizeCorner ? nodeId : null;
+  };
+
   const commitNodeSize = (nodeId, element) => {
-    if (!nodeId || !element) return;
+    if (resizeNodeRef.current !== nodeId || !nodeId || !element) return;
+    resizeNodeRef.current = null;
     const rect = element.getBoundingClientRect();
     const width = Math.round(rect.width);
     const height = Math.round(rect.height);
     if (width < 90 || height < 38) return;
-    updateNode(nodeId, { layout: { ...(findNode(draft.sections, nodeId)?.node?.layout || {}), width, height } });
+    const currentLayout = findNode(draft.sections, nodeId)?.node?.layout || {};
+    if (Math.abs(Number(currentLayout.width || 0) - width) <= 1 && Math.abs(Number(currentLayout.height || 0) - height) <= 1) return;
+    updateNode(nodeId, { layout: { ...currentLayout, width, height } });
   };
 
   /* ------------------------------- save ---------------------------------- */
@@ -713,6 +723,7 @@ const updateNode = (nodeId, changes) => {
           width: Number(node.layout?.width) > 0 ? Math.min(Number(node.layout.width), 2400) : "100%",
           height: Number(node.layout?.height) > 0 ? Math.min(Number(node.layout.height), 1800) : undefined,
         }}
+        onPointerDown={(event) => { event.stopPropagation(); beginNodeResize(node.id, event); }}
         onPointerUp={(event) => { event.stopPropagation(); commitNodeSize(node.id, event.currentTarget); }}
         onDragOver={(event) => { if (!preview) { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.add("cpb-dropzone"); } }}
         onDragLeave={(event) => event.currentTarget.classList.remove("cpb-dropzone")}
@@ -737,7 +748,7 @@ const updateNode = (nodeId, changes) => {
         {!preview ? <button type="button" className="cpb-node-remove" aria-label={`Remove ${nodeLabel(node)}`} title="Remove component" onClick={(event) => { event.stopPropagation(); setSelectedNodeId(node.id); setTimeout(() => { applyDraft((current) => ({ ...current, sections: removeNodeFromSections(current.sections, node.id) })); setSelectedNodeId(null); }, 0); }}><Minus size={15}/></button> : null}
         {!preview && selectedNodeId === node.id ? (
           <>
-            <span className="cpb-chip" style={{ position: "absolute", top: -10, left: 6, zIndex: 7, background: "#147d70", color: "#fff" }}>
+            <span className="cpb-chip" style={{ position: "absolute", top: 4, left: 6, zIndex: 7, background: "#147d70", color: "#fff" }}>
               {nodeLabel(node)}
             </span>
             <span className="cpb-node-actions">
