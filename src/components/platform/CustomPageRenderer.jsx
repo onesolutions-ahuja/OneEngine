@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
 import renderDashboardComponent from "../dashboard/DashboardComponents.jsx";
+import { canonicalComponentApi, componentImplementation } from "../metadata/componentImplementations.js";
 import {
   SECTION_WIDTHS,
   multiContainerColumns,
@@ -623,9 +624,20 @@ function AnalyticsNodeView({ node }) {
 
 function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
+  const api = canonicalComponentApi(node.componentApi || key);
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
+
+  // Versioned implementations are resolved before legacy renderer branches.
+  // This allows table.v1 and table.v2 to coexist without page-specific imports.
+  const VersionedComponent = componentImplementation(api);
+  if (VersionedComponent && api === "table.v1") return <VersionedComponent node={node} builderMode={builderMode} onRecordClick={onRecordClick} data={data?.[node.id]} />;
+  if (VersionedComponent && api === "button.v1") return <VersionedComponent node={node} builderMode={builderMode} onClick={onButtonClick} />;
+  if (VersionedComponent && api === "container.v1") {
+    return <VersionedComponent node={node}>{(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={onRecordClick} onButtonClick={onButtonClick} data={data} runtimeOverrides={runtimeOverrides} />)}</VersionedComponent>;
+  }
+
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
