@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readdir, readFile } from 'node:fs/promises'
+import { access, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 async function walk(root) {
@@ -24,8 +24,11 @@ test('retired OneTill and OneKiosk page surfaces cannot silently return', async 
     'public/icons/apps/onetill-new.svg',
     'public/icons/apps/onetill-dock-clean.svg',
   ]
-  const files = new Set(await walk('.'))
-  for (const target of missing) assert.equal(files.has(target), false, target + ' must stay retired')
+  for (const target of missing) {
+    let exists = true
+    try { await access(target) } catch { exists = false }
+    assert.equal(exists, false, target + ' must stay retired')
+  }
 })
 
 test('runtime source has no retired OneTill/OneKiosk app routes, package keys, or kiosk auth modes', async () => {
