@@ -53,7 +53,6 @@ const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
 const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
 const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
-const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
@@ -2077,7 +2076,7 @@ function Desktop({ onLock, onSignOut }) {
       contacts: 'customers',
       one_connect_google: 'google-connect',
       one_assistant: 'assistant',
-      one_kiosk: 'kiosk',
+      one_kiosk: 'kiosk-devices',
     }
     const target = aliases[id] || id
 
@@ -2103,7 +2102,7 @@ function Desktop({ onLock, onSignOut }) {
 
     const routeMap = new Set([
       'integrations','google-connect','accounting','online-orders','own-delivery',
-      'kiosk','kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
+      'kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','categories',
       'global-products','products','sales','workspace','till',
@@ -2382,8 +2381,6 @@ function Desktop({ onLock, onSignOut }) {
           <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
           <WorkspacePage initialObjectKey="online_order" appKey="own-delivery" />
-        ) : activeApp === 'kiosk' ? (
-          <OneKioskPage />
         ) : activeApp === 'kiosk-display' ? (
           <OneKioskDisplayPage />
         ) : activeApp === 'kiosk-devices' ? (
@@ -2436,9 +2433,6 @@ export default function App() {
   }
   if (route.app === 'flow-runtime') {
     return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
-  }
-  if (route.app === 'kiosk-runtime') {
-    return <div data-oneengine-route="kiosk-runtime"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading kiosk…</div>}><OneKioskPage publicMode /></Suspense></LazyLoadBoundary></div>
   }
   if (route.app === 'kiosk-display') {
     return <div data-oneengine-route="kiosk-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading collection display…</div>}><OneKioskDisplayPage /></Suspense></LazyLoadBoundary></div>
