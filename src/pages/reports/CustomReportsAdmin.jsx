@@ -158,7 +158,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       const data=response.data;setEditingId(data.id);setDefinition({...fresh(),...(data.definition||{}),name:data.name||"",description:data.description||"",userIds:data.user_ids||data.userIds||[]});setRuntimeFilters([]);setResults(null);
     }catch(e){setError(errorMessage(e));}
   };
-  const changeSource=(dataSource)=>update({dataSource,reportTypeId:null,objectId:dataSource==="platform_object"?(metadata.platformObjects?.[0]?.id||""):"",fields:[],rowGroups:[],groupBy:[],columnGroups:[],summaries:[],filters:[],crossFilters:[],sort:[]});
+  const changeSource=()=>update({dataSource:"platform_object",reportTypeId:null,objectId:"",fields:[],rowGroups:[],groupBy:[],columnGroups:[],summaries:[],filters:[],crossFilters:[],sort:[]});
   const changeReportType=(reportTypeId)=>{
     if(!reportTypeId)return update({reportTypeId:null});
     const reportType=(metadata.reportTypes||[]).find((item)=>String(item.id)===String(reportTypeId));
@@ -188,7 +188,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       if(!response?.success)throw new Error(response?.message);
       const id=response.data?.id||editingId;
       if(metadata.canManage&&id&&definition.userIds)await updateCustomReportUsers(id,definition.userIds);
-      setEditingId(id);setNotice("Report saved.");await load();onSaved?.();
+      setEditingId(id);const reopened=id?await getCustomReport(id):null;if(id&&!reopened?.success)throw new Error(reopened?.message||"Unable to reopen saved report");if(reopened?.data){const persisted=reopened.data;setDefinition({...fresh(),...(persisted.definition||{}),name:persisted.name||definition.name,description:persisted.description||definition.description,userIds:persisted.user_ids||persisted.userIds||definition.userIds||[]});}setNotice("Report saved and reopened.");await load();onSaved?.();
       if(runAfter&&id){const run=await runCustomReport(id);if(!run?.success)throw new Error(run?.message);setResults(run.data);}
     }catch(e){setError(errorMessage(e));}finally{setSaving(false);}
   };
@@ -235,7 +235,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       <PreviewControls value={definition.previewPreference||{autoPreview:true,sampleLimit:50}} onChange={(previewPreference)=>update({previewPreference})} onRefresh={preview} refreshing={running==="preview"}/>
       <div className="grid md:grid-cols-2 gap-3"><label className="onepos-label">Report name<input className="onepos-input mt-1" value={definition.name} onChange={(e)=>update({name:e.target.value})}/></label><label className="onepos-label">Description<input className="onepos-input mt-1" value={definition.description} onChange={(e)=>update({description:e.target.value})}/></label></div>
       <div className="grid md:grid-cols-3 gap-3">
-        <label className="onepos-label">Data source<select className="onepos-input mt-1" value={definition.dataSource} onChange={(e)=>changeSource(e.target.value)}>{(metadata.sources||[]).filter((source)=>source.key!=="sales").map((source)=><option key={source.key} value={source.key}>{source.label}</option>)}<option value="platform_object">Platform Object</option></select></label>
+        <label className="onepos-label">Data source<select className="onepos-input mt-1" value="platform_object" onChange={changeSource}><option value="platform_object">Metadata Objects / Report Types</option></select></label>
         {definition.dataSource==="platform_object"?<label className="onepos-label">Report type<select className="onepos-input mt-1" value={definition.reportTypeId||""} onChange={(e)=>changeReportType(e.target.value)}><option value="">Direct Object report</option>{(metadata.reportTypes||[]).map((item)=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>:null}
         {definition.dataSource==="platform_object"?<label className="onepos-label">Object<select className="onepos-input mt-1" disabled={Boolean(definition.reportTypeId)} value={definition.objectId||""} onChange={(e)=>changeObject(e.target.value)}><option value="">Select object</option>{metadata.platformObjects.map((object)=><option key={object.id} value={object.id}>{object.label||object.object_key}</option>)}</select></label>:null}
       </div>
