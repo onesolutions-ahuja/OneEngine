@@ -2,7 +2,7 @@ import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { safeSystemFields, systemObject, systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { buildPlatformSharingScope } from "./platformSharing.js";
-import { isSafeIdentifier } from "./platformMetadata.js";
+import { isSafeIdentifier } from "./platformCoreMetadata.js";
 
 export async function hasPlatformObjectPermission(db, req, objectId, action) {
   if (!objectId || !req.user?.companyId) return false;
