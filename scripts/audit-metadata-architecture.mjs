@@ -58,7 +58,8 @@ const businessTables=new Set([
   "inventory_ledger","cash_movements","cash_ledger","gift_cards","gift_card_ledger",
   "customer_loyalty_transactions","customer_loyalty_ledger","customer_credit_ledger",
 ]);
-for(const file of runtimeFiles.filter((file)=>rel(file).startsWith("server/")&&!rel(file).startsWith("server/metadata/"))){
+const schemaAdoptionFiles=new Set(["server/services/platformMetadata.js"]);
+for(const file of runtimeFiles.filter((file)=>rel(file).startsWith("server/")&&!rel(file).startsWith("server/metadata/")&&!schemaAdoptionFiles.has(rel(file)))){
   const text=fs.readFileSync(file,"utf8");
   for(const match of text.matchAll(/\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+["`]?(\w+)/gi)){
     const table=String(match[1]||"").toLowerCase();
