@@ -149,7 +149,7 @@ fs.writeFileSync(path.join(ROOT, "artifacts", "metadata-purity-audit.json"), JSO
 
 if (findings.length) {
   console.error(`Metadata purity audit failed with ${findings.length} violation(s).`);
-  for (const item of findings) console.error(`- ${item.rule}: ${item.file}${item.line ? ":" + item.line : ""}`);
+  for (const item of findings) console.error(`- ${item.rule}: ${item.file}${item.line ? ":" + item.line : ""}${item.table ? " [" + item.table + "]" : ""}`);
   process.exit(1);
 }
 console.log(`Metadata purity audit passed across ${report.scannedFiles} executable source files with 0 violations.`);
