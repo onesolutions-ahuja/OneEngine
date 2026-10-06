@@ -379,7 +379,7 @@ export default function DashboardPage({ onOpenBuilder }) {
           <option value="">Default dashboard</option>
           {available.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        <button type="button" onClick={() => loadDashboard(activeId,dateRange,globalFilterValues)}><RefreshCw size={14}/></button>
+        <button type="button" onClick={() => loadDashboard(activeId,globalFilterValues)}><RefreshCw size={14}/></button>
         {canSubscribe && definition?.id ? <button type="button" onClick={openSubscriptions}><Bell size={14}/> Subscribe</button> : null}
         {onOpenBuilder ? <button type="button" onClick={onOpenBuilder}><Pencil size={14}/> Edit</button> : null}
       </div>
