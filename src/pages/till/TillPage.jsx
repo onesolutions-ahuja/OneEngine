@@ -5,7 +5,7 @@ import {
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor, RefreshCw, ArrowLeftRight,
 } from 'lucide-react'
 import { apiRequest, getStoredUser, loadSessionPermissions } from '../../services/api'
-import { loadRuntimeSurface, mapRuntimePayload, surfacePath } from '../../services/runtimeSurface'
+import { loadRuntimeSurface, mapRuntimePayload, mappedRecordValue, surfacePath } from '../../services/runtimeSurface'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
@@ -64,21 +64,22 @@ function mergeCatalogueResponse(cachedCatalogue, incomingCatalogue) {
   return incomingCatalogue?.data ? { ...incomingCatalogue, data: merged } : merged
 }
 
-function normaliseProduct(product) {
+function normaliseProduct(product, mapping = {}) {
+  const value = (key, fallback) => mappedRecordValue(product, mapping, key, fallback)
   return {
-    id: product.id,
-    name: product.name || product.product_name || 'Unnamed Product',
-    sku: product.sku || product.code || '',
-    barcode: product.barcode || product.ean || '',
-    price: Number(product.price ?? product.selling_price ?? product.unit_price ?? 0),
-    vatRate: Number(product.vat_rate ?? product.vatRate ?? 0),
-    vatApplicable: product.vat_applicable !== undefined ? product.vat_applicable !== false : product.vatApplicable !== false,
-    ageRestricted: product.age_restricted === true || product.ageRestricted === true,
-    trackStock: product.track_stock !== false && product.trackStock !== false,
-    imageUrl: product.image_url || product.imageUrl || '',
-    category: product.category || product.category_name || 'Other',
-    stock: Number(product.stock_quantity ?? product.stock ?? product.quantity ?? 0),
-    active: product.active !== false && product.is_active !== false,
+    id: value('id', null),
+    name: value('name', 'Unnamed Product'),
+    sku: value('sku', ''),
+    barcode: value('barcode', ''),
+    price: Number(value('price', 0)),
+    vatRate: Number(value('vatRate', 0)),
+    vatApplicable: value('vatApplicable', true) !== false,
+    ageRestricted: value('ageRestricted', false) === true,
+    trackStock: value('trackStock', true) !== false,
+    imageUrl: value('imageUrl', ''),
+    category: value('category', 'Other'),
+    stock: Number(value('stock', 0)),
+    active: value('active', true) !== false,
   }
 }
 
@@ -186,7 +187,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const applyBootstrap = (catalogue, settingsResponse, buttonRows, paymentRows = []) => {
     const payload = catalogue?.data || catalogue || {}
     const sourceRows = Array.isArray(payload.products) ? payload.products : Array.isArray(payload.records) ? payload.records : Array.isArray(payload.data) ? payload.data : []
-    const rows = sourceRows.map(normaliseProduct).filter((product) => product.active)
+    const catalogueMapping = runtimeSurface?.recordMappings?.catalogue || {}
+    const rows = sourceRows.map((product) => normaliseProduct(product, catalogueMapping)).filter((product) => product.active)
     setProducts(rows)
     setCategories(['All', ...new Set(rows.map((product) => product.category).filter(Boolean))])
     setSettings(settingsResponse?.data || settingsResponse || null)
