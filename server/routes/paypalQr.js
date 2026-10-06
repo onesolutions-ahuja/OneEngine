@@ -36,7 +36,7 @@ export default function createPaypalQrRouter({ authenticate, authorize, db, conn
         const status = outcome === "approve" ? "APPROVED" : outcome === "decline" ? "DECLINED" : outcome === "cancel" ? "CANCELLED" : "EXPIRED";
         const attempt = await getPaymentAttempt(db, { companyId: req.body?.companyId || req.query?.companyId, attemptId: req.params.id });
         if (!attempt || attempt.environment !== "DEMO") return res.status(404).json({ success: false, message: "Demo payment attempt not found" });
-        await req.ensureBusinessCommandRun?.({ companyId: attempt.companyId, userId: null, storeId: attempt.storeId || null });
+        await req.ensureWorkflowTraceRun?.({ companyId: attempt.companyId, userId: null, storeId: attempt.storeId || null });
         const updated = await transitionPaymentAttempt({ db, companyId: attempt.companyId, attemptId: attempt.id, status, actorUserId: null, amount: attempt.amount, currency: attempt.currency });
         await writeAudit?.(attempt.companyId, null, `paypal_demo.${outcome}`, "payment_attempt", attempt.id, { status, providerReference: attempt.providerReference });
         res.json({ success: true, data: updated });
