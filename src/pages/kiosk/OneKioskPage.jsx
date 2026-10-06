@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CreditCard, Minus, Plus, Search, ShoppingBag, Trash2, ArrowLeft, Accessibility, Languages, HelpCircle, QrCode, GitCompareArrows, Volume2, LogOut } from "lucide-react";
 import { apiRequest, KIOSK_TOKEN_STORAGE_KEY, lockToKioskMode } from "../../services/api.js";
-import { loadRuntimeSurface } from '../../services/runtimeSurface'
+import { loadRuntimeSurface, mapRuntimePayload } from '../../services/runtimeSurface'
 import "./oneKiosk.css";
 
 const ONE_KIOSK_DEVICE_KEY = "onepos_one_kiosk_device_key";
@@ -937,46 +937,47 @@ export default function OneKioskPage({ publicMode = false }) {
 
       const clientRequestId = checkoutRequestId || crypto.randomUUID();
       if (!checkoutRequestId) setCheckoutRequestId(clientRequestId);
-      const saleInput = {
-        store_id: fulfilmentDetails.storeId || null,
-        customer_id: customer?.id || null,
+      const retailSurface = await loadRuntimeSurface('till', 'till');
+      const transactionObjectKey = String(retailSurface?.objects?.transaction || '');
+      const completeSaleAction = String(retailSurface?.actions?.completeSale || '');
+      const mappings = retailSurface?.payloadMappings || {};
+      if (!transactionObjectKey || !completeSaleAction) throw new Error("Sale runtime metadata is unavailable");
+      const saleInput = mapRuntimePayload(mappings.sale, {
+        storeId: fulfilmentDetails.storeId || null,
+        customerId: customer?.id || null,
         subtotal: Number(total || 0),
         tax: 0,
         discount: 0,
         total: Number(total || 0),
-        line_count: Number(basket.length),
+        lineCount: Number(basket.length),
         status: "COMPLETED",
-        offline_created: false,
-        sync_status: "SYNCED",
-        client_request_id: clientRequestId,
-        completed_at: new Date().toISOString(),
-      };
-      const itemInputs = basket.map((line) => ({
-        product_id: line.id,
-        product_name: line.name,
+        offlineCreated: false,
+        syncStatus: "SYNCED",
+        clientRequestId,
+        completedAt: new Date().toISOString(),
+      });
+      const itemInputs = basket.map((line) => mapRuntimePayload(mappings.item, {
+        productId: line.id,
+        productName: line.name,
         quantity: Number(line.quantity) || 1,
-        unit_price: Number(line.price) || 0,
+        unitPrice: Number(line.price) || 0,
         discount: 0,
         tax: 0,
         total: (Number(line.price) || 0) * (Number(line.quantity) || 1),
-        item_type: "PRODUCT",
-        modifier_data: Array.isArray(line.modifiers) ? line.modifiers : [],
-        bundle_components: [],
+        itemType: "PRODUCT",
+        modifierData: Array.isArray(line.modifiers) ? line.modifiers : [],
+        bundleComponents: [],
       }));
-      const paymentInputs = [{
-        customer_id: customer?.id || null,
+      const paymentInputs = [mapRuntimePayload(mappings.payment, {
+        customerId: customer?.id || null,
         direction: "IN",
-        payment_method: "card",
+        paymentMethod: "card",
         amount: Number(total || 0),
         provider: exactPayment.providerKey || exactPayment.provider || null,
-        terminal_id: exactPayment.terminalId || exactPayment.terminal_id || null,
-        idempotency_key: clientRequestId,
+        terminalId: exactPayment.terminalId || exactPayment.terminal_id || null,
+        idempotencyKey: clientRequestId,
         status: "COMPLETED",
-      }];
-      const retailSurface = await loadRuntimeSurface('till', 'till');
-      const transactionObjectKey = String(retailSurface?.objects?.transaction || '');
-      const completeSaleAction = String(retailSurface?.actions?.completeSale || '');
-      if (!transactionObjectKey || !completeSaleAction) throw new Error("Sale runtime metadata is unavailable");
+      })];
       const saleResponse = await apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(transactionObjectKey)}/buttons/${encodeURIComponent(completeSaleAction)}/execute`, {
         method: "POST",
         body: JSON.stringify({
