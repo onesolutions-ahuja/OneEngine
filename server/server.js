@@ -37,7 +37,6 @@ import { executeSystemAction } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
 
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
-import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReportsRouter from "./routes/reports.js";
 import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
@@ -1827,7 +1826,6 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 /* T10P: Scan & Go — customer scan sessions (token-authenticated, store/company
  * resolved server-side from the session; see routes/scanAndGo.js). */
 
-app.use("/api", createMobileScannerRouter({ authenticate, authorize, db, writeAudit }));
 
 
 app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
