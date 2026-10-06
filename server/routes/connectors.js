@@ -7,7 +7,7 @@ import {
 } from "../services/connectorFramework.js";
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeSystemAction, executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { configureSmsGateInboundWebhook } from "../services/smsGateConnector.js";
 
 function jsonValue(value, fallback) {
@@ -1426,7 +1426,7 @@ export default function createConnectorsRouter({
       let workflowExecution = null;
       if (!resetTest && requestedEnabled !== null && requestedEnabled !== (current.enabled === true)) {
         req.user = await hydrateConnectorPermissions(req.user);
-        workflowExecution = await executeSystemWorkflow({
+        workflowExecution = await executeSystemAction({
           db,
           companyId: req.user.companyId,
           userId: req.user.id || null,
@@ -1492,7 +1492,7 @@ export default function createConnectorsRouter({
         db,
         companyId: req.user.companyId,
         userId: req.user.id || null,
-        systemKey: "action:CONNECTOR_TEST_CONNECTION",
+        actionKey: "CONNECTOR_TEST_CONNECTION",
         req,
         input: { connectorInstanceId: req.params.id },
         storeId: instance.store_id || null,
