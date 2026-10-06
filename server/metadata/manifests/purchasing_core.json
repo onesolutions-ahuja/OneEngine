@@ -1,11 +1,11 @@
 {
   "objects": [
     {
-      "objectKey": "purchase",
-      "label": "Purchase",
-      "pluralLabel": "Purchases",
-      "description": "Protected supplier purchase header.",
-      "sourceTable": "purchases",
+      "objectKey": "purchase_ledger",
+      "label": "Purchase Ledger",
+      "pluralLabel": "Purchase Ledger",
+      "description": "Canonical purchasing transaction ledger.",
+      "sourceTable": "purchase_ledger",
       "metadataScope": "global",
       "storeScoped": true,
       "required": true,
@@ -139,7 +139,10 @@
         "retail_pos"
       ],
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       },
       "fields": [
         {
@@ -244,7 +247,10 @@
         "retail_pos"
       ],
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       },
       "fields": [
         {
@@ -469,13 +475,13 @@
   "relationships": [
     {
       "parentObjectKey": "supplier",
-      "childObjectKey": "purchase",
-      "relationshipKey": "purchases",
+      "childObjectKey": "purchase_ledger",
+      "relationshipKey": "purchase_ledger",
       "relationshipType": "one_to_many",
       "childFieldApiName": "supplier_id"
     },
     {
-      "parentObjectKey": "purchase",
+      "parentObjectKey": "purchase_ledger",
       "childObjectKey": "purchase_line",
       "relationshipKey": "lines",
       "relationshipType": "one_to_many",
@@ -490,7 +496,7 @@
       "parentFieldApiName": "product_id"
     },
     {
-      "parentObjectKey": "purchase",
+      "parentObjectKey": "purchase_ledger",
       "childObjectKey": "purchase_receipt",
       "relationshipKey": "receipts",
       "relationshipType": "one_to_many",
@@ -514,7 +520,7 @@
   ],
   "listViews": [
     {
-      "objectKey": "purchase",
+      "objectKey": "purchase_ledger",
       "viewKey": "all",
       "label": "Purchases",
       "columns": [
@@ -572,14 +578,14 @@
   ],
   "workflows": [
     {
-      "objectKey": "purchase",
+      "objectKey": "purchase_ledger",
       "name": "Purchase Create",
       "triggerKey": "manual",
       "active": true,
       "lifecycleStatus": "ACTIVE",
       "inputContract": [
         {
-          "name": "purchase",
+          "name": "purchase_ledger",
           "type": "record",
           "required": true
         },
@@ -591,7 +597,7 @@
       ],
       "outputContract": [
         {
-          "name": "purchase",
+          "name": "purchase_ledger",
           "type": "record",
           "source": "variables.purchase"
         }
@@ -648,7 +654,7 @@
           "id": "create_purchase",
           "label": "Create Purchase",
           "key": "CREATE_RECORD",
-          "objectKey": "purchase",
+          "objectKey": "purchase_ledger",
           "recordResource": {
             "path": "variables.purchase"
           }
@@ -679,7 +685,7 @@
       "variables": [
         {
           "value": "variables.purchase",
-          "apiName": "purchase",
+          "apiName": "purchase_ledger",
           "label": "Purchase",
           "type": "Variable",
           "dataType": "Record",
@@ -687,7 +693,7 @@
           "isCollection": false,
           "availableInput": true,
           "availableOutput": true,
-          "objectKey": "purchase"
+          "objectKey": "purchase_ledger"
         },
         {
           "value": "variables.items",
@@ -829,7 +835,7 @@
               "id": "create_purchase",
               "label": "Create Purchase",
               "key": "CREATE_RECORD",
-              "objectKey": "purchase",
+              "objectKey": "purchase_ledger",
               "recordResource": {
                 "path": "variables.purchase"
               }
@@ -909,7 +915,7 @@
       ]
     },
     {
-      "objectKey": "purchase",
+      "objectKey": "purchase_ledger",
       "name": "Purchase Receive",
       "triggerKey": "manual",
       "active": true,
@@ -921,7 +927,7 @@
           "required": true
         },
         {
-          "name": "purchase",
+          "name": "purchase_ledger",
           "type": "record",
           "required": true
         }
@@ -932,7 +938,7 @@
           "label": "Get Purchase",
           "apiName": "get_purchase",
           "key": "GET_RECORDS",
-          "objectKey": "purchase",
+          "objectKey": "purchase_ledger",
           "filters": [
             {
               "field": "id",
@@ -994,7 +1000,7 @@
           "id": "update_purchase",
           "label": "Update Purchase Receipt Status",
           "key": "UPDATE_RECORD",
-          "objectKey": "purchase",
+          "objectKey": "purchase_ledger",
           "recordId": {
             "path": "variables.purchase.id"
           },
@@ -1034,7 +1040,7 @@
         },
         {
           "value": "variables.purchase",
-          "apiName": "purchase",
+          "apiName": "purchase_ledger",
           "label": "Purchase Update",
           "type": "Variable",
           "dataType": "Record",
@@ -1042,7 +1048,7 @@
           "isCollection": false,
           "availableInput": true,
           "availableOutput": false,
-          "objectKey": "purchase"
+          "objectKey": "purchase_ledger"
         }
       ],
       "gptBuilder": true,
@@ -1071,7 +1077,7 @@
               "label": "Get Purchase",
               "apiName": "get_purchase",
               "key": "GET_RECORDS",
-              "objectKey": "purchase",
+              "objectKey": "purchase_ledger",
               "filters": [
                 {
                   "field": "id",
@@ -1199,7 +1205,7 @@
               "id": "update_purchase",
               "label": "Update Purchase Receipt Status",
               "key": "UPDATE_RECORD",
-              "objectKey": "purchase",
+              "objectKey": "purchase_ledger",
               "recordId": {
                 "path": "variables.purchase.id"
               },
@@ -1592,7 +1598,7 @@
   ],
   "buttons": [
     {
-      "objectKey": "purchase",
+      "objectKey": "purchase_ledger",
       "buttonKey": "purchase_create",
       "label": "New Purchase",
       "targetType": "workflow",
@@ -1715,7 +1721,7 @@
       }
     },
     {
-      "objectKey": "purchase",
+      "objectKey": "purchase_ledger",
       "buttonKey": "purchase_receive",
       "label": "Receive Remaining",
       "targetType": "workflow",
