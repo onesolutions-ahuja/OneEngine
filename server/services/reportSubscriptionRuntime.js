@@ -11,7 +11,7 @@ import {
   loadReportSubscriptionExecutionUser,
   resolveReportSubscriptionRecipients,
 } from "./reportSubscriptionDelivery.js";
-import { buildCustomSalesQuery, customDateRange, validateCustomReportDefinition } from "./reportSalesDefinition.js";
+import { normalizeAdvancedReportDefinition } from "./reportAnalyticsDefinition.js";
 
 async function userHasPermission(db, user, permission) {
   if (!user?.role_id && !user?.roleId) return false;
@@ -25,20 +25,7 @@ async function userHasPermission(db, user, permission) {
   return result.rows.length > 0;
 }
 
-async function loadStoreIds(db, user, requested = []) {
-  if (await userHasPermission(db, user, "reports.custom.manage")) return [...new Set((requested || []).map(String).filter(Boolean))];
-  const assigned = await db(
-    `SELECT us.store_id FROM user_stores us
-      JOIN stores s ON s.id=us.store_id
-      WHERE us.user_id=$1 AND us.active=TRUE AND s.company_id=$2 AND s.active=TRUE`,
-    [user.id, user.company_id]
-  );
-  const allowed = new Set((assigned.rows || []).map((row) => String(row.store_id)));
-  const wanted = [...new Set((requested || []).map(String).filter(Boolean))];
-  if (!wanted.length) return [...allowed];
-  if (wanted.some((id) => !allowed.has(id))) throw new Error("Subscription running user cannot access one or more report stores");
-  return wanted;
-}
+
 
 async function resolveReportTypeContext(db, req, reportTypeId) {
   if (!reportTypeId) return null;
@@ -67,7 +54,7 @@ async function resolveReportTypeContext(db, req, reportTypeId) {
 }
 
 async function executeSavedReport(db, report, executionUser) {
-  const definition = validateCustomReportDefinition(report.definition || {});
+  const definition = normalizeAdvancedReportDefinition({ ...(report.definition || {}), dataSource:"platform_object" });
   if (definition.format === "joined") throw new Error("Joined reports do not support subscriptions");
   if (definition.historicalTrend?.enabled === true) throw new Error("Historical trend reports do not support subscriptions");
   const storeResult = await db(
@@ -87,31 +74,31 @@ async function executeSavedReport(db, report, executionUser) {
   } };
 
   const executeBase = async (baseDefinition) => {
-    if (baseDefinition.dataSource === "platform_object") {
-      const reportType = await resolveReportTypeContext(db, req, baseDefinition.reportTypeId || baseDefinition.report_type_id || null);
-      const context = reportType?.context || await loadPlatformReportContext(db, req, baseDefinition.objectId);
-      const validated = validatePlatformReportDefinition(baseDefinition, context.object, context.fields, context.relationships);
-      const built = buildPlatformObjectQuery(validated, context.object, context.fields, executionUser.company_id, 1000, {
-        storeId: req.user.storeId,
-        visibilitySql: context.visibilitySql,
-        visibilityParams: context.visibilityParams,
-      }, context.relationships);
-      const result = await db(built.sql, built.params);
-      return {
-        columns: validated.fields.map((key) => {
-          const direct = context.fields.find((field) => field.api_name === key);
-          return { key, label: direct?.label || key };
-        }),
-        rows: result.rows,
-      };
-    }
-
-    const storeIds = await loadStoreIds(db, executionUser, baseDefinition.storeIds || []);
-    const built = buildCustomSalesQuery(baseDefinition, customDateRange(baseDefinition.filters), storeIds, baseDefinition.userIds || []);
-    built.params[2] = executionUser.company_id;
+    const reportType = await resolveReportTypeContext(db, req, baseDefinition.reportTypeId || baseDefinition.report_type_id || null);
+    const context = reportType?.context || await loadPlatformReportContext(db, req, baseDefinition.objectId);
+    const validated = validatePlatformReportDefinition(
+      { ...baseDefinition, dataSource:"platform_object" },
+      context.object,
+      context.fields,
+      context.relationships
+    );
+    const built = buildPlatformObjectQuery(validated, context.object, context.fields, executionUser.company_id, 1000, {
+      storeId: req.user.storeId,
+      visibilitySql: context.visibilitySql,
+      visibilityParams: context.visibilityParams,
+    }, context.relationships);
     const result = await db(built.sql, built.params);
     return {
-      columns: (baseDefinition.fields || []).map((key) => ({ key, label: key })),
+      columns: validated.fields.map((key) => {
+        const direct = context.fields.find((field) => field.api_name === key);
+        const related = (context.relationships || []).flatMap((relationship) =>
+          (relationship.fields || []).map((field) => ({
+            ...field,
+            key: `${relationship.relationship_key}.${field.api_name}`,
+          }))
+        ).find((field) => field.key === key);
+        return { key, label: direct?.label || related?.label || key };
+      }),
       rows: result.rows,
     };
   };
