@@ -90,7 +90,7 @@ async function loadSaleForDelivery(db, { saleId, companyId, storeId }) {
   const params = storeId ? [saleId, companyId, storeId] : [saleId, companyId];
   const saleResult = await db(
     `SELECT s.id, s.receipt_number, s.total, s.created_at, s.completed_at, s.customer_id
-     FROM sales s
+     FROM sale_ledger s
      INNER JOIN companies c ON c.id = s.company_id
      WHERE s.id = $1 AND s.company_id = $2 ${storeClause}
      LIMIT 1`,
