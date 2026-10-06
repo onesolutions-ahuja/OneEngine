@@ -25,3 +25,12 @@ test("metadata button flows use generic action permissions without hidden functi
   assert.match(source, /definition\?\.requiredPermissions/);
   assert.doesNotMatch(source, /CALL_FUNCTION|functionDefinition\.permissionsAny/);
 });
+
+
+test("package workflow provisioning preserves contracts resources and Builder metadata", async () => {
+  const source = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  assert.match(source, /inputContract: workflow\.inputContract \|\| workflow\.action\?\.inputContract \|\| \[\]/);
+  assert.match(source, /outputContract: workflow\.outputContract \|\| workflow\.action\?\.outputContract \|\| \[\]/);
+  assert.match(source, /resources: workflow\.resources \|\| workflow\.variables \|\| workflow\.action\?\.resources \|\| \[\]/);
+  assert.match(source, /gptBuilderElements: workflow\.gptBuilderElements \|\| workflow\.action\?\.gptBuilderElements \|\| \[\]/);
+});
