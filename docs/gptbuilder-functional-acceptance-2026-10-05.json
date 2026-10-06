@@ -574,5 +574,26 @@
     "status": "IN_PROGRESS",
     "note": "Till and Kiosk legacy pages/routes/packages removed by user direction; reusable retail platform capabilities retained as generic metadata/runtime primitives.",
     "lastVerificationHead": "c359e72675b95c73bb86f1b1bc654aaf15954799"
+  },
+  "phase4": {
+    "status": "IMPLEMENTED_AWAITING_FULL_GATE",
+    "scope": "Negative tests plus permanent regressions; fix failures before closure.",
+    "coverage": [
+      "N001",
+      "N002",
+      "N003",
+      "N004",
+      "N005"
+    ],
+    "regressionSuites": [
+      "tests/gptbuilderNegativeRegression.test.mjs",
+      "tests/gptbuilderResources.test.mjs",
+      "tests/retiredTillKiosk.test.mjs"
+    ],
+    "notes": [
+      "Decision now rejects stale resources and incompatible resource comparisons.",
+      "Record/event resource expansion filters inactive/unreadable metadata and deduplicates duplicate paths.",
+      "Retired Till/Kiosk page routes and assets have regression guards."
+    ]
   }
 }
