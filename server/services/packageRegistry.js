@@ -463,7 +463,7 @@ export function packageDefinition(entry) {
           required: true,
         }];
       })(),
-      ...(entry.key === "uber_eats" ? { workflows: uberEatsWorkflowDefinitions() } : {}),
+      
       iconAssetKey: entry.iconAssetKey || iconAssetKeys[entry.key] || null,
       ...(entry.key === "one_kiosk" ? {
         workflows: [
@@ -705,7 +705,7 @@ export function packageDefinition(entry) {
           { objectKey: "communication_event", viewKey: "recent_communication_events", label: "Recent Communication Events", columns: ["channel","event_type","direction","provider","body","recipient","created_at"], sort: { field: "created_at", direction: "desc" }, pageSize: 50, isDefault: true }
         ],
       } : {}),
-      ...(entry.key === "one_assistant" ? oneAssistantManifest : {}),
+      
       ...(entry.key === "whatsapp_assistant" ? {
         workflows: [
           {
@@ -2779,7 +2779,7 @@ export function packageDefinition(entry) {
           },
         ],
         workflows: [
-          ...uberEatsWorkflowDefinitions(),
+          
           {
             key: "uber_eats_menu_sync_after_product_save",
             label: "Uber Eats menu sync after product save",
