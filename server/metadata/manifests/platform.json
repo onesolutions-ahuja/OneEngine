@@ -881,7 +881,8 @@
           "sourceColumn": "store_id",
           "writable": false,
           "config": {
-            "relatedObjectKey": "store"
+            "relatedObjectKey": "store",
+            "runtimeWritable": true
           }
         },
         {
