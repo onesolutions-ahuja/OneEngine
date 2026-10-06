@@ -1887,6 +1887,21 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
+          name: "OneTill - Open Drawer",
+          apiName: "ONETILL_OPEN_DRAWER",
+          inputContract: [
+            { name: "tillSessionId", label: "Till Session", type: "text", required: true },
+            { name: "userId", label: "User", type: "text", required: true },
+            { name: "terminalId", label: "Terminal", type: "text", required: true },
+            { name: "reason", label: "Reason", type: "text", required: false },
+          ],
+          outputContract: [],
+          actions: [
+            { id: "create_drawer_open", label: "Record Drawer Open", apiName: "create_drawer_open", key: "CREATE_RECORD", objectKey: "cash_movement",
+              fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, terminal_id: { path: "$record.terminalId" }, type: "drawer_open", amount: 0, reason: { path: "$record.reason" } } },
+          ],
+        },
+        {
           name: "OneTill - Open Till Session",
           apiName: "ONETILL_OPEN_SESSION",
           inputContract: [
@@ -2370,7 +2385,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_print","command","print_receipt", { command: "print_receipt", recordContext: "last_sale" }],
         ["till_receipt_qr","workflow", tillWorkflowIds.get("ONETILL_RECEIPT_QR"), { recordContext: "last_sale", policyButtonKey: "till_receipt_qr_policy", policyEvent: "MANUAL" }],
         ["till_customer_display","command","customer_display", { command: "customer_display" }],
-        ["till_open_drawer","command","open_drawer", { command: "open_drawer" }],
+        ["till_open_drawer","workflow",tillWorkflowIds.get("ONETILL_OPEN_DRAWER"), {}],
         ["till_price_override","modal","price_override", { modal: "price_override", submitButtonKey: "till_price_override_apply" }],
         ["till_open_session","workflow",tillWorkflowIds.get("ONETILL_OPEN_SESSION"), { modal: "till" }],
         ["till_close_session","workflow",tillWorkflowIds.get("ONETILL_CLOSE_SESSION"), { modal: "till" }],
