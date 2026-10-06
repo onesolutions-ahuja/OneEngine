@@ -176,9 +176,8 @@ export async function uberRequest({
   path,
   body = null,
   action,
-  scope,
-  orderId = null,
-  productId = null,
+  scope
+
 }) {
   const { api } = baseUrls(config);
   const url = `${api}${path}`;
@@ -199,8 +198,6 @@ export async function uberRequest({
       success: false,
       errorMessage: error.message,
       durationMs: Date.now() - started,
-      orderId,
-      productId,
     });
     return { success: false, code: "AUTH_FAILED", message: error.message, httpStatus: null, data: null };
   }
@@ -229,8 +226,6 @@ export async function uberRequest({
       success: false,
       errorMessage: error.message,
       durationMs: Date.now() - started,
-      orderId,
-      productId,
     });
     return {
       success: false,
@@ -257,8 +252,6 @@ export async function uberRequest({
     responseStatus: response.status,
     success: response.ok,
     durationMs: Date.now() - started,
-    orderId,
-    productId,
   });
 
   return { success: response.ok, httpStatus: response.status, data };
