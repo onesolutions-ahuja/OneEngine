@@ -44,7 +44,15 @@ const PACKAGE_CATALOG = [
           sessionStatus: "status",
           sessionOpenValue: "open",
           sessionTerminalId: "terminal_id",
+          sessionStoreId: "store_id",
           catalogueActive: "active",
+          modifierGroupProductId: "product_id",
+          modifierGroupActive: "active",
+          modifierGroupOrder: "display_order",
+          modifierGroupMaxSelections: "max_selections",
+          modifierOptionGroupId: "group_id",
+          modifierOptionActive: "active",
+          modifierOptionOrder: "display_order",
         },
         payloadMappings: {
           sale: {
