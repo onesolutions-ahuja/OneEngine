@@ -198,6 +198,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const [pageId, setPageId] = useState(() => String(initialPageId || ""));
   const [page, setPage] = useState(null);
   const [draft, setDraft] = useState(() => newPageDraft());
+  const [paletteQuery, setPaletteQuery] = useState("");
   const registry = useComponentRegistry();
   const visiblePaletteGroups = useMemo(() => {
     const query = paletteQuery.trim().toLowerCase();
@@ -216,7 +217,6 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [versions, setVersions] = useState([]);
   const [showVersions, setShowVersions] = useState(false);
-  const [paletteQuery, setPaletteQuery] = useState("");
   const [panelMode, setPanelMode] = useState("properties");
   const [dirty, setDirty] = useState(false);
   /* Undo/redo: bounded snapshot stack of draft trees. Every mutation pushes. */
