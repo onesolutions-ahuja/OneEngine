@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Copy, Eye, GripVertical, Monitor, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, GripVertical, Minus, Monitor, MonitorSmartphone, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 import {
   componentByKey,
@@ -83,8 +83,11 @@ const BUILDER_CSS = `
   .cpb-palette-search input{width:100%;border:0;outline:0;background:transparent;font:inherit;font-size:12px;color:#25313b}
   .cpb-palette-search input::placeholder{color:#98a1aa}
   .cpb-palette-scroll{min-height:0;overflow-y:auto;overflow-x:hidden;padding:10px 10px 14px;overscroll-behavior:contain;scrollbar-gutter:stable}
-  .cpb-palette-scroll::-webkit-scrollbar,.cpb-properties-scroll::-webkit-scrollbar,.cpb-canvas::-webkit-scrollbar{width:8px;height:8px}
-  .cpb-palette-scroll::-webkit-scrollbar-thumb,.cpb-properties-scroll::-webkit-scrollbar-thumb,.cpb-canvas::-webkit-scrollbar-thumb{background:#c8cdd3;border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+  .cpb-palette-scroll::-webkit-scrollbar,.cpb-properties-scroll::-webkit-scrollbar{width:8px;height:8px}
+  .cpb-palette-scroll::-webkit-scrollbar-thumb,.cpb-properties-scroll::-webkit-scrollbar-thumb{background:#c8cdd3;border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+  .cpb-canvas::-webkit-scrollbar{width:12px;height:12px}
+  .cpb-canvas::-webkit-scrollbar-track{background:#e5e8eb;border-radius:999px}
+  .cpb-canvas::-webkit-scrollbar-thumb{background:#9aa4ad;border:2px solid #e5e8eb;border-radius:999px}
   .cpb-palette-group{padding:4px 0 8px}
   .cpb-palette-group-title{display:flex;align-items:center;justify-content:space-between;margin:0 2px 7px;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#68727d}
   .cpb-palette-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
@@ -94,22 +97,33 @@ const BUILDER_CSS = `
     transition:border-color .14s ease,background .14s ease,box-shadow .14s ease,transform .14s ease;
   }
   .cpb-palette-item:hover{border-color:#9dbeb8;background:#f8fbfa;box-shadow:0 2px 8px rgba(20,80,70,.06);transform:translateY(-1px)}
-  .cpb-palette-item svg{color:#237c72!important}
+  .cpb-palette-item svg{width:16px;height:16px;padding:2px;border-radius:4px;color:#176f6a!important;background:#e8f6f3}
+  .cpb-palette-item:nth-child(4n+2) svg{color:#9a6700!important;background:#fff4d6}
+  .cpb-palette-item:nth-child(4n+3) svg{color:#a23e72!important;background:#fdebf4}
+  .cpb-palette-item:nth-child(4n+4) svg{color:#5566aa!important;background:#edf0ff}
   .cpb-palette-empty{padding:18px 8px;text-align:center;font-size:11px;color:#89939d}
   .cpb-section-tools{border-top:1px solid #edf0f2;margin-top:3px;padding-top:9px}
   .cpb-canvas{
-    min-width:0;min-height:0;height:100%;overflow:auto;
-    border:1px solid #e2e5e9;border-radius:12px;background:#f7f8f9;padding:12px;
-    overscroll-behavior:contain;cursor:grab;user-select:none;
+    min-width:0;min-height:0;height:100%;overflow:scroll;
+    border:1px solid #e2e5e9;border-radius:12px;background:#f3f4f5;padding:18px;
+    overscroll-behavior:contain;cursor:grab;user-select:none;scrollbar-width:auto;scrollbar-color:#9aa4ad #e5e8eb;
   }
   .cpb-canvas.is-panning{cursor:grabbing}
   .cpb-canvas input,.cpb-canvas select,.cpb-canvas textarea,.cpb-canvas button,.cpb-canvas a{user-select:auto}
-  .cpb-node{position:relative;min-width:0;cursor:default}
-  .cpb-node-actions{position:absolute;top:-14px;right:8px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
+  .cpb-node{position:relative;min-width:90px;min-height:38px;max-width:100%;cursor:default;resize:both;overflow:auto}
+  .cpb-node-actions{position:absolute;top:-14px;right:36px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
+  .cpb-node-remove{position:absolute;top:-14px;right:4px;z-index:9;width:28px;height:28px;display:grid;place-items:center;border:1px solid #d2d7dc;border-radius:999px;background:#fff;color:#5f6972;box-shadow:0 2px 8px rgba(15,23,42,.10);cursor:pointer}
+  .cpb-node-remove:hover{border-color:#fecaca;background:#fff1f2;color:#dc2626}
   .cpb-node-actions button{width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#53606a;cursor:pointer}
   .cpb-node-actions button:hover{background:#f0f4f3;color:#176f6a}
   .cpb-node-actions button.is-danger:hover{background:#fff1f2;color:#dc2626}
   .cpb-tree{min-height:100%;padding:2px}
+  .cpb-device-frame{box-sizing:border-box;margin:0 auto;min-height:100%;background:#fff;transition:width .18s ease,min-height .18s ease,border-radius .18s ease;box-shadow:0 8px 28px rgba(15,23,42,.10)}
+  .cpb-device-frame.is-desktop{width:100%;min-width:760px;box-shadow:none;background:transparent}
+  .cpb-device-frame.is-tablet{width:820px;min-height:1080px;border:10px solid #202428;border-radius:26px;padding:14px}
+  .cpb-device-frame.is-mobile{width:390px;min-height:844px;border:10px solid #202428;border-radius:34px;padding:14px}
+  .cpb-device-frame.is-kiosk{width:1024px;min-height:768px;border:12px solid #202428;border-radius:18px;padding:14px}
+  .cpb-device-frame.is-tablet:before,.cpb-device-frame.is-mobile:before{content:"";display:block;width:42px;height:5px;margin:-5px auto 10px;border-radius:999px;background:#50555a}
   .cpb-canvas .onepos-card{border-color:#dfe3e7!important;box-shadow:none!important;background:#fff!important}
   .cpb-empty{display:grid;place-items:center;min-height:110px;border:1px dashed #cfd5da;border-radius:10px;background:#fbfcfc;color:#76808a;text-align:center;font-size:12px}
   .cpb-dropzone{outline:2px dashed #2d8b80;outline-offset:2px;border-radius:8px}
@@ -527,6 +541,15 @@ const updateNode = (nodeId, changes) => {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
+  const commitNodeSize = (nodeId, element) => {
+    if (!nodeId || !element) return;
+    const rect = element.getBoundingClientRect();
+    const width = Math.round(rect.width);
+    const height = Math.round(rect.height);
+    if (width < 90 || height < 38) return;
+    updateNode(nodeId, { layout: { ...(findNode(draft.sections, nodeId)?.node?.layout || {}), width, height } });
+  };
+
   /* ------------------------------- save ---------------------------------- */
 
   const definitionForSave = () => normalizeCustomPageTree({
@@ -686,6 +709,11 @@ const updateNode = (nodeId, changes) => {
       <div
         key={node.id}
         className={`cpb-node ${selectedNodeId === node.id && !preview ? "cpb-node-selected" : ""}`}
+        style={{
+          width: Number(node.layout?.width) > 0 ? Math.min(Number(node.layout.width), 2400) : "100%",
+          height: Number(node.layout?.height) > 0 ? Math.min(Number(node.layout.height), 1800) : undefined,
+        }}
+        onPointerUp={(event) => { event.stopPropagation(); commitNodeSize(node.id, event.currentTarget); }}
         onDragOver={(event) => { if (!preview) { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.add("cpb-dropzone"); } }}
         onDragLeave={(event) => event.currentTarget.classList.remove("cpb-dropzone")}
         onDrop={(event) => {
@@ -706,6 +734,7 @@ const updateNode = (nodeId, changes) => {
           setSelectedNodeId(node.id); setSelectedSectionId(null);
         }}
       >
+        {!preview ? <button type="button" className="cpb-node-remove" aria-label={`Remove ${nodeLabel(node)}`} title="Remove component" onClick={(event) => { event.stopPropagation(); setSelectedNodeId(node.id); setTimeout(() => { applyDraft((current) => ({ ...current, sections: removeNodeFromSections(current.sections, node.id) })); setSelectedNodeId(null); }, 0); }}><Minus size={15}/></button> : null}
         {!preview && selectedNodeId === node.id ? (
           <>
             <span className="cpb-chip" style={{ position: "absolute", top: -10, left: 6, zIndex: 7, background: "#147d70", color: "#fff" }}>
@@ -713,7 +742,6 @@ const updateNode = (nodeId, changes) => {
             </span>
             <span className="cpb-node-actions">
               <button type="button" title="Duplicate component" aria-label="Duplicate component" onClick={(event) => { event.stopPropagation(); duplicateSelectedNode(); }}><Copy size={13}/></button>
-              <button type="button" className="is-danger" title="Delete component" aria-label="Delete component" onClick={(event) => { event.stopPropagation(); removeSelectedNode(); }}><Trash2 size={13}/></button>
             </span>
           </>
         ) : null}
@@ -991,6 +1019,7 @@ const updateNode = (nodeId, changes) => {
           <option value="desktop">Desktop</option>
           <option value="tablet">Tablet</option>
           <option value="mobile">Mobile</option>
+          <option value="kiosk">Kiosk</option>
         </select>
       </div>
     </div>
@@ -1020,9 +1049,9 @@ const updateNode = (nodeId, changes) => {
         </select>
         <input className="w-56 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-medium" value={draft.label} onChange={(event) => applyDraft((current) => ({ ...current, label: event.target.value }))} aria-label="Page name" />
         <span className="ml-auto flex items-center gap-1">
-          {(["desktop", "tablet", "mobile"]).map((device) => (
+          {(["desktop", "tablet", "mobile", "kiosk"]).map((device) => (
             <button key={device} type="button" className={`cpb-device-btn ${draft.device === device ? "active" : ""}`} onClick={() => applyDraft((current) => ({ ...current, device }), { history: false })} aria-pressed={draft.device === device}>
-              {device === "desktop" ? <Monitor size={13} /> : device === "tablet" ? <Tablet size={13} /> : <Smartphone size={13} />}
+              {device === "desktop" ? <Monitor size={13} /> : device === "tablet" ? <Tablet size={13} /> : device === "mobile" ? <Smartphone size={13} /> : <MonitorSmartphone size={13} />}
               {device}
             </button>
           ))}
@@ -1056,7 +1085,9 @@ const updateNode = (nodeId, changes) => {
       {preview ? (
         /* PREVIEW MODE — the unsaved tree rendered exactly like runtime. */
         <div className="cpb-canvas">
-          <CustomPageRenderer definition={definitionForSave()} builderMode={false} device={draft.device} />
+          <div className={`cpb-device-frame is-${draft.device}`}>
+            <CustomPageRenderer definition={definitionForSave()} builderMode={false} device={draft.device} />
+          </div>
         </div>
       ) : (
         <div className="cpb-shell">
@@ -1132,14 +1163,16 @@ const updateNode = (nodeId, changes) => {
               }
             }}
           >
-            <div className="cpb-tree">
-              {draft.sections.map((section, index) => renderSection(section, index))}
-              {!draft.sections.length ? (
-                <div className="cpb-empty w-full py-14">
-                  <strong className="mb-1 block text-sm">Blank canvas</strong>
-                  Drag a <b>Section</b> from the palette to begin, then drop components inside it.
-                </div>
-              ) : null}
+            <div className={`cpb-device-frame is-${draft.device}`}>
+              <div className="cpb-tree">
+                {draft.sections.map((section, index) => renderSection(section, index))}
+                {!draft.sections.length ? (
+                  <div className="cpb-empty w-full py-14">
+                    <strong className="mb-1 block text-sm">Blank canvas</strong>
+                    Drag a <b>Section</b> from the palette to begin, then drop components inside it.
+                  </div>
+                ) : null}
+              </div>
             </div>
           </main>
 
