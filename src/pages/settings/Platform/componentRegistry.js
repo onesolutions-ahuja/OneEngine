@@ -63,7 +63,7 @@ import {
   MessageSquareWarning,
   BadgeCheck,
   LoaderCircle,
-} from "lucide-react";
+  ArrowLeft,\n  X,\n  RefreshCw,\n  ExternalLink,\n  Clock,\n  CalendarDays,\n  Menu,\n  ChevronRight,\n  ListOrdered,\n  MessageCircleQuestion,\n  Bell,\n  AppWindow,\n  PanelBottom,\n} from "lucide-react";
 
 // Client fallback mirrors the server registry so the builder remains usable
 // during transient API failures. The server /platform/component-registry is
@@ -111,6 +111,24 @@ export const COMPONENT_ICONS = {
   pagination: Rows3,
   filter_bar: ListFilter,
   product_image_card: ImageIcon,
+  icon_button: Square,
+  back_button: ArrowLeft,
+  close_button: X,
+  refresh_button: RefreshCw,
+  navigation_button: ArrowLeft,
+  link: ExternalLink,
+  select: ListFilter,
+  multi_select: ListFilter,
+  time_input: Clock,
+  date_picker: CalendarDays,
+  menu: Menu,
+  breadcrumb: ChevronRight,
+  stepper: ListOrdered,
+  tooltip: MessageCircleQuestion,
+  toast: Bell,
+  confirmation_dialog: MessageSquareWarning,
+  app_icon: AppWindow,
+  dock_item: PanelBottom,
   container: Box,
   multi_container: Rows3,
   table: Table,
