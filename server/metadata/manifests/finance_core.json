@@ -8,9 +8,7 @@
       "description": "Authoritative supplier invoice records.",
       "sourceTable": "supplier_invoices",
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true,
         "internal": true,
@@ -169,9 +167,7 @@
       "description": "Authoritative supplier-account payment records.",
       "sourceTable": "supplier_payments",
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true,
         "internal": true,
@@ -283,9 +279,7 @@
       "description": "Authoritative junction between supplier payments and invoices.",
       "sourceTable": "supplier_payment_allocations",
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true,
         "internal": true,
@@ -327,9 +321,7 @@
       "description": "Authoritative supplier-account ledger entries.",
       "sourceTable": "supplier_ledger_entries",
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true
       },
@@ -446,9 +438,7 @@
       "description": "Shared financial ledger contract backed by existing entries.",
       "sourceTable": "financial_ledger_entries",
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true
       },
