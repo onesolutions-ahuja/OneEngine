@@ -54,19 +54,9 @@ export default function useOnlineOrderActions({ applyOrderUpdate, otpRequired, s
       showOtp(order);
       return;
     }
-    let collectionReference = "";
-    if (
-      action === "complete"
-      && order?.platform === "one_kiosk"
-      && order?.platform_data?.collectionVerificationRequired === true
-    ) {
-      collectionReference = window.prompt("Enter the customer's collection reference to confirm handover:") || "";
-      if (!collectionReference.trim()) return;
-    }
     setError("");
     const body = action === "cancel" ? { reason: "Cancelled by store" }
       : action === "reject" ? { reason: "Rejected by store" }
-      : action === "complete" && collectionReference ? { collectionReference: collectionReference.trim() }
       : {};
     try {
       await requestAction(order, action, body);
