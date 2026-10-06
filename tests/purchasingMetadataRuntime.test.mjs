@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.js";
 
 const manifestUrl = new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url);
 
@@ -12,7 +11,6 @@ test("purchasing transactions are metadata Flow owned", async () => {
   for (const object of manifest.objects) assert.equal(object.config?.flowWritesOnly, true, object.objectKey);
   const names = new Set(manifest.workflows.map((flow) => flow.name));
   for (const name of ["Purchase Create","Purchase Receive","Supplier Return Execute"]) assert.ok(names.has(name), name);
-  for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
 });
 
 test("purchase and supplier return parent IDs come from created records", async () => {
@@ -51,7 +49,6 @@ test("generic CRUD protects Flow-owned purchasing transaction objects", async ()
 
 test("Phase 2 has no legacy direct SQL business writers", async () => {
   const treeTargets = [
-    "../server/services/platformFunctionRegistry.js",
     "../server/services/platformWorkflow.js",
     "../server/server.js",
   ];
@@ -63,10 +60,8 @@ test("Phase 2 has no legacy direct SQL business writers", async () => {
 });
 
 test("deleted purchasing and supplier business executors do not return", async () => {
-  const registry = await readFile(new URL("../server/services/platformFunctionRegistry.js", import.meta.url), "utf8");
-  for (const key of ["purchase.create","purchase.receive","supplier.return.execute","supplier.payment.execute","supplier.invoice.create","supplier.ledger.adjust"]) {
-    assert.equal(registry.includes(key), false, key);
-  }
+  const trusted = await readFile(new URL("../server/services/trustedRuntime.js", import.meta.url), "utf8");
+  assert.equal(trusted.includes("platformFunctionRegistry"), false);
 });
 
 
