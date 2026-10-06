@@ -2753,7 +2753,7 @@ async function startServer() {
                 );
               }
             }
-            if (["QUICKBOOKS_PROVIDER_SYNC", "SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
+            if (["SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
               await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
                 kind: job.kind,
                 status: failed?.status || "FAILED",
@@ -3638,28 +3638,6 @@ async function startServer() {
               if (outcome?.success === false) {
                 throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
                   retryable: outcome.retryable === true,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "QUICKBOOKS_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
-              if (!actionKey) throw Object.assign(new Error("QuickBooks provider job is missing an action key"), { retryable: false });
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey,
-                req: { method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", user: { companyId: job.company_id, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || outcome.code || "QuickBooks sync failed"), {
-                  retryable: outcome.retryable !== false,
                 });
               }
               return outcome;
