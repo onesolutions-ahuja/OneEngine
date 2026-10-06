@@ -659,13 +659,6 @@ function InlineNewWorkflowForm({ contextObjectKey, baseline, onCreated, onCancel
         <label className="block text-xs font-medium text-slate-500">Invocation Type</label>
         <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" value="UI Action · Input: Current Record" disabled readOnly />
       </div>
-      <div className="space-y-1">
-        <label className="block text-xs font-medium text-slate-500">First step (optional) — Show Form Layout</label>
-        <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" value={layoutId} onChange={(event) => setLayoutId(event.target.value)}>
-          <option value="">None — add steps later in Workflow Builder</option>
-          {layouts.map((layout) => <option key={layout.id} value={layout.id}>{layout.name}</option>)}
-        </select>
-      </div>
       <div className="flex items-center justify-end gap-2 pt-1">
         <button type="button" className="onepos-btn onepos-btn-secondary" onClick={onCancel}>Cancel</button>
         <button type="button" className="onepos-btn onepos-btn-primary" disabled={saving} onClick={create}>{saving ? "Saving…" : "Save Workflow"}</button>
