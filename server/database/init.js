@@ -295,7 +295,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         );
         await client.query("ALTER TABLE terminals ALTER COLUMN company_id SET NOT NULL");
         await client.query("CREATE INDEX IF NOT EXISTS idx_terminals_company_store ON terminals(company_id,store_id)");
-        await client.query("CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date ON sales(company_id,store_id,status,created_at DESC)");
+        await client.query("CREATE INDEX IF NOT EXISTS idx_sales_company_store_status_date ON sale_ledger(company_id,store_id,status,created_at DESC)");
       },
     },
     {
@@ -3424,8 +3424,8 @@ async function initializeLegacyDatabase(pool) {
     ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS net_amount NUMERIC(12,2);
     ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS hospitality_service_charge_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
     ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS hospitality_service_charge_tax NUMERIC(12,2) NOT NULL DEFAULT 0;
-    CREATE INDEX IF NOT EXISTS idx_sales_transaction_type ON sales(company_id, transaction_type, created_at);
-    CREATE INDEX IF NOT EXISTS idx_sales_original_transaction ON sales(original_transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_sales_transaction_type ON sale_ledger(company_id, transaction_type, created_at);
+    CREATE INDEX IF NOT EXISTS idx_sales_original_transaction ON sale_ledger(original_transaction_id);
 
     ALTER TABLE sale_ledger
       ADD COLUMN IF NOT EXISTS client_request_id UUID;
@@ -3433,7 +3433,7 @@ async function initializeLegacyDatabase(pool) {
       ADD COLUMN IF NOT EXISTS client_request_fingerprint TEXT;
 
     CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_client_request
-    ON sales(company_id, client_request_id);
+    ON sale_ledger(company_id, client_request_id);
 
     /*
      * Receipt numbers are authoritative and sequential per terminal per
@@ -3441,7 +3441,7 @@ async function initializeLegacyDatabase(pool) {
      * (terminal_id IS NULL) are exempt from the pattern entirely.
      */
     CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_terminal_receipt
-    ON sales(terminal_id, receipt_number)
+    ON sale_ledger(terminal_id, receipt_number)
     WHERE terminal_id IS NOT NULL
       AND receipt_number LIKE '%-%-%';
 
@@ -3449,7 +3449,7 @@ async function initializeLegacyDatabase(pool) {
       ADD COLUMN IF NOT EXISTS online_order_id UUID;
 
     CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_online_order
-    ON sales(online_order_id);
+    ON sale_ledger(online_order_id);
 
     DO $$
     BEGIN
