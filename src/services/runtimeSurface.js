@@ -72,3 +72,12 @@ export function mappedRecordValue(record, mapping, semanticKey, fallback = undef
   }
   return fallback
 }
+
+
+export function runtimeEndpoint(surface, key, params = {}) {
+  let value = String(surface?.endpoints?.[key] || '')
+  for (const [name, replacement] of Object.entries(params || {})) {
+    value = value.replaceAll(`{${name}}`, encodeURIComponent(String(replacement ?? '')))
+  }
+  return value
+}
