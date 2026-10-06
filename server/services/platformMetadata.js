@@ -2429,6 +2429,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
              target_type=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_type ELSE 'workflow' END,
              target_key=CASE WHEN platform_buttons.user_modified THEN platform_buttons.target_key ELSE EXCLUDED.target_key END,
              required_permission=CASE WHEN platform_buttons.user_modified THEN platform_buttons.required_permission ELSE EXCLUDED.required_permission END,
+             config=CASE WHEN platform_buttons.user_modified THEN platform_buttons.config ELSE EXCLUDED.config END,
              active=TRUE,managed=TRUE,updated_at=NOW()`,
           [saleObjectId, buttonKey, label, String(workflowId), permission, JSON.stringify({ runtimeRole })]
         );
