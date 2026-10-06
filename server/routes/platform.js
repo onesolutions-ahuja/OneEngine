@@ -7799,7 +7799,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const actionType = workflowAction.type || workflowAction.key;
       if (String(actionType || "").toUpperCase() === "CALL_FUNCTION") {
         const functionKey = workflowAction.functionKey || workflowAction.function_key;
-        const functionDefinition = getRegisteredFunction(functionKey);
+        const functionDefinition = null;
         if (!functionDefinition) {
           const error = new Error(`Function "${functionKey}" is not registered`);
           error.status = 422;
@@ -8276,7 +8276,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       if (action === "call_function") {
         const functionKey = component.functionKey || component.function_key;
-        const definition = getRegisteredFunction(functionKey);
+        const definition = null;
         if (!definition) return res.status(422).json({ success: false, message: "Configured registered function is unavailable" });
         const execution = await executeSystemWorkflow({
           db,
