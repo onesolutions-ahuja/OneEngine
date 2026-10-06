@@ -29,12 +29,13 @@ function readableValue(value) {
 }
 
 function recordTitle(record, fields) {
-  const preferred = ['name','full_name','title','label','number','sale_number','invoice_number','sku','email']
-  for (const key of preferred) if (record?.[key]) return String(record[key])
-  for (const field of fields || []) {
-    if (['text','email','phone'].includes(String(field.field_type || '').toLowerCase()) && record?.[field.api_name]) {
-      return String(record[field.api_name])
-    }
+  const configured = (fields || [])
+    .filter((field) => field?.active !== false && field?.readable !== false)
+    .sort((a, b) => Number(a?.display_order ?? a?.order ?? 999) - Number(b?.display_order ?? b?.order ?? 999))
+  const primary = configured.find((field) => field?.is_name_field === true || field?.primary_display === true)
+    || configured.find((field) => ['text','email','phone'].includes(String(field?.field_type || '').toLowerCase()))
+  if (primary?.api_name && record?.[primary.api_name] != null && record?.[primary.api_name] !== '') {
+    return String(record[primary.api_name])
   }
   return record?.id ? String(record.id) : 'Record'
 }
