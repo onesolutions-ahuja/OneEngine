@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
-import { DASHBOARD_DATE_RANGES, DATE_FILTER_FIELDS, SUMMARY_COLUMN, aggregatesForFieldType, operatorsForFieldType, platformFieldChoices } from "./platformDashboard.js";
+import { DASHBOARD_DATE_RANGES, SUMMARY_COLUMN, aggregatesForFieldType, operatorsForFieldType, platformFieldChoices } from "./platformDashboard.js";
 import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";
 
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
@@ -53,7 +53,7 @@ function ConditionEditor({ component, onChange, fields }) {
   const config = component.config || {};
   const report = config.report || {};
   const conditions = Array.isArray(report.filters) ? report.filters : [];
-  const available = report.dataSource === "platform_object" ? platformFieldChoices(fields).all : DATE_FILTER_FIELDS.map((field) => ({ key: field.key, label: field.label, type: field.kind === "date" ? "date" : "text" }));
+  const available = platformFieldChoices(fields).all;
   const setFilters = (filters) => onChange({ ...component, config: { ...config, report: { ...report, filters } } });
   const isDatePreset = (operator) => DASHBOARD_DATE_RANGES.some((range) => range.key === operator);
   return <div className="md:col-span-2 rounded-lg p-3" style={{ border: "1px solid var(--onepos-border)" }} data-testid="condition-editor">
@@ -84,7 +84,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const { reports: drillReports } = useReports();
   const config = component.config || {};
   const report = config.report || {};
-  const isPlatform = report.dataSource === "platform_object";
+  const isPlatform = true;
   const isChart = ["pie","donut","bar","line","gauge","funnel","scatter","combo","chart"].includes(component.type);
   const isUtility = ["clock_widget", "calendar_widget", "weather_widget"].includes(component.type);
   const isImage = component.type === "image";
