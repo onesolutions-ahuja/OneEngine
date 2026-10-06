@@ -809,6 +809,112 @@
           "writable": false
         }
       ]
+    },
+    {
+      "objectKey": "temporary_receipt_download",
+      "metadataScope": "global",
+      "label": "Temporary Download Token",
+      "pluralLabel": "Temporary Download Tokens",
+      "description": "Internal metadata-backed record used by flows to issue short-lived download links.",
+      "sourceTable": "temporary_receipt_downloads",
+      "config": {
+        "flowWritesOnly": true,
+        "internal": true,
+        "rbac": {
+          "view": "sale.view",
+          "create": "sale.view",
+          "edit": "sale.view",
+          "delete": "sale.view"
+        }
+      },
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": true
+        },
+        {
+          "apiName": "till_id",
+          "label": "Till",
+          "fieldType": "lookup",
+          "sourceColumn": "till_id",
+          "writable": true
+        },
+        {
+          "apiName": "sale_id",
+          "label": "Sale",
+          "fieldType": "lookup",
+          "sourceColumn": "sale_id",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "sale"
+          }
+        },
+        {
+          "apiName": "token_hash",
+          "label": "Token Hash",
+          "fieldType": "text",
+          "sourceColumn": "token_hash",
+          "required": true,
+          "writable": true,
+          "readable": false,
+          "config": {
+            "secure": true
+          }
+        },
+        {
+          "apiName": "status",
+          "label": "Status",
+          "fieldType": "picklist",
+          "sourceColumn": "status",
+          "writable": true,
+          "options": [
+            "ACTIVE",
+            "DOWNLOADED",
+            "REVOKED",
+            "EXPIRED"
+          ]
+        },
+        {
+          "apiName": "expires_at",
+          "label": "Expires At",
+          "fieldType": "datetime",
+          "sourceColumn": "expires_at",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "downloaded_at",
+          "label": "Downloaded At",
+          "fieldType": "datetime",
+          "sourceColumn": "downloaded_at",
+          "writable": true
+        },
+        {
+          "apiName": "revoked_at",
+          "label": "Revoked At",
+          "fieldType": "datetime",
+          "sourceColumn": "revoked_at",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
     }
   ],
   "relationships": [
@@ -4424,7 +4530,7 @@
             "name": "receipt",
             "label": "Receipt QR",
             "type": "object",
-            "source": "steps.create_receipt"
+            "source": "variables.receipt"
           }
         ],
         "resources": [
@@ -4479,20 +4585,91 @@
         ],
         "actions": [
           {
-            "id": "create_receipt",
-            "label": "Create Temporary Receipt Download",
-            "apiName": "create_receipt",
-            "key": "CALL_FUNCTION",
-            "functionKey": "temporary.receipt.download.create",
+            "id": "generate_receipt_token",
+            "label": "Generate Secure Receipt Token",
+            "apiName": "generate_receipt_token",
+            "key": "GENERATE_SECURE_TOKEN",
+            "tokenResourceName": "receiptToken",
+            "hashResourceName": "receiptTokenHash",
+            "bytes": 32
+          },
+          {
+            "id": "calculate_receipt_expiry",
+            "label": "Calculate Receipt Expiry",
+            "apiName": "calculate_receipt_expiry",
+            "key": "FORMULA",
+            "resourceName": "receiptExpiresAt",
+            "resultType": "datetime",
+            "expression": "ADDMINUTES(currentTime, expiryMinutes)",
             "inputs": {
-              "saleId": {
-                "path": "variables.saleId"
+              "currentTime": {
+                "path": "$now"
               },
               "expiryMinutes": {
                 "path": "variables.expiryMinutes"
+              }
+            }
+          },
+          {
+            "id": "create_receipt_record",
+            "label": "Create Temporary Download Record",
+            "apiName": "create_receipt_record",
+            "key": "CREATE_RECORD",
+            "objectKey": "temporary_receipt_download",
+            "fieldValues": {
+              "store_id": {
+                "path": "$user.storeId"
               },
-              "baseUrl": {
-                "path": "variables.baseUrl"
+              "till_id": {
+                "path": "$user.tillId"
+              },
+              "sale_id": {
+                "path": "variables.saleId"
+              },
+              "token_hash": {
+                "path": "variables.receiptTokenHash"
+              },
+              "status": "ACTIVE",
+              "expires_at": {
+                "path": "variables.receiptExpiresAt"
+              }
+            }
+          },
+          {
+            "id": "build_receipt_url",
+            "label": "Build Receipt Download URL",
+            "apiName": "build_receipt_url",
+            "key": "TEXT_TEMPLATE",
+            "resourceName": "receiptUrl",
+            "templateText": "{!variables.baseUrl}/receipt/download/{!variables.receiptToken}"
+          },
+          {
+            "id": "set_receipt_output",
+            "label": "Set Receipt Output",
+            "apiName": "set_receipt_output",
+            "key": "ASSIGNMENT",
+            "variableName": "receipt",
+            "variableType": "object",
+            "operator": "set",
+            "value": {
+              "id": {
+                "path": "steps.create_receipt_record.created.id"
+              },
+              "saleId": {
+                "path": "variables.saleId"
+              },
+              "token": {
+                "path": "variables.receiptToken"
+              },
+              "url": {
+                "path": "variables.receiptUrl"
+              },
+              "expiresAt": {
+                "path": "variables.receiptExpiresAt"
+              },
+              "status": "ACTIVE",
+              "expiresMinutes": {
+                "path": "variables.expiryMinutes"
               }
             }
           }
