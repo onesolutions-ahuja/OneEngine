@@ -2,11 +2,9 @@ name: Validate OneEngine
 
 on:
   push:
-    branches: [main]
+    branches: [main, flow-object-migration-work]
   pull_request:
   workflow_dispatch:
-  push:
-    branches: [main, flow-object-migration-work]
 
 concurrency:
   group: oneengine-validate-${{ github.ref }}
