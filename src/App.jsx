@@ -7,22 +7,14 @@ import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/route
 import { MenuBarClock, useClock } from './shell/clock/ShellClock'
 import RdvnReferenceDock, { dockItems } from './shell/dock/RdvnReferenceDock'
 import { CompanyContextLoading, LockScreen } from './shell/auth/LoginShell'
-import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
-import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import { appIconUrl, applyDefaultAppIcon, catalogAppForNavigation, localAppIcon, marketplaceSearchText, readMarketplaceCache, resolveAppOpenRoute, resolveCatalogNavigationRoute, writeMarketplaceCache } from './utils/appMarketplace'
 import JarvisOrb, { ORB_STATES } from './shell/jarvis/JarvisOrb'
 import JarvisPanel from './shell/jarvis/JarvisPanel'
-import IdentityAssuranceSettings from './pages/settings/IdentityAssuranceSettings'
 const RecordListView = lazyWithRecovery(() => import('./platform/records/RecordListView'))
 const MetadataRecordFormModal = lazyWithRecovery(() => import('./platform/forms/MetadataRecordFormModal'))
 const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
-const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
-const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/PaymentTerminalSettings'))
-const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
-const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
-const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
 const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
 const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
@@ -37,15 +29,8 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
-const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
-const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
-const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
-const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
-const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
-const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
 const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
