@@ -1,0 +1,544 @@
+{
+  "groups": [
+    {
+      "key": "company-setup",
+      "label": "Company Setup",
+      "order": 10
+    },
+    {
+      "key": "sales-tax",
+      "label": "Sales & Tax",
+      "order": 20
+    },
+    {
+      "key": "hardware",
+      "label": "Hardware",
+      "order": 30
+    },
+    {
+      "key": "security-identity",
+      "label": "Security & Identity",
+      "order": 40
+    },
+    {
+      "key": "users",
+      "label": "Users",
+      "order": 50
+    },
+    {
+      "key": "ai-assistant",
+      "label": "AI assistant",
+      "order": 60
+    },
+    {
+      "key": "integrations",
+      "label": "Integrations",
+      "order": 60
+    },
+    {
+      "key": "communications",
+      "label": "Communications",
+      "order": 70
+    },
+    {
+      "key": "system",
+      "label": "System",
+      "order": 80
+    },
+    {
+      "key": "developer",
+      "label": "Developer",
+      "order": 90
+    }
+  ],
+  "sections": [
+    {
+      "key": "general",
+      "label": "General",
+      "groupKey": "company-setup",
+      "order": 10,
+      "iconKey": "settings",
+      "description": "Configure your onePOS system preferences and regional settings.",
+      "action": {
+        "type": "tab",
+        "tab": "General"
+      }
+    },
+    {
+      "key": "company",
+      "label": "Company",
+      "groupKey": "company-setup",
+      "order": 20,
+      "iconKey": "building",
+      "description": "Company identity, contact details and regional defaults.",
+      "action": {
+        "type": "tab",
+        "tab": "Company"
+      }
+    },
+    {
+      "key": "store-till",
+      "label": "Store & Till",
+      "groupKey": "company-setup",
+      "order": 30,
+      "iconKey": "store",
+      "description": "Manage your stores, tills and invoice settings.",
+      "action": {
+        "type": "tab",
+        "tab": "Store & Till"
+      }
+    },
+    {
+      "key": "client-web-shop",
+      "label": "Client Web Shop",
+      "groupKey": "company-setup",
+      "order": 40,
+      "iconKey": "shopping-cart",
+      "description": "Configure your public storefront and guest checkout.",
+      "action": {
+        "type": "tab",
+        "tab": "Client Web Shop"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage"
+      ]
+    },
+    {
+      "key": "tax-vat",
+      "label": "Tax / VAT",
+      "groupKey": "sales-tax",
+      "order": 10,
+      "iconKey": "receipt",
+      "description": "VAT registration, rates and how tax is applied at the till.",
+      "action": {
+        "type": "tab",
+        "tab": "Tax / VAT"
+      }
+    },
+    {
+      "key": "receipts",
+      "label": "Receipts",
+      "groupKey": "sales-tax",
+      "order": 20,
+      "iconKey": "receipt",
+      "description": "How receipts are presented and printed at the till.",
+      "action": {
+        "type": "tab",
+        "tab": "Receipts"
+      }
+    },
+    {
+      "key": "payment-terminals",
+      "label": "Payment Terminals",
+      "groupKey": "sales-tax",
+      "order": 30,
+      "iconKey": "credit-card",
+      "description": "Card payment terminals connected to this company.",
+      "action": {
+        "type": "tab",
+        "tab": "Payment Terminals"
+      }
+    },
+    {
+      "key": "customer-loyalty",
+      "label": "Customer Loyalty",
+      "groupKey": "sales-tax",
+      "order": 40,
+      "iconKey": "sparkles",
+      "description": "Configure the customer loyalty programme.",
+      "action": {
+        "type": "tab",
+        "tab": "Customer Loyalty"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage"
+      ]
+    },
+    {
+      "key": "hardware",
+      "label": "Hardware",
+      "groupKey": "hardware",
+      "order": 10,
+      "iconKey": "hard-drive",
+      "description": "Barcode scanners, cash drawers and receipt printers.",
+      "action": {
+        "type": "tab",
+        "tab": "Hardware"
+      }
+    },
+    {
+      "key": "connections",
+      "label": "Connection Health",
+      "groupKey": "hardware",
+      "order": 20,
+      "iconKey": "cable",
+      "description": "Device and integration health at a glance.",
+      "action": {
+        "type": "tab",
+        "tab": "Connections"
+      }
+    },
+    {
+      "key": "security-identity",
+      "label": "Security & Identity",
+      "groupKey": "security-identity",
+      "order": 10,
+      "iconKey": "shield",
+      "description": "Login IP ranges, trusted networks, login hours, password and session policies, login history and active sessions.",
+      "action": {
+        "type": "tab",
+        "tab": "Security & Identity"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage"
+      ]
+    },
+    {
+      "key": "mfa-administration",
+      "label": "MFA Administration",
+      "groupKey": "security-identity",
+      "order": 20,
+      "iconKey": "shield",
+      "description": "Delegated MFA support, temporary verification codes and trusted devices.",
+      "action": {
+        "type": "tab",
+        "tab": "MFA Administration"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage",
+        "security.mfa.manage"
+      ]
+    },
+    {
+      "key": "identity-verification-history",
+      "label": "Identity Verification History",
+      "groupKey": "security-identity",
+      "order": 30,
+      "iconKey": "shield",
+      "description": "Audit MFA, step-up and device identity verification attempts separately from login history.",
+      "action": {
+        "type": "tab",
+        "tab": "Identity Verification History"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage",
+        "security.mfa.manage",
+        "security.identity_verification_history.view"
+      ]
+    },
+    {
+      "key": "security-governance",
+      "label": "Security Governance",
+      "groupKey": "security-identity",
+      "order": 40,
+      "iconKey": "shield",
+      "description": "Security health, API and OAuth policy, connected apps, trusted origins, certificates and credential vault.",
+      "action": {
+        "type": "tab",
+        "tab": "Security Governance"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage",
+        "security.governance.manage"
+      ]
+    },
+    {
+      "key": "data-protection",
+      "label": "Data Protection & Email Security",
+      "groupKey": "security-identity",
+      "order": 50,
+      "iconKey": "shield",
+      "description": "Data export, retention, organization-wide senders, verified email domains and delegated administration.",
+      "action": {
+        "type": "tab",
+        "tab": "Data Protection & Email Security"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage",
+        "data.export.manage",
+        "data.retention.manage",
+        "email.security.manage",
+        "delegated_admin.manage"
+      ]
+    },
+    {
+      "key": "users",
+      "label": "Users",
+      "groupKey": "users",
+      "order": 10,
+      "iconKey": "shield",
+      "description": "People who can sign in and what they can access.",
+      "action": {
+        "type": "tab",
+        "tab": "Users"
+      }
+    },
+    {
+      "key": "roles-permissions",
+      "label": "Roles & Permissions",
+      "groupKey": "users",
+      "order": 20,
+      "iconKey": "shield",
+      "description": "Roles and the permissions each role holds.",
+      "action": {
+        "type": "tab",
+        "tab": "Roles & Permissions"
+      }
+    },
+    {
+      "key": "ai-assistant",
+      "label": "AI assistant",
+      "groupKey": "ai-assistant",
+      "order": 10,
+      "iconKey": "sparkles",
+      "description": "JARVES licence allowance and availability.",
+      "action": {
+        "type": "tab",
+        "tab": "AI assistant"
+      }
+    },
+    {
+      "key": "uber-eats",
+      "label": "Uber Eats",
+      "groupKey": "integrations",
+      "order": 20,
+      "iconKey": "cable",
+      "description": "Uber Eats ordering integration for this company.",
+      "action": {
+        "type": "tab",
+        "tab": "Uber Eats"
+      }
+    },
+    {
+      "key": "deliveroo",
+      "label": "Deliveroo",
+      "groupKey": "integrations",
+      "order": 30,
+      "iconKey": "cable",
+      "description": "Deliveroo ordering integration for this company.",
+      "action": {
+        "type": "tab",
+        "tab": "Deliveroo"
+      }
+    },
+    {
+      "key": "whatsapp-assistant",
+      "label": "WhatsApp Assistant",
+      "groupKey": "integrations",
+      "order": 40,
+      "iconKey": "cable",
+      "description": "Workflow-driven WhatsApp Business assistant for this company.",
+      "action": {
+        "type": "tab",
+        "tab": "WhatsApp Assistant"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage"
+      ]
+    },
+    {
+      "key": "sms-delivery",
+      "label": "SMS Delivery",
+      "groupKey": "communications",
+      "order": 10,
+      "iconKey": "credit-card",
+      "description": "Invoice and receipt delivery by SMS.",
+      "action": {
+        "type": "tab",
+        "tab": "SMS Delivery"
+      }
+    },
+    {
+      "key": "email-delivery",
+      "label": "Email Delivery",
+      "groupKey": "communications",
+      "order": 20,
+      "iconKey": "credit-card",
+      "description": "Invoice and receipt delivery by email.",
+      "action": {
+        "type": "tab",
+        "tab": "Email Delivery"
+      }
+    },
+    {
+      "key": "server-api",
+      "label": "Server / API Configuration",
+      "groupKey": "system",
+      "order": 10,
+      "iconKey": "monitor-cog",
+      "description": "Device-level server and API connection settings.",
+      "action": {
+        "type": "tab",
+        "tab": "Server / API Configuration"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "objects",
+      "label": "Objects",
+      "groupKey": "developer",
+      "order": 10,
+      "iconKey": "layout-grid",
+      "description": "Objects, fields, relationships, rules, approvals and object metadata.",
+      "action": {
+        "type": "tab",
+        "tab": "Objects"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "assignment-rules",
+      "label": "Assignment Rules",
+      "groupKey": "developer",
+      "order": 20,
+      "iconKey": "layout-grid",
+      "description": "Object-scoped record assignment and routing rules.",
+      "action": {
+        "type": "tab",
+        "tab": "Assignment Rules"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "sharing-rules",
+      "label": "Sharing Rules",
+      "groupKey": "developer",
+      "order": 30,
+      "iconKey": "shield",
+      "description": "Object-scoped record sharing and access rules.",
+      "action": {
+        "type": "tab",
+        "tab": "Sharing Rules"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "platform",
+      "label": "Builders",
+      "groupKey": "developer",
+      "order": 40,
+      "iconKey": "layout-grid",
+      "description": "Workflow, Approval Flow, Page, Dashboard and Report canvases.",
+      "action": {
+        "type": "tab",
+        "tab": "Platform"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "workflow-runs",
+      "label": "Workflow Runs",
+      "groupKey": "developer",
+      "order": 50,
+      "iconKey": "workflow",
+      "description": "Inspect workflow execution history and outcomes.",
+      "action": {
+        "type": "tab",
+        "tab": "Workflow Runs"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "work-items",
+      "label": "Work Items",
+      "groupKey": "developer",
+      "order": 60,
+      "iconKey": "list",
+      "description": "Review workflow and approval work items.",
+      "action": {
+        "type": "tab",
+        "tab": "Work Items"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "platform-apps",
+      "label": "Platform Apps",
+      "groupKey": "developer",
+      "order": 70,
+      "iconKey": "layout-grid",
+      "description": "Manage platform app metadata and composition.",
+      "action": {
+        "type": "tab",
+        "tab": "Platform Apps"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "deployments",
+      "label": "Deployments",
+      "groupKey": "developer",
+      "order": 80,
+      "iconKey": "rocket",
+      "description": "Manage metadata deployments and promotion.",
+      "action": {
+        "type": "tab",
+        "tab": "Deployments"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "notifications",
+      "label": "Notifications",
+      "groupKey": "developer",
+      "order": 90,
+      "iconKey": "bell",
+      "description": "Manage platform notification subscriptions.",
+      "action": {
+        "type": "tab",
+        "tab": "Notifications"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "value-sets",
+      "label": "Value Sets",
+      "groupKey": "developer",
+      "order": 100,
+      "iconKey": "list",
+      "description": "Reusable picklist and value-set metadata.",
+      "action": {
+        "type": "tab",
+        "tab": "Value Sets"
+      },
+      "requiredAnyPermissions": [
+        "oneengine.manage"
+      ]
+    },
+    {
+      "key": "message-templates",
+      "label": "Message Templates",
+      "groupKey": "developer",
+      "order": 110,
+      "iconKey": "receipt",
+      "description": "Message templates used across communications.",
+      "action": {
+        "type": "tab",
+        "tab": "Message Templates"
+      },
+      "requiredAnyPermissions": [
+        "settings.manage"
+      ]
+    }
+  ]
+}
