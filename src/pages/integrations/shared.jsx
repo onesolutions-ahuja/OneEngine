@@ -13,11 +13,6 @@ export const AUTH_TYPES = [
 
 export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
-/* entity_type values accepted by the backend endpoints API. The dispatcher
- * maps events to these: SALE_CREATED->sale, PURCHASE_CREATED/RECEIVED->purchase,
- * SALES_RETURN_CREATED->custom (1:1 by design). */
-export const ENTITY_TYPES = ["custom"];
-
 export const ENTITY_EVENT_HINT =
   "Use a metadata-defined event key.";
 
