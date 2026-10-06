@@ -396,6 +396,8 @@ const report = {
   registeredFunctions: functions,
   registeredActions: actions,
   trustedJobKinds: jobs,
+  runtimeWorkflowInventory: runtimeWorkflowInventory.map((workflow) => ({ source: workflow.source, name: workflow.name, apiName: workflow.apiName, steps: workflow.actions.length })),
+  shortRuntimeWorkflows: shortRuntimeWorkflows.map((workflow) => ({ source: workflow.source, name: workflow.name, apiName: workflow.apiName, steps: workflow.actions.length, allowed: allowedShortRuntimeWorkflows.has(workflow.source + "::" + workflow.name) })),
   mutationRoutes,
   ignoredNonMutatingPostRoutes,
   directRuntimeCalls,
