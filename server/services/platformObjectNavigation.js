@@ -6,6 +6,7 @@ import {
 import { isPackageLicensed } from "./licensing.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
+import { canonicalComponentReference } from "./platformComponentRegistry.js";
 
 /*
  * METADATA-DRIVEN PLATFORM OBJECT NAVIGATION
@@ -106,6 +107,22 @@ function normalizeProfiles(value) {
  * target keys, then whitelists the navigation keys. Unknown keys are dropped —
  * the definition is admin-authored input, so nothing arbitrary is persisted.
  */
+function canonicalizeComponentNode(node) {
+  if (!node || typeof node !== "object" || Array.isArray(node)) return node;
+  const reference = node.componentId ?? node.component_id ?? node.componentKey ?? node.component_key ?? node.registryKey ?? node.type;
+  const canonical = canonicalComponentReference(reference);
+  const next = { ...node };
+  if (canonical) {
+    next.componentId = canonical.componentId;
+    next.componentKey = canonical.componentKey;
+    if ("component_id" in next) delete next.component_id;
+    if ("component_key" in next) delete next.component_key;
+  }
+  if (Array.isArray(next.children)) next.children = next.children.map(canonicalizeComponentNode);
+  if (Array.isArray(next.items)) next.items = next.items.map(canonicalizeComponentNode);
+  return next;
+}
+
 export function normalizeObjectPageDefinition(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   // Forms, record pages and custom pages share the same layout vocabulary:
@@ -130,8 +147,8 @@ export function normalizeObjectPageDefinition(value) {
       : [])
     : [];
   const definition = {
-    sections: Array.isArray(source.sections) ? source.sections : builderSections,
-    components: Array.isArray(source.components) ? source.components : builderComponents,
+    sections: (Array.isArray(source.sections) ? source.sections : builderSections).map(canonicalizeComponentNode),
+    components: (Array.isArray(source.components) ? source.components : builderComponents).map(canonicalizeComponentNode),
   };
 
   /* Custom Page Builder tree (nested sections.children). Sections/components
