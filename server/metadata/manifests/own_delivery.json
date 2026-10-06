@@ -1,0 +1,29 @@
+{
+  "permissionDeclarations": [
+    {
+      "permission": "online_orders.view",
+      "label": "View own-delivery queue"
+    },
+    {
+      "permission": "online_orders.manage",
+      "label": "Assign and dispatch own deliveries"
+    },
+    {
+      "permission": "delivery.driver",
+      "label": "View and update assigned deliveries only"
+    }
+  ],
+  "pages": [
+    {
+      "pageKey": "own_delivery",
+      "label": "Own Delivery",
+      "routePath": "/app/custom/own-delivery",
+      "runtimeComponent": "delivery_workspace",
+      "definition": {
+        "presentation_mode": "landing",
+        "runtime_component": "delivery_workspace",
+        "components": []
+      }
+    }
+  ]
+}
