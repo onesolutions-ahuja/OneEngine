@@ -128,6 +128,44 @@ function CanvasPicker({onPick,onClose}) {
 }
 
 
+
+function ActionSubflowEditor({element,onSave,onCancel}) {
+  const [draft,setDraft]=useState(()=>clone(element||{}))
+  const [actions,setActions]=useState([]),[flows,setFlows]=useState([]),[loading,setLoading]=useState(true)
+  const cfg=draft.config||{}
+  const patch=(changes)=>setDraft((row)=>({...row,...changes}))
+  const patchCfg=(changes)=>patch({config:{...cfg,...changes}})
+  useEffect(()=>{let live=true;setLoading(true);Promise.all([
+    apiRequest('/api/platform/workflow-actions').catch(()=>({data:[]})),
+    apiRequest('/api/platform/rules').catch(()=>({data:[]}))
+  ]).then(([a,b])=>{if(!live)return;setActions((Array.isArray(a?.data)?a.data:[]).filter((x)=>x?.builderVisible!==false&&!['RUN_AGENT','SCREEN','RUN_SUBFLOW'].includes(x.key)));setFlows((Array.isArray(b?.data)?b.data:[]).filter((x)=>x?.action?.type==='workflow'&&x?.action?.isTemplate!==true))}).finally(()=>{if(live)setLoading(false)});return()=>{live=false}},[])
+  const selectedAction=actions.find((x)=>x.key===cfg.actionKey)
+  const selectedFlow=flows.find((x)=>String(x.id)===String(cfg.workflowId))
+  const required=new Set(selectedAction?.schema?.required||[])
+  const inputs=Object.entries(selectedAction?.schema?.properties||{})
+  const valid=element.key==='action'?Boolean(selectedAction):Boolean(selectedFlow)
+  const runtime=element.key==='action'
+    ? {id:draft.id,key:cfg.actionKey,label:draft.label,apiName:draft.apiName,description:draft.description||'',...(cfg.inputs||{}),automaticOutputVariable:(cfg.outputMode||'automatic')==='automatic'?draft.apiName+'_Outputs':undefined,manualOutputMappings:cfg.outputMode==='manual'?(cfg.manualOutputs||[]):undefined}
+    : {id:draft.id,key:'RUN_SUBFLOW',label:draft.label,apiName:draft.apiName,description:draft.description||'',workflowId:cfg.workflowId,subflowApiName:cfg.workflowApiName,workflowInputs:cfg.inputMappings||{},outputMappings:cfg.outputMappings||{}}
+  return <aside className="gptbn-panel gptbn-element-editor">
+    <header><h3>{element.label}</h3><button aria-label="Close element" onClick={onCancel}><X size={17}/></button></header>
+    <div className="gptbn-panel-body">
+      <label><span>Label <b>*</b></span><input value={draft.label||''} onChange={(e)=>patch({label:e.target.value,apiName:apiFromElement(e.target.value)})}/></label>
+      <label><span>API Name <b>*</b></span><input value={draft.apiName||''} onChange={(e)=>patch({apiName:e.target.value})}/></label>
+      <label><span>Description</span><textarea rows="3" value={draft.description||''} onChange={(e)=>patch({description:e.target.value})}/></label>
+      {element.key==='action'?<><label><span>Action <b>*</b></span><select disabled={loading} value={cfg.actionKey||''} onChange={(e)=>patchCfg({actionKey:e.target.value,inputs:{},inputModes:{},outputMode:'automatic',manualOutputs:[]})}><option value="">{loading?'Loading actions...':'Select an action'}</option>{actions.map((a)=><option key={a.key} value={a.key}>{a.displayName||a.label||a.key}</option>)}</select></label>
+        {selectedAction?.key==='HTTP_CALLOUT'||/HTTP.*CALLOUT/i.test(selectedAction?.displayName||'')?<p className="gptbn-info">HTTP Callout uses the selected OneEngine workflow action contract, including its configured authentication and request schema.</p>:null}
+        {inputs.length?<div className="gptbn-action-inputs"><strong>Set Input Values</strong>{inputs.map(([name,schema])=><label key={name}><span>{schema?.title||name}{required.has(name)?' *':''}</span><input value={cfg.inputs?.[name]??''} onChange={(e)=>patchCfg({inputs:{...(cfg.inputs||{}),[name]:e.target.value}})} placeholder={schema?.description||name}/></label>)}</div>:null}
+        {selectedAction?<fieldset><legend>Store Output Values</legend><label className="gptbn-radio"><input type="radio" checked={(cfg.outputMode||'automatic')==='automatic'} onChange={()=>patchCfg({outputMode:'automatic'})}/>Automatically store all fields</label><label className="gptbn-radio"><input type="radio" checked={cfg.outputMode==='manual'} onChange={()=>patchCfg({outputMode:'manual'})}/>Manually assign variables</label></fieldset>:null}
+      </>:<><label><span>Referenced Flow <b>*</b></span><select disabled={loading} value={cfg.workflowId||''} onChange={(e)=>{const x=flows.find((r)=>String(r.id)===e.target.value);patchCfg({workflowId:e.target.value,workflowApiName:x?.action?.apiName||'',flowLabel:x?.name||'',inputMappings:{},outputMappings:{}})}}><option value="">{loading?'Loading flows...':'Select a flow'}</option>{flows.map((x)=><option key={x.id} value={x.id}>{x.name} · {x.action?.apiName||'Workflow'}</option>)}</select>{selectedFlow?<small>{selectedFlow.active||selectedFlow.runtime_active?'Active version':'Latest version'}</small>:null}</label>
+        {selectedFlow?.action?.inputContract?.length?<div className="gptbn-action-inputs"><strong>Select Input Values</strong>{selectedFlow.action.inputContract.map((input)=><label key={input.name}><span>{input.label||input.name}{input.required?' *':''}</span><input value={cfg.inputMappings?.[input.name]??''} onChange={(e)=>patchCfg({inputMappings:{...(cfg.inputMappings||{}),[input.name]:e.target.value}})}/></label>)}</div>:null}
+        {selectedFlow?.action?.outputContract?.length?<div className="gptbn-action-inputs"><strong>Store Output Values</strong>{selectedFlow.action.outputContract.map((output)=><label key={output.name}><span>{output.label||output.name}</span><input value={cfg.outputMappings?.[output.name]??''} onChange={(e)=>patchCfg({outputMappings:{...(cfg.outputMappings||{}),[output.name]:e.target.value}})} placeholder="variables.target"/></label>)}</div>:null}
+      </>}
+    </div>
+    <footer><button onClick={onCancel}>Cancel</button><button className="is-brand" disabled={!valid||!String(draft.label||'').trim()||!String(draft.apiName||'').trim()} onClick={()=>onSave({...draft,configured:true,runtimeAction:runtime})}>Done</button></footer>
+  </aside>
+}
+
 function DataElementEditor({element,objects,onSave,onCancel}) {
   const [draft,setDraft]=useState(()=>clone(element||{}))
   const [fields,setFields]=useState([])
@@ -180,6 +218,7 @@ function dataRuntimeAction(element) {
 }
 
 function ElementEditor({element,nodes,objects,onSave,onCancel}) {
+  if(element && ['action','subflow'].includes(element.key)) return <ActionSubflowEditor element={element} onSave={onSave} onCancel={onCancel}/>
   if(element && ['get_records','create_records','update_records','delete_records','rollback'].includes(element.key)) return <DataElementEditor element={element} objects={objects} onSave={onSave} onCancel={onCancel}/>
   const [draft,setDraft]=useState(()=>clone(element||{}))
   if(!element)return null
@@ -312,7 +351,7 @@ function Builder({flow,onBack}) {
   const save=async()=>{
     if(!startValid){setMessage('Configure Start before saving.');return}
     setSaving(true);setMessage('')
-    const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:false,lifecycleStatus:'DRAFT',version:1,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:[],goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:nodes.filter((node)=>node.configured).map(dataRuntimeAction).filter(Boolean)}}
+    const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:false,lifecycleStatus:'DRAFT',version:1,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:[],goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:nodes.filter((node)=>node.configured).map((node)=>node.runtimeAction||dataRuntimeAction(node)).filter(Boolean)}}
     try{const response=await apiRequest(savedId?`/api/platform/rules/${encodeURIComponent(savedId)}`:'/api/platform/rules',{method:savedId?'PUT':'POST',body:JSON.stringify(payload)});if(response?.data?.id)setSavedId(String(response.data.id));setMessage('Flow saved.')}
     catch(error){setMessage(error?.message||'Unable to save flow.')}
     finally{setSaving(false)}
