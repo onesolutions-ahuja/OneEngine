@@ -25,7 +25,7 @@ import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "EMAIL_ALERT", "SEND_SMS", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
 
@@ -3628,64 +3628,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
   },
-  {
-    key: "SEND_EMAIL_BREVO",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send Email - Brevo",
-    description: "Send an email through the tenant's installed Brevo connector.",
-    schema: {
-      type: "object",
-      properties: {
-        recipient: { type: "string", title: "Recipient email" },
-        contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
-        templateId: { type: "string", title: "Message template" },
-        subject: { type: "string", title: "Subject" },
-        body: { type: "string", title: "Message body" },
-      },
-      required: ["recipient"],
-    },
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send Email - Brevo requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    executor: async (context) => executeProviderSpecificEmail({
-      ...context,
-      packageKey: "brevo_connector",
-      actionKey: "SEND_EMAIL_BREVO",
-    }),
-  },
-  {
-    key: "SEND_EMAIL_MAILJET",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send Email - Mailjet",
-    description: "Send an email through the tenant's installed Mailjet connector.",
-    schema: {
-      type: "object",
-      properties: {
-        recipient: { type: "string", title: "Recipient email" },
-        contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
-        templateId: { type: "string", title: "Message template" },
-        subject: { type: "string", title: "Subject" },
-        body: { type: "string", title: "Message body" },
-      },
-      required: ["recipient"],
-    },
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send Email - Mailjet requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    executor: async (context) => executeProviderSpecificEmail({
-      ...context,
-      packageKey: "mailjet_connector",
-      actionKey: "SEND_EMAIL_MAILJET",
-    }),
-  },
+
+
   {
     key: "EMAIL_ALERT",
     builderVisible: false,
@@ -3742,30 +3686,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return { status: job ? "queued" : "skipped", jobId: job?.id || null };
     },
   },
-  {
-    key: "SEND_WHATSAPP",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send WhatsApp",
-    description: "Queue a WhatsApp message using the configured provider.",
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send WhatsApp requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.whatsapp",
-    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
-      const company = companyId || req?.user?.companyId;
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "WHATSAPP", stepRunId });
-      if (!provider.configured) {
-        return { status: "failed", provider: "WHATSAPP", error: provider.error, jobId: null };
-      }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_WHATSAPP", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
-    },
-  },
+
   {
     key: "CALL_FUNCTION",
     displayName: "Call Function",
