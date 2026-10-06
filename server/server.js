@@ -35,7 +35,6 @@ import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
-import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
 
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
@@ -52,7 +51,6 @@ import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
 import createIntegrationsRouter from "./routes/integrations.js";
-import createDashboardRouter from "./routes/dashboard.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
 import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
@@ -1894,7 +1892,6 @@ app.use("/api", createGlobalProductLookupRouter({
   connectorDrivers,
 }));
 
-app.use("/api", createDashboardRouter({ authenticate, authorize, db }));
 app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
 
 /*
@@ -2019,17 +2016,6 @@ app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool,
 |   PUT  /api/products/:id          (product.edit)
 |   DEL  /api/products/:id          (product.delete)
 */
-app.use(
-  "/api",
-  createProductFeaturesRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-  })
-);
-
-
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
 /* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
