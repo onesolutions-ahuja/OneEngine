@@ -4,7 +4,7 @@ import { runMigrations } from "./migrations.js";
 import { ensureReleaseTablesSql } from "../services/appReleaseManager.js";
 import { backfillLegacyRuleFieldReferences } from "../services/platformRuleReferences.js";
 import { packageDefinitions } from "../services/packageRegistry.js";
-import { platformSchema } from "../services/platformMetadata.js";
+import { platformSchema } from "../services/platformCoreMetadata.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { decryptSecret } from "../services/onlineOrders/platformConfig.js";
 
