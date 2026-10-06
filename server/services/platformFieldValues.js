@@ -1,4 +1,4 @@
-import { toSafeApiName } from "./platformMetadata.js";
+import { toSafeApiName } from "./platformIdentifiers.js";
 import { tenantFields } from "./platformSystemObjects.js";
 import { loadEffectivePermissionSets, mergePermissionSetFieldAccess } from "./platformPermissionSets.js";
 
