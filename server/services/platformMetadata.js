@@ -2328,7 +2328,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_cash_out","Cash Out","till.cash_out","till_session","cash.payout","cash_out","minus",40]
       ];
       for (const [buttonKey,label,actionKey,placement,permission,uiAction,icon,order] of tillButtons) {
-        const handlerKey = actionKey === "till.print" ? "PRINT_RECEIPT" : "TILL_UI_ACTION";
+        const handlerKey = actionKey === "till.print" ? "PRINT_RECEIPT" : "SHOW_MESSAGE";
         await pool.query(
           `INSERT INTO platform_registered_actions
             (company_id,object_id,action_key,label,description,handler_key,required_permission,config,active,managed)
