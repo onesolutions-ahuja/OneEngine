@@ -12,14 +12,14 @@ const systemFlows = new Map(
 function permissionDb({ products = [], inserted = [] } = {}) {
   const objects = {
     product: { id: "obj-product", object_key: "product", label: "Product", source_table: "products", company_id: null, company_scoped: true, store_scoped: false },
-    cash_ledger: { id: "obj-cash", object_key: "cash_ledger", label: "Cash Ledger", source_table: "cash_movements", company_id: null, company_scoped: true, store_scoped: true },
+    cash_movement: { id: "obj-cash", object_key: "cash_movement", label: "Cash Movement", source_table: "cash_movements", company_id: null, company_scoped: true, store_scoped: true },
   };
   const fields = {
     product: [
       { id:"fp1",object_id:"obj-product",api_name:"name",source_column:"name",active:true,readable:true,writable:true,label:"Name",display_order:1 },
       { id:"fp2",object_id:"obj-product",api_name:"price",source_column:"price",active:true,readable:true,writable:true,label:"Price",display_order:2 },
     ],
-    cash_ledger: [
+    cash_movement: [
       { id:"fc1",object_id:"obj-cash",api_name:"till_session_id",source_column:"till_session_id",active:true,readable:true,writable:true,label:"Till Session",display_order:1 },
       { id:"fc2",object_id:"obj-cash",api_name:"user_id",source_column:"user_id",active:true,readable:true,writable:true,label:"User",display_order:2 },
       { id:"fc3",object_id:"obj-cash",api_name:"type",source_column:"type",active:true,readable:true,writable:true,label:"Type",display_order:3 },
@@ -258,12 +258,12 @@ test("Price Override Flow debug validates object lookup and both decision paths"
 
 const pettyActions = [
   { id:"amount_is_valid", label:"Petty Cash Amount Is Valid", apiName:"amount_is_valid", key:"FORMULA", resourceName:"amountIsValid", resultType:"boolean", expression:"amount > 0", inputs:{ amount:{ path:"$record.amount" } } },
-  { id:"validate_amount", label:"Validate Petty Cash", apiName:"validate_amount", key:"CONDITION", outcomes:[{ id:"valid", label:"Valid Amount", condition:{ match:"all", conditions:[{ field:"variables.amountIsValid", operator:"equals", value:true }] }, branch:["create_cash_ledger"] }], defaultLabel:"Invalid Amount", defaultBranch:["invalid_amount"] },
-  { id:"create_cash_ledger", label:"Create Cash Ledger Entry", apiName:"create_cash_ledger", key:"CREATE_RECORD", objectKey: "cash_movement", fieldValues:{ till_session_id:{ path:"$record.tillSessionId" }, user_id:{ path:"$record.userId" }, type:"cash_out", amount:{ path:"$record.amount" }, reason:{ path:"$record.reason" } } },
+  { id:"validate_amount", label:"Validate Petty Cash", apiName:"validate_amount", key:"CONDITION", outcomes:[{ id:"valid", label:"Valid Amount", condition:{ match:"all", conditions:[{ field:"variables.amountIsValid", operator:"equals", value:true }] }, branch:["create_cash_movement"] }], defaultLabel:"Invalid Amount", defaultBranch:["invalid_amount"] },
+  { id:"create_cash_movement", label:"Create Cash Movement Entry", apiName:"create_cash_movement", key:"CREATE_RECORD", objectKey: "cash_movement", fieldValues:{ till_session_id:{ path:"$record.tillSessionId" }, user_id:{ path:"$record.userId" }, type:"cash_out", amount:{ path:"$record.amount" }, reason:{ path:"$record.reason" } } },
   { id:"invalid_amount", label:"Reject Invalid Amount", apiName:"invalid_amount", key:"CUSTOM_ERROR", errorMessage:"Petty cash amount must be greater than zero", errorLocation:"record" },
 ];
 
-test("Petty Cash Flow debug creates Cash Ledger and rejects invalid amount", async () => {
+test("Petty Cash Flow debug creates Cash Movement and rejects invalid amount", async () => {
   const inserted = [];
   const db = permissionDb({ inserted });
   await executeWorkflowActions({ actions:pettyActions, allActions:pettyActions, db, req, companyId:"c1", record:{ tillSessionId:"ts1", userId:"u1", amount:7.25, reason:"Milk" }, workflowVariables:{ variables:{}, steps:{} }, debugMode:true });
