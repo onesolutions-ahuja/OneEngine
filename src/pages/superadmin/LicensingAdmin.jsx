@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { databaseConfigurationPayload } from "../../services/tenantDatabaseForm.js";
 
-const DEFAULT_KEYS = ["pos", "inventory", "purchasing", "customers", "reports", "loyalty", "jarvis"];
-
 export default function LicensingAdmin({ companyId = '', lockCompany = false }) {
   const [licences, setLicences] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -26,7 +24,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   const [companyTiers, setCompanyTiers] = useState([]);
   const [jarvesLicence, setJarvesLicence] = useState({ allowance: 0, enabledUsers: 0, seatsRemaining: 0 });
   const [jarvesAllowanceDraft, setJarvesAllowanceDraft] = useState("0");
-  const [entitlements, setEntitlements] = useState(Object.fromEntries(DEFAULT_KEYS.map((key) => [key, false])));
+  const [entitlements, setEntitlements] = useState({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [databaseCompany, setDatabaseCompany] = useState(companyId || "");
@@ -42,7 +40,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   });
   const [databaseBusy, setDatabaseBusy] = useState(false);
   const [clientAdminEmail, setClientAdminEmail] = useState("");
-
+  const entitlementKeys = [...new Set([\n    ...Object.keys(entitlements || {}),\n    ...marketplacePackages.flatMap((item) => Array.isArray(item?.entitlements) ? item.entitlements : Object.keys(item?.entitlements || {})),\n  ])].filter(Boolean).sort();\n
   const load = async () => {
     try {
       const [licenceData, companyData, packageData, bundleData, tierData] = await Promise.all([
@@ -146,7 +144,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
       expiresAt: licence.expires_at ? new Date(licence.expires_at).toISOString().slice(0, 16) : "",
       active: licence.active === true,
     });
-    setEntitlements({ ...Object.fromEntries(DEFAULT_KEYS.map((key) => [key, false])), ...(licence.entitlements || {}) });
+    setEntitlements({ ...(licence.entitlements || {}) });
     setLicencePackages((licence.packages || []).map((item) => ({ ...item })));
   };
 
@@ -464,7 +462,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
           <label className="text-sm flex gap-2 items-center"><input type="checkbox" checked={licenceForm.active} onChange={(event) => setLicenceForm((current) => ({ ...current, active: event.target.checked }))} />Active</label>
         </div>
         <div className="flex flex-wrap gap-4">
-          {DEFAULT_KEYS.map((key) => <label key={key} className="text-sm flex gap-2 items-center"><input type="checkbox" checked={entitlements[key] === true} onChange={(event) => setEntitlements((current) => ({ ...current, [key]: event.target.checked }))} />{key}</label>)}
+          {entitlementKeys.map((key) => <label key={key} className="text-sm flex gap-2 items-center"><input type="checkbox" checked={entitlements[key] === true} onChange={(event) => setEntitlements((current) => ({ ...current, [key]: event.target.checked }))} />{key}</label>)}
         </div>
         <div className="space-y-2">
           <h3 className="font-medium">Included packages and dependencies</h3>
