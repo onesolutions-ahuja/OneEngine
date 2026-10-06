@@ -2406,6 +2406,8 @@ export function packageDefinition(entry) {
         buttons: [
           { objectKey:"till_session",buttonKey:"open_till",label:"Open Till",targetType:"workflow",targetKey:"Open Till Session",placement:"till_session",requiredPermission:"workflow.execute",inputMappings:{} },
           { objectKey:"cash_movement",buttonKey:"record_cash_movement",label:"Record Cash Movement",targetType:"workflow",targetKey:"Record Cash Movement",placement:"till_cash",requiredPermission:"workflow.execute",inputMappings:{} },
+          { objectKey:"sale",buttonKey:"till_open_drawer",label:"Open Drawer",targetType:"workflow",targetKey:"Open Drawer",placement:"till_action",requiredPermission:"workflow.execute",inputMappings:{} },
+          { objectKey:"sale",buttonKey:"till_petty_cash_submit",label:"Petty Cash",targetType:"workflow",targetKey:"Record Petty Cash",placement:"till_action",requiredPermission:"workflow.execute",inputMappings:{} },
           { objectKey:"sale",buttonKey:"till_complete_sale",label:"Complete Sale",targetType:"workflow",targetKey:"Complete Sale",placement:"till_checkout",requiredPermission:"workflow.execute",inputMappings:{} },
           { objectKey:"sale",buttonKey:"create_return",label:"Return",targetType:"workflow",targetKey:"Create Customer Return",placement:"record_action",requiredPermission:"workflow.execute",inputMappings:{} },
           { objectKey:"sale",buttonKey:"create_exchange",label:"Exchange",targetType:"workflow",targetKey:"Create Exchange",placement:"record_action",requiredPermission:"workflow.execute",inputMappings:{} },
@@ -2423,6 +2425,14 @@ export function packageDefinition(entry) {
           {
             objectKey:"cash_movement",name:"Record Cash Movement",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
             action:{type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"RECORD_CASH_MOVEMENT",capabilityType:"workflow",capabilityKey:"till.cash.move",systemGenerated:true,systemKey:"flow:till.cash.move",inputContract:[{name:"movement",type:"record",required:true}],outputContract:[{name:"movement",type:"record",source:"variables.movement"}],resources:[{value:"variables.movement",apiName:"movement",label:"Cash Movement",type:"Variable",dataType:"Record",defaultValue:null,isCollection:false,availableInput:true,availableOutput:true,objectKey:"cash_movement"}],actions:[{id:"create_movement",label:"Create Cash Movement",apiName:"create_movement",key:"CREATE_RECORD",objectKey:"cash_movement",recordResource:{path:"variables.movement"}}]}
+          },
+          {
+            objectKey:"cash_movement",name:"Open Drawer",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
+            action:{type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"OPEN_DRAWER",capabilityType:"workflow",capabilityKey:"till.drawer.open",systemGenerated:true,systemKey:"flow:till.drawer.open",inputContract:[{name:"tillSessionId",type:"string",required:false},{name:"terminalId",type:"string",required:false},{name:"userId",type:"string",required:false},{name:"reason",type:"string",required:false}],actions:[{id:"record_drawer",label:"Record Drawer Open",key:"CREATE_RECORD",objectKey:"cash_movement",fieldValues:{till_session_id:{path:"variables.tillSessionId"},terminal_id:{path:"variables.terminalId"},user_id:{path:"variables.userId"},type:"drawer_open",amount:0,reason:{path:"variables.reason"}}}]}
+          },
+          {
+            objectKey:"cash_movement",name:"Record Petty Cash",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
+            action:{type:"workflow",scope:"retail_pos",flowType:"AUTOLAUNCHED",apiName:"RECORD_PETTY_CASH",capabilityType:"workflow",capabilityKey:"till.petty.cash",systemGenerated:true,systemKey:"flow:till.petty.cash",inputContract:[{name:"amount",type:"number",required:true},{name:"reason",type:"string",required:false},{name:"tillSessionId",type:"string",required:false},{name:"userId",type:"string",required:false}],actions:[{id:"record_petty_cash",label:"Record Petty Cash",key:"CREATE_RECORD",objectKey:"cash_movement",fieldValues:{till_session_id:{path:"variables.tillSessionId"},user_id:{path:"variables.userId"},type:"cash_out",amount:{path:"variables.amount"},reason:{path:"variables.reason"}}}]}
           },
           {
             objectKey:"stock_return",name:"Create Customer Return",triggerKey:"manual",active:true,lifecycleStatus:"ACTIVE",
