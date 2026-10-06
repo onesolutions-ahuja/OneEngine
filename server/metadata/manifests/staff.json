@@ -1155,5 +1155,7 @@
   },
   "migrations": [
     "staff_core_object_metadata_v1"
-  ]
+  ],
+  "defaultInstall": true,
+  "provisionMetadataOnDefault": true
 }
