@@ -108,10 +108,7 @@ import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname 
 import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool } from "./services/tenantDatabase.js";
 /* Inventory primitives live in services/inventory.js (shared with every
  * stock writer: POS sales, purchases, returns, adjustments). */
-import {
-  createInventoryMovement,
-  inventoryMovementTypes,
-} from "./services/inventory.js";
+
 
 const { Pool } = pg;
 
@@ -2887,13 +2884,7 @@ async function startServer() {
                   [subscriptionId, job.company_id]
                 );
               }
-            }
-            if (["QUICKBOOKS_PROVIDER_SYNC", "SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
-              await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
-                kind: job.kind,
-                status: failed?.status || "FAILED",
-                attempts: failed?.attempts || 0,
-              });
+            });
             }
           },
           handler: async (job) => {
@@ -3757,29 +3748,20 @@ async function startServer() {
               }
             }
             if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
-            if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
+            if (job.kind === "PLATFORM_FLOW_EXECUTION") {
+              const systemKey = String(payload.systemKey || "");
+              if (!systemKey.startsWith("flow:")) throw Object.assign(new Error("Generic flow job requires a metadata Flow system key"), { retryable:false });
+              const input = payload.input && typeof payload.input === "object" ? payload.input : {};
               const execution = await executeSystemWorkflow({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                systemKey: "flow:shopify.webhook.process",
-                req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_WEBHOOK_PROCESS" },
-                extraContext: { pool, createInventoryMovement },
+                db, companyId:job.company_id, userId:payload.actorUserId||null, systemKey,
+                req:{method:"JOB",path:"PLATFORM_FLOW_EXECUTION",user:{companyId:job.company_id,storeId:payload.storeId||null,id:payload.actorUserId||null}},
+                input:{...input,_executeFromJob:true}, storeId:payload.storeId||null, writeAudit,
+                source:{type:"job",method:"JOB",path:"PLATFORM_FLOW_EXECUTION",capability:systemKey}, extraContext:{pool},
               });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
-                  retryable: outcome.retryable === true,
-                });
-              }
-              return outcome;
+              if (execution.result?.success === false) throw Object.assign(new Error(execution.result.message || execution.result.code || "Metadata Flow job failed"), {retryable:execution.result.retryable!==false});
+              return execution.result;
             }
-            if (job.kind === "QUICKBOOKS_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
+            const actionKey = String(payload.type || payload.key || "").toUpperCase();
               if (!actionKey) throw Object.assign(new Error("QuickBooks provider job is missing an action key"), { retryable: false });
               const execution = await executeSystemWorkflow({
                 db,
