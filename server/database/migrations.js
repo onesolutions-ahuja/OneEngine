@@ -35,6 +35,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0042_exact_root_cause_diagnostics",
   "0043_platform_agents",
   "0047_sale_ledger",
+  "0048_canonical_object_consolidation",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -234,6 +235,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Create and backfill canonical sale ledger",
     up: client => client.query(
       readFileSync(new URL("./migrations/0047_sale_ledger.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0048_canonical_object_consolidation",
+    version: "48",
+    name: "Consolidate canonical object model",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0048_canonical_object_consolidation.sql", import.meta.url), "utf8")
     ),
   },
 ]);
