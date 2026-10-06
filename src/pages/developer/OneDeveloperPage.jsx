@@ -213,11 +213,11 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
           {current.key === 'objects' ? <ObjectsSettingsPane />
-            : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onBack={onBackToSettings} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
+            : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onBack={() => select('objects')} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
             : current.key === 'gptappbuilder' ? <GPTAppBuilderPage />
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
-            : current.key === 'gpt-page-builder' ? <GPTPageBuilder context="developer" onBack={onBackToSettings} /> :
+            : current.key === 'gpt-page-builder' ? <GPTPageBuilder context="developer" onBack={() => select('objects')} /> :
           current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
             : current.key === 'report-types' ? <ReportTypeManager />
