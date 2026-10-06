@@ -2245,15 +2245,45 @@
         "description": "Install",
         "actions": [
           {
+            "id": "install_allowed",
+            "label": "1. Validate Install Eligibility",
+            "apiName": "install_allowed",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "allowed",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "AVAILABLE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "deploy_package",
+                  "install_app"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Allowed",
+            "defaultBranch": [
+              "install_not_allowed"
+            ]
+          },
+          {
             "id": "deploy_package",
-            "label": "1. Install Package Runtime",
+            "label": "2. Install Package Runtime",
             "apiName": "deploy_package",
             "key": "PACKAGE_LIFECYCLE",
             "operation": "INSTALL"
           },
           {
             "id": "install_app",
-            "label": "2. Update Tenant App Status",
+            "label": "3. Update Tenant App Status",
             "apiName": "install_app",
             "key": "UPDATE_RECORD",
             "objectKey": "tenant_app",
@@ -2270,9 +2300,337 @@
               "launchable": false,
               "storefront_state": "INSTALLED"
             }
+          },
+          {
+            "id": "install_not_allowed",
+            "label": "Install Rejected",
+            "apiName": "install_not_allowed",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "This app is not currently eligible for installation.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "install_allowed",
+            "key": "action",
+            "label": "1. Validate Install Eligibility",
+            "apiName": "install_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "install_allowed",
+                "label": "1. Validate Install Eligibility",
+                "apiName": "install_allowed",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "allowed",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "AVAILABLE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "deploy_package",
+                      "install_app"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Allowed",
+                "defaultBranch": [
+                  "install_not_allowed"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "deploy_package",
+            "key": "action",
+            "label": "2. Install Package Runtime",
+            "apiName": "deploy_package",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "PACKAGE_LIFECYCLE",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "deploy_package",
+                "label": "2. Install Package Runtime",
+                "apiName": "deploy_package",
+                "key": "PACKAGE_LIFECYCLE",
+                "operation": "INSTALL"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "install_app",
+            "key": "action",
+            "label": "3. Update Tenant App Status",
+            "apiName": "install_app",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "install_app",
+                "label": "3. Update Tenant App Status",
+                "apiName": "install_app",
+                "key": "UPDATE_RECORD",
+                "objectKey": "tenant_app",
+                "recordId": {
+                  "path": "record.id"
+                },
+                "fieldValues": {
+                  "status": "INSTALLED",
+                  "installed_version": {
+                    "path": "record.available_version"
+                  },
+                  "update_status": "CURRENT",
+                  "is_installed": true,
+                  "launchable": false,
+                  "storefront_state": "INSTALLED"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "install_not_allowed",
+            "key": "action",
+            "label": "Install Rejected",
+            "apiName": "install_not_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "install_not_allowed",
+                "label": "Install Rejected",
+                "apiName": "install_not_allowed",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "This app is not currently eligible for installation.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
-      }
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "install_allowed",
+          "key": "action",
+          "label": "1. Validate Install Eligibility",
+          "apiName": "install_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "install_allowed",
+              "label": "1. Validate Install Eligibility",
+              "apiName": "install_allowed",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "allowed",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "AVAILABLE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "deploy_package",
+                    "install_app"
+                  ]
+                }
+              ],
+              "defaultLabel": "Not Allowed",
+              "defaultBranch": [
+                "install_not_allowed"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "deploy_package",
+          "key": "action",
+          "label": "2. Install Package Runtime",
+          "apiName": "deploy_package",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "PACKAGE_LIFECYCLE",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "deploy_package",
+              "label": "2. Install Package Runtime",
+              "apiName": "deploy_package",
+              "key": "PACKAGE_LIFECYCLE",
+              "operation": "INSTALL"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "install_app",
+          "key": "action",
+          "label": "3. Update Tenant App Status",
+          "apiName": "install_app",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "install_app",
+              "label": "3. Update Tenant App Status",
+              "apiName": "install_app",
+              "key": "UPDATE_RECORD",
+              "objectKey": "tenant_app",
+              "recordId": {
+                "path": "record.id"
+              },
+              "fieldValues": {
+                "status": "INSTALLED",
+                "installed_version": {
+                  "path": "record.available_version"
+                },
+                "update_status": "CURRENT",
+                "is_installed": true,
+                "launchable": false,
+                "storefront_state": "INSTALLED"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "install_not_allowed",
+          "key": "action",
+          "label": "Install Rejected",
+          "apiName": "install_not_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "install_not_allowed",
+              "label": "Install Rejected",
+              "apiName": "install_not_allowed",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "This app is not currently eligible for installation.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
+      ]
     },
     {
       "objectKey": "tenant_app",
@@ -2286,15 +2644,63 @@
         "description": "Activate",
         "actions": [
           {
+            "id": "activate_allowed",
+            "label": "1. Validate Activation State",
+            "apiName": "activate_allowed",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "installed",
+                "label": "Installed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "INSTALLED"
+                    }
+                  ]
+                },
+                "branch": [
+                  "activate_package",
+                  "activate_app"
+                ]
+              },
+              {
+                "id": "inactive",
+                "label": "Inactive",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "INACTIVE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "activate_package",
+                  "activate_app"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Activatable",
+            "defaultBranch": [
+              "activate_not_allowed"
+            ]
+          },
+          {
             "id": "activate_package",
-            "label": "1. Activate Package Runtime",
+            "label": "2. Activate Package Runtime",
             "apiName": "activate_package",
             "key": "PACKAGE_LIFECYCLE",
             "operation": "ACTIVATE"
           },
           {
             "id": "activate_app",
-            "label": "2. Update Tenant App Status",
+            "label": "3. Update Tenant App Status",
             "apiName": "activate_app",
             "key": "UPDATE_RECORD",
             "objectKey": "tenant_app",
@@ -2307,9 +2713,365 @@
               "launchable": true,
               "storefront_state": "INSTALLED"
             }
+          },
+          {
+            "id": "activate_not_allowed",
+            "label": "Activation Rejected",
+            "apiName": "activate_not_allowed",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Only installed or inactive apps can be activated.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "activate_allowed",
+            "key": "action",
+            "label": "1. Validate Activation State",
+            "apiName": "activate_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "activate_allowed",
+                "label": "1. Validate Activation State",
+                "apiName": "activate_allowed",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "installed",
+                    "label": "Installed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "INSTALLED"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "activate_package",
+                      "activate_app"
+                    ]
+                  },
+                  {
+                    "id": "inactive",
+                    "label": "Inactive",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "INACTIVE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "activate_package",
+                      "activate_app"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Activatable",
+                "defaultBranch": [
+                  "activate_not_allowed"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "activate_package",
+            "key": "action",
+            "label": "2. Activate Package Runtime",
+            "apiName": "activate_package",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "PACKAGE_LIFECYCLE",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "activate_package",
+                "label": "2. Activate Package Runtime",
+                "apiName": "activate_package",
+                "key": "PACKAGE_LIFECYCLE",
+                "operation": "ACTIVATE"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "activate_app",
+            "key": "action",
+            "label": "3. Update Tenant App Status",
+            "apiName": "activate_app",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "activate_app",
+                "label": "3. Update Tenant App Status",
+                "apiName": "activate_app",
+                "key": "UPDATE_RECORD",
+                "objectKey": "tenant_app",
+                "recordId": {
+                  "path": "record.id"
+                },
+                "fieldValues": {
+                  "status": "ACTIVE",
+                  "is_installed": true,
+                  "launchable": true,
+                  "storefront_state": "INSTALLED"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "activate_not_allowed",
+            "key": "action",
+            "label": "Activation Rejected",
+            "apiName": "activate_not_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "activate_not_allowed",
+                "label": "Activation Rejected",
+                "apiName": "activate_not_allowed",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Only installed or inactive apps can be activated.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
-      }
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "activate_allowed",
+          "key": "action",
+          "label": "1. Validate Activation State",
+          "apiName": "activate_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "activate_allowed",
+              "label": "1. Validate Activation State",
+              "apiName": "activate_allowed",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "installed",
+                  "label": "Installed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "INSTALLED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "activate_package",
+                    "activate_app"
+                  ]
+                },
+                {
+                  "id": "inactive",
+                  "label": "Inactive",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "INACTIVE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "activate_package",
+                    "activate_app"
+                  ]
+                }
+              ],
+              "defaultLabel": "Not Activatable",
+              "defaultBranch": [
+                "activate_not_allowed"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "activate_package",
+          "key": "action",
+          "label": "2. Activate Package Runtime",
+          "apiName": "activate_package",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "PACKAGE_LIFECYCLE",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "activate_package",
+              "label": "2. Activate Package Runtime",
+              "apiName": "activate_package",
+              "key": "PACKAGE_LIFECYCLE",
+              "operation": "ACTIVATE"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "activate_app",
+          "key": "action",
+          "label": "3. Update Tenant App Status",
+          "apiName": "activate_app",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "activate_app",
+              "label": "3. Update Tenant App Status",
+              "apiName": "activate_app",
+              "key": "UPDATE_RECORD",
+              "objectKey": "tenant_app",
+              "recordId": {
+                "path": "record.id"
+              },
+              "fieldValues": {
+                "status": "ACTIVE",
+                "is_installed": true,
+                "launchable": true,
+                "storefront_state": "INSTALLED"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "activate_not_allowed",
+          "key": "action",
+          "label": "Activation Rejected",
+          "apiName": "activate_not_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "activate_not_allowed",
+              "label": "Activation Rejected",
+              "apiName": "activate_not_allowed",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "Only installed or inactive apps can be activated.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
+      ]
     },
     {
       "objectKey": "tenant_app",
@@ -2323,15 +3085,45 @@
         "description": "Deactivate",
         "actions": [
           {
+            "id": "deactivate_allowed",
+            "label": "1. Validate Deactivation State",
+            "apiName": "deactivate_allowed",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "allowed",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "ACTIVE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "deactivate_package",
+                  "deactivate_app"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Allowed",
+            "defaultBranch": [
+              "deactivate_not_allowed"
+            ]
+          },
+          {
             "id": "deactivate_package",
-            "label": "1. Deactivate Package Runtime",
+            "label": "2. Deactivate Package Runtime",
             "apiName": "deactivate_package",
             "key": "PACKAGE_LIFECYCLE",
             "operation": "DEACTIVATE"
           },
           {
             "id": "deactivate_app",
-            "label": "2. Update Tenant App Status",
+            "label": "3. Update Tenant App Status",
             "apiName": "deactivate_app",
             "key": "UPDATE_RECORD",
             "objectKey": "tenant_app",
@@ -2344,9 +3136,329 @@
               "launchable": false,
               "storefront_state": "INACTIVE"
             }
+          },
+          {
+            "id": "deactivate_not_allowed",
+            "label": "Deactivation Rejected",
+            "apiName": "deactivate_not_allowed",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Only active apps can be deactivated.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "deactivate_allowed",
+            "key": "action",
+            "label": "1. Validate Deactivation State",
+            "apiName": "deactivate_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "deactivate_allowed",
+                "label": "1. Validate Deactivation State",
+                "apiName": "deactivate_allowed",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "allowed",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "ACTIVE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "deactivate_package",
+                      "deactivate_app"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Allowed",
+                "defaultBranch": [
+                  "deactivate_not_allowed"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "deactivate_package",
+            "key": "action",
+            "label": "2. Deactivate Package Runtime",
+            "apiName": "deactivate_package",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "PACKAGE_LIFECYCLE",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "deactivate_package",
+                "label": "2. Deactivate Package Runtime",
+                "apiName": "deactivate_package",
+                "key": "PACKAGE_LIFECYCLE",
+                "operation": "DEACTIVATE"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "deactivate_app",
+            "key": "action",
+            "label": "3. Update Tenant App Status",
+            "apiName": "deactivate_app",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "deactivate_app",
+                "label": "3. Update Tenant App Status",
+                "apiName": "deactivate_app",
+                "key": "UPDATE_RECORD",
+                "objectKey": "tenant_app",
+                "recordId": {
+                  "path": "record.id"
+                },
+                "fieldValues": {
+                  "status": "INACTIVE",
+                  "is_installed": true,
+                  "launchable": false,
+                  "storefront_state": "INACTIVE"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "deactivate_not_allowed",
+            "key": "action",
+            "label": "Deactivation Rejected",
+            "apiName": "deactivate_not_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "deactivate_not_allowed",
+                "label": "Deactivation Rejected",
+                "apiName": "deactivate_not_allowed",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Only active apps can be deactivated.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
-      }
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "deactivate_allowed",
+          "key": "action",
+          "label": "1. Validate Deactivation State",
+          "apiName": "deactivate_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "deactivate_allowed",
+              "label": "1. Validate Deactivation State",
+              "apiName": "deactivate_allowed",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "allowed",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "ACTIVE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "deactivate_package",
+                    "deactivate_app"
+                  ]
+                }
+              ],
+              "defaultLabel": "Not Allowed",
+              "defaultBranch": [
+                "deactivate_not_allowed"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "deactivate_package",
+          "key": "action",
+          "label": "2. Deactivate Package Runtime",
+          "apiName": "deactivate_package",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "PACKAGE_LIFECYCLE",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "deactivate_package",
+              "label": "2. Deactivate Package Runtime",
+              "apiName": "deactivate_package",
+              "key": "PACKAGE_LIFECYCLE",
+              "operation": "DEACTIVATE"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "deactivate_app",
+          "key": "action",
+          "label": "3. Update Tenant App Status",
+          "apiName": "deactivate_app",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "deactivate_app",
+              "label": "3. Update Tenant App Status",
+              "apiName": "deactivate_app",
+              "key": "UPDATE_RECORD",
+              "objectKey": "tenant_app",
+              "recordId": {
+                "path": "record.id"
+              },
+              "fieldValues": {
+                "status": "INACTIVE",
+                "is_installed": true,
+                "launchable": false,
+                "storefront_state": "INACTIVE"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "deactivate_not_allowed",
+          "key": "action",
+          "label": "Deactivation Rejected",
+          "apiName": "deactivate_not_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "deactivate_not_allowed",
+              "label": "Deactivation Rejected",
+              "apiName": "deactivate_not_allowed",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "Only active apps can be deactivated.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
+      ]
     },
     {
       "objectKey": "tenant_app",
@@ -2360,15 +3472,81 @@
         "description": "Uninstall",
         "actions": [
           {
+            "id": "uninstall_allowed",
+            "label": "1. Validate Uninstall State",
+            "apiName": "uninstall_allowed",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "installed",
+                "label": "Installed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "INSTALLED"
+                    }
+                  ]
+                },
+                "branch": [
+                  "uninstall_package",
+                  "uninstall_app"
+                ]
+              },
+              {
+                "id": "active",
+                "label": "Active",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "ACTIVE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "uninstall_package",
+                  "uninstall_app"
+                ]
+              },
+              {
+                "id": "inactive",
+                "label": "Inactive",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "INACTIVE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "uninstall_package",
+                  "uninstall_app"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Installed",
+            "defaultBranch": [
+              "uninstall_not_allowed"
+            ]
+          },
+          {
             "id": "uninstall_package",
-            "label": "1. Uninstall Package Runtime",
+            "label": "2. Uninstall Package Runtime",
             "apiName": "uninstall_package",
             "key": "PACKAGE_LIFECYCLE",
             "operation": "UNINSTALL"
           },
           {
             "id": "uninstall_app",
-            "label": "2. Update Tenant App Status",
+            "label": "3. Update Tenant App Status",
             "apiName": "uninstall_app",
             "key": "UPDATE_RECORD",
             "objectKey": "tenant_app",
@@ -2384,9 +3562,407 @@
               "launchable": false,
               "storefront_state": "AVAILABLE"
             }
+          },
+          {
+            "id": "uninstall_not_allowed",
+            "label": "Uninstall Rejected",
+            "apiName": "uninstall_not_allowed",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Only installed, active, or inactive apps can be uninstalled.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "uninstall_allowed",
+            "key": "action",
+            "label": "1. Validate Uninstall State",
+            "apiName": "uninstall_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "uninstall_allowed",
+                "label": "1. Validate Uninstall State",
+                "apiName": "uninstall_allowed",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "installed",
+                    "label": "Installed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "INSTALLED"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "uninstall_package",
+                      "uninstall_app"
+                    ]
+                  },
+                  {
+                    "id": "active",
+                    "label": "Active",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "ACTIVE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "uninstall_package",
+                      "uninstall_app"
+                    ]
+                  },
+                  {
+                    "id": "inactive",
+                    "label": "Inactive",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "INACTIVE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "uninstall_package",
+                      "uninstall_app"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Installed",
+                "defaultBranch": [
+                  "uninstall_not_allowed"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "uninstall_package",
+            "key": "action",
+            "label": "2. Uninstall Package Runtime",
+            "apiName": "uninstall_package",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "PACKAGE_LIFECYCLE",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "uninstall_package",
+                "label": "2. Uninstall Package Runtime",
+                "apiName": "uninstall_package",
+                "key": "PACKAGE_LIFECYCLE",
+                "operation": "UNINSTALL"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "uninstall_app",
+            "key": "action",
+            "label": "3. Update Tenant App Status",
+            "apiName": "uninstall_app",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "uninstall_app",
+                "label": "3. Update Tenant App Status",
+                "apiName": "uninstall_app",
+                "key": "UPDATE_RECORD",
+                "objectKey": "tenant_app",
+                "recordId": {
+                  "path": "record.id"
+                },
+                "fieldValues": {
+                  "status": "AVAILABLE",
+                  "installed_version": null,
+                  "activated_at": null,
+                  "update_status": "CURRENT",
+                  "is_installed": false,
+                  "launchable": false,
+                  "storefront_state": "AVAILABLE"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "uninstall_not_allowed",
+            "key": "action",
+            "label": "Uninstall Rejected",
+            "apiName": "uninstall_not_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "uninstall_not_allowed",
+                "label": "Uninstall Rejected",
+                "apiName": "uninstall_not_allowed",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Only installed, active, or inactive apps can be uninstalled.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
-      }
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "uninstall_allowed",
+          "key": "action",
+          "label": "1. Validate Uninstall State",
+          "apiName": "uninstall_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "uninstall_allowed",
+              "label": "1. Validate Uninstall State",
+              "apiName": "uninstall_allowed",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "installed",
+                  "label": "Installed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "INSTALLED"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "uninstall_package",
+                    "uninstall_app"
+                  ]
+                },
+                {
+                  "id": "active",
+                  "label": "Active",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "ACTIVE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "uninstall_package",
+                    "uninstall_app"
+                  ]
+                },
+                {
+                  "id": "inactive",
+                  "label": "Inactive",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "INACTIVE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "uninstall_package",
+                    "uninstall_app"
+                  ]
+                }
+              ],
+              "defaultLabel": "Not Installed",
+              "defaultBranch": [
+                "uninstall_not_allowed"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "uninstall_package",
+          "key": "action",
+          "label": "2. Uninstall Package Runtime",
+          "apiName": "uninstall_package",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "PACKAGE_LIFECYCLE",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "uninstall_package",
+              "label": "2. Uninstall Package Runtime",
+              "apiName": "uninstall_package",
+              "key": "PACKAGE_LIFECYCLE",
+              "operation": "UNINSTALL"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "uninstall_app",
+          "key": "action",
+          "label": "3. Update Tenant App Status",
+          "apiName": "uninstall_app",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "uninstall_app",
+              "label": "3. Update Tenant App Status",
+              "apiName": "uninstall_app",
+              "key": "UPDATE_RECORD",
+              "objectKey": "tenant_app",
+              "recordId": {
+                "path": "record.id"
+              },
+              "fieldValues": {
+                "status": "AVAILABLE",
+                "installed_version": null,
+                "activated_at": null,
+                "update_status": "CURRENT",
+                "is_installed": false,
+                "launchable": false,
+                "storefront_state": "AVAILABLE"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "uninstall_not_allowed",
+          "key": "action",
+          "label": "Uninstall Rejected",
+          "apiName": "uninstall_not_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "uninstall_not_allowed",
+              "label": "Uninstall Rejected",
+              "apiName": "uninstall_not_allowed",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "Only installed, active, or inactive apps can be uninstalled.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
+      ]
     },
     {
       "objectKey": "tenant_app",
@@ -2400,15 +3976,57 @@
         "description": "Start 7-day Trial",
         "actions": [
           {
+            "id": "trial_allowed",
+            "label": "1. Validate Trial Eligibility",
+            "apiName": "trial_allowed",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "allowed",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "licence_status",
+                      "operator": "equals",
+                      "value": "NONE"
+                    },
+                    {
+                      "field": "licence_required",
+                      "operator": "equals",
+                      "value": true
+                    },
+                    {
+                      "field": "trial_eligible",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "activate_trial_runtime",
+                  "trial_started_at",
+                  "trial_expires_at",
+                  "grant_trial"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Allowed",
+            "defaultBranch": [
+              "trial_not_allowed"
+            ]
+          },
+          {
             "id": "activate_trial_runtime",
-            "label": "1. Create Tenant Trial Entitlement",
+            "label": "2. Create Tenant Trial Entitlement",
             "apiName": "activate_trial_runtime",
             "key": "PACKAGE_LIFECYCLE",
             "operation": "TRIAL"
           },
           {
             "id": "trial_started_at",
-            "label": "2. Set Trial Start",
+            "label": "3. Set Trial Start",
             "apiName": "trial_started_at",
             "key": "FORMULA",
             "resourceName": "trialStartedAt",
@@ -2418,7 +4036,7 @@
           },
           {
             "id": "trial_expires_at",
-            "label": "3. Set Trial Expiry",
+            "label": "4. Set Trial Expiry",
             "apiName": "trial_expires_at",
             "key": "FORMULA",
             "resourceName": "trialExpiresAt",
@@ -2428,7 +4046,7 @@
           },
           {
             "id": "grant_trial",
-            "label": "4. Update Tenant App Licence",
+            "label": "5. Update Tenant App Licence",
             "apiName": "grant_trial",
             "key": "UPDATE_RECORD",
             "objectKey": "tenant_app",
@@ -2444,9 +4062,487 @@
                 "path": "variables.trialExpiresAt"
               }
             }
+          },
+          {
+            "id": "trial_not_allowed",
+            "label": "Trial Rejected",
+            "apiName": "trial_not_allowed",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "This app is not currently eligible for a trial.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "trial_allowed",
+            "key": "action",
+            "label": "1. Validate Trial Eligibility",
+            "apiName": "trial_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "trial_allowed",
+                "label": "1. Validate Trial Eligibility",
+                "apiName": "trial_allowed",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "allowed",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "licence_status",
+                          "operator": "equals",
+                          "value": "NONE"
+                        },
+                        {
+                          "field": "licence_required",
+                          "operator": "equals",
+                          "value": true
+                        },
+                        {
+                          "field": "trial_eligible",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "activate_trial_runtime",
+                      "trial_started_at",
+                      "trial_expires_at",
+                      "grant_trial"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Allowed",
+                "defaultBranch": [
+                  "trial_not_allowed"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "activate_trial_runtime",
+            "key": "action",
+            "label": "2. Create Tenant Trial Entitlement",
+            "apiName": "activate_trial_runtime",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "PACKAGE_LIFECYCLE",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "activate_trial_runtime",
+                "label": "2. Create Tenant Trial Entitlement",
+                "apiName": "activate_trial_runtime",
+                "key": "PACKAGE_LIFECYCLE",
+                "operation": "TRIAL"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "trial_started_at",
+            "key": "action",
+            "label": "3. Set Trial Start",
+            "apiName": "trial_started_at",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "trial_started_at",
+                "label": "3. Set Trial Start",
+                "apiName": "trial_started_at",
+                "key": "FORMULA",
+                "resourceName": "trialStartedAt",
+                "resultType": "datetime",
+                "expression": "NOW()",
+                "inputs": {}
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "trial_expires_at",
+            "key": "action",
+            "label": "4. Set Trial Expiry",
+            "apiName": "trial_expires_at",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "trial_expires_at",
+                "label": "4. Set Trial Expiry",
+                "apiName": "trial_expires_at",
+                "key": "FORMULA",
+                "resourceName": "trialExpiresAt",
+                "resultType": "datetime",
+                "expression": "ADDDAYS(NOW(),7)",
+                "inputs": {}
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "grant_trial",
+            "key": "action",
+            "label": "5. Update Tenant App Licence",
+            "apiName": "grant_trial",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "grant_trial",
+                "label": "5. Update Tenant App Licence",
+                "apiName": "grant_trial",
+                "key": "UPDATE_RECORD",
+                "objectKey": "tenant_app",
+                "recordId": {
+                  "path": "record.id"
+                },
+                "fieldValues": {
+                  "licence_status": "TRIAL",
+                  "trial_started_at": {
+                    "path": "variables.trialStartedAt"
+                  },
+                  "trial_expires_at": {
+                    "path": "variables.trialExpiresAt"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "trial_not_allowed",
+            "key": "action",
+            "label": "Trial Rejected",
+            "apiName": "trial_not_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "trial_not_allowed",
+                "label": "Trial Rejected",
+                "apiName": "trial_not_allowed",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "This app is not currently eligible for a trial.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
-      }
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "trial_allowed",
+          "key": "action",
+          "label": "1. Validate Trial Eligibility",
+          "apiName": "trial_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "trial_allowed",
+              "label": "1. Validate Trial Eligibility",
+              "apiName": "trial_allowed",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "allowed",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "licence_status",
+                        "operator": "equals",
+                        "value": "NONE"
+                      },
+                      {
+                        "field": "licence_required",
+                        "operator": "equals",
+                        "value": true
+                      },
+                      {
+                        "field": "trial_eligible",
+                        "operator": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "activate_trial_runtime",
+                    "trial_started_at",
+                    "trial_expires_at",
+                    "grant_trial"
+                  ]
+                }
+              ],
+              "defaultLabel": "Not Allowed",
+              "defaultBranch": [
+                "trial_not_allowed"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "activate_trial_runtime",
+          "key": "action",
+          "label": "2. Create Tenant Trial Entitlement",
+          "apiName": "activate_trial_runtime",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "PACKAGE_LIFECYCLE",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "activate_trial_runtime",
+              "label": "2. Create Tenant Trial Entitlement",
+              "apiName": "activate_trial_runtime",
+              "key": "PACKAGE_LIFECYCLE",
+              "operation": "TRIAL"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "trial_started_at",
+          "key": "action",
+          "label": "3. Set Trial Start",
+          "apiName": "trial_started_at",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "trial_started_at",
+              "label": "3. Set Trial Start",
+              "apiName": "trial_started_at",
+              "key": "FORMULA",
+              "resourceName": "trialStartedAt",
+              "resultType": "datetime",
+              "expression": "NOW()",
+              "inputs": {}
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "trial_expires_at",
+          "key": "action",
+          "label": "4. Set Trial Expiry",
+          "apiName": "trial_expires_at",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "trial_expires_at",
+              "label": "4. Set Trial Expiry",
+              "apiName": "trial_expires_at",
+              "key": "FORMULA",
+              "resourceName": "trialExpiresAt",
+              "resultType": "datetime",
+              "expression": "ADDDAYS(NOW(),7)",
+              "inputs": {}
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "grant_trial",
+          "key": "action",
+          "label": "5. Update Tenant App Licence",
+          "apiName": "grant_trial",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "grant_trial",
+              "label": "5. Update Tenant App Licence",
+              "apiName": "grant_trial",
+              "key": "UPDATE_RECORD",
+              "objectKey": "tenant_app",
+              "recordId": {
+                "path": "record.id"
+              },
+              "fieldValues": {
+                "licence_status": "TRIAL",
+                "trial_started_at": {
+                  "path": "variables.trialStartedAt"
+                },
+                "trial_expires_at": {
+                  "path": "variables.trialExpiresAt"
+                }
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "trial_not_allowed",
+          "key": "action",
+          "label": "Trial Rejected",
+          "apiName": "trial_not_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "trial_not_allowed",
+              "label": "Trial Rejected",
+              "apiName": "trial_not_allowed",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "This app is not currently eligible for a trial.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
+      ]
     },
     {
       "objectKey": "tenant_app",
@@ -2460,8 +4556,45 @@
         "description": "Request Licence",
         "actions": [
           {
+            "id": "licence_request_allowed",
+            "label": "1. Validate Licence Request",
+            "apiName": "licence_request_allowed",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "allowed",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "licence_status",
+                      "operator": "equals",
+                      "value": "NONE"
+                    },
+                    {
+                      "field": "licence_required",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "load_requested_package",
+                  "create_licence_request",
+                  "notify_licence_request",
+                  "request_licence"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Allowed",
+            "defaultBranch": [
+              "licence_request_not_allowed"
+            ]
+          },
+          {
             "id": "load_requested_package",
-            "label": "1. Load Requested Package",
+            "label": "2. Load Requested Package",
             "apiName": "load_requested_package",
             "key": "GET_RECORDS",
             "objectKey": "onestore_app",
@@ -2492,7 +4625,7 @@
           },
           {
             "id": "create_licence_request",
-            "label": "2. Create Licence Request",
+            "label": "3. Create Licence Request",
             "apiName": "create_licence_request",
             "key": "CREATE_RECORD",
             "objectKey": "licence_request",
@@ -2522,7 +4655,7 @@
           },
           {
             "id": "notify_licence_request",
-            "label": "3. Notify Platform Administrators",
+            "label": "4. Notify Platform Administrators",
             "apiName": "notify_licence_request",
             "key": "SEND_COMMUNICATION",
             "channel": "IN_APP",
@@ -2532,7 +4665,7 @@
           },
           {
             "id": "request_licence",
-            "label": "4. Update Tenant App Licence Status",
+            "label": "5. Update Tenant App Licence Status",
             "apiName": "request_licence",
             "key": "UPDATE_RECORD",
             "objectKey": "tenant_app",
@@ -2542,9 +4675,553 @@
             "fieldValues": {
               "licence_status": "REQUESTED"
             }
+          },
+          {
+            "id": "licence_request_not_allowed",
+            "label": "Licence Request Rejected",
+            "apiName": "licence_request_not_allowed",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "A licence can only be requested when this app requires a licence and none is active.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "licence_request_allowed",
+            "key": "action",
+            "label": "1. Validate Licence Request",
+            "apiName": "licence_request_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "licence_request_allowed",
+                "label": "1. Validate Licence Request",
+                "apiName": "licence_request_allowed",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "allowed",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "licence_status",
+                          "operator": "equals",
+                          "value": "NONE"
+                        },
+                        {
+                          "field": "licence_required",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "load_requested_package",
+                      "create_licence_request",
+                      "notify_licence_request",
+                      "request_licence"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Allowed",
+                "defaultBranch": [
+                  "licence_request_not_allowed"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "load_requested_package",
+            "key": "action",
+            "label": "2. Load Requested Package",
+            "apiName": "load_requested_package",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "load_requested_package",
+                "label": "2. Load Requested Package",
+                "apiName": "load_requested_package",
+                "key": "GET_RECORDS",
+                "objectKey": "onestore_app",
+                "filters": [
+                  {
+                    "field": "id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "record.onestore_app_id"
+                    }
+                  }
+                ],
+                "limit": 1,
+                "store": "first",
+                "advancedAssignment": {
+                  "mode": "fields",
+                  "mappings": [
+                    {
+                      "field": "app_key",
+                      "resourceName": "requestedPackageKey"
+                    },
+                    {
+                      "field": "name",
+                      "resourceName": "requestedPackageName"
+                    }
+                  ]
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_licence_request",
+            "key": "action",
+            "label": "3. Create Licence Request",
+            "apiName": "create_licence_request",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_licence_request",
+                "label": "3. Create Licence Request",
+                "apiName": "create_licence_request",
+                "key": "CREATE_RECORD",
+                "objectKey": "licence_request",
+                "fieldValues": {
+                  "package_key": {
+                    "path": "variables.requestedPackageKey"
+                  },
+                  "package_name": {
+                    "path": "variables.requestedPackageName"
+                  }
+                },
+                "checkMatchingRecords": true,
+                "matchConditions": [
+                  {
+                    "field": "package_key",
+                    "value": {
+                      "path": "variables.requestedPackageKey"
+                    }
+                  },
+                  {
+                    "field": "status",
+                    "value": "PENDING"
+                  }
+                ],
+                "match": "all",
+                "matchAction": "skip"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "notify_licence_request",
+            "key": "action",
+            "label": "4. Notify Platform Administrators",
+            "apiName": "notify_licence_request",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SEND_COMMUNICATION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "notify_licence_request",
+                "label": "4. Notify Platform Administrators",
+                "apiName": "notify_licence_request",
+                "key": "SEND_COMMUNICATION",
+                "channel": "IN_APP",
+                "recipient": "platform_superadmins",
+                "title": "Licence request received",
+                "message": "A package licence request is ready for review."
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "request_licence",
+            "key": "action",
+            "label": "5. Update Tenant App Licence Status",
+            "apiName": "request_licence",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "request_licence",
+                "label": "5. Update Tenant App Licence Status",
+                "apiName": "request_licence",
+                "key": "UPDATE_RECORD",
+                "objectKey": "tenant_app",
+                "recordId": {
+                  "path": "record.id"
+                },
+                "fieldValues": {
+                  "licence_status": "REQUESTED"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "licence_request_not_allowed",
+            "key": "action",
+            "label": "Licence Request Rejected",
+            "apiName": "licence_request_not_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "licence_request_not_allowed",
+                "label": "Licence Request Rejected",
+                "apiName": "licence_request_not_allowed",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "A licence can only be requested when this app requires a licence and none is active.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
-      }
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "licence_request_allowed",
+          "key": "action",
+          "label": "1. Validate Licence Request",
+          "apiName": "licence_request_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "licence_request_allowed",
+              "label": "1. Validate Licence Request",
+              "apiName": "licence_request_allowed",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "allowed",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "licence_status",
+                        "operator": "equals",
+                        "value": "NONE"
+                      },
+                      {
+                        "field": "licence_required",
+                        "operator": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "load_requested_package",
+                    "create_licence_request",
+                    "notify_licence_request",
+                    "request_licence"
+                  ]
+                }
+              ],
+              "defaultLabel": "Not Allowed",
+              "defaultBranch": [
+                "licence_request_not_allowed"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "load_requested_package",
+          "key": "action",
+          "label": "2. Load Requested Package",
+          "apiName": "load_requested_package",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "load_requested_package",
+              "label": "2. Load Requested Package",
+              "apiName": "load_requested_package",
+              "key": "GET_RECORDS",
+              "objectKey": "onestore_app",
+              "filters": [
+                {
+                  "field": "id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.onestore_app_id"
+                  }
+                }
+              ],
+              "limit": 1,
+              "store": "first",
+              "advancedAssignment": {
+                "mode": "fields",
+                "mappings": [
+                  {
+                    "field": "app_key",
+                    "resourceName": "requestedPackageKey"
+                  },
+                  {
+                    "field": "name",
+                    "resourceName": "requestedPackageName"
+                  }
+                ]
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "create_licence_request",
+          "key": "action",
+          "label": "3. Create Licence Request",
+          "apiName": "create_licence_request",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "create_licence_request",
+              "label": "3. Create Licence Request",
+              "apiName": "create_licence_request",
+              "key": "CREATE_RECORD",
+              "objectKey": "licence_request",
+              "fieldValues": {
+                "package_key": {
+                  "path": "variables.requestedPackageKey"
+                },
+                "package_name": {
+                  "path": "variables.requestedPackageName"
+                }
+              },
+              "checkMatchingRecords": true,
+              "matchConditions": [
+                {
+                  "field": "package_key",
+                  "value": {
+                    "path": "variables.requestedPackageKey"
+                  }
+                },
+                {
+                  "field": "status",
+                  "value": "PENDING"
+                }
+              ],
+              "match": "all",
+              "matchAction": "skip"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "notify_licence_request",
+          "key": "action",
+          "label": "4. Notify Platform Administrators",
+          "apiName": "notify_licence_request",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "SEND_COMMUNICATION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "notify_licence_request",
+              "label": "4. Notify Platform Administrators",
+              "apiName": "notify_licence_request",
+              "key": "SEND_COMMUNICATION",
+              "channel": "IN_APP",
+              "recipient": "platform_superadmins",
+              "title": "Licence request received",
+              "message": "A package licence request is ready for review."
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "request_licence",
+          "key": "action",
+          "label": "5. Update Tenant App Licence Status",
+          "apiName": "request_licence",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "request_licence",
+              "label": "5. Update Tenant App Licence Status",
+              "apiName": "request_licence",
+              "key": "UPDATE_RECORD",
+              "objectKey": "tenant_app",
+              "recordId": {
+                "path": "record.id"
+              },
+              "fieldValues": {
+                "licence_status": "REQUESTED"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "licence_request_not_allowed",
+          "key": "action",
+          "label": "Licence Request Rejected",
+          "apiName": "licence_request_not_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "licence_request_not_allowed",
+              "label": "Licence Request Rejected",
+              "apiName": "licence_request_not_allowed",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "A licence can only be requested when this app requires a licence and none is active.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
+      ]
     },
     {
       "objectKey": "tenant_app",
@@ -2558,15 +5235,45 @@
         "description": "Upgrade",
         "actions": [
           {
+            "id": "upgrade_allowed",
+            "label": "1. Validate Upgrade Availability",
+            "apiName": "upgrade_allowed",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "allowed",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "update_status",
+                      "operator": "equals",
+                      "value": "UPDATE_AVAILABLE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "upgrade_package",
+                  "upgrade_app"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Allowed",
+            "defaultBranch": [
+              "upgrade_not_allowed"
+            ]
+          },
+          {
             "id": "upgrade_package",
-            "label": "1. Upgrade Package Runtime",
+            "label": "2. Upgrade Package Runtime",
             "apiName": "upgrade_package",
             "key": "PACKAGE_LIFECYCLE",
             "operation": "UPGRADE"
           },
           {
             "id": "upgrade_app",
-            "label": "2. Update Tenant App Version",
+            "label": "3. Update Tenant App Version",
             "apiName": "upgrade_app",
             "key": "UPDATE_RECORD",
             "objectKey": "tenant_app",
@@ -2579,9 +5286,329 @@
               },
               "update_status": "CURRENT"
             }
+          },
+          {
+            "id": "upgrade_not_allowed",
+            "label": "Upgrade Rejected",
+            "apiName": "upgrade_not_allowed",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "An app can only be upgraded when an update is available.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "upgrade_allowed",
+            "key": "action",
+            "label": "1. Validate Upgrade Availability",
+            "apiName": "upgrade_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "upgrade_allowed",
+                "label": "1. Validate Upgrade Availability",
+                "apiName": "upgrade_allowed",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "allowed",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "update_status",
+                          "operator": "equals",
+                          "value": "UPDATE_AVAILABLE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "upgrade_package",
+                      "upgrade_app"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Allowed",
+                "defaultBranch": [
+                  "upgrade_not_allowed"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "upgrade_package",
+            "key": "action",
+            "label": "2. Upgrade Package Runtime",
+            "apiName": "upgrade_package",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "PACKAGE_LIFECYCLE",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "upgrade_package",
+                "label": "2. Upgrade Package Runtime",
+                "apiName": "upgrade_package",
+                "key": "PACKAGE_LIFECYCLE",
+                "operation": "UPGRADE"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "upgrade_app",
+            "key": "action",
+            "label": "3. Update Tenant App Version",
+            "apiName": "upgrade_app",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "upgrade_app",
+                "label": "3. Update Tenant App Version",
+                "apiName": "upgrade_app",
+                "key": "UPDATE_RECORD",
+                "objectKey": "tenant_app",
+                "recordId": {
+                  "path": "record.id"
+                },
+                "fieldValues": {
+                  "installed_version": {
+                    "path": "record.available_version"
+                  },
+                  "update_status": "CURRENT"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "upgrade_not_allowed",
+            "key": "action",
+            "label": "Upgrade Rejected",
+            "apiName": "upgrade_not_allowed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "upgrade_not_allowed",
+                "label": "Upgrade Rejected",
+                "apiName": "upgrade_not_allowed",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "An app can only be upgraded when an update is available.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
-      }
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "gptBuilder": true,
+      "layout": {
+        "mode": "AUTO"
+      },
+      "gptBuilderElements": [
+        {
+          "id": "upgrade_allowed",
+          "key": "action",
+          "label": "1. Validate Upgrade Availability",
+          "apiName": "upgrade_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "upgrade_allowed",
+              "label": "1. Validate Upgrade Availability",
+              "apiName": "upgrade_allowed",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "allowed",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "update_status",
+                        "operator": "equals",
+                        "value": "UPDATE_AVAILABLE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "upgrade_package",
+                    "upgrade_app"
+                  ]
+                }
+              ],
+              "defaultLabel": "Not Allowed",
+              "defaultBranch": [
+                "upgrade_not_allowed"
+              ]
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "upgrade_package",
+          "key": "action",
+          "label": "2. Upgrade Package Runtime",
+          "apiName": "upgrade_package",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "PACKAGE_LIFECYCLE",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "upgrade_package",
+              "label": "2. Upgrade Package Runtime",
+              "apiName": "upgrade_package",
+              "key": "PACKAGE_LIFECYCLE",
+              "operation": "UPGRADE"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "upgrade_app",
+          "key": "action",
+          "label": "3. Update Tenant App Version",
+          "apiName": "upgrade_app",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "upgrade_app",
+              "label": "3. Update Tenant App Version",
+              "apiName": "upgrade_app",
+              "key": "UPDATE_RECORD",
+              "objectKey": "tenant_app",
+              "recordId": {
+                "path": "record.id"
+              },
+              "fieldValues": {
+                "installed_version": {
+                  "path": "record.available_version"
+                },
+                "update_status": "CURRENT"
+              }
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        },
+        {
+          "id": "upgrade_not_allowed",
+          "key": "action",
+          "label": "Upgrade Rejected",
+          "apiName": "upgrade_not_allowed",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedRuntimeAction": {
+              "id": "upgrade_not_allowed",
+              "label": "Upgrade Rejected",
+              "apiName": "upgrade_not_allowed",
+              "key": "CUSTOM_ERROR",
+              "errorMessage": "An app can only be upgraded when an update is available.",
+              "errorLocation": "record"
+            },
+            "importedRuntimeActionText": ""
+          },
+          "configured": true,
+          "source": "runtime_import",
+          "position": null
+        }
+      ]
     }
   ],
   "buttons": [
