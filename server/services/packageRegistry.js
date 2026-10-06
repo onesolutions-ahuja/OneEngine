@@ -1357,7 +1357,7 @@ export async function capturePackageMetadataSnapshot(db, { packageId, companyId 
   }));
 }
 
-export async function provisionDefaultCompanyPackages(db, { companyId, installedBy = null, packageKeys = ["staff", "retail_pos", "products", "customers"] }) {
+export async function provisionDefaultCompanyPackages(db, { companyId, installedBy = null, packageKeys = ["staff", "products", "customers"] }) {
   for (const packageKey of packageKeys) {
     const packageResult = await db(
       `SELECT p.id, p.version, p.module_id, p.manifest
