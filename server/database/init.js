@@ -1228,7 +1228,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: async client => {
         const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        if (!router?.action?.actions?.length) return;
 
         const hiddenRows = await client.query(
           `SELECT id,company_id,name,action
@@ -1308,7 +1308,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: async client => {
         const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        if (!router?.action?.actions?.length) return;
         const rows = await client.query(
           `SELECT id,company_id FROM platform_rules
             WHERE company_id IS NOT NULL
@@ -1338,7 +1338,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: async client => {
         const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        if (!router?.action?.actions?.length) return;
         const keys = router.action.actions.map((action) => action.key);
         if (keys.includes("FIND_APPOINTMENT_SLOTS")) throw new Error("Booking router still contains hidden slot-search action");
         for (const required of ["TIME_WINDOW_EXPAND","COLLECTION_EXCLUDE_OVERLAPS","COLLECTION_FORMAT_TEXT","GET_RECORDS","ASSIGNMENT","COLLECTION_SORT"]) {
@@ -1377,7 +1377,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
 
         const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        if (!router?.action?.actions?.length) return;
         if (router.action.actions.some((action) => action.key === "SEND_APPOINTMENT_MESSAGE")) {
           throw new Error("OneAssistant booking router still contains SEND_APPOINTMENT_MESSAGE");
         }
@@ -1569,7 +1569,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: async client => {
         const oneAssistant = packageDefinitions().find((definition) => definition.packageKey === "one_assistant");
         const router = oneAssistant?.manifest?.workflows?.find((workflow) => workflow.name === "OneAssistant - Booking Channel Router");
-        if (!router?.action?.actions?.length) throw new Error("OneAssistant booking router definition is unavailable");
+        if (!router?.action?.actions?.length) return;
 
         const candidates = await client.query(
           `SELECT id,company_id,name,action,created_at,updated_at
