@@ -101,7 +101,8 @@ async function loadSaleForDelivery(db, { saleId, companyId, storeId }) {
       receiptNumber: view.record.receiptNumber || view.record.id,
       total: Number(view.record.total) || 0,
     },
-    customer: view.lookups?.customer || null,
+    recipients: view.descriptor?.recipients || {},
+    lookups: view.lookups || {},
     company: view.lookups?.company || null,
   };
 }
@@ -396,17 +397,17 @@ export async function resendInvoiceByChannel({ db, channel, saleId, companyId, s
         ? normalizePhone(overrideRecipient, config.configuration.default_country_code || null)
         : isEmailUsable(overrideRecipient);
       if (!recipient) return { ok: false, outcome: "skipped", reason: "invalid_recipient" };
-    } else if (channel === "sms") {
-      recipient = normalizePhone(saleData.customer?.phone, config.configuration.default_country_code || null);
-      if (!recipient) {
-        await logDeliveryOutcome(db, { companyId, userId, saleId, action: "sms_invoice_delivery", deliveryType, trigger: "manual_resend", outcome: "skipped", reason: "no_customer_phone" });
-        return { ok: false, outcome: "skipped", reason: "no_customer_phone" };
-      }
     } else {
-      recipient = isEmailUsable(saleData.customer?.email);
+      const recipientSpec = saleData.recipients?.[channel] || {};
+      const lookup = saleData.lookups?.[recipientSpec.lookupAlias] || null;
+      const rawRecipient = lookup?.[recipientSpec.fieldAlias];
+      recipient = channel === "sms"
+        ? normalizePhone(rawRecipient, config.configuration.default_country_code || null)
+        : isEmailUsable(rawRecipient);
       if (!recipient) {
-        await logDeliveryOutcome(db, { companyId, userId, saleId, action: "email_invoice_delivery", deliveryType, trigger: "manual_resend", outcome: "skipped", reason: "no_customer_email" });
-        return { ok: false, outcome: "skipped", reason: "no_customer_email" };
+        const reason = "recipient_unavailable";
+        await logDeliveryOutcome(db, { companyId, userId, saleId, action: "invoice_delivery", deliveryType, trigger: "manual_resend", outcome: "skipped", reason });
+        return { ok: false, outcome: "skipped", reason };
       }
     }
 
