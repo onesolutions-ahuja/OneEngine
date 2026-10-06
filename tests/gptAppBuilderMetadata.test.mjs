@@ -5,6 +5,7 @@ import {
   compileAppDependencyGraph,
   validateAppDefinition,
   compilePortableAppManifest,
+  buildPortableArtifact,
 } from "../server/services/gptAppBuilderMetadata.js";
 
 test("blank app is generic metadata with desktop and mobile pages", () => {
@@ -86,4 +87,30 @@ test("HTTP callout metadata captures connector dependency without credentials", 
   const graph = compileAppDependencyGraph(app);
   assert.ok(graph.nodes.some((node) => node.id === "connector:sample_connector"));
   assert.doesNotThrow(() => validateAppDefinition(app));
+});
+
+
+test("workflow UUID references are discovered automatically", () => {
+  const app = createBlankAppDefinition({ appKey: "sample_app", label: "Sample App" });
+  app.pages[0].definition.children.push({ interaction: { type: "workflow", workflowUuid: "flow-uuid" } });
+  const graph = compileAppDependencyGraph(app);
+  assert.ok(graph.nodes.some((node) => node.id === "workflow:flow-uuid"));
+});
+
+test("build artifact is deterministic and blocks unresolved metadata", async () => {
+  const app = createBlankAppDefinition({ appKey: "sample_app", label: "Sample App" });
+  app.pages[0].definition.children.push({ actionKey: "sample_action" });
+  const ok = await compilePortableAppManifest(app, async ({ type, key }) =>
+    type === "action" && key === "sample_action" ? { actionKey: key, label: "Action" } : null
+  );
+  const first = buildPortableArtifact(ok);
+  const second = buildPortableArtifact(ok);
+  assert.equal(first.fingerprint, second.fingerprint);
+  assert.deepEqual(first.manifest, second.manifest);
+
+  app.pages[0].definition.children.push({ flowKey: "missing_flow" });
+  const broken = await compilePortableAppManifest(app, async ({ type, key }) =>
+    type === "action" && key === "sample_action" ? { actionKey: key, label: "Action" } : null
+  );
+  assert.throws(() => buildPortableArtifact(broken), /build blocked by unresolved metadata/i);
 });
