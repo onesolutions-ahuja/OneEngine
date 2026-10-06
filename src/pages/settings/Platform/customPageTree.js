@@ -301,11 +301,16 @@ function normalizeAdvancedConfig(componentKey, value) {
 
 function normalizeComponentNode(node) {
   const componentKey = safeApiName(node?.componentKey ?? node?.component_key) || "text";
+  const rawLayout = node?.layout && typeof node.layout === "object" && !Array.isArray(node.layout) ? node.layout : {};
   const base = {
     id: safeString(node?.id, 80) || null,
     componentKey,
     label: safeString(node?.label, 200) || null,
     visible: node?.visible !== false,
+    layout: {
+      width: safeNumber(rawLayout.width, 0, { min: 0, max: 2400 }),
+      height: safeNumber(rawLayout.height, 0, { min: 0, max: 1800 }),
+    },
   };
   if (componentKey === "container") {
     return {
@@ -389,7 +394,7 @@ export function normalizeCustomPageTree(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const presentation = ["landing", "overlay_rectangle", "overlay_square"].includes(source.presentation_mode ?? source.presentationMode)
     ? (source.presentation_mode ?? source.presentationMode) : "landing";
-  const device = ["desktop", "tablet", "mobile"].includes(source.device) ? source.device : "desktop";
+  const device = ["desktop", "tablet", "mobile", "kiosk"].includes(source.device) ? source.device : "desktop";
 
   /* Legacy flat pages (sections + components arrays) migrate in memory so an
      existing page keeps rendering instead of being dropped on the floor. */
@@ -490,6 +495,7 @@ export function multiContainerColumns({ sectionWidth = "full", containerSize = "
   const desktop = base[sectionWidth]?.[containerSize] ?? base.full[containerSize] ?? 3;
   if (device === "mobile") return sectionWidth === "full" && containerSize === "small" ? 2 : 1;
   if (device === "tablet") return Math.max(1, desktop - 1);
+  if (device === "kiosk") return Math.max(1, desktop - 1);
   return desktop;
 }
 
