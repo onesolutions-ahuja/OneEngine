@@ -157,10 +157,11 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
 
   const addComponent = (registryKey) => {
     const spec = dashboardPalette.find((item) => item.key === registryKey);
-    const type = spec?.rendererKey || registryKey;
-    const component = spec?.runtimeKind === "analytics"
-      ? createRegisteredComponent(spec, "DASHBOARD")
-      : { ...blankComponent(type), registryKey };
+    if (!spec) {
+      setError("Component metadata is not available. Refresh the builder and try again.");
+      return;
+    }
+    const component = { ...blankComponent(spec), registryKey: spec.key };
     setCurrent((value) => ({ ...(value || empty), components: [...(value?.components || []), component] }));
   };  const updateComponent = (index, next) => setCurrent((value) => {
     const components = [...(value?.components || [])];
