@@ -6,7 +6,7 @@ import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.
 test("purchasing package exposes protected metadata flows and functions", async () => {
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(registry, /entry\.key === "purchasing_core"/);
-  for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.ok(PLATFORM_FUNCTIONS.some((item) => item.key === key), key);
+  for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
   assert.match(registry, /targetKey:"Purchase Create"/);
   assert.match(registry, /targetKey:"Supplier Return Execute"/);
 });
@@ -149,7 +149,7 @@ test("retail transaction model is canonical metadata and Flow owned", async () =
     assert.ok(registry.includes(`objectKey:"${objectKey}"`) || registry.includes(`objectKey: "${objectKey}"`), objectKey);
   }
   assert.match(registry, /apiName:"COMPLETE_SALE"/);
-  assert.match(registry, /commonFieldValues:\{sale_id:\{path:"variables\.sale\.id"\}\}/);
+  assert.match(registry, /commonFieldValues:\{sale_id:\{path:"steps\.create_sale\.created\.id"\}\}/);
   assert.match(workflow, /commonFieldValues/);
 });
 
