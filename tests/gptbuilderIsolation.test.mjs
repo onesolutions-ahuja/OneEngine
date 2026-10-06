@@ -92,7 +92,7 @@ test('GPT Builder toolbar uses current Salesforce Run Debug View Tests and Activ
 
 test('GPT Builder lifecycle keeps active runtime separate from draft authoring and supports deactivation', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
-  const platform = await readFile(new URL('../server/routes/platform/developerRoutes.js', import.meta.url), 'utf8')
+  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
   const automation = await readFile(new URL('../server/services/platformAutomation.js', import.meta.url), 'utf8')
   assert.match(page, /setFlowActivation/)
   assert.match(page, /\{ active: false \}/)
@@ -132,7 +132,7 @@ test('GPT Builder phase 3 registers a real property editor and runtime mapping f
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const properties = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElementProperties.jsx', import.meta.url), 'utf8')
   const elementKeys = [...elementsSource.matchAll(/\{ key: '([^']+)', label:/g)].map((match) => match[1])
-  const runtimeOnly = new Set(['group', 'interaction'])
+  const runtimeOnly = new Set(['group', 'interaction', 'logic', 'data', 'data_create', 'data_update', 'data_delete'])
   for (const key of elementKeys) {
     if (!runtimeOnly.has(key)) {
       assert.match(page, new RegExp(`activeElement\\.key === '${key}'`), `missing property editor for ${key}`)
@@ -1315,7 +1315,7 @@ test('GPT Builder responsive shell keeps canvas and panels usable on narrow scre
 test('GPT Builder exposes masked provider metadata as reusable Flow resources', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const action = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAction.jsx', import.meta.url), 'utf8')
-  const platform = await readFile(new URL('../server/routes/platform.js', import.meta.url), 'utf8')
+  const platform = await readFile(new URL('../server/routes/platform/developerRoutes.js', import.meta.url), 'utf8')
   const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
   assert.match(page, /\/api\/platform\/workflow-providers/)
   assert.match(page, /providerResource: true/)
