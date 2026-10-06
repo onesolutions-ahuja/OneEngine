@@ -304,18 +304,6 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
           return res.status(400).json({ success: false, message: `A test ${channel.label === "SMS" ? "phone number" : "email address"} is required.` });
         }
 
-        // Tenant scope check (company + store where applicable).
-        const saleCheck = await db(
-          `SELECT id FROM sale_ledger
-           WHERE id = $1 AND company_id = $2
-           ${req.user.storeId ? "AND store_id = $3" : ""}
-           LIMIT 1`,
-          req.user.storeId ? [saleId, req.user.companyId, req.user.storeId] : [saleId, req.user.companyId]
-        );
-        if (!saleCheck.rows.length) {
-          return res.status(404).json({ success: false, message: "Sale not found in your company" });
-        }
-
         const result = await resendInvoiceByChannel({
           db,
           channel: req.params.channel,
@@ -370,16 +358,6 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
         const { saleId } = req.body || {};
         if (!saleId || typeof saleId !== "string") {
           return res.status(400).json({ success: false, message: "A sale ID is required." });
-        }
-        const saleCheck = await db(
-          `SELECT id FROM sale_ledger
-           WHERE id = $1 AND company_id = $2
-           ${req.user.storeId ? "AND store_id = $3" : ""}
-           LIMIT 1`,
-          req.user.storeId ? [saleId, req.user.companyId, req.user.storeId] : [saleId, req.user.companyId]
-        );
-        if (!saleCheck.rows.length) {
-          return res.status(404).json({ success: false, message: "Sale not found in your company" });
         }
 
         const result = await resendInvoiceByChannel({
