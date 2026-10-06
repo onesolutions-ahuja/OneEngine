@@ -503,14 +503,14 @@ function Toolbox({ layout, onClose, flowType, startConfig, elements, resources, 
 }
 
 
-function AutoDecisionCard({ decision, elements, onOpenDecision, onOpenMember, onAddElement, onRemoveElement, selecting, selectedIds, onSelectToggle, flowType, startConfig, copiedCount }) {
+function AutoDecisionCard({ decision, elements, onOpenDecision, onOpenMember, onAddElement, onRemoveElement, running = false, selecting, selectedIds, onSelectToggle, flowType, startConfig, copiedCount }) {
   const [openPath, setOpenPath] = useState('')
   const outcomes = Array.isArray(decision.config?.outcomes) ? decision.config.outcomes : []
   const paths = [
     ...outcomes.map((outcome, index) => ({ id: outcome.id || `outcome-${index + 1}`, label: outcome.label || `Outcome ${index + 1}`, memberIds: Array.isArray(outcome.branch) ? outcome.branch : [] })),
     { id: '__DEFAULT__', label: decision.config?.defaultLabel || 'Default Outcome', memberIds: Array.isArray(decision.config?.defaultBranch) ? decision.config.defaultBranch : [] },
   ]
-  return <div className="gptb-auto-decision">
+  return <div className={`gptb-auto-decision ${running ? 'is-running' : ''}`}>
     <PendingElementCard instance={decision} onOpen={onOpenDecision} onRemove={() => onRemoveElement?.(decision.id)} selecting={selecting} selected={selectedIds.includes(decision.id)} onSelectToggle={() => onSelectToggle(decision.id)}/>
     <div className="gptb-decision-branches" data-decision-id={decision.id}>
       {paths.map((path) => <section className="gptb-decision-branch" key={path.id}>
@@ -1885,7 +1885,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
             return <>{addSlot(0)}{visible.map((element,index)=><React.Fragment key={element.id}><div className="gptb-auto-element-slot" tabIndex="-1" data-gptb-auto-focus="true" data-gptb-element-id={element.id} data-gptb-description={element.description || `${element.label || 'Flow element'} (${element.key})`}>{element.key==='group'
               ? <AutoGroupCard group={element} members={(element.config?.memberIds||[]).map((id)=>autoElements.find((item)=>item.id===id)).filter(Boolean)} onOpenGroup={()=>openElement(element)} onOpenMember={openElement} onRemoveMember={(id)=>removeAutoElements([id])} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} connecting={connectMode} onConnectTarget={connectToElement} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length} onAddElement={(picked)=>addElementToGroup(element.id,picked)} onDeleteGroup={()=>setGroupDeleteTarget(element)}/>
               : element.key==='decision'
-                ? <AutoDecisionCard decision={element} elements={autoElements} onOpenDecision={()=>openElement(element)} onOpenMember={openElement} onAddElement={addElementToDecisionBranch} onRemoveElement={(id)=>removeAutoElements([id])} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length}/>
+                ? <AutoDecisionCard decision={element} elements={autoElements} onOpenDecision={()=>openElement(element)} onOpenMember={openElement} onAddElement={addElementToDecisionBranch} onRemoveElement={(id)=>removeAutoElements([id])} running={editingElement?.id === element.id || selectedElementIds.includes(element.id)} selecting={selecting} selectedIds={selectedElementIds} onSelectToggle={toggleElementSelection} flowType={flow.key} startConfig={startConfig} copiedCount={copiedElements.length}/>
                 : <PendingElementCard instance={element} onOpen={() => openElement(element)} onRemove={() => removeAutoElements([element.id])} selecting={selecting} selected={selectedElementIds.includes(element.id)} onSelectToggle={() => toggleElementSelection(element.id)} connecting={connectMode} onConnectTarget={() => connectToElement(element.id)}/>}</div>{addSlot(index + 1, editingElement?.id === element.id || selectedElementIds.includes(element.id))}</React.Fragment>)}</>
           })()}
           <div className="gptb-connector"/><div className="gptb-end-node"><span>■</span><strong>End</strong></div>
