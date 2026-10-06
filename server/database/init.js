@@ -4487,6 +4487,535 @@ ON secure_invoice_links(company_id, created_at DESC);
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(app_id, page_key)
       );
+      CREATE TABLE IF NOT EXISTS platform_component_availability (
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        component_id VARCHAR(14) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','DEPRECATED','REMOVED')),
+        updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY(company_id, component_id),
+        CHECK (component_id ~ '^[0-9]{14}
+      CREATE TABLE IF NOT EXISTS platform_automation_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(), rule_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
+        object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL, record_id UUID,
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE, trigger VARCHAR(40) NOT NULL,
+        status VARCHAR(20) NOT NULL, details JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS platform_message_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        name VARCHAR(200) NOT NULL,
+        api_key VARCHAR(100) NOT NULL,
+        description TEXT,
+        channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+        object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
+        subject TEXT,
+        body TEXT NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(company_id, api_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_message_templates_company
+        ON platform_message_templates(company_id, active);
+      CREATE TABLE IF NOT EXISTS platform_action_jobs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        kind VARCHAR(100) NOT NULL,
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ,
+        idempotency_key VARCHAR(255) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(company_id, idempotency_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_action_jobs_due
+        ON platform_action_jobs(status, next_attempt_at);
+      CREATE TABLE IF NOT EXISTS platform_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        title VARCHAR(200),
+        message TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'UNREAD',
+        delivery_status VARCHAR(20) NOT NULL DEFAULT 'DELIVERED',
+        event_id UUID,
+        subscription_id UUID,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE platform_notifications ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(20) NOT NULL DEFAULT 'DELIVERED';
+      ALTER TABLE platform_notifications ADD COLUMN IF NOT EXISTS event_id UUID;
+      ALTER TABLE platform_notifications ADD COLUMN IF NOT EXISTS subscription_id UUID;
+      CREATE INDEX IF NOT EXISTS idx_platform_notifications_company
+        ON platform_notifications(company_id, created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_notifications_subscription_event_user
+        ON platform_notifications(subscription_id,event_id,user_id)
+        WHERE subscription_id IS NOT NULL AND event_id IS NOT NULL AND user_id IS NOT NULL;
+      CREATE TABLE IF NOT EXISTS platform_licence_requests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        package_key VARCHAR(100) NOT NULL,
+        package_name VARCHAR(200) NOT NULL,
+        requesting_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        requesting_user_name VARCHAR(200),
+        licence_status JSONB NOT NULL DEFAULT '{}'::jsonb,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED','CANCELLED')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_licence_requests_pending
+        ON platform_licence_requests(company_id,package_key) WHERE status='PENDING';
+      CREATE TABLE IF NOT EXISTS platform_notification_subscriptions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        object_id UUID REFERENCES platform_objects(id) ON DELETE CASCADE,
+        event_type VARCHAR(200) NOT NULL,
+        recipient_type VARCHAR(20) NOT NULL CHECK (recipient_type IN ('ACTOR','USER','FIELD')),
+        recipient_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+        title_template VARCHAR(200),
+        message_template TEXT NOT NULL,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_notification_subscriptions_match
+        ON platform_notification_subscriptions(company_id,event_type,object_id,active);
+      CREATE TABLE IF NOT EXISTS platform_workflow_runs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        workflow_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
+        workflow_name VARCHAR(200),
+        workflow_version INTEGER NOT NULL DEFAULT 1,
+        object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
+        record_id UUID,
+        trigger_key VARCHAR(100),
+        parent_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ,
+        error_text TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_runs_company
+        ON platform_workflow_runs(company_id, created_at DESC);
+      CREATE TABLE IF NOT EXISTS platform_workflow_step_runs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
+        step_identifier TEXT,
+        step_order INTEGER NOT NULL DEFAULT 0,
+        action_type VARCHAR(60),
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ,
+        error_text TEXT,
+        durable_job_id UUID REFERENCES platform_action_jobs(id) ON DELETE SET NULL,
+        child_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_step_runs_run_order
+        ON platform_workflow_step_runs(run_id, step_order);
+      CREATE TABLE IF NOT EXISTS platform_workflow_screen_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        workflow_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
+        run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
+        step_run_id UUID REFERENCES platform_workflow_step_runs(id) ON DELETE CASCADE,
+        step_identifier TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+        screen JSONB NOT NULL DEFAULT '{}'::jsonb,
+        values JSONB NOT NULL DEFAULT '{}'::jsonb,
+        workflow_variables JSONB NOT NULL DEFAULT '{}'::jsonb,
+        history JSONB NOT NULL DEFAULT '[]'::jsonb,
+        actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        expires_at TIMESTAMPTZ,
+        submitted_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_screen_sessions_run
+        ON platform_workflow_screen_sessions(run_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_screen_sessions_company_status
+        ON platform_workflow_screen_sessions(company_id, status, created_at DESC);
+      CREATE TABLE IF NOT EXISTS platform_recommendation_reactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        recommendation_key VARCHAR(255) NOT NULL,
+        reaction VARCHAR(20) NOT NULL CHECK (reaction IN ('ACCEPTED','REJECTED')),
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
+        record_id UUID,
+        workflow_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        reacted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_recommendation_reactions_lookup
+        ON platform_recommendation_reactions(company_id,recommendation_key,reaction,reacted_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_platform_recommendation_reactions_user_record
+        ON platform_recommendation_reactions(company_id,user_id,record_id,reacted_at DESC);
+      CREATE TABLE IF NOT EXISTS platform_workflow_compensation_runs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        run_id UUID NOT NULL REFERENCES platform_workflow_runs(id) ON DELETE CASCADE,
+        step_run_id UUID REFERENCES platform_workflow_step_runs(id) ON DELETE SET NULL,
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        action_type VARCHAR(60),
+        status VARCHAR(20) NOT NULL,
+        error_text TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_workflow_compensation_once
+        ON platform_workflow_compensation_runs(run_id, step_run_id);
+
+      CREATE TABLE IF NOT EXISTS platform_workflow_versions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        workflow_id UUID NOT NULL REFERENCES platform_rules(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        definition JSONB NOT NULL,
+        lifecycle_status VARCHAR(20),
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(company_id, workflow_id, version)
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_versions_lookup
+        ON platform_workflow_versions(company_id, workflow_id, version DESC);
+
+      CREATE TABLE IF NOT EXISTS platform_workflow_tests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        workflow_id UUID NOT NULL REFERENCES platform_rules(id) ON DELETE CASCADE,
+        name VARCHAR(200) NOT NULL,
+        config JSONB NOT NULL DEFAULT '{}'::jsonb,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        last_status VARCHAR(20),
+        last_run_id UUID REFERENCES platform_workflow_runs(id) ON DELETE SET NULL,
+        last_result JSONB,
+        last_run_at TIMESTAMPTZ,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_workflow_tests_lookup
+        ON platform_workflow_tests(company_id, workflow_id, active, created_at DESC);
+      CREATE TABLE IF NOT EXISTS platform_communication_deliveries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
+        channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+        template_id UUID REFERENCES platform_message_templates(id) ON DELETE SET NULL,
+        object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
+        record_id UUID,
+        recipient TEXT NOT NULL,
+        provider_name VARCHAR(100),
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        failure_reason TEXT,
+        provider_message_id VARCHAR(255),
+        triggered_by_rule UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
+        attempted_at TIMESTAMPTZ,
+        sent_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_communication_deliveries_company
+        ON platform_communication_deliveries(company_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS platform_communication_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL','SMS','WHATSAPP')),
+        event_type VARCHAR(100) NOT NULL,
+        direction VARCHAR(20),
+        provider VARCHAR(100),
+        provider_message_id VARCHAR(255),
+        recipient TEXT,
+        sender TEXT,
+        template_id UUID REFERENCES platform_message_templates(id) ON DELETE SET NULL,
+        object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL,
+        record_id UUID,
+        communication_id UUID,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_communication_events_company
+        ON platform_communication_events(company_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_platform_communication_events_trigger
+        ON platform_communication_events(company_id, channel, event_type, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+        phone_number_id VARCHAR(40) NOT NULL,
+        wa_contact_id VARCHAR(80) NOT NULL,
+        customer_phone VARCHAR(50),
+        status VARCHAR(20) NOT NULL DEFAULT 'OPEN'
+          CHECK (status IN ('OPEN','HUMAN','CLOSED','OPTED_OUT')),
+        assistant_mode VARCHAR(20) NOT NULL DEFAULT 'RULES',
+        last_message_at TIMESTAMPTZ,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(company_id, phone_number_id, wa_contact_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_company_status
+        ON whatsapp_conversations(company_id, status, last_message_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_customer
+        ON whatsapp_conversations(company_id, customer_id);
+
+      CREATE TABLE IF NOT EXISTS whatsapp_messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        conversation_id UUID NOT NULL REFERENCES whatsapp_conversations(id) ON DELETE CASCADE,
+        direction VARCHAR(10) NOT NULL CHECK (direction IN ('INBOUND','OUTBOUND')),
+        provider_message_id VARCHAR(255),
+        message_type VARCHAR(40) NOT NULL DEFAULT 'text',
+        body TEXT,
+        status VARCHAR(30) NOT NULL DEFAULT 'RECEIVED',
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        occurred_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(company_id, provider_message_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_conversation
+        ON whatsapp_messages(conversation_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_company
+        ON whatsapp_messages(company_id, created_at DESC);
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hospitality_qr_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(), company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE, table_id UUID NOT NULL REFERENCES hospitality_tables(id) ON DELETE CASCADE,
+        token_hash VARCHAR(64) NOT NULL UNIQUE, active BOOLEAN NOT NULL DEFAULT TRUE, expires_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS hospitality_qr_orders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(), company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE, table_id UUID NOT NULL REFERENCES hospitality_tables(id) ON DELETE CASCADE,
+        session_id UUID REFERENCES hospitality_table_sessions(id) ON DELETE SET NULL, sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL,
+        order_number VARCHAR(50) NOT NULL, items JSONB NOT NULL, subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+        tax NUMERIC(12,2) NOT NULL DEFAULT 0, discount NUMERIC(12,2) NOT NULL DEFAULT 0, total NUMERIC(12,2) NOT NULL DEFAULT 0,
+        payment_mode VARCHAR(20) NOT NULL DEFAULT 'PAY_AT_TILL', payment_status VARCHAR(30) NOT NULL DEFAULT 'UNPAID',
+        status VARCHAR(30) NOT NULL DEFAULT 'SUBMITTED', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES hospitality_table_sessions(id) ON DELETE SET NULL;
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS client_request_id VARCHAR(120);
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_hospitality_order_client_request ON hospitality_qr_orders(company_id,store_id,client_request_id) WHERE client_request_id IS NOT NULL;
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS subtotal NUMERIC(12,2) NOT NULL DEFAULT 0;
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS tax NUMERIC(12,2) NOT NULL DEFAULT 0;
+      ALTER TABLE hospitality_qr_orders ADD COLUMN IF NOT EXISTS discount NUMERIC(12,2) NOT NULL DEFAULT 0;
+      CREATE TABLE IF NOT EXISTS hospitality_bills (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(), company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE, session_id UUID NOT NULL REFERENCES hospitality_table_sessions(id) ON DELETE RESTRICT,
+        status VARCHAR(20) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','PAID','CANCELLED')),
+        service_charge_type VARCHAR(20), service_charge_value NUMERIC(12,2) NOT NULL DEFAULT 0,
+        service_charge_amount NUMERIC(12,2) NOT NULL DEFAULT 0, service_charge_taxable BOOLEAN NOT NULL DEFAULT FALSE,
+        service_charge_tax NUMERIC(12,2) NOT NULL DEFAULT 0, created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE hospitality_bills DROP CONSTRAINT IF EXISTS hospitality_bills_company_id_store_id_session_id_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_hospitality_open_bill_per_session
+        ON hospitality_bills(company_id,store_id,session_id) WHERE status='OPEN';
+      CREATE TABLE IF NOT EXISTS hospitality_bill_sales (
+        bill_id UUID NOT NULL REFERENCES hospitality_bills(id) ON DELETE CASCADE,
+        sale_id UUID NOT NULL UNIQUE REFERENCES sale_ledger(id) ON DELETE RESTRICT,
+        source_sale_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL, split_mode VARCHAR(20),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (bill_id,sale_id)
+      );
+      CREATE TABLE IF NOT EXISTS hospitality_bill_splits (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(), bill_id UUID NOT NULL REFERENCES hospitality_bills(id) ON DELETE CASCADE,
+        mode VARCHAR(20) NOT NULL CHECK (mode IN ('ITEMS','QUANTITY','EQUAL')), shares INTEGER NOT NULL,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS hospitality_bill_split_items (
+        split_id UUID NOT NULL REFERENCES hospitality_bill_splits(id) ON DELETE CASCADE,
+        source_sale_item_id UUID NOT NULL REFERENCES sale_items(id) ON DELETE RESTRICT,
+        split_sale_item_id UUID NOT NULL REFERENCES sale_items(id) ON DELETE RESTRICT,
+        quantity NUMERIC(12,3) NOT NULL CHECK (quantity > 0), PRIMARY KEY (split_id,split_sale_item_id)
+      );
+      CREATE TABLE IF NOT EXISTS hospitality_tips (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(), company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE, bill_id UUID NOT NULL REFERENCES hospitality_bills(id) ON DELETE RESTRICT,
+        session_id UUID NOT NULL REFERENCES hospitality_table_sessions(id) ON DELETE RESTRICT,
+        payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE RESTRICT, amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_hospitality_bill_sales_sale ON hospitality_bill_sales(sale_id);
+      CREATE INDEX IF NOT EXISTS idx_hospitality_tips_session ON hospitality_tips(company_id,store_id,session_id,created_at);
+      CREATE TABLE IF NOT EXISTS hospitality_table_merge_orders (
+        merge_id UUID NOT NULL REFERENCES hospitality_table_merges(id) ON DELETE CASCADE,
+        order_id UUID NOT NULL REFERENCES hospitality_qr_orders(id) ON DELETE CASCADE,
+        original_session_id UUID NOT NULL REFERENCES hospitality_table_sessions(id) ON DELETE RESTRICT,
+        original_table_id UUID NOT NULL REFERENCES hospitality_tables(id) ON DELETE RESTRICT,
+        PRIMARY KEY (merge_id,order_id)
+      );
+      CREATE TABLE IF NOT EXISTS hospitality_table_merge_tickets (
+        merge_id UUID NOT NULL REFERENCES hospitality_table_merges(id) ON DELETE CASCADE,
+        ticket_id UUID NOT NULL REFERENCES hospitality_kds_tickets(id) ON DELETE CASCADE,
+        original_session_id UUID NOT NULL REFERENCES hospitality_table_sessions(id) ON DELETE RESTRICT,
+        original_table_id UUID NOT NULL REFERENCES hospitality_tables(id) ON DELETE RESTRICT,
+        PRIMARY KEY (merge_id,ticket_id)
+      );
+      INSERT INTO hospitality_table_sessions (company_id,store_id,table_id,status,started_at)
+      SELECT t.company_id,t.store_id,t.id,
+             CASE WHEN COUNT(q.id)>0 THEN 'ORDERING' ELSE 'OPEN' END,
+             COALESCE(MIN(q.created_at),NOW())
+        FROM hospitality_tables t
+        LEFT JOIN hospitality_qr_orders q ON q.company_id=t.company_id AND q.store_id=t.store_id
+          AND q.table_id=t.id AND q.payment_status='UNPAID' AND q.status<>'CANCELLED'
+       WHERE t.status IN ('OCCUPIED','MERGED') OR q.id IS NOT NULL
+       GROUP BY t.company_id,t.store_id,t.id
+      ON CONFLICT (company_id,store_id,table_id) WHERE status IN ('OPEN','ORDERING','SERVED','CHECK_REQUESTED') DO NOTHING;
+      UPDATE hospitality_qr_orders q SET session_id=s.id
+        FROM hospitality_table_sessions s
+       WHERE q.session_id IS NULL AND q.company_id=s.company_id AND q.store_id=s.store_id AND q.table_id=s.table_id
+         AND q.payment_status='UNPAID' AND q.status<>'CANCELLED'
+         AND s.status IN ('OPEN','ORDERING','SERVED','CHECK_REQUESTED');
+      UPDATE hospitality_kds_tickets k SET session_id=s.id
+        FROM hospitality_table_sessions s
+       WHERE k.session_id IS NULL AND k.company_id=s.company_id AND k.store_id=s.store_id AND k.table_id=s.table_id
+         AND s.status IN ('OPEN','ORDERING','SERVED','CHECK_REQUESTED');
+    `);
+
+
+    await pool.query(`
+      CREATE OR REPLACE VIEW hospitality_report_sessions AS
+      SELECT s.id AS session_id, s.company_id, s.store_id, s.started_at::date AS report_date,
+        f.name AS floor_name, t.table_number, COALESCE(u.full_name, u.username, 'Unknown') AS operator_name,
+        s.status, s.guests,
+        CASE WHEN EXISTS (SELECT 1 FROM hospitality_reservations r WHERE r.company_id=s.company_id AND r.store_id=s.store_id AND r.table_id=s.table_id AND r.reservation_date=s.started_at::date AND r.status <> 'CANCELLED') THEN 'RESERVATION' ELSE 'WALK_IN' END AS source,
+        COALESCE(bill_totals.gross,0) AS gross, COALESCE(bill_totals.discount,0) AS discount, COALESCE(bill_totals.net,0) AS net,
+        COALESCE(bill_totals.vat,0) AS vat, COALESCE(bill_totals.service_charge,0) AS service_charge, COALESCE(bill_totals.tips,0) AS tips,
+        COALESCE(bill_totals.paid,0) AS paid, GREATEST(COALESCE(bill_totals.gross,0)-COALESCE(bill_totals.paid,0),0) AS remaining,
+        bill_totals.payment_method, COALESCE(bill_totals.payment_count,0)::int AS payment_count,
+        s.started_at AS opened_at, s.ended_at AS closed_at, EXTRACT(EPOCH FROM (COALESCE(s.ended_at,NOW())-s.started_at))/60 AS duration_minutes,
+        CASE WHEN s.guests > 0 THEN COALESCE(bill_totals.gross,0)/s.guests ELSE 0 END AS average_spend_per_cover,
+        kds.ticket_created, kds.ticket_completed,
+        CASE WHEN kds.ticket_created IS NULL OR kds.ticket_completed IS NULL THEN NULL ELSE EXTRACT(EPOCH FROM (kds.ticket_completed-kds.ticket_created))/60 END AS preparation_duration,
+        COALESCE(kds.delayed,false) AS delayed
+      FROM hospitality_table_sessions s JOIN hospitality_tables t ON t.id=s.table_id JOIN hospitality_floors f ON f.id=t.floor_id
+      LEFT JOIN users u ON u.id=s.started_by
+      LEFT JOIN LATERAL (
+        SELECT SUM(sa.total)::numeric AS gross, SUM(sa.discount)::numeric AS discount, SUM(sa.total-sa.discount)::numeric AS net,
+          SUM(sa.tax)::numeric AS vat, SUM(sa.hospitality_service_charge_amount)::numeric AS service_charge,
+          (SELECT SUM(ht.amount)::numeric FROM hospitality_tips ht WHERE ht.session_id=s.id) AS tips,
+          (SELECT SUM(p.amount)::numeric FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS paid,
+          (SELECT string_agg(DISTINCT p.payment_method, ', ' ORDER BY p.payment_method) FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS payment_method,
+          (SELECT COUNT(*)::int FROM payments p WHERE p.sale_id IN (SELECT bs2.sale_id FROM hospitality_bill_sales bs2 JOIN hospitality_bills b2 ON b2.id=bs2.bill_id WHERE b2.session_id=s.id) AND p.status='completed' AND p.direction='IN') AS payment_count
+        FROM hospitality_bills b JOIN hospitality_bill_sales bs ON bs.bill_id=b.id JOIN sale_ledger sa ON sa.id=bs.sale_id
+        WHERE b.session_id=s.id AND b.company_id=s.company_id AND b.store_id=s.store_id
+      ) bill_totals ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT MIN(k.created_at) AS ticket_created, MAX(CASE WHEN k.status='COMPLETED' THEN k.updated_at END) AS ticket_completed,
+          BOOL_OR(k.status <> 'COMPLETED' AND k.created_at < NOW()-INTERVAL '20 minutes') AS delayed
+        FROM hospitality_kds_tickets k WHERE k.session_id=s.id AND k.company_id=s.company_id AND k.store_id=s.store_id
+      ) kds ON TRUE;
+    `);
+
+    await pool.query(`
+      ALTER TABLE sales_orders
+        DROP CONSTRAINT IF EXISTS online_orders_status_check;
+      ALTER TABLE sales_orders
+        ADD CONSTRAINT online_orders_status_check
+        CHECK (status IN ('RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'DRIVER_ACCEPTED', 'COLLECTED', 'OUT_FOR_DELIVERY', 'COMPLETED', 'FAILED_DELIVERY', 'RETURNED', 'REJECTED', 'CANCELLED'));
+    `);
+    await pool.query(`
+    ALTER TABLE companies ADD COLUMN IF NOT EXISTS user_email_domain VARCHAR(255);
+    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS domain_users_only BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_registration_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS password_reset_email_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS registration_link_expiry_minutes INTEGER NOT NULL DEFAULT 1440;
+    ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS password_reset_expiry_minutes INTEGER NOT NULL DEFAULT 60;
+
+    CREATE TABLE IF NOT EXISTS platform_policies (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      api_key VARCHAR(120) NOT NULL, name VARCHAR(200) NOT NULL, policy_type VARCHAR(40) NOT NULL DEFAULT 'COMPANY_POLICY',
+      version INTEGER NOT NULL DEFAULT 1, title VARCHAR(255) NOT NULL, body TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','ACTIVE','INACTIVE')),
+      require_acceptance BOOLEAN NOT NULL DEFAULT TRUE, applicability JSONB NOT NULL DEFAULT '{}'::jsonb,
+      display_order INTEGER NOT NULL DEFAULT 0, published_at TIMESTAMPTZ, created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(company_id,api_key,version)
+    );
+    CREATE TABLE IF NOT EXISTS platform_policy_acceptances (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      policy_id UUID NOT NULL REFERENCES platform_policies(id) ON DELETE RESTRICT, policy_version INTEGER NOT NULL,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      evidence JSONB NOT NULL DEFAULT '{}'::jsonb, UNIQUE(policy_id,policy_version,user_id)
+    );
+    CREATE TABLE IF NOT EXISTS account_action_tokens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, purpose VARCHAR(30) NOT NULL CHECK (purpose IN ('REGISTRATION','PASSWORD_RESET')),
+      token_hash VARCHAR(64) NOT NULL UNIQUE, expires_at TIMESTAMPTZ NOT NULL, used_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS company_licence_allocations (
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE, licence_id UUID NOT NULL REFERENCES licences(id) ON DELETE CASCADE,
+      seats INTEGER NOT NULL DEFAULT 0 CHECK(seats>=0), assigned_by UUID REFERENCES users(id) ON DELETE SET NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(company_id,licence_id)
+    );
+    ALTER TABLE company_licence_allocations ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE company_licence_allocations ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ;
+    ALTER TABLE company_licence_allocations ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+    CREATE TABLE IF NOT EXISTS user_licence_assignments (
+      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      licence_id UUID NOT NULL REFERENCES licences(id) ON DELETE RESTRICT, assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      active BOOLEAN NOT NULL DEFAULT TRUE, starts_at TIMESTAMPTZ, expires_at TIMESTAMPTZ,
+      CHECK(expires_at IS NULL OR starts_at IS NULL OR expires_at >= starts_at)
+    );
+
+    CREATE TABLE IF NOT EXISTS company_package_trials (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      package_id UUID NOT NULL REFERENCES package_registry(id) ON DELETE CASCADE,
+      activated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      UNIQUE(company_id, package_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_company_package_trials_company
+      ON company_package_trials(company_id, expires_at);
+    CREATE TABLE IF NOT EXISTS onepos_runtime_state (
+      state_key VARCHAR(120) PRIMARY KEY,
+      state_value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    ALTER TABLE user_licence_assignments ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE user_licence_assignments ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ;
+    ALTER TABLE user_licence_assignments ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+
+    ALTER TABLE licence_bundles ADD COLUMN IF NOT EXISTS visible BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE licence_bundles ADD COLUMN IF NOT EXISTS installable BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE licence_bundles ADD COLUMN IF NOT EXISTS display_order INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE licence_bundles ADD COLUMN IF NOT EXISTS allowed_companies UUID[] NOT NULL DEFAULT '{}';
+    ALTER TABLE licence_bundles ADD COLUMN IF NOT EXISTS available_tiers TEXT[] NOT NULL DEFAULT '{}';
+
+    ALTER TABLE licence_tiers ADD COLUMN IF NOT EXISTS visible BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE licence_tiers ADD COLUMN IF NOT EXISTS installable BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE licence_tiers ADD COLUMN IF NOT EXISTS display_order INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE licence_tiers ADD COLUMN IF NOT EXISTS allowed_companies UUID[] NOT NULL DEFAULT '{}';
+  `);
+
+}
+)
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_component_availability_company_status
+        ON platform_component_availability(company_id, status);
       CREATE TABLE IF NOT EXISTS platform_automation_logs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(), rule_id UUID REFERENCES platform_rules(id) ON DELETE SET NULL,
         object_id UUID REFERENCES platform_objects(id) ON DELETE SET NULL, record_id UUID,
