@@ -1,6 +1,42 @@
 // Declarative OneAssistant package metadata and Builder-visible Flow definition.
 // Kept outside the generic package registry so platform code has no appointment business knowledge.
 
+function builderEditableWorkflow(workflow) {
+  const action = workflow?.action || {};
+  const actions = Array.isArray(action.actions) ? action.actions : [];
+  return {
+    ...workflow,
+    action: {
+      ...action,
+      gptBuilder: true,
+      layout: action.layout || { mode: "AUTO" },
+      gptBuilderElements: actions.map((step, index) => ({
+        id: step.id || `assistant-step-${index + 1}`,
+        key: "action",
+        label: step.label || step.apiName || step.key || `Step ${index + 1}`,
+        apiName: step.apiName || step.id || `Assistant_Step_${index + 1}`,
+        description: step.description || "",
+        labelSource: "manual",
+        apiNameSource: "manual",
+        config: {
+          actionKey: step.key || step.type || "",
+          inputs: {},
+          inputModes: {},
+          inputIncluded: {},
+          transforms: {},
+          outputMode: "automatic",
+          manualOutputs: [],
+          importedRuntimeAction: step,
+          importedRuntimeActionText: "",
+        },
+        configured: true,
+        source: "runtime_import",
+        position: null,
+      })),
+    },
+  };
+}
+
 export function oneAssistantAppointmentRouterWorkflow() {
   const condition = (field, value) => ({ match: "all", conditions: [{ field, operator: "equals", value }] });
   // Communication stays Flow-visible. WhatsApp is an ordinary API step; credentials/base URL remain secure metadata.
@@ -193,7 +229,7 @@ export function oneAssistantAppointmentRouterWorkflow() {
     ...send("send_confirmation","Send Appointment Confirmation",{path:"variables.messageChannel"},confirmationMessage,{appointmentDate:{path:"variables.selectedSlot.date"},appointmentTime:{path:"variables.selectedSlot.time"}}),
   ];
 
-  return {
+  return builderEditableWorkflow({
     objectKey:"communication_event",name:"OneAssistant - Booking Channel Router",triggerKey:"communication_message_received",conditions:[],
     action:{type:"workflow",flowType:"platform_event",apiName:"OneAssistant_Booking_Channel_Router",
       description:"Fully Builder-visible appointment booking flow. Business decisions, record reads/writes and customer messages are explicit nodes.",
@@ -211,7 +247,7 @@ export function oneAssistantAppointmentRouterWorkflow() {
         {apiName:"busyIntervals",resourceType:"Variable",dataType:"Collection",description:"Existing appointments and active slot holds."},
         {apiName:"selectedSlot",resourceType:"Variable",dataType:"Record",description:"Selected appointment slot."}
       ],tests:[],builderGroups:[],builderLayout:{mode:"AUTO",positions:{},edges:[]},actions},active:true
-  };
+  });
 }
 
 
@@ -393,7 +429,7 @@ export const oneAssistantManifest = {
             },
             active: false,
           }
-        ],
+        ].map(builderEditableWorkflow),
         templates: [
           { apiKey: "assistant_email_booking_link", name: "OneAssistant Email - Booking Link", channel: "EMAIL", subject: "Choose your appointment time", body: "We received your appointment request. Choose an available time here: {{bookingUrl}}", required: false },
           { apiKey: "assistant_email_payment", name: "OneAssistant Email - Payment", channel: "EMAIL", subject: "Complete your appointment payment", body: "Your appointment slot is reserved temporarily. Complete payment here: {{paymentUrl}}", required: false },

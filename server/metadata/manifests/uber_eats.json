@@ -330,6 +330,228 @@
               "path": "steps.get_stores.data"
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "get_stores",
+            "key": "action",
+            "label": "Get Uber Eats Stores",
+            "apiName": "get_stores",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "get_stores",
+                "label": "Get Uber Eats Stores",
+                "apiName": "get_stores",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "uber_eats",
+                "method": "GET",
+                "endpoint": "/v1/eats/stores"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "check_result",
+            "key": "action",
+            "label": "Request Successful?",
+            "apiName": "check_result",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "check_result",
+                "label": "Request Successful?",
+                "apiName": "check_result",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.get_stores.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_success",
+                      "set_response"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_error"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_success",
+            "key": "action",
+            "label": "Set Success",
+            "apiName": "set_success",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_success",
+                "label": "Set Success",
+                "apiName": "set_success",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_response",
+            "key": "action",
+            "label": "Set Response",
+            "apiName": "set_response",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_response",
+                "label": "Set Response",
+                "apiName": "set_response",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.get_stores.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_error",
+            "key": "action",
+            "label": "Set Error",
+            "apiName": "set_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_error",
+                "label": "Set Error",
+                "apiName": "set_error",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.get_stores.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -468,6 +690,228 @@
             "value": {
               "path": "steps.test_connection.data"
             }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "test_connection",
+            "key": "action",
+            "label": "Test Uber Eats Connection",
+            "apiName": "test_connection",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "test_connection",
+                "label": "Test Uber Eats Connection",
+                "apiName": "test_connection",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "uber_eats",
+                "method": "GET",
+                "endpoint": "/v1/eats/stores"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "check_result",
+            "key": "action",
+            "label": "Request Successful?",
+            "apiName": "check_result",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "check_result",
+                "label": "Request Successful?",
+                "apiName": "check_result",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.test_connection.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_success",
+                      "set_response"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_error"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_success",
+            "key": "action",
+            "label": "Set Success",
+            "apiName": "set_success",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_success",
+                "label": "Set Success",
+                "apiName": "set_success",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_response",
+            "key": "action",
+            "label": "Set Response",
+            "apiName": "set_response",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_response",
+                "label": "Set Response",
+                "apiName": "set_response",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.test_connection.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_error",
+            "key": "action",
+            "label": "Set Error",
+            "apiName": "set_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_error",
+                "label": "Set Error",
+                "apiName": "set_error",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.test_connection.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -824,6 +1268,514 @@
               "path": "steps.upload_menu.data"
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "get_products",
+            "key": "action",
+            "label": "Get Uber-enabled Products",
+            "apiName": "get_products",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "get_products",
+                "label": "Get Uber-enabled Products",
+                "apiName": "get_products",
+                "key": "GET_RECORDS",
+                "objectKey": "product",
+                "filters": [
+                  {
+                    "field": "available_on_uber",
+                    "operator": "equals",
+                    "value": true
+                  },
+                  {
+                    "field": "active",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ],
+                "match": "all",
+                "store": "all",
+                "limit": 500,
+                "fieldSelection": "choose",
+                "selectedFields": [
+                  "id",
+                  "name",
+                  "description",
+                  "price",
+                  "vat_rate",
+                  "uber_item_id",
+                  "category_id"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "build_items",
+            "key": "action",
+            "label": "Build Uber Items",
+            "apiName": "build_items",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "TRANSFORM",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "build_items",
+                "label": "Build Uber Items",
+                "apiName": "build_items",
+                "key": "TRANSFORM",
+                "collection": "steps.get_products.records",
+                "transformMappings": {
+                  "id": {
+                    "coalesce": [
+                      "item.uber_item_id",
+                      "item.id"
+                    ]
+                  },
+                  "title": {
+                    "translations": {
+                      "en_us": {
+                        "path": "$record.name"
+                      }
+                    }
+                  },
+                  "description": {
+                    "translations": {
+                      "en_us": {
+                        "path": "$record.description"
+                      }
+                    }
+                  },
+                  "external_data": "item.id",
+                  "price_info": {
+                    "price": {
+                      "source": "item.price",
+                      "multiply": 100,
+                      "round": true
+                    }
+                  },
+                  "tax_info": {
+                    "vat_rate_percentage": "item.vat_rate"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "build_categories",
+            "key": "action",
+            "label": "Build Uber Categories",
+            "apiName": "build_categories",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "TRANSFORM",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "build_categories",
+                "label": "Build Uber Categories",
+                "apiName": "build_categories",
+                "key": "TRANSFORM",
+                "collection": "steps.get_products.records",
+                "transformMappings": {
+                  "id": "item.id",
+                  "title": {
+                    "translations": {
+                      "en_us": {
+                        "path": "$record.name"
+                      }
+                    }
+                  },
+                  "entities": [
+                    {
+                      "id": {
+                        "path": "$record.uber_item_id",
+                        "fallback": {
+                          "path": "$record.id"
+                        }
+                      },
+                      "type": "ITEM"
+                    }
+                  ]
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "build_category_ids",
+            "key": "action",
+            "label": "Build Category IDs",
+            "apiName": "build_category_ids",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "TRANSFORM",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "build_category_ids",
+                "label": "Build Category IDs",
+                "apiName": "build_category_ids",
+                "key": "TRANSFORM",
+                "collection": "steps.get_products.records",
+                "outputValue": "item.id"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "upload_menu",
+            "key": "action",
+            "label": "Upload Uber Eats Menu",
+            "apiName": "upload_menu",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "upload_menu",
+                "label": "Upload Uber Eats Menu",
+                "apiName": "upload_menu",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "uber_eats",
+                "method": "PUT",
+                "endpoint": "/v2/eats/stores/{{storeId}}/menus",
+                "body": {
+                  "menus": [
+                    {
+                      "id": "onepos-menu",
+                      "title": {
+                        "translations": {
+                          "en_us": "onePOS Menu"
+                        }
+                      },
+                      "service_availability": [
+                        {
+                          "day_of_week": "monday",
+                          "time_periods": [
+                            {
+                              "start_time": "00:00",
+                              "end_time": "23:59"
+                            }
+                          ]
+                        },
+                        {
+                          "day_of_week": "tuesday",
+                          "time_periods": [
+                            {
+                              "start_time": "00:00",
+                              "end_time": "23:59"
+                            }
+                          ]
+                        },
+                        {
+                          "day_of_week": "wednesday",
+                          "time_periods": [
+                            {
+                              "start_time": "00:00",
+                              "end_time": "23:59"
+                            }
+                          ]
+                        },
+                        {
+                          "day_of_week": "thursday",
+                          "time_periods": [
+                            {
+                              "start_time": "00:00",
+                              "end_time": "23:59"
+                            }
+                          ]
+                        },
+                        {
+                          "day_of_week": "friday",
+                          "time_periods": [
+                            {
+                              "start_time": "00:00",
+                              "end_time": "23:59"
+                            }
+                          ]
+                        },
+                        {
+                          "day_of_week": "saturday",
+                          "time_periods": [
+                            {
+                              "start_time": "00:00",
+                              "end_time": "23:59"
+                            }
+                          ]
+                        },
+                        {
+                          "day_of_week": "sunday",
+                          "time_periods": [
+                            {
+                              "start_time": "00:00",
+                              "end_time": "23:59"
+                            }
+                          ]
+                        }
+                      ],
+                      "category_ids": {
+                        "path": "steps.build_category_ids.collection"
+                      }
+                    }
+                  ],
+                  "categories": {
+                    "path": "steps.build_categories.collection"
+                  },
+                  "items": {
+                    "path": "steps.build_items.collection"
+                  },
+                  "modifier_groups": [],
+                  "display_options": {
+                    "disable_item_instructions": true
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "check_result",
+            "key": "action",
+            "label": "Menu Upload Successful?",
+            "apiName": "check_result",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "check_result",
+                "label": "Menu Upload Successful?",
+                "apiName": "check_result",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.upload_menu.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_success",
+                      "set_data"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_error"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_success",
+            "key": "action",
+            "label": "Set Success",
+            "apiName": "set_success",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_success",
+                "label": "Set Success",
+                "apiName": "set_success",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_data",
+            "key": "action",
+            "label": "Set Data",
+            "apiName": "set_data",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_data",
+                "label": "Set Data",
+                "apiName": "set_data",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.upload_menu.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_error",
+            "key": "action",
+            "label": "Set Error",
+            "apiName": "set_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_error",
+                "label": "Set Error",
+                "apiName": "set_error",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.upload_menu.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -983,6 +1935,231 @@
             "value": {
               "path": "steps.accept_order.data"
             }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "accept_order",
+            "key": "action",
+            "label": "Accept Uber Eats Order",
+            "apiName": "accept_order",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "accept_order",
+                "label": "Accept Uber Eats Order",
+                "apiName": "accept_order",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "uber_eats",
+                "method": "POST",
+                "endpoint": "/v1/eats/orders/{{orderId}}/accept_pos_order",
+                "body": {
+                  "reason": "Accepted by POS"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "check_result",
+            "key": "action",
+            "label": "Request Successful?",
+            "apiName": "check_result",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "check_result",
+                "label": "Request Successful?",
+                "apiName": "check_result",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.accept_order.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_success",
+                      "set_response"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_error"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_success",
+            "key": "action",
+            "label": "Set Success",
+            "apiName": "set_success",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_success",
+                "label": "Set Success",
+                "apiName": "set_success",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_response",
+            "key": "action",
+            "label": "Set Response",
+            "apiName": "set_response",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_response",
+                "label": "Set Response",
+                "apiName": "set_response",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.accept_order.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_error",
+            "key": "action",
+            "label": "Set Error",
+            "apiName": "set_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_error",
+                "label": "Set Error",
+                "apiName": "set_error",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.accept_order.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -1165,6 +2342,236 @@
             "value": {
               "path": "steps.deny_order.data"
             }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "deny_order",
+            "key": "action",
+            "label": "Deny Uber Eats Order",
+            "apiName": "deny_order",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "deny_order",
+                "label": "Deny Uber Eats Order",
+                "apiName": "deny_order",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "uber_eats",
+                "method": "POST",
+                "endpoint": "/v1/eats/orders/{{orderId}}/deny_pos_order",
+                "body": {
+                  "reason": {
+                    "explanation": {
+                      "path": "variables.reason"
+                    },
+                    "code": "OTHER"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "check_result",
+            "key": "action",
+            "label": "Request Successful?",
+            "apiName": "check_result",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "check_result",
+                "label": "Request Successful?",
+                "apiName": "check_result",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.deny_order.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_success",
+                      "set_response"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_error"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_success",
+            "key": "action",
+            "label": "Set Success",
+            "apiName": "set_success",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_success",
+                "label": "Set Success",
+                "apiName": "set_success",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_response",
+            "key": "action",
+            "label": "Set Response",
+            "apiName": "set_response",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_response",
+                "label": "Set Response",
+                "apiName": "set_response",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.deny_order.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_error",
+            "key": "action",
+            "label": "Set Error",
+            "apiName": "set_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_error",
+                "label": "Set Error",
+                "apiName": "set_error",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.deny_order.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }
@@ -1379,6 +2786,272 @@
               "path": "steps.update_price.data"
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "calculate_price_minor",
+            "key": "action",
+            "label": "Calculate Minor Unit Price",
+            "apiName": "calculate_price_minor",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "calculate_price_minor",
+                "label": "Calculate Minor Unit Price",
+                "apiName": "calculate_price_minor",
+                "key": "FORMULA",
+                "resourceName": "priceMinor",
+                "resultType": "number",
+                "expression": "price * 100",
+                "inputs": {
+                  "price": {
+                    "path": "variables.price"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "update_price",
+            "key": "action",
+            "label": "Update Uber Eats Item Price",
+            "apiName": "update_price",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "update_price",
+                "label": "Update Uber Eats Item Price",
+                "apiName": "update_price",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "uber_eats",
+                "method": "POST",
+                "endpoint": "/v2/eats/stores/{{storeId}}/menus/items/{{itemId}}",
+                "body": {
+                  "price_info": {
+                    "price": {
+                      "path": "variables.priceMinor"
+                    },
+                    "overrides": []
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "check_result",
+            "key": "action",
+            "label": "Request Successful?",
+            "apiName": "check_result",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "check_result",
+                "label": "Request Successful?",
+                "apiName": "check_result",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.update_price.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_success",
+                      "set_response"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_error"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_success",
+            "key": "action",
+            "label": "Set Success",
+            "apiName": "set_success",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_success",
+                "label": "Set Success",
+                "apiName": "set_success",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_response",
+            "key": "action",
+            "label": "Set Response",
+            "apiName": "set_response",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_response",
+                "label": "Set Response",
+                "apiName": "set_response",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.update_price.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_error",
+            "key": "action",
+            "label": "Set Error",
+            "apiName": "set_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_error",
+                "label": "Set Error",
+                "apiName": "set_error",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.update_price.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -1580,6 +3253,238 @@
               "path": "steps.set_unavailable.data"
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "set_unavailable",
+            "key": "action",
+            "label": "Set Uber Eats Item Unavailable",
+            "apiName": "set_unavailable",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_unavailable",
+                "label": "Set Uber Eats Item Unavailable",
+                "apiName": "set_unavailable",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "uber_eats",
+                "method": "POST",
+                "endpoint": "/v2/eats/stores/{{storeId}}/menus/items/{{itemId}}",
+                "body": {
+                  "suspension_info": {
+                    "suspension": {
+                      "suspend_until": {
+                        "path": "variables.suspendUntil"
+                      },
+                      "reason": "Out of stock"
+                    }
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "check_result",
+            "key": "action",
+            "label": "Request Successful?",
+            "apiName": "check_result",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "check_result",
+                "label": "Request Successful?",
+                "apiName": "check_result",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.set_unavailable.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_success",
+                      "set_response"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_error"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_success",
+            "key": "action",
+            "label": "Set Success",
+            "apiName": "set_success",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_success",
+                "label": "Set Success",
+                "apiName": "set_success",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_response",
+            "key": "action",
+            "label": "Set Response",
+            "apiName": "set_response",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_response",
+                "label": "Set Response",
+                "apiName": "set_response",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.set_unavailable.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_error",
+            "key": "action",
+            "label": "Set Error",
+            "apiName": "set_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_error",
+                "label": "Set Error",
+                "apiName": "set_error",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.set_unavailable.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -1761,6 +3666,235 @@
               "path": "steps.set_available.data"
             }
           }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "set_available",
+            "key": "action",
+            "label": "Set Uber Eats Item Available",
+            "apiName": "set_available",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_available",
+                "label": "Set Uber Eats Item Available",
+                "apiName": "set_available",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "uber_eats",
+                "method": "POST",
+                "endpoint": "/v2/eats/stores/{{storeId}}/menus/items/{{itemId}}",
+                "body": {
+                  "suspension_info": {
+                    "suspension": {
+                      "suspend_until": null
+                    }
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "check_result",
+            "key": "action",
+            "label": "Request Successful?",
+            "apiName": "check_result",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "check_result",
+                "label": "Request Successful?",
+                "apiName": "check_result",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.set_available.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_success",
+                      "set_response"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_error"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_success",
+            "key": "action",
+            "label": "Set Success",
+            "apiName": "set_success",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_success",
+                "label": "Set Success",
+                "apiName": "set_success",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_response",
+            "key": "action",
+            "label": "Set Response",
+            "apiName": "set_response",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_response",
+                "label": "Set Response",
+                "apiName": "set_response",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.set_available.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "success",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_error",
+            "key": "action",
+            "label": "Set Error",
+            "apiName": "set_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_error",
+                "label": "Set Error",
+                "apiName": "set_error",
+                "key": "ASSIGNMENT",
+                "variableName": "data",
+                "variableType": "object",
+                "operator": "set",
+                "value": {
+                  "path": "steps.set_available.data"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
         ]
       }
     },
@@ -1781,9 +3915,228 @@
         "type": "workflow",
         "actions": [
           {
+            "id": "get_uber_connection",
+            "label": "Get Active Uber Eats Connection",
+            "apiName": "get_uber_connection",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_eats_connection",
+            "filters": [
+              {
+                "field": "provider",
+                "operator": "equals",
+                "value": "uber_eats"
+              },
+              {
+                "field": "active",
+                "operator": "equals",
+                "value": true
+              }
+            ],
+            "match": "all",
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "connection_available",
+            "label": "Uber Eats Connection Available?",
+            "apiName": "connection_available",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Connected",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.get_uber_connection.record.id",
+                      "operator": "is_not_blank"
+                    }
+                  ]
+                },
+                "branch": [
+                  "sync_menu"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Connected",
+            "defaultBranch": [
+              "connection_missing"
+            ]
+          },
+          {
             "id": "sync_menu",
+            "label": "Sync Uber Eats Menu",
+            "apiName": "sync_menu",
             "key": "RUN_SUBFLOW",
             "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+          },
+          {
+            "id": "connection_missing",
+            "label": "Uber Eats Connection Missing",
+            "apiName": "connection_missing",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Uber Eats menu sync requires an active Uber Eats connection.",
+            "errorLocation": "record"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "get_uber_connection",
+            "key": "action",
+            "label": "Get Active Uber Eats Connection",
+            "apiName": "get_uber_connection",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "get_uber_connection",
+                "label": "Get Active Uber Eats Connection",
+                "apiName": "get_uber_connection",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_eats_connection",
+                "filters": [
+                  {
+                    "field": "provider",
+                    "operator": "equals",
+                    "value": "uber_eats"
+                  },
+                  {
+                    "field": "active",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ],
+                "match": "all",
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "connection_available",
+            "key": "action",
+            "label": "Uber Eats Connection Available?",
+            "apiName": "connection_available",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "connection_available",
+                "label": "Uber Eats Connection Available?",
+                "apiName": "connection_available",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Connected",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.get_uber_connection.record.id",
+                          "operator": "is_not_blank"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "sync_menu"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Connected",
+                "defaultBranch": [
+                  "connection_missing"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "sync_menu",
+            "key": "action",
+            "label": "Sync Uber Eats Menu",
+            "apiName": "sync_menu",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "sync_menu",
+                "label": "Sync Uber Eats Menu",
+                "apiName": "sync_menu",
+                "key": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "connection_missing",
+            "key": "action",
+            "label": "Uber Eats Connection Missing",
+            "apiName": "connection_missing",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "connection_missing",
+                "label": "Uber Eats Connection Missing",
+                "apiName": "connection_missing",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Uber Eats menu sync requires an active Uber Eats connection.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
           }
         ]
       }

@@ -581,36 +581,6 @@ export function packageDefinition(entry) {
         ],
       } : {}),
       ...(entry.key === "one_assistant" ? oneAssistantManifest : {}),
-      ...(entry.key === "whatsapp_assistant" ? {
-        workflows: [
-          {
-            objectKey: "communication_event",
-            name: "WhatsApp Assistant - inbound message",
-            triggerKey: "communication_message_received",
-            conditions: [{ field: "channel", operator: "equals", value: "WHATSAPP" }],
-            action: {
-              type: "workflow",
-              scope: "whatsapp_assistant",
-              channel: "WHATSAPP",
-              actions: []
-            },
-            active: false,
-          },
-          {
-            objectKey: "communication_event",
-            name: "WhatsApp Assistant - human handoff",
-            triggerKey: "communication_handoff",
-            conditions: [{ field: "channel", operator: "equals", value: "WHATSAPP" }],
-            action: {
-              type: "workflow",
-              scope: "whatsapp_assistant",
-              channel: "WHATSAPP",
-              actions: []
-            },
-            active: false,
-          }
-        ],
-      } : {}),
       ...(metadataManifestByPackageKey(entry.key) || {}),
       ...(entry.key === "platform" ? {
         objects: [
