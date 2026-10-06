@@ -1,6 +1,5 @@
 import express from "express";
 import { CHANNELS } from "../services/messageTemplates.js";
-import { toSafeApiName } from "../services/platformMetadata.js";
 
 const SENSITIVE_KEYS = new Set(["password", "passwd", "pass", "secret", "token", "api_key", "apiKey", "client_secret", "clientSecret", "access_token", "accessToken"]);
 
