@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { apiRequest, KIOSK_DISPLAY_TOKEN_STORAGE_KEY, lockToKioskDisplayMode } from "../../services/api.js";
+import { loadRuntimeSurface } from "../../services/runtimeSurface";
 import "./oneKioskDisplay.css";
 
 const DISPLAY_FLOW_KEY = "onepos_kiosk_display_flow_id";
@@ -53,13 +54,20 @@ export default function OneKioskDisplayPage() {
 
   const load = useCallback(async () => {
     try {
+      const surface = await loadRuntimeSurface("kiosk-display", "collectionDisplay");
+      const orderObjectKey = String(surface?.objects?.order || "");
+      const platformField = String(surface?.filters?.platformField || "");
+      const platformValue = surface?.filters?.platformValue;
+      if (!orderObjectKey) throw new Error("Collection display object metadata is unavailable");
+      const filter = platformField ? encodeURIComponent(JSON.stringify({ [platformField]: platformValue })) : "";
+      const orderPath = `/api/platform/objects/${encodeURIComponent(orderObjectKey)}/records?page=1&pageSize=100${filter ? `&filter=${filter}` : ""}`;
       const [response, flowResponse] = await Promise.all([
-        apiRequest("/api/online/orders?platform=one_kiosk&limit=100"),
+        apiRequest(orderPath),
         apiRequest("/api/kiosk/flows").catch(() => ({ data: [] })),
       ]);
-      if (!response?.success) throw new Error(response?.message || "Unable to load kiosk orders");
       const nextFlows = Array.isArray(flowResponse?.data) ? flowResponse.data : [];
-      setOrders(Array.isArray(response.data) ? response.data : []);
+      const orderRows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [];
+      setOrders(orderRows);
       setFlows(nextFlows);
       setFlowId((current) => {
         if (current && nextFlows.some((flow) => String(flow.id) === String(current))) return current;
