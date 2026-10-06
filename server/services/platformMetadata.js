@@ -1465,7 +1465,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const saleObjectForFormula = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='sale_ledger' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (saleObjectForFormula.rows[0]?.id) {
       await pool.query(
@@ -1949,7 +1949,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
        uiAction to the existing native POS implementation; labels, placement,
        visibility and permissions come from these Platform metadata rows. */
     const saleObjectResult = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='sale' AND company_id IS NULL AND active=TRUE LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='sale_ledger' AND company_id IS NULL AND active=TRUE LIMIT 1"
     );
     const saleObjectId = saleObjectResult.rows[0]?.id || null;
     if (saleObjectId) {
