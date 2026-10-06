@@ -51,7 +51,7 @@ const blankComponent = (type) => {
               visibility: "always",
             }
           : {
-              report: { dataSource: "sales", fields: [], groupBy: [], sort: [], filters: [], filterLogic: "all" },
+              report: { dataSource: null, fields: [], groupBy: [], sort: [], filters: [], filterLogic: "all" },
               valueField: AGGREGATE_FIELDS[0]?.key || null,
               labelField: null,
               format: "number",
