@@ -172,5 +172,15 @@ export function componentForFieldType(fieldType) {
 
 export function validateComponentRegistry() {
   const keys = PLATFORM_COMPONENTS.map((component) => component.key);
-  return { valid: new Set(keys).size === keys.length, count: keys.length };
+  const ids = PLATFORM_COMPONENTS.map((component) => component.id);
+  const invalidIds = PLATFORM_COMPONENTS.filter((component) => !/^\\d{14}$/.test(String(component.id || ""))).map((component) => component.key);
+  const duplicateKeys = keys.filter((key, index) => keys.indexOf(key) !== index);
+  const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+  return {
+    valid: duplicateKeys.length === 0 && duplicateIds.length === 0 && invalidIds.length === 0,
+    count: keys.length,
+    duplicateKeys: [...new Set(duplicateKeys)],
+    duplicateIds: [...new Set(duplicateIds)],
+    invalidIds,
+  };
 }
