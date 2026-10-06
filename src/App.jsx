@@ -1922,19 +1922,17 @@ function Desktop({ onLock, onSignOut }) {
     }
     const appIndex = parts.indexOf('app')
     const slug = parts[appIndex >= 0 ? appIndex + 1 : parts.length - 1]
-    if (slug) openItem(slug)
+    if (slug) {
+      const next = { app: slug, section: null }
+      setRoute(slug)
+      setRouteState(next)
+      setActiveApp(slug)
+    }
   }
 
   const openItem = (id) => {
-    const aliases = {
-      platform: 'developer',
-      builder: 'developer',
-      contacts: 'customers',
-      one_connect_google: 'google-connect',
-      one_assistant: 'assistant',
-      one_kiosk: 'kiosk',
-    }
-    const target = aliases[id] || id
+    const target = String(id || '').trim()
+    if (!target) return
 
     if (target === 'launchpad') {
       setAppSearch('')
@@ -1949,28 +1947,6 @@ function Desktop({ onLock, onSignOut }) {
       setTopPanel('store')
       return
     }
-
-    // Any app navigation must dismiss the Launchpad first. Without this,
-    // dock shortcuts can change the route behind the full-screen overlay.
-    setLauncherOpen(false)
-    setAppSearch('')
-    setTopPanel('')
-
-    const routeMap = new Set([
-      'integrations','google-connect','accounting','online-orders','own-delivery',
-      'kiosk','kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
-      'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
-      'gift-cards','suppliers','purchases','categories',
-      'global-products','products','sales','workspace','till',
-    ])
-
-    if (target === 'developer') {
-      const next = { app: 'developer', section: 'objects' }
-      setRoute('developer', 'objects')
-      setRouteState(next)
-      setActiveApp('developer')
-      return
-    }
     if (target === 'settings') {
       const section = readRoute().section || 'company'
       const next = { app: 'settings', section }
@@ -1979,16 +1955,33 @@ function Desktop({ onLock, onSignOut }) {
       setActiveApp('settings')
       return
     }
-    if (routeMap.has(target)) {
-      const next = { app: target, section: null }
-      setRoute(target)
-      setRouteState(next)
-      setActiveApp(target)
-      return
+
+    setLauncherOpen(false)
+    setAppSearch('')
+    setTopPanel('')
+
+    const matchingApp = storeApps.find((item) => {
+      const key = String(item?.package_key || item?.manifest?.packageKey || item?.key || '')
+      if (key === target) return true
+      const route = String(resolveAppOpenRoute(item) || '').split('?')[0]
+      const parts = route.split('/').filter(Boolean)
+      const routeSlug = parts[parts.indexOf('app') >= 0 ? parts.indexOf('app') + 1 : parts.length - 1] || ''
+      return routeSlug === target
+    })
+
+    if (matchingApp) {
+      const route = resolveAppOpenRoute(matchingApp)
+      if (route) {
+        openRoutePath(route)
+        return
+      }
     }
 
-    const item = dockItems.find((entry) => entry.id === id) ?? null
-    setMessage(`${item?.label ?? 'App'} is not available in this workspace.`)
+    // Core/system routes are routeable without maintaining a business allow-list.
+    const next = { app: target, section: null }
+    setRoute(target)
+    setRouteState(next)
+    setActiveApp(target)
   }
 
   return (
