@@ -46,7 +46,6 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
     const executesSystemWorkflow = /\bexecuteSystemWorkflow\s*\(/.test(body);
     const executesRegisteredAction = /\bexecuteRegisteredAction\s*\(/.test(body);
     const ensuresBusinessCommand = /\bensureBusinessCommandRun\??\.\s*\(/.test(body);
-    const invokesFunctionRegistry = /\b(?:getRegisteredFunction|executePlatformFunction|CALL_FUNCTION)\b/.test(body);
     const authenticated = routerLevelAuth
       || /\bauthenticate\b/.test(body)
       || authAliases.some((alias) => new RegExp("\\.\\.\\." + alias + "\\b|\\b" + alias + "\\b").test(body));
@@ -64,14 +63,12 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
       executesRegisteredAction,
       ensuresBusinessCommand,
       gatewayMediated,
-      invokesFunctionRegistry,
       authenticated,
       globalGatewayCovered: globalGatewayEnabled && authenticated,
     };
   });
 }
 
-const functionRegistry = read("server/services/platformFunctionRegistry.js");
 const workflowRuntime = read("server/services/platformWorkflow.js");
 const trustedRuntime = read("server/services/trustedRuntime.js");
 const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/trustedJobKinds.js"))
@@ -119,7 +116,6 @@ const executableDefaultFindings = forbiddenExecutableDefaults
   }));
 
 
-const functions = extractKeys(functionRegistry, /\bkey:\s*"([^"]+)"/g);
 const workflowActions = extractKeys(workflowRuntime, /\bkey:\s*"([A-Z0-9_]+)"/g);
 const coreActions = extractKeys(actionRegistry, /\bkey:\s*"([A-Z0-9_]+)"/g);
 const actions = uniq([...coreActions, ...workflowActions]);
@@ -195,14 +191,22 @@ for (const file of walk(SERVER)) {
 }
 
 const catalogueCoverage = {
-  functions: /PLATFORM_FUNCTIONS\.map\s*\(/.test(systemWorkflowCatalog),
   actions: /PLATFORM_ACTION_REGISTRY[\s\S]*\.map\s*\(/.test(systemWorkflowCatalog),
   jobs: /TRUSTED_JOB_KINDS\.map\s*\(/.test(systemWorkflowCatalog),
 };
 
+const forbiddenFunctionRuntime = [
+  ["server/services/platformWorkflow.js", /\bCALL_FUNCTION\b|platformFunctionRegistry|getRegisteredFunction/],
+  ["server/services/systemWorkflowCatalog.js", /\bCALL_FUNCTION\b|PLATFORM_FUNCTIONS|platformFunctionRegistry/],
+  ["server/services/trustedRuntime.js", /PLATFORM_FUNCTIONS|platformFunctionRegistry|function:/],
+].flatMap(([file, pattern]) => {
+  const source = read(file);
+  return pattern.test(source) ? [{ severity: "GAP", type: "LEGACY_FUNCTION_RUNTIME_PRESENT", file }] : [];
+});
+
 const findings = [
   ...executableDefaultFindings,
-  ...(!catalogueCoverage.functions ? functions.map((key) => ({ severity: "GAP", type: "FUNCTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
+  ...forbiddenFunctionRuntime,
   ...(!catalogueCoverage.actions ? actions.map((key) => ({ severity: "GAP", type: "ACTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
   ...(!catalogueCoverage.jobs ? jobs.map((key) => ({ severity: "GAP", type: "JOB_TRIGGER_REQUIRES_WORKFLOW", key })) : []),
   ...directRuntimeCalls.map((call) => ({ severity: "GAP", type: "DIRECT_RUNTIME_CALL_BYPASS", ...call })),
@@ -214,7 +218,6 @@ const report = {
   purpose: "Verify system-workflow coverage and identify remaining mutation entry points that still bypass workflow mediation.",
   generatedAt: new Date().toISOString(),
   summary: {
-    registeredFunctions: functions.length,
     registeredActions: actions.length,
     trustedJobKinds: jobs.length,
     mutationRoutes: mutationRoutes.length,
@@ -222,7 +225,6 @@ const report = {
     workflowMediatedMutationRoutes: mediatedRoutes.length,
     bypassMutationRoutes: bypassRoutes.length,
     directRuntimeCallSites: directRuntimeCalls.length,
-    catalogueFunctionsCovered: catalogueCoverage.functions,
     catalogueActionsCovered: catalogueCoverage.actions,
     catalogueJobsCovered: catalogueCoverage.jobs,
     globalBusinessCommandGateway: globalGatewayEnabled,
@@ -230,7 +232,6 @@ const report = {
     totalGaps: findings.length,
   },
   catalogueCoverage,
-  registeredFunctions: functions,
   registeredActions: actions,
   trustedJobKinds: jobs,
   mutationRoutes,
@@ -249,14 +250,12 @@ const md = [
   "",
   "## Summary",
   "",
-  `- Registered functions: ${report.summary.registeredFunctions}`,
   `- Registered actions: ${report.summary.registeredActions}`,
   `- Trusted job kinds: ${report.summary.trustedJobKinds}`,
   `- Mutation routes: ${report.summary.mutationRoutes}`,
   `- Workflow-mediated mutation routes: ${report.summary.workflowMediatedMutationRoutes}`,
   `- Mutation-route bypass candidates: ${report.summary.bypassMutationRoutes}`,
   `- Direct runtime call sites: ${report.summary.directRuntimeCallSites}`,
-  `- Catalogue functions covered: ${report.summary.catalogueFunctionsCovered}`,
   `- Catalogue actions covered: ${report.summary.catalogueActionsCovered}`,
   `- Catalogue jobs covered: ${report.summary.catalogueJobsCovered}`,
   `- Executable literal defaults: ${report.summary.executableLiteralDefaults}`,
