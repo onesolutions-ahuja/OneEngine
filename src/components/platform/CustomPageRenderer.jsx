@@ -300,12 +300,17 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
       if (builderMode || config.allowDragDrop === false || !collection.objectKey) return;
       const record = kanbanRecords.find((item) => String(item.id) === String(recordId));
       if (!record || String(record[groupField] || "Unassigned") === destination) return;
+      const interaction = config.moveInteraction || node.interaction;
+      if (!interaction || interaction.type === "none") {
+        setKanbanError("Configure a metadata action or Flow for card movement.");
+        return;
+      }
       try {
-        await apiRequest(`/api/platform/objects/${encodeURIComponent(collection.objectKey)}/records/${encodeURIComponent(record.id)}`, { method: "PUT", body: JSON.stringify({ data: { [groupField]: destination } }) });
+        await onInteraction?.(interaction, { record, recordId: record.id, destination, field: groupField, value: destination });
         setKanbanRecords((current) => current.map((item) => item.id === record.id ? { ...item, [groupField]: destination } : item));
         setKanbanError("");
       } catch (error) {
-        setKanbanError(error?.message || "Unable to move record. Edit permission may be required.");
+        setKanbanError(error?.message || "Unable to move record.");
       }
     };
     return <div className="space-y-2">{kanbanError ? <p role="alert" className="text-xs text-red-700">{kanbanError}</p> : null}<div className="flex min-w-0 gap-3 overflow-x-auto pb-1">{ordered.map((group) => <section key={group} onDragOver={(event) => { if (!builderMode && config.allowDragDrop !== false) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); moveCard(event.dataTransfer.getData("text/plain"), group); }} className="w-64 shrink-0 rounded-lg border p-2" style={{ borderColor: "var(--border-color, #e5e7eb)", background: "var(--muted-background, #f8fafc)" }}><h4 className="mb-2 flex justify-between text-xs font-semibold"><span>{group}</span><span>{groups.get(group).length}</span></h4><div className="space-y-2">{groups.get(group).map((record, index) => <button type="button" key={record.id || index} draggable={!builderMode && config.allowDragDrop !== false} onDragStart={(event) => event.dataTransfer.setData("text/plain", String(record.id))} onClick={() => clickRecord(record)} className="block w-full rounded-md border bg-white p-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="block font-medium">{record[titleField] || "Untitled"}</span>{config.subtitleField && record[config.subtitleField] ? <span className="mt-1 block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.subtitleField]}</span> : null}</button>)}</div></section>)}</div></div>;
@@ -526,7 +531,7 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
   );
 }
 
-function ProcessPathView({ node, builderMode, data }) {
+function ProcessPathView({ node, builderMode, data, onInteraction }) {
   const state = data?.[node.id] || {};
   const config = node.config || {};
   const record = state.records?.[0] || null;
@@ -548,11 +553,14 @@ function ProcessPathView({ node, builderMode, data }) {
     if (builderMode || config.allowStageChange !== true || !record?.id || !node.collection?.objectKey || stage === current) return;
     setSavingStage(stage);
     setMessage("");
+    const interaction = config.stageInteraction || node.interaction;
+    if (!interaction || interaction.type === "none") {
+      setMessage("Configure a metadata action or Flow for stage changes.");
+      setSavingStage("");
+      return;
+    }
     try {
-      await apiRequest(
-        `/api/platform/objects/${encodeURIComponent(node.collection.objectKey)}/records/${encodeURIComponent(record.id)}`,
-        { method: "PUT", body: JSON.stringify({ data: { [statusField]: stage } }) },
-      );
+      await onInteraction?.(interaction, { record, recordId: record.id, stage, field: statusField, value: stage });
       setOptimisticStage(stage);
       setMessage("Stage updated.");
     } catch (error) {
@@ -663,7 +671,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     return <TreeViewView node={node} builderMode={builderMode} onRecordClick={onRecordClick} data={data} />;
   }
   if (key === "process_path") {
-    return <ProcessPathView node={node} builderMode={builderMode} data={data} />;
+    return <ProcessPathView node={node} builderMode={builderMode} data={data} onInteraction={onInteraction} />;
   }
   if (key === "button") {
     const variantClass = { primary: "onepos-btn-primary", secondary: "onepos-btn-secondary", ghost: "onepos-btn-secondary", danger: "onepos-btn-danger" }[node.variant || "primary"] || "onepos-btn-primary";
