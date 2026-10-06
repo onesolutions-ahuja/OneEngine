@@ -83,24 +83,15 @@ export async function loginIfConfigured(page) {
     await usernameField.fill(username);
     await page.getByPlaceholder("Password").fill(password);
 
-    const loginResponsePromise = page.waitForResponse(
-      (response) => response.url().includes("/api/auth/login") && response.request().method() === "POST",
-      { timeout: 30_000 },
-    );
-
     await page.getByRole("button", { name: /^Sign In$/ }).click();
-    const loginResponse = await loginResponsePromise;
-    let loginBody = null;
-    try { loginBody = await loginResponse.json(); } catch {}
-
-    if (!loginResponse.ok() || loginBody?.success === false) {
-      throw new Error(`Login failed (${loginResponse.status()}): ${loginBody?.message || "authentication rejected"}`);
-    }
 
     await expect.poll(
-      () => page.evaluate(() => Boolean(sessionStorage.getItem("onepos_token"))),
-      { timeout: 15_000, message: "Login returned success but onepos_token was not stored" },
-    ).toBe(true);
+      () => page.evaluate(() => ({
+        token: Boolean(sessionStorage.getItem("onepos_token")),
+        error: document.querySelector(".login-error")?.textContent?.trim() || "",
+      })),
+      { timeout: 35_000, message: "Login did not establish a session" },
+    ).toMatchObject({ token: true });
 
     await expect(usernameField).toBeHidden({ timeout: 15_000 });
     await captureBrowserSession(page);
