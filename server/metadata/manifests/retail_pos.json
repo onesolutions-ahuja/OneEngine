@@ -4482,10 +4482,10 @@
             "id": "create_receipt",
             "label": "Create Temporary Receipt Download",
             "apiName": "create_receipt",
-            "key": "CALL_FUNCTION",
-            "functionKey": "temporary.receipt.download.create",
+            "key": "CREATE_SECURE_LINK",
+            "adapter": "receipt_download",
             "inputs": {
-              "saleId": {
+              "recordId": {
                 "path": "variables.saleId"
               },
               "expiryMinutes": {
