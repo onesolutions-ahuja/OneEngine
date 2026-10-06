@@ -1,5 +1,4 @@
 import { packageFunctions } from "../packages/functionsIndex.js";
-import { dispatchIntegrationEvent } from "./integrationDispatcher.js";
 import { issueAccountToken } from "./accountPolicy.js";
 import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveReceiptQrSettings, revokeTemporaryReceiptDownloadsForSale } from "./receiptQr.js";
 
@@ -9,24 +8,6 @@ import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, resolveRecei
 // capabilities are migrated to visible metadata/Flow and removed from this
 // registry as their callers are converted to generic primitives.
 const CORE_PLATFORM_FUNCTIONS = Object.freeze([
-  {
-    key: "integration.event.dispatch",
-    category: "INTEGRATIONS",
-    description: "Compatibility capability while integration dispatch is migrated to connector Flow.",
-    inputs: { type: "object", required: ["event", "entityId"] },
-    outputs: { type: "object" },
-    permissions: ["integrations.manage"],
-    handler: async ({ inputs = {}, db, companyId, req }) =>
-      dispatchIntegrationEvent({
-        event: inputs.event,
-        deps: { db },
-        context: {
-          companyId: companyId || req?.user?.companyId,
-          storeId: inputs.storeId || req?.user?.storeId,
-        },
-        entityId: inputs.entityId,
-      }),
-  },
   {
     key: "receipt.temporary_link.create",
     category: "DOCUMENT",
