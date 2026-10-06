@@ -672,7 +672,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       const completeButton = buttons.find((row) => row.button_key === 'till_complete_sale')
       if (!completeButton) throw new Error('Complete Sale Flow is not configured.')
       const response = await executeMetadataButton(completeButton, { sale: payload.sale, items: payload.items, payments: payload.payments })
-      const saleId = deepFind(response?.data, 'created')?.id
+      const saleId = deepFind(response?.data, 'created')?.id || deepFind(response?.data, 'matched')?.id
       if (!response?.success || !saleId) throw new Error(response?.message || 'Sale could not be confirmed')
       const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`)
       const sale = savedResponse?.record || savedResponse?.data || { id: saleId, total: payload.sale.total }
