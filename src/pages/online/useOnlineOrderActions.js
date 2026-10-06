@@ -20,7 +20,7 @@ export default function useOnlineOrderActions({ applyOrderUpdate, otpRequired, s
       const button = action;
       const buttonKey = String(button?.button_key || button?.buttonKey || button || "").trim();
       if (!buttonKey) throw new Error("Online Order metadata action is missing");
-      const data = await apiRequest(`/api/platform/runtime/objects/online_order/buttons/${encodeURIComponent(buttonKey)}/execute`, {
+      const data = await apiRequest(`/api/platform/runtime/objects/sales_order/buttons/${encodeURIComponent(buttonKey)}/execute`, {
         method: "POST",
         body: JSON.stringify({ recordId: order.id, input: body }),
       });
