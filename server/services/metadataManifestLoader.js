@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const manifestDirectory = fileURLToPath(new URL("../metadata/manifests/", import.meta.url));
 let cache = null;
+// Package manifests are executable platform metadata; business semantics stay in metadata, not this loader.
 
 function loadManifestMap() {
   if (cache) return cache;
