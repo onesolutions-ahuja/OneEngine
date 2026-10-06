@@ -90,11 +90,10 @@ export function filterStorePackages(packages, { search = "", category = "All", v
 export function packageBrandName(item) {
   const manifest = item?.manifest || {};
   const provider = manifest.providerConnector || manifest.provider_connector || {};
-  const keys = [provider.providerKey, provider.provider_key, item?.package_key, item?.package_name, item?.name]
-    .filter((key) => typeof key === "string")
-    .map((key) => key.toLowerCase().trim().replace(/[\s-]+/g, "_"));
-  for (const [alias, brand] of PROVIDER_BRANDS) {
-    if (keys.some((key) => key === alias || key.startsWith(`${alias}_`))) return brand;
-  }
-  return null;
+  const explicit = manifest.brandKey || manifest.brand_key || provider.brandKey || provider.brand_key
+    || item?.icon_asset_key || item?.iconAssetKey || manifest.iconAssetKey || manifest.icon_asset_key
+    || provider.iconAssetKey || provider.icon_asset_key || null;
+  return typeof explicit === "string" && explicit.trim()
+    ? explicit.trim().toLowerCase().replaceAll("_", "-")
+    : null;
 }
