@@ -11,6 +11,7 @@ import {
 } from "./componentRegistry.js";
 import CustomPageRenderer from "../../../components/platform/CustomPageRenderer.jsx";
 import ActionWorkflowPicker, { describeInteraction } from "./ActionWorkflowPicker.jsx";
+import MetadataComponentProperties from "./MetadataComponentProperties.jsx";
 import { CONDITION_OPERATORS } from "./conditionOperators.js";
 import {
   CONTAINER_SIZES,
@@ -716,6 +717,8 @@ const updateNode = (nodeId, changes) => {
     }
     if (!selectedNode) return <p className="text-xs text-slate-400">Select a component on the canvas.</p>;
     const node = selectedNode;
+    const nodeMetadata = componentByKey(registry, node.componentApi || node.componentKey);
+    const metadataPropertyEditor = Array.isArray(nodeMetadata?.configurable) && nodeMetadata.configurable.some((entry) => entry && typeof entry === "object" && entry.key);
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
@@ -725,6 +728,15 @@ const updateNode = (nodeId, changes) => {
             <button type="button" className="rounded p-1 text-slate-400 hover:text-red-600" title="Delete" aria-label="Delete component" onClick={removeSelectedNode}><Trash2 size={13} /></button>
           </span>
         </div>
+
+        {metadataPropertyEditor ? (
+          <MetadataComponentProperties
+            node={node}
+            metadata={nodeMetadata}
+            onChange={(changes) => updateNode(node.id, changes)}
+            interactionEditor={nodeMetadata?.interactions ? <InteractionProperties node={node} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+          />
+        ) : null}
 
         {node.componentKey === "multi_container" ? <MultiContainerProperties node={node} objects={objects} registry={registry} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
         {node.componentKey === "table" ? <TableProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
@@ -795,7 +807,7 @@ const updateNode = (nodeId, changes) => {
             }}
           </RecordCollectionDataGroup>
         ) : null}
-        {node.componentKey === "container" ? (
+        {!metadataPropertyEditor && node.componentKey === "container" ? (
           <div className="space-y-3">
             <div className="space-y-1">
               <label className={labelClass}>Columns</label>
@@ -811,7 +823,7 @@ const updateNode = (nodeId, changes) => {
             </div>
           </div>
         ) : null}
-        {node.componentKey === "button" ? (
+        {!metadataPropertyEditor && node.componentKey === "button" ? (
           <div className="space-y-3">
             <div className="space-y-1">
               <label className={labelClass}>Label</label>
@@ -838,25 +850,25 @@ const updateNode = (nodeId, changes) => {
             </div>
           </div>
         ) : null}
-        {["text", "header"].includes(node.componentKey) ? (
+        {!metadataPropertyEditor && ["text", "header"].includes(node.componentKey) ? (
           <div className="space-y-1">
             <label className={labelClass}>{node.componentKey === "header" ? "Heading text" : "Text"}</label>
             <input className={inputClass} value={node.text || ""} onChange={(event) => updateNode(node.id, { text: event.target.value })} />
           </div>
         ) : null}
-        {node.componentKey === "spacer" ? (
+        {!metadataPropertyEditor && node.componentKey === "spacer" ? (
           <div className="space-y-1">
             <label className={labelClass}>Spacing</label>
             <select className={inputClass} value={node.spacing || 3} onChange={(event) => updateNode(node.id, { spacing: Number(event.target.value) })}>{[1, 2, 3, 4, 5, 6].map((value) => <option key={value} value={value}>{value}</option>)}</select>
           </div>
         ) : null}
-        {node.componentKey === "field_value" ? (
+        {!metadataPropertyEditor && node.componentKey === "field_value" ? (
           <div className="space-y-1">
             <label className={labelClass}>Field</label>
             <input className={inputClass} value={node.field || ""} onChange={(event) => updateNode(node.id, { field: event.target.value })} placeholder="field api name" />
           </div>
         ) : null}
-        {node.componentKey === "related_list" ? (
+        {!metadataPropertyEditor && node.componentKey === "related_list" ? (
           <div className="space-y-1">
             <label className={labelClass}>Relationship key</label>
             <input className={inputClass} value={node.relationshipKey || ""} onChange={(event) => updateNode(node.id, { relationshipKey: event.target.value })} placeholder="relationship_key" />
