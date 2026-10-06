@@ -5,6 +5,7 @@ import {
   ShoppingBag, Tag, UserRound, X, Layers, Landmark, Wallet, Monitor, RefreshCw, ArrowLeftRight,
 } from 'lucide-react'
 import { apiRequest, getStoredUser, loadSessionPermissions } from '../../services/api'
+import { loadRuntimeSurface, surfacePath } from '../../services/runtimeSurface'
 import { DB_STATES, SERVER_STATES, startConnectivityMonitoring, subscribeConnectivity } from '../../services/connectivity'
 import {
   cacheProductModifiers, cacheTillBootstrap, enqueueOfflineCashSale, failOfflineCashSale,
@@ -149,16 +150,29 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const [onlineOrderCount, setOnlineOrderCount] = useState(0)
   const [onlineOrderToast, setOnlineOrderToast] = useState('')
   const [saleCompleteNotice, setSaleCompleteNotice] = useState(null)
+  const [runtimeSurface, setRuntimeSurface] = useState(null)
 
-  const currency = settings?.company?.currency || 'GBP'
+  const surfaceObjects = runtimeSurface?.objects || {}
+  const surfaceSettings = runtimeSurface?.settings || {}
+  const surfaceFields = runtimeSurface?.fields || {}
+  const surfaceActions = runtimeSurface?.actions || {}
+  const objectKey = (slot) => String(surfaceObjects?.[slot] || '')
+  const actionKey = (slot) => String(surfaceActions?.[slot] || '')
+  const buttonFor = (slot) => buttons.find((row) => row.button_key === actionKey(slot))
+  const settingValue = (slot, fallback) => surfacePath(settings, surfaceSettings?.[slot], fallback)
+  const currency = settingValue('currencyPath', 'GBP')
   const meta = useMemo(() => buttonMap(buttons), [buttons])
 
-  const loadTill = async () => {
+  const loadTill = async (surface = runtimeSurface) => {
     setTillStatusResolved(false)
     try {
-      const response = await apiRequest('/api/platform/objects/till_session/records?page=1&pageSize=100')
+      const sessionObjectKey = String(surface?.objects?.session || '')
+      if (!sessionObjectKey) throw new Error('Till session object metadata is missing.')
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(sessionObjectKey)}/records?page=1&pageSize=100`)
       const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
-      const open = rows.find((row) => String(row?.status || '').toLowerCase() === 'open') || null
+      const statusField = String(surface?.fields?.sessionStatus || 'status')
+      const openValue = String(surface?.fields?.sessionOpenValue || 'open').toLowerCase()
+      const open = rows.find((row) => String(row?.[statusField] || '').toLowerCase() === openValue) || null
       setTill(open)
     } catch {
       setTill(null)
@@ -211,15 +225,23 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       setLoading(false)
     }
     try {
+      const surface = await loadRuntimeSurface('till', 'till')
+      setRuntimeSurface(surface)
+      const catalogueObjectKey = String(surface?.objects?.catalogue || '')
+      const transactionObjectKey = String(surface?.objects?.transaction || '')
+      if (!catalogueObjectKey || !transactionObjectKey) throw new Error('Till object metadata is incomplete.')
       const catalogueQuery = new URLSearchParams()
-      catalogueQuery.set('active', 'true')
-      const cataloguePath = `/api/platform/objects/product/records${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
-      const tillPromise = loadTill()
+      const activeField = String(surface?.fields?.catalogueActive || '')
+      if (activeField) catalogueQuery.set(activeField, 'true')
+      const cataloguePath = `/api/platform/objects/${encodeURIComponent(catalogueObjectKey)}/records${catalogueQuery.size ? `?${catalogueQuery.toString()}` : ''}`
+      const tillPromise = loadTill(surface)
+      const settingsSource = String(surface?.settings?.source || '')
+      const paymentMethodsSource = String(surface?.settings?.paymentMethodsSource || '')
       const [catalogueDelta, settingsResponse, buttonResponse, paymentResponse, permissionResponse] = await Promise.all([
         apiRequest(cataloguePath),
-        apiRequest('/api/settings'),
-        apiRequest('/api/platform/runtime/objects/sale/buttons'),
-        apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
+        settingsSource ? apiRequest(settingsSource) : Promise.resolve(null),
+        apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(transactionObjectKey)}/buttons`),
+        paymentMethodsSource ? apiRequest(paymentMethodsSource).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
         loadSessionPermissions().catch(() => ({ permissions: [] })),
       ])
       const catalogue = mergeCatalogueResponse(usableCached?.catalogue, catalogueDelta)
@@ -295,11 +317,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const subtotal = Number(pricing.subtotal || 0)
   const vat = Number(pricing.vat || 0)
   const total = Number(pricing.total || 0)
-  const vatEnabled = settings?.tax?.vatEnabled !== false
-  const defaultVatRate = Number(settings?.tax?.defaultVatRate ?? 0)
+  const vatEnabled = settingValue('vatEnabledPath', true) !== false
+  const defaultVatRate = Number(settingValue('defaultVatRatePath', 0) ?? 0)
 
   useEffect(() => {
-    const button = buttons.find((row) => row.button_key === 'till_pricing_calculate')
+    const button = buttonFor('pricing')
     if (!button) return
     let cancelled = false
     const lines = [
@@ -316,7 +338,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         vatRate: Number(line.vatRate || 0) * 100,
       })),
     ]
-    apiRequest(`/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+    apiRequest(`/api/platform/runtime/objects/${encodeURIComponent(objectKey('transaction'))}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
       method: 'POST',
       body: JSON.stringify({ context: {
         lines,
@@ -351,7 +373,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       discountAmount,
       hasDiscount: discount.type !== null && Number(discount.value || 0) > 0,
       hasCustomer: Boolean(selectedCustomer),
-      storeName: settings?.store?.name || 'Till',
+      storeName: settingValue('storeNamePath', 'Till'),
       currency,
     }
     try { billChannelRef.current.postMessage(payload) } catch {}
@@ -359,7 +381,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       try { billChannelRef.current?.postMessage(payload) } catch {}
     }, 5000)
     return () => window.clearInterval(heartbeat)
-  }, [basket, miscLines, subtotal, vat, total, discountAmount, discount.type, discount.value, selectedCustomer, settings?.store?.name, currency])
+  }, [basket, miscLines, subtotal, vat, total, discountAmount, discount.type, discount.value, selectedCustomer, settingValue('storeNamePath', ''), currency])
 
   const addLine = (product, modifiers = []) => {
     setError('')
@@ -570,7 +592,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     if (!sale?.id) return
     const allowed = await runReceiptPolicy('AUTO')
     if (!allowed) return
-    const button = buttons.find((row) => row.button_key === 'till_receipt_qr')
+    const button = buttonFor('receiptQr')
     if (!button) return
     const response = await executeMetadataButton(button, {
       expiryMinutes: Number(settings?.receiptQr?.expiryMinutes || 5),
@@ -632,7 +654,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
 
     if (paymentMethod === 'split') {
-      const splitButton = buttons.find((row) => row.button_key === 'till_split_payment_validate')
+      const splitButton = buttonFor('splitPayment')
       if (!splitButton) return setError('Split Payment Flow is not configured.')
       try {
         const splitResponse = await executeMetadataButton(splitButton, {
@@ -669,12 +691,12 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         await refreshOfflineCount()
         return
       }
-      const completeButton = buttons.find((row) => row.button_key === 'till_complete_sale')
+      const completeButton = buttonFor('completeSale')
       if (!completeButton) throw new Error('Complete Sale Flow is not configured.')
       const response = await executeMetadataButton(completeButton, { sale: payload.sale, items: payload.items, payments: payload.payments })
       const saleId = deepFind(response?.data, 'created')?.id || deepFind(response?.data, 'matched')?.id
       if (!response?.success || !saleId) throw new Error(response?.message || 'Sale could not be confirmed')
-      const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`)
+      const savedResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('transaction'))}/records/${encodeURIComponent(saleId)}`)
       const sale = savedResponse?.record || savedResponse?.data || { id: saleId, total: payload.sale.total }
       if (durableCashEntry) await removeOfflineCashSale(durableCashEntry.id)
       setLastSale(sale)
@@ -683,7 +705,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       let savedSale = sale
       if (sale.id) {
         try {
-          const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(sale.id)}`)
+          const savedResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('transaction'))}/records/${encodeURIComponent(sale.id)}`)
           savedSale = savedResponse?.record || savedResponse?.data || sale
         } catch {}
       }
@@ -735,7 +757,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const openHeld = async () => {
     try {
-      const response = await apiRequest('/api/platform/objects/held_sale/records?page=1&pageSize=100')
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('heldTransaction'))}/records?page=1&pageSize=100`)
       const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
       setHeldSales(rows)
       setModal('held')
@@ -744,7 +766,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const resumeHeld = async (id) => {
     try {
-      const response = await apiRequest(`/api/platform/objects/held_sale/records/${encodeURIComponent(id)}`)
+      const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('heldTransaction'))}/records/${encodeURIComponent(id)}`)
       const held = response?.record || response?.data || response || {}
       const heldItems = held.items || {}
       if (Array.isArray(heldItems)) {
@@ -755,7 +777,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         setMiscLines(Array.isArray(heldItems.miscLines) ? heldItems.miscLines : [])
       }
       setDiscount({ type: held.discount_type || null, value: Number(held.discount_value || 0) })
-      const consumeButton = buttons.find((row) => row.button_key === 'till_resume_consume')
+      const consumeButton = buttonFor('resumeConsume')
       if (!consumeButton) throw new Error('Resume Sale Flow is not configured.')
       await executeMetadataButton(consumeButton, { heldSaleId: id })
       setModal(null)
@@ -775,7 +797,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const revokeReceiptQr = async (saleId = receiptQr?.saleId || lastSale?.id) => {
     if (saleId) {
-      const button = buttons.find((row) => row.button_key === 'till_receipt_qr_revoke')
+      const button = buttonFor('receiptQrRevoke')
       if (button) {
         try { await executeMetadataButton(button, {}, saleId) } catch {}
       }
@@ -786,7 +808,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const executeRecordButton = async (button, recordId) => {
     if (!button?.button_key || !recordId) throw new Error('A synced sale is required for this action.')
-    const response = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(recordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+    const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('transaction'))}/records/${encodeURIComponent(recordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
       method: 'POST',
       body: JSON.stringify({}),
     })
@@ -809,7 +831,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const openDrawer = async () => {
-    const button = buttons.find((row) => row.button_key === 'till_open_drawer')
+    const button = buttonFor('openDrawer')
     if (!button) return setError('Open Drawer Flow is not configured.')
     try {
       await executeMetadataButton(button, {
@@ -823,7 +845,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const recordPettyCash = async (amount, reason) => {
-    const button = buttons.find((row) => row.button_key === 'till_petty_cash_submit')
+    const button = buttonFor('pettyCash')
     if (!button) return setError('Petty cash Flow is not configured.')
     try {
       await executeMetadataButton(button, {
@@ -908,7 +930,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
       const endpoint = useRecordScope && scopedRecordId
         ? `/api/platform/objects/sale/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
-        : `/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`
+        : `/api/platform/runtime/objects/${encodeURIComponent(objectKey('transaction'))}/buttons/${encodeURIComponent(button.button_key)}/execute`
 
       const response = await apiRequest(endpoint, {
         method: 'POST',
@@ -952,7 +974,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const runPaymentModeFlow = async (paymentMode, options = {}, buttonOverride = null) => {
-    const button = buttonOverride || buttons.find((row) => row.button_key === 'till_payment_process')
+    const button = buttonOverride || buttonFor('paymentProcess')
     if (!button) throw new Error('Payment Mode Flow is not configured.')
     const response = await executeMetadataButton(button, paymentFlowInputs(paymentMode, options))
     const allowed = deepFind(response?.data, 'allowed')
@@ -965,7 +987,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const runReceiptPolicy = async (event) => {
-    const button = buttons.find((row) => row.button_key === 'till_receipt_qr_policy')
+    const button = buttonFor('receiptQrPolicy')
     if (!button) return false
     let printerAvailable = false
     if (event === 'AUTO' && String(settings?.receiptQr?.showAfterSuccessfulPayment || '').toUpperCase() === 'ONLY_WHEN_PRINTER_UNAVAILABLE') {
@@ -1051,7 +1073,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     <section className="till-theme-page">
       <div className="till-theme-window">
         <header className="till-theme-header">
-          <div><strong>{settings?.store?.name || 'Till'}</strong><span>{!tillStatusResolved ? 'Checking till…' : till ? `${till.terminal_name || till.terminalNumber || 'Till'} · Open` : 'Till closed'}{offlineCount ? ` · ${offlineCount} pending sync` : ''}</span></div>
+          <div><strong>{settingValue('storeNamePath', '') || 'Till'}</strong><span>{!tillStatusResolved ? 'Checking till…' : till ? `${till.terminal_name || till.terminalNumber || 'Till'} · Open` : 'Till closed'}{offlineCount ? ` · ${offlineCount} pending sync` : ''}</span></div>
           <div className="till-theme-header-actions">
             {offlineCount ? <button type="button" className="till-settings-button" onClick={() => setModal('offline_queue')} title="Offline sales queue" aria-label="Offline sales queue"><CloudQueueIcon count={offlineCount}/></button> : null}
             <span className="till-connectivity-status" title={`Server: ${connectivity.server} · Database: ${connectivity.database}`}>
@@ -1142,7 +1164,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
       {modal === 'discount' ? <Modal title={meta.discount?.label || 'Discount'} onClose={() => setModal(null)}><DiscountForm value={discount} onApply={(next) => { setDiscount(next); setModal(null) }}/></Modal> : null}
       {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={async (line) => {
-        const button = buttons.find((row) => row.button_key === 'till_misc_line_build')
+        const button = buttonFor('miscLine')
         if (!button) return setError('Misc Item Flow is not configured.')
         try {
           const response = await executeMetadataButton(button, {
@@ -1181,7 +1203,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         setModal(null)
       }}/></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={async (price, reason) => {
-        const button = buttons.find((row) => row.button_key === 'till_price_override_apply')
+        const button = buttonFor('priceOverride')
         if (!button) return setError('Price Override Flow is not configured.')
         try {
           await executeMetadataButton(button, {
@@ -1198,7 +1220,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { void revokeReceiptQr(); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}{settings?.receiptQr?.showCountdown !== false ? <p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p> : null}<button type="button" className="till-primary" onClick={async () => {
         const allowed = await runReceiptPolicy('REGENERATE')
         if (!allowed) return
-        const button = buttons.find((row) => row.button_key === 'till_receipt_qr')
+        const button = buttonFor('receiptQr')
         if (button && receiptQr?.saleId) {
           const response = await executeMetadataButton(button, {
             expiryMinutes: Number(settings?.receiptQr?.expiryMinutes || 5),
