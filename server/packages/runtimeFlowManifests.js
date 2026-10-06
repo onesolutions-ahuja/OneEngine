@@ -101,4 +101,34 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"has_supplier",label:"Supplier Credit?",key:"CONDITION",outcomes:[{id:"yes",label:"Post Credit",condition:{match:"all",conditions:[{field:"$record.supplierId",operator:"is_not_blank"}]},branch:["supplier_credit"]}],defaultLabel:"No Supplier Credit",defaultBranch:[]},
   {id:"supplier_credit",label:"Post Supplier Credit",key:"RUN_SUBFLOW",subflowApiName:"SUPPLIER_LEDGER_ADJUST",inputAssignments:{supplierId:{path:"$record.supplierId"},entryType:"RETURN_CREDIT",amount:{path:"variables.credit"},debit:false,reference:{path:"$record.returnNumber"},description:{path:"$record.reason"}}}
  ])
+,
+ flow("flow:global_product.lookup","Global Product · Lookup",[input("connectionId"),input("barcode"),input("operation","text",false)],[output("product","object"),output("providerResult","object")],[
+  {id:"lookup_provider",label:"Lookup Product Provider",key:"CALL_CONNECTOR",connectionId:{path:"$record.connectionId"},operation:{path:"$record.operation",fallback:"product.lookup"},input:{barcode:{path:"$record.barcode"}}},
+  {id:"set_provider_result",label:"Store Provider Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.lookup_provider"}},
+  {id:"set_product",label:"Store Product",key:"ASSIGNMENT",variableName:"product",variableType:"object",operator:"set",value:{path:"steps.lookup_provider.data"}}
+ ]),
+ flow("flow:shopify.webhook.process","Shopify · Process Webhook",[input("connectionId"),input("topic"),input("payload","object")],[output("providerResult","object")],[
+  {id:"call_shopify",label:"Process Shopify Webhook",key:"CALL_CONNECTOR",connectionId:{path:"$record.connectionId"},operation:"webhook.process",input:{topic:{path:"$record.topic"},payload:{path:"$record.payload"}}},
+  {id:"set_result",label:"Store Provider Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.call_shopify"}}
+ ]),
+ flow("flow:shopify.products.sync","Shopify · Sync Products",[input("connectionId"),input("products","collection")],[output("providerResult","object")],[
+  {id:"call_shopify",label:"Sync Products",key:"CALL_CONNECTOR",connectionId:{path:"$record.connectionId"},operation:"products.sync",input:{products:{path:"$record.products"}}},
+  {id:"set_result",label:"Store Provider Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.call_shopify"}}
+ ]),
+ flow("flow:shopify.inventory.sync","Shopify · Sync Inventory",[input("connectionId"),input("inventory","collection")],[output("providerResult","object")],[
+  {id:"call_shopify",label:"Sync Inventory",key:"CALL_CONNECTOR",connectionId:{path:"$record.connectionId"},operation:"inventory.sync",input:{inventory:{path:"$record.inventory"}}},
+  {id:"set_result",label:"Store Provider Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.call_shopify"}}
+ ]),
+ flow("flow:shopify.fulfilment.export","Shopify · Export Fulfilment",[input("connectionId"),input("orderId"),input("lineItems","collection")],[output("providerResult","object")],[
+  {id:"call_shopify",label:"Export Fulfilment",key:"CALL_CONNECTOR",connectionId:{path:"$record.connectionId"},operation:"fulfilment.export",input:{orderId:{path:"$record.orderId"},lineItems:{path:"$record.lineItems"}}},
+  {id:"set_result",label:"Store Provider Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.call_shopify"}}
+ ]),
+ flow("flow:shopify.refund.export","Shopify · Export Refund",[input("connectionId"),input("orderId"),input("amount","number"),input("lineItems","collection",false),input("reference","text")],[output("providerResult","object")],[
+  {id:"call_shopify",label:"Export Refund",key:"CALL_CONNECTOR",connectionId:{path:"$record.connectionId"},operation:"refund.export",input:{orderId:{path:"$record.orderId"},amount:{path:"$record.amount"},lineItems:{path:"$record.lineItems"},reference:{path:"$record.reference"}}},
+  {id:"set_result",label:"Store Provider Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.call_shopify"}}
+ ]),
+ flow("flow:shopify.sync.retry","Shopify · Retry Failed Sync",[input("connectionId"),input("operation"),input("payload","object")],[output("providerResult","object")],[
+  {id:"retry_connector",label:"Retry Connector Operation",key:"CALL_CONNECTOR",connectionId:{path:"$record.connectionId"},operation:{path:"$record.operation"},input:{payload:{path:"$record.payload"}}},
+  {id:"set_result",label:"Store Provider Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.retry_connector"}}
+ ])
 ];
