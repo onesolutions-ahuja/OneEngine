@@ -314,3 +314,44 @@ SET price_override_audit = COALESCE((
     AND (o.item_id IS NULL OR o.item_id=row.id)
 ), '[]'::jsonb)
 WHERE row.source_record_type IN ('SALE_HEADER','SALE_LINE');
+
+
+-- Retire the old physical sales model after all data and dependent FKs have moved.
+-- The shared legacy payments table is retained only for non-sale domains until
+-- their own canonical-ledger migrations; sale-linked payment rows are removed.
+
+-- financial_ledger_entries.transaction_id already points at the preserved
+-- sale-ledger header ID. Remove its redundant link to legacy sale payment rows.
+UPDATE financial_ledger_entries fle
+SET payment_id = NULL
+WHERE fle.payment_id IN (
+  SELECT p.id
+  FROM payments p
+  WHERE p.sale_id IS NOT NULL OR p.transaction_id IS NOT NULL
+);
+
+-- Remove remaining FKs from payments to the soon-to-be-retired sales table.
+DO $$
+DECLARE fk RECORD;
+BEGIN
+  IF to_regclass('public.payments') IS NULL OR to_regclass('public.sales') IS NULL THEN RETURN; END IF;
+  FOR fk IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE contype='f'
+      AND conrelid=to_regclass('public.payments')
+      AND confrelid=to_regclass('public.sales')
+  LOOP
+    EXECUTE format('ALTER TABLE payments DROP CONSTRAINT %I', fk.conname);
+  END LOOP;
+END $$;
+
+DELETE FROM payments
+WHERE sale_id IS NOT NULL OR transaction_id IS NOT NULL;
+
+DROP TABLE IF EXISTS sale_item_modifiers;
+DROP TABLE IF EXISTS sale_price_overrides;
+DROP TABLE IF EXISTS sale_discounts;
+DROP TABLE IF EXISTS refunds;
+DROP TABLE IF EXISTS sale_items;
+DROP TABLE IF EXISTS sales;
