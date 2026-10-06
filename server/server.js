@@ -54,7 +54,6 @@ import createIntegrationsRouter from "./routes/integrations.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
 import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
-import createCustomerAuthRouter from "./routes/customerAuth.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
@@ -1993,7 +1992,6 @@ app.use("/api", createSettingsRouter({
     return requireEntitlement(db, "loyalty")(req, res, next);
   },
 }));
-app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
 app.use("/api", createSmsGateWebhookRouter({ pool }));
 app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool, writeAudit }));
 
