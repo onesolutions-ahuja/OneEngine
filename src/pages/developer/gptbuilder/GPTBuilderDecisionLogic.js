@@ -25,6 +25,14 @@ export function decisionResourceType(resource) {
   return type
 }
 
+export function decisionOperators(type) {
+  const base = [['equals','Equals'],['not_equals','Does Not Equal'],['is_null','Is Null']]
+  if (['number','currency','date','datetime','time'].includes(type)) return [...base,['greater_than','Greater Than'],['greater_than_or_equal','Greater Than or Equal'],['less_than','Less Than'],['less_than_or_equal','Less Than or Equal']]
+  if (['text','picklist','multiselect'].includes(type)) return [...base,['contains','Contains'],['starts_with','Starts With'],['ends_with','Ends With']]
+  if (type === 'collection') return [...base,['contains','Contains']]
+  return base
+}
+
 export function compatibleDecisionResources(resources, source) {
   const type = decisionResourceType(source)
   if (!type || type === 'unknown') return []
