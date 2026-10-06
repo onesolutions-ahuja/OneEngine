@@ -5,7 +5,7 @@ import {
   decisionConfigErrors,
   decisionResourceType,
   compatibleDecisionResources,
-} from '../src/pages/developer/gptbuilder/GPTBuilderDecision.jsx'
+} from '../src/pages/developer/gptbuilder/GPTBuilderDecisionLogic.js'
 import {
   platformEventRecordResources,
   recordPathResources,
