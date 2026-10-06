@@ -1,8 +1,14 @@
 import { createHash } from "node:crypto";
 import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
-import { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
-export { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
+const JOB_KIND = /^[A-Z][A-Z0-9_]{0,139}$/;
+export function assertTrustedJobKind(kind) {
+  const normalized = String(kind || "");
+  if (!JOB_KIND.test(normalized)) {
+    throw Object.assign(new Error(`Invalid platform job kind: ${kind}`), { code: "INVALID_JOB_KIND" });
+  }
+  return normalized;
+}
 
 const PRIVILEGED_ROUTES = Object.freeze([
   { id: "appointments.manage", prefixes: ["/api/appointments"], methods: ["POST","PUT","PATCH","DELETE"] },
