@@ -7,7 +7,7 @@ import RelationshipEditor from './Platform/RelationshipEditor.jsx'
 import RecordTypeEditor from './Platform/RecordTypeEditor.jsx'
 import LayoutEditor from './Platform/LayoutEditor.jsx'
 import RuleEditor from './Platform/RuleEditor.jsx'
-import WorkflowAdmin from './Platform/WorkflowAdmin.jsx'
+import GPTBuilderPage from '../developer/gptbuilder/GPTBuilderPage.jsx'
 import ActionsAdmin from './Platform/ActionsAdmin.jsx'
 import ObjectActionEditor from './Platform/ObjectActionEditor.jsx'
 import ObjectButtonEditor from './Platform/ObjectButtonEditor.jsx'
@@ -679,13 +679,9 @@ export default function ObjectsSettingsPane({ initialTab = 'details' } = {}) {
                     onCancel={closeEditor}
                   />
                 ) : editor?.kind === 'workflow' ? (
-                  <WorkflowAdmin
-                    embedded
-                    initialWorkflow={editor.item || { object_id: selectedId, object_key: objectKey(selected), objectKey: objectKey(selected), trigger_key: 'after_update', active: false, action: { type: 'workflow', match: 'all', actions: [] } }}
-                    onMessage={() => {}}
-                    onError={(value) => setError(value || '')}
-                    onClose={closeEditor}
-                    onSaved={saveRule}
+                  <GPTBuilderPage
+                    initialWorkflowId={editor.item?.id ? String(editor.item.id) : ''}
+                    onWorkflowOpen={(id) => { if (!id) return; void refreshConfiguration(); }}
                   />
                 ) : editor?.kind === 'approval' ? (
                   <ApprovalProcessBuilder
