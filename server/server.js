@@ -96,7 +96,6 @@ import { requireEntitlement } from "./services/licensing.js";
 import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
 import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
-import { createCanonicalRelatedTransaction } from "./services/canonicalTransactions.js";
 import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // JARVES V2 - licence gate
 import { companyAdministrativeAccess, permissionAllows } from "./services/authorization.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
