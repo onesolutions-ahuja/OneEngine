@@ -1,6 +1,6 @@
 import express from "express";
 import { valuationRow } from "../services/inventoryValuation.js";
-import { buildPlatformObjectQuery, STANDARD_REPORT_SOURCES, validatePlatformReportDefinition } from "../services/reportableSources.js";
+import { buildPlatformObjectQuery, validatePlatformReportDefinition } from "../services/reportableSources.js";
 import { loadPlatformReportContext } from "../services/platformReportSecurity.js";
 import { reportCapabilities } from "../services/reportAnalyticsDefinition.js";
 import { executeAnalyticsDefinition } from "../services/reportExecution.js";
@@ -256,7 +256,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
           for (const row of reportTypes.rows || []) if (await reportTypeIsVisible(req, row)) visible.push(row);
           return visible;
         })(),
-        sources: STANDARD_REPORT_SOURCES,
+        sources: [],
         platformObjects: platformObjects.rows,
         capabilities: reportCapabilities(),
         canManage: manage,
