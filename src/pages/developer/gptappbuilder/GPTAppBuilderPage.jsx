@@ -3,6 +3,8 @@ import { AppWindow, Plus, Search } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 import CustomPageBuilder from "../../settings/Platform/CustomPageBuilder.jsx";
 import ConnectorDefinitionEditor from "./ConnectorDefinitionEditor.jsx";
+import { compilePortableAppManifest, buildPortableArtifact } from "../../../../server/services/gptAppBuilderMetadata.js";
+import { createPlatformMetadataResolver } from "./platformMetadataResolver.js";
 
 const BUILDER_DEFINITION = Object.freeze({
   key: "gpt_app_builder",
@@ -31,6 +33,8 @@ export default function GPTAppBuilderPage() {
   const [selectedAppId, setSelectedAppId] = useState("");
   const [selectedPageId, setSelectedPageId] = useState("");
   const [selectedConnectorKey, setSelectedConnectorKey] = useState("");
+  const [buildResult, setBuildResult] = useState(null);
+  const [building, setBuilding] = useState(false);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState({ label: "", appKey: "", description: "" });
   const [error, setError] = useState("");
@@ -101,6 +105,48 @@ export default function GPTAppBuilderPage() {
     }
   };
 
+  const buildSelectedApp = async (app) => {
+    setBuilding(true);
+    setError("");
+    setBuildResult(null);
+    try {
+      const pageResponse = await apiRequest(`/api/platform/apps/${encodeURIComponent(app.id)}/pages`);
+      const pages = Array.isArray(pageResponse?.data) ? pageResponse.data : [];
+      const definition = {
+        schemaVersion: 1,
+        app: {
+          appKey: app.app_key || app.appKey,
+          label: app.label,
+          description: app.description || "",
+          version: app.source_package_version || "0.1.0",
+          ...(app.config || {}),
+        },
+        pages: pages.map((page) => ({
+          appKey: app.app_key || app.appKey,
+          pageKey: page.page_key || page.pageKey,
+          label: page.label,
+          pageType: page.page_type || "object",
+          definition: page.definition || {},
+        })),
+        navigation: app.config?.navigation || { tabs: [] },
+        dependencies: app.config?.dependencies || [],
+      };
+      const compiled = await compilePortableAppManifest(definition, createPlatformMetadataResolver());
+      if (!compiled.valid) {
+        setBuildResult({ valid: false, unresolved: compiled.unresolved });
+        setError(`Build blocked: ${compiled.unresolved.length} unresolved metadata reference(s).`);
+        return;
+      }
+      const artifact = buildPortableArtifact(compiled);
+      setBuildResult({ valid: true, artifact, dependencyCount: compiled.graph.nodes.length });
+      setMessage(`Build ready: ${compiled.graph.nodes.length} metadata dependencies resolved.`);
+    } catch (e) {
+      setError(e?.message || "Build failed.");
+    } finally {
+      setBuilding(false);
+    }
+  };
+
   if (selectedAppId) {
     return (
       <div data-builder-key={BUILDER_DEFINITION.key}>
@@ -139,7 +185,9 @@ export default function GPTAppBuilderPage() {
       <div className="onepos-card"><div className="onepos-card-body"><ConnectorDefinitionEditor value={selectedConnectorKey} onChange={setSelectedConnectorKey} onMessage={setMessage} onError={setError}/></div></div>
       <label className="settings-search"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search app metadata"/></label>
       <div className="developer-record-list">
-        {visibleApps.map((app) => <button type="button" key={app.id} className="settings-nav-item" onClick={() => setSelectedAppId(String(app.id))}><AppWindow size={16}/><span>{app.label || app.app_key}</span></button>)}
+        {visibleApps.map((app) => <div key={app.id} className="settings-nav-item"><button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={() => setSelectedAppId(String(app.id))}><AppWindow size={16}/><span>{app.label || app.app_key}</span></button><button type="button" className="onepos-btn" disabled={building} onClick={() => void buildSelectedApp(app)}>{building ? "Building…" : "Build"}</button></div>)}
+        {buildResult?.valid ? <div className="settings-success">Portable manifest ready · {buildResult.dependencyCount} dependencies · fingerprint {buildResult.artifact.fingerprint}</div> : null}
+        {buildResult && !buildResult.valid ? <div className="settings-error">Unresolved: {buildResult.unresolved.map((item) => `${item.type}:${item.key}`).join(", ")}</div> : null}
       </div>
     </section>
   );
