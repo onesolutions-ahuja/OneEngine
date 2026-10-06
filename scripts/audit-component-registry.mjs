@@ -22,3 +22,12 @@ if (!result.valid || missing.length) {
   process.exit(1);
 }
 console.log(`Component registry audit passed: ${result.count} registered components, all with unique 14-digit IDs.`);
+
+
+const sourceText = JSON.stringify(PLATFORM_COMPONENTS);
+for (const forbidden of ["product_image_card","priceField"]) {
+  if (sourceText.includes(forbidden)) {
+    console.error("Component registry audit failed: business-specific component vocabulary found:", forbidden);
+    process.exit(1);
+  }
+}
