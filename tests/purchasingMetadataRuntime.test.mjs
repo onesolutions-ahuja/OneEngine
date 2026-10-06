@@ -159,6 +159,22 @@ test("generic CRUD blocks Flow-owned transaction objects from direct writes", as
   assert.match(platform, /SYSTEM_OBJECT_OPERATION_REQUIRED/);
 });
 
+test("Phase 1 retail write paths use generic atomic metadata workflows", async () => {
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const platform = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
+  const till = await readFile(new URL("../src/pages/till/TillPage.jsx", import.meta.url), "utf8");
+  const kiosk = await readFile(new URL("../src/pages/kiosk/OneKioskPage.jsx", import.meta.url), "utf8");
+  const offline = await readFile(new URL("../src/services/tillOffline.js", import.meta.url), "utf8");
+  for (const key of ["COMPLETE_SALE","OPEN_TILL_SESSION","CLOSE_TILL_SESSION","RECORD_CASH_MOVEMENT","CREATE_CUSTOMER_RETURN","CREATE_REFUND","CREATE_EXCHANGE"]) assert.ok(registry.includes(`apiName:"${key}"`), key);
+  for (const source of [till,kiosk,offline]) assert.equal(source.includes("/api/sales"), false);
+  assert.match(till, /platform\/runtime\/objects\/sale\/buttons/);
+  assert.match(kiosk, /platform\/runtime\/objects\/sale\/buttons\/till_complete_sale\/execute/);
+  assert.match(offline, /platform\/runtime\/objects\/sale\/buttons\/till_complete_sale\/execute/);
+  assert.match(platform, /transactionClient\.query\("BEGIN"\)/);
+  assert.match(platform, /transactionClient\.query\("ROLLBACK"\)/);
+  assert.match(platform, /status='FAILED'/);
+});
+
 test("legacy sales route is removed in favor of metadata runtime", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/sales.js"), false);
