@@ -4945,6 +4945,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
+    key: "ROLLBACK_RECORDS",
+    displayName: "Roll Back Records",
+    description: "Roll back pending record changes in the current Screen Flow transaction.",
+    validation: () => undefined,
+    async: false,
+    requiredPermissions: ["workflow.execute"],
+    executor: async () => ({ status: "completed", rollbackTransaction: true }),
+  },
+  {
     key: "CUSTOM_ERROR",
     displayName: "Custom Error",
     description: "Stop the flow with a targeted validation error.",
@@ -5933,6 +5942,14 @@ export async function executeWorkflowActions({ actions, ...context }) {
         } else {
           result.branch = { outcome: outcomeName, outcomeId: result.outcomeId ?? null, stepIds: [], results: [] };
         }
+      }
+
+      if (result?.rollbackTransaction === true) {
+        if (typeof context.rollbackCurrentTransaction !== "function") {
+          throw new Error("Roll Back Records requires a Screen Flow transaction boundary");
+        }
+        await context.rollbackCurrentTransaction();
+        completed.length = 0;
       }
 
       const entry = { stepId: item.id || `step-${globalIndex + 1}`, action: item.type || item.key, result, stepRunId: stepRun?.id || null };
