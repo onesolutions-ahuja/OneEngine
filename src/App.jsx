@@ -1835,15 +1835,6 @@ function Desktop({ onLock, onSignOut }) {
   </div>
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
-  const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 
-
-  useEffect(() => {
-    if (!isTillUser || activeApp !== 'home') return
-    const next = { app:  section: null }
-    setRouteState(next)
-    setRoute()
-    setActiveApp()
-  }, [isTillUser, activeApp])
 
   useEffect(() => {
     const syncRoute = () => {
