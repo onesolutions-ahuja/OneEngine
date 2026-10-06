@@ -1,6 +1,6 @@
 import express from "express";
 import { valuationRow } from "../services/inventoryValuation.js";
-import { buildPlatformObjectQuery, STANDARD_REPORT_SOURCES, validatePlatformReportDefinition } from "../services/reportableSources.js";
+import { buildPlatformObjectQuery, validatePlatformReportDefinition } from "../services/reportableSources.js";
 import { loadPlatformReportContext } from "../services/platformReportSecurity.js";
 import { reportCapabilities } from "../services/reportAnalyticsDefinition.js";
 import { executeAnalyticsDefinition } from "../services/reportExecution.js";
@@ -9,7 +9,7 @@ import { normalizeFolder, normalizeSubscription, subscriptionConditionMatches, s
 import { normalizeReportType } from "../services/reportTypeDefinition.js";
 import { normalizeHistoricalTrend, normalizePreviewPreference, normalizeReportExport, normalizeReportTypeExperience } from "../services/reportExperience.js";
 import { buildDetailsCsv, buildFormattedXlsx } from "../services/reportExport.js";
-import { CUSTOM_DATE_FILTERS, CUSTOM_REPORT_FIELDS, buildCustomSalesQuery, customDateRange, validateCustomReportDefinition } from "../services/reportSalesDefinition.js";
+import { REPORT_DATE_PRESETS, validateCustomReportDefinition } from "../services/reportDefinition.js";
 import { resolveAnalyticsPrincipalAccess } from "../services/analyticsSecurity.js";
 import { claimDueReportSubscriptions } from "../services/reportSubscriptionScheduler.js";
 import { loadReportSubscriptionExecutionUser, resolveReportSubscriptionRecipients } from "../services/reportSubscriptionDelivery.js";
@@ -47,6 +47,73 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
     ).toUpperCase();
     return status === "DEPLOYED" || (await canManageReportTypes(req));
   };
+
+  async function resolveCustomReportType(req, reportTypeId) {
+    if (!reportTypeId) return null;
+    const result = await db("SELECT * FROM custom_report_types WHERE id=$1 AND company_id=$2 AND active=TRUE", [reportTypeId, req.user.companyId]);
+    const row = result.rows[0];
+    if (!row || !(await reportTypeIsVisible(req, row))) throw new Error("Report Type is unavailable");
+    const definition = normalizeReportType({ ...(row.definition || {}), id: row.id });
+    const context = await platformReportContext(req, definition.primaryObjectId, definition.relationships || []);
+    if (!context.object) throw new Error("Report Type Object is unavailable");
+    const configured = new Map((definition.relationships || []).map((entry) => [String(entry.relationshipId), entry]));
+    const relationships = (context.relationships || [])
+      .filter((relationship) => !configured.size || configured.has(String(relationship.id)))
+      .map((relationship) => configured.has(String(relationship.id))
+        ? { ...relationship, reportJoinType: configured.get(String(relationship.id)).joinType }
+        : relationship);
+    return { row, definition, context: { ...context, relationships } };
+  }
+
+  async function reportById(req, reportId) {
+    const result = await db(
+      `SELECT cr.*,
+              EXISTS(SELECT 1 FROM custom_report_users cru WHERE cru.report_id=cr.id AND cru.user_id=$3) AS mapped
+         FROM custom_reports cr
+        WHERE cr.id=$1 AND cr.company_id=$2 AND cr.archived_at IS NULL
+        LIMIT 1`,
+      [reportId, req.user.companyId, req.user.id]
+    );
+    const report = result.rows[0];
+    if (!report) return null;
+    if (!(await canManageReports(req)) && !customReportVisibility(req.user, report)) return null;
+    if (report.folder_id && !(await visibleFolder(req, report.folder_id, "VIEW"))) return null;
+    return report;
+  }
+
+  async function recordReportView(req, reportId) {
+    await db(
+      `INSERT INTO report_user_preferences(company_id,user_id,report_id,last_viewed_at,view_count)
+       VALUES($1,$2,$3,NOW(),1)
+       ON CONFLICT(user_id,report_id)
+       DO UPDATE SET last_viewed_at=NOW(),view_count=report_user_preferences.view_count+1`,
+      [req.user.companyId, req.user.id, reportId]
+    );
+  }
+
+  async function executeCustomDefinition(req, inputDefinition, { preview = false } = {}) {
+    const definition = validateCustomReportDefinition(inputDefinition || {});
+    const executeBase = async (baseDefinition) => {
+      const reportType = await resolveCustomReportType(req, baseDefinition.reportTypeId || baseDefinition.report_type_id || null);
+      const context = reportType?.context || await platformReportContext(req, baseDefinition.objectId);
+      if (!context.object) throw new Error("Report Object is unavailable");
+      const validated = validatePlatformReportDefinition(baseDefinition, context.object, context.fields, context.relationships);
+      const built = buildPlatformObjectQuery(validated, context.object, context.fields, req.user.companyId, preview ? 100 : 1000, {
+        storeId: req.user.storeId || null,
+        visibilitySql: context.visibilitySql,
+        visibilityParams: context.visibilityParams,
+      }, context.relationships);
+      const result = await db(built.sql, built.params);
+      return {
+        columns: validated.fields.map((key) => {
+          const direct = context.fields.find((field) => field.api_name === key);
+          return { key, label: direct?.label || key };
+        }),
+        rows: result.rows,
+      };
+    };
+    return executeAnalyticsDefinition(definition, executeBase, { preview });
+  }
 
   async function visibleFolder(req, folderId, minimum = "VIEW") {
     if (!folderId) return null;
@@ -197,8 +264,8 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         db("SELECT o.id,o.object_key,o.label,o.source_table,o.company_id,COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config FROM platform_objects o LEFT JOIN platform_object_settings s ON s.object_id=o.id AND s.company_id=$1 WHERE o.active=true AND o.source_table IS NOT NULL AND (o.company_id IS NULL OR o.company_id=$1) ORDER BY o.label", [req.user.companyId]),
       ]);
       res.json({ success: true, data: {
-        fields: CUSTOM_REPORT_FIELDS.map(({ key,label,groupable,aggregate }) => ({ key,label,groupable:!!groupable,aggregate:!!aggregate,type:aggregate?"number":key==="date"?"date":"text" })),
-        filters: CUSTOM_DATE_FILTERS,
+        fields: [],
+        filters: REPORT_DATE_PRESETS,
         stores: stores.rows,
         users: users.rows,
         roles: manage ? roles.rows : [],
@@ -209,7 +276,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
           for (const row of reportTypes.rows || []) if (await reportTypeIsVisible(req, row)) visible.push(row);
           return visible;
         })(),
-        sources: STANDARD_REPORT_SOURCES,
+        sources: [],
         platformObjects: platformObjects.rows,
         capabilities: reportCapabilities(),
         canManage: manage,
@@ -366,9 +433,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const sourceInput=reportType?{...req.body,dataSource:"platform_object",objectId:reportType.definition.primaryObjectId,reportTypeId:reportType.row.id}:req.body;
       const definition=validateCustomReportDefinition(sourceInput);
       if(definition.dataSource==="platform_object"){const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
-      const stores=definition.dataSource==="platform_object"?[]:await accessibleStores(req,requestedStoreIds(definition));
+      const stores=[];
       const result=await db("INSERT INTO custom_reports(company_id,created_by,name,description,data_source,report_type_id,definition) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING *",
-        [req.user.companyId,req.user.id,name,String(req.body.description||"").slice(0,500),definition.dataSource||"sales",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
+        [req.user.companyId,req.user.id,name,String(req.body.description||"").slice(0,500),definition.dataSource||"platform_object",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
       res.status(201).json({success:true,data:result.rows[0]});
     } catch(error){res.status(400).json({success:false,message:error.message||"Unable to create custom report"});}
   });
@@ -383,9 +450,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const sourceInput=reportType?{...req.body,dataSource:"platform_object",objectId:reportType.definition.primaryObjectId,reportTypeId:reportType.row.id}:req.body;
       const definition=validateCustomReportDefinition(sourceInput);
       if(definition.dataSource==="platform_object"){const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
-      const stores=definition.dataSource==="platform_object"?[]:await accessibleStores(req,requestedStoreIds(definition));
+      const stores=[];
       const result=await db("UPDATE custom_reports SET name=$3,description=$4,data_source=$5,report_type_id=$6,definition=$7::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *",
-        [req.params.id,req.user.companyId,name,String(req.body.description||report.description||"").slice(0,500),definition.dataSource||"sales",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
+        [req.params.id,req.user.companyId,name,String(req.body.description||report.description||"").slice(0,500),definition.dataSource||"platform_object",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
       res.json({success:true,data:result.rows[0]});
     } catch(error){res.status(400).json({success:false,message:error.message||"Unable to update custom report"});}
   });
