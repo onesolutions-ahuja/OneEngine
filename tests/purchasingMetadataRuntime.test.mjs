@@ -21,7 +21,7 @@ test("purchase and supplier return parent IDs come from created records", async 
   const create = flows.get("Purchase Create");
   const ret = flows.get("Supplier Return Execute");
   const line = create.actions.find((action) => action.objectKey === "purchase_line");
-  const returnLine = ret.actions.find((action) => action.objectKey === "supplier_return_line");
+  const returnLine = ret.actions.find((action) => action.objectKey === "stock_return_line");
   assert.equal(line.commonFieldValues.purchase_id.path, "steps.create_purchase.created.id");
   assert.equal(returnLine.commonFieldValues.return_id.path, "steps.create_return.created.id");
 });
