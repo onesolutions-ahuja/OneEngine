@@ -176,6 +176,7 @@ export function normalizeComponent(component) {
   return {
     ...source,
     key,
+    id: /^\d{14}$/.test(String(source.id || source.component_id || source.componentId || "")) ? String(source.id || source.component_id || source.componentId) : "",
     label,
     category: String(source.category || "other").toLowerCase(),
     kind: String(source.kind || source.category || "other").toLowerCase(),
@@ -278,9 +279,15 @@ export function createRegisteredComponent(component, builder = "PAGE") {
   const defaults = typeof structuredClone === "function"
     ? structuredClone(spec.defaults || {})
     : JSON.parse(JSON.stringify(spec.defaults || {}));
-  const id = typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `component_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const id = (() => {
+    // Runtime instance IDs use the same 14-digit numeric contract as the
+    // registry while remaining unique per placement.
+    const now = String(Date.now()).slice(-11).padStart(11, "0");
+    const entropy = typeof crypto !== "undefined" && crypto.getRandomValues
+      ? crypto.getRandomValues(new Uint16Array(1))[0] % 1000
+      : Math.floor(Math.random() * 1000);
+    return `${now}${String(entropy).padStart(3, "0")}`;
+  })();
   if (String(builder).toUpperCase() === "DASHBOARD") {
     return {
       id,
