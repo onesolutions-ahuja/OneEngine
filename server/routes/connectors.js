@@ -7,7 +7,7 @@ import {
 } from "../services/connectorFramework.js";
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeSystemWorkflow, executeSystemAction } from "../services/systemWorkflowRuntime.js";
 import { configureSmsGateInboundWebhook } from "../services/smsGateConnector.js";
 import { selectMetadataRecords } from "../services/metadataRecordStore.js";
 
@@ -1489,7 +1489,7 @@ export default function createConnectorsRouter({
       }
       req.user = await hydrateConnectorPermissions(req.user);
 
-      const execution = await executeSystemWorkflow({
+      const execution = await executeSystemAction({
         db,
         companyId: req.user.companyId,
         userId: req.user.id || null,
