@@ -500,70 +500,68 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const buildSalePayload = (paymentMethod, verifiedOverride = false, options = {}) => {
     const clientRequestId = crypto.randomUUID()
-    const sale = {
-      store_id: till?.store_id || settings?.store?.id || getStoredUser()?.storeId || null,
-      terminal_id: till?.terminal_id || null,
-      user_id: getStoredUser()?.id || getStoredUser()?.userId || null,
-      customer_id: selectedCustomer?.id || null,
+    const checkout = {
+      storeId: till?.store_id || settings?.store?.id || getStoredUser()?.storeId || null,
+      terminalId: till?.terminal_id || null,
+      userId: getStoredUser()?.id || getStoredUser()?.userId || null,
+      customerId: selectedCustomer?.id || null,
       subtotal: Number(subtotal || 0),
       tax: Number(vat || 0),
       discount: Number(discountAmount || 0),
       total: Number(total || 0),
-      line_count: Number(basket.length + miscLines.length),
+      lineCount: Number(basket.length + miscLines.length),
       status: 'COMPLETED',
-      offline_created: false,
-      sync_status: 'SYNCED',
-      client_request_id: clientRequestId,
-      completed_at: new Date().toISOString(),
+      offlineCreated: false,
+      syncStatus: 'SYNCED',
+      requestId: clientRequestId,
+      completedAt: new Date().toISOString(),
     }
-    const items = [
+    const lineItems = [
       ...basket.map((item) => ({
-        product_id: item.id,
-        product_name: item.name,
+        productId: item.id,
+        name: item.name,
         quantity: Number(item.quantity || 0),
-        unit_price: Number(item.price || 0),
+        unitPrice: Number(item.price || 0),
         discount: Number(item.lineDiscount || 0),
         tax: Number(item.tax || 0),
         total: Number(item.total ?? (Number(item.price || 0) * Number(item.quantity || 0))),
-        item_type: item.itemType || 'PRODUCT',
-        modifier_data: Array.isArray(item.modifiers) ? item.modifiers : [],
-        bundle_components: Array.isArray(item.bundleComponents) ? item.bundleComponents : [],
+        itemType: item.itemType || 'PRODUCT',
+        modifiers: Array.isArray(item.modifiers) ? item.modifiers : [],
+        bundleComponents: Array.isArray(item.bundleComponents) ? item.bundleComponents : [],
       })),
       ...miscLines.map((line) => ({
-        product_id: line.productId || line.product_id || null,
-        product_name: line.description || 'Misc Item',
+        productId: line.productId || line.product_id || null,
+        name: line.description || 'Misc Item',
         quantity: Number(line.quantity || 0),
-        unit_price: Number(line.price || 0),
+        unitPrice: Number(line.price || 0),
         discount: 0,
         tax: 0,
         total: Number(line.price || 0) * Number(line.quantity || 0),
-        item_type: 'MISC',
-        modifier_data: [],
-        bundle_components: [],
+        itemType: 'MISC',
+        modifiers: [],
+        bundleComponents: [],
       })),
     ]
-    const paymentRows = Array.isArray(options.payments) && options.payments.length
+    const tenderSelections = Array.isArray(options.payments) && options.payments.length
       ? options.payments.map((row) => ({
-          customer_id: selectedCustomer?.id || null,
           direction: 'IN',
-          payment_method: row.method || row.paymentMethod || paymentMethod,
+          method: row.method || row.paymentMethod || paymentMethod,
           amount: Number(row.amount || 0),
           provider: row.provider || null,
-          terminal_id: till?.terminal_id || null,
-          provider_transaction_id: row.providerTransactionId || row.provider_transaction_id || null,
-          idempotency_key: row.idempotencyKey || row.idempotency_key || clientRequestId,
+          terminalId: till?.terminal_id || null,
+          providerTransactionId: row.providerTransactionId || row.provider_transaction_id || null,
+          idempotencyKey: row.idempotencyKey || row.idempotency_key || clientRequestId,
           status: row.status || 'COMPLETED',
         }))
       : [{
-          customer_id: selectedCustomer?.id || null,
           direction: 'IN',
-          payment_method: paymentMethod,
+          method: paymentMethod,
           amount: Number(total || 0),
-          terminal_id: till?.terminal_id || null,
-          idempotency_key: clientRequestId,
+          terminalId: till?.terminal_id || null,
+          idempotencyKey: clientRequestId,
           status: 'COMPLETED',
         }]
-    return { clientRequestId, sale, items, payments: paymentRows, ageVerified: ageVerified || verifiedOverride, paymentInputs: options.paymentInputs || {} }
+    return { clientRequestId, checkout, lineItems, tenderSelections, ageVerified: ageVerified || verifiedOverride, paymentInputs: options.paymentInputs || {} }
   }
 
   const maybeShowReceiptQr = async (sale) => {
@@ -671,7 +669,11 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       }
       const completeButton = buttons.find((row) => row.button_key === 'till_complete_sale')
       if (!completeButton) throw new Error('Complete Sale Flow is not configured.')
-      const response = await executeMetadataButton(completeButton, { sale: payload.sale, items: payload.items, payments: payload.payments })
+      const response = await executeMetadataButton(completeButton, {
+        checkout: payload.checkout,
+        lineItems: payload.lineItems,
+        tenderSelections: payload.tenderSelections,
+      })
       const saleId = deepFind(response?.data, 'created')?.id || deepFind(response?.data, 'matched')?.id
       if (!response?.success || !saleId) throw new Error(response?.message || 'Sale could not be confirmed')
       const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`)
