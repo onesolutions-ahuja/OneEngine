@@ -10,36 +10,10 @@ import {
   normalizeAdvancedReportDefinition,
 } from "./reportAnalyticsDefinition.js";
 
-export const STANDARD_REPORT_SOURCES = [
-  {
-    key: "sales",
-    label: "Sales",
-    kind: "standard",
-    supportsDates: true,
-    grouping: true,
-    sorting: true,
-    fields: ["date", "store", "user", "product", "sku", "quantity", "gross_sales", "net_sales", "vat", "discount", "transactions"],
-  },
-  { key: "products", label: "Products", kind: "standard", grouping: true, sorting: true },
-  { key: "customers", label: "Customers", kind: "standard", grouping: true, sorting: true },
-  { key: "inventory", label: "Inventory", kind: "standard", grouping: true, sorting: true },
-  { key: "payments", label: "Payments", kind: "standard", grouping: true, sorting: true },
-  {
-    key: "hospitality",
-    label: "Hospitality",
-    kind: "standard",
-    supportsDates: true,
-    grouping: true,
-    sorting: true,
-    fields: [
-      "date", "store", "floor", "table", "session", "operator", "status", "guests",
-      "source", "gross", "discount", "net", "vat", "service_charge", "tips",
-      "paid", "remaining", "payment_method", "payment_count", "opened_at", "closed_at",
-      "duration_minutes", "average_spend_per_cover", "ticket_created", "ticket_fired",
-      "ticket_completed", "course", "preparation_duration", "delayed",
-    ],
-  },
-];
+// Business report sources are metadata objects/report types, not code-level
+// datasource definitions. Kept as an empty compatibility export while callers
+// migrate to platform object metadata.
+export const STANDARD_REPORT_SOURCES = Object.freeze([]);
 
 const OPERATORS = new Set([
   "equals", "not_equals", "contains", "starts_with", "is_blank", "is_not_blank",
