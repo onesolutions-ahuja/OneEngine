@@ -4552,7 +4552,7 @@
             "name": "receipt",
             "label": "Receipt QR",
             "type": "object",
-            "source": "steps.create_receipt"
+            "source": "steps.create_receipt.data"
           }
         ],
         "resources": [
@@ -4610,17 +4610,17 @@
             "id": "create_receipt",
             "label": "Create Temporary Receipt Download",
             "apiName": "create_receipt",
-            "key": "CALL_FUNCTION",
-            "functionKey": "temporary.receipt.download.create",
-            "inputs": {
-              "saleId": {
+            "key": "ONE_API_REQUEST",
+            "method": "POST",
+            "path": "/api/platform/runtime/document-links",
+            "requireSuccess": true,
+            "body": {
+              "documentType": "RECEIPT",
+              "resourceId": {
                 "path": "variables.saleId"
               },
               "expiryMinutes": {
                 "path": "variables.expiryMinutes"
-              },
-              "baseUrl": {
-                "path": "variables.baseUrl"
               }
             }
           }
