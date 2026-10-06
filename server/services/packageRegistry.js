@@ -2445,11 +2445,11 @@ export function packageDefinition(entry) {
           { key: "product_deactivate", permission: "product.delete", access: "delete" },
         ],
         actions: [
-          { actionKey: "product.create", objectKey: "product", label: "Create Product", handlerKey: "RECORD_SAVE", requiredPermission: "product.create" },
-          { actionKey: "product.update", objectKey: "product", label: "Update Product", handlerKey: "RECORD_SAVE", requiredPermission: "product.edit" },
-          { actionKey: "product.activate", objectKey: "product", label: "Activate Product", handlerKey: "RECORD_SAVE", requiredPermission: "product.edit" },
-          { actionKey: "product.deactivate", objectKey: "product", label: "Deactivate Product", handlerKey: "RECORD_SAVE", requiredPermission: "product.edit" },
-          { actionKey: "product.add_variant", objectKey: "product", label: "Add Variant", handlerKey: "RECORD_SAVE", requiredPermission: "product.create" },
+          { actionKey: "product.create", objectKey: "product", label: "Create Product", handlerKey: "CREATE_RECORD", requiredPermission: "product.create" },
+          { actionKey: "product.update", objectKey: "product", label: "Update Product", handlerKey: "UPDATE_RECORD", requiredPermission: "product.edit" },
+          { actionKey: "product.activate", objectKey: "product", label: "Activate Product", handlerKey: "UPDATE_RECORD", requiredPermission: "product.edit" },
+          { actionKey: "product.deactivate", objectKey: "product", label: "Deactivate Product", handlerKey: "UPDATE_RECORD", requiredPermission: "product.edit" },
+          { actionKey: "product.add_variant", objectKey: "product", label: "Add Variant", handlerKey: "CREATE_RECORD", requiredPermission: "product.create" },
         ],
         rules: [
           {
