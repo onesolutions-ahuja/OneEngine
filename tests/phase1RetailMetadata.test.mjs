@@ -57,7 +57,7 @@ test("Phase 2 retail workflows reopen as explicit GPT Builder nodes", () => {
 });
 
 test("Phase 2 expands short retail business processes without padding atomic flows", () => {
-  const atomic = new Set(["Open Drawer","OneTill - Validate Stock","OneTill - Age Verification"]);
+  const atomic = new Set(["Open Drawer","Retail POS - Validate Stock","Retail POS - Age Verification"]);
   const short = (manifest.workflows || []).filter((flow) => (flow.action?.actions || []).length <= 2).map((flow) => flow.name).sort();
   assert.deepEqual(short, [...atomic].sort());
 
