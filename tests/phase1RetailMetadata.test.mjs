@@ -36,7 +36,7 @@ test("generated parent IDs are passed through Flow step resources", () => {
 });
 
 test("retail metadata uses generic runtime primitives only", () => {
-  const allowed = new Set(["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","BULK_UPDATE_RECORDS","CREATE_RELATED_RECORD","UPDATE_RELATED_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP","ASSIGN_RECORD","ASSIGNMENT","DECISION","CONDITION","LOOP","WAIT","FORMULA","RUN_SUBFLOW","STOP","ERROR","CUSTOM_ERROR","ONE_HTTP_REQUEST","ONE_API_REQUEST"]);
+  const allowed = new Set(["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","BULK_UPDATE_RECORDS","CREATE_RELATED_RECORD","UPDATE_RELATED_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP","ASSIGN_RECORD","ASSIGNMENT","DECISION","CONDITION","LOOP","WAIT","FORMULA","RUN_SUBFLOW","STOP","ERROR","CUSTOM_ERROR","ONE_HTTP_REQUEST","ONE_API_REQUEST","CALL_CONNECTOR"]);
   for (const flow of manifest.workflows || []) {
     for (const action of flow.action?.actions || []) {
       const key = String(action.key || action.type || "").toUpperCase();
