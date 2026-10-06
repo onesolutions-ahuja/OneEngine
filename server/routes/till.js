@@ -615,13 +615,5 @@ export default function createTillRouter({ authenticate, authorize, db, pool, ge
     }
   );
 
-  /*
-   * POST /api/till/drawer/open
-   * T-TILL software drawer control: records a drawer-open event (audit) and
-   * returns an ack for the POS to trigger the local hardware kick it already
-   * owns. Permission: cash.open_drawer (admin bypass per authorize()).
-   */
-
-
   return router;
 }
