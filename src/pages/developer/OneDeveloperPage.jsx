@@ -45,7 +45,7 @@ function normalizeSection(value) {
   return DEVELOPER_ITEMS.some((item) => item.key === migrated) ? migrated : 'objects'
 }
 
-export default function OneDeveloperPage({ initialSection = 'objects', initialWorkflowId = '', onSectionChange }) {
+export default function OneDeveloperPage({ initialSection = 'objects', initialWorkflowId = '', onSectionChange, onBackToSettings }) {
   const loggedInCompanyId = String(getStoredUser()?.companyId || getStoredUser()?.company_id || getStoredUser()?.company?.id || '')
   const [active, setActive] = useState(() => normalizeSection(initialSection))
   const [query, setQuery] = useState('')
@@ -135,6 +135,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
   }, [clients, clientQuery])
 
   const current = DEVELOPER_ITEMS.find((item) => item.key === active) || DEVELOPER_ITEMS[0]
+  const builderFocus = ['gptbuilder', 'gpt-page-builder'].includes(current.key)
 
   const select = (key) => {
     setActive(key)
@@ -164,7 +165,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
   const contentKey = `${current.key}:${selectedClient || "self"}`
 
   return (
-    <section className="settings-page onedeveloper-page" data-oneengine-route="developer" data-oneengine-section={current.key}>
+    <section className={`settings-page onedeveloper-page ${builderFocus ? 'is-builder-focus' : ''}`} data-oneengine-route="developer" data-oneengine-section={current.key}>
       <aside className="settings-sidebar">
         {canManageEngine ? (
           <div className="oneengine-client-selector">
@@ -212,11 +213,11 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
           {current.key === 'objects' ? <ObjectsSettingsPane />
-            : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
+            : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onBack={onBackToSettings} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
             : current.key === 'gptappbuilder' ? <GPTAppBuilderPage />
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
-            : current.key === 'gpt-page-builder' ? <GPTPageBuilder /> :
+            : current.key === 'gpt-page-builder' ? <GPTPageBuilder context="developer" onBack={onBackToSettings} /> :
           current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
             : current.key === 'report-types' ? <ReportTypeManager />
