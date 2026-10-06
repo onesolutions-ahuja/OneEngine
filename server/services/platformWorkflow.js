@@ -6341,19 +6341,18 @@ async function hydrateWorkflowProviderResources(context, workflowVariables) {
 
 export async function executeWorkflowActions({ actions, ...context }) {
   if (!Array.isArray(actions)) return [];
-  const containsRollbackRecords = actions.some((action) => resolveWorkflowActionType(action) === "ROLLBACK_RECORDS");
+  const transactionActions = Array.isArray(context.allActions) ? context.allActions : actions;
+  const containsRollbackRecords = transactionActions.some((action) => resolveWorkflowActionType(action) === "ROLLBACK_RECORDS");
   if (containsRollbackRecords && context.transactionOwned !== true) {
     if (!context.pool?.connect) throw new Error("Roll Back Records requires a database pool");
     const client = await context.pool.connect();
     const txDb = (query, params = []) => client.query(query, params);
-    let rolledBackRecords = false;
     try {
       await client.query("BEGIN");
       await client.query("SAVEPOINT oneengine_flow_records");
       const transactionController = {
         rollbackRecords: async () => {
           await client.query("ROLLBACK TO SAVEPOINT oneengine_flow_records");
-          rolledBackRecords = true;
         },
       };
       const result = await executeWorkflowActions({
