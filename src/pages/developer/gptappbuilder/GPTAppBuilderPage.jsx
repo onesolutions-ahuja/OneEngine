@@ -3,7 +3,7 @@ import { AppWindow, Plus, Search } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 import CustomPageBuilder from "../../settings/Platform/CustomPageBuilder.jsx";
 import ConnectorDefinitionEditor from "./ConnectorDefinitionEditor.jsx";
-import { compilePortableAppManifest, buildPortableArtifact } from "../../../shared/gptAppBuilderMetadata.js";
+import { compilePortableAppManifest, buildPortableArtifact, validatePortableArtifact } from "../../../shared/gptAppBuilderMetadata.js";
 import { createPlatformMetadataResolver } from "./platformMetadataResolver.js";
 
 const BUILDER_DEFINITION = Object.freeze({
@@ -35,6 +35,7 @@ export default function GPTAppBuilderPage() {
   const [selectedConnectorKey, setSelectedConnectorKey] = useState("");
   const [buildResult, setBuildResult] = useState(null);
   const [building, setBuilding] = useState(false);
+  const [testResult, setTestResult] = useState(null);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState({ label: "", appKey: "", description: "" });
   const [error, setError] = useState("");
@@ -139,11 +140,24 @@ export default function GPTAppBuilderPage() {
       }
       const artifact = buildPortableArtifact(compiled);
       setBuildResult({ valid: true, artifact, dependencyCount: compiled.graph.nodes.length });
+      setTestResult(null);
       setMessage(`Build ready: ${compiled.graph.nodes.length} metadata dependencies resolved.`);
     } catch (e) {
       setError(e?.message || "Build failed.");
     } finally {
       setBuilding(false);
+    }
+  };
+
+  const testBuild = () => {
+    if (!buildResult?.artifact) return setError("Build the app before testing.");
+    const result = validatePortableArtifact(buildResult.artifact);
+    setTestResult(result);
+    if (result.valid) {
+      setError("");
+      setMessage(`Validation passed${result.warnings.length ? ` with ${result.warnings.length} warning(s)` : ""}.`);
+    } else {
+      setError(`Validation failed: ${result.errors.join(" ")}`);
     }
   };
 
@@ -186,7 +200,8 @@ export default function GPTAppBuilderPage() {
       <label className="settings-search"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search app metadata"/></label>
       <div className="developer-record-list">
         {visibleApps.map((app) => <div key={app.id} className="settings-nav-item"><button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={() => setSelectedAppId(String(app.id))}><AppWindow size={16}/><span>{app.label || app.app_key}</span></button><button type="button" className="onepos-btn" disabled={building} onClick={() => void buildSelectedApp(app)}>{building ? "Building…" : "Build"}</button></div>)}
-        {buildResult?.valid ? <div className="settings-success">Portable manifest ready · {buildResult.dependencyCount} dependencies · fingerprint {buildResult.artifact.fingerprint}</div> : null}
+        {buildResult?.valid ? <div className="settings-success">Portable manifest ready · {buildResult.dependencyCount} dependencies · fingerprint {buildResult.artifact.fingerprint} <button type="button" className="onepos-btn" onClick={testBuild}>Test</button></div> : null}
+        {testResult?.valid ? <div className="settings-success">Test passed · artifact is publishable from the validation perspective.</div> : null}
         {buildResult && !buildResult.valid ? <div className="settings-error">Unresolved: {buildResult.unresolved.map((item) => `${item.type}:${item.key}`).join(", ")}</div> : null}
       </div>
     </section>
