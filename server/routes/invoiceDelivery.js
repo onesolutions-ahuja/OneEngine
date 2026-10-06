@@ -234,12 +234,19 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
           existing.configuration
         );
 
-        const result = await testInvoiceChannelConnection({
-          db,
-          companyId: req.user.companyId,
-          channel: req.params.channel,
-          configuration: candidate,
+        const connection = await db(
+          `SELECT id FROM integration_connections WHERE company_id=$1 AND enabled=TRUE AND integration_type=$2 ORDER BY updated_at DESC LIMIT 1`,
+          [req.user.companyId, req.params.channel]
+        );
+        if (!connection.rows[0]?.id) return res.status(400).json({ success:false, data:{ status:"failed", error:"No connector connection is configured." } });
+        const execution = await executeSystemWorkflow({
+          db, companyId:req.user.companyId, userId:req.user.id || null,
+          systemKey:"flow:connector.test_connection", req,
+          input:{ connectionId:connection.rows[0].id, operation:"connection.test", configuration:candidate },
+          storeId:req.user.storeId || null, writeAudit,
+          source:{ type:"api", method:req.method, path:req.path, capability:"CONNECTOR_TEST_CONNECTION" },
         });
+        const result = { ok:execution.result?.status !== "failed", ...(execution.result || {}) };
 
         await writeAudit(req.user.companyId, req.user.id, "invoice_delivery_connection_tested", "integration", null, {
           channel: channel.label.toLowerCase(),
