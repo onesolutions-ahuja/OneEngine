@@ -10,12 +10,12 @@ test("purchasing package exposes protected metadata flows and functions", async 
   for (const flow of ["Purchase Create","Purchase Receive","Supplier Return Execute"]) assert.ok(registry.includes(flow), flow);
 });
 
-test("purchases and supplier returns use generic workspace", async () => {
-  const purchase = await readFile(new URL("../src/pages/purchases/PurchasesPage.jsx", import.meta.url), "utf8");
-  const returns = await readFile(new URL("../src/pages/returns/SupplierReturnsPage.jsx", import.meta.url), "utf8");
-  assert.match(purchase, /initialObjectKey="purchase"/);
-  assert.match(returns, /initialObjectKey="purchase_line"/);
-  for (const source of [purchase,returns]) for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(source.includes(value),false,value);
+test("purchases and supplier returns route directly to generic workspace", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(app, /WorkspacePage initialObjectKey="purchase" appKey="purchases"/);
+  assert.match(app, /WorkspacePage initialObjectKey="purchase_line" appKey="supplier-returns"/);
+  assert.equal(app.includes("PurchasesPage"), false);
+  assert.equal(app.includes("SupplierReturnsPage"), false);
 });
 
 test("protected transactional objects cannot use generic CRUD", async () => {
@@ -91,7 +91,7 @@ test("customer administration is metadata-owned while runtime customer services 
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const route = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(app, /CustomersPage initialObjectKey="customer" appKey="customers"/);
+  assert.match(app, /WorkspacePage initialObjectKey="customer" appKey="customers"/);
   assert.equal(app.includes("pages/customers/CustomersPage"), false);
   assert.equal(route.includes('router.post("/customers"'), false);
   assert.equal(route.includes('router.put("/customers/:id"'), false);
@@ -147,9 +147,9 @@ test("sales products and categories use metadata workspace while legacy return a
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   const productsRoute = await readFile(new URL("../server/routes/products.js", import.meta.url), "utf8");
-  assert.match(app, /SalesPage initialObjectKey="sale" appKey="sales"/);
-  assert.match(app, /ProductsPage initialObjectKey="product" appKey="products"/);
-  assert.match(app, /CategoriesPage initialObjectKey="category" appKey="categories"/);
+  assert.match(app, /WorkspacePage initialObjectKey="sale" appKey="sales"/);
+  assert.match(app, /WorkspacePage initialObjectKey="product" appKey="products"/);
+  assert.match(app, /WorkspacePage initialObjectKey="category" appKey="categories"/);
   assert.equal(app.includes("const ReturnsPage ="), false);
   assert.equal(app.includes("const ExchangePage ="), false);
   assert.ok(metadata.includes('objectKey:"stock_return"') || metadata.includes('objectKey: "stock_return"'));
