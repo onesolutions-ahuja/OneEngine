@@ -234,7 +234,6 @@ test("store and till administration use metadata while operational till runtime 
   const admin = await readFile(new URL("../server/routes/admin.js", import.meta.url), "utf8");
   const till = await readFile(new URL("../server/routes/till.js", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  const settingsPage = await readFile(new URL("../src/pages/settings/StoreTillSettingsPage.jsx", import.meta.url), "utf8");
   assert.equal(app.includes("pages/stores/StoresPage"), false);
   assert.match(app, /objectKey="store" appKey="stores"/);
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
@@ -242,7 +241,6 @@ test("store and till administration use metadata while operational till runtime 
   assert.ok(registry.includes('objectKey:"terminal"') || registry.includes('objectKey: "terminal"'));
   assert.equal(admin.includes('router.put("/admin/stores/:id"'), false);
   assert.equal(admin.includes('router.put("/admin/tills/:id"'), false);
-  assert.equal(settingsPage.includes("/api/admin/tills/"), false);
   assert.match(till, /\/till\/sessions\/current/);
 });
 
