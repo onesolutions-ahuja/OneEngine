@@ -6,7 +6,6 @@ import {
 import { apiRequest } from '../../services/api'
 import DashboardBuilder from '../dashboard/DashboardBuilder.jsx'
 import CustomReportsAdmin from '../reports/CustomReportsAdmin.jsx'
-import WorkflowAdmin, { FLOW_TYPE_OPTIONS } from './Platform/WorkflowAdmin.jsx'
 import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import CustomPageBuilder from './Platform/CustomPageBuilder.jsx'
 import GPTBuilderPage from '../developer/gptbuilder/GPTBuilderPage.jsx'
@@ -789,33 +788,6 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
             setSelectedNodeId('')
             setSideTab('components')
             void loadSavedDefinitions('approval')
-          }}
-        />
-      ) : tab === 'workflow' ? (
-        <WorkflowAdmin
-          embedded
-          initialWorkflow={selectedSavedId ? saved.workflow.find((item) => String(item.id) === String(selectedSavedId)) || null : null}
-          onMessage={(value) => setMessage(value || '')}
-          onError={(value) => setError(value || '')}
-          onClose={() => {
-            setMode('list')
-            setSelectedSavedId('')
-            setSelectedNodeId('')
-            setSideTab('components')
-            setError('')
-            void loadSavedDefinitions('workflow')
-          }}
-          onSaved={(savedWorkflow, options = {}) => {
-            setMessage('Saved.')
-            void loadSavedDefinitions('workflow')
-            if (options.keepOpen) {
-              if (savedWorkflow?.id) setSelectedSavedId(String(savedWorkflow.id))
-              return
-            }
-            setMode('list')
-            setSelectedSavedId('')
-            setSelectedNodeId('')
-            setSideTab('components')
           }}
         />
       ) : tab === 'dashboard' ? (
