@@ -5334,12 +5334,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
 export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
 
-// Re-export registry bindings without eagerly reading them during module
-// initialization. platformFunctionRegistry participates in the workflow import
-// graph, so assigning these imported bindings to new consts can hit the ESM
-// temporal dead zone during startup.
-export { PLATFORM_FUNCTIONS as REGISTERED_FUNCTIONS, PLATFORM_FUNCTION_MAP as REGISTERED_FUNCTIONS_MAP } from "./platformFunctionRegistry.js";
-
 
 export function getWorkflowActionRegistry() {
   return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
@@ -5369,13 +5363,6 @@ export function validateWorkflowAction(action) {
   return definition;
 }
 
-export function getRegisteredFunction(functionKey) {
-  return PLATFORM_FUNCTION_MAP.get(String(functionKey || "")) || null;
-}
-
-export function getRegisteredFunctionsRegistry() {
-  return PLATFORM_FUNCTIONS.slice();
-}
 
 async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId }) {
   if (!db || typeof db !== "function" || !companyId) return null;
