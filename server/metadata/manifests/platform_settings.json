@@ -1,0 +1,46 @@
+{
+  "packageKey": "platform_settings",
+  "objects": [
+    {
+      "objectKey": "platform_setting",
+      "metadataScope": "global",
+      "label": "Platform Setting",
+      "pluralLabel": "Platform Settings",
+      "description": "Metadata authority for configurable platform settings.",
+      "sourceTable": "company_settings",
+      "fields": [
+        {"apiName":"company_id","label":"Company","fieldType":"lookup","required":true,"writable":false},
+        {"apiName":"default_landing_page","label":"Default Landing Page","fieldType":"text","writable":true},
+        {"apiName":"landing_flow","label":"Landing Flow","fieldType":"json","writable":true},
+        {"apiName":"platform_theme","label":"Platform Theme","fieldType":"json","writable":true},
+        {"apiName":"jarves_behaviour_media","label":"Assistant Behaviour Media","fieldType":"json","writable":true},
+        {"apiName":"updated_by","label":"Updated By","fieldType":"lookup","writable":true},
+        {"apiName":"updated_at","label":"Updated","fieldType":"datetime","writable":false}
+      ],
+      "config": {
+        "settingsGroups": {
+          "runtime": {
+            "permission": "settings.manage",
+            "scopeField": "company_id",
+            "fields": {
+              "companyDefault": {"field":"default_landing_page"},
+              "landingFlow": {"field":"landing_flow"},
+              "platformTheme": {"field":"platform_theme"}
+            }
+          },
+          "assistant_behaviour": {
+            "permission": "settings.manage",
+            "scopeField": "company_id",
+            "fields": {
+              "media": {"field":"jarves_behaviour_media"}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "permissionDeclarations": [
+    {"key":"view","permission":"user.view","access":"read"},
+    {"key":"configure","permission":"settings.manage","access":"write"}
+  ]
+}
