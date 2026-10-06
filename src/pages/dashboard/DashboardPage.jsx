@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Bell, CalendarDays, Pencil, RefreshCw, X } from 'lucide-react'
 import { apiRequest, getAvailableStores, loadSessionPermissions } from '../../services/api'
+import { loadRuntimeSurfaceSettings, surfacePath } from '../../services/runtimeSurface'
 import DashboardGrid from '../../components/dashboard/DashboardGrid.jsx'
 import { setRoute } from '../../navigation/routes'
 
@@ -209,12 +210,12 @@ export default function DashboardPage({ onOpenBuilder }) {
   useEffect(() => {
     let live = true
     Promise.all([
-      apiRequest('/api/settings').catch(() => null),
+      loadRuntimeSurfaceSettings('platform', 'presentation').catch(() => null),
       apiRequest('/api/dashboards').catch(() => null),
       loadSessionPermissions().catch(() => null),
-    ]).then(([settings, dashboards, permissions]) => {
+    ]).then(([presentation, dashboards, permissions]) => {
       if (!live) return
-      if (settings?.success) setCurrency(settings.data?.company?.currency || 'GBP')
+      if (presentation) setCurrency(surfacePath(presentation.settings, presentation.surface?.settings?.currencyPath, 'GBP') || 'GBP')
       setAvailable(dashboards?.success ? dashboards.data || [] : [])
       setPermissionCodes(Array.isArray(permissions?.permissions) ? permissions.permissions : [])
     })
