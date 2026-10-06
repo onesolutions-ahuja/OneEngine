@@ -1845,7 +1845,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
       {toolboxOpen ? <div ref={toolboxFocusRef} tabIndex="-1" className="gptb-toolbox-focus"><Toolbox key={layout} layout={layout} flowType={flow.key} startConfig={startConfig} elements={elements} resources={availableResources} goToConnections={goToConnections} onResourcesChange={applyResourceChanges} onOpenElement={openElement} onClose={() => setToolboxOpen(false)}/></div> : null}
       <main
         ref={canvasRef}
-        className="gptb-canvas"
+        className={`gptb-canvas ${layout === 'auto' ? 'is-reactflow' : ''}`}
         tabIndex="-1"
         aria-label="Flow canvas"
         onDragOver={layout === 'free' ? (event) => { if (event.dataTransfer.types.includes('application/x-gptbuilder-element') || event.dataTransfer.types.includes('application/x-gptbuilder-existing')) event.preventDefault() } : undefined}
@@ -1853,7 +1853,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
         onPointerMove={layout === 'free' && freeConnectorDraft ? (event) => { const point = canvasPoint(event.clientX, event.clientY); setFreeConnectorDraft((current) => current ? { ...current, x: point.x, y: point.y } : current) } : undefined}
         onPointerUp={layout === 'free' && freeConnectorDraft ? () => setFreeConnectorDraft(null) : undefined}
       >
-        <div className="gptb-canvas-stage" style={layout === 'free' ? { transform: `scale(${zoom / 100})` } : undefined}>{layout === 'auto' ? <>
+        <div className={`gptb-canvas-stage ${layout === 'auto' ? 'is-reactflow' : ''}`} style={layout === 'free' ? { transform: `scale(${zoom / 100})` } : undefined}>{layout === 'auto' ? <>
           <GPTBuilderReactFlowCanvas
             elements={elements}
             selectedId={editingElement?.id || selectedElementIds[0] || ''}
@@ -1904,6 +1904,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
               onClose={() => { setDecisionInsertTarget(null); setElementPickerOpen(false) }}
             />
           </div> : null}
+        </> : <>
           <svg className="gptb-free-connections" aria-hidden="true">
             {goToConnections.map((edge) => {
               const source = edge.sourceId === 'start' ? { x: 170, y: 115 } : elements.find((element) => element.id === edge.sourceId)?.position
@@ -1931,7 +1932,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
           />)}
           <div className="gptb-free-hint">Drag elements from the Elements tab, move them anywhere, and drag connectors between elements.</div>
         </>}</div>
-        <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(25, value - 10))} disabled={zoom <= 25}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button><button className="gptb-fit-view" aria-label="Zoom to fit" onClick={zoomToFit}>Fit</button></div>
+        {layout === 'free' ? <div className="gptb-zoom" role="group" aria-label="Canvas zoom"><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(25, value - 10))} disabled={zoom <= 25}><ZoomOut size={15}/></button><button className="gptb-zoom-value" aria-label="Reset zoom" onClick={() => setZoom(100)}>{zoom}%</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(150, value + 10))} disabled={zoom >= 150}><ZoomIn size={15}/></button><button className="gptb-fit-view" aria-label="Zoom to fit" onClick={zoomToFit}>Fit</button></div> : null}
         <div className="gptb-canvas-help" tabIndex="-1"><CircleHelp size={14}/><span>{layout === 'auto' ? 'Auto-Layout keeps the flow arranged and connected automatically.' : 'Free-Form lets you position and connect elements manually.'}</span></div>
       </main>
       {startOpen && flow.startNeedsConfiguration ? <StartPanel flowType={flow.key} value={startDraft} onChange={setStartDraft} objects={objects} eventTypes={eventTypes} onDone={finishStart} onCancel={() => setStartOpen(false)}/> : null}
