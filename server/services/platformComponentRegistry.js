@@ -15,9 +15,9 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   // Custom Page Builder layout components. `multi_container` is record-bound:
   // it renders a Record Collection through the shared page renderer and never
   // embeds its own query logic (collection → existing Platform record APIs).
-  { key: "container", label: "Container", category: "layout", kind: "layout", bindable: false, containsChildren: true },
+  { key: "container", api: "container.v1", version: 1, label: "Container", category: "layout", kind: "layout", bindable: false, containsChildren: true, rendererKey: "container" },
   { key: "multi_container", label: "MultiContainer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false },
-  { key: "table", label: "Table / List", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false },
+  { key: "table", api: "table.v1", version: 1, label: "Table / List", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, rendererKey: "table" },
   { key: "tree_view", label: "Tree View", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "parentField", "labelField", "secondaryField", "rootFilter", "sort", "maxDepth", "showCounts", "allowCollapse", "defaultExpandedDepth", "clickAction"] },
   { key: "process_path", label: "Process Path", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["fieldKey", "stages", "guidance", "keyFields"] },
   { key: "timeline", label: "Timeline", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "dateField", "titleField", "subtitleField", "iconField", "sort", "groupBy", "maxRecords", "filters", "clickAction"] },
@@ -118,11 +118,18 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   { key: "dashboard_text", label: "Dashboard Text", category: "dashboard", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true, runtimeKind: "analytics", rendererKey: "text", defaults: { title: "Text", config: { content: "" }, layout: { w: 6, h: 3 } }, configurable: ["content"] },
   { key: "dashboard_image", label: "Dashboard Image", category: "dashboard", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["DASHBOARD"], supportedContexts: ["dashboard"], supportsPageContext: false, supportsDashboardContext: true, runtimeKind: "analytics", rendererKey: "image", defaults: { title: "Image", config: { imageUrl: "", altText: "", imageFit: "contain", linkUrl: "" }, layout: { w: 6, h: 4 } }, configurable: ["imageUrl","altText","imageFit","linkUrl"] },
   // Reserved canonical trigger component. Behaviour/variants are configured in UI Batch 2.
-  { key: "button", label: "Custom Button", category: "action", kind: "action", bindable: false, reserved: true },
+  { key: "button", api: "button.v1", version: 1, label: "Custom Button", category: "action", kind: "action", bindable: false, reserved: true, rendererKey: "button" },
   { key: "jarves", label: "JARVES", category: "action", kind: "assistant", bindable: false, registered: true, behaviours: ["behaviour_1", "behaviour_2", "behaviour_3"], interactions: ["voice", "message", "ask_input"] },
 ]);
 
-const COMPONENT_MAP = new Map(PLATFORM_COMPONENTS.map((component) => [component.key, component]));
+const componentApi = (component) => component.api || `${component.key}.v${Number(component.version) || 1}`;
+const COMPONENT_MAP = new Map();
+for (const component of PLATFORM_COMPONENTS) {
+  const normalized = Object.freeze({ ...component, api: componentApi(component), version: Number(component.version) || 1 });
+  // Versioned API is canonical. Legacy key remains an alias during migration.
+  COMPONENT_MAP.set(normalized.api, normalized);
+  COMPONENT_MAP.set(normalized.key, normalized);
+}
 
 const FLOW_SCREEN_RENDERABLE_COMPONENTS = new Set([
   "header","text","divider","spacer",
@@ -131,11 +138,14 @@ const FLOW_SCREEN_RENDERABLE_COMPONENTS = new Set([
 ]);
 
 export function listPlatformComponents() {
-  return PLATFORM_COMPONENTS.map((component) => ({
+  return PLATFORM_COMPONENTS.map((source) => {
+    const component = COMPONENT_MAP.get(source.key);
+    return ({
     ...component,
     fieldTypes: component.fieldTypes ? [...component.fieldTypes] : undefined,
     flowScreenSupported: FLOW_SCREEN_RENDERABLE_COMPONENTS.has(component.key) || component.supportedBuilders?.includes("FLOW"),
-  }));
+  });
+  });
 }
 
 export function getPlatformComponent(key) {
@@ -147,7 +157,19 @@ export function componentForFieldType(fieldType) {
   return PLATFORM_COMPONENTS.find((component) => component.kind === "field" && component.fieldTypes?.includes(type)) || getPlatformComponent("text_input");
 }
 
+export function resolvePlatformComponentApi(value) {
+  const component = COMPONENT_MAP.get(String(value || "").trim());
+  return component?.api || null;
+}
+
 export function validateComponentRegistry() {
   const keys = PLATFORM_COMPONENTS.map((component) => component.key);
-  return { valid: new Set(keys).size === keys.length, count: keys.length };
+  const apis = PLATFORM_COMPONENTS.map((component) => componentApi(component));
+  const versioned = apis.every((api) => /^[a-z][a-z0-9_]*\.v[1-9][0-9]*$/.test(api));
+  return {
+    valid: new Set(keys).size === keys.length && new Set(apis).size === apis.length && versioned,
+    count: keys.length,
+    aliases: keys.length,
+    versioned,
+  };
 }
