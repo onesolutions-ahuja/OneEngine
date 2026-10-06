@@ -218,7 +218,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       const [catalogueDelta, settingsResponse, buttonResponse, paymentResponse, permissionResponse] = await Promise.all([
         apiRequest(cataloguePath),
         apiRequest('/api/settings'),
-        apiRequest('/api/platform/runtime/objects/sale/buttons'),
+        apiRequest('/api/platform/runtime/objects/sale_ledger/buttons'),
         apiRequest('/api/settings/payment-methods').catch(() => ({ data: [] })),
         loadSessionPermissions().catch(() => ({ permissions: [] })),
       ])
@@ -316,7 +316,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         vatRate: Number(line.vatRate || 0) * 100,
       })),
     ]
-    apiRequest(`/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+    apiRequest(`/api/platform/runtime/objects/sale_ledger/buttons/${encodeURIComponent(button.button_key)}/execute`, {
       method: 'POST',
       body: JSON.stringify({ context: {
         lines,
@@ -674,7 +674,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       const response = await executeMetadataButton(completeButton, { sale: payload.sale, items: payload.items, payments: payload.payments })
       const saleId = deepFind(response?.data, 'created')?.id || deepFind(response?.data, 'matched')?.id
       if (!response?.success || !saleId) throw new Error(response?.message || 'Sale could not be confirmed')
-      const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(saleId)}`)
+      const savedResponse = await apiRequest(`/api/platform/objects/sale_ledger/records/${encodeURIComponent(saleId)}`)
       const sale = savedResponse?.record || savedResponse?.data || { id: saleId, total: payload.sale.total }
       if (durableCashEntry) await removeOfflineCashSale(durableCashEntry.id)
       setLastSale(sale)
@@ -683,7 +683,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       let savedSale = sale
       if (sale.id) {
         try {
-          const savedResponse = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(sale.id)}`)
+          const savedResponse = await apiRequest(`/api/platform/objects/sale_ledger/records/${encodeURIComponent(sale.id)}`)
           savedSale = savedResponse?.record || savedResponse?.data || sale
         } catch {}
       }
@@ -786,7 +786,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const executeRecordButton = async (button, recordId) => {
     if (!button?.button_key || !recordId) throw new Error('A synced sale is required for this action.')
-    const response = await apiRequest(`/api/platform/objects/sale/records/${encodeURIComponent(recordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
+    const response = await apiRequest(`/api/platform/objects/sale_ledger/records/${encodeURIComponent(recordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`, {
       method: 'POST',
       body: JSON.stringify({}),
     })
@@ -907,8 +907,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       }
 
       const endpoint = useRecordScope && scopedRecordId
-        ? `/api/platform/objects/sale/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
-        : `/api/platform/runtime/objects/sale/buttons/${encodeURIComponent(button.button_key)}/execute`
+        ? `/api/platform/objects/sale_ledger/records/${encodeURIComponent(scopedRecordId)}/buttons/${encodeURIComponent(button.button_key)}/execute`
+        : `/api/platform/runtime/objects/sale_ledger/buttons/${encodeURIComponent(button.button_key)}/execute`
 
       const response = await apiRequest(endpoint, {
         method: 'POST',
