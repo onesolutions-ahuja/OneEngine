@@ -102,18 +102,11 @@ import { requireEntitlement } from "./services/licensing.js";
 import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
 import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
-import { createCanonicalRelatedTransaction, syncCanonicalSaleTransaction } from "./services/canonicalTransactions.js";
 import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // JARVES V2 - licence gate
 import { companyAdministrativeAccess, permissionAllows } from "./services/authorization.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
 import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname } from "./services/tenantResolver.js";
 import { createTenantDatabaseRouter, createAuthenticatedDatabaseMiddleware, getRequestDatabaseContext, getRequestPool } from "./services/tenantDatabase.js";
-/* Inventory primitives live in services/inventory.js (shared with every
- * stock writer: POS sales, purchases, returns, adjustments). */
-import {
-  createInventoryMovement,
-  inventoryMovementTypes,
-} from "./services/inventory.js";
 
 const { Pool } = pg;
 
@@ -385,7 +378,6 @@ app.use((req, res, next) => {
 });
 /* T10P: Scan & Go checkout deducts stock through the SAME inventory ledger
  * helper the till and online orders use (no second inventory mechanism). */
-app.locals.createInventoryMovement = createInventoryMovement;
 
 /*
  * A backend error on an idle pool connection (network blip, Postgres restart,
@@ -2061,7 +2053,6 @@ app.use(
     authorize,
     db,
     pool,
-    createInventoryMovement,
     writeAudit,
     canAccessStore,
     savePlatformRecord: saveDomainConfiguration,
@@ -2077,7 +2068,7 @@ app.use(
   })
 );
 
-app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, canonicalTransactionWriter: syncCanonicalSaleTransaction, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createSalesRouter({ authenticate, authorize, db, pool, requestPool: getRequestPool, associateCustomerWithStore, writeAudit, getRolePermissionCodes, canViewCompanyCustomers, selfCheckoutMode: (req) => req.user?.mode === "self_checkout", connectorDrivers, savePlatformRecord: saveDomainConfiguration }));
 
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
@@ -3715,7 +3706,6 @@ async function startServer() {
                   workflowVersion: Number(workflow.active_version || workflow.version || 1),
                   trigger: payload.eventType || workflow.trigger_key,
                   writeAudit,
-                  createInventoryMovement,
                 });
                 const waiting = workflowEntriesContainStatus(results, "waiting");
                 if (run?.id) {
@@ -3772,7 +3762,7 @@ async function startServer() {
                 storeId: payload.storeId || null,
                 writeAudit,
                 source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
-                extraContext: { pool, createInventoryMovement },
+                extraContext: { pool },
               });
               const outcome = execution.result;
               if (outcome?.success === false) {
@@ -3817,7 +3807,7 @@ async function startServer() {
                 storeId: payload.storeId || null,
                 writeAudit,
                 source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool, createInventoryMovement },
+                extraContext: { pool },
               });
               const outcome = execution.result;
               if (outcome?.success === false) {
@@ -3838,7 +3828,7 @@ async function startServer() {
               input: { ...payload, _executeFromJob: true },
               writeAudit,
               source: { type: "job", method: "JOB", path: job.kind, capability: actionKey },
-              extraContext: { pool, createInventoryMovement },
+              extraContext: { pool },
             });
             const result = execution.result;
             if (payload._stepRunId) {
