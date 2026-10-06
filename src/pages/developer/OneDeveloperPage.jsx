@@ -16,12 +16,14 @@ import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSub
 import ValueSetList from '../settings/Platform/ValueSetList'
 import DebugCodesAdmin from './DebugCodesAdmin'
 import GPTBuilderPage from './gptbuilder/GPTBuilderPage'
+import GPTBuilderNewPage from './gptbuildernew/GPTBuilderNewPage'
 import ReactFlowCanvasUXTest from './ReactFlowCanvasUXTest'
 import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
   { key: 'gptbuilder', label: 'GPT Builder', icon: Workflow },
+  { key: 'gptbuildernew', label: 'GPT Builder New', icon: Workflow },
   { key: 'canvas-ux-test', label: 'Canvas UX Test', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
   { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
@@ -206,6 +208,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
           {current.key === 'objects' ? <ObjectsSettingsPane />
             : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
+            : current.key === 'gptbuildernew' ? <GPTBuilderNewPage />
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
