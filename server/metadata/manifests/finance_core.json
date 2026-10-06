@@ -141,6 +141,20 @@
           "fieldType": "datetime",
           "sourceColumn": "updated_at",
           "writable": false
+        },
+        {
+          "apiName": "notes",
+          "label": "Notes",
+          "fieldType": "text",
+          "sourceColumn": "notes",
+          "writable": true
+        },
+        {
+          "apiName": "created_by",
+          "label": "Created By",
+          "fieldType": "lookup",
+          "sourceColumn": "created_by",
+          "writable": true
         }
       ]
     },
@@ -231,6 +245,27 @@
           "fieldType": "datetime",
           "sourceColumn": "created_at",
           "writable": false
+        },
+        {
+          "apiName": "notes",
+          "label": "Notes",
+          "fieldType": "text",
+          "sourceColumn": "notes",
+          "writable": true
+        },
+        {
+          "apiName": "idempotency_key",
+          "label": "Idempotency Key",
+          "fieldType": "text",
+          "sourceColumn": "idempotency_key",
+          "writable": true
+        },
+        {
+          "apiName": "created_by",
+          "label": "Created By",
+          "fieldType": "lookup",
+          "sourceColumn": "created_by",
+          "writable": true
         }
       ]
     },
@@ -370,6 +405,27 @@
           "fieldType": "datetime",
           "sourceColumn": "created_at",
           "writable": false
+        },
+        {
+          "apiName": "description",
+          "label": "Description",
+          "fieldType": "text",
+          "sourceColumn": "description",
+          "writable": true
+        },
+        {
+          "apiName": "idempotency_key",
+          "label": "Idempotency Key",
+          "fieldType": "text",
+          "sourceColumn": "idempotency_key",
+          "writable": true
+        },
+        {
+          "apiName": "created_by",
+          "label": "Created By",
+          "fieldType": "lookup",
+          "sourceColumn": "created_by",
+          "writable": true
         }
       ]
     },
@@ -658,21 +714,21 @@
       "lifecycleStatus": "ACTIVE",
       "actions": [
         {
-          "id": "supplier_invoice_create",
-          "label": "Create Invoice",
-          "key": "RUN_SUBFLOW",
-          "subflowApiName": "SUPPLIER_INVOICE_CREATE",
-          "inputAssignments": {
-            "supplierId": {
+          "id": "create_invoice",
+          "label": "Create Supplier Invoice",
+          "key": "CREATE_RECORD",
+          "objectKey": "supplier_invoice",
+          "fieldValues": {
+            "supplier_id": {
               "path": "record.id"
             },
-            "invoiceNumber": {
+            "invoice_number": {
               "path": "record.invoiceNumber"
             },
-            "invoiceDate": {
+            "invoice_date": {
               "path": "record.invoiceDate"
             },
-            "dueDate": {
+            "due_date": {
               "path": "record.dueDate"
             },
             "subtotal": {
@@ -684,10 +740,91 @@
             "total": {
               "path": "record.total"
             },
-            "purchaseId": {
+            "purchase_id": {
               "path": "record.purchaseId"
+            },
+            "notes": {
+              "path": "record.notes"
+            },
+            "status": "OPEN"
+          }
+        },
+        {
+          "id": "post_invoice_ledger",
+          "label": "Post Supplier Invoice Ledger",
+          "key": "CREATE_RECORD",
+          "objectKey": "supplier_ledger",
+          "fieldValues": {
+            "supplier_id": {
+              "path": "record.id"
+            },
+            "entry_type": "INVOICE",
+            "reference_type": "supplier_invoice",
+            "reference_id": {
+              "path": "steps.create_invoice.created.id"
+            },
+            "reference": {
+              "path": "record.invoiceNumber"
+            },
+            "amount": {
+              "path": "record.total"
+            },
+            "debit": true,
+            "description": {
+              "path": "record.notes"
             }
           }
+        }
+      ],
+      "inputContract": [
+        {
+          "name": "supplierId",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "invoiceNumber",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "invoiceDate",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "dueDate",
+          "type": "date"
+        },
+        {
+          "name": "subtotal",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "tax",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "total",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "purchaseId",
+          "type": "id"
+        },
+        {
+          "name": "notes",
+          "type": "string"
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "invoice",
+          "type": "record",
+          "source": "steps.create_invoice.created"
         }
       ]
     },
@@ -699,30 +836,136 @@
       "lifecycleStatus": "ACTIVE",
       "actions": [
         {
-          "id": "supplier_payment_execute",
-          "label": "Record Payment",
-          "key": "RUN_SUBFLOW",
-          "subflowApiName": "SUPPLIER_PAYMENT_CREATE",
-          "inputAssignments": {
-            "supplierId": {
+          "id": "create_payment",
+          "label": "Create Supplier Payment",
+          "key": "CREATE_RECORD",
+          "objectKey": "supplier_payment",
+          "checkMatchingRecords": true,
+          "matchAction": "skip",
+          "matchConditions": [
+            {
+              "field": "idempotency_key",
+              "operator": "equals",
+              "value": {
+                "path": "record.idempotencyKey"
+              }
+            }
+          ],
+          "fieldValues": {
+            "supplier_id": {
               "path": "record.id"
             },
             "amount": {
               "path": "record.amount"
             },
-            "paymentDate": {
+            "payment_date": {
               "path": "record.paymentDate"
             },
-            "paymentMethod": {
+            "payment_method": {
               "path": "record.paymentMethod"
             },
             "reference": {
               "path": "record.reference"
             },
-            "invoiceId": {
-              "path": "record.invoiceId"
+            "status": "COMPLETED",
+            "idempotency_key": {
+              "path": "record.idempotencyKey"
             }
           }
+        },
+        {
+          "id": "create_allocation",
+          "label": "Allocate Payment To Invoice",
+          "key": "CREATE_RECORD",
+          "objectKey": "supplier_payment_allocation",
+          "fieldValues": {
+            "payment_id": {
+              "path": "steps.create_payment.created.id"
+            },
+            "invoice_id": {
+              "path": "record.invoiceId"
+            },
+            "amount": {
+              "path": "record.amount"
+            }
+          }
+        },
+        {
+          "id": "post_payment_ledger",
+          "label": "Post Supplier Payment Ledger",
+          "key": "CREATE_RECORD",
+          "objectKey": "supplier_ledger",
+          "checkMatchingRecords": true,
+          "matchAction": "skip",
+          "matchConditions": [
+            {
+              "field": "idempotency_key",
+              "operator": "equals",
+              "value": {
+                "path": "record.idempotencyKey"
+              }
+            }
+          ],
+          "fieldValues": {
+            "supplier_id": {
+              "path": "record.id"
+            },
+            "entry_type": "PAYMENT",
+            "reference_type": "supplier_payment",
+            "reference_id": {
+              "path": "steps.create_payment.created.id"
+            },
+            "reference": {
+              "path": "record.reference"
+            },
+            "amount": {
+              "path": "record.amount"
+            },
+            "debit": false,
+            "idempotency_key": {
+              "path": "record.idempotencyKey"
+            }
+          }
+        }
+      ],
+      "inputContract": [
+        {
+          "name": "supplierId",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "amount",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "paymentDate",
+          "type": "date"
+        },
+        {
+          "name": "paymentMethod",
+          "type": "string"
+        },
+        {
+          "name": "reference",
+          "type": "string"
+        },
+        {
+          "name": "invoiceId",
+          "type": "id"
+        },
+        {
+          "name": "idempotencyKey",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "payment",
+          "type": "record",
+          "source": "steps.create_payment.created"
         }
       ]
     },
@@ -734,26 +977,72 @@
       "lifecycleStatus": "ACTIVE",
       "actions": [
         {
-          "id": "supplier_credit_create",
+          "id": "create_ledger_adjustment",
           "label": "Supplier Credit Create",
-          "key": "RUN_SUBFLOW",
-          "subflowApiName": "SUPPLIER_LEDGER_ADJUST",
-          "inputAssignments": {
-            "supplierId": {
+          "key": "CREATE_RECORD",
+          "objectKey": "supplier_ledger",
+          "checkMatchingRecords": true,
+          "matchAction": "skip",
+          "matchConditions": [
+            {
+              "field": "idempotency_key",
+              "operator": "equals",
+              "value": {
+                "path": "record.idempotencyKey"
+              }
+            }
+          ],
+          "fieldValues": {
+            "supplier_id": {
               "path": "record.id"
             },
-            "entryType": "RETURN_CREDIT",
-            "debit": false,
-            "amount": {
-              "path": "record.amount"
-            },
+            "entry_type": "RETURN_CREDIT",
             "reference": {
               "path": "record.reference"
             },
+            "amount": {
+              "path": "record.amount"
+            },
+            "debit": false,
             "description": {
               "path": "record.description"
+            },
+            "idempotency_key": {
+              "path": "record.idempotencyKey"
             }
           }
+        }
+      ],
+      "inputContract": [
+        {
+          "name": "supplierId",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "amount",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "reference",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "idempotencyKey",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "ledgerEntry",
+          "type": "record",
+          "source": "steps.create_ledger_adjustment.created"
         }
       ]
     },
@@ -765,26 +1054,72 @@
       "lifecycleStatus": "ACTIVE",
       "actions": [
         {
-          "id": "supplier_debit_create",
+          "id": "create_ledger_adjustment",
           "label": "Supplier Debit Create",
-          "key": "RUN_SUBFLOW",
-          "subflowApiName": "SUPPLIER_LEDGER_ADJUST",
-          "inputAssignments": {
-            "supplierId": {
+          "key": "CREATE_RECORD",
+          "objectKey": "supplier_ledger",
+          "checkMatchingRecords": true,
+          "matchAction": "skip",
+          "matchConditions": [
+            {
+              "field": "idempotency_key",
+              "operator": "equals",
+              "value": {
+                "path": "record.idempotencyKey"
+              }
+            }
+          ],
+          "fieldValues": {
+            "supplier_id": {
               "path": "record.id"
             },
-            "entryType": "OPENING",
-            "debit": true,
-            "amount": {
-              "path": "record.amount"
-            },
+            "entry_type": "OPENING",
             "reference": {
               "path": "record.reference"
             },
+            "amount": {
+              "path": "record.amount"
+            },
+            "debit": true,
             "description": {
               "path": "record.description"
+            },
+            "idempotency_key": {
+              "path": "record.idempotencyKey"
             }
           }
+        }
+      ],
+      "inputContract": [
+        {
+          "name": "supplierId",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "amount",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "reference",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "idempotencyKey",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "ledgerEntry",
+          "type": "record",
+          "source": "steps.create_ledger_adjustment.created"
         }
       ]
     },
@@ -796,26 +1131,72 @@
       "lifecycleStatus": "ACTIVE",
       "actions": [
         {
-          "id": "supplier_credit_note_create",
+          "id": "create_ledger_adjustment",
           "label": "Supplier Credit Note Create",
-          "key": "RUN_SUBFLOW",
-          "subflowApiName": "SUPPLIER_LEDGER_ADJUST",
-          "inputAssignments": {
-            "supplierId": {
+          "key": "CREATE_RECORD",
+          "objectKey": "supplier_ledger",
+          "checkMatchingRecords": true,
+          "matchAction": "skip",
+          "matchConditions": [
+            {
+              "field": "idempotency_key",
+              "operator": "equals",
+              "value": {
+                "path": "record.idempotencyKey"
+              }
+            }
+          ],
+          "fieldValues": {
+            "supplier_id": {
               "path": "record.id"
             },
-            "entryType": "RETURN_CREDIT",
-            "debit": false,
-            "amount": {
-              "path": "record.amount"
-            },
+            "entry_type": "RETURN_CREDIT",
             "reference": {
               "path": "record.reference"
             },
+            "amount": {
+              "path": "record.amount"
+            },
+            "debit": false,
             "description": {
               "path": "record.description"
+            },
+            "idempotency_key": {
+              "path": "record.idempotencyKey"
             }
           }
+        }
+      ],
+      "inputContract": [
+        {
+          "name": "supplierId",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "amount",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "reference",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "idempotencyKey",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "ledgerEntry",
+          "type": "record",
+          "source": "steps.create_ledger_adjustment.created"
         }
       ]
     }
