@@ -105,3 +105,14 @@ test("Phase 2 Dashboard and Reports presentation settings are metadata-owned", a
     assert.match(source,/loadRuntimeSurfaceSettings/);
   }
 });
+
+
+test("Phase 2 Global Product Lookup wiring is package-metadata owned", async()=>{
+  const source=await read("src/pages/products/GlobalProductLookupPage.jsx");
+  for(const token of ["/api/global-products","objects/category",'objectKey="product"',"category_id","image_url","source_provider"]) {
+    assert.equal(source.includes(token),false,token);
+  }
+  assert.match(source,/loadRuntimeSurface\('products','globalLookup'\)/);
+  assert.match(source,/runtimeEndpoint\(runtimeSurface/);
+  assert.match(source,/mapRuntimePayload\(productMap/);
+});
