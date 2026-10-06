@@ -4973,13 +4973,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     });
   });
 
-  router.get("/platform/function-registry", ...manage, async (req, res) => {
-    res.json({
-      success: true,
-      data: [],
-  });
-  });
-
   router.get("/platform/workflow-triggers", ...manage, async (_req, res) => {
     const core = [
       ["before_create", "Before a record is created"],
@@ -8190,29 +8183,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       }
 
       const action = String(component.action || "").toLowerCase();
-      const permission = action === "run_workflow" ? "workflow.execute" : action === "call_function" ? "functions.execute" : null;
+      const permission = action === "run_workflow" ? "workflow.execute" : null;
       if (!permission) return res.status(400).json({ success: false, message: "This record action is not executable" });
       if (!(await hasExecutionPermission(req, permission))) return res.status(403).json({ success: false, message: "You do not have permission to execute this action" });
-
-      if (action === "call_function") {
-        const functionKey = component.functionKey || component.function_key;
-        const definition = null;
-        if (!definition) return res.status(422).json({ success: false, message: "Configured registered function is unavailable" });
-        const execution = await executeSystemWorkflow({
-          db,
-          companyId: req.user.companyId,
-          userId: req.user.id || null,
-          systemKey: `function:${functionKey}`,
-          req,
-          input: component.inputs || {},
-          object,
-          record,
-          recordId: req.params.recordId,
-          storeId: req.user.storeId || null,
-          source: { type: "record_component", method: req.method, path: req.originalUrl || req.path, capability: functionKey },
-        });
-        return res.json({ success: true, data: execution.result, workflowRunId: execution.runId, correlationId: execution.correlationId });
-      }
 
       const workflowId = component.workflowId || component.workflow_id || component.ruleId || component.rule_id;
       if (!workflowId) return res.status(422).json({ success: false, message: "Configured workflow is missing" });
