@@ -176,7 +176,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
           rules={config.conditionalFormatting || []}
           onChange={(conditionalFormatting) => setConfig({ conditionalFormatting })}
           fields={[
-            ...(isPlatform ? choices.all : DASHBOARD_SALES_FIELDS),
+            ...(isPlatform ? choices.all : sourceFields),
             ...(config.valueField && config.aggregate ? [{ key: SUMMARY_COLUMN(config.aggregate, config.valueField), label: "Calculated metric" }] : []),
           ]}
         />
@@ -186,7 +186,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
           action={config.drillAction}
           onChange={(drillAction) => setConfig({ drillAction })}
           reports={drillReports}
-          fields={isPlatform ? choices.all : DASHBOARD_SALES_FIELDS}
+          fields={isPlatform ? choices.all : sourceFields}
         />
       </div>
     </>}
