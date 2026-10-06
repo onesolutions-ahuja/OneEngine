@@ -53,10 +53,6 @@ export function readRoute() {
     return { app: 'developer', section, workflowId }
   }
   if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
-  if (parts[0] === 'till') return { app: 'till', section: null }
-  // Legacy OneKiosk runtime URLs now resolve to the metadata-owned device workspace.
-  if (parts[0] === 'kiosk' || parts[0] === 'kiosk-runtime') return { app: 'kiosk-devices', section: null }
-  if (parts[0] === 'customer-display') return { app: 'customer-display', section: null }
   if (parts[0] === 'flow' && parts[1]) return { app: 'flow-runtime', section: null, sessionId: decodeURIComponent(parts[1]) }
   if (parts[0] === 'profile') return { app: 'profile', section: null }
   // Installed application slugs are metadata-owned; preserve the slug generically.
