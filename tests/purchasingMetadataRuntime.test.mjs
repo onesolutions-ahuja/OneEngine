@@ -329,3 +329,22 @@ test("retail transaction writes are metadata Flow owned", async () => {
   assert.equal(server.includes("./routes/sales.js"), false);
   assert.equal(server.includes("./routes/till.js"), false);
 });
+
+
+test("retail transactions are owned by metadata objects and generic Flow runtime", async () => {
+  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const workflow = await readFile(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.match(registry, /objectKey:\s*"sale"/);
+  assert.match(registry, /objectKey:\s*"sale_item"/);
+  assert.match(registry, /objectKey:\s*"payment"/);
+  assert.match(registry, /objectKey:\s*"refund"/);
+  assert.match(registry, /objectKey:\s*"till_session"/);
+  assert.match(registry, /objectKey:\s*"cash_movement"/);
+  assert.match(registry, /name:\s*"Complete Sale"/);
+  assert.match(registry, /name:\s*"Create Customer Return"/);
+  assert.match(registry, /name:\s*"Create Exchange"/);
+  assert.match(workflow, /commonFieldValues/);
+  assert.equal(server.includes("./routes/sales.js"), false);
+  assert.equal(server.includes("createSalesRouter"), false);
+});
