@@ -116,3 +116,19 @@ test("Phase 2 Global Product Lookup wiring is package-metadata owned", async()=>
   assert.match(source,/runtimeEndpoint\(runtimeSurface/);
   assert.match(source,/mapRuntimePayload\(productMap/);
 });
+
+
+test("Phase 2 publishes runtime surface metadata through package definitions", async()=>{
+  const registry=await read("server/services/packageRegistry.js");
+  const catalog=await read("server/packages/packageManifestCatalog.js");
+  const till=await read("src/pages/till/TillPage.jsx");
+  assert.match(registry,/navigationAliases: Array\.isArray\(entry\.navigationAliases\)/);
+  assert.match(registry,/runtimeSurfaces: entry\.runtimeSurfaces/);
+  assert.match(catalog,/runtimeSurfaces:\s*\{[\s\S]*till:\s*\{/);
+  assert.match(till,/loadRuntimeSurface\('till', 'till'\)/);
+  for(const token of [
+    "/api/platform/objects/product/records",
+    "/api/platform/runtime/objects/sale/buttons",
+    "/api/platform/objects/till_session/records"
+  ]) assert.equal(till.includes(token),false,token);
+});
