@@ -18,7 +18,7 @@ function reviewedOneAssistantManifest() {
   };
   return {
     ...oneAssistantManifest,
-    objects: (oneAssistantManifest.objects || []).filter((object) => !REVIEW_REMOVED_OBJECT_KEYS.has(object?.objectKey)),
+    objects: (oneAssistantManifest.objects || []).filter((object) => !REVIEW_REMOVED_OBJECT_KEYS.has(object?.objectKey) && !blockedReference(object)),
     relationships: (oneAssistantManifest.relationships || []).filter((item) => !blockedReference(item)),
     listViews: (oneAssistantManifest.listViews || []).filter((item) => !blockedReference(item)),
     rules: (oneAssistantManifest.rules || []).filter((item) => !blockedReference(item)),
