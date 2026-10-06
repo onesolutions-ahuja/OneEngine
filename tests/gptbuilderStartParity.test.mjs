@@ -68,12 +68,12 @@ test('Screen keeps dialog Done-Cancel editing while other auto-layout elements u
 })
 
 
-test('Phase 1 keeps Wait elements autolaunched-only and excludes AI/Apex surfaces', async () => {
+test('Phase 2 keeps Wait elements autolaunched-only, exposes the captured Apex-Defined resource type, and excludes unverified AI surfaces', async () => {
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   const decision = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderDecision.jsx', import.meta.url), 'utf8')
   assert.match(elements, /\['wait_duration', 'wait_conditions', 'wait_until_date'\]\.includes\(element\.key\)\) return flowType === 'autolaunched'/)
-  assert.doesNotMatch(page, /Apex-Defined/)
+  assert.match(page, /Apex-Defined/)
   assert.doesNotMatch(decision, /logicMode === 'ai'/)
 })
 

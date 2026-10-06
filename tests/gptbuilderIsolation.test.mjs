@@ -336,7 +336,7 @@ test('GPT Builder Screen matches Salesforce frame navigation palette drag reorde
   const runtime = await readFile(new URL('../server/services/platformWorkflow.js', import.meta.url), 'utf8')
   for (const text of [
     'Components',
-    'Configure Frame',
+    'Configure Header',
     'Control Navigation',
     'Show Header',
     'Show Footer',
@@ -510,6 +510,7 @@ test('GPT Builder Group supports add-inside move keyboard delete and keep-or-del
 test('GPT Builder Group matches Salesforce auto-layout visual grouping and browser-local collapse behavior', async () => {
   const editor = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderGroup.jsx', import.meta.url), 'utf8')
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const canvas = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderReactFlowCanvas.jsx', import.meta.url), 'utf8')
   const css = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.css', import.meta.url), 'utf8')
   const elements = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderElements.jsx', import.meta.url), 'utf8')
   assert.match(editor, /Groups organize auto-layout elements visually and don't change runtime behavior/)
