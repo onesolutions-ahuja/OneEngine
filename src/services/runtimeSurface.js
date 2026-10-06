@@ -32,3 +32,13 @@ export function surfacePath(source, path, fallback = undefined) {
   for (const part of parts) current = current?.[part]
   return current === undefined ? fallback : current
 }
+
+
+export function mapRuntimePayload(mapping, values = {}) {
+  const result = {}
+  for (const [semanticKey, targetKey] of Object.entries(mapping || {})) {
+    if (!targetKey || values?.[semanticKey] === undefined) continue
+    result[targetKey] = values[semanticKey]
+  }
+  return result
+}
