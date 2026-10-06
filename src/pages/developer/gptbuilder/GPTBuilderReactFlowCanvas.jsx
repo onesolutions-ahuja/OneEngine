@@ -424,8 +424,6 @@ export default function GPTBuilderReactFlowCanvas({
             defaultViewport={{ x: 140, y: 24, zoom: 0.8 }}
             minZoom={0.25}
             maxZoom={2}
-            nodesDeletable={false}
-            edgesDeletable={false}
             deleteKeyCode={null}
             proOptions={{ hideAttribution: true }}
           ><Controls position="bottom-left" showInteractive={false}/></ReactFlow>
