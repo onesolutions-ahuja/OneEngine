@@ -2390,7 +2390,7 @@ export function packageDefinition(entry) {
           { parentObjectKey:"sale",childObjectKey:"refund",relationshipKey:"refunds",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
           { parentObjectKey:"sale",childObjectKey:"stock_return",relationshipKey:"returns",relationshipType:"one_to_many",childFieldApiName:"sale_id" },
           { parentObjectKey:"stock_return",childObjectKey:"stock_return_line",relationshipKey:"items",relationshipType:"one_to_many",childFieldApiName:"return_id" },
-          { parentObjectKey:"payment",childObjectKey:"sale",relationshipKey:"sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
+          { parentObjectKey:"sale",childObjectKey:"payment",relationshipKey:"payment_sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
         ],
         rules: [
           { objectKey:"till_session",name:"Opening cash cannot be negative",triggerKey:"before_save",conditions:[{field:"opening_cash",operator:"less_than",value:0}],action:{type:"validation",message:"Opening cash cannot be negative"} },
