@@ -1,16 +1,5 @@
 import express from "express";
 import { createHash } from "node:crypto";
-import { allocateBatchConsumption } from "../services/inventory.js";
-import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
-import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
-import { getRequestPool } from "../services/tenantDatabase.js";
-import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
-import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes, listPaymentMethods } from "../services/paymentMethods.js";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
-import { executeWorkflowActions } from "../services/platformWorkflow.js";
-import { evaluateValidationRules } from "../services/platformValidation.js";
-
-export const PAYMENT_METHODS = DEFAULT_PAYMENT_METHODS.map((method) => method.code);
 
 function roundCurrency(value) {
   const numeric = Number(value) || 0;
