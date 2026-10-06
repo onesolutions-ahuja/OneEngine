@@ -569,5 +569,10 @@
       "status": "UNTESTED",
       "evidence": []
     }
-  ]
+  ],
+  "phase3": {
+    "status": "IN_PROGRESS",
+    "note": "Till and Kiosk legacy pages/routes/packages removed by user direction; reusable retail platform capabilities retained as generic metadata/runtime primitives.",
+    "lastVerificationHead": "c359e72675b95c73bb86f1b1bc654aaf15954799"
+  }
 }
