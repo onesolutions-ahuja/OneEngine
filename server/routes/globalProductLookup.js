@@ -75,7 +75,7 @@ function sanitizeSettings(body, providerKey, current) {
   return next;
 }
 
-export default function createGlobalProductLookupRouter({ authenticate, authorize, db, writeAudit, lookupService, connectorDrivers = null }) {
+export default function createGlobalProductLookupRouter({ authenticate, authorize, db, writeAudit, connectorDrivers = null }) {
   const router = express.Router();
 
   async function providerRows(companyId) {
@@ -158,46 +158,34 @@ export default function createGlobalProductLookupRouter({ authenticate, authoriz
     }
   });
 
-  router.get("/global-products/search", authenticate, authorize("global_product.view"), async (req, res) => {
-    try {
-      const result = await lookupService.search({
-        db,
-        companyId: req.user.companyId,
-        reqCompanyId: req.user.companyId,
-        query: req.query?.q,
-        providerKey: req.query?.providerKey || null,
-        page: req.query?.page,
-        pageSize: req.query?.pageSize,
-      });
-      res.json({ success: true, data: result });
-    } catch (error) {
-      const status = error?.code === "INVALID_SEARCH" ? 400 : 500;
-      res.status(status).json({
-        success: false,
-        code: error?.code || "SEARCH_FAILED",
-        message: status === 400 ? error.message : "Unable to search the global product database",
-      });
-    }
+  router.get("/global-products/search", authenticate, authorize("global_product.view"), async (_req, res) => {
+    res.status(400).json({ success:false, code:"FLOW_INPUT_REQUIRED", message:"Global product search must execute a configured metadata Flow/connector operation." });
   });
 
   router.post("/global-products/lookup", authenticate, authorize("global_product.view"), async (req, res) => {
     try {
-      const result = await lookupService.lookup({
-        db,
-        companyId: req.user.companyId,
-        reqCompanyId: req.user.companyId,
-        barcode: req.body?.barcode,
-        providerKey: req.body?.providerKey || null,
+      const barcode = String(req.body?.barcode || "").trim();
+      if (!/^([0-9]{8}|[0-9]{12,14})$/.test(barcode)) return res.status(400).json({ success:false, code:"INVALID_BARCODE", message:"Barcode must contain 8, 12, 13 or 14 digits" });
+      const providerKey = String(req.body?.providerKey || "").trim();
+      const connection = await db(
+        `SELECT id,provider_name FROM integration_connections
+          WHERE company_id=$1 AND enabled=TRUE AND integration_type='product_lookup'
+            AND ($2::text='' OR provider_name=$2)
+          ORDER BY fallback_order ASC,updated_at DESC LIMIT 1`,
+        [req.user.companyId, providerKey]
+      );
+      if (!connection.rows[0]?.id) return res.status(503).json({ success:false, code:"NO_PROVIDER", message:"No configured product lookup connector is available" });
+      const execution = await executeSystemWorkflow({
+        db, companyId:req.user.companyId, userId:req.user.id || null,
+        systemKey:"flow:global_product.lookup", req,
+        input:{ connectionId:connection.rows[0].id, barcode, operation:"product.lookup" },
+        storeId:req.user.storeId || null, writeAudit,
+        source:{ type:"api", method:req.method, path:req.path, capability:"GLOBAL_PRODUCT_LOOKUP" },
+        extraContext:{ connectorDrivers },
       });
-      if (result.status === "unavailable" && writeAudit) {
-        await writeAudit(req.user.companyId, req.user.id, "global_product_lookup_unavailable", "global_product_lookup", null, {
-          barcode: result.barcode, providerErrors: result.providerErrors,
-        });
-      }
-      res.json({ success: true, data: result });
+      res.json({ success:true, data:execution.result });
     } catch (error) {
-      const status = error?.code === "INVALID_BARCODE" ? 400 : 500;
-      res.status(status).json({ success: false, code: error?.code || "LOOKUP_FAILED", message: status === 400 ? error.message : "Unable to look up this barcode" });
+      res.status(500).json({ success:false, code:error?.code || "LOOKUP_FAILED", message:"Unable to look up this barcode" });
     }
   });
 

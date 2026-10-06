@@ -1,10 +1,7 @@
 import express from "express";
 import { createHash } from "node:crypto";
-import { allocateBatchConsumption } from "../services/inventory.js";
-import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
 import { getRequestPool } from "../services/tenantDatabase.js";
-import { syncCanonicalSaleTransaction } from "../services/canonicalTransactions.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes, listPaymentMethods } from "../services/paymentMethods.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { executeWorkflowActions } from "../services/platformWorkflow.js";
@@ -44,7 +41,6 @@ export default function createSalesRouter({
   getRolePermissionCodes = null,
   canViewCompanyCustomers = null,
   requestPool = null,
-  canonicalTransactionWriter = null,
   connectorDrivers = null,
   savePlatformRecord = null,
 }) {
@@ -995,254 +991,95 @@ export default function createSalesRouter({
         /* T10R: bound (was inline 'completed') so the loyalty earn guard
          * reads a real status; only earnable statuses award points. */
         const saleStatus = "completed";
-        const sale = await client.query(
-          `
-          INSERT INTO sales (
-            company_id,
-            store_id,
-            user_id,
-            customer_id,
-            terminal_id,
-            receipt_number,
-            subtotal,
-            tax,
-            discount,
-            total,
-            cash_received,
-            line_count,
-            status,
-            offline_created,
-            sync_status,
-            client_request_id,
-            client_request_fingerprint,
-            completed_at
-          )
-          VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$14,$15,
-            $12,
-            false,
-            'synced',
-            $11,
-            $13,
-            NOW()
-          )
-          RETURNING
-            id,
-            created_at,
-            total,
-            cash_received,
-            receipt_number
-          `,
-          [
-            req.user.companyId,
-            req.user.storeId,
-            req.user.id,
-            customerId,
-            session.rows[0].terminal_id,
-            receiptNumber,
-            Number(subtotal) || 0,
-            Number(tax) || 0,
-            Number(discount) || 0,
-            Number(total) || 0,
-            clientRequestId,
-            clientRequestFingerprint,
-            saleStatus,
-            selectedPaymentConfig.requiresCashReceived === true ? (Number.isFinite(receivedAmount) ? receivedAmount : Number(total) || 0) : null,
-            saleLineCount,
-          ]
-        );
-
-        const saleId = sale.rows[0].id;
-
-        /* Catalogue sale items and their stock movements. Flow-owned extension lines are persisted separately below. */
-          const saleItemIds = [];
-          for (const [itemIndex, item] of items.entries()) {
+        const saleLineRecords = [];
+        const saleItemFeatureMap = [];
+        for (const [itemIndex, item] of items.entries()) {
           const product = await client.query(
-            `
-          SELECT
-            id,
-            name,
-            price,
-            vat_rate,
-            track_stock
-          FROM products
-          WHERE id = $1
-            AND company_id = $2
-            AND active = true
-          `,
+            `SELECT id,name,price,vat_rate,track_stock,batch_tracking
+               FROM products WHERE id=$1 AND company_id=$2 AND active=true`,
             [item.productId, req.user.companyId]
           );
-
           const p = product.rows[0];
-          if (!p) {
-            throw Object.assign(new Error(`Product ${item.productId} was not found`), { statusCode: 400 });
-          }
-          const batch = await client.query(
-            `SELECT batch_tracking
-             FROM products
-             WHERE id = $1 AND company_id = $2 AND active = true`,
-            [item.productId, req.user.companyId]
-          );
-          p.batch_tracking = batch.rows[0]?.batch_tracking === true;
-          const features = lineFeatures.get(String(item.productId)) || { modifiers: [], bundleComponents: [] };
+          if (!p) throw Object.assign(new Error(`Product ${item.productId} was not found`), { statusCode:400 });
+          const features = lineFeatures.get(String(item.productId)) || { modifiers:[], bundleComponents:[] };
+          saleLineRecords.push({
+            product_id:item.productId, product_name:p.name, quantity:Number(item.quantity)||1,
+            unit_price:effectiveLinePrice[itemIndex], discount:Number(item.discount)||0,
+            tax:Number(item.tax)||0, total:Number(item.total)||0, item_type:"PRODUCT",
+            discount_type:item.discountType||null, discount_value:Number(item.discountValue)||0,
+            original_unit_price:catalogueLinePrice[itemIndex], original_tax:Number(p.vat_rate||0)/100,
+            original_total:roundCurrency(effectiveLinePrice[itemIndex]*(Number(item.quantity)||1)),
+            discounted_by:item.discountedBy||null, modifier_data:features.modifiers,
+            bundle_components:features.bundleComponents,
+          });
+          saleItemFeatureMap.push({ item, product:p, features });
+        }
+        for (const line of extensionLines) {
+          const gross=roundCurrency(line.unitPrice*line.quantity);
+          const lineTax=vatEnabled===false?0:roundCurrency(gross*line.vatRate);
+          saleLineRecords.push({ product_id:line.productId, product_name:line.description, quantity:line.quantity,
+            unit_price:line.unitPrice, discount:0, tax:lineTax, total:roundCurrency(gross+lineTax), item_type:"PRODUCT" });
+        }
+        const persistence = await executeSystemWorkflow({
+          db:(sql,params=[])=>client.query(sql,params), companyId:req.user.companyId, userId:req.user.id||null,
+          systemKey:"flow:sale.persist", req,
+          input:{
+            sale:{ company_id:req.user.companyId, store_id:req.user.storeId, user_id:req.user.id, customer_id:customerId,
+              terminal_id:session.rows[0].terminal_id, receipt_number:receiptNumber, subtotal:Number(subtotal)||0,
+              tax:Number(tax)||0, discount:Number(discount)||0, total:Number(total)||0,
+              cash_received:selectedPaymentConfig.requiresCashReceived===true?(Number.isFinite(receivedAmount)?receivedAmount:Number(total)||0):null,
+              line_count:saleLineCount, status:saleStatus, offline_created:false, sync_status:"synced",
+              client_request_id:clientRequestId, client_request_fingerprint:clientRequestFingerprint, completed_at:new Date().toISOString() },
+            items:saleLineRecords,
+          },
+          storeId:req.user.storeId||null,
+          source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"sale.persist"},
+        });
+        const sale = { rows:[persistence.result?.sale || {}] };
+        const saleId = persistence.result?.sale?.id;
+        if (!saleId) throw new Error("Sale persistence Flow did not return a sale id");
+        const persistedItems = Array.isArray(persistence.result?.saleItems) ? persistence.result.saleItems : [];
+        const saleItemIds = persistedItems.map(row=>row?.id||null);
+
+        for (const [itemIndex, entry] of saleItemFeatureMap.entries()) {
+          const { item, product:p, features } = entry;
           const stockLines = features.bundleComponents.length
             ? expandBundleComponents(item.quantity, features.bundleComponents)
-            : p.track_stock
-              ? [{ productId: item.productId, quantity: Number(item.quantity) || 1 }]
-              : [];
-          for (const modifier of features.modifiers) {
-            if (modifier.trackStock && modifier.inventoryProductId) {
-              stockLines.push({
-                productId: modifier.inventoryProductId,
-                quantity: modifier.quantity * (Number(item.quantity) || 1),
-              });
-            }
+            : p.track_stock ? [{productId:item.productId,quantity:Number(item.quantity)||1}] : [];
+          for (const modifier of features.modifiers) if (modifier.trackStock && modifier.inventoryProductId) {
+            stockLines.push({productId:modifier.inventoryProductId,quantity:modifier.quantity*(Number(item.quantity)||1)});
           }
           for (const stockLine of stockLines) {
-            const movementExecution = await executeSystemWorkflow({
-              db: (sql, params = []) => client.query(sql, params),
-              companyId: req.user.companyId,
-              userId: req.user.id || null,
-              systemKey: "flow:inventory.movement.create",
-              req,
-              input: {
-                productId: stockLine.productId,
-                storeId: inventoryStoreId,
-                movementType: "SALE",
-                quantityChange: -stockLine.quantity,
-                referenceType: "SALE",
-                referenceId: saleId,
-                createdBy: req.user.id || "",
-              },
-              storeId: inventoryStoreId,
-              source: { type: "flow", capability: "inventory.movement.create" },
+            await executeSystemWorkflow({
+              db:(sql,params=[])=>client.query(sql,params), companyId:req.user.companyId, userId:req.user.id||null,
+              systemKey:"flow:inventory.movement.create", req,
+              input:{productId:stockLine.productId,storeId:inventoryStoreId,movementType:"SALE",quantityChange:-stockLine.quantity,
+                referenceType:"SALE",referenceId:saleId,createdBy:req.user.id||""},
+              storeId:inventoryStoreId, source:{type:"flow",capability:"inventory.movement.create"},
             });
-
-            if (stockLine.productId === item.productId) p.stock_quantity = Number(movementExecution.result?.balance || 0);
-
-            /*
-             * Batch / expiry tracking: keep this store's batch rows in step
-             * with the sale. Only products flagged batch_tracking allocate
-             * (no-op otherwise — zero extra queries); allocation is FEFO
-             * (First Expired, First Out). The authoritative stock deduction
-             * is the movement above; this only moves the batch bookkeeping
-             * so the ledger and the batches can never disagree. Same
-             * transaction — sale failure rolls both back together.
-             */
-            if (p.batch_tracking && stockLine.productId === item.productId) {
-              await allocateBatchConsumption(client, {
-                companyId: req.user.companyId,
-                storeId: inventoryStoreId,
-                productId: item.productId,
-                quantity: stockLine.quantity,
-                mode: "fefo",
+            if (p.batch_tracking && stockLine.productId===item.productId) {
+              await executeSystemWorkflow({
+                db:(sql,params=[])=>client.query(sql,params), companyId:req.user.companyId, userId:req.user.id||null,
+                systemKey:"flow:inventory.batch.consume", req,
+                input:{productId:item.productId,storeId:inventoryStoreId,quantity:stockLine.quantity,mode:"fefo"},
+                storeId:inventoryStoreId, source:{type:"flow",capability:"inventory.batch.consume"},
               });
             }
           }
-
-          const itemInsert = await client.query(
-            `
-          INSERT INTO sale_items (
-            sale_id,
-            product_id,
-            product_name,
-            quantity,
-            unit_price,
-            discount,
-            tax,
-            total,
-            item_type,
-            discount_type,
-            discount_value,
-            original_unit_price,
-            original_tax,
-            original_total,
-            discounted_by,
-            modifier_data,
-            bundle_components
-          )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'PRODUCT',$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb)
-          RETURNING id
-          `,
-             [
-               saleId,
-               item.productId,
-               p.name,
-               Number(item.quantity) || 1,
-               effectiveLinePrice[itemIndex],
-               Number(item.discount) || 0,
-               Number(item.tax) || 0,
-               Number(item.total) || 0,
-               item.discountType || null,
-               Number(item.discountValue) || 0,
-               catalogueLinePrice[itemIndex],
-               Number(p.vat_rate || 0) / 100,
-               roundCurrency(effectiveLinePrice[itemIndex] * (Number(item.quantity) || 1)),
-               item.discountedBy || null,
-               JSON.stringify(features.modifiers),
-               JSON.stringify(features.bundleComponents),
-             ]
-           );
-          const saleItemId = itemInsert?.rows?.[0]?.id || null;
-          saleItemIds.push(saleItemId);
-          for (const modifier of features.modifiers) {
-            if (!saleItemId) continue;
-            await client.query(
-              `INSERT INTO sale_item_modifiers
-                (sale_item_id, modifier_option_id, quantity, unit_price, total)
-               VALUES ($1,$2,$3,$4,$5)`,
-              [saleItemId, modifier.optionId, modifier.quantity, modifier.price,
-                roundCurrency(modifier.quantity * modifier.price)]
-            );
-          }
+          const saleItemId=saleItemIds[itemIndex]||null;
         }
 
-        for (const line of extensionLines) {
-          const gross = roundCurrency(line.unitPrice * line.quantity);
-          const lineTax = vatEnabled === false ? 0 : roundCurrency(gross * line.vatRate);
-          const lineTotal = roundCurrency(gross + lineTax);
-          const inserted = await client.query(
-            `INSERT INTO sale_items (sale_id,product_id,product_name,quantity,unit_price,discount,tax,total,item_type)
-             VALUES ($1,$2,$3,$4,$5,0,$6,$7,'PRODUCT') RETURNING id`,
-            [saleId,line.productId,line.description,line.quantity,line.unitPrice,lineTax,lineTotal]
-          );
-          saleItemIds.push(inserted.rows[0]?.id || null);
+        const modifierAuditRecords = saleItemFeatureMap.flatMap((entry,itemIndex)=>entry.features.modifiers.map((modifier)=>({sale_item_id:saleItemIds[itemIndex]||null,modifier_option_id:modifier.optionId,quantity:modifier.quantity,unit_price:modifier.price,total:roundCurrency(modifier.quantity*modifier.price)}))).filter((row)=>row.sale_item_id);
+        const discountAuditRecords = saleDiscountAudit.map((entry)=>({sale_id:saleId,item_id:entry.itemIndex!=null?(saleItemIds[entry.itemIndex]||null):null,user_id:entry.userId,type:entry.discountType,value:entry.discountValue,amount:entry.amount}));
+        const priceOverrideAuditRecords = salePriceOverride.map((entry)=>({sale_id:saleId,item_id:entry.itemIndex!=null?(saleItemIds[entry.itemIndex]||null):null,product_id:entry.productId,user_id:entry.userId,original_unit_price:entry.originalUnitPrice,overridden_unit_price:entry.overriddenUnitPrice,reason:entry.reason}));
+        if (modifierAuditRecords.length || discountAuditRecords.length || priceOverrideAuditRecords.length) {
+          await executeSystemWorkflow({
+            db:(sql,params=[])=>client.query(sql,params), companyId:req.user.companyId, userId:req.user.id||null,
+            systemKey:"flow:sale.audit.persist", req,
+            input:{modifiers:modifierAuditRecords,discounts:discountAuditRecords,priceOverrides:priceOverrideAuditRecords},
+            storeId:req.user.storeId||null, source:{type:"flow",capability:"sale.audit.persist"},
+          });
         }
-
-         /*
-          * T10-DISCOUNT: audit trail for every discount applied to this sale.
-          * Per-line entries reference the sale_items row; order-level entries
-          * have item_id NULL. Persisted atomically with the sale.
-          */
-          for (const entry of saleDiscountAudit) {
-            const itemId = entry.itemIndex != null ? saleItemIds[entry.itemIndex] : null;
-            await client.query(
-              `
-              INSERT INTO sale_discounts
-                (sale_id, item_id, user_id, type, value, amount)
-              VALUES ($1, $2, $3, $4, $5, $6)
-              `,
-              [saleId, itemId || null, entry.userId, entry.discountType, entry.discountValue, entry.amount]
-            );
-          }
-
-          /*
-           * T10-PRICE: audit trail for manual price overrides (sale.price_change).
-           * Persisted atomically with the sale; links the sale, sale_item and
-           * product with the original and overridden unit prices and the actor.
-           */
-          for (const entry of salePriceOverride) {
-            const itemId = entry.itemIndex != null ? saleItemIds[entry.itemIndex] : null;
-            await client.query(
-              `
-              INSERT INTO sale_price_overrides
-                (sale_id, item_id, product_id, user_id, original_unit_price, overridden_unit_price, reason)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)
-              `,
-              [saleId, itemId, entry.productId, entry.userId, entry.originalUnitPrice, entry.overriddenUnitPrice, entry.reason]
-            );
-          }
-
 
         /*
           * Payment records — one row per tender.
@@ -1282,14 +1119,17 @@ export default function createSalesRouter({
 
 
 
-        if (typeof canonicalTransactionWriter === "function") {
-          await canonicalTransactionWriter(client, {
-            saleId,
-            companyId: req.user.companyId,
-            storeId: req.user.storeId,
-            transactionType: "SALE",
-          });
-        }
+        await executeSystemWorkflow({
+          db: (sql, params=[]) => client.query(sql, params),
+          companyId: req.user.companyId,
+          userId: req.user.id || null,
+          systemKey: "flow:sale.canonical.post",
+          req,
+          input: { saleId, companyId:req.user.companyId, storeId:req.user.storeId, transactionType:"SALE" },
+          storeId: req.user.storeId,
+          writeAudit,
+          source: { type:"sale", method:req.method, path:req.path, capability:"SALE_CANONICAL_POST" },
+        });
 
         /*
          * Platform record lifecycle hook. This keeps the protected Sales
@@ -1391,17 +1231,6 @@ export default function createSalesRouter({
             })()
           ).catch((auditError) => console.error("Negative-stock audit write error:", auditError));
         }
-
-        /*
-         * T9G: fire-and-forget integration dispatch (never blocks/throws -
-         * partner failures cannot affect the completed sale).
-         */
-        dispatchIntegrationEvent({
-          event: "SALE_CREATED",
-          deps: { db },
-          context: { companyId: req.user.companyId, storeId: req.user.storeId },
-          entityId: saleId,
-        }).catch(() => {});
 
         res.status(201).json({
           success: true,
