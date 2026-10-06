@@ -65,12 +65,10 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
       if (!terminalId) {
         return res.status(400).json({ success: false, message: "A till is required" });
       }
-      const config = await db(
-        "SELECT connection_mode, wifi_mode FROM mobile_scanner_settings WHERE company_id = $1 AND store_id = $2",
-        [req.user.companyId, req.user.storeId]
-      );
-      const connectionMode = config.rows[0]?.connection_mode || "WIFI_QR";
-      const wifiMode = config.rows[0]?.wifi_mode || "LOCAL_ONLY";
+      // Connection policy is supplied by metadata/UI configuration; this transport
+      // validates protocol values but does not persist or own business settings.
+      const connectionMode = String(req.body?.connectionMode || "WIFI_QR").toUpperCase();
+      const wifiMode = String(req.body?.wifiMode || "LOCAL_ONLY").toUpperCase();
       if (connectionMode !== "WIFI_QR") return res.status(409).json({ success: false, message: "Selected scanner connection mode is not supported" });
       const allowed = await db(
         `SELECT t.id FROM terminals t INNER JOIN stores s ON s.id = t.store_id
