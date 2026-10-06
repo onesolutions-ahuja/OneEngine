@@ -239,7 +239,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     await page.goto('developer/gptbuilder')
     await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByRole('button', { name: 'Contract Persistence Flow' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Contract Persistence Flow', exact: true })).toBeVisible()
     await page.getByRole('button', { name: /Edit Contract Persistence Flow/i }).click()
     await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
     await page.getByRole('button', { name: 'View Properties' }).click()
