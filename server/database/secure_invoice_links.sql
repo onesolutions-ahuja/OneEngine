@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS secure_invoice_links (
 
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID REFERENCES stores(id),
-    sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    sale_id UUID NOT NULL REFERENCES sale_ledger(id) ON DELETE CASCADE,
 
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
 
