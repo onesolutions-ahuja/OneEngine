@@ -132,3 +132,59 @@ test("Phase 2 publishes runtime surface metadata through package definitions", a
     "/api/platform/objects/till_session/records"
   ]) assert.equal(till.includes(token),false,token);
 });
+
+
+test("Phase 2 Till has no direct business record-column wiring", async()=>{
+  const source=await read("src/pages/till/TillPage.jsx");
+  for(const token of [
+    "receipt_number","change_due","customer_name","discount_type","discount_value",
+    "product_id","provider_transaction_id","terminal_number",
+    "/api/mobile-scanner/events"
+  ]) assert.equal(source.includes(token),false,token);
+  assert.match(source,/mappedValue\(/);
+  assert.match(source,/runtimeEndpoint\(runtimeSurface, 'scannerEvents'/);
+});
+
+test("Phase 2 OneKiosk contracts are package-metadata owned", async()=>{
+  const kiosk=await read("src/pages/kiosk/OneKioskPage.jsx");
+  const display=await read("src/pages/kiosk/OneKioskDisplayPage.jsx");
+  const catalog=await read("server/packages/packageManifestCatalog.js");
+  for(const source of [kiosk,display]){
+    assert.equal(/\/api\/kiosk\//.test(source),false);
+  }
+  for(const token of ['"COMPLETED"','"SYNCED"','"READY_FOR_PICKUP"','"PREPARING"','"ACCEPTED"']){
+    assert.equal(kiosk.includes(token),false,token);
+    assert.equal(display.includes(token),false,token);
+  }
+  assert.match(catalog,/key: "one_kiosk"[\s\S]*runtimeSurfaces:[\s\S]*kiosk:/);
+  assert.match(kiosk,/runtimeEndpoint\(/);
+  assert.match(display,/runtimeEndpoint\(/);
+});
+
+test("Phase 2 integration mapping catalogue is platform-metadata driven", async()=>{
+  const catalogue=await read("src/services/integrationFieldCatalogue.js");
+  const editor=await read("src/pages/integrations/MappingEditorModal.jsx");
+  const server=await read("server/routes/integrations.js");
+  for(const token of ["sales.","purchase.","return.","product.ean","customer.name"]){
+    assert.equal(catalogue.includes(token),false,token);
+    assert.equal(editor.includes(token),false,token);
+  }
+  assert.match(catalogue,/\/api\/integrations\/field-catalogue/);
+  assert.match(editor,/getIntegrationFieldCatalogue\(\)/);
+  assert.match(server,/\/integrations\/field-catalogue/);
+  assert.match(server,/platform_objects/);
+  assert.match(server,/platform_fields/);
+});
+
+test("Phase 2 connector settings have no provider-specific shell implementation", async()=>{
+  const app=await read("src/App.jsx");
+  const connector=await read("src/pages/settings/ConnectorAppSettings.jsx");
+  const catalog=await read("server/packages/packageManifestCatalog.js");
+  assert.equal(app.includes("GoogleConnectSettings"),false);
+  assert.equal(app.includes("activeApp === 'google-connect'"),false);
+  for(const provider of ["Square","Dojo","SumUp","SMSGate","Shopify"]){
+    assert.equal(connector.includes(provider),false,provider);
+  }
+  assert.match(connector,/loadRuntimeSurface\(packageKey, "connectorSettings"\)/);
+  assert.match(catalog,/key: "one_connect_google"[\s\S]*\/app\/connector-settings\/one_connect_google/);
+});
