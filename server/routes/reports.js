@@ -430,7 +430,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const sourceInput=reportType?{...req.body,dataSource:"platform_object",objectId:reportType.definition.primaryObjectId,reportTypeId:reportType.row.id}:req.body;
       const definition=normalizeAdvancedReportDefinition(sourceInput);
       if(definition.dataSource==="platform_object"){const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
-      const stores=definition.dataSource==="platform_object"?[]:await accessibleStores(req,requestedStoreIds(definition));
+      const stores=[];
       const result=await db("UPDATE custom_reports SET name=$3,description=$4,data_source=$5,report_type_id=$6,definition=$7::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *",
         [req.params.id,req.user.companyId,name,String(req.body.description||report.description||"").slice(0,500),definition.dataSource||"platform_object",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
       res.json({success:true,data:result.rows[0]});
