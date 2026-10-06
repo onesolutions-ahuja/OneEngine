@@ -33,8 +33,7 @@ const PACKAGE_CATALOG = [
     route: "/app/products",
     permissions: [
       "product.view", "product.create", "product.edit", "product.delete",
-      "category.view", "category.create", "category.edit", "category.delete",
-    ],
+      "category.view", "category.create", "category.edit", "category.delete"],
     storeScoped: false,
     category: "Catalogue & Supply",
     packageType: "FOUNDATION",
@@ -77,8 +76,7 @@ const PACKAGE_CATALOG = [
       "hospitality.bill.split",
       "hospitality.table.transfer",
       "hospitality.service_charge.override",
-      "hospitality.qr.manage",
-    ],
+      "hospitality.qr.manage"],
     storeScoped: true,
     category: "Operations",
   },
@@ -320,12 +318,10 @@ const PACKAGE_CATALOG = [
         { key: "payment.refund", requiredPermissions: ["sale.refund"] },
         { key: "payment.status", requiredPermissions: ["sale.view"] },
         { key: "payment.test", requiredPermissions: ["integration.manage"] },
-        { key: "payment.health", requiredPermissions: ["connector.view"] },
-      ],
+        { key: "payment.health", requiredPermissions: ["connector.view"] }],
       configurationSchema: [
         { key: "mode", type: "string", required: true, default: "TEST", enum: ["TEST"] },
-        { key: "simulatedOutcome", type: "string", required: true, default: "APPROVED", enum: ["APPROVED", "DECLINED", "OFFLINE", "TIMEOUT", "ERROR"] },
-      ],
+        { key: "simulatedOutcome", type: "string", required: true, default: "APPROVED", enum: ["APPROVED", "DECLINED", "OFFLINE", "TIMEOUT", "ERROR"] }],
     },
   },
   {
@@ -351,8 +347,7 @@ const PACKAGE_CATALOG = [
         { key: "payment.refund", requiredPermissions: ["sale.refund"] },
         { key: "payment.status", requiredPermissions: ["sale.view"] },
         { key: "payment.test", requiredPermissions: ["integration.manage"] },
-        { key: "payment.health", requiredPermissions: ["connector.view"] },
-      ],
+        { key: "payment.health", requiredPermissions: ["connector.view"] }],
       configurationSchema: [
         { key: "environment", type: "picklist", required: true, default: "DEMO", enum: ["DEMO", "SANDBOX", "LIVE"] },
         { key: "enabled", type: "boolean", default: false },
@@ -371,8 +366,7 @@ const PACKAGE_CATALOG = [
         { key: "tillIds", type: "till lookup", label: "Till assignment" },
         { key: "autoCloseSuccess", type: "boolean", default: true, label: "Auto close on success" },
         { key: "testConnection", type: "action", label: "Test connection" },
-        { key: "connectionStatus", type: "readonly", label: "Connection status" },
-      ],
+        { key: "connectionStatus", type: "readonly", label: "Connection status" }],
     },
   },
   {
@@ -422,8 +416,7 @@ const PACKAGE_CATALOG = [
         { key: "payment.cancel", selfCheckoutSupported: true, requiredPermissions: ["sale.create"] },
         { key: "payment.status", requiredPermissions: ["sale.view"] },
         { key: "payment.health", requiredPermissions: ["connector.view"] },
-        { key: "payment.test", requiredPermissions: ["integration.manage"] },
-      ],
+        { key: "payment.test", requiredPermissions: ["integration.manage"] }],
       metadataSchema: {
         providerKey: "dojo",
         storeRelationship: true,
@@ -444,8 +437,7 @@ const PACKAGE_CATALOG = [
         { key: "storeId", type: "store lookup", label: "Store assignment" },
         { key: "tillId", type: "till lookup", label: "Till assignment" },
         { key: "testConnection", type: "action", label: "Test connection" },
-        { key: "healthStatus", type: "readonly", label: "Health status" },
-      ],
+        { key: "healthStatus", type: "readonly", label: "Health status" }],
     },
   },
   {
@@ -473,8 +465,7 @@ const PACKAGE_CATALOG = [
         { key: "payment.cancel", selfCheckoutSupported: true, requiredPermissions: ["sale.create"] },
         { key: "payment.status", requiredPermissions: ["sale.view"] },
         { key: "payment.health", requiredPermissions: ["connector.view"] },
-        { key: "payment.test", requiredPermissions: ["integration.manage"] },
-      ],
+        { key: "payment.test", requiredPermissions: ["integration.manage"] }],
       metadataSchema: {
         providerKey: "sumup",
         storeRelationship: true,
@@ -495,8 +486,7 @@ const PACKAGE_CATALOG = [
         { key: "tillId", type: "till lookup", label: "Till assignment" },
         { key: "selfCheckoutSupported", type: "boolean", default: true, label: "Self Checkout supported" },
         { key: "testConnection", type: "action", label: "Test connection" },
-        { key: "healthStatus", type: "readonly", label: "Health status" },
-      ],
+        { key: "healthStatus", type: "readonly", label: "Health status" }],
     },
   },
   {
@@ -524,8 +514,7 @@ const PACKAGE_CATALOG = [
         { key: "payment.cancel", selfCheckoutSupported: true, requiredPermissions: ["sale.create"] },
         { key: "payment.status", requiredPermissions: ["sale.view"] },
         { key: "payment.health", requiredPermissions: ["connector.view"] },
-        { key: "payment.test", requiredPermissions: ["integration.manage"] },
-      ],
+        { key: "payment.test", requiredPermissions: ["integration.manage"] }],
       metadataSchema: {
         providerKey: "square",
         storeRelationship: true,
@@ -546,8 +535,7 @@ const PACKAGE_CATALOG = [
         { key: "storeId", type: "store lookup", label: "Store assignment" },
         { key: "tillId", type: "till lookup", label: "Till assignment" },
         { key: "testConnection", type: "action", label: "Test connection" },
-        { key: "healthStatus", type: "readonly", label: "Health status" },
-      ],
+        { key: "healthStatus", type: "readonly", label: "Health status" }],
     },
   },
   {
@@ -611,8 +599,7 @@ const PACKAGE_CATALOG = [
       optionalCapabilities: ["bluetooth_scanner"],
       configurationSchema: [
         { key: "connectionMode", type: "string", default: "WIFI_QR", enum: ["WIFI_QR", "BLUETOOTH"] },
-        { key: "wifiMode", type: "string", default: "LOCAL_ONLY", enum: ["LOCAL_ONLY", "SERVER_RELAY"] },
-      ],
+        { key: "wifiMode", type: "string", default: "LOCAL_ONLY", enum: ["LOCAL_ONLY", "SERVER_RELAY"] }],
     },
   },
   {
@@ -697,7 +684,7 @@ const PACKAGE_CATALOG = [
       settings: ["fromEmail", "fromName", "apiKey"],
       mappings: ["recipient_email", "subject", "message_template", "provider_message_id"],
       events: ["communication.message_sent", "communication.message_delivered", "communication.message_failed"],
-      actions: ["SEND_EMAIL_BREVO"],
+      actions: [],
     },
     connectorApp: {
       type: "communication",
@@ -758,7 +745,7 @@ const PACKAGE_CATALOG = [
       settings: ["fromEmail", "fromName", "apiKey", "secretKey"],
       mappings: ["recipient_email", "subject", "message_template", "provider_message_id"],
       events: ["communication.message_sent", "communication.message_delivered", "communication.message_failed"],
-      actions: ["SEND_EMAIL_MAILJET"],
+      actions: [],
     },
     connectorApp: {
       type: "communication",
@@ -920,7 +907,7 @@ const PACKAGE_CATALOG = [
         "communication.message_delivered",
         "communication.message_failed"
       ],
-      actions: ["SEND_COMMUNICATION", "WHATSAPP_TEST_CONNECTION", "WHATSAPP_SYNC_MESSAGE_STATUS"],
+      actions: ["SEND_COMMUNICATION"],
     },
     iconAssetKey: "whatsapp",
   },
@@ -1052,7 +1039,7 @@ const PACKAGE_CATALOG = [
       settings: ["shop_domain", "environment", "price_list_id", "default_store_id", "catalogue_sync", "inventory_sync", "order_import", "customer_linking"],
       mappings: ["product", "variant", "price", "store_location", "order_status", "fulfilment_status", "tax"],
       webhooks: ["orders/create", "orders/updated", "orders/fulfilled", "orders/cancelled", "refunds/create", "fulfillments/create", "fulfillments/update", "products/create", "products/update", "products/delete", "inventory_levels/update"],
-      actions: ["CONNECTOR_TEST_CONNECTION", "SHOPIFY_PROCESS_WEBHOOK", "SHOPIFY_SYNC_PRODUCTS", "SHOPIFY_SYNC_INVENTORY", "SHOPIFY_EXPORT_FULFILMENT", "SHOPIFY_EXPORT_REFUND", "SHOPIFY_RETRY_FAILED_SYNC"],
+      actions: ["CONNECTOR_TEST_CONNECTION"],
     },
   },
   {
@@ -1134,7 +1121,7 @@ const PACKAGE_CATALOG = [
         configurableFields: ["baseUrl", "enabled", "priority", "timeoutMs", "fallbackEnabled", "cacheTtlSeconds"],
         fieldMappings: { barcode: "ean", name: "title", brand: "brand", description: "description", category: "category", imageUrl: "images.0" },
         scope: "worldwide",
-        actions: ["UPCITEMDB_LOOKUP_PRODUCT", "UPCITEMDB_SEARCH_PRODUCTS", "UPCITEMDB_TEST_CONNECTION"],
+        actions: [],
       },
     },
   },
@@ -1173,7 +1160,7 @@ const PACKAGE_CATALOG = [
         configurableFields: ["baseUrl", "enabled", "priority", "timeoutMs", "fallbackEnabled", "cacheTtlSeconds"],
         fieldMappings: { name: "name", brand: "brand", category: "categories", quantity: "quantity", imageUrl: "image_url", country: "countries" },
         scope: "worldwide",
-        actions: ["BARCODENEST_LOOKUP_PRODUCT", "BARCODENEST_TEST_CONNECTION"],
+        actions: [],
       },
     },
   },
@@ -1206,7 +1193,7 @@ const PACKAGE_CATALOG = [
         cacheTtlSeconds: 5,
         configurableFields: ["baseUrl", "enabled", "priority", "timeoutMs", "fallbackEnabled", "cacheTtlSeconds"],
         fieldMappings: { barcode: "barcode", name: "name", brand: "brand", description: "description", category: "category", imageUrl: "image_url" },
-        actions: ["GO_UPC_LOOKUP_PRODUCT", "CONNECTOR_TEST_CONNECTION"],
+        actions: [ "CONNECTOR_TEST_CONNECTION"],
       },
     },
   },
@@ -1383,8 +1370,7 @@ const PACKAGE_CATALOG = [
     permissions: ["settings.manage"],
     storeScoped: false,
     category: "Administration",
-  },
-];
+  }];
 
 
 export const packageManifestCatalog = Object.freeze(
