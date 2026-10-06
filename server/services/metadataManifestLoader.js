@@ -106,11 +106,25 @@ function canonicalizeSalesWorkflow(flow) {
       recordCollectionResource: { path: "variables.items" },
       commonFieldValues: saleLineCommonFields("create_sale"),
     };
-    cloned.action.actions = [createHeader, createLines];
-    cloned.action.gptBuilderElements = [createHeader, createLines].map(importedNode);
+    const createPayments = {
+      id: "create_payments",
+      label: "Create Sale Ledger Payments",
+      apiName: "create_payments",
+      key: "CREATE_RECORD",
+      objectKey: "sale_ledger",
+      recordCollectionResource: { path: "variables.payments" },
+      commonFieldValues: {
+        transaction_id: { path: "steps.create_sale.created.id" },
+        sale_id: { path: "steps.create_sale.created.id" },
+        source_record_type: "PAYMENT",
+        transaction_type: "PAYMENT",
+      },
+    };
+    cloned.action.actions = [createHeader, createLines, createPayments];
+    cloned.action.gptBuilderElements = [createHeader, createLines, createPayments].map(importedNode);
     cloned.action.resources = (cloned.action.resources || []).map((resource) => {
       if (resource.apiName === "sale" || resource.apiName === "items") return { ...resource, objectKey: "sale_ledger" };
-      if (resource.apiName === "payments") return { ...resource, objectKey: "" };
+      if (resource.apiName === "payments") return { ...resource, objectKey: "sale_ledger" };
       return resource;
     });
     return cloned;
@@ -155,7 +169,16 @@ function canonicalizeSalesWorkflow(flow) {
           commonFieldValues: saleLineCommonFields("create_replacement_sale"),
         });
       } else if (action.id === "create_exchange_payments") {
-        continue;
+        actions.push({
+          ...action,
+          objectKey: "sale_ledger",
+          commonFieldValues: {
+            transaction_id: { path: "steps.create_replacement_sale.created.id" },
+            sale_id: { path: "steps.create_replacement_sale.created.id" },
+            source_record_type: "PAYMENT",
+            transaction_type: "PAYMENT",
+          },
+        });
       } else {
         actions.push(action);
       }
@@ -164,7 +187,7 @@ function canonicalizeSalesWorkflow(flow) {
     cloned.action.gptBuilderElements = actions.map(importedNode);
     cloned.action.resources = (cloned.action.resources || []).map((resource) => {
       if (resource.apiName === "sale" || resource.apiName === "items") return { ...resource, objectKey: "sale_ledger" };
-      if (resource.apiName === "payments") return { ...resource, objectKey: "" };
+      if (resource.apiName === "payments") return { ...resource, objectKey: "sale_ledger" };
       return resource;
     });
     return cloned;
