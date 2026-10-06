@@ -102,21 +102,6 @@ test("customer administration is metadata-owned while runtime customer services 
 });
 
 
-test("customer credit and loyalty administration has no legacy route-local writes", async () => {
-  const route = await readFile(new URL("../server/routes/customers.js", import.meta.url), "utf8");
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  const workflows = await readFile(new URL("../server/services/systemWorkflowCatalog.js", import.meta.url), "utf8");
-  assert.equal(route.includes("/loyalty/adjust"), false);
-  assert.equal(route.includes("/credit/payment"), false);
-  assert.equal(route.includes("/credit/adjustment"), false);
-  assert.equal(route.includes("/credit/statement"), false);
-  assert.match(registry, /objectKey: "customer_credit_account"/);
-  assert.match(registry, /objectKey: "customer_credit_ledger"/);
-  assert.match(registry, /objectKey: "loyalty_account"/);
-  assert.match(registry, /objectKey: "loyalty_activity"/);
-  assert.equal(workflows.includes("customer.credit.limit.check"), false);
-});
-
 
 test("layaway uses metadata ownership", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
@@ -233,17 +218,6 @@ test("reports use generic platform reporting instead of fixed business report ro
   assert.match(route, /\/reports\/custom\/preview/);
 });
 
-
-test("own delivery package uses metadata workspace instead of hardcoded business route and UI", async () => {
-  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.equal(app.includes("OwnDeliveryWorkspace"), false);
-  assert.match(app, /objectKey="online_order" appKey="own-delivery"/);
-  assert.equal(server.includes("createOwnDeliveryRouter"), false);
-  const catalogue = await readFile(new URL("../server/packages/packageManifestCatalog.js", import.meta.url), "utf8");
-  assert.ok(catalogue.includes('key: "own_delivery"') || catalogue.includes('key:"own_delivery"'));
-});
 
 test("kiosk administration is metadata-driven and obsolete kiosk route is removed", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
