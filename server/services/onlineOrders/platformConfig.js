@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { sanitizeUberMenuMapping } from "./uberMenuMapping.js";
 
 /*
  * Online platform configuration storage (Uber Eats / Deliveroo)
@@ -20,58 +19,6 @@ const SECRET_FIELDS = ["client_secret", "api_key", "webhook_secret"];
 const PLAIN_FIELDS = ["environment", "client_id", "store_location_id", "store_id", "brand_id", "order_acceptance", "notes"];
 // Boolean settings stored as-is (default false).
 const BOOLEAN_FIELDS = ["require_otp_on_completion"];
-
-export function sanitizeUberStoreMappings(value) {
-  if (!Array.isArray(value)) {
-    const error = new Error("Uber store mappings must be an array");
-    error.code = "INVALID_UBER_STORE_MAPPINGS";
-    throw error;
-  }
-  const externalIds = new Set();
-  return value.map((mapping) => {
-    const uberStoreId = String(mapping?.uber_store_id || "").trim();
-    const oneposStoreId = String(mapping?.onepos_store_id || "").trim();
-    if (!uberStoreId || !oneposStoreId) {
-      const error = new Error("Each Uber store mapping requires uber_store_id and onepos_store_id");
-      error.code = "INVALID_UBER_STORE_MAPPINGS";
-      throw error;
-    }
-    if (externalIds.has(uberStoreId)) {
-      const error = new Error(`Uber store ${uberStoreId} is mapped more than once`);
-      error.code = "INVALID_UBER_STORE_MAPPINGS";
-      throw error;
-    }
-    externalIds.add(uberStoreId);
-    return { uber_store_id: uberStoreId, onepos_store_id: oneposStoreId };
-  });
-}
-
-export function sanitizeUberStoreMenuMappings(value) {
-  if (!Array.isArray(value)) {
-    const error = new Error("Uber store menu configurations must be an array");
-    error.code = "INVALID_UBER_STORE_MENU_MAPPINGS";
-    throw error;
-  }
-  const externalIds = new Set();
-  return value.map((configuration) => {
-    const uberStoreId = String(configuration?.uber_store_id || "").trim();
-    if (!uberStoreId || !configuration?.menu_mapping || typeof configuration.menu_mapping !== "object") {
-      const error = new Error("Each Uber store menu configuration requires uber_store_id and menu_mapping");
-      error.code = "INVALID_UBER_STORE_MENU_MAPPINGS";
-      throw error;
-    }
-    if (externalIds.has(uberStoreId)) {
-      const error = new Error(`Uber store ${uberStoreId} has more than one menu configuration`);
-      error.code = "INVALID_UBER_STORE_MENU_MAPPINGS";
-      throw error;
-    }
-    externalIds.add(uberStoreId);
-    return {
-      uber_store_id: uberStoreId,
-      menu_mapping: sanitizeUberMenuMapping(configuration.menu_mapping),
-    };
-  });
-}
 
 function encryptionKey() {
   const secret =
@@ -138,16 +85,6 @@ export function buildStoredConfiguration(input = {}, existingConfiguration = {})
     next[field] = input[field] === null ? null : encryptSecret(input[field]);
   }
 
-  if (Object.prototype.hasOwnProperty.call(input, "menu_mapping") && input.menu_mapping !== undefined) {
-    next.menu_mapping = sanitizeUberMenuMapping(input.menu_mapping);
-  }
-  if (Object.prototype.hasOwnProperty.call(input, "store_mappings") && input.store_mappings !== undefined) {
-    next.store_mappings = sanitizeUberStoreMappings(input.store_mappings);
-  }
-  if (Object.prototype.hasOwnProperty.call(input, "store_menu_mappings") && input.store_menu_mappings !== undefined) {
-    next.store_menu_mappings = sanitizeUberStoreMenuMappings(input.store_menu_mappings);
-  }
-
   return next;
 }
 
@@ -159,25 +96,8 @@ export function maskConfiguration(configuration = {}) {
     store_location_id: configuration.store_location_id || null,
     store_id: configuration.store_id || null,
     brand_id: configuration.brand_id || null,
-    /* T10-UBER-MENU: non-secret sync-status passthrough. */
-    menu_sync_last_attempt: configuration.menu_sync_last_attempt || null,
-    menu_sync_last_success: configuration.menu_sync_last_success || null,
-    menu_sync_last_error: configuration.menu_sync_last_error || null,
-    menu_sync_last_count: configuration.menu_sync_last_count ?? null,
-    order_acceptance: configuration.order_acceptance === "auto" ? "auto" : "manual",
-    require_otp_on_completion: configuration.require_otp_on_completion === true,
-    notes: configuration.notes || null,
-    store_mappings: Array.isArray(configuration.store_mappings)
-      ? sanitizeUberStoreMappings(configuration.store_mappings)
-      : [],
-    store_menu_mappings: Array.isArray(configuration.store_menu_mappings)
-      ? sanitizeUberStoreMenuMappings(configuration.store_menu_mappings)
-      : [],
   };
 
-  if (configuration.menu_mapping && typeof configuration.menu_mapping === "object") {
-    masked.menu_mapping = sanitizeUberMenuMapping(configuration.menu_mapping);
-  }
 
   for (const field of SECRET_FIELDS) {
     const value = decryptSecret(configuration[field]);
@@ -208,8 +128,6 @@ export async function loadPlatformConfig(db, companyId, platform) {
     store_location_id: null,
     store_id: null,
     brand_id: null,
-    store_mappings: [],
-    store_menu_mappings: [],
     order_acceptance: "manual",
     require_otp_on_completion: false,
     api_key: null,
@@ -237,38 +155,16 @@ export async function loadPlatformConfig(db, companyId, platform) {
   runtime.environment = configuration.environment || "sandbox";
   runtime.client_id = configuration.client_id || null;
   runtime.store_location_id = configuration.store_location_id || null;
-  // Uber Store/Brand IDs saved after store discovery (Settings). Exposed here
-  // so the platform services can use them for menu/order calls.
   runtime.store_id = configuration.store_id || null;
   runtime.brand_id = configuration.brand_id || null;
-  runtime.store_mappings = Array.isArray(configuration.store_mappings)
-    ? sanitizeUberStoreMappings(configuration.store_mappings)
-    : [];
-  runtime.store_menu_mappings = Array.isArray(configuration.store_menu_mappings)
-    ? sanitizeUberStoreMenuMappings(configuration.store_menu_mappings)
-    : [];
-  // "manual" | "auto" - used by the online-order receive flow to auto-accept.
   runtime.order_acceptance = configuration.order_acceptance === "auto" ? "auto" : "manual";
-  // "Require customer OTP on completion" - default NO when unset.
   runtime.require_otp_on_completion = configuration.require_otp_on_completion === true;
   runtime.notes = configuration.notes || null;
-  if (platform === "uber") {
-    runtime.menu_mapping =
-      configuration.menu_mapping ||
-      configuration.menu_field_mappings ||
-      configuration.uber_menu_mapping ||
-      null;
-  }
   runtime.client_secret = decryptSecret(configuration.client_secret);
   runtime.api_key = decryptSecret(configuration.api_key);
   runtime.webhook_secret = decryptSecret(configuration.webhook_secret);
   runtime.configured = Boolean(runtime.client_id || runtime.client_secret || runtime.api_key);
 
-  /* T10-UBER-MENU: non-secret menu-sync status (Settings display). */
-  runtime.menu_sync_last_attempt = configuration.menu_sync_last_attempt || null;
-  runtime.menu_sync_last_success = configuration.menu_sync_last_success || null;
-  runtime.menu_sync_last_error = configuration.menu_sync_last_error || null;
-  runtime.menu_sync_last_count = configuration.menu_sync_last_count ?? null;
 
   /*
    * Internal handles for the platform services (request/response auditing in
