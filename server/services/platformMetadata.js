@@ -1300,12 +1300,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     await pool.query(`
       ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS cash_received NUMERIC(12,2);
       ALTER TABLE sale_ledger ADD COLUMN IF NOT EXISTS line_count INTEGER NOT NULL DEFAULT 0;
-      ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
-      ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
-      UPDATE cash_movements cm
+      ALTER TABLE cash_ledger ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+      ALTER TABLE cash_ledger ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
+      UPDATE cash_ledger cm
          SET company_id=ts.company_id,
              store_id=ts.store_id
-        FROM till_sessions ts
+        FROM device_sessions ts
        WHERE ts.id=cm.till_session_id
          AND (cm.company_id IS NULL OR cm.store_id IS NULL);
     `);
@@ -1542,7 +1542,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const cashLedgerValidationObject = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='cash_movement' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (cashLedgerValidationObject.rows[0]?.id) {
       await pool.query(
@@ -1562,7 +1562,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     }
 
     const tillSessionObjectForOptions = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='till_session' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='device_session' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (tillSessionObjectForOptions.rows[0]?.id) {
       await pool.query(
@@ -1572,7 +1572,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       );
     }
     const cashLedgerObjectForOptions = await pool.query(
-      "SELECT id FROM platform_objects WHERE object_key='cash_movement' AND company_id IS NULL AND active=true LIMIT 1"
+      "SELECT id FROM platform_objects WHERE object_key='cash_ledger' AND company_id IS NULL AND active=true LIMIT 1"
     );
     if (cashLedgerObjectForOptions.rows[0]?.id) {
       await pool.query(
@@ -1906,7 +1906,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_drawer_open", label: "Record Drawer Open", apiName: "create_drawer_open", key: "CREATE_RECORD", objectKey: "cash_movement",
+            { id: "create_drawer_open", label: "Record Drawer Open", apiName: "create_drawer_open", key: "CREATE_RECORD", objectKey: "cash_ledger",
               fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, terminal_id: { path: "$record.terminalId" }, type: "drawer_open", amount: 0, reason: { path: "$record.reason" } } },
           ],
         },
@@ -1920,7 +1920,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_till_session", label: "Create Till Session", apiName: "create_till_session", key: "CREATE_RECORD", objectKey: "till_session",
+            { id: "create_till_session", label: "Create Till Session", apiName: "create_till_session", key: "CREATE_RECORD", objectKey: "device_session",
               fieldValues: { terminal_id: { path: "$record.terminalId" }, user_id: { path: "$record.userId" }, opening_cash: { path: "$record.openingCash" }, status: "open" } },
           ],
         },
@@ -1935,7 +1935,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_cash_in", label: "Create Cash In", apiName: "create_cash_in", key: "CREATE_RECORD", objectKey: "cash_movement",
+            { id: "create_cash_in", label: "Create Cash In", apiName: "create_cash_in", key: "CREATE_RECORD", objectKey: "cash_ledger",
               fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_in", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
           ],
         },
@@ -1950,7 +1950,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_cash_out", label: "Create Cash Out", apiName: "create_cash_out", key: "CREATE_RECORD", objectKey: "cash_movement",
+            { id: "create_cash_out", label: "Create Cash Out", apiName: "create_cash_out", key: "CREATE_RECORD", objectKey: "cash_ledger",
               fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_out", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
           ],
         },
@@ -1965,7 +1965,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "close_till_session", label: "Close Till Session", apiName: "close_till_session", key: "UPDATE_RECORD", objectKey: "till_session",
+            { id: "close_till_session", label: "Close Till Session", apiName: "close_till_session", key: "UPDATE_RECORD", objectKey: "device_session",
               recordId: { path: "$record.tillSessionId" },
               fieldValues: { status: "closed", closing_cash: { path: "$record.countedCash" }, closed_by: { path: "$record.userId" }, closed_at: { path: "$record.closedAt" } } },
           ],
@@ -2021,7 +2021,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
                 branch: ["create_cash_movement"] }],
               defaultLabel: "Invalid Amount", defaultBranch: ["invalid_amount"] },
             { id: "create_cash_movement", label: "Create Cash Movement", apiName: "create_cash_movement", key: "CREATE_RECORD",
-              objectKey: "cash_movement",
+              objectKey: "cash_ledger",
               fieldValues: {
                 till_session_id: { path: "$record.tillSessionId" },
                 user_id: { path: "$record.userId" },
