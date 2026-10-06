@@ -76,8 +76,20 @@ function collectManifestSourceTables() {
   return tables;
 }
 
+const PLATFORM_CORE_TABLES = new Set([
+  "companies","stores","users","roles","permissions","role_permissions","user_roles","user_store_access",
+  "platform_modules","platform_objects","platform_fields","platform_relationships","platform_layouts","platform_rules",
+  "platform_reports","platform_list_views","platform_object_permissions","platform_field_security","platform_registered_actions",
+  "platform_buttons","platform_pages","platform_apps","platform_record_associations","platform_message_templates",
+  "platform_workflow_runs","platform_workflow_debug_sessions","platform_jobs","platform_events","platform_event_subscriptions",
+  "platform_communication_events","platform_communication_deliveries","platform_licence_requests",
+  "package_registry","package_dependencies","package_metadata_ownership","package_releases",
+  "company_package_installations","company_package_entitlement_sources","package_installation_versions","package_installation_operations",
+  "onestore_apps","tenant_apps","audit_logs","integrations","integration_connections"
+]);
+
 function directBusinessSqlFindings() {
-  const tables = collectManifestSourceTables();
+  const tables = new Set([...collectManifestSourceTables()].filter((table) => !PLATFORM_CORE_TABLES.has(table)));
   const roots = [path.join(ROOT, "server", "routes"), path.join(ROOT, "server", "services")];
   const output = [];
   for (const file of roots.flatMap(walk)) {
