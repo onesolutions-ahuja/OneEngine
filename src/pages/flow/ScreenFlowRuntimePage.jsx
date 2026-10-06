@@ -292,15 +292,16 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       id: component.id || component.name,
       name: component.name,
       disabled: busy || component.disabled === true,
+      readOnly: component.readOnly === true,
       required: component.required === true,
       'aria-invalid': Boolean(errors[component.name]),
     }
-    if (component.type === 'TEXT_AREA') {
+    if (['TEXT_AREA','LONG_TEXT'].includes(component.type)) {
       return <textarea {...common} rows={component.rows || 4} minLength={component.minLength === '' || component.minLength == null ? undefined : Number(component.minLength)} maxLength={component.maxLength === '' || component.maxLength == null ? undefined : Number(component.maxLength)} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)} />
     }
-    if (['TEXT','EMAIL','PASSWORD','DATE','DATETIME','NUMBER'].includes(component.type)) {
-      const type = component.type === 'DATETIME' ? 'datetime-local' : component.type.toLowerCase()
-      return <input {...common} type={type} min={component.min} max={component.max} step={component.type === 'NUMBER' ? (component.step || 'any') : undefined} minLength={component.minLength === '' || component.minLength == null ? undefined : Number(component.minLength)} maxLength={component.maxLength === '' || component.maxLength == null ? undefined : Number(component.maxLength)} pattern={component.pattern || undefined} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, component.type === 'NUMBER' ? event.target.value : event.target.value)} />
+    if (['TEXT','EMAIL','PHONE','URL','PASSWORD','DATE','DATETIME','TIME','NUMBER','CURRENCY'].includes(component.type)) {
+      const type = component.type === 'DATETIME' ? 'datetime-local' : component.type === 'PHONE' ? 'tel' : component.type === 'CURRENCY' ? 'number' : component.type.toLowerCase()
+      return <input {...common} type={type} min={component.min} max={component.max} step={['NUMBER','CURRENCY'].includes(component.type) ? (component.step || 'any') : undefined} minLength={component.minLength === '' || component.minLength == null ? undefined : Number(component.minLength)} maxLength={component.maxLength === '' || component.maxLength == null ? undefined : Number(component.maxLength)} pattern={component.pattern || undefined} className="w-full rounded-lg border border-slate-300 px-3 py-2" placeholder={component.placeholder || ''} value={value ?? ''} onChange={(event) => setValue(component.name, component.type === 'NUMBER' ? event.target.value : event.target.value)} />
     }
     if (['CHECKBOX','TOGGLE'].includes(component.type)) {
       return <label className="flex items-center gap-2"><input {...common} type="checkbox" checked={Boolean(value)} onChange={(event) => setValue(component.name, event.target.checked)} /><span>{component.toggleLabel || component.helpText || component.label}</span></label>
@@ -312,7 +313,7 @@ export default function ScreenFlowRuntimePage({ sessionId }) {
       const selected = Array.isArray(value) ? value : []
       return <div className="space-y-2">{componentOptions(component, values).map((option) => <label key={option.value} className="flex items-center gap-2"><input {...common} type="checkbox" checked={selected.includes(option.value)} onChange={(event) => setValue(component.name, event.target.checked ? [...selected, option.value] : selected.filter((item) => item !== option.value))} /><span>{option.label}</span></label>)}</div>
     }
-    if (component.type === 'SELECT') {
+    if (['SELECT','PICKLIST'].includes(component.type)) {
       return <select {...common} className="w-full rounded-lg border border-slate-300 px-3 py-2" value={value ?? ''} onChange={(event) => setValue(component.name, event.target.value)}><option value="">{component.placeholder || 'Select…'}</option>{componentOptions(component, values).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
     }
     if (component.type === 'MULTI_SELECT') {
