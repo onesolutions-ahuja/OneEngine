@@ -886,6 +886,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [elementPickerOpen, setElementPickerOpen] = useState(false)
   const [autoInsertIndex, setAutoInsertIndex] = useState(null)
   const [decisionInsertTarget, setDecisionInsertTarget] = useState(null)
+  const [groupInsertTarget, setGroupInsertTarget] = useState(null)
   const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
   const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
   const [providerResources, setProviderResources] = useState([])
@@ -1862,6 +1863,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
             onRemove={(id) => removeAutoElements([id])}
             onAddAt={(index) => {
               setDecisionInsertTarget(null)
+              setGroupInsertTarget(null)
               setElementPickerOpen(true)
               setAutoInsertIndex(index)
               setStartOpen(false)
@@ -1870,7 +1872,17 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
             }}
             onAddDecisionBranch={(decisionId, pathId) => {
               setAutoInsertIndex(null)
+              setGroupInsertTarget(null)
               setDecisionInsertTarget({ decisionId, pathId })
+              setElementPickerOpen(true)
+              setStartOpen(false)
+              setDiagnosticsOpen(false)
+              setEditingElement(null)
+            }}
+            onAddGroupMember={(groupId) => {
+              setAutoInsertIndex(null)
+              setDecisionInsertTarget(null)
+              setGroupInsertTarget(groupId)
               setElementPickerOpen(true)
               setStartOpen(false)
               setDiagnosticsOpen(false)
@@ -1902,6 +1914,20 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
                 setElementPickerOpen(false)
               }}
               onClose={() => { setDecisionInsertTarget(null); setElementPickerOpen(false) }}
+            />
+          </div> : null}
+          {elementPickerOpen && groupInsertTarget ? <div className="gptb-reactflow-picker">
+            <ElementPicker
+              flowType={flow.key}
+              startConfig={startConfig}
+              hasExistingElements
+              copiedCount={copiedElements.length}
+              onSelect={(element) => {
+                addElementToGroup(groupInsertTarget, element)
+                setGroupInsertTarget(null)
+                setElementPickerOpen(false)
+              }}
+              onClose={() => { setGroupInsertTarget(null); setElementPickerOpen(false) }}
             />
           </div> : null}
         </> : <>
