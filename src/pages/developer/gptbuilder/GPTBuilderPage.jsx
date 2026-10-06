@@ -35,6 +35,7 @@ import GPTBuilderRecordTriggerPaths from './GPTBuilderStartOptions'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderFormulaBuilder'
 import GPTBuilderNewAutomation from './GPTBuilderNewAutomation'
 import GPTBuilderReactFlowCanvas from './GPTBuilderReactFlowCanvas'
+import { platformEventRecordResources, recordPathResources } from './GPTBuilderResources'
 import {
   GPTBuilderCompareVersionsPanel, GPTBuilderEditHistoryPanel, GPTBuilderSaveAsFlowDialog, GPTBuilderSaveAsMenu, GPTBuilderUnsavedHistoryDialog,
 } from './GPTBuilderSaveHistory'
@@ -894,6 +895,7 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved }) {
   const [elements, setElements] = useState(() => Array.isArray(templateAction.gptBuilderElements) ? structuredClone(templateAction.gptBuilderElements) : [])
   const [resources, setResources] = useState(() => Array.isArray(templateAction.resources) ? structuredClone(templateAction.resources) : [])
   const [providerResources, setProviderResources] = useState([])
+  const [recordPathMetadata, setRecordPathMetadata] = useState([])
   // Keep the resource list safe during the first render of every flow type. Provider
   // metadata arrives asynchronously and must never make Builder creation depend on it.
   const automaticResources = useMemo(() => {
