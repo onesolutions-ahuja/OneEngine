@@ -5,6 +5,7 @@ const fail = (message) => { console.error('GPT Builder functional contract audit
 
 const contract = JSON.parse(read('docs/gptbuilder-functional-acceptance-2026-10-05.json'))
 const tests = read('tests/gptbuilderFunctionalContract.test.mjs')
+const negativeTests = read('tests/gptbuilderNegativeRegression.test.mjs')
 
 if (contract.frozen_through !== '2026-10-05') fail('frozen scope date changed')
 if (!Array.isArray(contract.requirements) || !contract.requirements.length) fail('acceptance contract has no requirements')
@@ -18,6 +19,11 @@ for (const row of contract.requirements) {
 if (/\btest\.(?:skip|todo)\s*\(/.test(tests)) fail('skipped/todo contract tests are forbidden')
 if (/describe\.(?:skip|todo)\s*\(/.test(tests)) fail('skipped/todo suites are forbidden')
 if (/\.only\s*\(/.test(tests)) fail('focused .only tests are forbidden')
+if (/\btest\.(?:skip|todo)\s*\(/.test(negativeTests)) fail('skipped/todo negative regression tests are forbidden')
+if (/\.only\s*\(/.test(negativeTests)) fail('focused negative regression tests are forbidden')
+for (const id of ['N001','N002','N003','N004','N005']) {
+  if (!negativeTests.includes(id)) fail(id + ': missing explicit negative regression coverage')
+}
 
 const modes = [...tests.matchAll(/"mode":\s*"([^"]+)"/g)].map((match) => match[1])
 const allowedModes = new Set(['static','integration','e2e','static+integration','gate'])
