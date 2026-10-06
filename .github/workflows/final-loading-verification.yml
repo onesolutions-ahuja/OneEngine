@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: oneengine-final-loading-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: oneengine-final-loading
   cancel-in-progress: true
 
 jobs:
