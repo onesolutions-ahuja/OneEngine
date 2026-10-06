@@ -1267,7 +1267,7 @@ export default function ObjectPage({
                   <input
                     value={listViewDialog.label || ""}
                     onChange={(event) => setListViewDialog((current) => ({ ...current, label: event.target.value }))}
-                    placeholder="My open customers"
+                    placeholder="My open records"
                     autoFocus
                     required
                   />
