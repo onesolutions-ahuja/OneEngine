@@ -16,7 +16,6 @@ const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 const exempt = new Set([
   "server/services/platformMetadata.js",
   "server/services/platformSystemObjects.js",
-  "server/services/packageRegistry.js",
   "server/services/tenantDatabase.js",
 ]);
 const declarativePrefixes=["server/packages/","server/metadata/"];
