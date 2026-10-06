@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronUp, ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { ChevronUp, ChevronDown, Plus, Search, Trash2 } from 'lucide-react'
 
 const uid = () => globalThis.crypto?.randomUUID?.() || `dc-${Date.now()}-${Math.random().toString(36).slice(2)}`
 const apiNameFromLabel = (label, fallback = 'Outcome') => {
@@ -102,10 +102,21 @@ export function decisionRuntimeAction(instance) {
 }
 
 function ResourcePicker({ resources, value, onChange, allowedResources = resources }) {
-  return <select value={value || ''} onChange={(event) => onChange(event.target.value)}>
-    <option value="">Select a resource</option>
-    {allowedResources.map((item) => <option key={item.id || item.apiName} value={resourcePath(item)}>{item.label || item.apiName}</option>)}
-  </select>
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const visible = allowedResources.filter((item) => {
+    if (!needle) return true
+    return `${item.label || ''} ${item.apiName || ''} ${resourcePath(item)} ${item.dataType || ''}`.toLowerCase().includes(needle)
+  })
+  const selected = allowedResources.find((item) => resourcePath(item) === value)
+  const options = selected && !visible.some((item) => resourcePath(item) === value) ? [selected, ...visible] : visible
+  return <div className="gptb-resource-picker">
+    <label className="gptb-resource-search"><Search size={12}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search resources and fields..." aria-label="Search resources and fields"/></label>
+    <select value={value || ''} onChange={(event) => onChange(event.target.value)} aria-label="Resource">
+      <option value="">Select a resource</option>
+      {options.map((item) => <option key={item.id || item.apiName || resourcePath(item)} value={resourcePath(item)}>{item.label || item.apiName}{item.path && item.path !== item.label ? ` · ${item.path}` : ''}</option>)}
+    </select>
+  </div>
 }
 
 export default function GPTBuilderDecision({ draft, updateConfig, resources, flowType, onConfiguredChange }) {
