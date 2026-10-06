@@ -222,7 +222,7 @@ const report = {
     workflowMediatedMutationRoutes: mediatedRoutes.length,
     bypassMutationRoutes: bypassRoutes.length,
     directRuntimeCallSites: directRuntimeCalls.length,
-    catalogueFunctionsCovered: catalogueCoverage.functions,
+    catalogueFunctionsCovered: functions.length === 0 || catalogueCoverage.functions,
     catalogueActionsCovered: catalogueCoverage.actions,
     catalogueJobsCovered: catalogueCoverage.jobs,
     globalWorkflowTraceGateway: globalGatewayEnabled,
