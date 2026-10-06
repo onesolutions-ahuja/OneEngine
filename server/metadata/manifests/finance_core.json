@@ -12,7 +12,10 @@
         "retail_pos"
       ],
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       },
       "fields": [
         {
@@ -170,7 +173,10 @@
         "retail_pos"
       ],
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       },
       "fields": [
         {
@@ -281,7 +287,10 @@
         "retail_pos"
       ],
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
       },
       "fields": [
         {
@@ -622,7 +631,7 @@
     },
     {
       "parentObjectKey": "supplier_invoice",
-      "childObjectKey": "purchase",
+      "childObjectKey": "purchase_ledger",
       "relationshipKey": "purchase_order",
       "relationshipType": "lookup",
       "parentFieldApiName": "purchase_id"
