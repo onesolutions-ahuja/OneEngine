@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 import { apiRequest, loadSessionPermissions } from "../../../services/api.js";
-import WorkflowAdmin from "./WorkflowAdmin.jsx";
 import {
   NAVIGATION_TARGET_TYPES,
   describeNavigationTarget,
@@ -20,7 +19,7 @@ import {
  *   - Workflow: searchable list of EXISTING platform_rules workflows, typed
  *     against the selected object first (compatible workflows rank higher),
  *     stores workflow_uuid (NOT the display name, so renames never break pages)
- *   - `+` opens the EXISTING Workflow Builder (WorkflowAdmin) as an in-screen
+ *   - `+` opens the EXISTING Workflow Builder (GPT Builder) as an in-screen
  *     overlay pre-seeded with the component's object context. Nothing navigates
  *     away; the caller's state is untouched and the new workflow's UUID is
  *     returned and auto-selected.
@@ -527,7 +526,7 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
 }
 
 /**
- * In-screen Workflow Builder overlay — reuses the EXISTING WorkflowAdmin
+ * In-screen Workflow Builder overlay — reuses the EXISTING GPT Builder
  * builder wholesale (steps canvas, registered actions, save pipeline). The
  * overlay only adds creation context: the host component's object and a
  * manual/UI trigger, so "View Online Order" style workflows start correct.
@@ -554,14 +553,14 @@ export function WorkflowCreationOverlay({ contextObjectKey, onClose, onCreated }
           <button type="button" className="onepos-btn onepos-btn-secondary" onClick={onClose}>Cancel</button>
         </header>
         <div className="min-h-0 flex-1 overflow-auto p-4">
-          <WorkflowAdminOverlayHost contextObjectKey={contextObjectKey} baseline={baseline} onClose={onClose} onCreated={onCreated} />
+          <GPT BuilderOverlayHost contextObjectKey={contextObjectKey} baseline={baseline} onClose={onClose} onCreated={onCreated} />
         </div>
       </div>
     </div>
   );
 }
 
-function WorkflowAdminOverlayHost({ contextObjectKey, baseline, onClose, onCreated }) {
+function GPT BuilderOverlayHost({ contextObjectKey, baseline, onClose, onCreated }) {
   // InlineNewWorkflowForm already returns the created workflow through onCreated.
   // Avoid polling the full rules registry while this overlay is open.
   return (
@@ -575,7 +574,7 @@ function WorkflowAdminOverlayHost({ contextObjectKey, baseline, onClose, onCreat
  * A minimal creation form over the SAME /api/platform/rules pipeline the
  * Workflow Builder uses. It creates the workflow shell (name + object +
  * manual trigger) with a Show-Form-Layout style first step the admin can
- * extend immediately in WorkflowAdmin; complex step authoring stays there.
+ * extend immediately in GPT Builder; complex step authoring stays there.
  * This guarantees: no navigation away, unsaved page state preserved, and the
  * new workflow auto-selected by UUID in the picker.
  */
