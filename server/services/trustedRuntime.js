@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
-import { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
-export { TRUSTED_JOB_KINDS, assertTrustedJobKind } from "./trustedJobKinds.js";
 
 const PRIVILEGED_ROUTES = Object.freeze([
   { id: "platform.developer.manage", prefixes: ["/api/platform/developer/"], methods: ["POST","PUT","PATCH","DELETE"] },
@@ -17,7 +15,6 @@ const definitions = [
   ...PRIVILEGED_ROUTES.map((item) => ({ id: item.id, type: "route" })),
   ...PLATFORM_FUNCTIONS.map((item) => ({ id: `function:${item.key}`, type: "function" })),
   ...PLATFORM_ACTION_REGISTRY.map((item) => ({ id: `action:${item.key}`, type: "action" })),
-  ...TRUSTED_JOB_KINDS.map((kind) => ({ id: `job:${kind}`, type: "job" })),
 ];
 
 const duplicateIds = definitions.map((item) => item.id).filter((id, index, all) => all.indexOf(id) !== index);
@@ -50,9 +47,7 @@ export function isPrivilegedMutation(path, method = "GET") {
   if (!["POST","PUT","PATCH","DELETE"].includes(verb)) return false;
   const pathname = canonicalPath(path);
   return pathname.startsWith("/api/appointments") || pathname.startsWith("/api/platform/") || pathname.startsWith("/api/security/") || pathname.startsWith("/api/packages/")
-    || pathname.startsWith("/api/admin/") || pathname.startsWith("/api/settings/")
-    || pathname.startsWith("/api/payments") || pathname.startsWith("/api/payment")
-    || pathname.startsWith("/api/platform/objects/stock_return");
+    || pathname.startsWith("/api/admin/") || pathname.startsWith("/api/settings/");
 }
 
 export function validateTrustedRuntime() {
