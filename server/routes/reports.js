@@ -411,8 +411,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       if(!name||name.length>150)return res.status(400).json({success:false,message:"A report name up to 150 characters is required"});
       const reportType=await resolveCustomReportType(req,req.body?.reportTypeId||req.body?.report_type_id||null);
       const sourceInput=reportType?{...req.body,dataSource:"platform_object",objectId:reportType.definition.primaryObjectId,reportTypeId:reportType.row.id}:req.body;
-      const definition=normalizeAdvancedReportDefinition(sourceInput);
-      if(definition.dataSource==="platform_object"){const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
+      const definition=normalizeAdvancedReportDefinition({...sourceInput,dataSource:"platform_object"});
+      if(!definition.objectId)return res.status(400).json({success:false,message:"Select a report object or report type"});
+      {const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
       const stores=[];
       const result=await db("INSERT INTO custom_reports(company_id,created_by,name,description,data_source,report_type_id,definition) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING *",
         [req.user.companyId,req.user.id,name,String(req.body.description||"").slice(0,500),definition.dataSource||"platform_object",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
@@ -428,8 +429,9 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
       const name=String(req.body?.name||report.name).trim();
       const reportType=await resolveCustomReportType(req,req.body?.reportTypeId||req.body?.report_type_id||report.report_type_id||null);
       const sourceInput=reportType?{...req.body,dataSource:"platform_object",objectId:reportType.definition.primaryObjectId,reportTypeId:reportType.row.id}:req.body;
-      const definition=normalizeAdvancedReportDefinition(sourceInput);
-      if(definition.dataSource==="platform_object"){const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
+      const definition=normalizeAdvancedReportDefinition({...sourceInput,dataSource:"platform_object"});
+      if(!definition.objectId)return res.status(400).json({success:false,message:"Select a report object or report type"});
+      {const context=reportType?.context||await platformReportContext(req,definition.objectId);validatePlatformReportDefinition(definition,context.object,context.fields,context.relationships);}
       const stores=[];
       const result=await db("UPDATE custom_reports SET name=$3,description=$4,data_source=$5,report_type_id=$6,definition=$7::jsonb,updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *",
         [req.params.id,req.user.companyId,name,String(req.body.description||report.description||"").slice(0,500),definition.dataSource||"platform_object",reportType?.row?.id||null,JSON.stringify({...definition,reportTypeId:reportType?.row?.id||null,storeIds:stores})]);
