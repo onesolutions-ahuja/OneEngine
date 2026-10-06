@@ -32,7 +32,7 @@ Follow these rules at all times:
 /*
  * The context fields JARVIS V1 may see about the authenticated session. This
  * is an explicit allow-list: session identity + permission CODES only. No
- * database rows, no customer data, no sale/inventory data, no secrets.
+ * no tenant records, operational data or secrets.
  */
 export const JARVIS_CONTEXT_FIELDS = Object.freeze([
   "userId",
