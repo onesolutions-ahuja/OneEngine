@@ -1575,7 +1575,7 @@
             },
             "commonFieldValues": {
               "return_id": {
-                "path": "variables.return.id"
+                "path": "steps.create_return.created.id"
               }
             }
           }
@@ -1777,7 +1777,7 @@
             },
             "commonFieldValues": {
               "return_id": {
-                "path": "variables.originalReturn.id"
+                "path": "steps.create_original_return.created.id"
               }
             }
           },
@@ -1802,7 +1802,7 @@
             },
             "commonFieldValues": {
               "sale_id": {
-                "path": "variables.sale.id"
+                "path": "steps.create_replacement_sale.created.id"
               }
             }
           },
@@ -1817,7 +1817,7 @@
             },
             "commonFieldValues": {
               "sale_id": {
-                "path": "variables.sale.id"
+                "path": "steps.create_replacement_sale.created.id"
               }
             }
           }
@@ -1935,7 +1935,7 @@
             },
             "commonFieldValues": {
               "sale_id": {
-                "path": "variables.sale.id"
+                "path": "steps.create_sale.created.id"
               }
             }
           },
@@ -1950,7 +1950,7 @@
             },
             "commonFieldValues": {
               "sale_id": {
-                "path": "variables.sale.id"
+                "path": "steps.create_sale.created.id"
               }
             }
           }
