@@ -162,7 +162,13 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"prepare_items",label:"Attach Sale To Items",key:"LOOP",collection:{path:"$record.items"},itemVariable:"currentItem",bodyBranch:["create_sale_item"]},
   {id:"create_sale_item",label:"Create Sale Item",key:"CREATE_RECORD",objectKey:"sale_item",fieldValues:{sale_id:{path:"steps.create_sale.created.id"},product_id:{path:"variables.currentItem.product_id"},product_name:{path:"variables.currentItem.product_name"},quantity:{path:"variables.currentItem.quantity"},unit_price:{path:"variables.currentItem.unit_price"},discount:{path:"variables.currentItem.discount"},tax:{path:"variables.currentItem.tax"},total:{path:"variables.currentItem.total"},item_type:{path:"variables.currentItem.item_type"},discount_type:{path:"variables.currentItem.discount_type"},discount_value:{path:"variables.currentItem.discount_value"},original_unit_price:{path:"variables.currentItem.original_unit_price"},original_tax:{path:"variables.currentItem.original_tax"},original_total:{path:"variables.currentItem.original_total"},discounted_by:{path:"variables.currentItem.discounted_by"},modifier_data:{path:"variables.currentItem.modifier_data"},bundle_components:{path:"variables.currentItem.bundle_components"}}},
   {id:"get_items",label:"Load Sale Items",key:"GET_RECORDS",objectKey:"sale_item",filters:[{field:"sale_id",operator:"equals",value:{path:"steps.create_sale.created.id"}}],limit:500,store:"all"},
-  {id:"set_items",label:"Store Sale Items",key:"ASSIGNMENT",variableName:"saleItems",variableType:"collection",operator:"set",value:{path:"steps.get_items.records"}}
+  {id:"set_items",label:"Store Sale Items",key:"ASSIGNMENT",variableName:"saleItems",variableType:"collection",operator:"set",value:{path:"steps.get_items.records"}},
+  {id:"persist_modifiers",label:"Persist Modifiers",key:"LOOP",collection:{path:"$record.modifiers"},itemVariable:"currentModifier",bodyBranch:["create_modifier"]},
+  {id:"create_modifier",label:"Create Modifier",key:"CREATE_RECORD",objectKey:"sale_item_modifier",recordResource:{path:"variables.currentModifier"}},
+  {id:"persist_discounts",label:"Persist Discount Audit",key:"LOOP",collection:{path:"$record.discounts"},itemVariable:"currentDiscount",bodyBranch:["create_discount"]},
+  {id:"create_discount",label:"Create Discount Audit",key:"CREATE_RECORD",objectKey:"sale_discount",recordResource:{path:"variables.currentDiscount"}},
+  {id:"persist_price_overrides",label:"Persist Price Overrides",key:"LOOP",collection:{path:"$record.priceOverrides"},itemVariable:"currentPriceOverride",bodyBranch:["create_price_override"]},
+  {id:"create_price_override",label:"Create Price Override",key:"CREATE_RECORD",objectKey:"sale_price_override",recordResource:{path:"variables.currentPriceOverride"}}
  ])
 ,
  flow("flow:inventory.batch.consume","Inventory · Consume Batch",[input("productId"),input("storeId"),input("quantity","number"),input("mode")],[output("consumed","number")],[
