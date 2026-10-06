@@ -642,8 +642,6 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   const key = String(api || "").replace(/\.v[1-9][0-9]*$/, "") || node.componentKey;
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
-  if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
-
   // Versioned implementations are resolved before legacy renderer branches.
   // This allows table.v1 and table.v2 to coexist without page-specific imports.
   const VersionedComponent = componentImplementation(api);
@@ -658,6 +656,8 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   }
   if (VersionedComponent && api === "tree_view.v1") return <VersionedComponent node={node} builderMode={builderMode} onRecordClick={onRecordClick} data={data?.[node.id]} />;
   if (VersionedComponent && api === "process_path.v1") return <VersionedComponent node={node} builderMode={builderMode} data={data?.[node.id]} onAction={(payload) => onButtonClick?.({ ...node, interactionPayload: payload })} />;
+  if (VersionedComponent && ["timeline.v1","kanban.v1","scheduler.v1","hierarchy_viewer.v1"].includes(api)) return <VersionedComponent node={node} builderMode={builderMode} onRecordClick={onRecordClick} onInteraction={(interaction, payload) => onButtonClick?.({ ...node, interaction, interactionPayload: payload })} data={data?.[node.id]} />;
+  if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
   if (VersionedComponent && ["header.v1","text.v1","divider.v1","spacer.v1","related_list.v1"].includes(api)) return <VersionedComponent node={node} />;
   if (VersionedComponent && api === "field_value.v1") return <VersionedComponent node={node} value={currentOverride?.value} />;
 
