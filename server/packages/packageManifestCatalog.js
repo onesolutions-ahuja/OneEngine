@@ -697,7 +697,7 @@ const PACKAGE_CATALOG = [
       settings: ["fromEmail", "fromName", "apiKey"],
       mappings: ["recipient_email", "subject", "message_template", "provider_message_id"],
       events: ["communication.message_sent", "communication.message_delivered", "communication.message_failed"],
-      actions: ["SEND_EMAIL_BREVO"],
+      actions: ["SEND_COMMUNICATION"],
     },
     connectorApp: {
       type: "communication",
@@ -758,7 +758,7 @@ const PACKAGE_CATALOG = [
       settings: ["fromEmail", "fromName", "apiKey", "secretKey"],
       mappings: ["recipient_email", "subject", "message_template", "provider_message_id"],
       events: ["communication.message_sent", "communication.message_delivered", "communication.message_failed"],
-      actions: ["SEND_EMAIL_MAILJET"],
+      actions: ["SEND_COMMUNICATION"],
     },
     connectorApp: {
       type: "communication",
@@ -1206,7 +1206,7 @@ const PACKAGE_CATALOG = [
         cacheTtlSeconds: 5,
         configurableFields: ["baseUrl", "enabled", "priority", "timeoutMs", "fallbackEnabled", "cacheTtlSeconds"],
         fieldMappings: { barcode: "barcode", name: "name", brand: "brand", description: "description", category: "category", imageUrl: "image_url" },
-        actions: ["GO_UPC_LOOKUP_PRODUCT", "CONNECTOR_TEST_CONNECTION"],
+        actions: ["CALL_CONNECTOR_CAPABILITY", "CONNECTOR_TEST_CONNECTION"],
       },
     },
   },
