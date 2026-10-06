@@ -304,6 +304,7 @@ function normalizeComponentNode(node) {
   const base = {
     id: safeString(node?.id, 80) || null,
     componentKey,
+    componentApi: safeString(node?.componentApi ?? node?.component_api, 120) || `${componentKey}.v1`,
     label: safeString(node?.label, 200) || null,
     visible: node?.visible !== false,
   };
@@ -411,6 +412,7 @@ export function normalizeCustomPageTree(value) {
               .map((component, componentIndex) => ({
                 id: String(component?.id || `${component?.component_key || component?.type || "component"}-${componentIndex + 1}`),
                 componentKey: String(component?.component_key || component?.type || "text"),
+                componentApi: safeString(component?.componentApi ?? component?.component_api, 120) || `${String(component?.component_key || component?.type || "text")}.v1`,
                 label: safeString(component?.label, 200),
                 visible: component?.visible !== false,
                 ...(component?.component_key === "multi_container" || component?.type === "multi_container"
