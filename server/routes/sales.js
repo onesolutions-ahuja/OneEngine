@@ -1,6 +1,5 @@
 import express from "express";
 import { createHash } from "node:crypto";
-import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
 import { getRequestPool } from "../services/tenantDatabase.js";
 import { DEFAULT_PAYMENT_METHODS, getAllowedPaymentMethodCodes, listPaymentMethods } from "../services/paymentMethods.js";
@@ -1260,17 +1259,6 @@ export default function createSalesRouter({
             })()
           ).catch((auditError) => console.error("Negative-stock audit write error:", auditError));
         }
-
-        /*
-         * T9G: fire-and-forget integration dispatch (never blocks/throws -
-         * partner failures cannot affect the completed sale).
-         */
-        dispatchIntegrationEvent({
-          event: "SALE_CREATED",
-          deps: { db },
-          context: { companyId: req.user.companyId, storeId: req.user.storeId },
-          entityId: saleId,
-        }).catch(() => {});
 
         res.status(201).json({
           success: true,
