@@ -6,7 +6,7 @@ import {
   validateAppDefinition,
   compilePortableAppManifest,
   buildPortableArtifact,
-} from "../server/services/gptAppBuilderMetadata.js";
+} from "../src/shared/gptAppBuilderMetadata.js";
 
 test("blank app is generic metadata with desktop and mobile pages", () => {
   const app = createBlankAppDefinition({ appKey: "sample_app", label: "Sample App" });
