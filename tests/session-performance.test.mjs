@@ -306,10 +306,10 @@ test('all production-facing live E2E workflows are manual-only', async () => {
 })
 
 
-test('core package function registry has no top-level-await discovery loop', async () => {
-  const source = await read('../server/services/platformFunctionRegistry.js')
-  assert.match(source, /packages\/functionsIndex\.js/)
-  assert.equal(source.includes('for (const directory of await readdir'), false)
+test('legacy package function registry is absent from workflow runtime', async () => {
+  const source = await read('../server/services/platformWorkflow.js')
+  assert.equal(source.includes('platformFunctionRegistry'), false)
+  assert.equal(source.includes('CALL_FUNCTION'), false)
 })
 
 test('Render shutdown is bounded against stale keep-alive connections', async () => {
@@ -320,11 +320,12 @@ test('Render shutdown is bounded against stale keep-alive connections', async ()
 })
 
 
-test('trusted runtime accepts package functions protected by permissionsAny', async () => {
+test('trusted runtime authority contains routes actions and jobs only', async () => {
   const source = await read('../server/services/trustedRuntime.js')
-  assert.match(source, /alternativePermissions/)
-  assert.match(source, /fn\?\.permissionsAny/)
-  assert.match(source, /!requiredPermissions\.length && !alternativePermissions\.length/)
+  assert.equal(source.includes('PLATFORM_FUNCTIONS'), false)
+  assert.equal(source.includes('platformFunctionRegistry'), false)
+  assert.match(source, /PLATFORM_ACTION_REGISTRY/)
+  assert.match(source, /TRUSTED_JOB_KINDS/)
 })
 
 
