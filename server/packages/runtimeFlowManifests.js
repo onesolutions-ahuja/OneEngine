@@ -147,4 +147,10 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"send_invoice",label:"Send Invoice Communication",key:"SEND_COMMUNICATION",channel:{path:"$record.channel"},recipient:{path:"$record.recipient"},subject:{path:"$record.subject"},message:{path:"$record.message"},templateContext:{sale_id:{path:"$record.saleId"},invoice_url:{path:"$record.invoiceUrl"}}},
   {id:"set_status",label:"Return Status",key:"ASSIGNMENT",variableName:"status",variableType:"text",operator:"set",value:{path:"steps.send_invoice.status"}}
  ])
+,
+ flow("flow:connector.test_connection","Connector · Test Connection",[input("connectionId"),input("operation"),input("configuration","object",false)],[output("status"),output("providerResult","object")],[
+  {id:"test_connector",label:"Test Connector",key:"CALL_CONNECTOR",connectionId:{path:"$record.connectionId"},operation:{path:"$record.operation"},input:{configuration:{path:"$record.configuration"}}},
+  {id:"set_result",label:"Store Result",key:"ASSIGNMENT",variableName:"providerResult",variableType:"object",operator:"set",value:{path:"steps.test_connector"}},
+  {id:"set_status",label:"Set Status",key:"ASSIGNMENT",variableName:"status",variableType:"text",operator:"set",value:"connected"}
+ ])
 ];
