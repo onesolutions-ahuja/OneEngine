@@ -160,7 +160,7 @@ function safeConnectorEventPayload(input) {
   const allowed = new Set([
     "companyId",
     "storeId",
-    "deviceSessionId",
+    "terminalId",
     "connectorInstanceId",
     "connectorKey",
     "capability",
@@ -177,7 +177,7 @@ function safeConnectorEventPayload(input) {
   if (!input || typeof input !== "object") return output;
   for (const [key, value] of Object.entries(input)) {
     if (value === undefined || value === null) continue;
-    if (key === "companyId" || key === "storeId" || key === "deviceSessionId" || key === "connectorInstanceId" || key === "connectorKey" || key === "capability" || key === "internalTransactionId" || key === "internalReferenceId" || key === "status" || key === "timestamp" || key === "message" || key === "amount" || key === "currency") {
+    if (key === "companyId" || key === "storeId" || key === "terminalId" || key === "connectorInstanceId" || key === "connectorKey" || key === "capability" || key === "internalTransactionId" || key === "internalReferenceId" || key === "status" || key === "timestamp" || key === "message" || key === "amount" || key === "currency") {
       output[key] = value;
       continue;
     }
@@ -244,7 +244,7 @@ export async function executeConnectorWorkflowAction({
   db,
   companyId,
   storeId,
-  deviceSessionId,
+  terminalId,
   connectorDrivers,
   req,
   writeAudit = null,
@@ -274,7 +274,7 @@ export async function executeConnectorWorkflowAction({
   }
   const tenantCompanyId = companyId || req?.user?.companyId || null;
   const tenantStoreId = storeId || req?.user?.storeId || null;
-  const tenantTillId = deviceSessionId || req?.user?.deviceSessionId || null;
+  const tenantTerminalId = terminalId || req?.user?.terminalId || null;
   if (!tenantCompanyId) {
     return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a company scope" };
   }
@@ -337,7 +337,7 @@ export async function executeConnectorWorkflowAction({
       if (requestedKey === "CONNECTOR_ENABLE") {
         const lastTest = typeof instance.last_test_result === "string" ? JSON.parse(instance.last_test_result || "{}") : (instance.last_test_result || {});
         const companyScoped = manifest?.connectorApp?.scope === "company";
-        if ((!companyScoped && !instance.device_session_id) || lastTest?.success !== true) {
+        if ((!companyScoped && !instance.terminal_id) || lastTest?.success !== true) {
           return { success: false, code: "TEST_REQUIRED", message: companyScoped ? "Successfully test this connector before enabling it" : "Assign and successfully test this connector before enabling it", connectorInstanceId: instance.id };
         }
       }
@@ -377,7 +377,7 @@ export async function executeConnectorWorkflowAction({
         },
         companyId: instance.company_id,
         storeId: instance.store_id,
-        deviceSessionId: instance.device_session_id,
+        terminalId: instance.terminal_id,
       }),
     });
     if (!["CONNECTOR_TEST_CONNECTION","CONNECTOR_ENABLE","CONNECTOR_DISABLE"].includes(requestedKey)) {
@@ -468,8 +468,8 @@ export async function executeConnectorWorkflowAction({
     }
   }
 
-  if (!tenantStoreId || !tenantTillId) {
-    return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a store and till scope" };
+  if (!tenantStoreId || !tenantTerminalId) {
+    return { success: false, code: "INVALID_SCOPE", message: "Connector workflow action requires a store and terminal scope" };
   }
 
   const resolved = await import("./connectorRuntime.js").then(({ resolvePersistedConnectorCapability }) => resolvePersistedConnectorCapability({
@@ -477,9 +477,8 @@ export async function executeConnectorWorkflowAction({
     drivers: connectorDrivers,
     companyId: tenantCompanyId,
     storeId: tenantStoreId,
-    deviceSessionId: tenantTillId,
+    terminalId: tenantTerminalId,
     capabilityKey: capability,
-    selfCheckout: action?.selfCheckout === true,
     payload: runtimePayload,
     writeAudit,
     actorUserId: actorUserId || req?.user?.id || null,
@@ -508,7 +507,7 @@ export async function emitConnectorWorkflowEvent({
   db,
   companyId,
   storeId,
-  deviceSessionId,
+  terminalId,
   connectorInstanceId,
   connectorKey,
   capability,
@@ -525,7 +524,7 @@ export async function emitConnectorWorkflowEvent({
   const safePayload = safeConnectorEventPayload({
     companyId,
     storeId,
-    deviceSessionId,
+    terminalId,
     connectorInstanceId,
     connectorKey,
     capability,
@@ -955,7 +954,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
     async: false,
     requiredPermissions: ["workflow.execute"],
-    executor: async ({ action, db, companyId, req, storeId, deviceSessionId, connectorDrivers, writeAudit, workflowVariables, record, object, actorUserId }) => {
+    executor: async ({ action, db, companyId, req, storeId, terminalId, connectorDrivers, writeAudit, workflowVariables, record, object, actorUserId }) => {
       const context = { workflowVariables, record, object, req };
       const packageKeyRaw = action.packageKey == null ? null : resolveConfiguredResource(action.packageKey, context, { preserveMissing: false });
       const capabilityRaw = resolveConfiguredResource(action.capability, context, { preserveMissing: false });
@@ -970,10 +969,9 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         drivers: connectorDrivers,
         companyId: companyId || req?.user?.companyId,
         storeId: storeId || req?.user?.storeId || null,
-        deviceSessionId: deviceSessionId || req?.user?.deviceSessionId || null,
+        terminalId: terminalId || req?.user?.terminalId || null,
         capabilityKey,
         packageKey,
-        selfCheckout: input.selfCheckout === true,
         payload: input,
         writeAudit,
         actorUserId: actorUserId || req?.user?.id || null,
@@ -3306,7 +3304,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
               inputMappings: mappings,
               actorUserId: req?.user?.id || context.actorUserId || null,
               storeId: req?.user?.storeId || context.storeId || null,
-              deviceSessionId: req?.user?.deviceSessionId || context.deviceSessionId || null,
+              terminalId: req?.user?.terminalId || context.terminalId || null,
               initialVariables: childWorkflowVariables,
               initialPreviousRecord: redact(previousRecord || null),
             },
