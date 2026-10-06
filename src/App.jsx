@@ -17,16 +17,13 @@ const RecordListView = lazyWithRecovery(() => import('./platform/records/RecordL
 const MetadataRecordFormModal = lazyWithRecovery(() => import('./platform/forms/MetadataRecordFormModal'))
 const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
-const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
 const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
 const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/PaymentTerminalSettings'))
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
-const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
 const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const MetadataPageRuntime = lazyWithRecovery(() => import('./platform/pages/MetadataPageRuntime'))
-const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
@@ -36,16 +33,13 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
-const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
 const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
 const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
-const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
@@ -1120,7 +1114,8 @@ function SettingsPage({ onOpenProfile }) {
               ) : current?.key === 'store-till' ? (
                 <>
                   <MetadataSettingsSection section="Store & Till" />
-                  <StoreTillSettingsPage />
+                  <MetadataPageRuntime objectKey="store" appKey="settings" />
+                  <MetadataPageRuntime objectKey="terminal" appKey="settings" />
                 </>
               ) : current?.key === 'client-web-shop' ? (
                 <MetadataSettingsSection section="Client Web Shop" />
@@ -1249,9 +1244,9 @@ function SettingsPage({ onOpenProfile }) {
               ) : current?.key === 'connections' ? (
                 <ConnectionsSettings />
               ) : current?.key === 'email-delivery' ? (
-                <DeliverySettingsPage channel="email" />
+                <MetadataPageRuntime objectKey="integration" appKey="email-delivery" />
               ) : current?.key === 'sms-delivery' ? (
-                <DeliverySettingsPage channel="sms" />
+                <MetadataPageRuntime objectKey="integration" appKey="sms-delivery" />
               ) : current?.key === 'whatsapp-assistant' ? (
                 <WhatsAppAssistantSettings />
               ) : current?.key === 'ai-assistant' ? (
@@ -2330,10 +2325,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeApp === 'till' ? (
-          <TillPage
-            onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
-            onNavigate={openItem}
-          />
+          <MetadataPageRuntime pageKey="till" />
         ) : activeApp === 'sales' ? (
           <MetadataPageRuntime objectKey="sale" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
@@ -2376,7 +2368,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'own-delivery' ? (
           <MetadataPageRuntime objectKey="online_order" appKey="own-delivery" />
         ) : activeApp === 'kiosk' ? (
-          <OneKioskPage />
+          <MetadataPageRuntime pageKey="kiosk" />
         ) : activeApp === 'kiosk-display' ? (
           <OneKioskDisplayPage />
         ) : activeApp === 'kiosk-devices' ? (
@@ -2410,7 +2402,7 @@ function Desktop({ onLock, onSignOut }) {
             }}
           />
         ) : activeApp === 'home' || activeApp === 'dashboard' ? (
-          <DashboardPage />
+          <MetadataPageRuntime pageKey="dashboard" />
         ) : (
           <div className="module-state" role="alert">This app is not available in this workspace.</div>
         )}
@@ -2431,7 +2423,7 @@ export default function App() {
     return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
   }
   if (route.app === 'kiosk-runtime') {
-    return <div data-oneengine-route="kiosk-runtime"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading kiosk…</div>}><OneKioskPage publicMode /></Suspense></LazyLoadBoundary></div>
+    return <div data-oneengine-route="kiosk-runtime"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading kiosk…</div>}><MetadataPageRuntime pageKey="kiosk" /></Suspense></LazyLoadBoundary></div>
   }
   if (route.app === 'kiosk-display') {
     return <div data-oneengine-route="kiosk-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading collection display…</div>}><OneKioskDisplayPage /></Suspense></LazyLoadBoundary></div>
