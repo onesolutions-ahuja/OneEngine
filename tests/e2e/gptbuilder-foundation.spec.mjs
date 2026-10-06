@@ -253,4 +253,70 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     expect(failures, failures.join('\n')).toEqual([])
   })
+  test('Run, Debug, and saved Test Scenario use the correct saved-flow endpoints and show results', async ({ page }) => {
+    if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
+    const failures = watchRuntimeFailures(page)
+    const rules = [
+      { id: 'runtime-auto', name: 'Runtime Autolaunched', active: false, lifecycle_status: 'DRAFT', action: { type: 'workflow', gptBuilder: true, flowType: 'autolaunched', apiName: 'Runtime_Autolaunched', start: {}, layout: { mode: 'AUTO' }, gptBuilderElements: [], resources: [] } },
+      { id: 'runtime-screen', name: 'Runtime Screen', active: false, lifecycle_status: 'DRAFT', action: { type: 'workflow', gptBuilder: true, flowType: 'screen', apiName: 'Runtime_Screen', start: {}, layout: { mode: 'AUTO' }, gptBuilderElements: [], resources: [] } },
+    ]
+    const calls = []
+
+    await page.route('**/api/platform/rules', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue()
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: rules }) })
+    })
+    await page.route('**/api/platform/rules/runtime-auto/run', async (route) => {
+      calls.push({ kind: 'run', body: route.request().postDataJSON() })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'COMPLETED', runId: 'run-1', steps: [] } }) })
+    })
+    await page.route('**/api/platform/rules/runtime-screen/debug', async (route) => {
+      calls.push({ kind: 'debug', body: route.request().postDataJSON() })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'COMPLETED', runId: 'debug-1', steps: [] } }) })
+    })
+    await page.route('**/api/platform/rules/runtime-auto/tests', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue()
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [{ id: 'scenario-1', name: 'Saved Contract Scenario', config: { inputs: {}, rollback: true }, last_status: 'PASSED' }] }) })
+    })
+    await page.route('**/api/platform/rules/runtime-auto/tests/scenario-1/run', async (route) => {
+      calls.push({ kind: 'test', body: route.request().postDataJSON() })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'COMPLETED', testPassed: true, runId: 'test-1', assertionResult: { checks: [] } } }) })
+    })
+
+    await page.goto('developer/gptbuilder')
+    await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: /Edit Runtime Autolaunched/i }).click()
+    await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
+
+    await page.getByRole('button', { name: /^Run$/ }).click()
+    const runPanel = page.getByLabel('Run')
+    await expect(runPanel).toBeVisible()
+    await runPanel.getByRole('button', { name: /^Run$/ }).click()
+    await expect(runPanel.getByText('COMPLETED', { exact: true })).toBeVisible()
+    await expect(runPanel.getByText('run-1', { exact: true })).toBeVisible()
+    await runPanel.getByRole('button', { name: /^Close$/ }).click()
+
+    await page.getByRole('button', { name: /^View Tests$/ }).click()
+    const testPanel = page.getByLabel('View Tests')
+    await expect(testPanel).toBeVisible()
+    await testPanel.getByText('Saved Test', { exact: true }).locator('..').getByRole('combobox').selectOption('scenario-1')
+    await testPanel.getByRole('button', { name: /^Run Scenario$/ }).click()
+    await expect(testPanel.getByText('Passed', { exact: true })).toBeVisible()
+    await testPanel.getByRole('button', { name: /^Close$/ }).click()
+
+    await page.getByRole('button', { name: /^New Automation$/ }).click()
+    await page.getByRole('button', { name: /^Cancel$/ }).click()
+    await page.goto('developer/gptbuilder')
+    await page.getByRole('button', { name: /Edit Runtime Screen/i }).click()
+    await page.getByRole('button', { name: /^Debug$/ }).click()
+    const debugPanel = page.getByLabel('Debug')
+    await expect(debugPanel).toBeVisible()
+    await debugPanel.getByRole('button', { name: /^Run$/ }).click()
+    await expect(debugPanel.getByText('debug-1', { exact: true })).toBeVisible()
+
+    expect(calls.map((call) => call.kind)).toEqual(['run', 'test', 'debug'])
+    expect(calls.find((call) => call.kind === 'test')?.body?.mode).toBe('test')
+    expect(calls.find((call) => call.kind === 'debug')?.body?.mode).toBe('debug')
+    expect(failures, failures.join('\n')).toEqual([])
+  })
 })
