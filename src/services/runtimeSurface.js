@@ -28,8 +28,21 @@ export async function loadRuntimeSurface(navigationKey, surfaceKey = navigationK
   if (rows.length) writeMarketplaceCache(rows)
   item = catalogAppForNavigation(rows, navigationKey)
   surface = runtimeSurfaceFromItem(item, surfaceKey)
+  if (!surface) {
+    const runtimeNavigation = await apiRequest('/api/packages/runtime-navigation', { timeoutMs: 12000, retryGet: true })
+    const runtimeRows = Array.isArray(runtimeNavigation?.data) ? runtimeNavigation.data : []
+    item = catalogAppForNavigation(runtimeRows, navigationKey)
+    surface = runtimeSurfaceFromItem(item, surfaceKey)
+  }
   if (!surface) throw new Error(`Runtime surface metadata is unavailable for ${navigationKey}.`)
   return surface
+}
+
+export async function loadRuntimeSurfaceSettings(navigationKey, surfaceKey) {
+  const surface = await loadRuntimeSurface(navigationKey, surfaceKey)
+  const source = String(surface?.settings?.source || '')
+  const response = source ? await apiRequest(source) : null
+  return { surface, settings: response?.data || response || null }
 }
 
 export function surfacePath(source, path, fallback = undefined) {
