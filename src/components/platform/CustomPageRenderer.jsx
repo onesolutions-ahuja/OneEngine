@@ -709,7 +709,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
  *
  * @param definition  normalised Custom Page tree (customPageTree.js shape)
  * @param builderMode when true, records stay as placeholders and interactions are inert
- * @param device      desktop | tablet | mobile (builder device preview / runtime width)
+ * @param device      desktop | tablet | mobile | kiosk (builder device preview / runtime width)
  */
 export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, renderSectionChrome = null }) {
   const sections = Array.isArray(definition?.sections) ? definition.sections : [];
@@ -781,7 +781,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
   const setNodeState = (nodeId, patch) => setCollectionState((current) => ({ ...current, [nodeId]: { ...(current[nodeId] || {}), ...patch } }));
 
   return (
-    <div className={`cpb-tree${device === "mobile" ? " mx-auto w-full max-w-[420px]" : device === "tablet" ? " mx-auto w-full max-w-[820px]" : " w-full"}`}>
+    <div className={`cpb-tree${device === "mobile" ? " mx-auto w-full max-w-[390px]" : device === "tablet" ? " mx-auto w-full max-w-[820px]" : device === "kiosk" ? " mx-auto w-full max-w-[1024px]" : " w-full"}`}>
       <style>{PAGE_BUILDER_GRID_CSS}</style>
       {sections.filter((section) => section.visible !== false).map((section) => {
         const body = (
@@ -790,7 +790,11 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
               <div
                 key={node.id}
                 onClick={builderMode && onSelectNode ? (event) => { event.stopPropagation(); onSelectNode(node.id, null); } : undefined}
-                style={{ minWidth: 0 }}
+                style={{
+                  minWidth: 0,
+                  width: Number(node.layout?.width) > 0 ? `min(100%, ${Number(node.layout.width)}px)` : undefined,
+                  minHeight: Number(node.layout?.height) > 0 ? Number(node.layout.height) : undefined,
+                }}
                 className={`${builderMode && selectedId === node.id ? "cpb-selected" : ""}`}
               >
                 <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode} runtimeOverride={runtimeOverrides[node.id]}>
