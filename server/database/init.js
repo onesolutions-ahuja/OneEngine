@@ -1770,6 +1770,35 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         });
       },
     },
+    {
+      key: "0066_remove_system_action_job_workflow_wrappers",
+      version: "66",
+      name: "Remove generated action and job pseudo-workflows",
+      up: async client => {
+        const removed = await client.query(
+          `DELETE FROM platform_rules
+            WHERE action->>'systemGenerated'='true'
+              AND (
+                action->>'systemKey' LIKE 'action:%'
+                OR action->>'systemKey' LIKE 'job:%'
+                OR action->>'capabilityType' IN ('action','job')
+              )
+            RETURNING id,name,company_id,action->>'systemKey' AS system_key`
+        );
+        const remaining = await client.query(
+          `SELECT id,name,company_id,action->>'systemKey' AS system_key
+             FROM platform_rules
+            WHERE action->>'systemGenerated'='true'
+              AND (
+                action->>'systemKey' LIKE 'action:%'
+                OR action->>'systemKey' LIKE 'job:%'
+                OR action->>'capabilityType' IN ('action','job')
+              )`
+        );
+        if (remaining.rows.length) throw new Error("Generated action/job pseudo-workflow cleanup verification failed");
+        console.log("onePOS: removed generated action/job pseudo-workflows", { removed: removed.rowCount });
+      },
+    },
     ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
