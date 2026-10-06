@@ -424,15 +424,6 @@ app.use("/api", (req, res, next) => {
  */
 const writeAudit = createAuditWriter({ db });
 app.locals.writeAudit = writeAudit;
-const workflowTraceRetentionDays = Math.max(7, Number(process.env.WORKFLOW_TRACE_RETENTION_DAYS || 90));
-const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
-  db,
-  retentionDays: workflowTraceRetentionDays,
-  batchSize: 5000,
-}).catch((error) => console.error("Workflow trace retention cleanup error:", error?.message || error));
-setTimeout(purgeWorkflowTraceBatch, 60_000).unref?.();
-setInterval(purgeWorkflowTraceBatch, 6 * 60 * 60 * 1000).unref?.();
-
 /*
 |--------------------------------------------------------------------------
 | JWT / Authentication (session layer - services/session.js)
