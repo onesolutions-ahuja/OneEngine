@@ -25,7 +25,7 @@ import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "EMAIL_ALERT", "SEND_SMS", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
 
@@ -3384,88 +3384,8 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: true };
     },
   },
-  {
-    key: "SEND_EMAIL",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send Email",
-    description: "Queue an email using the configured email provider.",
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send Email requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.email",
-    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
-      const company = companyId || req?.user?.companyId;
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
-      if (!provider.configured) {
-        return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
-      }
-      const resolvedAction = await resolveEmailWorkflowAction({ db, companyId: company, action, record, previousRecord, object, workflowVariables, req });
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_EMAIL", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
-    },
-  },
 
 
-  {
-    key: "EMAIL_ALERT",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Email Alert",
-    description: "Send a reusable email-template alert through the configured email provider.",
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Email Alert requires a recipient");
-      if (!action?.templateId && !action?.template) throw new Error("Email Alert requires an email template");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.email",
-    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
-      const company = companyId || req?.user?.companyId;
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "EMAIL", stepRunId });
-      if (!provider.configured) {
-        return { status: "failed", provider: "EMAIL", error: provider.error, jobId: null };
-      }
-      const resolvedAction = await resolveEmailWorkflowAction({ db, companyId: company, action: { ...action, type: "SEND_EMAIL", contentMode: "TEMPLATE" }, record, previousRecord, object, workflowVariables, req });
-      const job = await enqueuePlatformJob({
-        db,
-        companyId: company,
-        kind: "SEND_EMAIL",
-        payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId },
-        runAt: new Date(),
-        idempotencyKey: action.idempotencyKey || `${company}:email-alert:${stepRunId || action.id || JSON.stringify(action)}`,
-      });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
-    },
-  },
-  {
-    key: "SEND_SMS",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send SMS",
-    description: "Queue an SMS using the configured SMS provider.",
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send SMS requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    requiredEntitlement: "communications.sms",
-    executor: async ({ db, action, req, companyId, stepRunId, record, previousRecord, object, workflowVariables }) => {
-      const company = companyId || req?.user?.companyId;
-      const provider = await ensureCommunicationProvider({ db, companyId: company, providerKind: "SMS", stepRunId });
-      if (!provider.configured) {
-        return { status: "failed", provider: "SMS", error: provider.error, jobId: null };
-      }
-      const resolvedAction = resolveCommunicationWorkflowAction(action, record, object, workflowVariables, req, previousRecord);
-      const job = await enqueuePlatformJob({ db, companyId: company, kind: "SEND_SMS", payload: { ...resolvedAction, _roleId: req?.user?.roleId, _stepRunId: stepRunId }, runAt: new Date(), idempotencyKey: action.idempotencyKey || `${company}:${stepRunId || action.id || JSON.stringify(action)}` });
-      return { status: job ? "queued" : "skipped", jobId: job?.id || null };
-    },
-  },
 
   {
     key: "CALL_FUNCTION",
