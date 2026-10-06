@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
-import { SUMMARY_COLUMN, aggregatesForFieldType, operatorsForFieldType, platformFieldChoices } from "./platformDashboard.js";
+import { SUMMARY_COLUMN, aggregatesForFieldType, platformFieldChoices } from "./platformDashboard.js";
 import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";
 
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
@@ -21,19 +21,6 @@ function useReports() {
   }, []);
   return state;
 }
-function useObjects() {
-  const [state, setState] = useState({ objects: [], error: "" });
-  useEffect(() => {
-    let alive = true;
-    apiRequest("/api/reports/custom/metadata").then((response) => {
-      if (!alive) return;
-      setState(response.success ? { objects: response.data?.platformObjects || [], error: "" } : { objects: [], error: response.message || "Unable to load Objects" });
-    }).catch((error) => alive && setState({ objects: [], error: error.message }));
-    return () => { alive = false; };
-  }, []);
-  return state;
-}
-
 function useFields(objectId) {
   const [state, setState] = useState({ fields: [], loading: false, error: "" });
   useEffect(() => {
@@ -42,42 +29,11 @@ function useFields(objectId) {
     setState({ fields: [], loading: true, error: "" });
     apiRequest(`/api/reports/custom/platform-objects/${encodeURIComponent(objectId)}/metadata`).then((response) => {
       if (!alive) return;
-      setState(response.success ? { fields: response.data?.fields || [], loading: false, error: "" } : { fields: [], loading: false, error: response.message || "Unable to load Object fields" });
+      const direct=response.data?.fields||[];const related=(response.data?.relationships||[]).flatMap((relationship)=>(relationship.fields||[]));setState(response.success ? { fields: [...direct,...related], loading: false, error: "" } : { fields: [], loading: false, error: response.message || "Unable to load Object fields" });
     }).catch((error) => alive && setState({ fields: [], loading: false, error: error.message }));
     return () => { alive = false; };
   }, [objectId]);
   return state;
-}
-
-function ConditionEditor({ component, onChange, fields }) {
-  const config = component.config || {};
-  const report = config.report || {};
-  const conditions = Array.isArray(report.filters) ? report.filters : [];
-  const available = platformFieldChoices(fields).all;
-  const setFilters = (filters) => onChange({ ...component, config: { ...config, report: { ...report, filters } } });
-  const isDatePreset = (operator) => DASHBOARD_DATE_RANGES.some((range) => range.key === operator);
-  return <div className="md:col-span-2 rounded-lg p-3" style={{ border: "1px solid var(--onepos-border)" }} data-testid="condition-editor">
-    <div className="flex items-center justify-between mb-2">
-      <span className={LABEL}>Conditions</span>
-      <div className="flex items-center gap-2">
-        {conditions.length > 1 ? <select aria-label="Filter logic" data-testid="filter-logic" className="onepos-input text-xs" style={{ width: "auto" }} value={report.filterLogic || "all"} onChange={(event) => onChange({ ...component, config: { ...config, report: { ...report, filterLogic: event.target.value } } })}><option value="all">Match all</option><option value="any">Match any</option></select> : null}
-        <button type="button" className="onepos-btn onepos-btn-sm" data-testid="add-condition" onClick={() => setFilters([...conditions, { field: available[0]?.key || "", operator: "equals", value: "" }])}>+ Condition</button>
-      </div>
-    </div>
-    {!conditions.length ? <p className="text-xs" style={{ color: "var(--onepos-text-muted)" }}>No conditions — every record in the datasource is included.</p> : null}
-    {conditions.map((condition, index) => {
-      const field = available.find((entry) => entry.key === condition.field);
-      const operators = field?.type === "date" ? DASHBOARD_DATE_RANGES.map((range) => [range.key, range.label]) : operatorsForFieldType(field?.type);
-      const needsValue = !["is_blank", "is_not_blank"].includes(condition.operator) && !isDatePreset(condition.operator);
-      const update = (patch) => setFilters(conditions.map((entry, i) => i === index ? { ...entry, ...patch } : entry));
-      return <div key={index} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto] items-end mb-2" data-testid={`condition-${index}`}>
-        <select aria-label="Condition field" className={FIELD} style={STYLE} value={condition.field || ""} onChange={(event) => update({ field: event.target.value, operator: "equals" })}>{available.length ? null : <option value="">No fields available</option>}{available.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}</select>
-        <select aria-label="Condition operator" className={FIELD} style={STYLE} value={condition.operator || "equals"} onChange={(event) => update({ operator: event.target.value })}>{operators.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
-        {needsValue ? <input aria-label="Condition value" className={FIELD} style={STYLE} value={Array.isArray(condition.value) ? condition.value.join(", ") : (condition.value ?? "")} placeholder={condition.operator === "in" ? "comma separated" : "value"} onChange={(event) => update({ value: event.target.value })} /> : <span className="text-xs py-2" style={{ color: "var(--onepos-text-muted)" }}>No value needed</span>}
-        <button type="button" className="onepos-btn onepos-btn-sm" data-testid={`remove-condition-${index}`} onClick={() => setFilters(conditions.filter((_, i) => i !== index))}>Remove</button>
-      </div>;
-    })}
-  </div>;
 }
 
 export default function DashboardComponentProperties({ component, onChange }) {
@@ -89,9 +45,10 @@ export default function DashboardComponentProperties({ component, onChange }) {
   const isChart = ["pie","donut","bar","line","gauge","funnel","scatter","combo","chart"].includes(component.type);
   const isUtility = ["clock_widget", "calendar_widget", "weather_widget"].includes(component.type);
   const isImage = component.type === "image";
-  const { objects, error: objectsError } = useObjects();
   const { fields, loading, error: fieldsError } = useFields(report.objectId || null);
-  const choices = platformFieldChoices(fields);
+  const reportFieldKeys = new Set([...(report.fields || []), ...(report.rowGroups || report.groupBy || []), ...(report.columnGroups || [])].map(String));
+  const reportFields = fields.filter((field) => reportFieldKeys.has(String(field.key || field.api_name)));
+  const choices = platformFieldChoices(reportFields);
   const metrics = choices.metricFields;
   const groups = choices.groupFields;
   const typeOf = (key) => choices.all.find((field) => field.key === key)?.type || "text";
@@ -146,7 +103,7 @@ export default function DashboardComponentProperties({ component, onChange }) {
       <div><span className={LABEL}>Width (grid columns, 1–12)</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.w ?? 3} onChange={layout("w")} /></div>
       <div><span className={LABEL}>Height</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.h ?? 2} onChange={layout("h")} /></div>
     </> : <>
-      <div className="md:col-span-2"><span className={LABEL}>Source report</span><select className={FIELD} style={STYLE} value={config.reportId || ""} onChange={(event) => selectSavedReport(event.target.value)}><option value="">{drillReports.length ? "Select a saved report" : "No saved reports available"}</option>{drillReports.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><p className="mt-1 text-xs" style={{ color: "var(--onepos-text-muted)" }}>Dashboard analytics widgets use saved Report Builder definitions. Edit objects, fields, relationships and filters in the source report.</p>{objectsError ? <p className="text-xs" style={{ color: "#b91c1c" }}>{objectsError}</p> : null}{fieldsError ? <p className="text-xs" style={{ color: "#b91c1c" }}>{fieldsError}</p> : null}</div>
+      <div className="md:col-span-2"><span className={LABEL}>Source report</span><select className={FIELD} style={STYLE} value={config.reportId || ""} onChange={(event) => selectSavedReport(event.target.value)}><option value="">{drillReports.length ? "Select a saved report" : "No saved reports available"}</option>{drillReports.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><p className="mt-1 text-xs" style={{ color: "var(--onepos-text-muted)" }}>Dashboard analytics widgets use saved Report Builder definitions. Edit objects, fields, relationships and filters in the source report.</p>{fieldsError ? <p className="text-xs" style={{ color: "#b91c1c" }}>{fieldsError}</p> : null}</div>
       {component.type === "combo" ? <><div><span className={LABEL}>Metric fields (up to 4)</span><select multiple data-testid="metric-fields" className={FIELD} style={STYLE} value={config.yFields?.length ? config.yFields : (config.valueField ? [config.valueField] : [])} onChange={(event) => selectComboMetrics(Array.from(event.target.selectedOptions).map((option) => option.value))}>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div><div><span className={LABEL}>Secondary axis</span><select multiple className={FIELD} style={STYLE} value={config.secondaryAxisFields || []} onChange={(event) => setConfig({ secondaryAxisFields: Array.from(event.target.selectedOptions).map((option) => option.value).filter((field) => (config.yFields || []).includes(field)) })}>{(config.yFields || []).map((field) => <option key={field} value={field}>{metrics.find((item) => item.key === field)?.label || field}</option>)}</select></div></> : <div><span className={LABEL}>Metric field</span><select data-testid="metric-field" className={FIELD} style={STYLE} value={config.valueField || ""} onChange={(event) => selectMetric(event.target.value)}><option value="">Select a metric</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select>{isPlatform && report.objectId && !loading && !metrics.length ? <p className="text-xs" style={{ color: "var(--onepos-text-muted)" }}>This Object has no aggregatable fields.</p> : null}</div>}
       {isPlatform ? <div><span className={LABEL}>Aggregation</span><select data-testid="aggregate" className={FIELD} style={STYLE} value={config.aggregate || "COUNT"} onChange={(event) => selectAggregate(event.target.value)}>{aggregates.map((aggregate) => <option key={aggregate} value={aggregate}>{aggregate}</option>)}</select></div> : null}
       <div><span className={LABEL}>{isChart ? "Category / group field" : "Label field (optional)"}</span><select className={FIELD} style={STYLE} value={config.labelField || ""} onChange={(event) => selectGroup(event.target.value)}><option value="">None</option>{groups.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div>
@@ -165,7 +122,6 @@ export default function DashboardComponentProperties({ component, onChange }) {
           {config.targetMode === "field" ? <div><span className={LABEL}>Target field</span><select className={FIELD} style={STYLE} value={config.targetField || ""} onChange={(event) => setConfig({ targetField: event.target.value })}><option value="">Select field</option>{metrics.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}</select></div> : <div><span className={LABEL}>Target value</span><input type="number" className={FIELD} style={STYLE} value={config.targetValue ?? 100} onChange={num("targetValue")} /></div>}
         </> : null}
       </> : null}
-      <ConditionEditor component={component} onChange={onChange} fields={fields} />
       <div className="md:col-span-2">
         <ConditionalFormattingEditor
           rules={config.conditionalFormatting || []}
