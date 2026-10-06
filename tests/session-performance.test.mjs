@@ -163,9 +163,8 @@ test('automatic CI does not run competing live E2E suites against production', a
   const playwright = await read('../.github/workflows/playwright-e2e.yml')
   const workflowBuilder = await read('../.github/workflows/workflow-builder-e2e.yml')
   const cypress = await read('../.github/workflows/cypress-deep-e2e.yml')
-  const appointment = await read('../.github/workflows/appointment-debug.yml')
   const validate = await read('../.github/workflows/validate.yml')
-  for (const source of [playwright, workflowBuilder, cypress, appointment]) {
+  for (const source of [playwright, workflowBuilder, cypress]) {
     assert.match(source, /group: oneengine-live-e2e/)
     assert.match(source, /cancel-in-progress: false/)
   }
@@ -295,7 +294,6 @@ test('bandwidth-heavy production E2E workflows are manual-only', async () => {
   for (const path of [
     '../.github/workflows/playwright-e2e.yml',
     '../.github/workflows/cypress-deep-e2e.yml',
-    '../.github/workflows/appointment-debug.yml',
   ]) {
     const source = await read(path)
     assert.match(source, /on:\n\s+workflow_dispatch:/)

@@ -25,18 +25,10 @@ const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAs
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
 const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
 const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
-const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
+const MetadataPageRuntime = lazyWithRecovery(() => import('./platform/pages/MetadataPageRuntime'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const SalesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
-const ProductsPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const CategoriesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
-const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
-const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
-const CustomersPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
@@ -2343,13 +2335,13 @@ function Desktop({ onLock, onSignOut }) {
             onNavigate={openItem}
           />
         ) : activeApp === 'sales' ? (
-          <SalesPage initialObjectKey="sale" appKey="sales" />
+          <MetadataPageRuntime objectKey="sale" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
-          <SupplierReturnsPage />
+          <MetadataPageRuntime objectKey="purchase_line" appKey="supplier-returns" />
         ) : activeApp === 'products' ? (
-          <ProductsPage initialObjectKey="product" appKey="products" />
+          <MetadataPageRuntime objectKey="product" appKey="products" />
         ) : activeApp === 'categories' ? (
-          <CategoriesPage initialObjectKey="category" appKey="categories" />
+          <MetadataPageRuntime objectKey="category" appKey="categories" />
         ) : activeApp === 'global-products' ? (
           <GlobalProductLookupPage
             onBack={() => openItem('products')}
@@ -2360,17 +2352,17 @@ function Desktop({ onLock, onSignOut }) {
           />
 
         ) : activeApp === 'purchases' ? (
-          <PurchasesPage />
+          <MetadataPageRuntime objectKey="purchase" appKey="purchases" />
         ) : activeApp === 'suppliers' ? (
-          <SuppliersPage />
+          <MetadataPageRuntime objectKey="supplier" appKey="suppliers" />
         ) : activeApp === 'customers' ? (
-          <CustomersPage initialObjectKey="customer" appKey="customers" />
+          <MetadataPageRuntime objectKey="customer" appKey="customers" />
         ) : activeApp === 'gift-cards' ? (
-          <WorkspacePage initialObjectKey="gift_card" appKey="gift-cards" />
+          <MetadataPageRuntime objectKey="gift_card" appKey="gift-cards" />
         ) : activeApp === 'employees' ? (
-          <WorkspacePage initialObjectKey="employee" appKey="employees" />
+          <MetadataPageRuntime objectKey="employee" appKey="employees" />
         ) : activeApp === 'stores' ? (
-          <WorkspacePage initialObjectKey="store" appKey="stores" />
+          <MetadataPageRuntime objectKey="store" appKey="stores" />
         ) : activeApp === 'reports' ? (
           <ReportsPage />
         ) : activeApp === 'custom-reports' ? (
@@ -2380,15 +2372,15 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'accounting' ? (
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'online-orders' ? (
-          <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
+          <MetadataPageRuntime objectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
-          <WorkspacePage initialObjectKey="online_order" appKey="own-delivery" />
+          <MetadataPageRuntime objectKey="online_order" appKey="own-delivery" />
         ) : activeApp === 'kiosk' ? (
           <OneKioskPage />
         ) : activeApp === 'kiosk-display' ? (
           <OneKioskDisplayPage />
         ) : activeApp === 'kiosk-devices' ? (
-          <WorkspacePage initialObjectKey="kiosk_device" appKey="one_kiosk" />
+          <MetadataPageRuntime objectKey="kiosk_device" appKey="one_kiosk" />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
@@ -2403,11 +2395,11 @@ function Desktop({ onLock, onSignOut }) {
             setActiveApp('settings')
           }} />
         ) : activeApp === 'custom-page-runtime' ? (
-          <CustomPageRuntimePage pageKey={routeState.pageKey || ''} />
+          <MetadataPageRuntime pageKey={routeState.pageKey || ''} />
         ) : activeApp === 'workspace' ? (
-          <WorkspacePage
-            initialObjectKey={routeState.objectKey || ''}
-            initialRecordId={routeState.recordId || ''}
+          <MetadataPageRuntime
+            objectKey={routeState.objectKey || ''}
+            recordId={routeState.recordId || ''}
             appKey={routeState.appKey || ''}
             onNavigate={openItem}
             onRouteChange={(objectKey, recordId) => {
