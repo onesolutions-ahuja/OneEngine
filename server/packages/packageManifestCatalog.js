@@ -23,6 +23,27 @@ const PACKAGE_CATALOG = [
           onlineOrder: "online_order",
           customer: "customer",
         },
+        permissions: {
+          onlineOrdersView: "online_orders.view",
+        },
+        values: {
+          onlineOrderReceived: "RECEIVED",
+        },
+        fields: {
+          sessionStatus: "status",
+          sessionOpenValue: "open",
+          sessionTerminalId: "terminal_id",
+          sessionStoreId: "store_id",
+          catalogueActive: "active",
+          modifierGroupProductId: "product_id",
+          modifierGroupActive: "active",
+          modifierGroupOrder: "display_order",
+          modifierGroupMaxSelections: "max_selections",
+          modifierOptionGroupId: "group_id",
+          modifierOptionActive: "active",
+          modifierOptionOrder: "display_order",
+          onlineOrderStatus: "status",
+        },
         settings: {
           source: "/api/settings",
           paymentMethodsSource: "/api/settings/payment-methods",
@@ -39,20 +60,6 @@ const PACKAGE_CATALOG = [
           receiptQrAllowRegeneratePath: "receiptQr.allowRegenerate",
           receiptQrAutoClosePath: "receiptQr.autoCloseOnNewSale",
           receiptQrShowCountdownPath: "receiptQr.showCountdown",
-        },
-        fields: {
-          sessionStatus: "status",
-          sessionOpenValue: "open",
-          sessionTerminalId: "terminal_id",
-          sessionStoreId: "store_id",
-          catalogueActive: "active",
-          modifierGroupProductId: "product_id",
-          modifierGroupActive: "active",
-          modifierGroupOrder: "display_order",
-          modifierGroupMaxSelections: "max_selections",
-          modifierOptionGroupId: "group_id",
-          modifierOptionActive: "active",
-          modifierOptionOrder: "display_order",
         },
         recordMappings: {
           catalogue: {
