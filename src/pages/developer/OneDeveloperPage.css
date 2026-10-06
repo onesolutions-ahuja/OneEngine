@@ -244,3 +244,77 @@
   padding-left: 12px;
   padding-right: 12px;
 }
+
+
+/* 2026-10-06 live Developer UX audit fixes */
+.developer-compact-nav {
+  display: none;
+}
+
+.onedeveloper-page > .settings-content > .settings-content-body {
+  padding-bottom: max(var(--onepos-dock-clearance, 74px), env(safe-area-inset-bottom));
+}
+
+.onedeveloper-page .developer-record-editor-actions,
+.onedeveloper-page .record-dialog-actions,
+.onedeveloper-page .cpb-toolbar {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1100px) {
+  .onedeveloper-page:not(.is-builder-focus) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .onedeveloper-page:not(.is-builder-focus) > .settings-sidebar {
+    display: none;
+  }
+
+  .developer-compact-nav {
+    display: grid;
+    grid-template-columns: auto minmax(180px, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(0,0,0,.08);
+    background: rgba(255,255,255,.96);
+  }
+
+  .developer-compact-nav > span {
+    font-size: 11px;
+    font-weight: 700;
+    color: #52606d;
+  }
+
+  .developer-compact-nav select {
+    width: 100%;
+    min-width: 0;
+    height: 34px;
+    border: 1px solid rgba(0,0,0,.12);
+    border-radius: 8px;
+    background: #fff;
+    padding: 0 10px;
+    font: inherit;
+  }
+
+  .onedeveloper-page .objects-settings-shell {
+    grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+  }
+
+  .onedeveloper-page .objects-detail-pane {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .developer-compact-nav {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .onedeveloper-page .objects-settings-shell {
+    grid-template-columns: 1fr;
+  }
+}
