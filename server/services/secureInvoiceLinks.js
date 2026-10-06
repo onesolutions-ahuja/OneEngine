@@ -17,6 +17,7 @@
  * module is the reusable foundation for any future delivery channel.
  */
 import crypto from "crypto";
+import { selectMetadataRecords } from "./metadataRecordStore.js";
 
 export const SECURE_LINK_DEFAULT_EXPIRY_DAYS = 30;
 
@@ -76,15 +77,16 @@ export async function createSecureInvoiceLink({
   }
 
   // The link may only ever be created by/for a sale the caller's tenant owns.
-  const saleCheck = await db(
-    `SELECT s.id, s.company_id, s.store_id, s.customer_id
-     FROM sales s
-     WHERE s.id = $1 AND s.company_id = $2
-     ${storeId ? "AND s.store_id = $3" : ""}
-     LIMIT 1`,
-    storeId ? [saleId, companyId, storeId] : [saleId, companyId]
-  );
-  if (!saleCheck.rows.length) {
+  const saleFilters = { id: saleId };
+  if (storeId) saleFilters.store_id = storeId;
+  const saleRecord = (await selectMetadataRecords(db, {
+    objectKey: "sale",
+    companyId,
+    filters: saleFilters,
+    columns: ["id","company_id","store_id","customer_id"],
+    limit: 1,
+  }))[0];
+  if (!saleRecord) {
     return { ok: false, status: 404, message: "Sale not found" };
   }
 
@@ -96,7 +98,7 @@ export async function createSecureInvoiceLink({
        (token_hash, company_id, store_id, sale_id, created_by, expires_at)
      VALUES ($1,$2,$3,$4,$5,$6)
      RETURNING id, expires_at`,
-    [tokenHash, companyId, saleCheck.rows[0].store_id ?? storeId, saleId, createdBy, expiry]
+    [tokenHash, companyId, saleRecord.store_id ?? storeId, saleId, createdBy, expiry]
   );
 
   const row = result.rows[0];
@@ -106,7 +108,7 @@ export async function createSecureInvoiceLink({
     token: plaintext,
     expiresAt: row.expires_at,
     // Convenience audit context for the caller; never includes the plaintext.
-    customerId: customerId ?? saleCheck.rows[0].customer_id ?? null,
+    customerId: customerId ?? saleRecord.customer_id ?? null,
   };
 }
 
@@ -140,28 +142,29 @@ export async function validateSecureInvoiceToken({ db, token, includeSale = true
     if (link.expires_at && new Date(link.expires_at).getTime() <= Date.now()) return generic;
 
     // Company/store ownership comes from the token relationship itself.
-    const saleResult = await db(
-      `SELECT s.id, s.company_id, s.store_id, s.receipt_number, s.subtotal,
-              s.tax, s.discount, s.total, s.status, s.created_at, s.completed_at,
-              c.timezone AS company_timezone, c.currency AS company_currency
-       FROM sales s
-       INNER JOIN companies c ON c.id = s.company_id
-       WHERE s.id = $1 AND s.company_id = $2
-       ${link.store_id ? "AND s.store_id = $3" : ""}
-       LIMIT 1`,
-      link.store_id ? [link.sale_id, link.company_id, link.store_id] : [link.sale_id, link.company_id]
-    );
-    const sale = saleResult.rows[0];
+    const saleFilters = { id: link.sale_id };
+    if (link.store_id) saleFilters.store_id = link.store_id;
+    const sale = (await selectMetadataRecords(db, {
+      objectKey: "sale",
+      companyId: link.company_id,
+      filters: saleFilters,
+      columns: ["id","company_id","store_id","receipt_number","subtotal","tax","discount","total","status","created_at","completed_at"],
+      limit: 1,
+    }))[0];
     if (!sale) return generic;
 
+    const company = await db("SELECT timezone,currency FROM companies WHERE id=$1 LIMIT 1",[link.company_id]);
+    sale.company_timezone = company.rows[0]?.timezone || null;
+    sale.company_currency = company.rows[0]?.currency || null;
+
     if (includeSale !== false) {
-      const itemResult = await db(
-        `SELECT product_name, quantity, unit_price, discount, discount_type, discount_value,
-           original_unit_price, tax, total
-         FROM sale_items WHERE sale_id = $1 ORDER BY id ASC`,
-        [sale.id]
-      );
-      sale.items = itemResult.rows.map((item) => ({
+      const items = await selectMetadataRecords(db, {
+        objectKey: "sale_item",
+        companyId: link.company_id,
+        filters: { sale_id: sale.id },
+        orderBy: { field: "id", direction: "ASC" },
+      });
+      sale.items = items.map((item) => ({
         name: item.product_name,
         quantity: Number(item.quantity),
         unitPrice: Number(item.unit_price),
@@ -172,11 +175,14 @@ export async function validateSecureInvoiceToken({ db, token, includeSale = true
         tax: Number(item.tax),
         total: Number(item.total),
       }));
-      const payResult = await db(
-        `SELECT payment_method, amount, status FROM payments WHERE sale_id = $1 ORDER BY created_at ASC`,
-        [sale.id]
-      );
-      sale.payments = payResult.rows.map((pay) => ({
+      const payments = await selectMetadataRecords(db, {
+        objectKey: "payment",
+        companyId: link.company_id,
+        filters: { sale_id: sale.id },
+        columns: ["payment_method","amount","status","created_at"],
+        orderBy: { field: "created_at", direction: "ASC" },
+      });
+      sale.payments = payments.map((pay) => ({
         method: pay.payment_method,
         amount: Number(pay.amount),
         status: pay.status,
