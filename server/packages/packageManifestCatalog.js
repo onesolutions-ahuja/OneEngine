@@ -1064,6 +1064,8 @@ const PACKAGE_CATALOG = [
       integrationType: "product_lookup",
       authentication: { type: "none", credentialStorage: null },
       globalProductLookup: {
+        targetObjectKey: "product",
+        categoryObjectKey: "category",
         providerKey: "open_food_facts",
         configKey: "global_product_lookup_open_food_facts",
         displayName: "Open Food Facts",
@@ -1105,6 +1107,8 @@ const PACKAGE_CATALOG = [
       integrationType: "product_lookup",
       authentication: { type: "optional_api_key", credentialStorage: "integration_connections.credentials_encrypted" },
       globalProductLookup: {
+        targetObjectKey: "product",
+        categoryObjectKey: "category",
         providerKey: "upcitemdb",
         configKey: "global_product_lookup_upcitemdb",
         displayName: "UPCitemdb",
@@ -1147,6 +1151,8 @@ const PACKAGE_CATALOG = [
       integrationType: "product_lookup",
       authentication: { type: "x_api_key", credentialStorage: "integration_connections.credentials_encrypted" },
       globalProductLookup: {
+        targetObjectKey: "product",
+        categoryObjectKey: "category",
         providerKey: "barcode_nest",
         configKey: "global_product_lookup_barcode_nest",
         displayName: "BarcodeNest",
@@ -1180,6 +1186,8 @@ const PACKAGE_CATALOG = [
       integrationType: "product_lookup",
       authentication: { type: "bearer_api_key", credentialStorage: "integration_connections.credentials_encrypted" },
       globalProductLookup: {
+        targetObjectKey: "product",
+        categoryObjectKey: "category",
         providerKey: "go_upc",
         configKey: "global_product_lookup_go_upc",
         displayName: "Go-UPC",
