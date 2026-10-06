@@ -14,8 +14,6 @@ import {
   createWorkflowRun,
   executeWorkflowAction,
   executeWorkflowActions,
-  getRegisteredFunction,
-  getRegisteredFunctionsRegistry,
   getWorkflowActionDefinition,
   getWorkflowActionRegistry,
   getWorkflowBuilderActionRegistry,
@@ -5069,7 +5067,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   router.get("/platform/function-registry", ...manage, async (req, res) => {
     res.json({
       success: true,
-      data: getRegisteredFunctionsRegistry().map(({ handler, validation, ...definition }) => definition),
+      data: [],
     });
   });
 
