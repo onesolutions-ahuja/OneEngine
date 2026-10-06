@@ -826,7 +826,76 @@
           "type": "record",
           "source": "steps.create_invoice.created"
         }
-      ]
+      ],
+      "action": {
+        "type": "workflow",
+        "apiName": "SUPPLIER_INVOICE_CREATE",
+        "flowType": "AUTOLAUNCHED",
+        "actions": [
+          {
+            "id": "create_invoice",
+            "label": "Create Supplier Invoice",
+            "key": "CREATE_RECORD",
+            "objectKey": "supplier_invoice",
+            "fieldValues": {
+              "supplier_id": {
+                "path": "record.id"
+              },
+              "invoice_number": {
+                "path": "record.invoiceNumber"
+              },
+              "invoice_date": {
+                "path": "record.invoiceDate"
+              },
+              "due_date": {
+                "path": "record.dueDate"
+              },
+              "subtotal": {
+                "path": "record.subtotal"
+              },
+              "tax": {
+                "path": "record.tax"
+              },
+              "total": {
+                "path": "record.total"
+              },
+              "purchase_id": {
+                "path": "record.purchaseId"
+              },
+              "notes": {
+                "path": "record.notes"
+              },
+              "status": "OPEN"
+            }
+          },
+          {
+            "id": "post_invoice_ledger",
+            "label": "Post Supplier Invoice Ledger",
+            "key": "CREATE_RECORD",
+            "objectKey": "supplier_ledger",
+            "fieldValues": {
+              "supplier_id": {
+                "path": "record.id"
+              },
+              "entry_type": "INVOICE",
+              "reference_type": "supplier_invoice",
+              "reference_id": {
+                "path": "steps.create_invoice.created.id"
+              },
+              "reference": {
+                "path": "record.invoiceNumber"
+              },
+              "amount": {
+                "path": "record.total"
+              },
+              "debit": true,
+              "description": {
+                "path": "record.notes"
+              }
+            }
+          }
+        ]
+      }
     },
     {
       "objectKey": "supplier",
@@ -967,7 +1036,106 @@
           "type": "record",
           "source": "steps.create_payment.created"
         }
-      ]
+      ],
+      "action": {
+        "type": "workflow",
+        "apiName": "SUPPLIER_PAYMENT_CREATE",
+        "flowType": "AUTOLAUNCHED",
+        "actions": [
+          {
+            "id": "create_payment",
+            "label": "Create Supplier Payment",
+            "key": "CREATE_RECORD",
+            "objectKey": "supplier_payment",
+            "checkMatchingRecords": true,
+            "matchAction": "skip",
+            "matchConditions": [
+              {
+                "field": "idempotency_key",
+                "operator": "equals",
+                "value": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            ],
+            "fieldValues": {
+              "supplier_id": {
+                "path": "record.id"
+              },
+              "amount": {
+                "path": "record.amount"
+              },
+              "payment_date": {
+                "path": "record.paymentDate"
+              },
+              "payment_method": {
+                "path": "record.paymentMethod"
+              },
+              "reference": {
+                "path": "record.reference"
+              },
+              "status": "COMPLETED",
+              "idempotency_key": {
+                "path": "record.idempotencyKey"
+              }
+            }
+          },
+          {
+            "id": "create_allocation",
+            "label": "Allocate Payment To Invoice",
+            "key": "CREATE_RECORD",
+            "objectKey": "supplier_payment_allocation",
+            "fieldValues": {
+              "payment_id": {
+                "path": "steps.create_payment.created.id"
+              },
+              "invoice_id": {
+                "path": "record.invoiceId"
+              },
+              "amount": {
+                "path": "record.amount"
+              }
+            }
+          },
+          {
+            "id": "post_payment_ledger",
+            "label": "Post Supplier Payment Ledger",
+            "key": "CREATE_RECORD",
+            "objectKey": "supplier_ledger",
+            "checkMatchingRecords": true,
+            "matchAction": "skip",
+            "matchConditions": [
+              {
+                "field": "idempotency_key",
+                "operator": "equals",
+                "value": {
+                  "path": "record.idempotencyKey"
+                }
+              }
+            ],
+            "fieldValues": {
+              "supplier_id": {
+                "path": "record.id"
+              },
+              "entry_type": "PAYMENT",
+              "reference_type": "supplier_payment",
+              "reference_id": {
+                "path": "steps.create_payment.created.id"
+              },
+              "reference": {
+                "path": "record.reference"
+              },
+              "amount": {
+                "path": "record.amount"
+              },
+              "debit": false,
+              "idempotency_key": {
+                "path": "record.idempotencyKey"
+              }
+            }
+          }
+        ]
+      }
     },
     {
       "objectKey": "supplier",
@@ -1199,6 +1367,103 @@
           "source": "steps.create_ledger_adjustment.created"
         }
       ]
+    },
+    {
+      "objectKey": "supplier",
+      "name": "Supplier · Ledger Adjustment",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "scope": "package",
+        "capabilityKey": "supplier.ledger.adjust",
+        "apiName": "SUPPLIER_LEDGER_ADJUST",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "supplierId",
+            "label": "supplierId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "entryType",
+            "label": "entryType",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "label": "amount",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "debit",
+            "label": "debit",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "reference",
+            "label": "reference",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "description",
+            "label": "description",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "ledgerId",
+            "label": "ledgerId",
+            "type": "text",
+            "source": "variables.ledgerId"
+          }
+        ],
+        "actions": [
+          {
+            "id": "create_ledger",
+            "label": "Create Ledger Adjustment",
+            "key": "CREATE_RECORD",
+            "objectKey": "supplier_ledger",
+            "fieldValues": {
+              "supplier_id": {
+                "path": "$record.supplierId"
+              },
+              "entry_type": {
+                "path": "$record.entryType"
+              },
+              "reference_type": "SUPPLIER_ADJUSTMENT",
+              "reference": {
+                "path": "$record.reference"
+              },
+              "amount": {
+                "path": "$record.amount"
+              },
+              "debit": {
+                "path": "$record.debit"
+              }
+            }
+          },
+          {
+            "id": "set_ledger_id",
+            "label": "Return Ledger Entry",
+            "key": "ASSIGNMENT",
+            "variableName": "ledgerId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_ledger.record.id"
+            }
+          }
+        ]
+      }
     }
   ],
   "buttons": [
