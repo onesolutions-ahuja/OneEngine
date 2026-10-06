@@ -38,7 +38,6 @@ import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./ser
 import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
 
-import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
 import createReportsRouter from "./routes/reports.js";
@@ -236,10 +235,6 @@ app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
 
-/* T10D: Self-Checkout mode gate — ahead of EVERY API router so a
- * self-checkout mode token is refused for privileged operations
- * server-side (never merely hidden in the UI). */
-app.use(createSelfCheckoutModeGate());
 app.use(createRestrictedSessionGate());
 app.use(createTrustedRuntimeGate());
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
@@ -1835,17 +1830,6 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 */
 
 app.use("/api", createEanLookupRouter({ authenticate, db, lookupService: globalProductLookupService }));
-
-/* T10D: Self-Checkout session routes (enter/exit the restricted mode). */
-app.use("/api", createSelfCheckoutRouter({
-  authenticate,
-  authorize,
-  db,
-  bcrypt,
-  writeAudit,
-  requireSelfCheckoutEntitlement: requireEntitlement(db, "self_checkout"),
-  getCompanyEntitlements: (companyId) => getCompanyEntitlements(db, companyId),
-}));
 
 /* T10P: Scan & Go — customer scan sessions (token-authenticated, store/company
  * resolved server-side from the session; see routes/scanAndGo.js). */
