@@ -24,7 +24,7 @@ const routes = [
   "developer/report-builder",
   "developer/workflow-runs",
   "developer/work-items",
-  "developer/platform-apps",
+  "developer/gptappbuilder",
   "developer/deployments",
   "developer/notifications",
   "developer/value-sets",
