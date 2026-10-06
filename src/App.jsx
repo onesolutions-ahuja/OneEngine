@@ -2322,6 +2322,12 @@ function Desktop({ onLock, onSignOut }) {
                 setRouteState(next)
                 setRoute('developer', section, options)
               }}
+              onBackToSettings={() => {
+                const next = { app: 'settings', section: null }
+                setRouteState(next)
+                setRoute('settings')
+                setActiveApp('settings')
+              }}
             />
           ) : enginePermissionNotice
         ) : activeApp === 'settings' ? (
