@@ -151,7 +151,7 @@ export async function executeSystemWorkflow({
   }
 
   const correlationId = String(
-    req?.businessCommandCorrelationId
+    req?.workflowTraceCorrelationId
       || req?.headers?.["x-request-id"]
       || req?.headers?.["x-correlation-id"]
       || randomUUID()
@@ -169,9 +169,9 @@ export async function executeSystemWorkflow({
     steps: {},
   };
 
-  const parentRunId = req?.ensureBusinessCommandRun
-    ? await req.ensureBusinessCommandRun({ companyId, userId, storeId, tillId })
-    : (req?.businessCommandRunId || null);
+  const parentRunId = req?.ensureWorkflowTraceRun
+    ? await req.ensureWorkflowTraceRun({ companyId, userId, storeId, tillId })
+    : (req?.workflowTraceRunId || null);
 
   const run = await createWorkflowRun({
     db,
