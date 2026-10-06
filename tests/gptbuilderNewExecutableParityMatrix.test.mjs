@@ -5,6 +5,7 @@ import { executeWorkflowAction, executeWorkflowActions } from '../server/service
 
 const page=await readFile(new URL('../src/pages/developer/gptbuildernew/GPTBuilderNewPage.jsx',import.meta.url),'utf8')
 const runtime=await readFile(new URL('../server/services/platformWorkflow.js',import.meta.url),'utf8')
+const platformRoute=await readFile(new URL('../server/routes/platform.js',import.meta.url),'utf8')
 const flowTypes=['screen','record','schedule','platform_event','autolaunched','automation_event','user_provisioning','contact_request','cart_async','recommendation_strategy','autolaunched_orchestration','record_orchestration','evaluation','cms_orchestration','individual_linking','autolaunched_approval','record_approval','identity_registration']
 
 function ctx(extra={}){
@@ -76,4 +77,13 @@ test('run debug and saved tests coerce declared input resource types',()=>{
 test('Save As New Version uses the implemented generic workflow lifecycle contract',()=>{
  assert.ok(page.includes("forceNewVersion:true,active:false,lifecycleStatus:'DRAFT'"))
  assert.ok(!page.includes("/versions`,{method:'POST'"))
+})
+
+test('manual Run evaluates Start formulas through the same bounded formula runtime as automation',()=>{
+ const start=platformRoute.indexOf('async function runSavedWorkflowRequest')
+ const end=platformRoute.indexOf('router.post("/platform/rules/:ruleId/debug"',start)
+ const runRuntime=platformRoute.slice(start,end)
+ assert.ok(runRuntime.includes('evaluateWorkflowFormula('))
+ assert.ok(runRuntime.includes('normalizeStartFormula(workflow.action.startFormula)'))
+ assert.ok(runRuntime.includes('startFormulaInputs(fields, record, null)'))
 })
