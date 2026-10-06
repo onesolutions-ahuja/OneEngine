@@ -1063,7 +1063,7 @@ test('GPT Builder phase 4 shared properties implements Salesforce label and API-
 test('GPT Builder integrated Auto-Layout exposes insertion points between every element', async () => {
   const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
   assert.match(page, /const \[autoInsertIndex, setAutoInsertIndex\] = useState\(null\)/)
-  assert.match(page, /const addSlot = \(index\) =>/)
+  assert.match(page, /gptb-add-slot/)
   assert.match(page, /Add element at position/)
   assert.match(page, /chooseElement\(element, 'auto', null, index\)/)
   assert.match(page, /const target = topLevelAutoElements\[insertIndex\] \|\| null/)
