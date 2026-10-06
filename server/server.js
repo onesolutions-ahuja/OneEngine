@@ -80,7 +80,6 @@ import createConnectorsRouter from "./routes/connectors.js";
 import createPaypalQrRouter from "./routes/paypalQr.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
-import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
 import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
 import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
 import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
@@ -463,7 +462,6 @@ app.use("/api", (req, res, next) => {
 
 const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
-connectorDrivers.register(createReferencePaymentDriver());
 connectorDrivers.register(createPaypalQrDriver());
 connectorDrivers.register(createSmsGateDriver());
 connectorDrivers.register(createBrevoDriver());
