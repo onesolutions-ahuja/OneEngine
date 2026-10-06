@@ -1858,8 +1858,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
     if (saleObjectId) {
       const tillWorkflowDefinitions = [
         {
-          name: "OneTill - Hold Sale",
-          apiName: "ONETILL_HOLD_SALE",
+          name: "Retail POS - Hold Sale",
+          apiName: "RETAIL_POS_HOLD_SALE",
           inputContract: [
             { name: "userId", label: "User", type: "text", required: false },
             { name: "customerId", label: "Customer", type: "text", required: false },
@@ -1874,8 +1874,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Consume Held Sale",
-          apiName: "ONETILL_CONSUME_HELD_SALE",
+          name: "Retail POS - Consume Held Sale",
+          apiName: "RETAIL_POS_CONSUME_HELD_SALE",
           inputContract: [{ name: "heldSaleId", label: "Held Sale", type: "text", required: true }],
           outputContract: [],
           actions: [
@@ -1883,8 +1883,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Open Drawer",
-          apiName: "ONETILL_OPEN_DRAWER",
+          name: "Retail POS - Open Drawer",
+          apiName: "RETAIL_POS_OPEN_DRAWER",
           inputContract: [
             { name: "tillSessionId", label: "Till Session", type: "text", required: true },
             { name: "userId", label: "User", type: "text", required: true },
@@ -1898,8 +1898,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Open Till Session",
-          apiName: "ONETILL_OPEN_SESSION",
+          name: "Retail POS - Open Till Session",
+          apiName: "RETAIL_POS_OPEN_SESSION",
           inputContract: [
             { name: "terminalId", label: "Till", type: "text", required: true },
             { name: "userId", label: "User", type: "text", required: true },
@@ -1912,8 +1912,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Cash In",
-          apiName: "ONETILL_CASH_IN",
+          name: "Retail POS - Cash In",
+          apiName: "RETAIL_POS_CASH_IN",
           inputContract: [
             { name: "tillSessionId", label: "Till Session", type: "text", required: true },
             { name: "userId", label: "User", type: "text", required: true },
@@ -1927,8 +1927,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Cash Out",
-          apiName: "ONETILL_CASH_OUT",
+          name: "Retail POS - Cash Out",
+          apiName: "RETAIL_POS_CASH_OUT",
           inputContract: [
             { name: "tillSessionId", label: "Till Session", type: "text", required: true },
             { name: "userId", label: "User", type: "text", required: true },
@@ -1942,8 +1942,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Close Till Session",
-          apiName: "ONETILL_CLOSE_SESSION",
+          name: "Retail POS - Close Till Session",
+          apiName: "RETAIL_POS_CLOSE_SESSION",
           inputContract: [
             { name: "tillSessionId", label: "Till Session", type: "text", required: true },
             { name: "userId", label: "Closed By", type: "text", required: true },
@@ -1958,8 +1958,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Validate Price Override",
-          apiName: "ONETILL_VALIDATE_PRICE_OVERRIDE",
+          name: "Retail POS - Validate Price Override",
+          apiName: "RETAIL_POS_VALIDATE_PRICE_OVERRIDE",
           inputContract: [
             { name: "productId", label: "Product", type: "text", required: true },
             { name: "originalPrice", label: "Original Price", type: "currency", required: true },
@@ -1990,8 +1990,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Record Petty Cash",
-          apiName: "ONETILL_RECORD_PETTY_CASH",
+          name: "Retail POS - Record Petty Cash",
+          apiName: "RETAIL_POS_RECORD_PETTY_CASH",
           inputContract: [
             { name: "tillSessionId", label: "Till Session", type: "text", required: true },
             { name: "userId", label: "User", type: "text", required: true },
@@ -2021,8 +2021,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Checkout Age Preflight",
-          apiName: "ONETILL_CHECKOUT_AGE_PREFLIGHT",
+          name: "Retail POS - Checkout Age Preflight",
+          apiName: "RETAIL_POS_CHECKOUT_AGE_PREFLIGHT",
           inputContract: [
             { name: "basket", label: "Basket Lines", type: "collection", required: true },
             { name: "ageVerified", label: "Age Verified", type: "boolean", required: true },
@@ -2041,8 +2041,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Process Payment",
-          apiName: "ONETILL_PAYMENT_MODE",
+          name: "Retail POS - Process Payment",
+          apiName: "RETAIL_POS_PAYMENT_MODE",
           inputContract: [
             { name: "paymentMode", label: "Payment Mode", type: "text", required: true },
             { name: "online", label: "Online", type: "boolean", required: true },
@@ -2099,8 +2099,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Calculate Sale Pricing",
-          apiName: "ONETILL_CALCULATE_SALE_PRICING",
+          name: "Retail POS - Calculate Sale Pricing",
+          apiName: "RETAIL_POS_CALCULATE_SALE_PRICING",
           inputContract: [
             { name: "lines", label: "Sale Lines", type: "collection", required: true },
             { name: "discountType", label: "Discount Type", type: "text", required: false },
@@ -2134,8 +2134,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Validate Split Payment",
-          apiName: "ONETILL_VALIDATE_SPLIT_PAYMENT",
+          name: "Retail POS - Validate Split Payment",
+          apiName: "RETAIL_POS_VALIDATE_SPLIT_PAYMENT",
           inputContract: [
             { name: "payments", label: "Payment Lines", type: "collection", required: true },
             { name: "total", label: "Sale Total", type: "currency", required: true },
@@ -2167,8 +2167,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Build Misc Sale Line",
-          apiName: "ONETILL_BUILD_MISC_LINE",
+          name: "Retail POS - Build Misc Sale Line",
+          apiName: "RETAIL_POS_BUILD_MISC_LINE",
           inputContract: [
             { name: "description", label: "Description", type: "text", required: true },
             { name: "price", label: "Entered Price", type: "currency", required: true },
@@ -2198,8 +2198,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Receipt QR",
-          apiName: "ONETILL_RECEIPT_QR",
+          name: "Retail POS - Receipt QR",
+          apiName: "RETAIL_POS_RECEIPT_QR",
           inputContract: [
             { name: "expiryMinutes", label: "Expiry Minutes", type: "number", required: true },
             { name: "baseUrl", label: "Public Base URL", type: "text", required: false },
@@ -2216,8 +2216,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Receipt QR Policy",
-          apiName: "ONETILL_RECEIPT_QR_POLICY",
+          name: "Retail POS - Receipt QR Policy",
+          apiName: "RETAIL_POS_RECEIPT_QR_POLICY",
           inputContract: [
             { name: "event", label: "Policy Event", type: "text", required: true },
             { name: "mode", label: "Auto Show Mode", type: "text", required: true },
@@ -2244,8 +2244,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
         },
         {
-          name: "OneTill - Revoke Receipt QR",
-          apiName: "ONETILL_RECEIPT_QR_REVOKE",
+          name: "Retail POS - Revoke Receipt QR",
+          apiName: "RETAIL_POS_RECEIPT_QR_REVOKE",
           inputContract: [],
           outputContract: [],
           actions: [
@@ -2368,7 +2368,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       const targetUpdates = [
         ["till_session","modal","till", { modal: "till" }],
         ["till_customer","modal","customer", { modal: "customer" }],
-        ["till_hold","workflow",tillWorkflowIds.get("ONETILL_HOLD_SALE"), {}],
+        ["till_hold","workflow",tillWorkflowIds.get("RETAIL_POS_HOLD_SALE"), {}],
         ["till_resume","modal","held", { modal: "held", consumeButtonKey: "till_resume_consume" }],
         ["till_returns","navigation","returns", { route: "returns" }],
         ["till_exchange","navigation","exchange", { route: "exchange" }],
@@ -2379,14 +2379,14 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_misc_item","modal","misc", { modal: "misc" }],
         ["till_petty_cash","modal","petty", { modal: "petty", submitButtonKey: "till_petty_cash_submit" }],
         ["till_print","command","print_receipt", { command: "print_receipt", recordContext: "last_sale" }],
-        ["till_receipt_qr","workflow", tillWorkflowIds.get("ONETILL_RECEIPT_QR"), { recordContext: "last_sale", policyButtonKey: "till_receipt_qr_policy", policyEvent: "MANUAL" }],
+        ["till_receipt_qr","workflow", tillWorkflowIds.get("RETAIL_POS_RECEIPT_QR"), { recordContext: "last_sale", policyButtonKey: "till_receipt_qr_policy", policyEvent: "MANUAL" }],
         ["till_customer_display","command","customer_display", { command: "customer_display" }],
-        ["till_open_drawer","workflow",tillWorkflowIds.get("ONETILL_OPEN_DRAWER"), {}],
+        ["till_open_drawer","workflow",tillWorkflowIds.get("RETAIL_POS_OPEN_DRAWER"), {}],
         ["till_price_override","modal","price_override", { modal: "price_override", submitButtonKey: "till_price_override_apply" }],
-        ["till_open_session","workflow",tillWorkflowIds.get("ONETILL_OPEN_SESSION"), { modal: "till" }],
-        ["till_close_session","workflow",tillWorkflowIds.get("ONETILL_CLOSE_SESSION"), { modal: "till" }],
-        ["till_cash_in","workflow",tillWorkflowIds.get("ONETILL_CASH_IN"), { modal: "till" }],
-        ["till_cash_out","workflow",tillWorkflowIds.get("ONETILL_CASH_OUT"), { modal: "till" }],
+        ["till_open_session","workflow",tillWorkflowIds.get("RETAIL_POS_OPEN_SESSION"), { modal: "till" }],
+        ["till_close_session","workflow",tillWorkflowIds.get("RETAIL_POS_CLOSE_SESSION"), { modal: "till" }],
+        ["till_cash_in","workflow",tillWorkflowIds.get("RETAIL_POS_CASH_IN"), { modal: "till" }],
+        ["till_cash_out","workflow",tillWorkflowIds.get("RETAIL_POS_CASH_OUT"), { modal: "till" }],
       ];
       for (const [buttonKey,targetType,targetKey,config] of targetUpdates) {
         if (!targetKey) continue;
@@ -2408,16 +2408,16 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
       ).catch(() => {});
 
       const internalWorkflowButtons = [
-        ["till_resume_consume","Consume Held Sale",tillWorkflowIds.get("ONETILL_CONSUME_HELD_SALE"),"sale.hold"],
-        ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("ONETILL_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
-        ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("ONETILL_CHECKOUT_AGE_PREFLIGHT"),"sale.create"],
-        ["till_payment_process","Select Payment Mode",tillWorkflowIds.get("ONETILL_PAYMENT_MODE"),"sale.create"],
-        ["till_pricing_calculate","Calculate Sale Pricing",tillWorkflowIds.get("ONETILL_CALCULATE_SALE_PRICING"),"sale.create"],
-        ["till_split_payment_validate","Validate Split Payment",tillWorkflowIds.get("ONETILL_VALIDATE_SPLIT_PAYMENT"),"sale.create"],
-        ["till_misc_line_build","Build Misc Sale Line",tillWorkflowIds.get("ONETILL_BUILD_MISC_LINE"),"sale.create"],
-        ["till_petty_cash_submit","Record Petty Cash",tillWorkflowIds.get("ONETILL_RECORD_PETTY_CASH"),"cash.payout"],
-        ["till_receipt_qr_policy","Receipt QR Policy",tillWorkflowIds.get("ONETILL_RECEIPT_QR_POLICY"),"sale.view"],
-        ["till_receipt_qr_revoke","Revoke Receipt QR",tillWorkflowIds.get("ONETILL_RECEIPT_QR_REVOKE"),"sale.view"],
+        ["till_resume_consume","Consume Held Sale",tillWorkflowIds.get("RETAIL_POS_CONSUME_HELD_SALE"),"sale.hold"],
+        ["till_price_override_apply","Apply Price Override",tillWorkflowIds.get("RETAIL_POS_VALIDATE_PRICE_OVERRIDE"),"sale.price_change"],
+        ["till_age_preflight","Checkout Age Preflight",tillWorkflowIds.get("RETAIL_POS_CHECKOUT_AGE_PREFLIGHT"),"sale.create"],
+        ["till_payment_process","Select Payment Mode",tillWorkflowIds.get("RETAIL_POS_PAYMENT_MODE"),"sale.create"],
+        ["till_pricing_calculate","Calculate Sale Pricing",tillWorkflowIds.get("RETAIL_POS_CALCULATE_SALE_PRICING"),"sale.create"],
+        ["till_split_payment_validate","Validate Split Payment",tillWorkflowIds.get("RETAIL_POS_VALIDATE_SPLIT_PAYMENT"),"sale.create"],
+        ["till_misc_line_build","Build Misc Sale Line",tillWorkflowIds.get("RETAIL_POS_BUILD_MISC_LINE"),"sale.create"],
+        ["till_petty_cash_submit","Record Petty Cash",tillWorkflowIds.get("RETAIL_POS_RECORD_PETTY_CASH"),"cash.payout"],
+        ["till_receipt_qr_policy","Receipt QR Policy",tillWorkflowIds.get("RETAIL_POS_RECEIPT_QR_POLICY"),"sale.view"],
+        ["till_receipt_qr_revoke","Revoke Receipt QR",tillWorkflowIds.get("RETAIL_POS_RECEIPT_QR_REVOKE"),"sale.view"],
       ];
       for (const [buttonKey,label,workflowId,permission] of internalWorkflowButtons) {
         if (!workflowId) continue;
