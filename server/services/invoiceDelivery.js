@@ -33,6 +33,7 @@ import {
   loadInvoiceChannelConfig,
 } from "./onlineOrders/platformConfig.js";
 import { resolveSystemEmailSender } from "./emailSecurity.js";
+import { loadConfiguredRuntimeView } from "./platformRuntimeViews.js";
 
 const PROVIDER_TIMEOUT_MS = 10000;
 const DEFAULT_SMS_TEMPLATE = "Thank you for your purchase. Your invoice{number}: {link}";
@@ -86,39 +87,25 @@ async function logDeliveryOutcome(db, entry) {
 
 /** Load the tenant-scoped sale + customer for delivery, mirroring WhatsApp's loader shape. */
 async function loadSaleForDelivery(db, { saleId, companyId, storeId }) {
-  const storeClause = storeId ? "AND s.store_id = $3" : "";
-  const params = storeId ? [saleId, companyId, storeId] : [saleId, companyId];
-  const saleResult = await db(
-    `SELECT s.id, s.receipt_number, s.total, s.created_at, s.completed_at, s.customer_id
-     FROM sale_ledger s
-     INNER JOIN companies c ON c.id = s.company_id
-     WHERE s.id = $1 AND s.company_id = $2 ${storeClause}
-     LIMIT 1`,
-    params
-  );
-  const sale = saleResult.rows[0];
-  if (!sale) return null;
-
-  let customer = null;
-  if (sale.customer_id) {
-    const customerResult = await db(
-      `SELECT name, phone, email FROM customers WHERE id = $1 AND company_id = $2 LIMIT 1`,
-      [sale.customer_id, companyId]
-    );
-    customer = customerResult.rows[0] || null;
-  }
-  return { sale: { id: sale.id, receiptNumber: sale.receipt_number, total: Number(sale.total) || 0 }, customer, company: null };
+  const view = await loadConfiguredRuntimeView({
+    db,
+    companyId,
+    storeId,
+    viewKey: "receipt_document",
+    recordId: saleId,
+  });
+  if (!view?.record) return null;
+  return {
+    sale: {
+      id: view.record.id,
+      receiptNumber: view.record.receiptNumber || view.record.id,
+      total: Number(view.record.total) || 0,
+    },
+    customer: view.lookups?.customer || null,
+    company: view.lookups?.company || null,
+  };
 }
 
-/** Company display name for message templates (best-effort). */
-async function loadCompanyName(db, companyId) {
-  try {
-    const result = await db(`SELECT name FROM companies WHERE id = $1 LIMIT 1`, [companyId]);
-    return result.rows[0]?.name || null;
-  } catch {
-    return null;
-  }
-}
 
 /** Fill {company} {number} {link} placeholders without ever exposing internals. */
 function renderTemplate(template, { company, number, link }) {
@@ -289,7 +276,7 @@ async function deliverViaChannel(db, { channel, saleData, runtime, recipient, sa
       return { ok: false, outcome: "skipped", reason: "link_failed", error: link.message };
     }
 
-    const companyName = await loadCompanyName(db, companyId);
+    const companyName = saleData.company?.name || null;
     const { apiKey, authScheme } = resolveProviderCredential(runtime.configuration);
     const invoiceNumber = saleData.sale.receiptNumber || null;
     const recipientMasked = channel === "sms" ? `.....${recipient.slice(-4)}` : maskEmail(recipient);
