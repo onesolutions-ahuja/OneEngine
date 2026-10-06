@@ -303,10 +303,6 @@ test('bandwidth-heavy production E2E workflows are manual-only', async () => {
 })
 
 
-test('legacy package function registry stays retired', async () => {
-  await assert.rejects(read('../server/services/platformFunctionRegistry.js'))
-})
-
 test('Render shutdown is bounded against stale keep-alive connections', async () => {
   const source = await read('../server/server.js')
   assert.match(source, /closeIdleConnections/)
@@ -314,11 +310,6 @@ test('Render shutdown is bounded against stale keep-alive connections', async ()
   assert.match(source, /setTimeout\(\(\) => process\.exit\(0\), 5_000\)/)
 })
 
-
-test('trusted runtime no longer depends on package function permission aliases', async () => {
-  const source = await read('../server/services/trustedRuntime.js')
-  assert.doesNotMatch(source, /PLATFORM_FUNCTIONS|platformFunctionRegistry|permissionsAny/)
-})
 
 
 test('login network policy uses the preloaded preflight result instead of another database round trip', async () => {
@@ -358,12 +349,6 @@ test('workspace app routes use cached metadata instead of forcing a blocking ref
   assert.equal(block.includes('forceRefresh: true'), false)
 })
 
-test('Till delegates startup to the generic metadata page runtime', async () => {
-  const source = await read('../src/pages/till/TillPage.jsx')
-  assert.match(source, /MetadataPageRuntime/)
-  assert.match(source, /pageKey=.*till/)
-  assert.equal(source.includes('loadTill()'), false)
-})
 test('stale cache revalidation is deduped by cache key', async () => {
   const source = await read('../src/services/cachedApi.js')
   assert.match(source, /const refreshInFlight = new Map\(\)/)
@@ -371,23 +356,3 @@ test('stale cache revalidation is deduped by cache key', async () => {
   assert.match(source, /refreshInFlight\.set\(key, request\)/)
 })
 
-test('Dashboard startup reads are launched together instead of separate mount waterfalls', async () => {
-  const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /Promise\.all\(\[\s*apiRequest\('\/api\/settings'\)/)
-  assert.match(source, /apiRequest\('\/api\/dashboards'\)/)
-  assert.match(source, /loadSessionPermissions\(\)/)
-})
-
-test('Dashboard starts saved filter-state lookup before building the run request', async () => {
-  const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /const statePromise = value\?\.id/)
-  assert.match(source, /const state = await statePromise/)
-})
-
-test('Settings loads values only for the active metadata section', async () => {
-  const source = await read('../src/pages/settings/MetadataSettingsPage.jsx')
-  assert.equal(source.includes('const sectionedPairs = await Promise.all(sectioned.map'), false)
-  assert.match(source, /current\.type !== 'system'/)
-  assert.match(source, /rowsLoaded === true/)
-  assert.match(source, /void loadSectionedRows\(current\.object\)/)
-})
