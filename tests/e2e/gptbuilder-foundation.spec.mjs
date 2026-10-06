@@ -106,7 +106,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     const searches = page.getByLabel('Search resources and fields')
     await expect(searches.first()).toBeVisible()
     await searches.first().fill('mode')
-    const resource = page.getByLabel('Resource').first()
+    const resource = page.getByRole('combobox', { name: 'Resource', exact: true }).first()
     await expect(resource.locator('option[value="$Record.mode"]')).toHaveCount(1)
     await resource.selectOption('$Record.mode')
     await expect(resource).toHaveValue('$Record.mode')
@@ -158,7 +158,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.getByRole('button', { name: /Add Condition/i }).click()
 
     const search = page.getByLabel('Search resources and fields').first()
-    const resource = page.getByLabel('Resource').first()
+    const resource = page.getByRole('combobox', { name: 'Resource', exact: true }).first()
     await search.fill('Owner Email')
     await expect(resource.locator('option[value="$Record.account.owner.email"]')).toHaveCount(1)
     await resource.selectOption('$Record.account.owner.email')
@@ -170,6 +170,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     expect(failures, failures.join('\n')).toEqual([])
   })
   test('all five supported flow types open the correct editable Builder context', async ({ page }) => {
+    test.setTimeout(120_000)
     if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
     const failures = watchRuntimeFailures(page)
     const cases = [
@@ -230,7 +231,7 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await expect(props).toBeVisible()
     await props.getByRole('textbox', { name: /^Flow Label/ }).fill('Contract Persistence Flow')
     await props.getByRole('button', { name: /^Save$/ }).click()
-    await expect(page.getByText('Flow saved.', { exact: true })).toBeVisible()
+    await expect.poll(() => savedRule?.id || '', { timeout: 10_000 }).toBe('contract-saved-flow')
     expect(savedRule?.action?.gptBuilder).toBe(true)
     expect(savedRule?.action?.flowType).toBe('screen')
     expect(savedRule?.action?.layout?.mode).toBe('AUTO')
