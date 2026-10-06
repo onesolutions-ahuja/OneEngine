@@ -2549,8 +2549,8 @@ export function packageDefinition(entry) {
               { apiName:"status",label:"Status",fieldType:"picklist",sourceColumn:"status",writable:true },
               { apiName:"created_at",label:"Created",fieldType:"datetime",sourceColumn:"created_at",writable:false }
             ],
-          },,
-{ objectKey: "layaway", label: "Layaway", pluralLabel: "Layaways", sourceTable: "layaways", metadataScope: "global", storeScoped: true, fields: [
+          },
+          { objectKey: "layaway", label: "Layaway", pluralLabel: "Layaways", sourceTable: "layaways", metadataScope: "global", storeScoped: true, fields: [
             { apiName: "store_id", label: "Store", fieldType: "lookup", sourceColumn: "store_id", required: true, writable: false },
             { apiName: "customer_id", label: "Customer", fieldType: "lookup", sourceColumn: "customer_id", writable: true },
             { apiName: "total", label: "Total", fieldType: "currency", sourceColumn: "total", required: true, writable: false },
