@@ -215,3 +215,114 @@ export function oneHttpRequestDefinition() {
     },
   };
 }
+
+
+function safeInternalApiPath(value) {
+  const raw = String(value || "").trim();
+  if (!raw.startsWith("/api/")) throw new Error("ONE_API_REQUEST requires an app-relative /api/ path");
+  if (/^\/\/|^[a-z]+:/i.test(raw)) throw new Error("ONE_API_REQUEST cannot call an absolute URL");
+  return raw;
+}
+
+export async function oneApiRequest({ req, method = "GET", path = "/", headers = {}, body = null, query = {}, variables = {}, timeoutMs = null }) {
+  if (!req?.get) throw new Error("ONE_API_REQUEST requires authenticated request context");
+  const renderedPath = interpolatePayload(safeInternalApiPath(path), variables);
+  const protocol = String(req.headers?.["x-forwarded-proto"] || req.protocol || "https").split(",")[0].trim() || "https";
+  const host = String(req.get("host") || "").trim();
+  if (!host) throw new Error("ONE_API_REQUEST cannot resolve the OneEngine host");
+  const url = new URL(renderedPath, `${protocol}://${host}`);
+  for (const [key, value] of Object.entries(query || {})) {
+    if (value !== undefined && value !== null) url.searchParams.set(key, interpolatePayload(String(value), variables));
+  }
+
+  const requestMethod = String(method || "GET").toUpperCase();
+  if (!ALLOWED_METHODS.has(requestMethod)) throw new Error(`Unsupported API method: ${requestMethod}`);
+  const requestHeaders = { Accept: "application/json", ...headers };
+  const authorization = req.get("authorization");
+  const cookie = req.get("cookie");
+  const actingCompany = req.get("x-acting-company-id");
+  const storeId = req.get("x-store-id");
+  if (authorization) requestHeaders.Authorization = authorization;
+  if (cookie) requestHeaders.Cookie = cookie;
+  if (actingCompany) requestHeaders["X-Acting-Company-Id"] = actingCompany;
+  if (storeId) requestHeaders["X-Store-Id"] = storeId;
+
+  const effectiveTimeout = Math.max(100, Math.min(120000, Number(timeoutMs || 15000)));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), effectiveTimeout);
+  try {
+    const init = { method: requestMethod, headers: requestHeaders, signal: controller.signal };
+    if (body !== null && body !== undefined && requestMethod !== "GET") {
+      init.headers["Content-Type"] ||= "application/json";
+      const renderedBody = interpolatePayload(body, variables);
+      init.body = typeof renderedBody === "string" ? renderedBody : JSON.stringify(renderedBody);
+    }
+    const response = await fetch(url, init);
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    return {
+      status: "completed",
+      success: response.ok,
+      statusCode: response.status,
+      data: redactValue(data),
+      request: { method: requestMethod, path: renderedPath, headers: redactHeadersForLog(requestHeaders) },
+    };
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`OneEngine API request timed out after ${effectiveTimeout}ms`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function oneApiRequestDefinition() {
+  return {
+    key: "ONE_API_REQUEST",
+    displayName: "ONE - API Request",
+    description: "Call an authenticated OneEngine API endpoint using the current session; path and payload remain Flow metadata.",
+    schema: {
+      type: "object",
+      properties: {
+        method: { type: "string", title: "Method", enum: ["GET","POST","PUT","PATCH","DELETE"] },
+        path: { type: "string", title: "API Path" },
+        headers: { type: "object", title: "Headers" },
+        query: { type: "object", title: "Query" },
+        body: { title: "Body" },
+        timeoutMs: { type: "number", title: "Timeout (ms)" },
+        requireSuccess: { type: "boolean", title: "Fail Flow on API Error" },
+      },
+      required: ["path"],
+    },
+    validation: (action) => {
+      safeInternalApiPath(action?.path || action?.endpoint);
+      if (action?.url) throw new Error("ONE_API_REQUEST uses an app-relative path; direct URL is not allowed");
+    },
+    async: true,
+    requiredPermissions: ["workflow.execute"],
+    executor: async ({ req, action, workflowVariables = {}, record = {} }) => {
+      const bindingContext = { record, user: req?.user || null, variables: workflowVariables };
+      const result = await oneApiRequest({
+        req,
+        method: action.method,
+        path: action.path || action.endpoint,
+        headers: resolveBindingTree(action.headers || {}, bindingContext),
+        body: resolveBindingTree(action.body, bindingContext),
+        query: resolveBindingTree(action.query || {}, bindingContext),
+        variables: {
+          ...(record || {}),
+          ...(workflowVariables?.variables || {}),
+          input: workflowVariables?.input || {},
+          ...resolveBindingTree(action.variables || {}, bindingContext),
+        },
+        timeoutMs: action.timeoutMs,
+      });
+      if (action.requireSuccess === true && result?.success === false) {
+        const error = new Error(`OneEngine API request failed with HTTP ${result.statusCode || "error"}`);
+        error.apiResult = result;
+        throw error;
+      }
+      return result;
+    },
+  };
+}
