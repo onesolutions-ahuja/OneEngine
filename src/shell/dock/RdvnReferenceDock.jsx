@@ -7,7 +7,6 @@ export const dockItems = [
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png`, scaled: true },
   { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: true },
   { id: 'store', label: 'OneStore', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onestore-dock-clean.svg?v=20261004a`, scaled: true },
-  { id: 'till', label: 'OneTill', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onetill-dock-clean.svg?v=20261004a`, scaled: true },
   { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
   { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg?v=20261004a`, scaled: true },
 ]
@@ -36,7 +35,7 @@ function DockItem({ item, mouseX, onActivate }) {
   return (
     <motion.button ref={ref} type="button" className="efb-dock-item" style={{ width }} onPointerDown={item.id === 'store' ? onActivate : undefined} onClick={onActivate} aria-label={item.label}>
       <span className="efb-dock-icon-wrap">
-        <img className={`${item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'}${item.id === 'developer' && item.src.includes('one-developer-dock.svg') ? ' efb-dock-image--developer' : ''}${['store','till','workspace'].includes(item.id) ? ' efb-dock-image--app-art' : ''}`} src={item.src} alt="" draggable="false" />
+        <img className={`${item.scaled ? 'efb-dock-image efb-dock-image--scaled' : 'efb-dock-image'}${item.id === 'developer' && item.src.includes('one-developer-dock.svg') ? ' efb-dock-image--developer' : ''}${['store','workspace'].includes(item.id) ? ' efb-dock-image--app-art' : ''}`} src={item.src} alt="" draggable="false" />
       </span>
     </motion.button>
   )
