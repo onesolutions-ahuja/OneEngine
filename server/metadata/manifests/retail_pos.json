@@ -4687,11 +4687,8 @@
             "key": "FORMULA",
             "resourceName": "receiptExpiresAt",
             "resultType": "datetime",
-            "expression": "ADDMINUTES(currentTime, expiryMinutes)",
+            "expression": "ADDMINUTES(NOW(), expiryMinutes)",
             "inputs": {
-              "currentTime": {
-                "path": "variables.currentTime"
-              },
               "expiryMinutes": {
                 "path": "variables.expiryMinutes"
               }
