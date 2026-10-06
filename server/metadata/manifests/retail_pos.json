@@ -4675,6 +4675,127 @@
           }
         ]
       }
+    },
+    {
+      "objectKey": "sale",
+      "name": "OneTill - Revoke Receipt QR",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "scope": "retail_pos",
+        "flowType": "AUTOLAUNCHED",
+        "apiName": "till_receipt_qr_revoke",
+        "inputContract": [
+          {
+            "name": "saleId",
+            "label": "saleId",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "revoked",
+            "label": "Revoked Count",
+            "type": "number",
+            "source": "variables.revoked"
+          }
+        ],
+        "resources": [
+          {
+            "value": "variables.saleId",
+            "apiName": "saleId",
+            "label": "saleId",
+            "type": "Variable",
+            "dataType": "Text",
+            "availableInput": true,
+            "availableOutput": false,
+            "isCollection": false
+          },
+          {
+            "value": "variables.revoked",
+            "apiName": "revoked",
+            "label": "revoked",
+            "type": "Variable",
+            "dataType": "Number",
+            "availableInput": false,
+            "availableOutput": true,
+            "isCollection": false
+          }
+        ],
+        "actions": [
+          {
+            "id": "find_receipt_tokens",
+            "label": "Find Active Receipt Tokens",
+            "apiName": "find_receipt_tokens",
+            "key": "GET_RECORDS",
+            "objectKey": "temporary_receipt_download",
+            "filters": [
+              {
+                "field": "sale_id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.saleId"
+                }
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              },
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "DOWNLOADED"
+              }
+            ],
+            "customConditionLogic": "1 AND (2 OR 3)",
+            "store": "all",
+            "limit": 100
+          },
+          {
+            "id": "revoke_tokens",
+            "label": "Revoke Receipt Tokens",
+            "apiName": "revoke_tokens",
+            "key": "LOOP",
+            "collection": "steps.find_receipt_tokens.records",
+            "itemVariable": "currentReceiptToken",
+            "bodyBranch": [
+              "mark_receipt_revoked"
+            ]
+          },
+          {
+            "id": "mark_receipt_revoked",
+            "label": "Mark Receipt Token Revoked",
+            "apiName": "mark_receipt_revoked",
+            "key": "UPDATE_RECORD",
+            "objectKey": "temporary_receipt_download",
+            "recordId": {
+              "path": "variables.currentReceiptToken.id"
+            },
+            "fieldValues": {
+              "status": "REVOKED",
+              "revoked_at": {
+                "path": "$now"
+              }
+            }
+          },
+          {
+            "id": "count_revoked",
+            "label": "Count Revoked Tokens",
+            "apiName": "count_revoked",
+            "key": "ASSIGNMENT",
+            "variableName": "revoked",
+            "variableType": "number",
+            "operator": "count",
+            "value": {
+              "path": "steps.find_receipt_tokens.records"
+            }
+          }
+        ]
+      }
     }
   ]
 }
