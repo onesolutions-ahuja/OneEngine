@@ -3,7 +3,7 @@ import { withDomainSave } from "../services/platformDomainRecords.js";
 import express from "express";
 import { DUPLICATE_EMAIL_MESSAGE, normalizeEmail } from "../services/userIdentity.js";
 import { domainAllowed } from "../services/accountPolicy.js";
-import { toSafeApiName } from "../services/platformMetadata.js";
+import { toSafeApiName } from "../services/platformIdentifiers.js";
 import { delegatedAdminContext, delegatedRoleAssignable, delegatedUserAllowed } from "../services/delegatedAdministration.js";
 import {
   JARVES_ALLOWANCE_RESULTS,
