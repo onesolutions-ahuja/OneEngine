@@ -27,14 +27,8 @@ const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/Worksp
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const SalesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
-const ProductsPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CategoriesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
-const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
-const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
-const CustomersPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
@@ -2096,14 +2090,6 @@ function Desktop({ onLock, onSignOut }) {
     setAppSearch('')
     setTopPanel('')
 
-    const routeMap = new Set([
-      'integrations','google-connect','accounting','online-orders','own-delivery',
-      'kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
-      'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
-      'gift-cards','suppliers','purchases','categories',
-      'global-products','products','sales','workspace','till',
-    ])
-
     if (target === 'developer') {
       const next = { app: 'developer', section: 'objects' }
       setRoute('developer', 'objects')
@@ -2119,11 +2105,10 @@ function Desktop({ onLock, onSignOut }) {
       setActiveApp('settings')
       return
     }
-    if (routeMap.has(target)) {
-      const next = { app: target, section: null }
-      setRoute(target)
-      setRouteState(next)
-      setActiveApp(target)
+    const installedApp = storeApps.find((item) => String(item?.package_key || '') === String(target) && item?.is_installed === true)
+    const declaredRoute = installedApp ? resolveAppOpenRoute(installedApp) : ''
+    if (declaredRoute && declaredRoute !== '/app') {
+      openRoutePath(declaredRoute)
       return
     }
 
@@ -2337,35 +2322,12 @@ function Desktop({ onLock, onSignOut }) {
           <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
-        ) : activeApp === 'sales' ? (
-          <SalesPage initialObjectKey="sale_ledger" appKey="sales" />
-        ) : activeApp === 'supplier-returns' ? (
-          <SupplierReturnsPage />
-        ) : activeApp === 'products' ? (
-          <ProductsPage initialObjectKey="product" appKey="products" />
-        ) : activeApp === 'categories' ? (
-          <CategoriesPage initialObjectKey="category" appKey="categories" />
-        ) : activeApp === 'global-products' ? (
-          <GlobalProductLookupPage
-            onBack={() => openItem('products')}
-            onOpenStore={() => {
-              setAppSearch('')
-              setTopPanel('store')
-            }}
+        ) : activeApp === 'workspace' ? (
+          <WorkspacePage
+            initialObjectKey={routeState.objectKey || ''}
+            initialRecordId={routeState.recordId || ''}
+            appKey={routeState.appKey || ''}
           />
-
-        ) : activeApp === 'purchases' ? (
-          <PurchasesPage />
-        ) : activeApp === 'suppliers' ? (
-          <SuppliersPage />
-        ) : activeApp === 'customers' ? (
-          <CustomersPage initialObjectKey="customer" appKey="customers" />
-        ) : activeApp === 'gift-cards' ? (
-          <WorkspacePage initialObjectKey="gift_card" appKey="gift-cards" />
-        ) : activeApp === 'employees' ? (
-          <WorkspacePage initialObjectKey="employee" appKey="employees" />
-        ) : activeApp === 'stores' ? (
-          <WorkspacePage initialObjectKey="store" appKey="stores" />
         ) : activeApp === 'reports' ? (
           <ReportsPage />
         ) : activeApp === 'custom-reports' ? (
