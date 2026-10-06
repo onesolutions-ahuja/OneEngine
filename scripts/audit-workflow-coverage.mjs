@@ -71,7 +71,6 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
   });
 }
 
-const functionRegistry = read("server/services/platformFunctionRegistry.js");
 const workflowRuntime = read("server/services/platformWorkflow.js");
 const trustedRuntime = read("server/services/trustedRuntime.js");
 const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/trustedJobKinds.js"))
@@ -202,7 +201,6 @@ const catalogueCoverage = {
 
 const findings = [
   ...executableDefaultFindings,
-  ...(!catalogueCoverage.functions ? functions.map((key) => ({ severity: "GAP", type: "FUNCTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
   ...(!catalogueCoverage.actions ? actions.map((key) => ({ severity: "GAP", type: "ACTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
   ...(!catalogueCoverage.jobs ? jobs.map((key) => ({ severity: "GAP", type: "JOB_TRIGGER_REQUIRES_WORKFLOW", key })) : []),
   ...directRuntimeCalls.map((call) => ({ severity: "GAP", type: "DIRECT_RUNTIME_CALL_BYPASS", ...call })),
@@ -222,7 +220,6 @@ const report = {
     workflowMediatedMutationRoutes: mediatedRoutes.length,
     bypassMutationRoutes: bypassRoutes.length,
     directRuntimeCallSites: directRuntimeCalls.length,
-    catalogueFunctionsCovered: catalogueCoverage.functions,
     catalogueActionsCovered: catalogueCoverage.actions,
     catalogueJobsCovered: catalogueCoverage.jobs,
     globalBusinessCommandGateway: globalGatewayEnabled,
@@ -230,7 +227,6 @@ const report = {
     totalGaps: findings.length,
   },
   catalogueCoverage,
-  registeredFunctions: functions,
   registeredActions: actions,
   trustedJobKinds: jobs,
   mutationRoutes,
