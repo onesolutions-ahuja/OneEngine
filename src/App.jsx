@@ -23,8 +23,6 @@ const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
-const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
-const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
@@ -53,8 +51,6 @@ const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
 const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
 const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
-const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
-const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   LockKeyhole,
@@ -2077,7 +2073,6 @@ function Desktop({ onLock, onSignOut }) {
       contacts: 'customers',
       one_connect_google: 'google-connect',
       one_assistant: 'assistant',
-      one_kiosk: 'kiosk',
     }
     const target = aliases[id] || id
 
@@ -2103,10 +2098,10 @@ function Desktop({ onLock, onSignOut }) {
 
     const routeMap = new Set([
       'integrations','google-connect','accounting','online-orders','own-delivery',
-      'kiosk','kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
+      'supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','categories',
-      'global-products','products','sales','workspace','till',
+      'global-products','products','sales','workspace',
     ])
 
     if (target === 'developer') {
@@ -2336,11 +2331,6 @@ function Desktop({ onLock, onSignOut }) {
           <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
-        ) : activeApp === 'till' ? (
-          <TillPage
-            onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
-            onNavigate={openItem}
-          />
         ) : activeApp === 'sales' ? (
           <SalesPage initialObjectKey="sale" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
@@ -2382,12 +2372,6 @@ function Desktop({ onLock, onSignOut }) {
           <WorkspacePage initialObjectKey="online_order" appKey="online-orders" />
         ) : activeApp === 'own-delivery' ? (
           <WorkspacePage initialObjectKey="online_order" appKey="own-delivery" />
-        ) : activeApp === 'kiosk' ? (
-          <OneKioskPage />
-        ) : activeApp === 'kiosk-display' ? (
-          <OneKioskDisplayPage />
-        ) : activeApp === 'kiosk-devices' ? (
-          <WorkspacePage initialObjectKey="kiosk_device" appKey="one_kiosk" />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
@@ -2431,17 +2415,8 @@ function Desktop({ onLock, onSignOut }) {
 
 export default function App() {
   const route = readRoute()
-  if (route.app === 'customer-display') {
-    return <div data-oneengine-route="customer-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary></div>
-  }
   if (route.app === 'flow-runtime') {
     return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
-  }
-  if (route.app === 'kiosk-runtime') {
-    return <div data-oneengine-route="kiosk-runtime"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading kiosk…</div>}><OneKioskPage publicMode /></Suspense></LazyLoadBoundary></div>
-  }
-  if (route.app === 'kiosk-display') {
-    return <div data-oneengine-route="kiosk-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading collection display…</div>}><OneKioskDisplayPage /></Suspense></LazyLoadBoundary></div>
   }
 
   // A browser refresh should restore an authenticated session, not behave like
