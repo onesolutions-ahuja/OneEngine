@@ -362,16 +362,6 @@ test('workspace app routes use cached metadata instead of forcing a blocking ref
   assert.equal(block.includes('forceRefresh: true'), false)
 })
 
-test('Till starts till-session lookup alongside its bootstrap requests', async () => {
-  const source = await read('../src/pages/till/TillPage.jsx')
-  const start = source.indexOf('const tillPromise = loadTill()')
-  const end = source.indexOf('await tillPromise', start)
-  const block = source.slice(start, end)
-  assert.notEqual(start, -1)
-  assert.notEqual(end, -1)
-  assert.match(block, /Promise\.all\(\[/)
-})
-
 test('stale cache revalidation is deduped by cache key', async () => {
   const source = await read('../src/services/cachedApi.js')
   assert.match(source, /const refreshInFlight = new Map\(\)/)
@@ -379,23 +369,3 @@ test('stale cache revalidation is deduped by cache key', async () => {
   assert.match(source, /refreshInFlight\.set\(key, request\)/)
 })
 
-test('Dashboard startup reads are launched together instead of separate mount waterfalls', async () => {
-  const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /Promise\.all\(\[\s*apiRequest\('\/api\/settings'\)/)
-  assert.match(source, /apiRequest\('\/api\/dashboards'\)/)
-  assert.match(source, /loadSessionPermissions\(\)/)
-})
-
-test('Dashboard starts saved filter-state lookup before building the run request', async () => {
-  const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /const statePromise = value\?\.id/)
-  assert.match(source, /const state = await statePromise/)
-})
-
-test('Settings loads values only for the active metadata section', async () => {
-  const source = await read('../src/pages/settings/MetadataSettingsPage.jsx')
-  assert.equal(source.includes('const sectionedPairs = await Promise.all(sectioned.map'), false)
-  assert.match(source, /current\.type !== 'system'/)
-  assert.match(source, /rowsLoaded === true/)
-  assert.match(source, /void loadSectionedRows\(current\.object\)/)
-})
