@@ -5,7 +5,7 @@ import DashboardComponentProperties from "../../components/dashboard/DashboardCo
 // DashboardComponentProperties (the shared <DashboardGrid> editor surface)
 // exposes Data source, Metric field, Category / group field, Date range,
 // Format, Size, Maximum categories, Width and Height controls.
-import { DASHBOARD_SALES_FIELDS, applyLayout } from "../../components/dashboard/platformDashboard.js";
+import { applyLayout } from "../../components/dashboard/platformDashboard.js";
 import { componentIcon, createRegisteredComponent, registryForBuilder, useComponentRegistry } from "../settings/Platform/componentRegistry.js";
 import { DashboardFilterEditor, DashboardRunAsEditor, ResponsiveLayoutMode, responsiveComponents } from "../../components/dashboard/DashboardManagementControls.jsx";
 
@@ -17,52 +17,12 @@ import { DashboardFilterEditor, DashboardRunAsEditor, ResponsiveLayoutMode, resp
  * the Dashboard page renders that metadata through the same runtime.
  */
 const empty = { name: "", description: "", components: [], filters: [], global_filters: [], responsive_layouts: { desktop: [], tablet: [], mobile: [] }, run_as_mode: "VIEWER", run_as_user_id: null };
-const AGGREGATE_FIELDS = DASHBOARD_SALES_FIELDS.filter((f) => f.aggregate);
 const CARD = { background: "var(--onepos-card-bg, var(--onepos-surface-raised))", border: "1px solid var(--onepos-border)", borderRadius: "var(--onepos-card-radius, 16px)" };
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
 const FIELD_STYLE = { borderColor: "var(--onepos-border)", background: "var(--onepos-surface-raised)", color: "var(--onepos-text-primary)" };
 const LABEL = "block text-xs font-semibold mb-1";
 
-const blankComponent = (type) => {
-  const modern = ["folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile"];
-  const utility = ["clock_widget", "calendar_widget", "weather_widget"];
-  const isModern = modern.includes(type);
-  const isUtility = utility.includes(type);
-  const utilityConfig = type === "clock_widget"
-    ? { timeZone: "", hour12: false, showSeconds: false, showDate: true }
-    : type === "calendar_widget"
-      ? { timeZone: "", showWeekday: true, showMonth: true }
-      : { location: "", unit: "C", temperature: "", condition: "" };
-  return {
-    id: crypto.randomUUID(),
-    type,
-    title: type === "clock_widget" ? "Clock" : type === "calendar_widget" ? "Calendar" : type === "weather_widget" ? "Weather" : type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " "),
-    config: type === "text"
-      ? { content: "" }
-      : isUtility
-        ? utilityConfig
-        : isModern
-          ? {
-              title: type === "folder_card" ? "New folder" : type === "avatar_group" ? "Team" : "Modern component",
-              subtitle: type === "folder_card" ? "Overview" : type === "avatar_group" ? "People" : "Summary",
-              metric: type === "folder_card" ? 12 : type === "modern_kpi_card" ? 125000 : null,
-              icon: type === "icon_action_tile" ? "sparkles" : "folder",
-              accentStyle: "gradient",
-              visibility: "always",
-            }
-          : {
-              report: { dataSource: "sales", fields: [], groupBy: [], sort: [], filters: [], filterLogic: "all" },
-              valueField: AGGREGATE_FIELDS[0]?.key || null,
-              labelField: null,
-              format: "number",
-              size: "medium",
-              maxCategories: 6,
-              limit: 12,
-              dateRange: "this_month",
-            },
-    layout: type === "kpi" || type === "modern_kpi_card" || isUtility ? { x: 0, y: 0, w: 3, h: 2 } : { x: 0, y: 0, w: 6, h: 4 },
-  };
-};
+const blankComponent = (spec) => createRegisteredComponent(spec, "DASHBOARD");
 
 
 export default function DashboardBuilder({ embedded = false, initialDashboard = null, onClose, onSaved } = {}) {
