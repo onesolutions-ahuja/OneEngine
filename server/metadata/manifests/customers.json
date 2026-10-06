@@ -82,7 +82,15 @@
         }
       ],
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "readScope": {
+          "type": "junction",
+          "table": "customer_stores",
+          "recordColumn": "customer_id",
+          "storeColumn": "store_id",
+          "companyColumn": "company_id",
+          "activeColumn": "active"
+        }
       }
     },
     {
