@@ -29,7 +29,7 @@ function readableValue(value) {
 }
 
 function recordTitle(record, fields) {
-  const preferred = ['name','full_name','title','label','number','sale_number','invoice_number','sku','email']
+  const preferred = ['name','full_name','title','label','number','reference','code','email']
   for (const key of preferred) if (record?.[key]) return String(record[key])
   for (const field of fields || []) {
     if (['text','email','phone'].includes(String(field.field_type || '').toLowerCase()) && record?.[field.api_name]) {
