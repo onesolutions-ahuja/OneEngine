@@ -159,6 +159,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const surfaceActions = runtimeSurface?.actions || {}
   const surfacePermissions = runtimeSurface?.permissions || {}
   const surfaceValues = runtimeSurface?.values || {}
+  const surfaceValue = (slot, fallback = undefined) => surfaceValues?.[slot] ?? fallback
   const objectKey = (slot) => String(surfaceObjects?.[slot] || '')
   const actionKey = (slot) => String(surfaceActions?.[slot] || '')
   const buttonFor = (slot) => buttons.find((row) => row.button_key === actionKey(slot))
@@ -546,13 +547,13 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       discount: Number(discountAmount || 0),
       total: Number(total || 0),
       lineCount: Number(basket.length + miscLines.length),
-      status: 'COMPLETED',
+      status: surfaceValue('saleStatusCompleted'),
       offlineCreated: false,
-      syncStatus: 'SYNCED',
+      syncStatus: surfaceValue('offlineSyncStatus'),
       clientRequestId,
       completedAt: new Date().toISOString(),
     })
-    const itemValues = (line, itemType = 'PRODUCT') => ({
+    const itemValues = (line, itemType = surfaceValue('itemTypeProduct')) => ({
       productId: line.id || line.productId || line.product_id || null,
       productName: line.name || line.description || 'Misc Item',
       quantity: Number(line.quantity || 0),
@@ -565,19 +566,19 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       bundleComponents: Array.isArray(line.bundleComponents) ? line.bundleComponents : [],
     })
     const items = [
-      ...basket.map((item) => mapRuntimePayload(mappings.item, itemValues(item, item.itemType || 'PRODUCT'))),
-      ...miscLines.map((line) => mapRuntimePayload(mappings.item, itemValues(line, 'MISC'))),
+      ...basket.map((item) => mapRuntimePayload(mappings.item, itemValues(item, item.itemType || surfaceValue('itemTypeProduct')))),
+      ...miscLines.map((line) => mapRuntimePayload(mappings.item, itemValues(line, surfaceValue('itemTypeMisc')))),
     ]
     const paymentValue = (row, defaultMethod = paymentMethod) => ({
       customerId: selectedCustomer?.id || null,
-      direction: 'IN',
+      direction: surfaceValue('paymentDirectionIn'),
       paymentMethod: row?.method || row?.paymentMethod || defaultMethod,
       amount: Number(row?.amount ?? total ?? 0),
       provider: row?.provider || null,
       terminalId: recordValue(till, 'sessionTerminalId', null) || null,
       providerTransactionId: row?.providerTransactionId || row?.provider_transaction_id || null,
       idempotencyKey: row?.idempotencyKey || row?.idempotency_key || clientRequestId,
-      status: row?.status || 'COMPLETED',
+      status: row?.status || surfaceValue('paymentStatusCompleted'),
     })
     const paymentRows = Array.isArray(options.payments) && options.payments.length
       ? options.payments.map((row) => mapRuntimePayload(mappings.payment, paymentValue(row)))
