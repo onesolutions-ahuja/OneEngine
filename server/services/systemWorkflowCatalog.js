@@ -1,4 +1,3 @@
-import { PACKAGE_RUNTIME_FLOWS } from "../packages/runtimeFlowManifests.js";
 import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 import { TRUSTED_JOB_KINDS } from "./trustedJobKinds.js";
@@ -412,7 +411,7 @@ export function systemWorkflowDefinitions() {
     .filter((item) => item?.key && item.key !== "WORKFLOW" && item.systemVisible !== false)
     .map(actionWorkflow);
   const jobs = TRUSTED_JOB_KINDS.map(jobWorkflow);
-  return [...functions, ...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS];
+  return [...functions, ...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS];
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {
