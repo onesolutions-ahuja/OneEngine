@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppWindow, Plus, Search } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 import CustomPageBuilder from "../../settings/Platform/CustomPageBuilder.jsx";
+import ConnectorDefinitionEditor from "./ConnectorDefinitionEditor.jsx";
 
 const BUILDER_DEFINITION = Object.freeze({
   key: "gpt_app_builder",
@@ -29,6 +30,7 @@ export default function GPTAppBuilderPage() {
   const [query, setQuery] = useState("");
   const [selectedAppId, setSelectedAppId] = useState("");
   const [selectedPageId, setSelectedPageId] = useState("");
+  const [selectedConnectorKey, setSelectedConnectorKey] = useState("");
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState({ label: "", appKey: "", description: "" });
   const [error, setError] = useState("");
@@ -134,6 +136,7 @@ export default function GPTAppBuilderPage() {
           <div className="cpb-toolbar"><button type="button" className="onepos-btn onepos-btn-primary" disabled={!draft.label.trim()} onClick={() => void createBlank()}>Create Blank App</button><button type="button" className="onepos-btn" onClick={() => setCreating(false)}>Cancel</button></div>
         </div></div>
       ) : null}
+      <div className="onepos-card"><div className="onepos-card-body"><ConnectorDefinitionEditor value={selectedConnectorKey} onChange={setSelectedConnectorKey} onMessage={setMessage} onError={setError}/></div></div>
       <label className="settings-search"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search app metadata"/></label>
       <div className="developer-record-list">
         {visibleApps.map((app) => <button type="button" key={app.id} className="settings-nav-item" onClick={() => setSelectedAppId(String(app.id))}><AppWindow size={16}/><span>{app.label || app.app_key}</span></button>)}
