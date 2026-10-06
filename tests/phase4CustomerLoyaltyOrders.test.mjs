@@ -38,7 +38,7 @@ test("customer credit posting checks customer, idempotency, and removes duplicat
   assert.ok(actions.some((item) => item.id === "find_existing_credit_entry"));
   assert.ok(actions.some((item) => item.key === "CONDITION"));
   assert.ok(actions.some((item) => item.key === "CUSTOM_ERROR"));
-  const ledger = manifest.objects.find((item) => item.objectKey === "customer_credit_ledger");
+  const ledger = manifest.objects.find((item) => item.objectKey === "customer_ledger");
   assert.equal(ledger.fields.filter((field) => field.apiName === "idempotency_key").length, 1);
 });
 
