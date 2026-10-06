@@ -2386,6 +2386,8 @@ export function packageDefinition(entry) {
           { parentObjectKey:"payment",childObjectKey:"sale",relationshipKey:"sale",relationshipType:"lookup",childFieldApiName:"sale_id" },
         ],
         rules: [
+          { objectKey:"till_session",name:"Opening cash cannot be negative",triggerKey:"before_save",conditions:[{field:"opening_cash",operator:"less_than",value:0}],action:{type:"validation",message:"Opening cash cannot be negative"} },
+          { objectKey:"cash_movement",name:"Cash movement amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Cash movement amount must be positive"} },
           { objectKey:"sale",name:"Sale total cannot be negative",triggerKey:"before_save",conditions:[{field:"total",operator:"less_than",value:0}],action:{type:"validation",message:"Sale total cannot be negative"} },
           { objectKey:"sale",name:"Sale must contain at least one line",triggerKey:"before_save",conditions:[{field:"line_count",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"A sale must contain at least one line"} },
           { objectKey:"sale_item",name:"Sale item quantity must be positive",triggerKey:"before_save",conditions:[{field:"quantity",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Sale item quantity must be greater than zero"} },
@@ -2414,7 +2416,7 @@ export function packageDefinition(entry) {
               actions:[
                 {id:"create_sale",label:"1. Create Sale",apiName:"create_sale",key:"CREATE_RECORD",objectKey:"sale",recordResource:{path:"variables.sale"},store:"record"},
                 {id:"create_items",label:"3. Create Sale Items",apiName:"create_items",key:"CREATE_RECORD",objectKey:"sale_item",recordCollectionResource:{path:"variables.items"},commonFieldValues:{sale_id:{path:"variables.sale.id"}}},
-                {id:"create_payments",label:"4. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"},commonFieldValues:{sale_id:{path:"variables.saleId"}}}
+                {id:"create_payments",label:"4. Create Payments",apiName:"create_payments",key:"CREATE_RECORD",objectKey:"payment",recordCollectionResource:{path:"variables.payments"},commonFieldValues:{sale_id:{path:"variables.sale.id"}}}
               ]
             }
           }
