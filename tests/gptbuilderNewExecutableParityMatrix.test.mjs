@@ -72,3 +72,8 @@ test('run debug and saved tests coerce declared input resource types',()=>{
  assert.ok(page.includes("['record','apex-defined'].includes(type)"))
  assert.ok(page.includes('inputs:Object.fromEntries(resources.filter((r)=>r.availableForInput)'))
 })
+
+test('Save As New Version uses the implemented generic workflow lifecycle contract',()=>{
+ assert.ok(page.includes("forceNewVersion:true,active:false,lifecycleStatus:'DRAFT'"))
+ assert.ok(!page.includes("/versions`,{method:'POST'"))
+})
