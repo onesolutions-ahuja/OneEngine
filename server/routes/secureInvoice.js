@@ -26,6 +26,8 @@ import {
 import {
   validateTemporaryReceiptDownload,
   markTemporaryReceiptDownloaded,
+  buildReceiptPdfBytes,
+  loadPublicReceiptData,
 } from "../services/receiptQr.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
@@ -207,140 +209,38 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
   router.get("/receipt/download/:token", async (req, res) => {
     const token = String(req.params.token || "");
     if (!token.trim()) return genericNotFound(res);
+
     const validated = await validateTemporaryReceiptDownload({ db, token });
     if (!validated.ok || !validated.receipt) return genericNotFound(res);
+
+    const receiptData = await loadPublicReceiptData({ db, companyId: validated.receipt.company_id, saleId: validated.receipt.sale_id });
+    if (!receiptData || !receiptData.sale) return genericNotFound(res);
+
+    const pdf = buildReceiptPdfBytes({
+      sale: receiptData.sale,
+      company: receiptData.company,
+      store: receiptData.store,
+    });
+
     await markTemporaryReceiptDownloaded({ db, receiptId: validated.receipt.id });
-    return res.status(410).json({ success:false, code:"METADATA_DOCUMENT_REQUIRED", message:"Receipt document rendering must be provided by a metadata document template." });
+
+    const filename = `receipt-${String(receiptData.sale.receiptNumber || validated.receipt.sale_id).replace(/[^a-zA-Z0-9._-]/g, "") || "receipt"}.pdf`;
+    res
+      .status(200)
+      .type("application/pdf")
+      .set("Content-Disposition", `attachment; filename="${filename}"`)
+      .set("Cache-Control", "no-store, max-age=0")
+      .set("X-Robots-Tag", "noindex, nofollow")
+      .set("Referrer-Policy", "no-referrer")
+      .send(Buffer.from(pdf));
   });
 
   /* ---------------- ADMIN: link management for later batches ---------------- */
 
-  router.post(
-    "/api/sales/:saleId/secure-links",
-    authenticate,
-    authorize("sale.refund"),
-    async (req, res) => {
-      try {
-        const result = await createSecureInvoiceLink({
-          db,
-          companyId: req.user.companyId,
-          storeId: req.user.storeId ?? null,
-          saleId: req.params.saleId,
-          createdBy: req.user.id ?? null,
-          expiryDays: Number.isFinite(Number(req.body?.expiryDays))
-            ? Number(req.body.expiryDays)
-            : undefined,
-        });
-        if (!result.ok) {
-          return res.status(result.status).json({ success: false, message: result.message });
-        }
-        await writeAudit(req.user.companyId, req.user.id, "secure_invoice_link_created", "secure_invoice_link", result.linkId, {
-          saleId: req.params.saleId,
-          expiresAt: result.expiresAt,
-        });
-        res.status(201).json({
-          success: true,
-          data: {
-            linkId: result.linkId,
-            token: result.token, // plaintext shown exactly once
-            url: `/i/${result.token}`,
-            expiresAt: result.expiresAt,
-            defaultExpiryDays: SECURE_LINK_DEFAULT_EXPIRY_DAYS,
-          },
-        });
-      } catch (error) {
-        console.error("Create secure invoice link error:", error);
-        res.status(500).json({ success: false, message: "Unable to create secure link" });
-      }
-    }
-  );
-
-  router.post(
-    "/api/sales/:saleId/receipt-qr",
-    authenticate,
-    authorize("sale.refund"),
-    async (req, res) => {
-      try {
-        const expiryMinutes = Number.isFinite(Number(req.body?.expiryMinutes)) ? Number(req.body.expiryMinutes) : 5;
-        const execution = await executeSystemWorkflow({
-          db,
-          companyId: req.user.companyId,
-          userId: req.user.id || null,
-          systemKey: "flow:till.receipt.qr",
-          req,
-          input: {
-            saleId: req.params.saleId,
-            expiryMinutes,
-            baseUrl: req.protocol === "https" ? `https://${req.get("host")}` : `http://${req.get("host")}`,
-          },
-          storeId: req.user.storeId || null,
-          tillId: req.user.tillId || null,
-          source: {
-            type: "api",
-            method: req.method,
-            path: req.originalUrl || req.path,
-            capability: "till.receipt.qr",
-          },
-        });
-        const result = execution?.result?.receipt || null;
-        if (!result?.id || !result?.url) {
-          return res.status(503).json({ success: false, message: "Receipt QR Flow did not return a receipt link" });
-        }
-
-        await writeAudit?.(req.user.companyId, req.user.id, "temporary_receipt_qr_created", "temporary_receipt_download", result.id, {
-          saleId: req.params.saleId,
-          expiresAt: result.expiresAt,
-          downloadUrl: result.url,
-          workflowRunId: execution.runId || null,
-        });
-
-        res.status(201).json({ success: true, data: result });
-      } catch (error) {
-        console.error("Create receipt QR error:", error);
-        res.status(500).json({ success: false, message: "Unable to create receipt QR link" });
-      }
-    }
-  );
-
-  router.delete(
-    "/api/sales/:saleId/receipt-qr",
-    authenticate,
-    authorize("sale.refund"),
-    async (req, res) => {
-      try {
-        const result = await revokeTemporaryReceiptDownloadsForSale({
-          db,
-          companyId: req.user.companyId,
-          saleId: req.params.saleId,
-        });
-        res.json({ success: true, data: { revoked: result.revoked || 0 }, message: "Receipt QR revoked" });
-      } catch (error) {
-        console.error("Revoke receipt QR error:", error);
-        res.status(500).json({ success: false, message: "Unable to revoke receipt QR" });
-      }
-    }
-  );
-
-  router.delete(
-    "/api/sales/:saleId/secure-links",
-    authenticate,
-    authorize("sale.refund"),
-    async (req, res) => {
-      try {
-        const result = await revokeSecureInvoiceLinksForSale({ db, companyId: req.user.companyId, saleId: req.params.saleId });
-        await writeAudit(req.user.companyId, req.user.id, "secure_invoice_links_revoked", "sale", req.params.saleId, {
-          revoked: result.revoked,
-        });
-        res.json({ success: true, message: "Secure links revoked", data: { revoked: result.revoked } });
-      } catch (error) {
-        console.error("Revoke secure links error:", error);
-        res.status(500).json({ success: false, message: "Unable to revoke links" });
-      }
-    }
-  );
-
+  const metadataRequired=(_req,res)=>res.status(410).json({success:false,code:"METADATA_ACTION_REQUIRED",message:"Receipt/invoice link business actions execute through metadata Actions/Flows; secure-token validation remains protocol infrastructure."});
+  router.post("/receipt-qr",authenticate,authorize("sale.view"),metadataRequired);
+  router.post("/secure-invoice",authenticate,authorize("sale.view"),metadataRequired);
+  router.delete("/receipt-qr/:saleId",authenticate,authorize("sale.view"),metadataRequired);
+  router.delete("/secure-invoice/:saleId",authenticate,authorize("sale.view"),metadataRequired);
   return router;
 }
-
-/* Internal re-export for tests; not part of the public surface. */
-export { genericNotFound, rateLimited, buildInvoiceHtml };
