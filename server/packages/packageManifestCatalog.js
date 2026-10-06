@@ -1001,26 +1001,7 @@ const PACKAGE_CATALOG = [
     },
     iconAssetKey: "whatsapp",
   },
-  {
-    key: "quickbooks",
-    name: "QuickBooks",
-    description: "QuickBooks accounting connection and mapped exports.",
-    route: "/app/integrations",
-    permissions: ["integration.manage", "accounting.export"],
-    storeScoped: false,
-    category: "Finance",
-    entitlementKey: "integrations",
-    dependencies: ["integrations", "finance_core", "retail_pos", "customers", "supplier_core"],
-    capabilities: ["accounting_export", "customer_sync", "supplier_sync", "product_mapping"],
-    providerConnector: {
-      providerKey: "quickbooks",
-      integrationType: "accounting",
-      authentication: { type: "oauth2", credentialStorage: "integration_connections.credentials_encrypted" },
-      settings: ["environment", "accounting_mode", "sync_customers", "sync_suppliers", "sync_products", "sync_sales", "sync_payments", "sync_refunds", "sync_purchases", "sync_supplier_payments", "sync_supplier_credits"],
-      mappings: ["vat_code", "sales_income_account", "accounts_payable_account", "inventory_asset_account", "expense_account", "card_account", "cash_account", "payment_account", "refund_account", "discount_account", "service_charge_account", "delivery_account", "payment_method"],
-      actions: ["CONNECTOR_TEST_CONNECTION"],
-    },
-  },
+
   {
     key: "shopify",
     name: "Shopify",
