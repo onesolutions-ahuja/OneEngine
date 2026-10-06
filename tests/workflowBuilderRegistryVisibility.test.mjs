@@ -38,7 +38,7 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
   const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
   const builder = new Set(getWorkflowBuilderActionRegistry().map((item) => item.key));
 
-  for (const key of ["CREATE_RECORD","UPDATE_RECORD","GET_RECORDS","SEND_COMMUNICATION","CALL_CONNECTOR","HTTP_REQUEST","ONE_HTTP_REQUEST","RUN_SUBFLOW"]) {
+  for (const key of ["CREATE_RECORD","UPDATE_RECORD","GET_RECORDS","SEND_COMMUNICATION","CALL_CONNECTOR","HTTP_REQUEST","ONE_HTTP_REQUEST","ONE_API_REQUEST","RUN_SUBFLOW"]) {
     assert.ok(builder.has(key), key + " must remain available to Flow Builder");
   }
 
@@ -62,7 +62,8 @@ test("staff lifecycle orchestration stays in editable Flow metadata", () => {
   const packages = readFileSync(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(packages, /apiName:\s*"STAFF_SEND_PASSWORD_RESET"/);
   assert.match(packages, /apiName:\s*"STAFF_SEND_INVITATION"/);
-  assert.match(packages, /functionKey:\s*"account\.lifecycle\.token\.issue"/);
+  assert.match(packages, /key:"ONE_API_REQUEST".*path:"\/api\/platform\/runtime\/security\/tokens"/s);
+  assert.equal(packages.includes("CALL_FUNCTION"), false);
   assert.match(packages, /handlerKey:\s*"RUN_SUBFLOW"/);
 });
 
