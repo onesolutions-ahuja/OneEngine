@@ -80,7 +80,7 @@ export default function DashboardLayoutCanvas({ components = [], results = [], l
       <DashboardGrid components={components} results={results} loading={loading} testId="dashboard-layout-grid" />
       {/* Interaction overlay: one absolutely-positioned layer aligned to the
           same 12-column grid, so handles never disturb the rendered output. */}
-      {!loading && components.length ? <div className="absolute inset-0 grid grid-cols-4 gap-4" data-testid="dashboard-layout-overlay" style={{ pointerEvents: "none" }}>
+      {!loading && components.length ? <div className="absolute inset-0 grid grid-cols-12 gap-4" data-testid="dashboard-layout-overlay" style={{ pointerEvents: "none" }}>
         {components.map((component, index) => {
           const active = selectedId === component.id;
           const dragging = overIndex === index;
