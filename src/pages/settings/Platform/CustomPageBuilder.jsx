@@ -73,6 +73,7 @@ const BUILDER_CSS = `
 `;
 
 function uid(prefix) { return makeNodeId(prefix); }
+function targetPageFromList(response, pageId) { return (Array.isArray(response?.data) ? response.data : []).find((row) => String(row.id) === String(pageId)) || null; }
 
 function collectPageNodes(sections, excludeId = "") {
   const rows = [];
@@ -474,9 +475,12 @@ const updateNode = (nodeId, changes) => {
       // the same definition the next edit session will reopen, so save/reopen
       // drift is detected immediately instead of reaching runtime.
       if (saved?.id) {
-        const reopened = await apiRequest(`/api/platform/pages/${encodeURIComponent(saved.id)}`);
-        if (reopened?.success && reopened.data) {
-          saved = reopened.data;
+        // Re-open from the authoritative app page list. The platform exposes
+        // page reads through the app-scoped collection, not a standalone
+        // /pages/:id GET route.
+        const reopened = targetPageFromList(await apiRequest(`/api/platform/apps/${encodeURIComponent(saved.app_id || appId || targetApp)}/pages`), saved.id);
+        if (reopened) {
+          saved = reopened;
           setPage(saved);
           const persistedTree = normalizeCustomPageTree(saved?.draft_definition || saved?.definition || {});
           setDraft((current) => ({
