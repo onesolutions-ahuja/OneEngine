@@ -289,7 +289,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
   router.put("/superadmin/companies/:id/jarves-licence", async (req,res) => {
     const allowance = Math.max(0, Math.trunc(Number(req.body?.allowance) || 0));
     try {
-      const result = await setJarvesAllowance(db, req.params.id, allowance, req.user?.id || null);
+      const result = await setJarvesAllowance(db, req.params.id, allowance, req.user.id);
       if (result === JARVES_ALLOWANCE_RESULTS.ALLOWANCE_BELOW_ENABLED) {
         const state = await getJarvesLicenceState(db, req.params.id);
         return res.status(409).json({ success: false, message: `Cannot reduce JARVES seats below ${state.enabledUsers} enabled user${state.enabledUsers === 1 ? "" : "s"}` });
