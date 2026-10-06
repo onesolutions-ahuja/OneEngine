@@ -51,7 +51,7 @@ const allowedSqlPrefixes=[
 ];
 const allowedExactTables=new Set([
   "companies","users","roles","permissions","role_permissions","user_roles","stores",
-  "company_settings","server_settings","sessions"
+  "company_settings","server_settings","sessions","integrations"
 ]);
 const violations=[];
 
