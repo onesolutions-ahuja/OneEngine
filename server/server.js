@@ -1899,7 +1899,7 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-app.use("/api", createEanLookupRouter({ authenticate, db, lookupService: globalProductLookupService }));
+app.use("/api", createEanLookupRouter({ authenticate, db }));
 
 /* T10D: Self-Checkout session routes (enter/exit the restricted mode). */
 app.use("/api", createSelfCheckoutRouter({
