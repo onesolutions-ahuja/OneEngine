@@ -1,45 +1,6 @@
 import express from "express";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
-
 export default function createTillRouter({ authenticate, authorize, db, pool, getRolePermissionCodes, canViewCompanyCustomers }) {
   const router = express.Router();
-
-  function money(value) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : NaN;
-  }
-
-  async function calculateCashPosition(req, {
-    openingCash = 0,
-    cashIn = 0,
-    cashOut = 0,
-    cashSales = 0,
-    cashRefunds = 0,
-    countedCash = 0,
-    requestedCashOut = 0,
-    terminalId = null,
-  } = {}) {
-    const execution = await executeSystemWorkflow({
-      db,
-      companyId: req.user.companyId,
-      userId: req.user.id || null,
-      systemKey: "flow:till.cash.position",
-      req,
-      input: {
-        openingCash: Number(openingCash) || 0,
-        cashIn: Number(cashIn) || 0,
-        cashOut: Number(cashOut) || 0,
-        cashSales: Number(cashSales) || 0,
-        cashRefunds: Number(cashRefunds) || 0,
-        countedCash: Number(countedCash) || 0,
-        requestedCashOut: Number(requestedCashOut) || 0,
-      },
-      storeId: req.user.storeId || null,
-      tillId: terminalId || req.user.tillId || null,
-      source: { type: "api", method: req.method, path: req.originalUrl || req.path, capability: "till.cash.position" },
-    });
-    return execution?.result || {};
-  }
 
   /*
    * GET /api/till/sessions/current
