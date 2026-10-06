@@ -6,13 +6,13 @@
  * Reusable validation/normalisation for Integration field-mapping
  * definitions consumed by the payload builder:
  *
- *   { partnerField: "customer.name", sourcePath: "sales.customer.name" }
+ *   { partnerField: "record.field", sourcePath: "record.related.field" }
  *
  * RULES
  * - partnerField and sourcePath are required, must be strings, and must be
  *   non-empty after trimming.
  * - Outer whitespace is trimmed; inner whitespace makes a path malformed.
- * - [] array notation is preserved (e.g. "items[].sku").
+ * - [] array notation is preserved (e.g. "lines[].field").
  * - Malformed paths are rejected with UI-friendly error messages.
  * - Exact duplicates (after trimming) are removed; order is preserved.
  * - Generic: no entity/field names are hard-coded.
