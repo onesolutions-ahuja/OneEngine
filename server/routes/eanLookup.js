@@ -1,7 +1,7 @@
 import express from "express";
-import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { createGlobalProductLookupService } from "../services/globalProductLookup.js";
 
-export default function createEanLookupRouter({ authenticate, db }) {
+export default function createEanLookupRouter({ authenticate, db, lookupService = createGlobalProductLookupService() }) {
   const router = express.Router();
 
   // Shared reference lookup only: never reads or writes customer products.
@@ -15,29 +15,12 @@ export default function createEanLookupRouter({ authenticate, db }) {
     }
 
     try {
-      const connection = await db(
-        `SELECT id FROM integration_connections
-          WHERE company_id=$1 AND enabled=TRUE
-            AND integration_type='product_lookup'
-          ORDER BY fallback_order ASC, updated_at DESC LIMIT 1`,
-        [req.user.companyId]
-      );
-      if (!connection.rows[0]?.id) {
-        return res.status(503).json({ success:false, code:"NO_PROVIDER", data:null, message:"No Global Product Lookup provider installed" });
-      }
-      const execution = await executeSystemWorkflow({
+      const result = await lookupService.lookup({
         db,
         companyId: req.user.companyId,
-        userId: req.user.id || null,
-        systemKey: "flow:global_product.lookup",
-        req,
-        input: { connectionId: connection.rows[0].id, barcode: ean, operation: "product.lookup" },
-        storeId: req.user.storeId || null,
-        source: { type:"api", method:req.method, path:req.path, capability:"GLOBAL_PRODUCT_LOOKUP" },
+        reqCompanyId: req.user.companyId,
+        barcode: ean,
       });
-      const flowResult = execution.result || {};
-      const product = flowResult.product || flowResult.providerResult?.data || null;
-      const result = product ? { status:"found", product } : { status:"not_found", product:null };
 
       // Record valid attempts using the existing authenticated session context.
       await db(
