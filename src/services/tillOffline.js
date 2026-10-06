@@ -145,7 +145,7 @@ export async function syncOfflineCashSales(apiRequest) {
   for (const entry of rows) {
     if (entry.status === 'failed') continue
     try {
-      const response = await apiRequest('/api/platform/runtime/objects/sale/buttons/till_complete_sale/execute', { method: 'POST', body: JSON.stringify({ context: { source: 'OFFLINE_SYNC' }, inputs: { sale: { ...(entry.payload.sale || {}), offline_created: true, sync_status: 'SYNCED' }, items: entry.payload.items || [], payments: entry.payload.payments || [] } }) })
+      const response = await apiRequest('/api/platform/runtime/objects/sale_ledger/buttons/till_complete_sale/execute', { method: 'POST', body: JSON.stringify({ context: { source: 'OFFLINE_SYNC' }, inputs: { sale: { ...(entry.payload.sale || {}), offline_created: true, sync_status: 'SYNCED' }, items: entry.payload.items || [], payments: entry.payload.payments || [] } }) })
       const saleStep = response?.data?.results?.find?.((step) => step?.stepId === 'create_sale')?.result
       const saleId = saleStep?.created?.id || saleStep?.matched?.id || null
       if (!response?.success || !saleId) throw Object.assign(new Error(response?.message || 'Unconfirmed sale response'), { serverResponse: true })
