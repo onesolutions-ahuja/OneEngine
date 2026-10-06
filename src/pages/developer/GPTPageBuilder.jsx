@@ -1,11 +1,11 @@
-import PageBuilder from "../settings/Platform/PageBuilder.jsx";
+import CustomPageBuilder from "../settings/Platform/CustomPageBuilder.jsx";
 
 /*
- * GPT Page Builder intentionally uses the same metadata editor as the platform
- * Page Builder. Page composition is spatial/layout metadata, not a workflow
- * graph, so React Flow nodes/edges must never become a second page-definition
- * format.
+ * GPT Page Builder is the canonical metadata Page Builder surfaced from the
+ * Developer area. It deliberately shares the same saved page definition,
+ * component registry, WYSIWYG renderer and action/Flow metadata contract as
+ * the standard Page Builder.
  */
 export default function GPTPageBuilder(props) {
-  return <PageBuilder {...props} />;
+  return <CustomPageBuilder {...props} />;
 }
