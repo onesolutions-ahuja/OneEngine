@@ -1,4 +1,5 @@
 import { oneAssistantManifest } from "../packages/oneAssistantManifest.js";
+import { metadataManifestByPackageKey } from "./metadataManifestLoader.js";
 import { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 export { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 import { packageManifestCatalog } from "../packages/packageManifestCatalog.js";
@@ -2311,7 +2312,8 @@ export function packageDefinition(entry) {
           }
         ],
       } : {}),
-      ...(metadataManifestByPackageKey(entry.key) || {}),\import { metadataManifestByPackageKey } from "./metadataManifestLoader.js";\nn      ...(entry.key === "products" ? {
+      ...(metadataManifestByPackageKey(entry.key) || {}),
+      ...(entry.key === "products" ? {
         packageKey: "products",
         packageType: "FOUNDATION",
         name: "Product Core",
