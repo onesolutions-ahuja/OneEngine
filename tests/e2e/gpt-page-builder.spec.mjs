@@ -18,5 +18,21 @@ test('GPT Page Builder renders without route/runtime errors', async ({ page }) =
 
   await expect(page.getByText('GPT Page Builder', { exact: true })).toBeVisible()
   await expect(page.getByText(/registered components/)).toBeVisible()
+
+  const paletteItem = page.getByRole('button', { name: /Modern Data Card/i })
+  await paletteItem.click()
+  const node = page.locator('.react-flow__node-registeredComponent').filter({ hasText: 'Modern Data Card' })
+  await expect(node).toBeVisible()
+  await expect(node).toHaveCSS('opacity', '1')
+  await expect(page.locator('.gptpb-selected-meta')).toContainText('Modern Data Card')
+
+  const before = await node.boundingBox()
+  expect(before?.width || 0).toBeGreaterThan(100)
+  expect(before?.height || 0).toBeGreaterThan(50)
+  await node.dragTo(page.locator('.gptpb-canvas'), { targetPosition: { x: 420, y: 280 } })
+  await expect(node).toBeVisible()
+
+  await page.getByRole('button', { name: /Delete component/i }).click()
+  await expect(node).toHaveCount(0)
   expect(pageErrors, pageErrors.join('\n')).toEqual([])
 })
