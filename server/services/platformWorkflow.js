@@ -24,6 +24,8 @@ import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
+import { issueAccountToken } from "./accountPolicy.js";
+import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, revokeTemporaryReceiptDownloadsForSale } from "./receiptQr.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
@@ -3385,6 +3387,80 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
   },
 
 
+
+
+  {
+    key: "ISSUE_IDENTITY_TOKEN",
+    displayName: "Issue Identity Token",
+    description: "Issue a tenant-scoped identity lifecycle token. Flow owns purpose, recipient, sequencing and templates.",
+    validation: (action) => {
+      if (!action?.userId && !action?.inputs?.userId) throw new Error("Issue Identity Token requires userId");
+      if (!action?.purpose && !action?.inputs?.purpose) throw new Error("Issue Identity Token requires purpose");
+    },
+    async: false,
+    requiredPermissions: ["user.manage"],
+    executor: async ({ action, db, companyId, req, record, workflowVariables = {} }) => {
+      const configured = action.inputs || {};
+      const resolve = (value) => resolveConfiguredResource(value, { record, req, workflowVariables });
+      const userId = resolve(action.userId ?? configured.userId);
+      const purpose = String(resolve(action.purpose ?? configured.purpose) || "").trim().toUpperCase();
+      const expiresMinutesRaw = resolve(action.expiresMinutes ?? configured.expiresMinutes);
+      const expiresMinutes = Number.isFinite(Number(expiresMinutesRaw)) ? Math.max(1, Math.min(10080, Number(expiresMinutesRaw))) : (purpose === "REGISTRATION" ? 1440 : 60);
+      if (!["PASSWORD_RESET","REGISTRATION"].includes(purpose)) throw new Error("Unsupported identity token purpose");
+      const token = await issueAccountToken(db, { companyId: companyId || req?.user?.companyId, userId, purpose, expiresMinutes });
+      return { token, userId, purpose, expiresMinutes };
+    },
+  },
+  {
+    key: "CREATE_SECURE_LINK",
+    displayName: "Create Secure Link",
+    description: "Create a short-lived secure link through a metadata-selected technical link adapter.",
+    validation: (action) => {
+      if (!action?.adapter) throw new Error("Create Secure Link requires adapter");
+      if (!action?.recordId && !action?.inputs?.recordId) throw new Error("Create Secure Link requires recordId");
+    },
+    async: false,
+    requiredPermissions: ["sale.view"],
+    executor: async ({ action, db, companyId, req, record, workflowVariables = {} }) => {
+      const resolve = (value) => resolveConfiguredResource(value, { record, req, workflowVariables });
+      const adapter = String(action.adapter || "").trim().toLowerCase();
+      if (adapter !== "receipt_download") throw new Error(`Unsupported secure-link adapter "${adapter}"`);
+      const recordId = resolve(action.recordId ?? action.inputs?.recordId);
+      const expiryRaw = resolve(action.expiryMinutes ?? action.inputs?.expiryMinutes);
+      const expiryMinutes = Number.isFinite(Number(expiryRaw)) ? Math.max(1, Number(expiryRaw)) : 5;
+      const result = await createTemporaryReceiptDownload({
+        db,
+        companyId: companyId || req?.user?.companyId,
+        storeId: req?.user?.storeId || null,
+        tillId: req?.user?.tillId || null,
+        saleId: recordId,
+        expiryMinutes,
+      });
+      if (!result.ok) throw Object.assign(new Error(result.message || "Unable to create secure link"), { status: result.status || 500 });
+      const baseUrl = req?.protocol && req?.get ? `${req.protocol}://${req.get("host")}` : "";
+      const url = buildReceiptQrDownloadUrl(result.token, baseUrl);
+      return { id: result.id, recordId, token: result.token, url, qrcodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`, expiresAt: result.expiresAt, expiresMinutes };
+    },
+  },
+  {
+    key: "REVOKE_SECURE_LINKS",
+    displayName: "Revoke Secure Links",
+    description: "Revoke active secure links through a metadata-selected technical link adapter.",
+    validation: (action) => {
+      if (!action?.adapter) throw new Error("Revoke Secure Links requires adapter");
+      if (!action?.recordId && !action?.inputs?.recordId) throw new Error("Revoke Secure Links requires recordId");
+    },
+    async: false,
+    requiredPermissions: ["sale.view"],
+    executor: async ({ action, db, companyId, req, record, workflowVariables = {} }) => {
+      const resolve = (value) => resolveConfiguredResource(value, { record, req, workflowVariables });
+      const adapter = String(action.adapter || "").trim().toLowerCase();
+      if (adapter !== "receipt_download") throw new Error(`Unsupported secure-link adapter "${adapter}"`);
+      const recordId = resolve(action.recordId ?? action.inputs?.recordId);
+      const result = await revokeTemporaryReceiptDownloadsForSale({ db, companyId: companyId || req?.user?.companyId, saleId: recordId });
+      return { recordId, revoked: result.revoked || 0 };
+    },
+  },
 
   {
     key: "RUN_SUBFLOW",
