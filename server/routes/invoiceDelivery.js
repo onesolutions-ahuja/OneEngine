@@ -88,26 +88,7 @@ const CHANNELS = {
 export default function createInvoiceDeliveryRouter({ db, pool, authenticate, authorize, writeAudit }) {
   const router = express.Router();
 
-  const upsertRow = async (client, companyId, provider, active, configuration) => {
-    const existing = await client.query(
-      `SELECT id FROM integrations WHERE company_id = $1 AND provider = $2 FOR UPDATE`,
-      [companyId, provider]
-    );
-    if (existing.rows.length) {
-      await client.query(
-        `UPDATE integrations SET active = $2, configuration = $3, updated_at = NOW() WHERE id = $1`,
-        [existing.rows[0].id, active, JSON.stringify(configuration)]
-      );
-      return existing.rows[0].id;
-    }
-    const name = provider === "sms_invoice" ? "SMS Invoice Delivery" : "Email Invoice Delivery";
-    const inserted = await client.query(
-      `INSERT INTO integrations (company_id, name, provider, configuration, active)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [companyId, name, provider, JSON.stringify(configuration), active]
-    );
-    return inserted.rows[0].id;
-  };
+
 
   /* ------------------------------ GET settings ---------------------------- */
 
