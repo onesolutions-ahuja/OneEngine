@@ -1374,6 +1374,7 @@ const PACKAGE_CATALOG = [
     permissions: ["settings.manage"],
     storeScoped: false,
     category: "Administration",
+    bootstrapFoundation: true,
   }];
 
 
