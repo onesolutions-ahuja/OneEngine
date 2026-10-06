@@ -1,6 +1,5 @@
 import express from "express";
 import { createHash } from "node:crypto";
-import { allocateBatchConsumption } from "../services/inventory.js";
 import { dispatchIntegrationEvent } from "../services/integrationDispatcher.js";
 import { loadSaleLineFeatures, calculateModifierTotal, expandBundleComponents } from "../services/productFeatures.js";
 import { getRequestPool } from "../services/tenantDatabase.js";
@@ -1060,7 +1059,12 @@ export default function createSalesRouter({
               storeId:inventoryStoreId, source:{type:"flow",capability:"inventory.movement.create"},
             });
             if (p.batch_tracking && stockLine.productId===item.productId) {
-              await allocateBatchConsumption(client,{companyId:req.user.companyId,storeId:inventoryStoreId,productId:item.productId,quantity:stockLine.quantity,mode:"fefo"});
+              await executeSystemWorkflow({
+                db:(sql,params=[])=>client.query(sql,params), companyId:req.user.companyId, userId:req.user.id||null,
+                systemKey:"flow:inventory.batch.consume", req,
+                input:{productId:item.productId,storeId:inventoryStoreId,quantity:stockLine.quantity,mode:"fefo"},
+                storeId:inventoryStoreId, source:{type:"flow",capability:"inventory.batch.consume"},
+              });
             }
           }
           const saleItemId=saleItemIds[itemIndex]||null;
