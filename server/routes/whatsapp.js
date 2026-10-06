@@ -1050,18 +1050,12 @@ export default function createWhatsAppSettingsRouter({ db, pool, authenticate, a
           }
 
           if (!customer && configuration.create_customer_if_missing === true) {
-            const created = await db(
-              `INSERT INTO customers (company_id,name,phone,notes,active)
-               VALUES ($1,$2,$3,$4,true)
-               RETURNING id,name,phone,email`,
-              [
-                companyId,
-                contactName || `WhatsApp ${sender.slice(-4)}`,
-                `+${sender}`,
-                "Created automatically by WhatsApp Assistant",
-              ]
-            );
-            customer = created.rows[0] || null;
+            const creation = await executeSystemWorkflow({
+              db, companyId, userId:null, systemKey:"flow:customer.register", req,
+              input:{customer:{company_id:companyId,name:contactName || `WhatsApp ${sender.slice(-4)}`,phone:`+${sender}`,notes:"Created automatically by WhatsApp Assistant",active:true}},
+              source:{type:"webhook",method:req.method,path:req.originalUrl||req.path,capability:"customer.register"},
+            });
+            customer = creation.result?.customer || null;
           }
 
           const conversationResult = await db(
