@@ -328,12 +328,12 @@
   ],
   "references": [
     {
-      "packageKey": "retail_pos",
+      "packageKey": "sales",
       "objectKey": "sale_ledger",
       "purpose": "Sale reference for earning, redemption and reversal activity"
     },
     {
-      "packageKey": "retail_pos",
+      "packageKey": "sales",
       "objectKey": "payment",
       "purpose": "Loyalty redemption remains a Payment Core tender"
     }
