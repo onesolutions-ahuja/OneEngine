@@ -7,7 +7,10 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     const failures = watchRuntimeFailures(page)
 
     await page.goto('developer/gptbuilder')
-    await expect(page.getByRole('dialog', { name: /New Automation/i })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('button', { name: /^New Flow$/ })).toBeVisible()
+    await page.getByRole('button', { name: /^New Flow$/ }).click()
+    await expect(page.getByRole('dialog', { name: /New Automation/i })).toBeVisible()
 
     await expect(page.getByRole('button', { name: /Start From Scratch/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /Use a Template/i })).toBeVisible()
@@ -67,6 +70,64 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.getByRole('button', { name: /Auto-Layout/ }).click()
     await page.getByRole('menuitemradio', { name: /Free-Form/ }).click()
     await expect(saveButton).toBeDisabled()
+
+    expect(failures, failures.join('\n')).toEqual([])
+  })
+  test('Platform Event $Record fields come from field_schema and are selectable in Decision', async ({ page }) => {
+    if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
+    const failures = watchRuntimeFailures(page)
+
+    await page.route('**/api/platform/event-types', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: [{
+            event_type: 'contract_test_event',
+            description: 'Contract event',
+            field_schema: [
+              { api_name: 'mode', label: 'Mode', data_type: 'text' },
+              { api_name: 'attempts', label: 'Attempts', data_type: 'number' },
+            ],
+          }],
+        }),
+      })
+    })
+
+    await page.goto('developer/gptbuilder')
+    await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: /^New Flow$/ }).click()
+    await page.getByRole('button', { name: /Start From Scratch/i }).click()
+    await page.getByRole('button', { name: /^Next$/ }).click()
+    await page.getByLabel('Search automation types').fill('platform event')
+    await page.getByRole('button', { name: /Platform Event-Triggered Flow/i }).click()
+    await page.getByRole('button', { name: /^Create$/ }).click()
+
+    const startPanel = page.getByLabel('Configure Start')
+    await expect(startPanel).toBeVisible()
+    await startPanel.getByText('Platform Event', { exact: true }).locator('..').getByRole('combobox').selectOption('contract_test_event')
+    await startPanel.getByRole('button', { name: /^Done$/ }).click()
+
+    await page.getByRole('button', { name: 'Add after Start' }).click()
+    const add = page.getByRole('dialog', { name: 'Add Element' })
+    await expect(add).toBeVisible()
+    await add.getByRole('button', { name: /^Decision$/ }).click()
+
+    await expect(page.getByText('Decision Mode', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /New Outcome/i }).click()
+    await page.getByRole('button', { name: /Add Condition/i }).click()
+
+    const searches = page.getByLabel('Search resources and fields')
+    await expect(searches.first()).toBeVisible()
+    await searches.first().fill('mode')
+    const resource = page.getByLabel('Resource').first()
+    await expect(resource.getByRole('option', { name: /Platform Event Record.*Mode.*\$Record\.mode/i })).toHaveCount(1)
+    await resource.selectOption('$Record.mode')
+    await expect(resource).toHaveValue('$Record.mode')
+
+    await searches.first().fill('attempts')
+    await expect(resource.getByRole('option', { name: /Platform Event Record.*Attempts.*\$Record\.attempts/i })).toHaveCount(1)
 
     expect(failures, failures.join('\n')).toEqual([])
   })
