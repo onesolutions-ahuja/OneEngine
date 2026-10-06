@@ -88,12 +88,14 @@ test('manual Run evaluates Start formulas through the same bounded formula runti
  assert.ok(runRuntime.includes('startFormulaInputs(fields, record, null)'))
 })
 
-test('Subflow resolution prefers active version and permits latest saved only when none is active',()=>{
+test('Subflow resolution executes active definition or latest saved snapshot when none is active',()=>{
  const start=runtime.indexOf('key: "RUN_SUBFLOW"')
  const end=runtime.indexOf('key: "CALL_WEBHOOK"',start)
  const subflow=runtime.slice(start,end)
- assert.ok(subflow.includes("(active=true OR active_version IS NULL)"))
- assert.ok(subflow.includes("ORDER BY CASE WHEN active=true THEN 0 ELSE 1 END, version DESC"))
+ assert.ok(subflow.includes("row.active === true"))
+ assert.ok(subflow.includes('FROM platform_workflow_versions'))
+ assert.ok(subflow.includes('ORDER BY version DESC LIMIT 1'))
+ assert.ok(subflow.includes('latest.rows[0]?.definition'))
  assert.ok(subflow.includes("action->>'type'='workflow'"))
- assert.ok(subflow.includes("company_id=$2"))
+ assert.ok(subflow.includes("r.company_id=$2"))
 })
