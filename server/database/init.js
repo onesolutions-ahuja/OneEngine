@@ -2795,7 +2795,7 @@ async function initializeLegacyDatabase(pool) {
      * same products.stock_quantity pool the POS uses, via ONLINE_RESERVE /
      * ONLINE_RELEASE inventory movements.
      */
-    CREATE TABLE IF NOT EXISTS online_orders (
+    CREATE TABLE IF NOT EXISTS sales_orders (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
@@ -2845,30 +2845,30 @@ async function initializeLegacyDatabase(pool) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT online_orders_platform_external_unique UNIQUE (company_id, platform, external_order_id)
     );
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_assigned_at TIMESTAMPTZ;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_route_order INTEGER;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS delivery_status_note TEXT;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS out_for_delivery_at TIMESTAMPTZ;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS failed_delivery_at TIMESTAMPTZ;
-    ALTER TABLE online_orders ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ;
-    ALTER TABLE online_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
-    ALTER TABLE online_orders ADD CONSTRAINT online_orders_status_check CHECK (
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_assigned_at TIMESTAMPTZ;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_route_order INTEGER;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS delivery_status_note TEXT;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS out_for_delivery_at TIMESTAMPTZ;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS failed_delivery_at TIMESTAMPTZ;
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ;
+    ALTER TABLE sales_orders DROP CONSTRAINT IF EXISTS online_orders_status_check;
+    ALTER TABLE sales_orders ADD CONSTRAINT online_orders_status_check CHECK (
       status IN ('RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'DRIVER_ACCEPTED', 'COLLECTED', 'OUT_FOR_DELIVERY', 'COMPLETED', 'FAILED_DELIVERY', 'RETURNED', 'REJECTED', 'CANCELLED')
     );
 
     CREATE INDEX IF NOT EXISTS idx_online_orders_company
-    ON online_orders(company_id, created_at);
+    ON sales_orders(company_id, created_at);
 
     CREATE INDEX IF NOT EXISTS idx_online_orders_status
-    ON online_orders(company_id, status, created_at);
+    ON sales_orders(company_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_online_orders_delivery_driver
-    ON online_orders(company_id, store_id, delivery_driver_id, status, delivery_route_order);
+    ON sales_orders(company_id, store_id, delivery_driver_id, status, delivery_route_order);
 
-    CREATE TABLE IF NOT EXISTS online_order_items (
+    CREATE TABLE IF NOT EXISTS sales_order_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      order_id UUID NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+      order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
       product_id UUID REFERENCES products(id),
       external_item_id VARCHAR(255),
       product_name VARCHAR(255) NOT NULL,
@@ -2882,31 +2882,31 @@ async function initializeLegacyDatabase(pool) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_online_order_items_order
-    ON online_order_items(order_id);
+    ON sales_order_items(order_id);
 
     CREATE INDEX IF NOT EXISTS idx_online_order_items_external
-    ON online_order_items(external_item_id);
+    ON sales_order_items(external_item_id);
 
     /*
      * Incoming platform items may arrive WITHOUT a onePOS product mapping;
      * those are stored (never dropped) with product_id NULL and
      * mapping_status 'UNMAPPED' so the mapping UI can be built later.
      */
-    ALTER TABLE online_order_items
+    ALTER TABLE sales_order_items
       ALTER COLUMN product_id DROP NOT NULL;
 
-    ALTER TABLE online_order_items
+    ALTER TABLE sales_order_items
       ADD COLUMN IF NOT EXISTS mapping_status VARCHAR(20) NOT NULL DEFAULT 'MAPPED';
-    ALTER TABLE online_orders
+    ALTER TABLE sales_orders
       ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL;
-    ALTER TABLE online_orders
+    ALTER TABLE sales_orders
       ADD COLUMN IF NOT EXISTS customer_data JSONB;
     CREATE INDEX IF NOT EXISTS idx_online_orders_customer
-      ON online_orders(company_id, customer_id);
+      ON sales_orders(company_id, customer_id);
 
     CREATE TABLE IF NOT EXISTS online_order_events (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      order_id UUID NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+      order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
       event_type VARCHAR(50) NOT NULL,
       from_status VARCHAR(30),
       to_status VARCHAR(30),
@@ -2943,7 +2943,7 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_deliveroo_item_mappings_company
     ON deliveroo_item_mappings(company_id, external_item_id);
 
-    ALTER TABLE online_orders
+    ALTER TABLE sales_orders
       ADD COLUMN IF NOT EXISTS inventory_reserved BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS inventory_released BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50),
@@ -2976,7 +2976,7 @@ async function initializeLegacyDatabase(pool) {
       success BOOLEAN,
       error_message TEXT,
       duration_ms INTEGER,
-      order_id UUID REFERENCES online_orders(id) ON DELETE SET NULL,
+      order_id UUID REFERENCES sales_orders(id) ON DELETE SET NULL,
       product_id UUID REFERENCES products(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -3034,7 +3034,7 @@ async function initializeLegacyDatabase(pool) {
     CREATE INDEX IF NOT EXISTS idx_suppliers_company
     ON suppliers(company_id);
 
-    CREATE TABLE IF NOT EXISTS purchases (
+    CREATE TABLE IF NOT EXISTS purchase_ledger (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       store_id UUID NOT NULL REFERENCES stores(id),
@@ -3058,7 +3058,7 @@ async function initializeLegacyDatabase(pool) {
 
     CREATE TABLE IF NOT EXISTS purchase_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      purchase_id UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+      purchase_id UUID NOT NULL REFERENCES purchase_ledger(id) ON DELETE CASCADE,
       product_id UUID NOT NULL REFERENCES products(id),
       quantity NUMERIC(12,3) NOT NULL CHECK (quantity > 0),
       received_quantity NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (received_quantity >= 0 AND received_quantity <= quantity),
@@ -3071,7 +3071,7 @@ async function initializeLegacyDatabase(pool) {
     ALTER TABLE purchase_items ADD COLUMN IF NOT EXISTS manufacturing_date DATE;
 
     CREATE INDEX IF NOT EXISTS idx_purchases_company_date
-    ON purchases(company_id, purchase_date DESC);
+    ON purchase_ledger(company_id, purchase_date DESC);
 
     CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase
     ON purchase_items(purchase_id);
@@ -3083,14 +3083,14 @@ async function initializeLegacyDatabase(pool) {
       ADD COLUMN IF NOT EXISTS expiry_date DATE;
     ALTER TABLE purchase_items
       ADD COLUMN IF NOT EXISTS received_quantity NUMERIC(12,3) NOT NULL DEFAULT 0;
-    ALTER TABLE purchases DROP CONSTRAINT IF EXISTS purchases_status_check;
-    ALTER TABLE purchases ADD CONSTRAINT purchases_status_check
+    ALTER TABLE purchase_ledger DROP CONSTRAINT IF EXISTS purchases_status_check;
+    ALTER TABLE purchase_ledger ADD CONSTRAINT purchases_status_check
       CHECK (status IN ('DRAFT', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'));
 
     CREATE TABLE IF NOT EXISTS purchase_receipts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-      purchase_id UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+      purchase_id UUID NOT NULL REFERENCES purchase_ledger(id) ON DELETE CASCADE,
       store_id UUID NOT NULL REFERENCES stores(id),
       received_by UUID REFERENCES users(id) ON DELETE SET NULL,
       received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -3174,7 +3174,7 @@ async function initializeLegacyDatabase(pool) {
       company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
       supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
       store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
-      purchase_id UUID REFERENCES purchases(id) ON DELETE SET NULL,
+      purchase_id UUID REFERENCES purchase_ledger(id) ON DELETE SET NULL,
       invoice_number VARCHAR(100) NOT NULL,
       invoice_date DATE NOT NULL DEFAULT CURRENT_DATE, due_date DATE,
       subtotal NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
@@ -3414,7 +3414,7 @@ async function initializeLegacyDatabase(pool) {
       completed_at TIMESTAMPTZ,
       /*
        * ONLINE ORDER -> POS SALE: set when an Uber Eats / Deliveroo order is
-       * completed (online_orders exists further up in this script). The
+       * completed (sales_orders exists further up in this script). The
        * UNIQUE index below makes duplicate sales on retry impossible.
        */
       online_order_id UUID
@@ -3456,7 +3456,7 @@ async function initializeLegacyDatabase(pool) {
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sales_online_order') THEN
         ALTER TABLE sale_ledger
           ADD CONSTRAINT fk_sales_online_order
-          FOREIGN KEY (online_order_id) REFERENCES online_orders(id);
+          FOREIGN KEY (online_order_id) REFERENCES sales_orders(id);
       END IF;
     END $$;
 
@@ -3525,7 +3525,7 @@ async function initializeLegacyDatabase(pool) {
       provider VARCHAR(100),
       terminal_id VARCHAR(100),
       provider_transaction_id VARCHAR(255),
-      online_order_id UUID REFERENCES online_orders(id) ON DELETE SET NULL,
+      online_order_id UUID REFERENCES sales_orders(id) ON DELETE SET NULL,
       idempotency_key VARCHAR(200),
       status VARCHAR(50) NOT NULL DEFAULT 'completed',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -3538,7 +3538,7 @@ async function initializeLegacyDatabase(pool) {
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS transaction_id UUID REFERENCES sale_ledger(id) ON DELETE SET NULL;
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS direction VARCHAR(20) NOT NULL DEFAULT 'IN';
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS reference VARCHAR(100);
-    ALTER TABLE payments ADD COLUMN IF NOT EXISTS online_order_id UUID REFERENCES online_orders(id) ON DELETE SET NULL;
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS online_order_id UUID REFERENCES sales_orders(id) ON DELETE SET NULL;
     ALTER TABLE payments ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(200);
     CREATE TABLE IF NOT EXISTS payment_attempts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -4394,14 +4394,14 @@ ON secure_invoice_links(company_id, created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_layouts_default_scope
         ON platform_layouts(object_id, page_type, COALESCE(company_id, '00000000-0000-0000-0000-000000000000'::uuid))
         WHERE is_default=true AND role_id IS NULL AND active=true;
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         DROP CONSTRAINT IF EXISTS online_orders_platform_check;
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         DROP CONSTRAINT IF EXISTS online_orders_platform_format_check;
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         ADD CONSTRAINT online_orders_platform_format_check
         CHECK (platform ~ '^[a-z][a-z0-9_]{0,19}$');
-      UPDATE online_orders AS o
+      UPDATE sales_orders AS o
          SET customer_id = c.id
         FROM customers AS c
        WHERE o.customer_id IS NULL
@@ -4919,9 +4919,9 @@ ON secure_invoice_links(company_id, created_at DESC);
     `);
 
     await pool.query(`
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         DROP CONSTRAINT IF EXISTS online_orders_status_check;
-      ALTER TABLE online_orders
+      ALTER TABLE sales_orders
         ADD CONSTRAINT online_orders_status_check
         CHECK (status IN ('RECEIVED', 'ACCEPTED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY', 'DRIVER_ACCEPTED', 'COLLECTED', 'OUT_FOR_DELIVERY', 'COMPLETED', 'FAILED_DELIVERY', 'RETURNED', 'REJECTED', 'CANCELLED'));
     `);
