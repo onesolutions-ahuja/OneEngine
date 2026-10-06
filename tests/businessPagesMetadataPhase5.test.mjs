@@ -6,7 +6,7 @@ const direct=[
  ['gift_card','gift-cards'],['employee','employees'],['online_order','online-orders']
 ];
 test("phase 5 business apps route through one generic metadata workspace",()=>{
- for(const [objectKey,appKey] of direct) assert.match(app,new RegExp(`WorkspacePage initialObjectKey="${objectKey}" appKey="${appKey}"`));
+ for(const [objectKey,appKey] of direct) assert.match(app,new RegExp(`MetadataPageRuntime objectKey="${objectKey}" appKey="${appKey}"`));
 });
 test("phase 5 removes obsolete business page wrappers",()=>{
  for(const name of ["SalesPage","ProductsPage","CategoriesPage","CustomersPage","SuppliersPage","PurchasesPage","SupplierReturnsPage"]) assert.equal(app.includes(name),false,name);
