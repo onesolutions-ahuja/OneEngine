@@ -17,7 +17,7 @@ import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
-import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
+import { hasEntitlement } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
@@ -722,102 +722,6 @@ async function loadRecordRelationship({ db, action, object }) {
   return { relationship, field: fieldResult.rows[0] || null };
 }
 
-async function executeLicenceRequestPackageAction({ db, action, req, companyId, userId, pool, writeAudit, record = null, recordId = null }) {
-  let packageKey = String(action?.packageKey || action?.package_key || "").trim();
-  if (!packageKey && (record?.id || recordId)) {
-    const tenantApp = await db(
-      `SELECT osa.app_key
-         FROM tenant_apps ta
-         JOIN onestore_apps osa ON osa.id=ta.onestore_app_id
-        WHERE ta.id=$1 AND ta.company_id=$2
-        LIMIT 1`,
-      [record?.id || recordId, companyId || req?.user?.companyId]
-    );
-    packageKey = String(tenantApp.rows[0]?.app_key || "").trim();
-  }
-  const tenantId = companyId || req?.user?.companyId;
-  const actorId = userId || req?.user?.id || null;
-  if (!db || !tenantId || !packageKey) throw new Error("Licence request requires a package key and company context");
-  const packageResult = await db(
-    `SELECT p.package_key,p.name,p.visible,p.active,p.installable,p.system_only,p.publication_state,p.manifest,
-            c.name AS company_name,u.full_name,u.username,u.email
-       FROM package_registry p
-       JOIN companies c ON c.id=$2
-       LEFT JOIN users u ON u.id=$3
-      WHERE p.package_key=$1 LIMIT 1`,
-    [packageKey, tenantId, actorId]
-  );
-  const packageRow = packageResult.rows[0];
-  if (!packageRow || packageRow.visible !== true || packageRow.active !== true || packageRow.installable !== true || packageRow.system_only === true || packageRow.publication_state !== "PUBLISHED") {
-    throw Object.assign(new Error("This package cannot be requested"), { status: 409 });
-  }
-  const entitlements = await getCompanyEntitlements(db, tenantId);
-  if (isPackageLicensed(entitlements, packageRow)) {
-    throw Object.assign(new Error("This package is already licensed for the company"), { status: 409 });
-  }
-  const existing = await db("SELECT * FROM platform_licence_requests WHERE company_id=$1 AND package_key=$2 AND status='PENDING' LIMIT 1", [tenantId, packageKey]);
-  if (existing.rows.length) return { status: "PENDING", duplicate: true, request: existing.rows[0] };
-  const requestResult = await db(
-    `INSERT INTO platform_licence_requests
-      (company_id,package_key,package_name,requesting_user_id,requesting_user_name,licence_status)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb) RETURNING *`,
-    [tenantId, packageKey, packageRow.name, actorId, packageRow.full_name || packageRow.username || packageRow.email || null,
-      JSON.stringify({ licensed: false, entitlementKey: packageRow.manifest?.entitlementKey || packageKey })]
-  );
-  const request = requestResult.rows[0];
-  if (typeof writeAudit === "function") {
-    await writeAudit(tenantId, actorId, "licence_request_created", "platform_licence_request", request.id, { packageKey, packageName: packageRow.name, status: "PENDING" });
-  }
-  const templateResult = await db(
-    `INSERT INTO platform_message_templates
-      (company_id,name,api_key,description,channel,subject,body,active,created_by)
-     VALUES ($1,'Licence Request Created','licence_request_superadmin','Default Superadmin licence-request email','EMAIL',
-       'Licence request - {{company.name}} - {{package.name}}',
-       'Company: {{company.name}}\n\nRequested app: {{package.name}}\n\nRequested by: {{request.user_name}}\n\nRequested at: {{request.created_at}}',true,$2)
-     ON CONFLICT(company_id,api_key) DO UPDATE SET updated_at=NOW()
-     RETURNING id`,
-    [tenantId, actorId]
-  );
-  const templateId = templateResult.rows[0]?.id;
-  await db(
-    `INSERT INTO platform_rules (object_id,name,trigger_key,conditions,action,active,company_id,created_by)
-     SELECT NULL,'Licence Request Created','licence_request_created','[]'::jsonb,$1::jsonb,true,$2,$3
-      WHERE NOT EXISTS (SELECT 1 FROM platform_rules WHERE company_id=$2 AND trigger_key='licence_request_created' AND active=true)`,
-    [JSON.stringify({ type: "workflow", actions: [
-      { type: "SEND_COMMUNICATION", channel: "IN_APP", recipient: "platform_superadmins", title: "Licence request received", message: `${packageRow.company_name} requested licence for ${packageRow.name}` },
-      { type: "SEND_COMMUNICATION", channel: "EMAIL", recipient: "platform_superadmins", templateId, templateContext: {
-        company: { name: packageRow.company_name }, package: { name: packageRow.name },
-        request: { user_name: request.requesting_user_name, created_at: request.created_at },
-      } },
-    ] }), tenantId, actorId]
-  );
-  const workflowResult = await db(
-    `SELECT id,name,action FROM platform_rules
-      WHERE active=true AND trigger_key='licence_request_created' AND (company_id=$1 OR company_id IS NULL)
-      ORDER BY CASE WHEN company_id=$1 THEN 0 ELSE 1 END,id LIMIT 1`,
-    [tenantId]
-  );
-  if (workflowResult.rows[0]?.action) {
-    const workflow = workflowResult.rows[0];
-    const actions = Array.isArray(workflow.action.actions) ? workflow.action.actions : [];
-    const run = await createWorkflowRun({ db, companyId: tenantId, workflowId: workflow.id, workflowName: workflow.name, triggerKey: "licence_request_created", status: "RUNNING", metadata: { requestId: request.id } });
-    const record = { ...request, company_name: packageRow.company_name, package_name: packageRow.name, request_user_name: request.requesting_user_name };
-    try {
-      await executeWorkflowActions({ actions, db, pool, req, companyId: tenantId, userId: actorId, record, runId: run?.id || null, trigger: "licence_request_created", writeAudit });
-      if (run?.id) await db("UPDATE platform_workflow_runs SET status='COMPLETED',completed_at=NOW(),updated_at=NOW() WHERE id=$1", [run.id]);
-    } catch (error) {
-      if (run?.id) {
-        const failureMessage = String(error?.message || error || "Workflow execution failed").slice(0, 2000);
-        await db(
-          "UPDATE platform_workflow_runs SET status='FAILED',completed_at=NOW(),error_text=$1,updated_at=NOW(),metadata=COALESCE(metadata,'{}'::jsonb)||$2::jsonb WHERE id=$3",
-          [failureMessage, JSON.stringify({ error: failureMessage, last_error: failureMessage }), run.id]
-        );
-      }
-    }
-  }
-  return { status: "PENDING", duplicate: false, request };
-}
-
 async function resolveEmailWorkflowAction({
   db,
   companyId,
@@ -1126,14 +1030,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         tenantAppId: record?.id || recordId,
         operation: action.operation,
       }),
-  },  {
-    key: "LICENCE_REQUEST_PACKAGE",
-    displayName: "Licence - Request Package",
-    description: "Create a pending package licence request and run its configured workflow.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["package.manage"],
-    executor: (context) => executeLicenceRequestPackageAction(context),
   },
   {
     key: "GLOBAL_PRODUCT_LOOKUP_BARCODE",
