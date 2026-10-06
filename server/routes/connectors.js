@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import express from "express";
 import { decryptCredentials, encryptCredentials } from "../services/integrationCredentials.js";
 import {
@@ -8,7 +7,6 @@ import {
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { executeSystemAction, executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
-import { configureSmsGateInboundWebhook } from "../services/smsGateConnector.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
@@ -185,8 +183,8 @@ function publicConnectorInstance(row) {
     companyId: row.company_id,
     storeId: row.store_id,
     storeName: row.store_name || null,
-    tillId: row.till_id,
-    tillName: row.till_name || null,
+    terminalId: row.terminal_id,
+    terminalName: row.terminal_name || null,
     enabled: row.enabled === true,
     status: row.connection_status,
     health,
@@ -323,51 +321,6 @@ export default function createConnectorsRouter({
     return {
       ...user,
       permissionCodes: permissionResult.rows.map((row) => row.code),
-    };
-  }
-
-  async function ensureSmsGateInboundWebhook(instanceId, companyId) {
-    const currentResult = await db(
-      `SELECT id,connector_configuration,credentials_encrypted
-         FROM integration_connections
-        WHERE id=$1 AND company_id=$2 AND connector_package_key='smsgate_connector'
-        LIMIT 1`,
-      [instanceId, companyId]
-    );
-    const current = currentResult.rows[0];
-    if (!current) throw Object.assign(new Error("SMSGate connector instance not found"), { code: "CONNECTOR_NOT_FOUND" });
-
-    const configuration = jsonValue(current.connector_configuration, {});
-    let secrets = {};
-    try { secrets = decryptCredentials(current.credentials_encrypted) || {}; } catch { secrets = {}; }
-
-    const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
-    const publicBaseUrl = String(
-      process.env.PUBLIC_API_URL ||
-      process.env.RENDER_EXTERNAL_URL ||
-      "https://oneengine-6gas.onrender.com"
-    ).replace(/\/$/, "");
-    const webhookUrl = `${publicBaseUrl}/api/smsgate/webhook/${current.id}/${webhookToken}`;
-
-    const webhook = await configureSmsGateInboundWebhook(
-      { ...configuration, ...secrets },
-      { webhookUrl }
-    );
-
-    await db(
-      `UPDATE integration_connections
-          SET credentials_encrypted=$1,
-              connector_configuration=connector_configuration - 'webhookSigningKey',
-              updated_at=NOW()
-        WHERE id=$2 AND company_id=$3`,
-      [encryptCredentials({ ...secrets, webhookToken }), current.id, companyId]
-    );
-
-    return {
-      configured: true,
-      created: webhook?.created === true,
-      removedStale: Number(webhook?.removedStale || 0),
-      webhookId: webhook?.webhookId || null,
     };
   }
 
@@ -1266,13 +1219,13 @@ export default function createConnectorsRouter({
   router.get("/connector-instances", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
       const result = await db(
-        `SELECT c.id,c.company_id,c.store_id,c.till_id,c.name,c.enabled,c.connection_status,
+        `SELECT c.id,c.company_id,c.store_id,c.terminal_id,c.name,c.enabled,c.connection_status,
                 c.connector_package_key,c.connector_configuration,c.connector_capabilities,c.credentials_encrypted,
                 c.fallback_order,c.last_test_result,c.created_at,c.updated_at,
-                s.name AS store_name,t.name AS till_name
+                s.name AS store_name,t.name AS terminal_name
            FROM integration_connections c
            LEFT JOIN stores s ON s.id=c.store_id AND s.company_id=c.company_id
-           LEFT JOIN terminals t ON t.id=c.till_id AND t.store_id=COALESCE(c.store_id,t.store_id)
+           LEFT JOIN terminals t ON t.id=c.terminal_id AND t.store_id=COALESCE(c.store_id,t.store_id)
           WHERE c.company_id=$1 AND c.connector_package_key IS NOT NULL
           ORDER BY c.created_at DESC`,
         [req.user.companyId]
@@ -1307,16 +1260,16 @@ export default function createConnectorsRouter({
         ? encryptCredentials(configurationResult.secrets)
         : null;
       let storeId = req.body?.storeId || null;
-      const tillId = req.body?.tillId || null;
+      const terminalId = req.body?.terminalId || null;
       if (storeId) {
         const store = await db("SELECT id FROM stores WHERE id=$1 AND company_id=$2", [storeId, req.user.companyId]);
         if (!store.rows[0]) return res.status(400).json({ success: false, message: "Store is not available" });
       }
-      if (tillId) {
+      if (terminalId) {
         const till = await db(
           `SELECT t.id,t.store_id FROM terminals t JOIN stores s ON s.id=t.store_id
             WHERE t.id=$1 AND s.company_id=$2`,
-          [tillId, req.user.companyId]
+          [terminalId, req.user.companyId]
         );
         if (!till.rows[0] || (storeId && String(till.rows[0].store_id) !== String(storeId))) {
           return res.status(400).json({ success: false, message: "Till is not available for the selected store" });
@@ -1326,16 +1279,16 @@ export default function createConnectorsRouter({
       const capabilities = (connectorApp.capabilities || []).map((item) => typeof item === "string" ? item : item.key).filter(Boolean);
       const result = await db(
         `INSERT INTO integration_connections
-          (company_id,store_id,till_id,name,provider_name,integration_type,connector_package_key,
+          (company_id,store_id,terminal_id,name,provider_name,integration_type,connector_package_key,
            connector_configuration,connector_capabilities,credentials_encrypted,fallback_order,enabled,connection_status,
            last_test_result,created_by)
          VALUES($1,$2,$3,$4,$5,$6,$5,$7::jsonb,$8::jsonb,$9,$10,FALSE,'DISCONNECTED',$11::jsonb,$12)
-         RETURNING id,company_id,store_id,till_id,name,enabled,connection_status,connector_package_key,
+         RETURNING id,company_id,store_id,terminal_id,name,enabled,connection_status,connector_package_key,
                    connector_configuration,connector_capabilities,credentials_encrypted,fallback_order,last_test_result,created_at,updated_at`,
         [
           req.user.companyId,
           storeId,
-          tillId,
+          terminalId,
           String(req.body?.name || packageRow.name).trim().slice(0, 200),
           packageKey,
           connectorApp.type || "hardware",
@@ -1348,7 +1301,7 @@ export default function createConnectorsRouter({
         ]
       );
       const row = result.rows[0];
-      await writeAudit?.(req.user.companyId, req.user.id, "connector.instance.created", "integration_connection", row.id, { packageKey, storeId, tillId });
+      await writeAudit?.(req.user.companyId, req.user.id, "connector.instance.created", "integration_connection", row.id, { packageKey, storeId, terminalId });
       res.status(201).json({ success: true, data: publicConnectorInstance(row) });
     } catch (error) {
       console.error("Create connector instance error:", error);
@@ -1375,16 +1328,16 @@ export default function createConnectorsRouter({
       const validation = validateAppConfiguration(manifest, configuration, { existingSecrets });
       if (validation.error) return res.status(400).json({ success: false, message: validation.error });
       let storeId = req.body?.storeId === undefined ? current.store_id : req.body.storeId || null;
-      const tillId = req.body?.tillId === undefined ? current.till_id : req.body.tillId || null;
+      const terminalId = req.body?.terminalId === undefined ? current.terminal_id : req.body.terminalId || null;
       if (storeId) {
         const store = await db("SELECT id FROM stores WHERE id=$1 AND company_id=$2", [storeId, req.user.companyId]);
         if (!store.rows[0]) return res.status(400).json({ success: false, message: "Store is not available" });
       }
-      if (tillId) {
+      if (terminalId) {
         const till = await db(
           `SELECT t.id,t.store_id FROM terminals t JOIN stores s ON s.id=t.store_id
             WHERE t.id=$1 AND s.company_id=$2`,
-          [tillId, req.user.companyId]
+          [terminalId, req.user.companyId]
         );
         if (!till.rows[0] || (storeId && String(till.rows[0].store_id) !== String(storeId))) {
           return res.status(400).json({ success: false, message: "Till is not available for the selected store" });
@@ -1395,7 +1348,7 @@ export default function createConnectorsRouter({
         && JSON.stringify(validation.value) !== JSON.stringify(jsonValue(current.connector_configuration, {}));
       const secretsChanged = configurationSupplied && Object.keys(validation.secrets || {}).length > 0;
       const nextCredentials = secretsChanged ? encryptCredentials({ ...existingSecrets, ...validation.secrets }) : current.credentials_encrypted;
-      const assignmentChanged = String(tillId || "") !== String(current.till_id || "") || String(storeId || "") !== String(current.store_id || "");
+      const assignmentChanged = String(terminalId || "") !== String(current.terminal_id || "") || String(storeId || "") !== String(current.store_id || "");
       const resetTest = configurationChanged || secretsChanged || assignmentChanged;
       const requestedEnabled = req.body?.enabled === undefined ? null : req.body.enabled === true;
       // Configuration/assignment changes invalidate the prior connection test.
@@ -1410,16 +1363,16 @@ export default function createConnectorsRouter({
       }
       const capabilities = (manifest.connectorApp?.capabilities || []).map((item) => typeof item === "string" ? item : item.key).filter(Boolean);
       const result = await db(
-        `UPDATE integration_connections SET store_id=$1,till_id=$2,connector_configuration=$3::jsonb,
+        `UPDATE integration_connections SET store_id=$1,terminal_id=$2,connector_configuration=$3::jsonb,
            connector_capabilities=$4::jsonb,credentials_encrypted=$5,fallback_order=$6,enabled=$7,
            connection_status=CASE WHEN $8 THEN 'DISCONNECTED' ELSE connection_status END,
            last_test_at=CASE WHEN $8 THEN NULL ELSE last_test_at END,
            last_test_result=CASE WHEN $8 THEN '{"success":false,"code":"NOT_TESTED"}'::jsonb ELSE last_test_result END,
            updated_at=NOW()
          WHERE id=$9 AND company_id=$10
-         RETURNING id,company_id,store_id,till_id,name,enabled,connection_status,connector_package_key,
+         RETURNING id,company_id,store_id,terminal_id,name,enabled,connection_status,connector_package_key,
                    connector_configuration,connector_capabilities,credentials_encrypted,fallback_order,last_test_result,created_at,updated_at`,
-        [storeId, tillId, JSON.stringify(validation.value), JSON.stringify(capabilities), nextCredentials, fallbackOrder, persistedEnabled, resetTest, req.params.id, req.user.companyId]
+        [storeId, terminalId, JSON.stringify(validation.value), JSON.stringify(capabilities), nextCredentials, fallbackOrder, persistedEnabled, resetTest, req.params.id, req.user.companyId]
       );
       let row = result.rows[0];
 
@@ -1443,13 +1396,13 @@ export default function createConnectorsRouter({
           },
         });
         const refreshed = await db(
-          `SELECT c.id,c.company_id,c.store_id,c.till_id,c.name,c.enabled,c.connection_status,
+          `SELECT c.id,c.company_id,c.store_id,c.terminal_id,c.name,c.enabled,c.connection_status,
                   c.connector_package_key,c.connector_configuration,c.connector_capabilities,
                   c.credentials_encrypted,c.fallback_order,c.last_test_result,c.created_at,c.updated_at,
-                  s.name AS store_name,t.name AS till_name
+                  s.name AS store_name,t.name AS terminal_name
              FROM integration_connections c
              LEFT JOIN stores s ON s.id=c.store_id
-             LEFT JOIN terminals t ON t.id=c.till_id
+             LEFT JOIN terminals t ON t.id=c.terminal_id
             WHERE c.id=$1 AND c.company_id=$2`,
           [req.params.id, req.user.companyId]
         );
@@ -1458,7 +1411,7 @@ export default function createConnectorsRouter({
 
       await writeAudit?.(req.user.companyId, req.user.id, "connector.instance.updated", "integration_connection", row.id, {
         storeId,
-        tillId,
+        terminalId,
         enabled: row.enabled === true,
         fallbackOrder,
       });
@@ -1477,7 +1430,7 @@ export default function createConnectorsRouter({
   router.post("/connector-instances/:id/test", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
       const instanceResult = await db(
-        `SELECT id,name,connector_package_key,store_id,till_id
+        `SELECT id,name,connector_package_key,store_id,terminal_id
            FROM integration_connections
           WHERE id=$1 AND company_id=$2 AND connector_package_key IS NOT NULL`,
         [req.params.id, req.user.companyId]
@@ -1496,7 +1449,7 @@ export default function createConnectorsRouter({
         req,
         input: { connectorInstanceId: req.params.id },
         storeId: instance.store_id || null,
-        tillId: instance.till_id || null,
+        terminalId: instance.terminal_id || null,
         connectorDrivers: drivers,
         writeAudit,
         source: {
@@ -1511,32 +1464,6 @@ export default function createConnectorsRouter({
       });
       let result = execution.result?.result || execution.result || null;
 
-      // Inbound SMS requires a provider-side sms:received webhook. Reconcile it
-      // immediately after a successful SMSGate connection test so connectors
-      // configured after process startup do not remain outbound-only.
-      if (instance.connector_package_key === "smsgate_connector" && result?.success === true) {
-        try {
-          const inboundWebhook = await ensureSmsGateInboundWebhook(instance.id, req.user.companyId);
-          result = { ...result, inboundWebhook };
-        } catch (webhookError) {
-          const message = `SMSGate connected, but inbound webhook setup failed: ${webhookError?.message || "unknown error"}`;
-          await db(
-            `UPDATE integration_connections
-                SET last_test_result=$1::jsonb,last_error=$2,updated_at=NOW()
-              WHERE id=$3 AND company_id=$4`,
-            [JSON.stringify({ success: false, code: "WEBHOOK_SETUP_FAILED", message }), message, instance.id, req.user.companyId]
-          );
-          console.error("SMSGate inbound webhook setup after connector test failed:", webhookError?.message || webhookError);
-          return res.status(409).json({
-            success: false,
-            code: "WEBHOOK_SETUP_FAILED",
-            message,
-            workflowRunId: execution.runId,
-            correlationId: execution.correlationId,
-          });
-        }
-      }
-
       res.json({ success: true, data: result, workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
       console.error("Test connector instance workflow error:", error);
@@ -1549,191 +1476,7 @@ export default function createConnectorsRouter({
     }
   });
 
-  router.post("/connector-instances/:id/send-test-email", authenticate, authorize("communications.send"), async (req, res) => {
-    try {
-      const recipient = String(req.body?.recipient || "").trim().toLowerCase();
-      const subject = String(req.body?.subject || "Brevo Test").trim();
-      const message = String(req.body?.message || "It works I love chatGPT").trim();
-
-      if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) || recipient.length > 320) {
-        return res.status(400).json({ success: false, code: "INVALID_RECIPIENT", message: "Enter a valid recipient email address" });
-      }
-      if (!subject || subject.length > 200) {
-        return res.status(400).json({ success: false, code: "INVALID_SUBJECT", message: "Email subject is required and must be 200 characters or fewer" });
-      }
-      if (!message || message.length > 2000) {
-        return res.status(400).json({ success: false, code: "INVALID_MESSAGE", message: "Email message is required and must be 2000 characters or fewer" });
-      }
-
-      const instanceResult = await db(
-        `SELECT c.*,p.manifest
-           FROM integration_connections c
-           JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
-          WHERE c.id=$1 AND c.company_id=$2
-          LIMIT 1`,
-        [req.params.id, req.user.companyId]
-      );
-      const instance = instanceResult.rows[0];
-      if (!instance) return res.status(404).json({ success: false, message: "Connector instance not found" });
-      if (!["brevo_connector", "mailjet_connector"].includes(instance.connector_package_key)) {
-        return res.status(400).json({ success: false, message: "This test is only available for supported email connectors" });
-      }
-      const providerLabel = instance.connector_package_key === "mailjet_connector" ? "Mailjet" : "Brevo";
-
-      const lastTest = jsonValue(instance.last_test_result, {});
-      if (lastTest?.success !== true || String(instance.connection_status || "").toUpperCase() !== "CONNECTED") {
-        return res.status(409).json({ success: false, message: `Run a successful ${providerLabel} connection test before sending email` });
-      }
-
-      const driver = drivers?.get(instance.connector_package_key);
-      if (!driver || !driver.capabilities?.has?.("email.send")) {
-        return res.status(409).json({ success: false, message: `${providerLabel} email send capability is unavailable` });
-      }
-
-      const configuration = {
-        ...jsonValue(instance.connector_configuration, {}),
-        ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
-      };
-      const service = new ConnectorService({
-        connectorKey: instance.connector_package_key,
-        capabilities: ["email.send"],
-        adapter: driver.createAdapter({
-          instanceId: instance.id,
-          configuration,
-          companyId: instance.company_id,
-          storeId: instance.store_id,
-          tillId: instance.till_id,
-        }),
-      });
-
-      const connection = await service.connect();
-      if (!connection.healthy) {
-        return res.status(409).json({ success: false, message: connection.lastError || `${providerLabel} is not healthy` });
-      }
-
-      const result = await service.execute("email.send", {
-        to: recipient,
-        subject,
-        text: message,
-      });
-
-      await writeAudit?.(
-        req.user.companyId,
-        req.user.id || null,
-        "connector.test_email.sent",
-        "integration_connection",
-        instance.id,
-        {
-          packageKey: instance.connector_package_key,
-          recipientDomain: recipient.split("@")[1] || null,
-          providerMessageId: result?.providerMessageId || null,
-        }
-      );
-
-      return res.json({
-        success: true,
-        data: {
-          status: result?.status || "SENT",
-          providerMessageId: result?.providerMessageId || null,
-          message: `Test email submitted to ${providerLabel}`,
-        },
-      });
-    } catch (error) {
-      console.error("Send email connector test error:", error);
-      return res.status(error?.status || 500).json({
-        success: false,
-        code: error?.code || undefined,
-        message: error?.message || "Unable to send test email",
-      });
-    }
-  });
-
-  router.post("/connector-instances/:id/send-test-sms", authenticate, authorize("communications.send"), async (req, res) => {
-    try {
-      const recipient = String(req.body?.recipient || "").trim();
-      const message = String(req.body?.message || "onePOS SMSGate test message").trim();
-      if (!recipient) return res.status(400).json({ success: false, message: "Test mobile number is required" });
-      if (!message) return res.status(400).json({ success: false, message: "Test message is required" });
-      if (message.length > 500) return res.status(400).json({ success: false, message: "Test message is too long" });
-
-      const instanceResult = await db(
-        `SELECT c.*,p.manifest
-           FROM integration_connections c
-           JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
-          WHERE c.id=$1 AND c.company_id=$2
-          LIMIT 1`,
-        [req.params.id, req.user.companyId]
-      );
-      const instance = instanceResult.rows[0];
-      if (!instance) return res.status(404).json({ success: false, message: "Connector instance not found" });
-      if (instance.connector_package_key !== "smsgate_connector") {
-        return res.status(400).json({ success: false, message: "This test is only available for SMSGate" });
-      }
-      if (instance.enabled !== true) {
-        return res.status(409).json({ success: false, message: "Enable SMSGate before sending a test SMS" });
-      }
-
-      const lastTest = jsonValue(instance.last_test_result, {});
-      if (lastTest?.success !== true || String(instance.connection_status || "").toUpperCase() !== "CONNECTED") {
-        return res.status(409).json({ success: false, message: "Run a successful connection test before sending SMS" });
-      }
-
-      await req.ensureBusinessCommandRun?.({
-        companyId: req.user.companyId,
-        userId: req.user.id || null,
-        storeId: instance.store_id || null,
-      });
-
-      const driver = drivers?.get(instance.connector_package_key);
-      if (!driver || !driver.capabilities?.has?.("sms.send")) {
-        return res.status(409).json({ success: false, message: "SMSGate send capability is unavailable" });
-      }
-      const configuration = {
-        ...jsonValue(instance.connector_configuration, {}),
-        ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
-      };
-      const service = new ConnectorService({
-        connectorKey: instance.connector_package_key,
-        capabilities: ["sms.send"],
-        adapter: driver.createAdapter({
-          instanceId: instance.id,
-          configuration,
-          companyId: instance.company_id,
-          storeId: instance.store_id,
-          tillId: instance.till_id,
-        }),
-      });
-      const connection = await service.connect();
-      if (!connection.healthy) {
-        return res.status(409).json({ success: false, message: connection.lastError || "SMSGate is not healthy" });
-      }
-      const result = await service.execute("sms.send", { recipient, text: message });
-      await writeAudit?.(
-        req.user.companyId,
-        req.user.id || null,
-        "connector.test_sms.sent",
-        "integration_connection",
-        instance.id,
-        { packageKey: instance.connector_package_key, recipientLast4: recipient.slice(-4), providerMessageId: result?.providerMessageId || null }
-      );
-      return res.json({
-        success: true,
-        data: {
-          status: result?.status || "SENT",
-          providerMessageId: result?.providerMessageId || null,
-          message: "Test SMS submitted to SMSGate",
-        },
-      });
-    } catch (error) {
-      console.error("Send SMSGate test SMS error:", error);
-      return res.status(error?.status || 500).json({
-        success: false,
-        message: error?.message || "Unable to send test SMS",
-      });
-    }
-  });
-
-  router.get("/connector-capabilities/:capabilityKey", authenticate, authorize("sale.create"), async (req, res) => {
+  router.get("/connector-capabilities/:capabilityKey", authenticate, authorize("connector.view"), async (req, res) => {
     try {
       let session = await db(
         `SELECT terminal_id,store_id FROM device_sessions
@@ -1747,7 +1490,7 @@ export default function createConnectorsRouter({
              FROM device_sessions ts
              JOIN integration_connections c
                ON c.company_id=ts.company_id
-              AND c.till_id=ts.terminal_id
+              AND c.terminal_id=ts.terminal_id
               AND c.enabled=TRUE
               AND (c.store_id IS NULL OR c.store_id=ts.store_id)
             WHERE ts.company_id=$1
@@ -1764,7 +1507,7 @@ export default function createConnectorsRouter({
         drivers,
         companyId: req.user.companyId,
         storeId: session.rows[0].store_id,
-        tillId: session.rows[0].terminal_id,
+        terminalId: session.rows[0].terminal_id,
         capabilityKey: req.params.capabilityKey,
         selfCheckout: req.user.mode === "self_checkout",
       });
