@@ -441,8 +441,8 @@ test("provider HTTP and WhatsApp delivery status are observable without secrets"
   const whatsapp = readFileSync(new URL("../server/routes/whatsapp.js", import.meta.url), "utf8");
   assert.match(core, /Provider HTTP request completed/);
   assert.match(core, /providerMessageId/);
-  assert.match(whatsapp, /WhatsApp delivery status/);
-  assert.match(whatsapp, /trackedMessage/);
+  assert.match(whatsapp, /recordCommunicationEvent/);
+  assert.match(whatsapp, /providerStatus/);
 });
 
 
