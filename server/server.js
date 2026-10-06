@@ -597,7 +597,7 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
       }
       req.user = { ...req.user, storeId: requestedStoreId };
     }
-    await req.ensureBusinessCommandRun?.({
+    await req.ensureWorkflowTraceRun?.({
       companyId: req.user?.companyId || null,
       userId: req.user?.id || null,
       storeId: req.user?.storeId || null,
