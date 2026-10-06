@@ -1,23 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { metadataManifestByPackageKey } from "../server/services/metadataManifestLoader.js";
 
-const manifest = JSON.parse(readFileSync(new URL("../server/metadata/manifests/retail_pos.json", import.meta.url), "utf8"));
+const manifest = metadataManifestByPackageKey("retail_pos");
 const objects = new Map((manifest.objects || []).map((object) => [object.objectKey, object]));
 const flows = new Map((manifest.workflows || []).map((flow) => [flow.action?.systemKey || flow.name, flow]));
 
 test("Phase 1 retail objects are metadata-backed and flow-write-only", () => {
-  for (const key of ["sale","sale_item","payment","till_session","cash_movement","refund","stock_return","stock_return_line"]) {
+  for (const key of ["sale_ledger","till_session","cash_movement","stock_return","stock_return_line"]) {
     assert.ok(objects.has(key), `missing metadata object ${key}`);
     assert.equal(objects.get(key).config?.flowWritesOnly, true, `${key} must write through Flow`);
+  }
+  for (const legacy of ["sale","sale_item","payment","refund"]) {
+    assert.equal(objects.has(legacy), false, `${legacy} must not survive canonical metadata loading`);
   }
 });
 
 test("Phase 1 validations are metadata rules", () => {
   const rules = manifest.rules || [];
-  for (const objectKey of ["sale","sale_item","payment","till_session","cash_movement","refund","stock_return","stock_return_line"]) {
+  for (const objectKey of ["sale_ledger","till_session","cash_movement","stock_return","stock_return_line"]) {
     assert.ok(rules.some((rule) => rule.objectKey === objectKey), `missing validation metadata for ${objectKey}`);
   }
+  assert.equal(rules.some((rule) => ["sale","sale_item","payment","refund"].includes(rule.objectKey)), false);
 });
 
 test("Phase 1 business processes are editable workflow metadata", () => {
@@ -27,12 +31,12 @@ test("Phase 1 business processes are editable workflow metadata", () => {
   }
 });
 
-test("generated parent IDs are passed through Flow step resources", () => {
-  const complete = flows.get("flow:sale.complete").action.actions;
-  assert.equal(complete.find((a) => a.id === "create_items").commonFieldValues.sale_id.path, "steps.create_sale.created.id");
-  assert.equal(complete.find((a) => a.id === "create_payments").commonFieldValues.sale_id.path, "steps.create_sale.created.id");
-  const customerReturn = flows.get("flow:return.create").action.actions;
-  assert.equal(customerReturn.find((a) => a.id === "create_return_items").commonFieldValues.return_id.path, "steps.create_return.created.id");
+test("sale workflows resolve only to the canonical sale ledger object", () => {
+  const serialized = JSON.stringify(manifest.workflows || []);
+  for (const legacy of ["\\\"sale\\\"","\\\"sale_item\\\"","\\\"payment\\\"","\\\"refund\\\""]) {
+    assert.equal(serialized.includes(legacy), false, `legacy sales object reference survives: ${legacy}`);
+  }
+  assert.ok(serialized.includes("\\\"sale_ledger\\\""));
 });
 
 test("retail metadata uses generic runtime primitives only", () => {
