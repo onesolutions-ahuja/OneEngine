@@ -48,7 +48,10 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"update_order_totals",label:"Update Order Totals",key:"UPDATE_RECORD",objectKey:"online_order",recordId:{path:"variables.orderId"},fieldValues:{subtotal:{path:"variables.subtotal"},tax:{path:"variables.tax"},total:{path:"variables.total"}}}
  ]),
  flow("flow:supplier.ledger.adjust","Supplier · Ledger Adjustment",[input("supplierId"),input("entryType"),input("amount","number"),input("debit","boolean"),input("reference","text",false),input("description","text",false)],[output("ledgerId")],[
+  {id:"validate_adjustment",label:"Validate Ledger Adjustment",key:"FORMULA",resourceName:"adjustmentValid",resultType:"boolean",expression:"amount > 0 && !ISBLANK(supplierId) && !ISBLANK(entryType)",inputs:{amount:{path:"$record.amount"},supplierId:{path:"$record.supplierId"},entryType:{path:"$record.entryType"}}},
+  {id:"adjustment_ready",label:"Ledger Adjustment Ready?",key:"CONDITION",outcomes:[{id:"yes",label:"Valid",condition:{match:"all",conditions:[{field:"variables.adjustmentValid",operator:"equals",value:true}]},branch:["create_ledger","set_ledger_id"]}],defaultLabel:"Invalid",defaultBranch:["adjustment_invalid"]},
   {id:"create_ledger",label:"Create Ledger Adjustment",key:"CREATE_RECORD",objectKey:"supplier_ledger",fieldValues:{supplier_id:{path:"$record.supplierId"},entry_type:{path:"$record.entryType"},reference_type:"SUPPLIER_ADJUSTMENT",reference:{path:"$record.reference"},amount:{path:"$record.amount"},debit:{path:"$record.debit"}}},
-  {id:"set_ledger_id",label:"Return Ledger Entry",key:"ASSIGNMENT",variableName:"ledgerId",variableType:"text",operator:"set",value:{path:"steps.create_ledger.record.id"}}
+  {id:"set_ledger_id",label:"Return Ledger Entry",key:"ASSIGNMENT",variableName:"ledgerId",variableType:"text",operator:"set",value:{path:"steps.create_ledger.record.id"}},
+  {id:"adjustment_invalid",label:"Ledger Adjustment Rejected",key:"CUSTOM_ERROR",errorMessage:"Supplier ledger adjustment requires a supplier, entry type, and positive amount.",errorLocation:"record"}
  ]),
  ];
