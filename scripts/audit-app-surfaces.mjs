@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { internalAppCatalog } from '../server/services/internalAppCatalog.js'
-import { packageDefinitions } from '../server/services/packageRegistry.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8')
@@ -56,7 +55,7 @@ const publicApps = internalAppCatalog.filter((entry) =>
   entry.packageType !== 'FOUNDATION'
 )
 
-const packageByModule = new Map(packageDefinitions().map((definition) => [definition.moduleKey, definition]))
+const packageByModule = new Map()
 for (const entry of internalAppCatalog) {
   const definition = packageByModule.get(entry.key)
   assert(Boolean(definition), `${entry.key}: missing generated package definition`)
