@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/audit-trusted-runtime.mjs && node scripts/audit-app-surfaces.mjs && node scripts/audit-sale-ledger-canonical.mjs && node scripts/audit-sale-ledger-runtime.mjs && vite build",
+    "build": "node scripts/audit-trusted-runtime.mjs && node scripts/audit-app-surfaces.mjs && node scripts/audit-sale-ledger-canonical.mjs && node scripts/audit-sale-ledger-runtime.mjs && node scripts/audit-reviewed-object-model.mjs && vite build",
     "preview": "vite preview",
     "audit:apps": "node scripts/audit-app-surfaces.mjs",
     "audit:trusted": "node scripts/audit-trusted-runtime.mjs",
@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
-    "audit:sale-ledger": "node scripts/audit-sale-ledger-canonical.mjs && node scripts/audit-sale-ledger-runtime.mjs"
+    "audit:sale-ledger": "node scripts/audit-sale-ledger-canonical.mjs && node scripts/audit-sale-ledger-runtime.mjs",
+    "audit:object-model": "node scripts/audit-reviewed-object-model.mjs"
   },
   "dependencies": {
     "framer-motion": "^12.23.24",
