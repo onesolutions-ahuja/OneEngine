@@ -2794,6 +2794,14 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
           if (!metadata || !isSafeIdentifier(metadata.source_column || metadata.api_name)) throw new Error("Update Record condition field is unavailable");
           const column = '"' + (metadata.source_column || metadata.api_name) + '"';
           const operator = String(condition.operator || "equals").toLowerCase();
+          if (operator === "is_null") {
+            clauses.push(column + " IS NULL");
+            continue;
+          }
+          if (operator === "is_not_null") {
+            clauses.push(column + " IS NOT NULL");
+            continue;
+          }
           const value = resolveConfiguredResource(condition.value, context, { preserveMissing: false });
           params.push(value);
           const placeholder = "$" + params.length;
