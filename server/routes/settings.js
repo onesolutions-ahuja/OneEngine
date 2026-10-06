@@ -9,6 +9,7 @@ import {
 import { destinationFor, isValidLandingPage, normalizeDeviceProfile } from "../services/runtimeAccess.js";
 import { listPaymentMethods, ensureDefaultPaymentMethods, ensureConnectorPaymentMethods } from "../services/paymentMethods.js";
 import { normalizePlatformTheme } from "../src/utils/platformTheme.js";
+import { selectMetadataRecords, upsertMetadataRecord, updateMetadataRecords } from "../services/metadataRecordStore.js";
 
 export default function createSettingsRouter({
   authenticate,
@@ -27,35 +28,43 @@ export default function createSettingsRouter({
   };
 
   const claimLegacyHardware = async (req) => {
-    const deviceKey = deviceKeyFor(req)
-    await db(
-      `UPDATE hardware_configurations
-          SET device_key=$1,updated_at=NOW()
-        WHERE company_id=$2 AND store_id=$3 AND device_key='legacy-unassigned'`,
-      [deviceKey, req.user.companyId, req.user.storeId]
-    );
-    return deviceKey
+    const deviceKey = deviceKeyFor(req);
+    const legacy = await selectMetadataRecords(db, {
+      objectKey: "hardware_configuration",
+      companyId: req.user.companyId,
+      filters: { store_id: req.user.storeId, device_key: "legacy-unassigned" },
+      columns: ["id"],
+    });
+    for (const row of legacy) {
+      await updateMetadataRecords(db, {
+        objectKey: "hardware_configuration",
+        companyId: req.user.companyId,
+        filters: { id: row.id },
+        values: { device_key: deviceKey },
+      });
+    }
+    return deviceKey;
   };
 
   const claimSingleLegacyPaymentTerminal = async (req) => {
-    const deviceKey = deviceKeyFor(req)
-    const existing = await db(
-      `SELECT
-          COUNT(*) FILTER (WHERE device_key=$3 AND active=true)::int AS linked_count,
-          COUNT(*) FILTER (WHERE device_key='legacy-unassigned' AND active=true)::int AS legacy_count,
-          (ARRAY_AGG(id ORDER BY id) FILTER (WHERE device_key='legacy-unassigned' AND active=true))[1] AS legacy_id
-         FROM payment_terminals
-        WHERE company_id=$1 AND store_id=$2`,
-      [req.user.companyId, req.user.storeId, deviceKey]
-    );
-    const row = existing.rows[0] || {};
-    if (Number(row.linked_count) === 0 && Number(row.legacy_count) === 1 && row.legacy_id) {
-      await db(
-        "UPDATE payment_terminals SET device_key=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3 AND store_id=$4 AND device_key='legacy-unassigned'",
-        [deviceKey,row.legacy_id,req.user.companyId,req.user.storeId]
-      );
+    const deviceKey = deviceKeyFor(req);
+    const rows = await selectMetadataRecords(db, {
+      objectKey: "payment_terminal",
+      companyId: req.user.companyId,
+      filters: { store_id: req.user.storeId },
+      columns: ["id","device_key","active"],
+    });
+    const linked = rows.filter((row) => row.active === true && row.device_key === deviceKey);
+    const legacy = rows.filter((row) => row.active === true && row.device_key === "legacy-unassigned");
+    if (!linked.length && legacy.length === 1) {
+      await updateMetadataRecords(db, {
+        objectKey: "payment_terminal",
+        companyId: req.user.companyId,
+        filters: { id: legacy[0].id },
+        values: { device_key: deviceKey },
+      });
     }
-    return deviceKey
+    return deviceKey;
   };
 
   router.get("/settings/payment-methods", authenticate, async (req, res) => {
@@ -72,20 +81,22 @@ export default function createSettingsRouter({
 
   router.get("/settings/runtime", authenticate, async (req, res) => {
     try {
-      const result = await db(
-        `SELECT cs.default_landing_page, cs.landing_flow, cs.platform_theme, r.default_landing_page AS role_default_landing_page,
-                t.app_profile, up.preferences
-         FROM users u
-         LEFT JOIN company_settings cs ON cs.company_id=u.company_id
-         LEFT JOIN roles r ON r.id=u.role_id AND r.company_id=u.company_id
-         LEFT JOIN terminals t ON t.store_id=u.store_id AND t.active=true
-         LEFT JOIN user_preferences up ON up.user_id=u.id
-         WHERE u.id=$1 AND u.company_id=$2
-         ORDER BY t.created_at
-         LIMIT 1`,
-        [req.user.id, req.user.companyId]
-      );
-      const row = result.rows[0] || {};
+      const [contextResult, settingsRows] = await Promise.all([
+        db(
+          `SELECT r.default_landing_page AS role_default_landing_page,
+                  t.app_profile, up.preferences
+             FROM users u
+             LEFT JOIN roles r ON r.id=u.role_id AND r.company_id=u.company_id
+             LEFT JOIN terminals t ON t.store_id=u.store_id AND t.active=true
+             LEFT JOIN user_preferences up ON up.user_id=u.id
+            WHERE u.id=$1 AND u.company_id=$2
+            ORDER BY t.created_at
+            LIMIT 1`,
+          [req.user.id, req.user.companyId]
+        ),
+        selectMetadataRecords(db, { objectKey: "system_settings", companyId: req.user.companyId, limit: 1 }),
+      ]);
+      const row = { ...(settingsRows[0] || {}), ...(contextResult.rows[0] || {}) };
       const preferences = row.preferences && typeof row.preferences === "object" ? row.preferences : {};
       res.json({
         success: true,
@@ -117,16 +128,24 @@ export default function createSettingsRouter({
     const profile = normalizeDeviceProfile(appProfile);
     const nextTheme = normalizePlatformTheme(platformTheme);
     try {
-      await db(
-        `INSERT INTO company_settings (company_id, default_landing_page, platform_theme, updated_by, updated_at)
-         VALUES ($1,$2,$3,$4,NOW())
-         ON CONFLICT (company_id) DO UPDATE SET default_landing_page=$2, platform_theme=$3, updated_by=$4, updated_at=NOW()`,
-        [req.user.companyId, destinationFor(companyDefault).key, nextTheme, req.user.id]
-      );
+      await upsertMetadataRecord(db, {
+        objectKey: "system_settings",
+        companyId: req.user.companyId,
+        match: { company_id: req.user.companyId },
+        values: {
+          default_landing_page: destinationFor(companyDefault).key,
+          platform_theme: nextTheme,
+          updated_by: req.user.id,
+        },
+      });
       if (landingFlow !== undefined) {
         const flow = landingFlow && typeof landingFlow === "object" && !Array.isArray(landingFlow) ? landingFlow : null;
         if (!flow || !Array.isArray(flow.rules)) return res.status(400).json({ success: false, message: "Landing flow must contain a rules array" });
-        await db("UPDATE company_settings SET landing_flow=$1::jsonb, updated_by=$2, updated_at=NOW() WHERE company_id=$3", [JSON.stringify(flow), req.user.id, req.user.companyId]);
+        await updateMetadataRecords(db, {
+          objectKey: "system_settings",
+          companyId: req.user.companyId,
+          values: { landing_flow: flow, updated_by: req.user.id },
+        });
       }
       if (roleDefault !== undefined) {
         await db("UPDATE roles SET default_landing_page=$1 WHERE id=$2 AND company_id=$3", [roleDefault ? destinationFor(roleDefault).key : null, req.user.roleId, req.user.companyId]);
@@ -212,9 +231,14 @@ export default function createSettingsRouter({
 
   router.get("/settings/jarves/behaviours", authenticate, authorize("settings.manage", "user.view"), async (req, res) => {
     try {
-      const result = await db("SELECT jarves_behaviour_media FROM company_settings WHERE company_id=$1", [req.user.companyId]);
+      const rows = await selectMetadataRecords(db, {
+        objectKey: "system_settings",
+        companyId: req.user.companyId,
+        columns: ["jarves_behaviour_media"],
+        limit: 1,
+      });
       const defaults = { behaviour_1: "/jarves.mp4", behaviour_2: "/jarves.mp4", behaviour_3: "/jarves.mp4" };
-      res.json({ success: true, data: { ...defaults, ...(result.rows[0]?.jarves_behaviour_media || {}) } });
+      res.json({ success: true, data: { ...defaults, ...(rows[0]?.jarves_behaviour_media || {}) } });
     } catch (error) {
       console.error("JARVES behaviour settings error:", error?.message || error);
       res.status(500).json({ success: false, message: "Unable to load JARVES behaviour settings" });
@@ -228,8 +252,12 @@ export default function createSettingsRouter({
       if (Object.values(media).some((value) => !value.startsWith("/") && !/^https:\/\//i.test(value))) {
         return res.status(400).json({ success: false, message: "JARVES media must be an app path or HTTPS URL" });
       }
-      await db(`INSERT INTO company_settings (company_id, jarves_behaviour_media, updated_by, updated_at) VALUES ($1,$2::jsonb,$3,NOW())
-        ON CONFLICT (company_id) DO UPDATE SET jarves_behaviour_media=$2::jsonb, updated_by=$3, updated_at=NOW()`, [req.user.companyId, JSON.stringify(media), req.user.id]);
+      await upsertMetadataRecord(db, {
+        objectKey: "system_settings",
+        companyId: req.user.companyId,
+        match: { company_id: req.user.companyId },
+        values: { jarves_behaviour_media: media, updated_by: req.user.id },
+      });
       res.json({ success: true, data: media });
     } catch (error) {
       console.error("JARVES behaviour settings update error:", error?.message || error);
@@ -239,55 +267,24 @@ export default function createSettingsRouter({
 
   router.get("/settings", authenticate, async (req, res) => {
     try {
-      const result = await db(
-        `
-        SELECT
-          c.id AS company_id, c.name AS company_name, c.legal_name, c.email AS company_email, c.phone AS company_phone, c.currency, c.timezone, c.logo_url,
-          cs.date_format, cs.vat_enabled, cs.default_vat_rate, cs.loyalty_enabled, cs.loyalty_earning_rate,
-          cs.loyalty_min_sale_total, cs.loyalty_redeem_value_per_point, cs.loyalty_min_points_redeem,
-          cs.allow_negative_inventory_billing,
-          cs.batch_inventory_mode, cs.batch_default_mfg_rule, cs.batch_default_expiry_rule, cs.batch_default_expiry_days,
-          cs.scan_go_enabled, cs.exchange_mode, cs.online_ordering_enabled, cs.online_payment_methods,
-          cs.product_view, cs.dock_quick_access,
-          cs.customer_display_enabled,
-          s.id AS store_id, s.name AS store_name,
-          NULL::uuid AS till_id, NULL::text AS till_name, NULL::text AS terminal_number
-        FROM companies c
-        LEFT JOIN company_settings cs ON cs.company_id = c.id
-        LEFT JOIN stores s ON s.id = $2 AND s.company_id = c.id
-        WHERE c.id = $1
-        LIMIT 1
-        `,
-        [req.user.companyId, req.user.storeId]
-      );
-
-      if (!result.rows.length) {
-        return res.status(404).json({ success: false, message: "Company settings not found" });
-      }
-
-      const settings = result.rows[0];
+      const [companyResult, storeResult, settingsRows] = await Promise.all([
+        db("SELECT id,name,legal_name,email,phone,currency,timezone,logo_url FROM companies WHERE id=$1 LIMIT 1", [req.user.companyId]),
+        req.user.storeId
+          ? db("SELECT id,name FROM stores WHERE id=$1 AND company_id=$2 LIMIT 1", [req.user.storeId, req.user.companyId])
+          : Promise.resolve({ rows: [] }),
+        selectMetadataRecords(db, { objectKey: "system_settings", companyId: req.user.companyId, limit: 1 }),
+      ]);
+      const company = companyResult.rows[0];
+      if (!company) return res.status(404).json({ success: false, message: "Company settings not found" });
+      const settings = settingsRows[0] || {};
+      const store = storeResult.rows[0] || {};
       res.json({
         success: true,
         data: {
-          company: {
-            id: settings.company_id,
-            name: settings.company_name,
-            legalName: settings.legal_name,
-            email: settings.company_email,
-            phone: settings.company_phone,
-            currency: settings.currency,
-            timezone: settings.timezone,
-            logoUrl: settings.logo_url || null,
-          },
-          general: {
-            dateFormat: settings.date_format || "DD/MM/YYYY",
-          },
-          tax: {
-            vatEnabled: settings.vat_enabled ?? true,
-            defaultVatRate: Number(settings.default_vat_rate ?? 20),
-          },
+          company: { id: company.id, name: company.name, legalName: company.legal_name, email: company.email, phone: company.phone, currency: company.currency, timezone: company.timezone, logoUrl: company.logo_url || null },
+          general: { dateFormat: settings.date_format || "DD/MM/YYYY" },
+          tax: { vatEnabled: settings.vat_enabled ?? true, defaultVatRate: Number(settings.default_vat_rate ?? 20) },
           inventory: {
-            /* T10U: negative-inventory billing safety — OFF unless explicitly enabled. */
             allowNegativeInventoryBilling: settings.allow_negative_inventory_billing === true,
             batchInventoryMode: settings.batch_inventory_mode || "none",
             batchDefaultMfgRule: settings.batch_default_mfg_rule || "none",
@@ -297,71 +294,26 @@ export default function createSettingsRouter({
           loyalty: {
             enabled: settings.loyalty_enabled ?? false,
             earningRate: Number(settings.loyalty_earning_rate ?? 0.0100),
-            /* T10R: redemption economics + minimum qualifying sale.
-             * null = feature not configured (redemption UI must treat a
-             * null redeem value as "redemption not configured"). */
             minSaleTotal: settings.loyalty_min_sale_total == null ? null : Number(settings.loyalty_min_sale_total),
             redeemValuePerPoint: settings.loyalty_redeem_value_per_point == null ? null : Number(settings.loyalty_redeem_value_per_point),
             minPointsRedeem: settings.loyalty_min_points_redeem == null ? null : Number(settings.loyalty_min_points_redeem),
           },
-          scanGo: {
-            enabled: settings.scan_go_enabled ?? false,
-          },
-          exchange: {
-            /* receipt | normal | both (default). The till Exchange workflow
-               and metadata Validation Rules / Flows enforce this server-side. */
-            mode: ["receipt", "normal", "both"].includes(settings.exchange_mode)
-              ? settings.exchange_mode
-              : "both",
-          },
-          till: {
-            id: settings.till_id,
-            name: settings.till_name,
-            terminalNumber: settings.terminal_number,
-            /* Till product browser presentation: 'image' | 'compact'. */
-            productView: settings.product_view === "compact" ? "compact" : "image",
-          },
+          scanGo: { enabled: settings.scan_go_enabled ?? false },
+          exchange: { mode: ["receipt","normal","both"].includes(settings.exchange_mode) ? settings.exchange_mode : "both" },
+          till: { id: null, name: null, terminalNumber: null, productView: settings.product_view === "compact" ? "compact" : "image" },
           receiptQr: {
-            showAfterSuccessfulPayment: ["OFF", "ALWAYS", "ONLY_WHEN_PRINTER_UNAVAILABLE"].includes(String(settings.receipt_qr_show_after_payment || "OFF").toUpperCase())
-              ? String(settings.receipt_qr_show_after_payment || "OFF").trim().toUpperCase()
-              : "OFF",
+            showAfterSuccessfulPayment: ["OFF","ALWAYS","ONLY_WHEN_PRINTER_UNAVAILABLE"].includes(String(settings.receipt_qr_show_after_payment || "OFF").toUpperCase()) ? String(settings.receipt_qr_show_after_payment || "OFF").toUpperCase() : "OFF",
             expiryMinutes: Number.isFinite(Number(settings.receipt_qr_expiry_minutes)) ? Math.max(1, Number(settings.receipt_qr_expiry_minutes)) : 5,
             allowManualQr: settings.receipt_qr_allow_manual !== false,
             allowRegenerate: settings.receipt_qr_allow_regenerate !== false,
             autoCloseOnNewSale: settings.receipt_qr_auto_close_on_new_sale !== false,
             showCountdown: settings.receipt_qr_show_countdown !== false,
           },
-          /* Configurable sale invoice/receipt prefixes per sale source.
-             Defaults TO / DEL / SC; till + self-checkout receipts keep the
-             existing PREFIX-YYYYMMDD-NNNN sequencing, delivery receipts
-             become PREFIX-<platform external order id>. */
-          invoicePrefixes: {
-            till: settings.till_invoice_prefix || "TO",
-            delivery: settings.delivery_invoice_prefix || "DEL",
-            selfCheckout: settings.self_checkout_invoice_prefix || "SC",
-          },
-          /* Admin dock quick-access (T10W): pages shown directly on the
-             bottom bar. Ordered; validated on save; launcher always shows
-             every permitted page regardless of this list. */
-          dock: {
-            quickAccess: Array.isArray(settings.dock_quick_access)
-              ? settings.dock_quick_access
-              : ["Dashboard", "Sales", "Products", "Inventory", "Customers", "Reports"],
-          },
-          /* Customer Display (second monitor): master ON/OFF. When OFF the
-             till shows no entry point and the /customer-display page refuses
-             to connect. */
-          customerDisplay: {
-            enabled: settings.customer_display_enabled === true,
-          },
-          onlineOrdering: {
-            enabled: settings.online_ordering_enabled ?? false,
-            paymentMethods: Array.isArray(settings.online_payment_methods) ? settings.online_payment_methods : ["card", "cash", "cod"],
-          },
-          store: {
-            id: settings.store_id,
-            name: settings.store_name,
-          },
+          invoicePrefixes: { till: settings.till_invoice_prefix || "TO", delivery: settings.delivery_invoice_prefix || "DEL", selfCheckout: settings.self_checkout_invoice_prefix || "SC" },
+          dock: { quickAccess: Array.isArray(settings.dock_quick_access) ? settings.dock_quick_access : [] },
+          customerDisplay: { enabled: settings.customer_display_enabled === true },
+          onlineOrdering: { enabled: settings.online_ordering_enabled ?? false, paymentMethods: Array.isArray(settings.online_payment_methods) ? settings.online_payment_methods : [] },
+          store: { id: store.id || null, name: store.name || null },
         },
       });
     } catch (error) {
@@ -451,62 +403,29 @@ export default function createSettingsRouter({
    */
   router.put("/settings/negative-inventory-billing", authenticate, authorize("settings.manage"), async (req, res) => {
     const enabled = req.body.enabled === true;
-    if (!pool) {
-      return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-    }
-
-    /* Strong confirmation: an enabling request must carry the exact
-       acknowledgement string (the settings UI shows the same warning). */
     if (enabled && req.body.acknowledged !== true) {
-      return res.status(400).json({
-        success: false,
-        message: "Enabling negative-inventory billing requires explicit acknowledgement of the warning",
-      });
+      return res.status(400).json({ success: false, message: "Enabling negative-inventory billing requires explicit acknowledgement of the warning" });
     }
-
-    const client = await pool.connect();
     try {
-      await client.query("BEGIN");
-      const previous = await client.query(
-        "SELECT allow_negative_inventory_billing FROM company_settings WHERE company_id=$1 FOR UPDATE",
-        [req.user.companyId]
-      );
-      const previousValue = previous.rows.length ? previous.rows[0].allow_negative_inventory_billing === true : false;
-
-      if (previousValue === enabled) {
-        await client.query("COMMIT");
-        return res.json({ success: true, message: enabled ? "Already enabled" : "Already disabled", data: { enabled } });
-      }
-
-      await client.query(
-        `
-        INSERT INTO company_settings (company_id, allow_negative_inventory_billing, updated_by, updated_at)
-        VALUES ($1, $2, $3, NOW())
-        ON CONFLICT (company_id) DO UPDATE SET
-          allow_negative_inventory_billing = $2, updated_by = $3, updated_at = NOW()
-        `,
-        [req.user.companyId, enabled, req.user.id]
-      );
-
-      /* Audit: setting change (previous + new value, who, when). */
-      await client.query(
-        `INSERT INTO audit_logs (company_id, user_id, action, entity_type, entity_id, details)
-         VALUES ($1,$2,'inventory.negative_billing_setting','company',$1,$3)`,
-        [
-          req.user.companyId,
-          req.user.id,
-          JSON.stringify({ enabled, previousValue, storeId: req.user.storeId ?? null }),
-        ]
-      );
-
-      await client.query("COMMIT");
+      const rows = await selectMetadataRecords(db, {
+        objectKey: "system_settings",
+        companyId: req.user.companyId,
+        columns: ["allow_negative_inventory_billing"],
+        limit: 1,
+      });
+      const previousValue = rows[0]?.allow_negative_inventory_billing === true;
+      if (previousValue === enabled) return res.json({ success: true, message: enabled ? "Already enabled" : "Already disabled", data: { enabled } });
+      await upsertMetadataRecord(db, {
+        objectKey: "system_settings",
+        companyId: req.user.companyId,
+        match: { company_id: req.user.companyId },
+        values: { allow_negative_inventory_billing: enabled, updated_by: req.user.id },
+      });
+      await writeAudit?.(req.user.companyId, req.user.id, "inventory.negative_billing_setting", "company", req.user.companyId, { enabled, previousValue, storeId: req.user.storeId ?? null });
       res.json({ success: true, message: enabled ? "Negative-inventory billing enabled" : "Negative-inventory billing disabled", data: { enabled } });
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => {});
       console.error("Negative-inventory billing setting error:", error);
       res.status(500).json({ success: false, message: "Unable to update the setting" });
-    } finally {
-      client.release();
     }
   });
 
@@ -630,33 +549,24 @@ export default function createSettingsRouter({
       return res.status(400).json({ success: false, message: "No configurable settings field was supplied" });
     }
 
-    if (!pool) {
-      return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
+    const metadataValues = {};
+    for (const [field, spec] of Object.entries(SETTINGS_PATCH_COLUMNS)) {
+      if (!Object.prototype.hasOwnProperty.call(patch, field)) continue;
+      const normalized = SETTINGS_PATCH_VALIDATORS[spec.type](patch[field], patch);
+      metadataValues[spec.column] = normalized;
     }
-    const client = await pool.connect();
     try {
-      await client.query("BEGIN");
-      /* Upsert so a company without a settings row yet is seeded with column
-         defaults + the patched fields; ON CONFLICT touches ONLY the patched
-         columns, so concurrent section saves cannot clobber each other. */
-      await client.query(
-        `INSERT INTO company_settings (company_id, ${patchedFields.join(", ")}, updated_by, updated_at)
-         VALUES ($1, ${patchedFields.map((_, index) => `$${index + 2}`).join(", ")}, $${values.length + 1}, NOW())
-         ON CONFLICT (company_id) DO UPDATE SET ${assignments.join(", ")}, updated_by = $${values.length + 1}, updated_at = NOW()`,
-        [...values, req.user.id]
-      );
-      await client.query(
-        `INSERT INTO audit_logs (company_id, user_id, action, entity_type, entity_id, details) VALUES ($1,$2,'settings.patched','company',$1,$3)`,
-        [req.user.companyId, req.user.id, JSON.stringify({ fields: Object.keys(patch).filter((f) => SETTINGS_PATCH_COLUMNS[f]) })]
-      );
-      await client.query("COMMIT");
+      await upsertMetadataRecord(db, {
+        objectKey: "system_settings",
+        companyId: req.user.companyId,
+        match: { company_id: req.user.companyId },
+        values: { ...metadataValues, updated_by: req.user.id },
+      });
+      await writeAudit?.(req.user.companyId, req.user.id, "settings.patched", "company", req.user.companyId, { fields: Object.keys(metadataValues) });
       res.json({ success: true, message: "Settings updated" });
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => {});
       console.error("Patch settings error:", error);
       res.status(500).json({ success: false, message: "Unable to update settings" });
-    } finally {
-      client.release();
     }
   });
 
@@ -827,42 +737,36 @@ export default function createSettingsRouter({
          "column \"dock_quick_access\" does not exist" (HTTP 500). Omitted
          fields fall back to the column default on insert; the ON CONFLICT
          arm below keeps the stored value on update. */
-      await client.query(
-        `
-        INSERT INTO company_settings (company_id, date_format, vat_enabled, default_vat_rate, loyalty_enabled, loyalty_earning_rate, loyalty_min_sale_total, loyalty_redeem_value_per_point, loyalty_min_points_redeem, scan_go_enabled, exchange_mode, product_view, dock_quick_access, customer_display_enabled, online_ordering_enabled, online_payment_methods, till_invoice_prefix, delivery_invoice_prefix, self_checkout_invoice_prefix, updated_by, updated_at)
-        VALUES ($1,$2,$3,$4,$5,COALESCE($6, 0.0100),$7::numeric,$8::numeric,$9::integer,$10,COALESCE($11, 'both'),COALESCE($12, 'image'),COALESCE($13::jsonb, '["Dashboard", "Sales", "Products", "Inventory", "Customers", "Reports"]'::jsonb),COALESCE($14, false),$15,COALESCE($16::jsonb, '["card", "cash", "cod"]'::jsonb),COALESCE($17,'TO'),COALESCE($18,'DEL'),COALESCE($19,'SC'),$20,NOW())
-        ON CONFLICT (company_id) DO UPDATE SET date_format=$2, vat_enabled=$3, default_vat_rate=$4, loyalty_enabled=$5, loyalty_earning_rate=COALESCE($6, company_settings.loyalty_earning_rate), loyalty_min_sale_total=COALESCE($7::numeric, company_settings.loyalty_min_sale_total), loyalty_redeem_value_per_point=COALESCE($8::numeric, company_settings.loyalty_redeem_value_per_point), loyalty_min_points_redeem=COALESCE($9::integer, company_settings.loyalty_min_points_redeem), scan_go_enabled=$10, exchange_mode=COALESCE($11, company_settings.exchange_mode), product_view=COALESCE($12, company_settings.product_view), dock_quick_access=COALESCE($13::jsonb, company_settings.dock_quick_access), customer_display_enabled=COALESCE($14, company_settings.customer_display_enabled), online_ordering_enabled=$15, online_payment_methods=COALESCE($16::jsonb, company_settings.online_payment_methods), till_invoice_prefix=COALESCE($17, company_settings.till_invoice_prefix), delivery_invoice_prefix=COALESCE($18, company_settings.delivery_invoice_prefix), self_checkout_invoice_prefix=COALESCE($19, company_settings.self_checkout_invoice_prefix), updated_by=$20, updated_at=NOW()
-        `,
-        [
-          req.user.companyId,
-          dateFormat || "DD/MM/YYYY",
-          vatEnabled !== false,
-          vatRate,
-          loyaltyEnabled !== false,
-          loyaltyEarningRate !== undefined ? loyaltyEarningRate : null,
-          loyaltyMinSaleTotalNorm,
-          loyaltyRedeemValueNorm,
-          loyaltyMinPointsNorm,
-          scanGoEnabled === true,
-          exchangeModeNorm || null,
-          productView === "compact" ? "compact" : productView === "image" ? "image" : null,
-          Array.isArray(dockQuickAccess) ? JSON.stringify(dockQuickAccess) : null,
-          typeof customerDisplayEnabled === "boolean" ? customerDisplayEnabled : null,
-          onlineOrderingEnabled === true,
-          onlinePaymentMethods !== undefined ? JSON.stringify(onlinePaymentMethods) : null,
-          /* Invoice prefixes: per-source objects only; null = keep existing. */
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.till === "string" ? invoicePrefixes.till.trim().toUpperCase() : null)
-            : null,
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.delivery === "string" ? invoicePrefixes.delivery.trim().toUpperCase() : null)
-            : null,
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.selfCheckout === "string" ? invoicePrefixes.selfCheckout.trim().toUpperCase() : null)
-            : null,
-          req.user.id
-        ]
-      );
+      await upsertMetadataRecord((sql, params) => client.query(sql, params), {
+        objectKey: "system_settings",
+        companyId: req.user.companyId,
+        match: { company_id: req.user.companyId },
+        values: {
+          date_format: dateFormat || "DD/MM/YYYY",
+          vat_enabled: vatEnabled !== false,
+          default_vat_rate: vatRate,
+          loyalty_enabled: loyaltyEnabled !== false,
+          loyalty_earning_rate: loyaltyEarningRate !== undefined ? loyaltyEarningRate : 0.0100,
+          loyalty_min_sale_total: loyaltyMinSaleTotalNorm,
+          loyalty_redeem_value_per_point: loyaltyRedeemValueNorm,
+          loyalty_min_points_redeem: loyaltyMinPointsNorm,
+          scan_go_enabled: scanGoEnabled === true,
+          exchange_mode: exchangeModeNorm || "both",
+          product_view: productView === "compact" ? "compact" : "image",
+          dock_quick_access: Array.isArray(dockQuickAccess) ? dockQuickAccess : [],
+          customer_display_enabled: typeof customerDisplayEnabled === "boolean" ? customerDisplayEnabled : false,
+          online_ordering_enabled: onlineOrderingEnabled === true,
+          online_payment_methods: Array.isArray(onlinePaymentMethods) ? onlinePaymentMethods : [],
+          till_invoice_prefix: invoicePrefixes?.till?.trim?.().toUpperCase?.() || "TO",
+          delivery_invoice_prefix: invoicePrefixes?.delivery?.trim?.().toUpperCase?.() || "DEL",
+          self_checkout_invoice_prefix: invoicePrefixes?.selfCheckout?.trim?.().toUpperCase?.() || "SC",
+          batch_inventory_mode: batchInventoryMode || "none",
+          batch_default_mfg_rule: batchDefaultMfgRule || "none",
+          batch_default_expiry_rule: batchDefaultExpiryRule || "none",
+          batch_default_expiry_days: batchDays ?? 365,
+          updated_by: req.user.id,
+        },
+      });
       await client.query(
         `INSERT INTO audit_logs (company_id, user_id, action, entity_type, entity_id, details) VALUES ($1,$2,'settings.updated','company',$1,$3)`,
         [req.user.companyId, req.user.id, JSON.stringify({ currency, timezone, dateFormat, vatEnabled, defaultVatRate: vatRate, loyaltyEnabled, loyaltyEarningRate, scanGoEnabled, productView, dockQuickAccess, customerDisplayEnabled, onlineOrderingEnabled, onlinePaymentMethods, invoicePrefixes })]
@@ -881,22 +785,9 @@ export default function createSettingsRouter({
   router.get("/payment-terminals", authenticate, async (req, res) => {
     try {
       const deviceKey = await claimSingleLegacyPaymentTerminal(req);
-      const result = await db(
-        `SELECT id,store_id,provider,name,terminal_identifier,connection_url,
-                active,(api_credentials IS NOT NULL AND api_credentials <> '') AS has_credentials,
-                last_test_result,last_tested_at,created_at,updated_at,
-                (device_key=$3) AS linked_to_this_device,
-                (device_key='legacy-unassigned') AS unassigned
-           FROM payment_terminals
-          WHERE company_id=$1 AND store_id=$2
-          ORDER BY linked_to_this_device DESC,active DESC,name`,
-        [req.user.companyId, req.user.storeId, deviceKey]
-      );
-      res.json({success:true,data:result.rows});
-    } catch(error) {
-      console.error("Load payment terminals error:",error);
-      res.status(500).json({success:false,message:"Unable to load payment terminals"});
-    }
+      const rows = await selectMetadataRecords(db, { objectKey:"payment_terminal", companyId:req.user.companyId, filters:{store_id:req.user.storeId}, orderBy:{field:"name",direction:"ASC"} });
+      res.json({success:true,data:rows.map(({api_credentials,...row})=>({...row,has_credentials:Boolean(api_credentials),linked_to_this_device:row.device_key===deviceKey,unassigned:row.device_key==="legacy-unassigned"}))});
+    } catch(error) { console.error("Load payment terminals error:",error); res.status(500).json({success:false,message:"Unable to load payment terminals"}); }
   });
 
   router.post("/payment-terminals", authenticate, authorize("settings.manage"), async (req,res) => {
@@ -905,156 +796,97 @@ export default function createSettingsRouter({
     try {
       const targetStoreId=storeId||req.user.storeId;
       if(!targetStoreId) return res.status(400).json({success:false,message:"Select a store before configuring a payment terminal"});
-      const deviceKey=deviceKeyFor(req);
-      const result=await db(
-        `INSERT INTO payment_terminals (company_id,store_id,provider,name,terminal_identifier,connection_url,api_credentials,device_key)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-         RETURNING id,store_id,provider,name,terminal_identifier,connection_url,active,TRUE AS linked_to_this_device`,
-        [req.user.companyId,targetStoreId,String(provider).trim(),String(name).trim(),terminalIdentifier||null,connectionUrl||null,apiCredentials||null,deviceKey]
-      );
-      await writeAudit(req.user.companyId,req.user.id,"payment_terminal.created","payment_terminal",result.rows[0].id,{provider,name,deviceLinked:true});
-      res.status(201).json({success:true,message:"Payment terminal created and linked to this device",data:result.rows[0]});
-    } catch(error) {
-      console.error("Create payment terminal error:",error);
-      res.status(500).json({success:false,message:"Unable to create payment terminal"});
-    }
+      const row=await upsertMetadataRecord(db,{objectKey:"payment_terminal",companyId:req.user.companyId,values:{
+        company_id:req.user.companyId,store_id:targetStoreId,provider:String(provider).trim(),name:String(name).trim(),
+        terminal_identifier:terminalIdentifier||null,connection_url:connectionUrl||null,api_credentials:apiCredentials||null,
+        device_key:deviceKeyFor(req),active:true,
+      }});
+      await writeAudit?.(req.user.companyId,req.user.id,"payment_terminal.created","payment_terminal",row.id,{provider,name,deviceLinked:true});
+      const {api_credentials,...safe}=row; res.status(201).json({success:true,message:"Payment terminal created and linked to this device",data:{...safe,linked_to_this_device:true,has_credentials:Boolean(api_credentials)}});
+    } catch(error) { console.error("Create payment terminal error:",error); res.status(500).json({success:false,message:"Unable to create payment terminal"}); }
   });
 
   router.put("/payment-terminals/:id", authenticate, authorize("settings.manage"), async (req,res) => {
     const {provider,name,terminalIdentifier=null,connectionUrl=null,apiCredentials,active=true,linkToThisDevice=false}=req.body;
     try {
-      const existing=await db("SELECT api_credentials,device_key,store_id FROM payment_terminals WHERE id=$1 AND company_id=$2",[req.params.id,req.user.companyId]);
-      if(!existing.rows.length) return res.status(404).json({success:false,message:"Payment terminal not found"});
-      if(String(existing.rows[0].store_id)!==String(req.user.storeId||'')) return res.status(403).json({success:false,message:"This terminal belongs to another store"});
-      const credentials=apiCredentials?apiCredentials:existing.rows[0].api_credentials;
-      const deviceKey=linkToThisDevice?deviceKeyFor(req):existing.rows[0].device_key;
-      const result=await db(
-        `UPDATE payment_terminals
-            SET provider=$1,name=$2,terminal_identifier=$3,connection_url=$4,api_credentials=$5,active=$6,device_key=$7,updated_at=NOW()
-          WHERE id=$8 AND company_id=$9
-          RETURNING id,store_id,provider,name,terminal_identifier,connection_url,active,
-                    (api_credentials IS NOT NULL AND api_credentials <> '') AS has_credentials,
-                    (device_key=$7) AS linked_to_this_device`,
-        [provider,name,terminalIdentifier||null,connectionUrl||null,credentials,active!==false,deviceKey,req.params.id,req.user.companyId]
-      );
-      await writeAudit(req.user.companyId,req.user.id,"payment_terminal.updated","payment_terminal",req.params.id,{provider,name,active:active!==false,deviceLinked:linkToThisDevice||undefined});
-      res.json({success:true,message:linkToThisDevice?"Payment terminal linked to this device":"Payment terminal updated",data:result.rows[0]});
-    } catch(error) {
-      console.error("Update payment terminal error:",error);
-      res.status(500).json({success:false,message:"Unable to update payment terminal"});
-    }
+      const rows=await selectMetadataRecords(db,{objectKey:"payment_terminal",companyId:req.user.companyId,filters:{id:req.params.id},limit:1});
+      const existing=rows[0]; if(!existing)return res.status(404).json({success:false,message:"Payment terminal not found"});
+      if(String(existing.store_id)!==String(req.user.storeId||''))return res.status(403).json({success:false,message:"This terminal belongs to another store"});
+      await updateMetadataRecords(db,{objectKey:"payment_terminal",companyId:req.user.companyId,filters:{id:req.params.id},values:{
+        provider,name,terminal_identifier:terminalIdentifier||null,connection_url:connectionUrl||null,
+        api_credentials:apiCredentials||existing.api_credentials||null,active:active!==false,
+        device_key:linkToThisDevice?deviceKeyFor(req):existing.device_key,
+      }});
+      const row=(await selectMetadataRecords(db,{objectKey:"payment_terminal",companyId:req.user.companyId,filters:{id:req.params.id},limit:1}))[0];
+      await writeAudit?.(req.user.companyId,req.user.id,"payment_terminal.updated","payment_terminal",req.params.id,{provider,name,active:active!==false,deviceLinked:linkToThisDevice||undefined});
+      const {api_credentials,...safe}=row; res.json({success:true,message:linkToThisDevice?"Payment terminal linked to this device":"Payment terminal updated",data:{...safe,has_credentials:Boolean(api_credentials),linked_to_this_device:row.device_key===deviceKeyFor(req)}});
+    } catch(error) { console.error("Update payment terminal error:",error); res.status(500).json({success:false,message:"Unable to update payment terminal"}); }
   });
 
   router.post("/payment-terminals/:id/test", authenticate, authorize("settings.manage"), async (req,res) => {
     try {
-      const deviceKey=deviceKeyFor(req);
-      const result=await db("SELECT * FROM payment_terminals WHERE id=$1 AND company_id=$2 AND store_id=$3 AND device_key=$4",[req.params.id,req.user.companyId,req.user.storeId,deviceKey]);
-      if(!result.rows.length) return res.status(404).json({success:false,message:"Payment terminal is not linked to this device"});
-      const test=await testPaymentTerminal(result.rows[0]);
-      await db("UPDATE payment_terminals SET last_test_result=$1,last_tested_at=NOW() WHERE id=$2 AND company_id=$3",[test.message,req.params.id,req.user.companyId]);
+      const rows=await selectMetadataRecords(db,{objectKey:"payment_terminal",companyId:req.user.companyId,filters:{id:req.params.id,store_id:req.user.storeId,device_key:deviceKeyFor(req)},limit:1});
+      if(!rows.length)return res.status(404).json({success:false,message:"Payment terminal is not linked to this device"});
+      const test=await testPaymentTerminal(rows[0]);
+      await updateMetadataRecords(db,{objectKey:"payment_terminal",companyId:req.user.companyId,filters:{id:req.params.id},values:{last_test_result:test.message,last_tested_at:new Date().toISOString()}});
       res.json({success:true,data:test});
-    } catch(error) {
-      console.error("Test payment terminal error:",error);
-      res.status(500).json({success:false,message:"Unable to test payment terminal"});
-    }
+    } catch(error) { console.error("Test payment terminal error:",error); res.status(500).json({success:false,message:"Unable to test payment terminal"}); }
   });
 
   router.get("/hardware", authenticate, async (req,res) => {
     try {
       const deviceKey=await claimLegacyHardware(req);
-      const result=await db(
-        `SELECT id,store_id,device_type,device_name,connection_type,connection_address,paper_width,is_default,active,last_test_result,last_tested_at
-           FROM hardware_configurations
-          WHERE company_id=$1 AND store_id=$2 AND device_key=$3
-          ORDER BY device_type`,
-        [req.user.companyId,req.user.storeId,deviceKey]
-      );
-      res.json({success:true,data:result.rows});
-    } catch(error) {
-      console.error("Load hardware error:",error);
-      res.status(500).json({success:false,message:"Unable to load hardware configuration"});
-    }
+      const rows=await selectMetadataRecords(db,{objectKey:"hardware_configuration",companyId:req.user.companyId,filters:{store_id:req.user.storeId,device_key:deviceKey},orderBy:{field:"device_type"}});
+      res.json({success:true,data:rows});
+    } catch(error) { console.error("Load hardware error:",error); res.status(500).json({success:false,message:"Unable to load hardware configuration"}); }
   });
 
   router.put("/hardware", authenticate, authorize("settings.manage"), async (req,res) => {
     const {deviceType,deviceName=null,connectionType=null,connectionAddress=null,paperWidth=null,isDefault=false,active=false}=req.body;
-    if(!["BARCODE_SCANNER","CASH_DRAWER","RECEIPT_PRINTER"].includes(deviceType)) return res.status(400).json({success:false,message:"Invalid hardware type"});
+    if(!["BARCODE_SCANNER","CASH_DRAWER","RECEIPT_PRINTER"].includes(deviceType))return res.status(400).json({success:false,message:"Invalid hardware type"});
     try {
       const deviceKey=await claimLegacyHardware(req);
-      const result=await db(
-        `INSERT INTO hardware_configurations (company_id,store_id,device_key,device_type,device_name,connection_type,connection_address,paper_width,is_default,active)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-         ON CONFLICT (company_id,store_id,device_key,device_type)
-         DO UPDATE SET device_name=$5,connection_type=$6,connection_address=$7,paper_width=$8,is_default=$9,active=$10,updated_at=NOW()
-         RETURNING id,store_id,device_type,device_name,connection_type,connection_address,paper_width,is_default,active,last_test_result,last_tested_at`,
-        [req.user.companyId,req.user.storeId,deviceKey,deviceType,deviceName,connectionType,connectionAddress,paperWidth,isDefault,active]
-      );
-      await writeAudit(req.user.companyId,req.user.id,"hardware.updated","hardware",result.rows[0].id,{deviceType,connectionType,active,deviceLinked:true});
-      res.json({success:true,message:"Hardware configuration updated for this device",data:result.rows[0]});
-    } catch(error) {
-      console.error("Update hardware error:",error);
-      res.status(500).json({success:false,message:"Unable to update hardware configuration"});
-    }
+      const row=await upsertMetadataRecord(db,{objectKey:"hardware_configuration",companyId:req.user.companyId,
+        match:{company_id:req.user.companyId,store_id:req.user.storeId,device_key:deviceKey,device_type:deviceType},
+        values:{company_id:req.user.companyId,store_id:req.user.storeId,device_key:deviceKey,device_type:deviceType,device_name:deviceName,connection_type:connectionType,connection_address:connectionAddress,paper_width:paperWidth,is_default:isDefault,active}});
+      await writeAudit?.(req.user.companyId,req.user.id,"hardware.updated","hardware",row.id,{deviceType,connectionType,active,deviceLinked:true});
+      res.json({success:true,message:"Hardware configuration updated for this device",data:row});
+    } catch(error) { console.error("Update hardware error:",error); res.status(500).json({success:false,message:"Unable to update hardware configuration"}); }
   });
 
   router.post("/hardware/:type/test", authenticate, authorize("settings.manage"), async (req,res) => {
     const allowed=["BARCODE_SCANNER","CASH_DRAWER","RECEIPT_PRINTER"];
-    if(!allowed.includes(req.params.type)) return res.status(400).json({success:false,message:"Invalid hardware type"});
+    if(!allowed.includes(req.params.type))return res.status(400).json({success:false,message:"Invalid hardware type"});
     const message="Live hardware probe is unavailable for this connection type";
     try {
-      const deviceKey=await claimLegacyHardware(req);
-      const result=await db("SELECT id FROM hardware_configurations WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND device_type=$4",[req.user.companyId,req.user.storeId,deviceKey,req.params.type]);
-      if(result.rows.length) await db("UPDATE hardware_configurations SET last_test_result=$1,last_tested_at=NOW() WHERE id=$2",[message,result.rows[0].id]);
+      const rows=await selectMetadataRecords(db,{objectKey:"hardware_configuration",companyId:req.user.companyId,filters:{store_id:req.user.storeId,device_key:await claimLegacyHardware(req),device_type:req.params.type},columns:["id"],limit:1});
+      if(rows[0]?.id)await updateMetadataRecords(db,{objectKey:"hardware_configuration",companyId:req.user.companyId,filters:{id:rows[0].id},values:{last_test_result:message,last_tested_at:new Date().toISOString()}});
       res.json({success:true,data:{status:"CONFIGURED",live:false,message}});
-    } catch(error) {
-      console.error("Test hardware error:",error);
-      res.status(500).json({success:false,message:"Unable to test hardware"});
-    }
+    } catch(error) { console.error("Test hardware error:",error); res.status(500).json({success:false,message:"Unable to test hardware"}); }
   });
 
   router.get("/health/devices", authenticate, async (req,res) => {
     try {
-      const deviceKey=await claimLegacyHardware(req);
-      await claimSingleLegacyPaymentTerminal(req);
-      const [hardwareResult,terminalResult]=await Promise.all([
-        db(`SELECT id,device_type,device_name,connection_type,last_test_result,last_tested_at
-              FROM hardware_configurations
-             WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND active=true
-             ORDER BY device_type`,[req.user.companyId,req.user.storeId,deviceKey]),
-        db(`SELECT * FROM payment_terminals
-             WHERE company_id=$1 AND store_id=$2 AND device_key=$3 AND active=true
-             ORDER BY name`,[req.user.companyId,req.user.storeId,deviceKey]),
+      const deviceKey=await claimLegacyHardware(req); await claimSingleLegacyPaymentTerminal(req);
+      const [hardwareRows,terminalRows]=await Promise.all([
+        selectMetadataRecords(db,{objectKey:"hardware_configuration",companyId:req.user.companyId,filters:{store_id:req.user.storeId,device_key:deviceKey,active:true},orderBy:{field:"device_type"}}),
+        selectMetadataRecords(db,{objectKey:"payment_terminal",companyId:req.user.companyId,filters:{store_id:req.user.storeId,device_key:deviceKey,active:true},orderBy:{field:"name"}}),
       ]);
-      const hardware=hardwareResult.rows.map(row=>({
-        id:`hardware:${row.id}`,kind:"hardware",deviceType:row.device_type,
-        name:row.device_name||String(row.device_type||"Device").replaceAll("_"," "),
-        status:"CONFIGURED",live:false,
-        message:row.last_test_result||"Configured for this device; live probing is not supported by this connection.",
-        checkedAt:row.last_tested_at||null,
-      }));
-      const terminals=await Promise.all(terminalResult.rows.map(async row=>{
-        try {
-          const probe=await testPaymentTerminal(row);
-          const status=String(probe?.status||"UNKNOWN").toUpperCase();
-          const connected=["CONNECTED","READY","ONLINE","OK","SUCCESS"].includes(status);
-          await db("UPDATE payment_terminals SET last_test_result=$1,last_tested_at=NOW() WHERE id=$2 AND company_id=$3",[probe?.message||status,row.id,req.user.companyId]);
-          return {id:`terminal:${row.id}`,kind:"payment_terminal",deviceType:"PAYMENT_TERMINAL",name:row.name||row.provider||"Card terminal",status:connected?"CONNECTED":status,live:true,message:probe?.message||status,checkedAt:new Date().toISOString()};
-        } catch(error) {
-          return {id:`terminal:${row.id}`,kind:"payment_terminal",deviceType:"PAYMENT_TERMINAL",name:row.name||row.provider||"Card terminal",status:"OFFLINE",live:true,message:error?.message||"Connection check failed",checkedAt:new Date().toISOString()};
-        }
-      }));
+      const hardware=hardwareRows.map(row=>({id:`hardware:${row.id}`,kind:"hardware",deviceType:row.device_type,name:row.device_name||String(row.device_type||"Device").replaceAll("_"," "),status:"CONFIGURED",live:false,message:row.last_test_result||"Configured for this device; live probing is not supported by this connection.",checkedAt:row.last_tested_at||null}));
+      const terminals=await Promise.all(terminalRows.map(async row=>{try{
+        const probe=await testPaymentTerminal(row); const status=String(probe?.status||"UNKNOWN").toUpperCase(); const connected=["CONNECTED","READY","ONLINE","OK","SUCCESS"].includes(status);
+        await updateMetadataRecords(db,{objectKey:"payment_terminal",companyId:req.user.companyId,filters:{id:row.id},values:{last_test_result:probe?.message||status,last_tested_at:new Date().toISOString()}});
+        return {id:`terminal:${row.id}`,kind:"payment_terminal",deviceType:"PAYMENT_TERMINAL",name:row.name||row.provider||"Card terminal",status:connected?"CONNECTED":status,live:true,message:probe?.message||status,checkedAt:new Date().toISOString()};
+      }catch(error){return {id:`terminal:${row.id}`,kind:"payment_terminal",deviceType:"PAYMENT_TERMINAL",name:row.name||row.provider||"Card terminal",status:"OFFLINE",live:true,message:error?.message||"Connection check failed",checkedAt:new Date().toISOString()};}}));
       res.json({success:true,data:[...hardware,...terminals]});
-    } catch(error) {
-      console.error("Device health error:",error);
-      res.status(500).json({success:false,message:"Unable to load device health"});
-    }
+    } catch(error) { console.error("Device health error:",error); res.status(500).json({success:false,message:"Unable to load device health"}); }
   });
 
   router.get("/health/integrations", authenticate, async (req, res) => {
     let database = "Unavailable";
     try { await db("SELECT 1"); database = "Connected"; } catch { database = "Unavailable"; }
-    const terminals = await db("SELECT COUNT(*)::int AS count FROM payment_terminals WHERE company_id=$1 AND active=true", [req.user.companyId]);
-    res.json({ success: true, data: { database, api: "Connected", paymentTerminal: terminals.rows[0].count ? "Configured" : "Not configured", barcodeScanner: "Not configured", cashDrawer: "Not configured", receiptPrinter: "Not configured" } });
+    const terminals = await selectMetadataRecords(db, { objectKey:"payment_terminal", companyId:req.user.companyId, filters:{active:true}, columns:["id"] });
+    res.json({ success: true, data: { database, api: "Connected", paymentTerminal: terminals.length ? "Configured" : "Not configured", barcodeScanner: "Not configured", cashDrawer: "Not configured", receiptPrinter: "Not configured" } });
   });
 
 
