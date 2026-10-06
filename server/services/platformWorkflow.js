@@ -2907,7 +2907,10 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         if (existing) {
           const shouldUpdate = action.updateExisting === true || String(action.matchAction || "skip").toLowerCase() === "update";
           if (shouldUpdate) updated.push(await updateExistingRecord(existing, payload));
-          else skipped.push(existing);
+          else {
+            skipped.push(existing);
+            if (sourceVariableName && workflowVariables.variables) workflowVariables.variables[sourceVariableName] = existing;
+          }
           continue;
         }
         const inserted = await insertRecord(payload);
