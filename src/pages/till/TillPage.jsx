@@ -157,6 +157,8 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const surfaceSettings = runtimeSurface?.settings || {}
   const surfaceFields = runtimeSurface?.fields || {}
   const surfaceActions = runtimeSurface?.actions || {}
+  const surfacePermissions = runtimeSurface?.permissions || {}
+  const surfaceValues = runtimeSurface?.values || {}
   const objectKey = (slot) => String(surfaceObjects?.[slot] || '')
   const actionKey = (slot) => String(surfaceActions?.[slot] || '')
   const buttonFor = (slot) => buttons.find((row) => row.button_key === actionKey(slot))
@@ -486,11 +488,15 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }, [online, recordValue(till, 'sessionTerminalId', null), products])
 
   useEffect(() => {
-    if (!online || !permissions.includes('online_orders.view')) return undefined
+    const requiredPermission = String(surfacePermissions?.onlineOrdersView || '')
+    if (!online || (requiredPermission && !permissions.includes(requiredPermission))) return undefined
     let stopped = false
     const loadOrders = async () => {
       try {
-        const filter = encodeURIComponent(JSON.stringify({ status: 'RECEIVED' }))
+        const statusField = surfaceField('onlineOrderStatus')
+        const receivedValue = surfaceValues?.onlineOrderReceived
+        if (!statusField || receivedValue == null) return
+        const filter = encodeURIComponent(JSON.stringify({ [statusField]: receivedValue }))
         const response = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey('onlineOrder'))}/records?page=1&pageSize=50&filter=${filter}`)
         if (!stopped) {
           const rows = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
@@ -508,7 +514,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       stopped = true
       window.clearInterval(timer)
     }
-  }, [online, permissions])
+  }, [online, permissions, surfacePermissions?.onlineOrdersView, surfaceValues?.onlineOrderReceived, surfaceFields?.onlineOrderStatus])
 
   const changeQty = (id, delta) => setBasket((current) => current
     .map((item) => item.id === id ? { ...item, quantity: item.quantity + delta } : item)
