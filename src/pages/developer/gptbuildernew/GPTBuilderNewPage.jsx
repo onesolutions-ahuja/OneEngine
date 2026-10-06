@@ -247,7 +247,21 @@ function DataElementEditor({element,objects,resources=[],onSave,onCancel}) {
   const cfg=draft.config||{}
   const selectedObject=objects.find((row)=>objectKey(row)===cfg.objectKey)
   const writable=['create_records','update_records'].includes(element.key)
-  useEffect(()=>{let live=true;if(!selectedObject?.id){setFields([]);return()=>{live=false}};apiRequest(`/api/platform/objects/${encodeURIComponent(selectedObject.id)}/fields`).then((r)=>{if(live)setFields((Array.isArray(r?.data)?r.data:[]).filter((field)=>field?.active!==false&&(writable?field?.writable!==false:field?.readable!==false))}).catch(()=>{if(live)setFields([])});return()=>{live=false}},[selectedObject?.id,writable])
+  useEffect(() => {
+    let live = true
+    if (!selectedObject?.id) {
+      setFields([])
+      return () => { live = false }
+    }
+    apiRequest(`/api/platform/objects/${encodeURIComponent(selectedObject.id)}/fields`)
+      .then((r) => {
+        if (!live) return
+        const rows = Array.isArray(r?.data) ? r.data : []
+        setFields(rows.filter((field) => field?.active !== false && (writable ? field?.writable !== false : field?.readable !== false)))
+      })
+      .catch(() => { if (live) setFields([]) })
+    return () => { live = false }
+  }, [selectedObject?.id, writable])
   const patch=(changes)=>setDraft((row)=>({...row,...changes}))
   const patchCfg=(changes)=>patch({config:{...cfg,...changes}})
   const rows=Array.isArray(cfg.conditions)?cfg.conditions:[]
