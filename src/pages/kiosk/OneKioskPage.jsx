@@ -936,47 +936,46 @@ export default function OneKioskPage({ publicMode = false }) {
 
       const clientRequestId = checkoutRequestId || crypto.randomUUID();
       if (!checkoutRequestId) setCheckoutRequestId(clientRequestId);
-      const saleInput = {
-        store_id: fulfilmentDetails.storeId || null,
-        customer_id: customer?.id || null,
+      const checkout = {
+        storeId: fulfilmentDetails.storeId || null,
+        customerId: customer?.id || null,
         subtotal: Number(total || 0),
         tax: 0,
         discount: 0,
         total: Number(total || 0),
-        line_count: Number(basket.length),
+        lineCount: Number(basket.length),
         status: "COMPLETED",
-        offline_created: false,
-        sync_status: "SYNCED",
-        client_request_id: clientRequestId,
-        completed_at: new Date().toISOString(),
+        offlineCreated: false,
+        syncStatus: "SYNCED",
+        requestId: clientRequestId,
+        completedAt: new Date().toISOString(),
       };
-      const itemInputs = basket.map((line) => ({
-        product_id: line.id,
-        product_name: line.name,
+      const lineItems = basket.map((line) => ({
+        productId: line.id,
+        name: line.name,
         quantity: Number(line.quantity) || 1,
-        unit_price: Number(line.price) || 0,
+        unitPrice: Number(line.price) || 0,
         discount: 0,
         tax: 0,
         total: (Number(line.price) || 0) * (Number(line.quantity) || 1),
-        item_type: "PRODUCT",
-        modifier_data: Array.isArray(line.modifiers) ? line.modifiers : [],
-        bundle_components: [],
+        itemType: "PRODUCT",
+        modifiers: Array.isArray(line.modifiers) ? line.modifiers : [],
+        bundleComponents: [],
       }));
-      const paymentInputs = [{
-        customer_id: customer?.id || null,
+      const tenderSelections = [{
         direction: "IN",
-        payment_method: "card",
+        method: exactPayment.paymentMethodCode || exactPayment.method || "card",
         amount: Number(total || 0),
         provider: exactPayment.providerKey || exactPayment.provider || null,
-        terminal_id: exactPayment.terminalId || exactPayment.terminal_id || null,
-        idempotency_key: clientRequestId,
+        terminalId: exactPayment.terminalId || exactPayment.terminal_id || null,
+        idempotencyKey: clientRequestId,
         status: "COMPLETED",
       }];
       const saleResponse = await apiRequest("/api/platform/runtime/objects/sale/buttons/till_complete_sale/execute", {
         method: "POST",
         body: JSON.stringify({
           context: { source: "KIOSK", kioskDeviceKey: kioskDeviceKey() },
-          inputs: { sale: saleInput, items: itemInputs, payments: paymentInputs },
+          inputs: { checkout, lineItems, tenderSelections },
         }),
       });
       const saleId = saleResponse?.data?.results?.find?.((step) => step?.stepId === "create_sale")?.result?.created?.id || null;
