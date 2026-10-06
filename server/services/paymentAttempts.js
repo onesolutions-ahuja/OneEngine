@@ -38,7 +38,7 @@ export async function getPaymentAttempt(db, { companyId, attemptId, storeId = nu
   return rowToAttempt(result.rows[0]);
 }
 
-export async function createPaypalPaymentAttempt({ db, connectorDrivers, companyId, storeId, tillId, saleId = null, sessionReference = null, amount, currency = "GBP", idempotencyKey, expiresInSeconds = 300, actorUserId = null }) {
+export async function createPaymentAttempt({ db, connectorDrivers, companyId, storeId, tillId, saleId = null, sessionReference = null, amount, currency = "GBP", idempotencyKey, expiresInSeconds = 300, actorUserId = null }) {
   if (!companyId || !storeId || !tillId) throw new Error("Payment attempt requires company, store, and till scope");
   if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) throw new Error("Payment attempt requires a positive amount");
   if (!idempotencyKey) throw new Error("Payment attempt requires an idempotency key");
@@ -49,14 +49,14 @@ export async function createPaypalPaymentAttempt({ db, connectorDrivers, company
     payload: { amount: Number(amount), currency: String(currency).toUpperCase(), idempotencyKey, reference: idempotencyKey, terminalId: tillId },
     actorUserId,
   });
-  if (!resolved.available) throw Object.assign(new Error(resolved.message || "PayPal QR connector is unavailable"), { code: resolved.code || "CONNECTOR_UNAVAILABLE" });
+  if (!resolved.available) throw Object.assign(new Error(resolved.message || "Payment connector is unavailable"), { code: resolved.code || "CONNECTOR_UNAVAILABLE" });
   const result = resolved.result || {};
   const environment = result.demoMode ? "DEMO" : String(result.environment || "SANDBOX").toUpperCase();
   const expiresAt = new Date(Date.now() + Math.max(30, Number(expiresInSeconds) || 300) * 1000);
   const inserted = await db(
     `INSERT INTO payment_attempts(company_id,store_id,till_id,sale_id,session_reference,connector_instance_id,connector_package_key,environment,amount,currency,provider_reference,idempotency_key,status,qr_url,expires_at)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-    [companyId, storeId, tillId, saleId, sessionReference, resolved.connectorInstanceId, resolved.connectorPackageKey || "paypal_qr", environment, Number(amount), String(currency).toUpperCase(), result.providerTransactionId || null, idempotencyKey, result.status || "PENDING", result.qrUrl || null, expiresAt]
+    [companyId, storeId, tillId, saleId, sessionReference, resolved.connectorInstanceId, resolved.connectorPackageKey || null, environment, Number(amount), String(currency).toUpperCase(), result.providerTransactionId || null, idempotencyKey, result.status || "PENDING", result.qrUrl || null, expiresAt]
   );
   const attempt = rowToAttempt(inserted.rows[0]);
   await publishPlatformEvent({ db, companyId, eventType: "payment.pending", payload: { paymentAttemptId: attempt.id, storeId, tillId, amount: attempt.amount, currency: attempt.currency, providerReference: attempt.providerReference, environment }, actorUserId, idempotencyKey: `payment-attempt:${attempt.id}:pending` });

@@ -62,10 +62,10 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
       db,
       companyId:u.company_id,
       userId:req.user.id||null,
-      systemKey:"function:account.registration.token.issue",
+      systemKey:"action:ACCOUNT_TOKEN_ISSUE",
       req,
       input:{userId:u.id,expiresMinutes:u.registration_link_expiry_minutes},
-      source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"account.registration.token.issue"},
+      source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"ACCOUNT_TOKEN_ISSUE"},
     });
     const token=tokenExecution.result;
     // Token is returned only to the workflow caller so the registered message action can merge it into the approved template.

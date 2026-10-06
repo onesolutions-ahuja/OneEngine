@@ -837,8 +837,9 @@ export default function ObjectPage({
   async function handleMetadataButton(button) {
     const targetType = button?.target_type || "action";
     const targetKey = button?.target_key || button?.action_key;
-    if (targetType === "action" && targetKey === "RECORD_SAVE") return setRecordModal({ type: "edit" });
-    if (targetType === "action" && targetKey === "RECORD_DELETE") return deleteSelectedRecord();
+    if (targetType === "action" && targetKey === "CREATE_RECORD") return setRecordModal({ type: "create" });
+    if (targetType === "action" && targetKey === "UPDATE_RECORD") return setRecordModal({ type: "edit" });
+    if (targetType === "action" && targetKey === "DELETE_RECORD") return deleteSelectedRecord();
     if (targetType === "url") {
       const resolved = resolveMetadataUrl(targetKey, selectedRecord || {});
       if (!resolved) return setError("This button has an unsafe or invalid URL.");

@@ -2195,8 +2195,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "CALL_FUNCTION",
-              functionKey: "temporary.receipt.download.create",
+            { id: "create_receipt_qr", label: "Create Temporary Receipt Download", apiName: "create_receipt_qr", key: "SECURE_RESOURCE_LINK_MANAGE",
+              operation: "CREATE",
               inputs: {
                 saleId: { path: "$record.id" },
                 expiryMinutes: { path: "$record.expiryMinutes" },
@@ -2238,8 +2238,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           inputContract: [],
           outputContract: [],
           actions: [
-            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "CALL_FUNCTION",
-              functionKey: "temporary.receipt.download.revoke_for_sale",
+            { id: "revoke_receipt_qr", label: "Revoke Temporary Receipt Downloads", apiName: "revoke_receipt_qr", key: "SECURE_RESOURCE_LINK_MANAGE",
+              operation: "REVOKE",
               inputs: { saleId: { path: "$record.id" } } },
           ],
         },
@@ -2328,7 +2328,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         ["till_cash_out","Cash Out","till.cash_out","till_session","cash.payout","cash_out","minus",40]
       ];
       for (const [buttonKey,label,actionKey,placement,permission,uiAction,icon,order] of tillButtons) {
-        const handlerKey = actionKey === "till.print" ? "PRINT_RECEIPT" : "TILL_UI_ACTION";
+        const handlerKey = actionKey === "till.print" ? "PRINT_RECEIPT" : "UI_ACTION";
         await pool.query(
           `INSERT INTO platform_registered_actions
             (company_id,object_id,action_key,label,description,handler_key,required_permission,config,active,managed)
@@ -2338,7 +2338,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
              handler_key=EXCLUDED.handler_key,required_permission=EXCLUDED.required_permission,
              config=CASE WHEN platform_registered_actions.user_modified THEN platform_registered_actions.config ELSE EXCLUDED.config END,
              active=TRUE,managed=TRUE,updated_at=NOW()`,
-          [saleObjectId, actionKey, label, `Retail POS ${label} interaction.`, handlerKey, permission, JSON.stringify({ uiAction })]
+          [saleObjectId, actionKey, label, `Retail POS ${label} interaction.`, handlerKey, permission, JSON.stringify({ component: "till", uiAction })]
         );
         await pool.query(
           `INSERT INTO platform_buttons

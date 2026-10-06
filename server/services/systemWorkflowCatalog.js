@@ -475,8 +475,8 @@ const TILL_SYSTEM_WORKFLOWS = Object.freeze([
         id: "create_receipt",
         label: "Create Temporary Receipt Download",
         apiName: "create_receipt",
-        key: "CALL_FUNCTION",
-        functionKey: "temporary.receipt.download.create",
+        key: "SECURE_RESOURCE_LINK_MANAGE",
+        operation: "CREATE",
         inputs: {
           saleId: { path: "variables.saleId" },
           expiryMinutes: { path: "variables.expiryMinutes" },
