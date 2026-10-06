@@ -1658,6 +1658,28 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
         [tenantAppObject.id]
       ).catch(() => {});
 
+      const lifecycleDecision = (id, label, conditions, branch, errorId, defaultLabel = "Not Allowed") => ({
+        id,
+        label,
+        apiName: id,
+        key: "CONDITION",
+        outcomes: [{
+          id: "allowed",
+          label: "Allowed",
+          condition: { match: "all", conditions },
+          branch,
+        }],
+        defaultLabel,
+        defaultBranch: [errorId],
+      });
+      const lifecycleError = (id, label, message) => ({
+        id,
+        label,
+        apiName: id,
+        key: "CUSTOM_ERROR",
+        errorMessage: message,
+        errorLocation: "record",
+      });
       const lifecycleFlows = [
         {
           name: "OneStore - Install App",
@@ -1675,8 +1697,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             ],
           },
           actions: [
-            { id: "deploy_package", label: "1. Install Package Runtime", apiName: "deploy_package", key: "PACKAGE_LIFECYCLE", operation: "INSTALL" },
-            { id: "install_app", label: "2. Update Tenant App Status", apiName: "install_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INSTALLED", installed_version: { path: "record.available_version" }, update_status: "CURRENT", is_installed: true, launchable: false, storefront_state: "INSTALLED" } },
+            lifecycleDecision("install_allowed", "1. Validate Install Eligibility", [
+              { field: "status", operator: "equals", value: "AVAILABLE" },
+            ], ["deploy_package","install_app"], "install_not_allowed"),
+            { id: "deploy_package", label: "2. Install Package Runtime", apiName: "deploy_package", key: "PACKAGE_LIFECYCLE", operation: "INSTALL" },
+            { id: "install_app", label: "3. Update Tenant App Status", apiName: "install_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INSTALLED", installed_version: { path: "record.available_version" }, update_status: "CURRENT", is_installed: true, launchable: false, storefront_state: "INSTALLED" } },
+            lifecycleError("install_not_allowed", "Install Rejected", "This app is not currently eligible for installation."),
           ],
         },
         {
@@ -1685,8 +1711,21 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           label: "Activate",
           visibility: { match: "any", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }, { field: "status", operator: "equals", value: "INACTIVE" }] },
           actions: [
-            { id: "activate_package", label: "1. Activate Package Runtime", apiName: "activate_package", key: "PACKAGE_LIFECYCLE", operation: "ACTIVATE" },
-            { id: "activate_app", label: "2. Update Tenant App Status", apiName: "activate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "ACTIVE", is_installed: true, launchable: true, storefront_state: "INSTALLED" } },
+            {
+              id: "activate_allowed",
+              label: "1. Validate Activation State",
+              apiName: "activate_allowed",
+              key: "CONDITION",
+              outcomes: [
+                { id: "installed", label: "Installed", condition: { match: "all", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }] }, branch: ["activate_package","activate_app"] },
+                { id: "inactive", label: "Inactive", condition: { match: "all", conditions: [{ field: "status", operator: "equals", value: "INACTIVE" }] }, branch: ["activate_package","activate_app"] },
+              ],
+              defaultLabel: "Not Activatable",
+              defaultBranch: ["activate_not_allowed"],
+            },
+            { id: "activate_package", label: "2. Activate Package Runtime", apiName: "activate_package", key: "PACKAGE_LIFECYCLE", operation: "ACTIVATE" },
+            { id: "activate_app", label: "3. Update Tenant App Status", apiName: "activate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "ACTIVE", is_installed: true, launchable: true, storefront_state: "INSTALLED" } },
+            lifecycleError("activate_not_allowed", "Activation Rejected", "Only installed or inactive apps can be activated."),
           ],
         },
         {
@@ -1695,8 +1734,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           label: "Deactivate",
           visibility: { match: "all", conditions: [{ field: "status", operator: "equals", value: "ACTIVE" }] },
           actions: [
-            { id: "deactivate_package", label: "1. Deactivate Package Runtime", apiName: "deactivate_package", key: "PACKAGE_LIFECYCLE", operation: "DEACTIVATE" },
-            { id: "deactivate_app", label: "2. Update Tenant App Status", apiName: "deactivate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INACTIVE", is_installed: true, launchable: false, storefront_state: "INACTIVE" } },
+            lifecycleDecision("deactivate_allowed", "1. Validate Deactivation State", [
+              { field: "status", operator: "equals", value: "ACTIVE" },
+            ], ["deactivate_package","deactivate_app"], "deactivate_not_allowed"),
+            { id: "deactivate_package", label: "2. Deactivate Package Runtime", apiName: "deactivate_package", key: "PACKAGE_LIFECYCLE", operation: "DEACTIVATE" },
+            { id: "deactivate_app", label: "3. Update Tenant App Status", apiName: "deactivate_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "INACTIVE", is_installed: true, launchable: false, storefront_state: "INACTIVE" } },
+            lifecycleError("deactivate_not_allowed", "Deactivation Rejected", "Only active apps can be deactivated."),
           ],
         },
         {
@@ -1705,8 +1748,22 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           label: "Uninstall",
           visibility: { match: "any", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }, { field: "status", operator: "equals", value: "ACTIVE" }, { field: "status", operator: "equals", value: "INACTIVE" }] },
           actions: [
-            { id: "uninstall_package", label: "1. Uninstall Package Runtime", apiName: "uninstall_package", key: "PACKAGE_LIFECYCLE", operation: "UNINSTALL" },
-            { id: "uninstall_app", label: "2. Update Tenant App Status", apiName: "uninstall_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "AVAILABLE", installed_version: null, activated_at: null, update_status: "CURRENT", is_installed: false, launchable: false, storefront_state: "AVAILABLE" } },
+            {
+              id: "uninstall_allowed",
+              label: "1. Validate Uninstall State",
+              apiName: "uninstall_allowed",
+              key: "CONDITION",
+              outcomes: [
+                { id: "installed", label: "Installed", condition: { match: "all", conditions: [{ field: "status", operator: "equals", value: "INSTALLED" }] }, branch: ["uninstall_package","uninstall_app"] },
+                { id: "active", label: "Active", condition: { match: "all", conditions: [{ field: "status", operator: "equals", value: "ACTIVE" }] }, branch: ["uninstall_package","uninstall_app"] },
+                { id: "inactive", label: "Inactive", condition: { match: "all", conditions: [{ field: "status", operator: "equals", value: "INACTIVE" }] }, branch: ["uninstall_package","uninstall_app"] },
+              ],
+              defaultLabel: "Not Installed",
+              defaultBranch: ["uninstall_not_allowed"],
+            },
+            { id: "uninstall_package", label: "2. Uninstall Package Runtime", apiName: "uninstall_package", key: "PACKAGE_LIFECYCLE", operation: "UNINSTALL" },
+            { id: "uninstall_app", label: "3. Update Tenant App Status", apiName: "uninstall_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { status: "AVAILABLE", installed_version: null, activated_at: null, update_status: "CURRENT", is_installed: false, launchable: false, storefront_state: "AVAILABLE" } },
+            lifecycleError("uninstall_not_allowed", "Uninstall Rejected", "Only installed, active, or inactive apps can be uninstalled."),
           ],
         },
         {
@@ -1719,10 +1776,16 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { field: "trial_eligible", operator: "equals", value: true }
           ] },
           actions: [
-            { id: "activate_trial_runtime", label: "1. Create Tenant Trial Entitlement", apiName: "activate_trial_runtime", key: "PACKAGE_LIFECYCLE", operation: "TRIAL" },
-            { id: "trial_started_at", label: "2. Set Trial Start", apiName: "trial_started_at", key: "FORMULA", resourceName: "trialStartedAt", resultType: "datetime", expression: "NOW()", inputs: {} },
-            { id: "trial_expires_at", label: "3. Set Trial Expiry", apiName: "trial_expires_at", key: "FORMULA", resourceName: "trialExpiresAt", resultType: "datetime", expression: "ADDDAYS(NOW(),7)", inputs: {} },
-            { id: "grant_trial", label: "4. Update Tenant App Licence", apiName: "grant_trial", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "TRIAL", trial_started_at: { path: "variables.trialStartedAt" }, trial_expires_at: { path: "variables.trialExpiresAt" } } },
+            lifecycleDecision("trial_allowed", "1. Validate Trial Eligibility", [
+              { field: "licence_status", operator: "equals", value: "NONE" },
+              { field: "licence_required", operator: "equals", value: true },
+              { field: "trial_eligible", operator: "equals", value: true },
+            ], ["activate_trial_runtime","trial_started_at","trial_expires_at","grant_trial"], "trial_not_allowed"),
+            { id: "activate_trial_runtime", label: "2. Create Tenant Trial Entitlement", apiName: "activate_trial_runtime", key: "PACKAGE_LIFECYCLE", operation: "TRIAL" },
+            { id: "trial_started_at", label: "3. Set Trial Start", apiName: "trial_started_at", key: "FORMULA", resourceName: "trialStartedAt", resultType: "datetime", expression: "NOW()", inputs: {} },
+            { id: "trial_expires_at", label: "4. Set Trial Expiry", apiName: "trial_expires_at", key: "FORMULA", resourceName: "trialExpiresAt", resultType: "datetime", expression: "ADDDAYS(NOW(),7)", inputs: {} },
+            { id: "grant_trial", label: "5. Update Tenant App Licence", apiName: "grant_trial", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "TRIAL", trial_started_at: { path: "variables.trialStartedAt" }, trial_expires_at: { path: "variables.trialExpiresAt" } } },
+            lifecycleError("trial_not_allowed", "Trial Rejected", "This app is not currently eligible for a trial."),
           ],
         },
         {
@@ -1734,9 +1797,13 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             { field: "licence_required", operator: "equals", value: true }
           ] },
           actions: [
+            lifecycleDecision("licence_request_allowed", "1. Validate Licence Request", [
+              { field: "licence_status", operator: "equals", value: "NONE" },
+              { field: "licence_required", operator: "equals", value: true },
+            ], ["load_requested_package","create_licence_request","notify_licence_request","request_licence"], "licence_request_not_allowed"),
             {
               id: "load_requested_package",
-              label: "1. Load Requested Package",
+              label: "2. Load Requested Package",
               apiName: "load_requested_package",
               key: "GET_RECORDS",
               objectKey: "onestore_app",
@@ -1753,7 +1820,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             },
             {
               id: "create_licence_request",
-              label: "2. Create Licence Request",
+              label: "3. Create Licence Request",
               apiName: "create_licence_request",
               key: "CREATE_RECORD",
               objectKey: "licence_request",
@@ -1771,7 +1838,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
             },
             {
               id: "notify_licence_request",
-              label: "3. Notify Platform Administrators",
+              label: "4. Notify Platform Administrators",
               apiName: "notify_licence_request",
               key: "SEND_COMMUNICATION",
               channel: "IN_APP",
@@ -1779,7 +1846,8 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
               title: "Licence request received",
               message: "A package licence request is ready for review.",
             },
-            { id: "request_licence", label: "4. Update Tenant App Licence Status", apiName: "request_licence", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "REQUESTED" } },
+            { id: "request_licence", label: "5. Update Tenant App Licence Status", apiName: "request_licence", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { licence_status: "REQUESTED" } },
+            lifecycleError("licence_request_not_allowed", "Licence Request Rejected", "A licence can only be requested when this app requires a licence and none is active."),
           ],
         },
         {
@@ -1788,8 +1856,12 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           label: "Upgrade",
           visibility: { match: "all", conditions: [{ field: "update_status", operator: "equals", value: "UPDATE_AVAILABLE" }] },
           actions: [
-            { id: "upgrade_package", label: "1. Upgrade Package Runtime", apiName: "upgrade_package", key: "PACKAGE_LIFECYCLE", operation: "UPGRADE" },
-            { id: "upgrade_app", label: "2. Update Tenant App Version", apiName: "upgrade_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
+            lifecycleDecision("upgrade_allowed", "1. Validate Upgrade Availability", [
+              { field: "update_status", operator: "equals", value: "UPDATE_AVAILABLE" },
+            ], ["upgrade_package","upgrade_app"], "upgrade_not_allowed"),
+            { id: "upgrade_package", label: "2. Upgrade Package Runtime", apiName: "upgrade_package", key: "PACKAGE_LIFECYCLE", operation: "UPGRADE" },
+            { id: "upgrade_app", label: "3. Update Tenant App Version", apiName: "upgrade_app", key: "UPDATE_RECORD", objectKey: "tenant_app", recordId: { path: "record.id" }, fieldValues: { installed_version: { path: "record.available_version" }, update_status: "CURRENT" } },
+            lifecycleError("upgrade_not_allowed", "Upgrade Rejected", "An app can only be upgraded when an update is available."),
           ],
         },
       ];
@@ -1800,7 +1872,32 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           apiName: flow.buttonKey.toUpperCase(),
           flowType: "AUTOLAUNCHED",
           description: flow.label,
+          gptBuilder: true,
+          layout: { mode: "AUTO" },
           actions: flow.actions,
+          gptBuilderElements: flow.actions.map((step, index) => ({
+            id: step.id || `onestore-step-${index + 1}`,
+            key: "action",
+            label: step.label || step.apiName || step.key || `Step ${index + 1}`,
+            apiName: step.apiName || step.id || `OneStore_Step_${index + 1}`,
+            description: step.description || "",
+            labelSource: "manual",
+            apiNameSource: "manual",
+            config: {
+              actionKey: step.key || step.type || "",
+              inputs: {},
+              inputModes: {},
+              inputIncluded: {},
+              transforms: {},
+              outputMode: "automatic",
+              manualOutputs: [],
+              importedRuntimeAction: step,
+              importedRuntimeActionText: "",
+            },
+            configured: true,
+            source: "runtime_import",
+            position: null,
+          })),
         };
         const existingFlow = await pool.query(
           "SELECT id,user_modified FROM platform_rules WHERE object_id=$1 AND company_id IS NULL AND name=$2 LIMIT 1",
