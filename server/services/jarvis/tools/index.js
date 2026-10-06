@@ -121,16 +121,16 @@ async function todaysSales(context, { db, canViewCompanyCustomers }) {
     WITH sales_total AS (
       SELECT COALESCE(SUM(s.total),0) gross_sales, COUNT(*)::int transactions,
         COALESCE(SUM(s.tax),0) vat, COALESCE(SUM(s.discount),0) discounts
-      FROM sales s INNER JOIN companies c ON c.id=s.company_id
+      FROM sale_ledger s INNER JOIN companies c ON c.id=s.company_id
       WHERE s.company_id=$1 AND s.store_id=$2 AND s.status='completed'
+        AND s.source_record_type='SALE_HEADER'
         AND (s.created_at AT TIME ZONE c.timezone)::date = $3::date
     ), returns_total AS (
-      SELECT COALESCE(SUM(sri.quantity * si.unit_price),0) returned_value
-      FROM stock_returns sr
-      INNER JOIN stock_return_items sri ON sri.return_id=sr.id
-      INNER JOIN sale_items si ON si.id=sri.sale_item_id
-      WHERE sr.company_id=$1 AND sr.store_id=$2 AND sr.return_type='CUSTOMER'
-        AND sr.created_at::date = $3::date
+      SELECT COALESCE(SUM(ABS(s.total)),0) returned_value
+      FROM sale_ledger s INNER JOIN companies c ON c.id=s.company_id
+      WHERE s.company_id=$1 AND s.store_id=$2
+        AND s.source_record_type='REFUND'
+        AND (s.created_at AT TIME ZONE c.timezone)::date = $3::date
     ) SELECT sales_total.*, returns_total.returned_value FROM sales_total, returns_total
     `,
     [context.companyId, context.storeId, today]
