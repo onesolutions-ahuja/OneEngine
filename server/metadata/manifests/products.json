@@ -642,5 +642,7 @@
   ],
   "migrations": [
     "product_core.adopt_canonical_metadata.v1"
-  ]
+  ],
+  "defaultInstall": true,
+  "provisionMetadataOnDefault": true
 }
