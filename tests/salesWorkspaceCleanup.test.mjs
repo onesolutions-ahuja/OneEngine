@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 
 test("Sales app list surface uses generic sale Workspace runtime", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  assert.match(app, /WorkspacePage initialObjectKey="sale" appKey="sales"/);
-  assert.match(app, /<WorkspacePage initialObjectKey="sale" appKey="sales" \/>/);
+  assert.match(app, /MetadataPageRuntime objectKey="sale" appKey="sales"/);
+  assert.match(app, /<MetadataPageRuntime objectKey="sale" appKey="sales" \/>/);
   assert.equal(app.includes("./pages/sales/SalesPage"), false);
 });
 
