@@ -623,8 +623,8 @@ function AnalyticsNodeView({ node }) {
 }
 
 function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
-  const key = node.componentKey;
-  const api = canonicalComponentApi(node.componentApi || key);
+  const api = canonicalComponentApi(node.componentApi || node.componentKey);
+  const key = String(api || "").replace(/\.v[1-9][0-9]*$/, "") || node.componentKey;
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
