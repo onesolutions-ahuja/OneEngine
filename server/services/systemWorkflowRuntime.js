@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { ensureSystemWorkflowCatalog } from "./systemWorkflowCatalog.js";
 import { createWorkflowRun, executeWorkflowActions, workflowResultsContainStatus } from "./platformWorkflow.js";
 import { resolveWorkflowResource } from "./platformRecordPaths.js";
 
@@ -121,7 +120,6 @@ export async function executeSystemWorkflow({
   if (!companyId) throw new Error("System workflow requires company context");
   if (!systemKey) throw new Error("System workflow key is required");
 
-  await ensureSystemWorkflowCatalog({ db, companyId, userId });
   const actor = await resolveSystemWorkflowActor({ db, companyId, userId, req });
   const runtimeReq = {
     ...(req || {}),
