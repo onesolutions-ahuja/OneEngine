@@ -1604,25 +1604,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     }),
   },
   {
-    key: "TILL_UI_ACTION",
-    displayName: "Till UI Action",
-    description: "Dispatch a metadata-defined Retail POS interaction to the Till shell. Business mutations still execute through their canonical protected endpoints/connectors.",
-    validation: (action) => {
-      const uiAction = String(action?.uiAction || action?.ui_action || "").trim();
-      if (!uiAction || !/^[a-z0-9_.-]{1,80}$/i.test(uiAction)) throw new Error("Till UI Action requires a valid uiAction");
-    },
-    async: false,
-    requiredPermissions: [],
-    executor: async ({ action }) => ({
-      status: "completed",
-      uiDirective: {
-        component: "till",
-        action: String(action.uiAction || action.ui_action),
-        config: action.config || {},
-      },
-    }),
-  },
-  {
     key: "SHOW_MESSAGE",
     displayName: "Show Message",
     description: "Show a transient user-facing message.",
