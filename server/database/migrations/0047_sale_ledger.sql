@@ -185,3 +185,115 @@ SELECT
 FROM refunds r
 JOIN sales s ON s.id=r.sale_id
 ON CONFLICT (id) DO NOTHING;
+
+
+-- Repoint surviving references to the canonical ledger. IDs were deliberately
+-- preserved above, so this changes ownership without changing referenced values.
+DO $$
+DECLARE fk RECORD;
+BEGIN
+  IF to_regclass('public.sale_ledger') IS NULL THEN RETURN; END IF;
+
+  -- sale/header references
+  FOR fk IN
+    SELECT conrelid::regclass AS table_name, conname
+    FROM pg_constraint
+    WHERE contype='f' AND confrelid=to_regclass('public.sales')
+      AND conrelid = ANY(ARRAY[
+        to_regclass('public.secure_invoice_links'),
+        to_regclass('public.temporary_receipt_downloads'),
+        to_regclass('public.payment_attempts'),
+        to_regclass('public.hospitality_bill_sales'),
+        to_regclass('public.financial_ledger_entries'),
+        to_regclass('public.layaways'),
+        to_regclass('public.sale_discounts'),
+        to_regclass('public.sale_price_overrides'),
+        to_regclass('public.hospitality_qr_orders')
+      ]::oid[])
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', fk.table_name, fk.conname);
+  END LOOP;
+
+  -- line references
+  FOR fk IN
+    SELECT conrelid::regclass AS table_name, conname
+    FROM pg_constraint
+    WHERE contype='f' AND confrelid=to_regclass('public.sale_items')
+      AND conrelid = ANY(ARRAY[
+        to_regclass('public.sale_item_modifiers'),
+        to_regclass('public.hospitality_bill_split_items'),
+        to_regclass('public.sale_discounts'),
+        to_regclass('public.sale_price_overrides')
+      ]::oid[])
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', fk.table_name, fk.conname);
+  END LOOP;
+
+  -- payment references
+  FOR fk IN
+    SELECT conrelid::regclass AS table_name, conname
+    FROM pg_constraint
+    WHERE contype='f' AND confrelid=to_regclass('public.payments')
+      AND conrelid = to_regclass('public.financial_ledger_entries')
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', fk.table_name, fk.conname);
+  END LOOP;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.secure_invoice_links') IS NOT NULL THEN
+    ALTER TABLE secure_invoice_links DROP CONSTRAINT IF EXISTS fk_secure_invoice_links_sale_ledger;
+    ALTER TABLE secure_invoice_links ADD CONSTRAINT fk_secure_invoice_links_sale_ledger FOREIGN KEY (sale_id) REFERENCES sale_ledger(id) ON DELETE CASCADE;
+  END IF;
+  IF to_regclass('public.temporary_receipt_downloads') IS NOT NULL THEN
+    ALTER TABLE temporary_receipt_downloads DROP CONSTRAINT IF EXISTS fk_temporary_receipt_sale_ledger;
+    ALTER TABLE temporary_receipt_downloads ADD CONSTRAINT fk_temporary_receipt_sale_ledger FOREIGN KEY (sale_id) REFERENCES sale_ledger(id) ON DELETE CASCADE;
+  END IF;
+  IF to_regclass('public.payment_attempts') IS NOT NULL THEN
+    ALTER TABLE payment_attempts DROP CONSTRAINT IF EXISTS fk_payment_attempt_sale_ledger;
+    ALTER TABLE payment_attempts ADD CONSTRAINT fk_payment_attempt_sale_ledger FOREIGN KEY (sale_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
+  END IF;
+  IF to_regclass('public.hospitality_bill_sales') IS NOT NULL THEN
+    ALTER TABLE hospitality_bill_sales DROP CONSTRAINT IF EXISTS fk_hospitality_bill_sale_ledger;
+    ALTER TABLE hospitality_bill_sales DROP CONSTRAINT IF EXISTS fk_hospitality_bill_source_sale_ledger;
+    ALTER TABLE hospitality_bill_sales ADD CONSTRAINT fk_hospitality_bill_sale_ledger FOREIGN KEY (sale_id) REFERENCES sale_ledger(id) ON DELETE RESTRICT;
+    ALTER TABLE hospitality_bill_sales ADD CONSTRAINT fk_hospitality_bill_source_sale_ledger FOREIGN KEY (source_sale_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
+  END IF;
+  IF to_regclass('public.financial_ledger_entries') IS NOT NULL THEN
+    ALTER TABLE financial_ledger_entries DROP CONSTRAINT IF EXISTS fk_financial_transaction_sale_ledger;
+    ALTER TABLE financial_ledger_entries DROP CONSTRAINT IF EXISTS fk_financial_payment_sale_ledger;
+    ALTER TABLE financial_ledger_entries ADD CONSTRAINT fk_financial_transaction_sale_ledger FOREIGN KEY (transaction_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
+    ALTER TABLE financial_ledger_entries ADD CONSTRAINT fk_financial_payment_sale_ledger FOREIGN KEY (payment_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
+  END IF;
+  IF to_regclass('public.layaways') IS NOT NULL THEN
+    ALTER TABLE layaways DROP CONSTRAINT IF EXISTS fk_layaway_sale_ledger;
+    ALTER TABLE layaways ADD CONSTRAINT fk_layaway_sale_ledger FOREIGN KEY (completed_sale_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
+  END IF;
+  IF to_regclass('public.sale_discounts') IS NOT NULL THEN
+    ALTER TABLE sale_discounts DROP CONSTRAINT IF EXISTS fk_sale_discount_sale_ledger;
+    ALTER TABLE sale_discounts DROP CONSTRAINT IF EXISTS fk_sale_discount_item_ledger;
+    ALTER TABLE sale_discounts ADD CONSTRAINT fk_sale_discount_sale_ledger FOREIGN KEY (sale_id) REFERENCES sale_ledger(id) ON DELETE CASCADE;
+    ALTER TABLE sale_discounts ADD CONSTRAINT fk_sale_discount_item_ledger FOREIGN KEY (item_id) REFERENCES sale_ledger(id) ON DELETE CASCADE;
+  END IF;
+  IF to_regclass('public.sale_price_overrides') IS NOT NULL THEN
+    ALTER TABLE sale_price_overrides DROP CONSTRAINT IF EXISTS fk_sale_override_sale_ledger;
+    ALTER TABLE sale_price_overrides DROP CONSTRAINT IF EXISTS fk_sale_override_item_ledger;
+    ALTER TABLE sale_price_overrides ADD CONSTRAINT fk_sale_override_sale_ledger FOREIGN KEY (sale_id) REFERENCES sale_ledger(id) ON DELETE CASCADE;
+    ALTER TABLE sale_price_overrides ADD CONSTRAINT fk_sale_override_item_ledger FOREIGN KEY (item_id) REFERENCES sale_ledger(id) ON DELETE CASCADE;
+  END IF;
+  IF to_regclass('public.sale_item_modifiers') IS NOT NULL THEN
+    ALTER TABLE sale_item_modifiers DROP CONSTRAINT IF EXISTS fk_sale_item_modifier_ledger;
+    ALTER TABLE sale_item_modifiers ADD CONSTRAINT fk_sale_item_modifier_ledger FOREIGN KEY (sale_item_id) REFERENCES sale_ledger(id) ON DELETE CASCADE;
+  END IF;
+  IF to_regclass('public.hospitality_bill_split_items') IS NOT NULL THEN
+    ALTER TABLE hospitality_bill_split_items DROP CONSTRAINT IF EXISTS fk_hospitality_source_item_ledger;
+    ALTER TABLE hospitality_bill_split_items DROP CONSTRAINT IF EXISTS fk_hospitality_split_item_ledger;
+    ALTER TABLE hospitality_bill_split_items ADD CONSTRAINT fk_hospitality_source_item_ledger FOREIGN KEY (source_sale_item_id) REFERENCES sale_ledger(id) ON DELETE RESTRICT;
+    ALTER TABLE hospitality_bill_split_items ADD CONSTRAINT fk_hospitality_split_item_ledger FOREIGN KEY (split_sale_item_id) REFERENCES sale_ledger(id) ON DELETE RESTRICT;
+  END IF;
+  IF to_regclass('public.hospitality_qr_orders') IS NOT NULL THEN
+    ALTER TABLE hospitality_qr_orders DROP CONSTRAINT IF EXISTS fk_hospitality_qr_sale_ledger;
+    ALTER TABLE hospitality_qr_orders ADD CONSTRAINT fk_hospitality_qr_sale_ledger FOREIGN KEY (sale_id) REFERENCES sale_ledger(id) ON DELETE SET NULL;
+  END IF;
+END $$;
