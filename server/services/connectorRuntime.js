@@ -238,7 +238,7 @@ export class ConnectorCapabilityRegistry {
     this.installations = new Map();
   }
 
-  register({ installationId, companyId, storeId = null, divisionId = null, deviceSessionId = null, active = true, priority = 0, service }) {
+  register({ installationId, companyId, storeId = null, divisionId = null, terminalId = null, active = true, priority = 0, service }) {
     if (!installationId || !companyId || !(service instanceof ConnectorService)) {
       throw new TypeError("installationId, companyId, and ConnectorService are required");
     }
@@ -247,7 +247,7 @@ export class ConnectorCapabilityRegistry {
       companyId: String(companyId),
       storeId: storeId == null ? null : String(storeId),
       divisionId: divisionId == null ? null : String(divisionId),
-      deviceSessionId: deviceSessionId == null ? null : String(deviceSessionId),
+      terminalId: terminalId == null ? null : String(terminalId),
       active: active === true,
       priority: Number.isFinite(Number(priority)) ? Number(priority) : 0,
       service,
@@ -267,10 +267,9 @@ export class ConnectorCapabilityRegistry {
         if (!installation.active || installation.companyId !== String(context.companyId)) return false;
         if (installation.storeId && installation.storeId !== String(context.storeId || "")) return false;
         if (installation.divisionId && installation.divisionId !== String(context.divisionId || "")) return false;
-        if (installation.deviceSessionId && installation.deviceSessionId !== String(context.deviceSessionId || "")) return false;
+        if (installation.terminalId && installation.terminalId !== String(context.terminalId || "")) return false;
         const capability = installation.service.capabilities.get(capabilityKey);
         if (!capability || installation.service.status().healthy !== true) return false;
-        if (context.selfCheckout === true && capability.selfCheckoutSupported !== true) return false;
         if (context.isAdmin !== true && capability.requiredPermissions.some((permission) => !permissions.has(permission))) return false;
         return true;
       })
@@ -311,23 +310,23 @@ function capabilityDefinition(manifest, capabilityKey) {
   ) || null;
 }
 
-async function loadPersistedCandidates({ db, companyId, storeId, deviceSessionId }) {
-  if (!companyId || !storeId || !deviceSessionId) return [];
+async function loadPersistedCandidates({ db, companyId, storeId, terminalId }) {
+  if (!companyId || !storeId || !terminalId) return [];
   const result = await db(
-    `SELECT c.id, c.company_id, c.store_id, c.device_session_id, c.connector_package_key,
+    `SELECT c.id, c.company_id, c.store_id, c.terminal_id, c.connector_package_key,
             c.connector_configuration, c.connector_capabilities, c.enabled,
             c.connection_status, c.fallback_order, c.created_at, c.credentials_encrypted, p.manifest
        FROM integration_connections c
        JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
        JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=c.company_id
         AND i.status='active' AND i.suspended_by_entitlement=FALSE
-       JOIN terminals t ON t.id=c.device_session_id AND t.store_id=$2
+       JOIN terminals t ON t.id=c.terminal_id AND t.store_id=$2
        JOIN stores s ON s.id=t.store_id AND s.company_id=c.company_id
-      WHERE c.company_id=$1 AND c.enabled=TRUE AND c.device_session_id=$3
+      WHERE c.company_id=$1 AND c.enabled=TRUE AND c.terminal_id=$3
         AND (c.store_id IS NULL OR c.store_id=$2)
         AND p.package_type='APPLICATION'
       ORDER BY c.fallback_order ASC, c.created_at ASC, c.id ASC`,
-    [companyId, storeId, deviceSessionId]
+    [companyId, storeId, terminalId]
   );
   return result.rows || [];
 }
@@ -343,32 +342,30 @@ async function persistConnectorHealth(db, instance, state) {
   );
 }
 
-/** Resolve an installed, licensed and till-assigned connector from persisted package instances. */
+/** Resolve an installed, licensed and terminal-assigned connector from persisted package instances. */
 export async function resolvePersistedConnectorCapability({
   db,
   drivers,
   companyId,
   storeId,
-  deviceSessionId,
+  terminalId,
   capabilityKey,
   packageKey = null,
-  selfCheckout = false,
   payload = null,
   writeAudit = null,
   actorUserId = null,
 }) {
-  const instances = await loadPersistedCandidates({ db, companyId, storeId, deviceSessionId });
+  const instances = await loadPersistedCandidates({ db, companyId, storeId, terminalId });
   const eligible = instances.filter((instance) => {
     if (packageKey && String(instance.connector_package_key) !== String(packageKey)) return false;
     const manifest = effectiveManifest(instance.connector_package_key, instance.manifest);
     const capability = capabilityDefinition(manifest, capabilityKey);
     if (!capability) return false;
-    if (selfCheckout && (typeof capability === "string" || capability.selfCheckoutSupported !== true)) return false;
     const declared = jsonValue(instance.connector_capabilities, []);
     return !Array.isArray(declared) || declared.length === 0 || declared.includes(capabilityKey);
   });
   if (!eligible.length) {
-    return { available: false, code: "CONNECTOR_UNAVAILABLE", message: "No eligible connector is assigned to this till" };
+    return { available: false, code: "CONNECTOR_UNAVAILABLE", message: "No eligible connector is assigned to this terminal" };
   }
 
   let lastTechnicalFailure = null;
@@ -395,7 +392,7 @@ export async function resolvePersistedConnectorCapability({
           },
           companyId,
           storeId,
-          deviceSessionId,
+          terminalId,
         }),
       });
     } catch (error) {
