@@ -16,7 +16,9 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
-    "audit:metadata-architecture": "node scripts/audit-metadata-architecture.mjs"
+    "audit:metadata-architecture": "node scripts/audit-metadata-architecture.mjs",
+    "audit:workflow-stepwise": "node scripts/audit-workflow-stepwise.mjs",
+    "audit:workflow-stepwise:enforce": "node scripts/audit-workflow-stepwise.mjs --enforce"
   },
   "dependencies": {
     "framer-motion": "^12.23.24",
