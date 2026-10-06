@@ -90,7 +90,7 @@ INSERT INTO sale_ledger (
 SELECT
   s.id, s.company_id, s.store_id, s.terminal_id, s.user_id, s.customer_id,
   s.id, s.id, s.id, 'SALE_HEADER',
-  s.receipt_number, COALESCE(s.line_count,0), s.subtotal, s.tax, s.discount, s.total, COALESCE(s.net_amount,s.total),
+  s.receipt_number, (SELECT COUNT(*)::int FROM sale_items counted WHERE counted.sale_id=s.id), s.subtotal, s.tax, s.discount, s.total, COALESCE(s.net_amount,s.total),
   COALESCE(s.transaction_type,'SALE'), s.status,
   COALESCE((
     SELECT jsonb_agg(jsonb_build_object(
