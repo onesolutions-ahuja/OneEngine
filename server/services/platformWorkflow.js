@@ -6,52 +6,27 @@ import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationC
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
-import { executeRegisteredAction } from "./platformActions.js";
 import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { effectiveManifest, resolvePersistedConnectorCapability } from "./connectorRuntime.js";
-import { createInventoryMovement } from "./inventory.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
 import { createQuickBooksAdapter } from "./quickbooksAdapter.js";
-import { syncQuickBooksVendor, exportQuickBooksPurchase, exportQuickBooksSupplierPayment, exportQuickBooksSupplierCredit } from "./quickbooksSync.js";
 import { createShopifyAdapter } from "./shopifyAdapter.js";
-import { exportShopifyFulfillment, exportShopifyRefund, syncShopifyInventory, syncShopifyProducts } from "./shopifySync.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "./licensing.js";
 import { findConfiguredDuplicateMatches, resolveDuplicateAction } from "./platformDuplicateMatching.js";
 import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
-import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
-import { PLATFORM_FUNCTIONS, PLATFORM_FUNCTION_MAP } from "./platformFunctionRegistry.js";
 import { issueAccountToken } from "./accountPolicy.js";
 import { createTemporaryReceiptDownload, revokeTemporaryReceiptDownloadsForSale, buildReceiptQrDownloadUrl } from "./receiptQr.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "SEND_EMAIL_BREVO", "SEND_EMAIL_MAILJET", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "SEND_EMAIL", "EMAIL_ALERT", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
-const globalProductLookupService = createGlobalProductLookupService();
-
-async function executeGlobalProductLookupAction(context, providerKey = null) {
-  const companyId = context.companyId || context.req?.user?.companyId;
-  const barcode = context.action?.barcode ?? context.action?.code ?? context.record?.barcode ?? context.trigger?.barcode;
-  try {
-    const result = await globalProductLookupService.lookup({
-      db: context.db,
-      companyId,
-      reqCompanyId: context.req?.user?.companyId || null,
-      barcode,
-      providerKey,
-    });
-    return { success: true, ...result };
-  } catch (error) {
-    return { success: false, code: error?.code || "LOOKUP_FAILED", message: error?.code === "INVALID_BARCODE" ? error.message : "Unable to look up this barcode" };
-  }
-}
-
 function redact(value, depth = 0, inheritedSecureValues = new Set()) {
   if (depth > 5 || value == null) return value;
   const secureValues = new Set(inheritedSecureValues);
@@ -123,14 +98,6 @@ async function loadProviderConnection(context, providerKey, requestedConnectionI
         clientId,
         clientSecret,
       });
-    } else if (providerKey === "shopify") {
-      const shopDomain = credentials.shopDomain || credentials.shop_domain || connection.base_url;
-      refreshed = await createShopifyAdapter().refreshAuthentication({
-        shopDomain: String(shopDomain || "").replace(/^https?:\/\//i, "").replace(/\/$/, ""),
-        refreshToken: credentials.refreshToken || credentials.refresh_token,
-        clientId,
-        clientSecret,
-      });
     }
     if (!refreshed) throw new Error(`${providerKey} token refresh is unavailable`);
     credentials = {
@@ -153,22 +120,6 @@ async function loadProviderConnection(context, providerKey, requestedConnectionI
     if (!saved.rows?.length) throw new Error(`${providerKey} connection changed during token refresh`);
   }
   return { connection, credentials };
-}
-
-async function shopifyPackageAvailability(db, companyId) {
-  const entitlements = await getCompanyEntitlements(db, companyId);
-  if (!hasEntitlement(entitlements, "integrations")) {
-    return { success: false, code: "NOT_LICENSED", retryable: false, message: "Shopify is not licensed for this company" };
-  }
-  const installed = await db(
-    `SELECT 1 FROM company_package_installations i
-       JOIN package_registry p ON p.id=i.package_id
-      WHERE i.company_id=$1 AND p.package_key='shopify'
-        AND i.status='active' AND i.suspended_by_entitlement=false LIMIT 1`,
-    [companyId],
-  );
-  if (!installed.rows.length) return { success: false, code: "NOT_INSTALLED", retryable: false, message: "Shopify is not installed for this company" };
-  return null;
 }
 
 async function quickBooksPackageAvailability(db, companyId) {
@@ -1044,90 +995,6 @@ async function resolveEmailWorkflowAction({
   return resolved;
 }
 
-async function executeProviderSpecificEmail({
-  packageKey,
-  actionKey,
-  db,
-  action,
-  req,
-  companyId,
-  stepRunId,
-  record,
-  previousRecord,
-  object,
-  workflowVariables,
-  connectorDrivers,
-  writeAudit,
-}) {
-  const company = companyId || req?.user?.companyId;
-  if (!company) return { status: "failed", provider: packageKey, error: "Company scope is required" };
-  const connection = await db(
-    `SELECT c.id
-       FROM integration_connections c
-       JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
-       JOIN company_package_installations i ON i.package_id=p.id AND i.company_id=c.company_id
-        AND i.status='active' AND i.suspended_by_entitlement=FALSE
-      WHERE c.company_id=$1
-        AND c.connector_package_key=$2
-        AND c.enabled=TRUE
-        AND UPPER(COALESCE(c.connection_status,''))='CONNECTED'
-        AND COALESCE((c.last_test_result->>'success')::boolean,FALSE)=TRUE
-      ORDER BY c.fallback_order ASC,c.updated_at DESC
-      LIMIT 1`,
-    [company, packageKey]
-  );
-  const connectorInstanceId = connection.rows[0]?.id || null;
-  if (!connectorInstanceId) {
-    return {
-      status: "failed",
-      provider: packageKey,
-      error: `${packageKey === "brevo_connector" ? "Brevo" : "Mailjet"} connector is not configured, tested and enabled`,
-    };
-  }
-  const resolvedAction = await resolveEmailWorkflowAction({
-    db,
-    companyId: company,
-    action,
-    record,
-    previousRecord,
-    object,
-    workflowVariables,
-    req,
-  });
-  const execution = await executeConnectorWorkflowAction({
-    action: {
-      ...resolvedAction,
-      key: actionKey,
-      capability: "email.send",
-      connectorInstanceId,
-    },
-    payload: resolvedAction,
-    db,
-    companyId: company,
-    connectorDrivers,
-    req,
-    writeAudit,
-    actorUserId: req?.user?.id || null,
-  });
-  if (!execution.success) {
-    return {
-      status: "failed",
-      provider: packageKey,
-      error: execution.message || execution.code || "Email connector failed",
-      connectorInstanceId,
-    };
-  }
-  return {
-    status: "sent",
-    provider: packageKey,
-    connectorInstanceId,
-    providerMessageId: execution.result?.providerMessageId || null,
-    result: execution.result || null,
-    stepRunId: stepRunId || null,
-  };
-}
-
-
 function validateGetRecordsCustomLogic(logic, conditionCount, context = "Get Records") {
   const value = String(logic || "").trim();
   if (!value) return;
@@ -1420,30 +1287,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     executor: (context) => executeLicenceRequestPackageAction(context),
   },
   {
-    key: "GLOBAL_PRODUCT_LOOKUP_BARCODE",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Global Product - Lookup Barcode",
-    description: "Resolve an external barcode using enabled, installed product lookup providers in configured priority order.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context),
-  },
-  {
-    key: "GO_UPC_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Go-UPC - Lookup Product",
-    description: "Look up a barcode using the installed Go-UPC connector and company credential.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
-  },
-  {
     key: "CALL_CONNECTOR_CAPABILITY",
     displayName: "Call Connector Capability",
     description: "Resolve an enabled tenant/store/till connector by package and capability, then execute it without provider-specific workflow code.",
@@ -1509,27 +1352,28 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       required: ["connectionId", "operation"],
     },
     validation: (action) => {
-      if (typeof action?.connectionId !== "string" || !/^[0-9a-f-]{36}$/i.test(action.connectionId)) {
-        throw new Error("Call Connector requires a valid connectionId");
-      }
-      if (typeof action?.operation !== "string" || !/^[a-zA-Z0-9_.-]{1,100}$/.test(action.operation)) {
-        throw new Error("Call Connector requires a valid operation key");
-      }
+      if (typeof action?.connectionId !== "string" && typeof action?.connectionId !== "object") throw new Error("Call Connector requires a connectionId or resource binding");
+      if (typeof action?.operation !== "string" && typeof action?.operation !== "object") throw new Error("Call Connector requires an operation key or resource binding");
       if (action.input !== undefined && (!action.input || typeof action.input !== "object" || Array.isArray(action.input))) {
         throw new Error("Call Connector input must be an object");
       }
     },
     async: false,
     requiredPermissions: ["integration.manage"],
-    executor: async ({ action, db, companyId, req }) => {
+    executor: async ({ action, db, companyId, req, workflowVariables, record, object }) => {
+      const context = { workflowVariables, record, object, req };
+      const connectionId = String(resolveConfiguredResource(action.connectionId, context, { preserveMissing: false }) || "").trim();
+      const operation = String(resolveConfiguredResource(action.operation, context, { preserveMissing: false }) || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(connectionId)) throw new Error("Call Connector resolved an invalid connectionId");
+      if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(operation)) throw new Error("Call Connector resolved an invalid operation key");
       const execute = createConnectorActionExecutor({ db });
       return {
         status: "completed",
         ...(await execute({
           companyId: companyId || req?.user?.companyId,
-          connectionId: action.connectionId,
-          operation: action.operation,
-          input: action.input || {},
+          connectionId,
+          operation,
+          input: resolveFieldValueMap(action.input || {}, context) || {},
           platformCredentialAccess:
             Array.isArray(req?.user?.permissions) && req.user.permissions.includes("oneengine.manage"),
           actorUserId: req?.user?.id || null,
@@ -3765,64 +3609,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "SEND_EMAIL_BREVO",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send Email - Brevo",
-    description: "Send an email through the tenant's installed Brevo connector.",
-    schema: {
-      type: "object",
-      properties: {
-        recipient: { type: "string", title: "Recipient email" },
-        contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
-        templateId: { type: "string", title: "Message template" },
-        subject: { type: "string", title: "Subject" },
-        body: { type: "string", title: "Message body" },
-      },
-      required: ["recipient"],
-    },
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send Email - Brevo requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    executor: async (context) => executeProviderSpecificEmail({
-      ...context,
-      packageKey: "brevo_connector",
-      actionKey: "SEND_EMAIL_BREVO",
-    }),
-  },
-  {
-    key: "SEND_EMAIL_MAILJET",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "Send Email - Mailjet",
-    description: "Send an email through the tenant's installed Mailjet connector.",
-    schema: {
-      type: "object",
-      properties: {
-        recipient: { type: "string", title: "Recipient email" },
-        contentMode: { type: "string", enum: ["TEMPLATE","CUSTOM"], title: "Content source" },
-        templateId: { type: "string", title: "Message template" },
-        subject: { type: "string", title: "Subject" },
-        body: { type: "string", title: "Message body" },
-      },
-      required: ["recipient"],
-    },
-    validation: (action) => {
-      if (!action?.recipient && !action?.to) throw new Error("Send Email - Mailjet requires a recipient");
-    },
-    async: true,
-    requiredPermissions: ["communications.send"],
-    executor: async (context) => executeProviderSpecificEmail({
-      ...context,
-      packageKey: "mailjet_connector",
-      actionKey: "SEND_EMAIL_MAILJET",
-    }),
-  },
-  {
     key: "EMAIL_ALERT",
     builderVisible: false,
     systemVisible: false,
@@ -5577,153 +5363,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "SHOPIFY_SYNC_PRODUCTS",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Sync Shopify Products",
-    description: "Upsert canonical onePOS products and variants into the configured Shopify store.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage", "product.manage"],
-    executor: async (context) => {
-      const companyId = context.companyId || context.req?.user?.companyId;
-      const storeId = context.storeId || context.req?.user?.storeId;
-      try {
-        const unavailable = await shopifyPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
-        const result = await syncShopifyProducts({ db: context.db, companyId, storeId, ...loaded });
-        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
-        return { success: true, ...result };
-      } catch (error) {
-        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify product sync failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
-        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify product sync failed").slice(0, 500) };
-      }
-    },
-  },
-  {
-    key: "SHOPIFY_SYNC_INVENTORY",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Sync Shopify Inventory",
-    description: "Set Shopify inventory levels from the canonical onePOS store stock balances.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage", "inventory.view"],
-    executor: async (context) => {
-      const companyId = context.companyId || context.req?.user?.companyId;
-      const storeId = context.storeId || context.req?.user?.storeId;
-      try {
-        const unavailable = await shopifyPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
-        const result = await syncShopifyInventory({ db: context.db, companyId, storeId, ...loaded });
-        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
-        return { success: true, ...result };
-      } catch (error) {
-        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify inventory sync failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
-        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify inventory sync failed").slice(0, 500) };
-      }
-    },
-  },
-  {
-    key: "SHOPIFY_RETRY_FAILED_SYNC",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Retry Failed Shopify Sync",
-    description: "Retry the selected Shopify product or inventory synchronisation after a provider failure.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage"],
-    executor: async (context) => {
-      const syncType = String(context.action?.syncType || "products").toLowerCase();
-      if (!["products", "inventory", "fulfilment", "refund"].includes(syncType)) return { success: false, code: "INVALID_SYNC_TYPE", retryable: false, message: "Shopify retry must target products, inventory, fulfilment or refund" };
-      const companyId = context.companyId || context.req?.user?.companyId;
-      const storeId = context.storeId || context.req?.user?.storeId;
-      try {
-        const unavailable = await shopifyPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
-        const result = syncType === "products"
-          ? await syncShopifyProducts({ db: context.db, companyId, storeId, ...loaded })
-          : syncType === "inventory"
-            ? await syncShopifyInventory({ db: context.db, companyId, storeId, ...loaded })
-            : syncType === "fulfilment"
-              ? await exportShopifyFulfillment({ db: context.db, pool: context.pool, companyId, storeId, orderId: context.action?.orderId, ...loaded })
-              : await exportShopifyRefund({ db: context.db, pool: context.pool, companyId, storeId, returnId: context.action?.returnId, ...loaded });
-        await context.db("UPDATE integration_connections SET last_error=NULL,updated_at=NOW() WHERE id=$1 AND company_id=$2", [loaded.connection.id, companyId]);
-        return { success: true, retried: syncType, ...result };
-      } catch (error) {
-        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify sync retry failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
-        return { success: false, code: "SYNC_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify sync retry failed").slice(0, 500) };
-      }
-    },
-  },
-  {
-    key: "SHOPIFY_EXPORT_FULFILMENT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Export Shopify Fulfilment",
-    description: "Create the Shopify fulfilment for a completed canonical onePOS order.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage", "online_orders.manage"],
-    executor: async (context) => {
-      const companyId = context.companyId || context.req?.user?.companyId;
-      const storeId = context.storeId || context.req?.user?.storeId;
-      try {
-        const unavailable = await shopifyPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
-        return {
-          success: true,
-          ...(await exportShopifyFulfillment({
-            db: context.db, pool: context.pool, companyId, storeId, orderId: context.action?.orderId, ...loaded,
-            notifyCustomer: context.action?.notifyCustomer !== false,
-          })),
-        };
-      } catch (error) {
-        return { success: false, code: "FULFILMENT_EXPORT_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify fulfilment export failed").slice(0, 500) };
-      }
-    },
-  },
-  {
-    key: "SHOPIFY_EXPORT_REFUND",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Export Shopify Refund",
-    description: "Export a canonical onePOS customer return refund for a Shopify order.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage", "returns.create"],
-    executor: async (context) => {
-      const companyId = context.companyId || context.req?.user?.companyId;
-      const storeId = context.storeId || context.req?.user?.storeId;
-      try {
-        const unavailable = await shopifyPackageAvailability(context.db, companyId);
-        if (unavailable) return unavailable;
-        const loaded = await loadProviderConnection(context, "shopify", context.action?.connectionId);
-        if (!loaded) return { success: false, code: "NOT_CONFIGURED", retryable: false, message: "Shopify connection is unavailable" };
-        return {
-          success: true,
-          ...(await exportShopifyRefund({ db: context.db, pool: context.pool, companyId, storeId, returnId: context.action?.returnId, ...loaded })),
-        };
-      } catch (error) {
-        if (context.db && context.action?.connectionId) await context.db("UPDATE integration_connections SET last_error=$1,updated_at=NOW() WHERE id=$2 AND company_id=$3", [String(error?.message || "Shopify refund export failed").slice(0, 500), context.action.connectionId, companyId]).catch(() => {});
-        return { success: false, code: "REFUND_EXPORT_FAILED", retryable: error?.retryable === true, message: String(error?.message || "Shopify refund export failed").slice(0, 500) };
-      }
-    },
-  },
-  {
     key: "ROLLBACK_RECORDS",
     displayName: "Roll Back Records",
     description: "Roll back record changes made by the current workflow transaction.",
@@ -5750,21 +5389,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
 export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
 
-// Re-export registry bindings without eagerly reading them during module
-// initialization. platformFunctionRegistry participates in the workflow import
-// graph, so assigning these imported bindings to new consts can hit the ESM
-// temporal dead zone during startup.
-export { PLATFORM_FUNCTIONS as REGISTERED_FUNCTIONS, PLATFORM_FUNCTION_MAP as REGISTERED_FUNCTIONS_MAP } from "./platformFunctionRegistry.js";
-
-export async function executeMediatedRegisteredAction({ db, companyId, userId = null, req = null, action }) {
-  return executeRegisteredAction({
-    db,
-    companyId,
-    userId,
-    req: req || { user: { id: userId, companyId } },
-    action,
-  });
-}
 
 export function getWorkflowActionRegistry() {
   return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
@@ -5794,13 +5418,6 @@ export function validateWorkflowAction(action) {
   return definition;
 }
 
-export function getRegisteredFunction(functionKey) {
-  return PLATFORM_FUNCTION_MAP.get(String(functionKey || "")) || null;
-}
-
-export function getRegisteredFunctionsRegistry() {
-  return PLATFORM_FUNCTIONS.slice();
-}
 
 async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId }) {
   if (!db || typeof db !== "function" || !companyId) return null;
