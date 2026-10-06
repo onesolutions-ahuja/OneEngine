@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "build": "node --check server.js && node --check services/debugCodes.js && node scripts/check-migration-sql.mjs && node ../scripts/audit-rbac-authority.mjs && node ../scripts/audit-trusted-runtime.mjs && node --test test/trustedPackages.test.mjs && node --test ../tests/appointmentWorkflow.test.mjs && node --test ../tests/tillFlowDebug.test.mjs && node scripts/check-runtime-imports.mjs && node ../scripts/audit-workflow-coverage.mjs --enforce",
+    "build": "node ../scripts/audit-metadata-architecture.mjs && node --check server.js && node --check services/debugCodes.js && node scripts/check-migration-sql.mjs && node ../scripts/audit-rbac-authority.mjs && node ../scripts/audit-trusted-runtime.mjs && node --test test/trustedPackages.test.mjs && node --test ../tests/appointmentWorkflow.test.mjs && node --test ../tests/tillFlowDebug.test.mjs && node scripts/check-runtime-imports.mjs && node ../scripts/audit-workflow-coverage.mjs --enforce",
     "platform:metadata:export": "node scripts/export-platform-package-metadata.mjs",
     "audit:trusted": "node ../scripts/audit-trusted-runtime.mjs",
     "test:trusted": "node --test test/trustedPackages.test.mjs",
-    "audit:workflow-coverage": "node ../scripts/audit-workflow-coverage.mjs"
+    "audit:workflow-coverage": "node ../scripts/audit-workflow-coverage.mjs",
+    "audit:metadata": "node ../scripts/audit-metadata-architecture.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
