@@ -44,3 +44,35 @@ test("retail metadata uses generic runtime primitives only", () => {
     }
   }
 });
+
+
+test("Phase 2 retail workflows reopen as explicit GPT Builder nodes", () => {
+  assert.equal((manifest.workflows || []).length, 17);
+  for (const flow of manifest.workflows || []) {
+    const actions = flow.action?.actions || [];
+    const nodes = flow.action?.gptBuilderElements || [];
+    assert.equal(nodes.length, actions.length, `${flow.name} Builder/runtime step count mismatch`);
+    assert.ok(nodes.every((node) => node.config?.importedRuntimeAction && node.configured === true), `${flow.name} has a non-editable imported node`);
+  }
+});
+
+test("Phase 2 expands short retail business processes without padding atomic flows", () => {
+  const atomic = new Set(["Open Drawer","OneTill - Validate Stock","OneTill - Age Verification"]);
+  const short = (manifest.workflows || []).filter((flow) => (flow.action?.actions || []).length <= 2).map((flow) => flow.name).sort();
+  assert.deepEqual(short, [...atomic].sort());
+
+  for (const name of ["Open Till Session","Close Till Session","Record Cash Movement","Record Petty Cash","Create Customer Return","Create Refund"]) {
+    const flow = (manifest.workflows || []).find((item) => item.name === name);
+    assert.ok(flow, name);
+    assert.ok(flow.action.actions.length >= 4, name + " must expose its validation/orchestration steps");
+  }
+
+  const open = (manifest.workflows || []).find((item) => item.name === "Open Till Session").action.actions;
+  assert.ok(open.some((step) => step.key === "GET_RECORDS"));
+  assert.ok(open.some((step) => step.key === "CONDITION"));
+  assert.ok(open.some((step) => step.key === "CUSTOM_ERROR"));
+
+  const refund = (manifest.workflows || []).find((item) => item.name === "Create Refund").action.actions;
+  assert.ok(refund.some((step) => step.key === "FORMULA"));
+  assert.ok(refund.some((step) => step.key === "CONDITION"));
+});
