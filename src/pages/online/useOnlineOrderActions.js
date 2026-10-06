@@ -1,3 +1,4 @@
+import { actionKeyForButton } from "./useOnlineOrderMetadata.js";
 import { useRef, useState } from "react";
 import { apiRequest } from "../../services/api.js";
 
@@ -14,14 +15,14 @@ export default function useOnlineOrderActions({ applyOrderUpdate, otpRequired, s
   const requestAction = async (order, action, body = {}) => {
     if (inFlight.current.has(order.id)) return null;
     inFlight.current.add(order.id);
-    setBusyActions((current) => ({ ...current, [order.id]: action }));
+    setBusyActions((current) => ({ ...current, [order.id]: typeof action === "string" ? action : actionKeyForButton(action) }));
     try {
-      const internalKiosk = order?.platform === "one_kiosk";
-      const endpoint = internalKiosk
-        ? `/api/online/orders/generic/${order.id}/${action}`
-        : `/api/online/orders/${order.id}/${action}`;
-      const data = await apiRequest(endpoint, {
-        method: "POST", body: JSON.stringify(body),
+      const button = action;
+      const buttonKey = String(button?.button_key || button?.buttonKey || button || "").trim();
+      if (!buttonKey) throw new Error("Online Order metadata action is missing");
+      const data = await apiRequest(`/api/platform/runtime/objects/online_order/buttons/${encodeURIComponent(buttonKey)}/execute`, {
+        method: "POST",
+        body: JSON.stringify({ recordId: order.id, input: body }),
       });
       if (!data.success) {
         throw Object.assign(new Error(data.message || "Action failed"), { code: data.code });
