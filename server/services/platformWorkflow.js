@@ -12,7 +12,6 @@ import { isSafeIdentifier } from "./platformMetadata.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
 import { effectiveManifest, resolvePersistedConnectorCapability } from "./connectorRuntime.js";
-import { createInventoryMovement } from "./inventory.js";
 import { publishPlatformEvent } from "./platformEvents.js";
 import { applyPackageLifecycle } from "./packageLifecycleRuntime.js";
 import { decryptCredentials, encryptCredentials } from "./integrationCredentials.js";
@@ -79,38 +78,6 @@ function errorDetails(error) {
     status,
     retryable: error?.retryable ?? null,
   });
-}
-
-async function shopifyPackageAvailability(db, companyId) {
-  const entitlements = await getCompanyEntitlements(db, companyId);
-  if (!hasEntitlement(entitlements, "integrations")) {
-    return { success: false, code: "NOT_LICENSED", retryable: false, message: "Shopify is not licensed for this company" };
-  }
-  const installed = await db(
-    `SELECT 1 FROM company_package_installations i
-       JOIN package_registry p ON p.id=i.package_id
-      WHERE i.company_id=$1 AND p.package_key='shopify'
-        AND i.status='active' AND i.suspended_by_entitlement=false LIMIT 1`,
-    [companyId],
-  );
-  if (!installed.rows.length) return { success: false, code: "NOT_INSTALLED", retryable: false, message: "Shopify is not installed for this company" };
-  return null;
-}
-
-async function quickBooksPackageAvailability(db, companyId) {
-  const entitlements = await getCompanyEntitlements(db, companyId);
-  if (!hasEntitlement(entitlements, "integrations")) {
-    return { success: false, code: "NOT_LICENSED", retryable: false, message: "QuickBooks is not licensed for this company" };
-  }
-  const installed = await db(
-    `SELECT 1 FROM company_package_installations i
-       JOIN package_registry p ON p.id=i.package_id
-      WHERE i.company_id=$1 AND p.package_key='quickbooks'
-        AND i.status='active' AND i.suspended_by_entitlement=false LIMIT 1`,
-    [companyId],
-  );
-  if (!installed.rows.length) return { success: false, code: "NOT_INSTALLED", retryable: false, message: "QuickBooks is not installed for this company" };
-  return null;
 }
 
 export class WorkflowExecutionError extends Error {
