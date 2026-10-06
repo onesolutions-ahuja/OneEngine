@@ -108,6 +108,15 @@ function buttonMap(buttons) {
   return Object.fromEntries((buttons || []).map((button) => [button?.config?.uiAction || button?.config?.ui_action || button?.action_key, button]))
 }
 
+function runtimeButton(buttons, role) {
+  return (buttons || []).find((button) => String(button?.config?.runtimeRole || button?.config?.runtime_role || "") === String(role || ""))
+}
+
+function referencedButton(buttons, sourceButton, configKey) {
+  const key = sourceButton?.config?.[configKey]
+  return key ? (buttons || []).find((button) => String(button?.button_key || "") === String(key)) : null
+}
+
 export default function TillPage({ onOpenSettings, onNavigate }) {
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState(['All'])
@@ -299,7 +308,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   const defaultVatRate = Number(settings?.tax?.defaultVatRate ?? 0)
 
   useEffect(() => {
-    const button = buttons.find((row) => row.button_key === 'till_pricing_calculate')
+    const button = runtimeButton(buttons, 'pricing_calculate')
     if (!button) return
     let cancelled = false
     const lines = [
@@ -568,7 +577,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     if (!sale?.id) return
     const allowed = await runReceiptPolicy('AUTO')
     if (!allowed) return
-    const button = buttons.find((row) => row.button_key === 'till_receipt_qr')
+    const button = meta.receipt_qr || null
     if (!button) return
     const response = await executeMetadataButton(button, {
       expiryMinutes: Number(settings?.receiptQr?.expiryMinutes || 5),
@@ -630,7 +639,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
     }
 
     if (paymentMethod === 'split') {
-      const splitButton = buttons.find((row) => row.button_key === 'till_split_payment_validate')
+      const splitButton = runtimeButton(buttons, 'split_validate')
       if (!splitButton) return setError('Split Payment Flow is not configured.')
       try {
         const splitResponse = await executeMetadataButton(splitButton, {
@@ -667,7 +676,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         await refreshOfflineCount()
         return
       }
-      const completeButton = buttons.find((row) => row.button_key === 'till_complete_sale')
+      const completeButton = buttons.find((row) => row.placement === 'till_checkout')
       if (!completeButton) throw new Error('Complete Sale Flow is not configured.')
       const response = await executeMetadataButton(completeButton, {
         checkout: payload.checkout,
@@ -757,7 +766,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         setMiscLines(Array.isArray(heldItems.miscLines) ? heldItems.miscLines : [])
       }
       setDiscount({ type: held.discount_type || null, value: Number(held.discount_value || 0) })
-      const consumeButton = buttons.find((row) => row.button_key === 'till_resume_consume')
+      const consumeButton = referencedButton(buttons, meta.resume, 'consumeButtonKey')
       if (!consumeButton) throw new Error('Resume Sale Flow is not configured.')
       await executeMetadataButton(consumeButton, { heldSaleId: id })
       setModal(null)
@@ -777,7 +786,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
   const revokeReceiptQr = async (saleId = receiptQr?.saleId || lastSale?.id) => {
     if (saleId) {
-      const button = buttons.find((row) => row.button_key === 'till_receipt_qr_revoke')
+      const button = referencedButton(buttons, meta.receipt_qr, 'revokeButtonKey')
       if (button) {
         try { await executeMetadataButton(button, {}, saleId) } catch {}
       }
@@ -811,7 +820,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const openDrawer = async () => {
-    const button = buttons.find((row) => row.button_key === 'till_open_drawer')
+    const button = meta.open_drawer || null
     if (!button) return setError('Open Drawer Flow is not configured.')
     try {
       await executeMetadataButton(button, {
@@ -825,7 +834,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const recordPettyCash = async (amount, reason) => {
-    const button = buttons.find((row) => row.button_key === 'till_petty_cash_submit')
+    const button = referencedButton(buttons, meta.petty, 'submitButtonKey')
     if (!button) return setError('Petty cash Flow is not configured.')
     try {
       await executeMetadataButton(button, {
@@ -954,7 +963,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const runPaymentModeFlow = async (paymentMode, options = {}, buttonOverride = null) => {
-    const button = buttonOverride || buttons.find((row) => row.button_key === 'till_payment_process')
+    const button = buttonOverride || runtimeButton(buttons, 'payment_process')
     if (!button) throw new Error('Payment Mode Flow is not configured.')
     const response = await executeMetadataButton(button, paymentFlowInputs(paymentMode, options))
     const allowed = deepFind(response?.data, 'allowed')
@@ -967,7 +976,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
   }
 
   const runReceiptPolicy = async (event) => {
-    const button = buttons.find((row) => row.button_key === 'till_receipt_qr_policy')
+    const button = referencedButton(buttons, meta.receipt_qr, 'policyButtonKey')
     if (!button) return false
     let printerAvailable = false
     if (event === 'AUTO' && String(settings?.receiptQr?.showAfterSuccessfulPayment || '').toUpperCase() === 'ONLY_WHEN_PRINTER_UNAVAILABLE') {
@@ -1006,7 +1015,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       return
     }
     if (type === 'workflow') {
-      if (button.button_key === 'till_hold') return holdSale(button)
+      if (String(button?.config?.uiAction || button?.config?.ui_action || '') === 'hold') return holdSale(button)
       if (config.policyEvent) {
         const allowed = await runReceiptPolicy(config.policyEvent)
         if (!allowed) return
@@ -1144,7 +1153,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
 
       {modal === 'discount' ? <Modal title={meta.discount?.label || 'Discount'} onClose={() => setModal(null)}><DiscountForm value={discount} onApply={(next) => { setDiscount(next); setModal(null) }}/></Modal> : null}
       {modal === 'misc' ? <Modal title={meta.misc?.label || 'Misc Item'} onClose={() => setModal(null)}><MiscForm vatEnabled={vatEnabled} defaultVatRate={Number(settings?.tax?.defaultVatRate ?? 0)} onAdd={async (line) => {
-        const button = buttons.find((row) => row.button_key === 'till_misc_line_build')
+        const button = referencedButton(buttons, meta.misc, 'submitButtonKey')
         if (!button) return setError('Misc Item Flow is not configured.')
         try {
           const response = await executeMetadataButton(button, {
@@ -1183,7 +1192,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
         setModal(null)
       }}/></Modal> : null}
       {modal === 'price_override' && priceTarget ? <Modal title={meta.price_override?.label || 'Change Price'} onClose={() => { setPriceTarget(null); setModal(null) }}><PriceOverrideForm item={priceTarget} onApply={async (price, reason) => {
-        const button = buttons.find((row) => row.button_key === 'till_price_override_apply')
+        const button = referencedButton(buttons, meta.price_override, 'submitButtonKey')
         if (!button) return setError('Price Override Flow is not configured.')
         try {
           await executeMetadataButton(button, {
@@ -1200,7 +1209,7 @@ export default function TillPage({ onOpenSettings, onNavigate }) {
       {modal === 'receipt_qr' && receiptQr ? <Modal title={meta.receipt_qr?.label || 'Receipt QR'} onClose={() => { void revokeReceiptQr(); setModal(null) }}><div className="till-receipt-qr">{receiptQr.qrcodeUrl ? <img src={receiptQr.qrcodeUrl} alt="Receipt QR"/> : null}{settings?.receiptQr?.showCountdown !== false ? <p>{receiptQr.expiresAt ? `Expires ${new Date(receiptQr.expiresAt).toLocaleTimeString()}` : ''}</p> : null}<button type="button" className="till-primary" onClick={async () => {
         const allowed = await runReceiptPolicy('REGENERATE')
         if (!allowed) return
-        const button = buttons.find((row) => row.button_key === 'till_receipt_qr')
+        const button = meta.receipt_qr || null
         if (button && receiptQr?.saleId) {
           const response = await executeMetadataButton(button, {
             expiryMinutes: Number(settings?.receiptQr?.expiryMinutes || 5),
