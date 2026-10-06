@@ -15,6 +15,7 @@
     "audit:metadata-phase4": "node --test tests/finalMetadataPhase4.test.mjs",
     "audit:metadata-phase5": "node --test tests/finalMetadataPhase5.test.mjs",
     "audit:metadata-phase6": "node --test tests/finalMetadataPhase6.test.mjs",
+    "audit:metadata-phase7": "node --test tests/finalMetadataPhase7.test.mjs",
     "test:unit": "node --test tests/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
