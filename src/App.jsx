@@ -23,7 +23,6 @@ const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
-const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
 const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
@@ -2253,9 +2252,7 @@ function Desktop({ onLock, onSignOut }) {
             </button>
             <AnimatePresence>
               {topPanel === 'help' ? <HelpMenu onSelect={(label) => {
-                setTopPanel('')
-                if (label === 'Till guide') openItem('till')
-                else if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
+                setTopPanel('')                if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
                 else { setRoute('settings', 'connections'); setRouteState({ app: 'settings', section: 'connections' }); setActiveApp('settings') }
               }} /> : null}
             </AnimatePresence>
@@ -2341,11 +2338,6 @@ function Desktop({ onLock, onSignOut }) {
           <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
-        ) : activeApp === 'till' ? (
-          <TillPage
-            onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
-            onNavigate={openItem}
-          />
         ) : activeApp === 'sales' ? (
           <SalesPage initialObjectKey="sale_ledger" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
