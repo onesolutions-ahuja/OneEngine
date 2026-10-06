@@ -337,7 +337,7 @@ export async function executeSystemAction({
 
   try {
     const workflowVariables = { variables: {}, steps: {} };
-    const actions = [{ type: normalizedActionKey, systemTemplate: true, ...(input || {}) }];
+    const actions = [{ ...(input || {}), type: normalizedActionKey, systemTemplate: true }];
     const results = await executeWorkflowActions({
       actions,
       db,
