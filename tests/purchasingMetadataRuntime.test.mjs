@@ -344,6 +344,10 @@ test("retail transactions are owned by metadata objects and generic Flow runtime
   assert.match(registry, /name:\s*"Complete Sale"/);
   assert.match(registry, /name:\s*"Create Customer Return"/);
   assert.match(registry, /name:\s*"Create Exchange"/);
+  assert.match(registry, /name:\s*"Open Drawer"/);
+  assert.match(registry, /name:\s*"Record Petty Cash"/);
+  assert.match(registry, /buttonKey:"till_open_drawer"/);
+  assert.match(registry, /buttonKey:"till_petty_cash_submit"/);
   assert.match(workflow, /commonFieldValues/);
   assert.equal(server.includes("./routes/sales.js"), false);
   assert.equal(server.includes("createSalesRouter"), false);
