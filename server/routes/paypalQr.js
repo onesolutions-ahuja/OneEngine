@@ -18,6 +18,5 @@ export default function createPaypalQrRouter({ authenticate, authorize, db }) {
     res.json({success:true,data:attempt});
   });
   router.post("/paypal-qr/attempts/:id/cancel",authenticate,authorize("sale.create"),metadataRequired);
-  for(const outcome of ["approve","decline","cancel","expire"]) router.post(`/paypal-qr/demo/:id/${outcome}`,metadataRequired);
   return router;
 }
