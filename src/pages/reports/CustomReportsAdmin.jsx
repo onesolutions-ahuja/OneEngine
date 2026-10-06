@@ -1,3 +1,4 @@
+import { loadRuntimeSurfaceSettings, surfacePath } from '../../services/runtimeSurface'
 import { useEffect, useMemo, useState } from "react";
 import {
   archiveCustomReport,
@@ -117,7 +118,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     }catch(e){setError(errorMessage(e));}finally{setLoading(false);}
   };
   useEffect(()=>{void load();},[]);
-  useEffect(()=>{let live=true;apiRequest("/api/settings").then((response)=>{if(live&&response?.success)setReportCurrency(response.data?.company?.currency||"GBP");}).catch(()=>{});return()=>{live=false;};},[]);
+  useEffect(()=>{let live=true;loadRuntimeSurfaceSettings("platform","presentation").then(({surface,settings})=>{if(live)setReportCurrency(surfacePath(settings,surface?.settings?.currencyPath,"GBP")||"GBP");}).catch(()=>{});return()=>{live=false;};},[]);
   useEffect(()=>{
     let live=true;
     if(!initialReport?.id||!runtimeFilters.length)return()=>{live=false;};
