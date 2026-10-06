@@ -1,5 +1,4 @@
 const DEFINITIONS = [
-  { id: 'appointments.manage', prefixes: ['/api/appointments'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'platform.developer.manage', prefixes: ['/api/platform/developer/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'platform.metadata.execute', prefixes: ['/api/platform/'], methods: ['POST','PUT','PATCH','DELETE'] },
   { id: 'package.lifecycle', prefixes: ['/api/packages/', '/api/platform/packages/'], methods: ['POST','PUT','PATCH','DELETE'] },
@@ -86,15 +85,12 @@ export function isPrivilegedMutation(path, method = 'GET') {
   const verb = String(method || 'GET').toUpperCase()
   if (!['POST','PUT','PATCH','DELETE'].includes(verb)) return false
   const pathname = canonicalPath(path)
-  return pathname.startsWith('/api/appointments')
-    || pathname.startsWith('/api/platform/')
+  return pathname.startsWith('/api/platform/')
     || pathname.startsWith('/api/security/')
     || pathname.startsWith('/api/packages/')
     || pathname.startsWith('/api/admin/')
     || pathname.startsWith('/api/settings/')
-    || pathname.startsWith('/api/payments')
-    || pathname.startsWith('/api/payment')
-    || pathname.startsWith('/api/platform/objects/stock_return')
+
 }
 
 export function trustedRuntimeHeaders(capability) {
