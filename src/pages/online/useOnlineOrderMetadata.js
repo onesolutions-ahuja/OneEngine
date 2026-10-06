@@ -45,7 +45,7 @@ export default function useOnlineOrderMetadata() {
 
   useEffect(() => {
     let live = true;
-    apiRequest("/api/platform/runtime/objects/online_order/buttons")
+    apiRequest("/api/platform/runtime/objects/sales_order/buttons")
       .then((response) => {
         if (!live) return;
         if (!response?.success) throw new Error(response?.message || "Unable to load Online Order actions");
