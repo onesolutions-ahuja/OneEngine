@@ -1799,6 +1799,51 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         console.log("onePOS: removed generated action/job pseudo-workflows", { removed: removed.rowCount });
       },
     },
+    {
+      key: "0067_remove_residual_duplicate_runtime_workflows",
+      version: "67",
+      name: "Remove residual duplicate runtime workflows",
+      up: async client => {
+        const retiredSystemKeys = [
+          "flow:online_order.transition",
+          "flow:supplier.invoice.create",
+          "flow:supplier.payment.create",
+          "flow:purchase.create",
+          "flow:purchase.receive",
+          "flow:supplier.return.execute",
+        ];
+        const removedGenerated = await client.query(
+          `DELETE FROM platform_rules
+            WHERE COALESCE(user_modified,FALSE)=FALSE
+              AND action->>'systemGenerated'='true'
+              AND action->>'systemKey'=ANY($1::text[])
+            RETURNING id,name,company_id,action->>'systemKey' AS system_key`,
+          [retiredSystemKeys]
+        );
+        const removedLegacyLicence = await client.query(
+          `DELETE FROM platform_rules
+            WHERE COALESCE(user_modified,FALSE)=FALSE
+              AND name='Licence Request Created'
+              AND trigger_key='licence_request_created'
+            RETURNING id,name,company_id`
+        );
+        const remaining = await client.query(
+          `SELECT id,name,company_id,action->>'systemKey' AS system_key
+             FROM platform_rules
+            WHERE COALESCE(user_modified,FALSE)=FALSE
+              AND (
+                (action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[]))
+                OR (name='Licence Request Created' AND trigger_key='licence_request_created')
+              )`,
+          [retiredSystemKeys]
+        );
+        if (remaining.rows.length) throw new Error("Residual duplicate runtime workflow cleanup verification failed");
+        console.log("onePOS: removed residual duplicate runtime workflows", {
+          generated: removedGenerated.rowCount,
+          legacyLicence: removedLegacyLicence.rowCount,
+        });
+      },
+    },
     ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);

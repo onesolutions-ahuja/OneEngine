@@ -74,16 +74,16 @@ test("Send Communication resolves templates and can notify platform admins", asy
   assert.equal(notifications[0][3], "Acme requested OneAssistant");
 });
 
-test("licence requests no longer create notifications outside Flow", () => {
-  const source = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
-  const start = source.indexOf("async function executeLicenceRequestPackageAction");
-  const end = source.indexOf("async function resolveEmailWorkflowAction", start);
-  assert.ok(start >= 0 && end > start);
-  const body = source.slice(start, end);
-  assert.doesNotMatch(body, /INSERT INTO platform_notifications/);
-  assert.match(body, /SEND_COMMUNICATION/);
-  assert.match(body, /channel: "IN_APP"/);
-  assert.match(body, /channel: "EMAIL"/);
+test("licence request business orchestration exists only in metadata Flow", () => {
+  const runtime = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
+  const metadata = readFileSync(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  assert.doesNotMatch(runtime, /executeLicenceRequestPackageAction/);
+  assert.doesNotMatch(runtime, /LICENCE_REQUEST_PACKAGE/);
+  assert.doesNotMatch(runtime, /Licence Request Created/);
+  assert.match(metadata, /OneStore - Request Licence/);
+  assert.match(metadata, /create_licence_request/);
+  assert.match(metadata, /notify_licence_request/);
+  assert.match(metadata, /key: "SEND_COMMUNICATION"/);
 });
 
 test("communication upgrade migration converts legacy steps", () => {
