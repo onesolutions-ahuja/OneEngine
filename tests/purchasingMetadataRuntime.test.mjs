@@ -8,7 +8,7 @@ const manifestUrl = new URL("../server/metadata/manifests/purchasing_core.json",
 test("purchasing transactions are metadata Flow owned", async () => {
   const manifest = JSON.parse(await readFile(manifestUrl, "utf8"));
   const objectKeys = new Set(manifest.objects.map((item) => item.objectKey));
-  for (const key of ["purchase","purchase_line","purchase_receipt","stock_return","stock_return_line"]) assert.ok(objectKeys.has(key), key);
+  for (const key of ["purchase_ledger","purchase_line","purchase_receipt","stock_return","stock_return_line"]) assert.ok(objectKeys.has(key), key);
   for (const object of manifest.objects) assert.equal(object.config?.flowWritesOnly, true, object.objectKey);
   const names = new Set(manifest.workflows.map((flow) => flow.name));
   for (const name of ["Purchase Create","Purchase Receive","Supplier Return Execute"]) assert.ok(names.has(name), name);
@@ -29,8 +29,8 @@ test("purchase and supplier return parent IDs come from created records", async 
 test("purchases and supplier returns use generic workspace endpoints", async () => {
   const purchase = await readFile(new URL("../src/pages/purchases/PurchasesPage.jsx", import.meta.url), "utf8");
   const returns = await readFile(new URL("../src/pages/returns/SupplierReturnsPage.jsx", import.meta.url), "utf8");
-  assert.match(purchase, /initialObjectKey="purchase"/);
-  assert.match(returns, /initialObjectKey="purchase_line"/);
+  assert.match(purchase, /initialObjectKey="purchase_ledger"/);
+  assert.match(returns, /initialObjectKey="purchase_ledger"/);
   for (const source of [purchase, returns]) {
     for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(source.includes(value), false, value);
   }
@@ -55,7 +55,7 @@ test("Phase 2 has no legacy direct SQL business writers", async () => {
     "../server/services/platformWorkflow.js",
     "../server/server.js",
   ];
-  const forbidden = /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(?:purchases|purchase_items|purchase_receipts|suppliers|supplier_invoices|supplier_payments|supplier_payment_allocations|supplier_ledger_entries|stock_returns|stock_return_items)\b/i;
+  const forbidden = /(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(?:purchase_ledger|purchase_items|purchase_receipts|suppliers|supplier_invoices|supplier_payments|supplier_payment_allocations|supplier_ledger_entries|stock_returns|stock_return_items)\b/i;
   for (const target of treeTargets) {
     const source = await readFile(new URL(target, import.meta.url), "utf8");
     assert.equal(forbidden.test(source), false, target);
