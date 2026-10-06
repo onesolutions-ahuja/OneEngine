@@ -23,8 +23,6 @@ const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
-const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
-const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
@@ -53,7 +51,6 @@ const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
 const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
 const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
-const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   LockKeyhole,
@@ -107,7 +104,7 @@ import {
 const SETTINGS_VISUALS = {
   general: { icon: Settings2, tone: 'orange', searchTerms: ['date format', 'currency', 'timezone', 'regional'] },
   company: { icon: Building2, tone: 'blue', searchTerms: ['company name', 'legal name', 'company email', 'company phone', 'logo'] },
-  'store-till': { icon: Store, tone: 'blue', searchTerms: ['store', 'till', 'terminal', 'terminal number', 'product view', 'invoice'] },
+  'store-till': { icon: Store, tone: 'blue', searchTerms: ['store',  'terminal', 'terminal number', 'product view', 'invoice'] },
   'client-web-shop': { icon: ShoppingCart, tone: 'green' },
   'tax-vat': { icon: ReceiptText, tone: 'green', searchTerms: ['vat', 'tax', 'vat enabled', 'default vat rate', 'rate'] },
   receipts: { icon: ReceiptText, tone: 'green' },
@@ -647,7 +644,7 @@ function SettingsPage({ onOpenProfile }) {
       else if (field === 'batchDefaultMfgRule') cloneSection('inventory').batchDefaultMfgRule = value
       else if (field === 'batchDefaultExpiryRule') cloneSection('inventory').batchDefaultExpiryRule = value
       else if (field === 'batchDefaultExpiryDays') cloneSection('inventory').batchDefaultExpiryDays = Number(value)
-      else if (field === 'productView') cloneSection('till').productView = value
+      else if (field === 'productView') cloneSection().productView = value
       else if (field === 'dockQuickAccess') cloneSection('dock').quickAccess = Array.isArray(value) ? [...value] : []
       else if (field === 'customerDisplayEnabled') cloneSection('customerDisplay').enabled = value
       else if (field === 'onlineOrderingEnabled') cloneSection('onlineOrdering').enabled = value
@@ -1838,14 +1835,14 @@ function Desktop({ onLock, onSignOut }) {
   </div>
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
-  const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 'till'
+  const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 
 
   useEffect(() => {
     if (!isTillUser || activeApp !== 'home') return
-    const next = { app: 'till', section: null }
+    const next = { app:  section: null }
     setRouteState(next)
-    setRoute('till')
-    setActiveApp('till')
+    setRoute()
+    setActiveApp()
   }, [isTillUser, activeApp])
 
   useEffect(() => {
@@ -2105,7 +2102,7 @@ function Desktop({ onLock, onSignOut }) {
       'kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','categories',
-      'global-products','products','sales','workspace','till',
+      'global-products','products','sales','workspace',
     ])
 
     if (target === 'developer') {
@@ -2254,7 +2251,7 @@ function Desktop({ onLock, onSignOut }) {
             <AnimatePresence>
               {topPanel === 'help' ? <HelpMenu onSelect={(label) => {
                 setTopPanel('')
-                if (label === 'Till guide') openItem('till')
+                if (label === 'Till guide') openItem()
                 else if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
                 else { setRoute('settings', 'connections'); setRouteState({ app: 'settings', section: 'connections' }); setActiveApp('settings') }
               }} /> : null}
@@ -2335,7 +2332,7 @@ function Desktop({ onLock, onSignOut }) {
           <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
-        ) : activeApp === 'till' ? (
+        ) : activeApp ===  ? (
           <TillPage
             onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
             onNavigate={openItem}
@@ -2428,14 +2425,8 @@ function Desktop({ onLock, onSignOut }) {
 
 export default function App() {
   const route = readRoute()
-  if (route.app === 'customer-display') {
-    return <div data-oneengine-route="customer-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary></div>
-  }
   if (route.app === 'flow-runtime') {
     return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
-  }
-  if (route.app === 'kiosk-display') {
-    return <div data-oneengine-route="kiosk-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading collection display…</div>}><OneKioskDisplayPage /></Suspense></LazyLoadBoundary></div>
   }
 
   // A browser refresh should restore an authenticated session, not behave like
