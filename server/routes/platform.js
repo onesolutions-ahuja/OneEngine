@@ -7883,6 +7883,17 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
           await transactionClient.query("COMMIT");
         } catch (error) {
           await transactionClient.query("ROLLBACK");
+          if (run?.id) {
+            await db(
+              `UPDATE platform_workflow_runs
+                  SET status='FAILED',
+                      completed_at=NOW(),
+                      updated_at=NOW(),
+                      metadata=COALESCE(metadata,'{}'::jsonb) || $1::jsonb
+                WHERE id=$2 AND company_id=$3`,
+              [JSON.stringify({ error: String(error?.message || error) }), run.id, req.user.companyId]
+            );
+          }
           throw error;
         } finally {
           transactionClient.release();
