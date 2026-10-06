@@ -11,6 +11,7 @@
     "audit:trusted": "node scripts/audit-trusted-runtime.mjs",
     "audit:workflow-coverage": "node scripts/audit-workflow-coverage.mjs",
     "audit:workflow-coverage:enforce": "node scripts/audit-workflow-coverage.mjs --enforce",
+    "audit:metadata-phase3": "node --test tests/finalMetadataPhase3.test.mjs",
     "test:unit": "node --test tests/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
