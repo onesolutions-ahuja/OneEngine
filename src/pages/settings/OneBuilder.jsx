@@ -10,6 +10,14 @@ import ApprovalProcessBuilder from './Platform/ApprovalProcessBuilder.jsx'
 import CustomPageBuilder from './Platform/CustomPageBuilder.jsx'
 import GPTBuilderPage from '../developer/gptbuilder/GPTBuilderPage.jsx'
 
+const FLOW_TYPE_OPTIONS = [
+  { key: 'RECORD_TRIGGERED', label: 'Record-Triggered Flow', description: 'Run when a record changes.', icon: '◉' },
+  { key: 'SCREEN', label: 'Screen Flow', description: 'Guide a user through interactive screens.', icon: '▣' },
+  { key: 'PLATFORM_EVENT', label: 'Platform Event-Triggered Flow', description: 'Run when a platform event is received.', icon: '⚡' },
+  { key: 'SCHEDULE', label: 'Schedule-Triggered Flow', description: 'Run on a schedule.', icon: '◷' },
+  { key: 'AUTOLAUNCHED', label: 'Autolaunched Flow', description: 'Run when invoked by metadata or another flow.', icon: '▶' },
+]
+
 const TABS = [
   { key: 'workflow', label: 'Workflow', icon: Workflow },
   { key: 'approval', label: 'Approval Flow', icon: UserCheck },
@@ -433,7 +441,7 @@ export default function OneBuilder({ initialTab = 'workflow', singleBuilder = fa
     setMessage('')
     try {
       if (tab === 'workflow') {
-        throw new Error('Workflow definitions are saved only through WorkflowAdmin.')
+        throw new Error('Workflow definitions are saved only through GPT Builder.')
       } else if (tab === 'approval') {
         if (!activeMeta.name || !activeMeta.objectId) throw new Error('Approval name and object are required.')
         const conditions = items.filter((item) => item.key === 'criteria' && item.config?.field).map((item) => ({ id: item.id, field: item.config.field, operator: item.config.operator || 'equals', value: item.config.value }))
