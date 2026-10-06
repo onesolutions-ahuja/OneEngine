@@ -1829,16 +1829,6 @@ function Desktop({ onLock, onSignOut }) {
   </div>
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
-  const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 'till'
-
-  useEffect(() => {
-    if (!isTillUser || activeApp !== 'home') return
-    const next = { app: 'till', section: null }
-    setRouteState(next)
-    setRoute('till')
-    setActiveApp('till')
-  }, [isTillUser, activeApp])
-
   useEffect(() => {
     const syncRoute = () => {
       const route = readRoute()
@@ -2235,7 +2225,6 @@ function Desktop({ onLock, onSignOut }) {
             <AnimatePresence>
               {topPanel === 'help' ? <HelpMenu onSelect={(label) => {
                 setTopPanel('')
-                if (label === 'Till guide') openItem('till')
                 else if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
                 else { setRoute('settings', 'connections'); setRouteState({ app: 'settings', section: 'connections' }); setActiveApp('settings') }
               }} /> : null}
@@ -2336,10 +2325,6 @@ function Desktop({ onLock, onSignOut }) {
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'accounting' ? (
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
-        ) : activeApp === 'online-orders' ? (
-          <WorkspacePage initialObjectKey="sales_order" appKey="online-orders" />
-        ) : activeApp === 'own-delivery' ? (
-          <WorkspacePage initialObjectKey="sales_order" appKey="own-delivery" />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
