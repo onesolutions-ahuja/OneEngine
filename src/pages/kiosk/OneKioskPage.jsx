@@ -178,7 +178,13 @@ export default function OneKioskPage({ publicMode = false }) {
     if (demoMode) {
       setProducts(DEMO_PRODUCTS);
       setCurrency("GBP");
-      apiRequest(demoMode ? "/api/kiosk/flows?demo=1" : "/api/kiosk/flows")
+      loadRuntimeSurface('one_kiosk', 'kiosk')
+        .then((surface) => {
+          setKioskSurface(surface);
+          const flowsEndpoint = runtimeEndpoint(surface, 'flows');
+          if (!flowsEndpoint) throw new Error("OneKiosk flow metadata is unavailable");
+          return apiRequest(`${flowsEndpoint}?demo=1`);
+        })
         .then((response) => {
           const flows = Array.isArray(response?.data) ? response.data : [];
           const requested = String(demoFlowKey || "").trim().toLowerCase();
