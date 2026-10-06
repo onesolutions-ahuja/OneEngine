@@ -372,4 +372,60 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     expect(failures, failures.join('\n')).toEqual([])
   })
 
+
+  test('invalid flows cannot activate and runtime failures never report success', async ({ page }) => {
+    if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
+    const failures = watchRuntimeFailures(page)
+    let savedRule = null
+    let activationCalls = 0
+
+    await page.route('**/api/platform/rules', async (route) => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: savedRule ? [savedRule] : [] }) })
+        return
+      }
+      if (request.method() === 'POST') {
+        const payload = request.postDataJSON()
+        savedRule = { id: 'negative-empty-flow', ...payload, active: false, runtime_active: false, lifecycle_status: 'DRAFT' }
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: savedRule }) })
+        return
+      }
+      await route.continue()
+    })
+    await page.route('**/api/platform/rules/negative-empty-flow', async (route) => {
+      if (route.request().method() === 'PUT') activationCalls += 1
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: savedRule }) })
+    })
+    await page.route('**/api/platform/rules/negative-empty-flow/run', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'Contract runtime failure' }) })
+    })
+
+    await page.goto('developer/gptbuilder')
+    await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: /^New Flow$/ }).click()
+    await page.getByLabel('Search automations').fill('screen')
+    await page.locator('.gptb-type-card').filter({ has: page.getByText('Screen Flow', { exact: true }) }).click()
+    await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
+
+    await page.getByRole('button', { name: /^Save$/ }).click()
+    const props = page.getByRole('dialog', { name: /Save the Flow/i })
+    await props.getByRole('textbox', { name: /^Flow Label/ }).fill('Invalid Empty Contract Flow')
+    await props.getByRole('button', { name: /^Save$/ }).click()
+    await expect(page.getByText('Flow saved.', { exact: true })).toBeVisible()
+
+    const activate = page.getByRole('button', { name: /^Activate$/ })
+    await expect(activate).toBeDisabled()
+    expect(activationCalls).toBe(0)
+
+    await page.getByRole('button', { name: /^Run$/ }).click()
+    const runPanel = page.getByRole('complementary', { name: 'Run' })
+    await runPanel.getByRole('button', { name: /^Run$/ }).click()
+    await expect(runPanel.getByRole('alert')).toContainText('Contract runtime failure')
+    await expect(runPanel.getByText('COMPLETED', { exact: true })).toHaveCount(0)
+
+    expect(activationCalls).toBe(0)
+    expect(failures, failures.join('\n')).toEqual([])
+  })
+
 })
