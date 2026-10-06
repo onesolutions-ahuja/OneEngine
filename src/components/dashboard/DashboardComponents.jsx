@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 /*
  * Generic dashboard component renderers.
  *
- * Nothing here knows about sales, products or payments: every component reads
+ * Nothing here knows about any business object or domain: every component reads
  * its datasource, metric, grouping and date range from the configuration the
  * Dashboard Builder persisted. Swapping a component's report/field changes what
  * these renderers draw without changing this file.
