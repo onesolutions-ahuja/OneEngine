@@ -12,18 +12,9 @@ import { FlaskConical } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
 import { safeParse } from "./shared.jsx";
 
-export const SAMPLE_JSON = `{
-  "sales": {
-    "sale_id": "S-1001",
-    "receipt_number": "T01-20260916-0001",
-    "total": 42.5,
-    "customer": { "name": "Acme Ltd", "address": { "postcode": "SW1A 1AA" } },
-    "items": [ { "quantity": 2, "product": { "ean": "5000111000011" } } ]
-  }
-}`;
-
 export default function EndpointTestModal({ integration, endpoint, onClose }) {
-  const [sampleJson, setSampleJson] = useState(SAMPLE_JSON);
+  const initialSample = endpoint?.sampleData || endpoint?.sample_data || endpoint?.config?.sampleData || integration?.manifest?.sampleData || {};
+  const [sampleJson, setSampleJson] = useState(JSON.stringify(initialSample, null, 2));
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -73,7 +64,7 @@ export default function EndpointTestModal({ integration, endpoint, onClose }) {
         </div>
         <div className="p-5 space-y-3">
           <label className="block">
-            <span className="block text-xs font-medium text-slate-600 mb-1">Sample onePOS data (JSON)</span>
+            <span className="block text-xs font-medium text-slate-600 mb-1">Sample event data (JSON)</span>
             <textarea
               value={sampleJson}
               onChange={(e) => setSampleJson(e.target.value)}
