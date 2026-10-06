@@ -209,12 +209,6 @@ export default function createMobileScannerRouter({ authenticate, authorize, db,
     const terminalId = String(req.query.terminalId || "");
     if (!terminalId) return res.status(400).json({ success: false, message: "Till assignment required" });
     try {
-      const activeTill = await db(
-        `SELECT id FROM till_sessions WHERE company_id = $1 AND store_id = $2 AND terminal_id = $3
-         AND user_id = $4 AND status = 'open' LIMIT 1`,
-        [req.user.companyId, req.user.storeId, terminalId, req.user.id]
-      );
-      if (!activeTill.rows[0]) return res.status(403).json({ success: false, message: "Open the assigned till to receive scanner events" });
       const events = await db(
         `WITH pending AS (
            SELECT e.id FROM mobile_scanner_events e
