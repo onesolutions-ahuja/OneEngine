@@ -24,14 +24,7 @@ const retired = new Set(["server/routes/dashboard.js","server/services/reportSal
 // Temporary compatibility inventory: these adapters are allowed to touch the
 // authoritative POS tables, but every entry is named here so additions cannot
 // silently expand the exception surface.
-const legacyBusinessRuntime = new Set([
-  "server/routes/settings.js","server/routes/integrations.js",
-  "server/services/jarvis/tools/index.js","server/services/jarvis/index.js",
-  "server/routes/productFeatures.js","server/services/productFeatures.js","server/services/productImportExport.js",
-  "server/routes/eanLookup.js","server/routes/globalProductLookup.js","server/services/globalProductLookup.js",
-  "server/routes/customerAuth.js","server/routes/audit.js","server/services/licensing.js",
-  "server/services/paypalQrConnector.js","server/services/integrationFieldResolver.js"
-]);
+const legacyBusinessRuntime = new Set([]);
 const businessTables=[
   "sales","sale_ledger","sale_items","customers","payments","products","suppliers",
   "purchases","purchase_ledger","purchase_items","purchase_receipts","refunds",
