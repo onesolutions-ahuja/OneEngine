@@ -259,7 +259,10 @@ function loadManifestMap() {
     if (!file.isFile() || extname(file.name) !== ".json") continue;
     const packageKey = file.name.slice(0, -5);
     const parsed = JSON.parse(readFileSync(join(manifestDirectory, file.name), "utf8"));
-    entries.set(packageKey, packageKey === "retail_pos" ? canonicalizeRetailSalesManifest(parsed) : parsed);
+    const canonical = packageKey === "retail_pos"
+      ? canonicalizeRetailSalesManifest(parsed)
+      : rewriteSalesObjectReferences(parsed);
+    entries.set(packageKey, canonical);
   }
   cache = entries;
   return cache;
