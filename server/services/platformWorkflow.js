@@ -3767,42 +3767,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "CALL_FUNCTION",
-    displayName: "Call Function",
-    description: "Invoke a registered, approved onePOS function.",
-    validation: (action) => {
-      if (!action?.functionKey && !action?.key) throw new Error("Call Function requires a functionKey");
-    },
-    async: false,
-    requiredPermissions: ["functions.execute"],
-    executor: async ({ action, db, businessDb = null, pool, client, req, companyId, userId, record, previousRecord, object, fields, workflowVariables = {} }) => {
-      const functionKey = action.functionKey || action.key;
-      const functionDefinition = getRegisteredFunction(functionKey);
-      if (!functionDefinition) throw new Error(`Function "${functionKey}" is not registered`);
-      if (typeof functionDefinition.handler !== "function") {
-        throw new Error(`Function "${functionKey}" has no handler`);
-      }
-      const inputs = Object.fromEntries(Object.entries(action.inputs || {}).map(([key, value]) => [
-        key,
-        resolveConfiguredResource(value, { record, previousRecord, req, object, workflowVariables }),
-      ]));
-      return functionDefinition.handler({
-        action,
-        inputs,
-        db: businessDb || db,
-        pool,
-        client,
-        req,
-        companyId,
-        userId,
-        record,
-        previousRecord,
-        object,
-        fields,
-      });
-    },
-  },
-  {
     key: "RUN_SUBFLOW",
     displayName: "Run Subflow",
     description: "Run another approved workflow as a child workflow.",
@@ -5456,13 +5420,6 @@ export function validateWorkflowAction(action) {
   return definition;
 }
 
-export function getRegisteredFunction(functionKey) {
-  return PLATFORM_FUNCTION_MAP.get(String(functionKey || "")) || null;
-}
-
-export function getRegisteredFunctionsRegistry() {
-  return PLATFORM_FUNCTIONS.slice();
-}
 
 async function resolveTargetObjectMetadata({ db, objectId, objectKey, companyId }) {
   if (!db || typeof db !== "function" || !companyId) return null;
