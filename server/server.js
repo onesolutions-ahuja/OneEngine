@@ -35,7 +35,6 @@ import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemWorkflow } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
-import createTillRouter from "./routes/till.js";
 import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
 
@@ -2104,32 +2103,6 @@ app.use(
 | sale.hold permission gate and company/store/user scoping as before.
 */
 
-/*
-|--------------------------------------------------------------------------
-| TILL SESSIONS & CASH MANAGEMENT
-|--------------------------------------------------------------------------
-|
-| A till session is opened per terminal (till) for a store. One open session
-| is allowed per terminal. Sales created while a session is open are linked
-| to the session's terminal; cash sales contribute to expected cash at close,
-| card sales do not. Cash movements record manual cash-in / cash-out.
-|
-| Routes are registered via routes/till.js, receiving the existing
-| authenticate, authorize, db, getRolePermissionCodes and
-| canViewCompanyCustomers functions so behaviour is unchanged.
-*/
-
-app.use(
-  "/api",
-  createTillRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-    getRolePermissionCodes,
-    canViewCompanyCustomers,
-  })
-);
 
 /*
 |--------------------------------------------------------------------------
