@@ -46,7 +46,6 @@ import createReportsRouter from "./routes/reports.js";
 import createSecureInvoiceRouter from "./routes/secureInvoice.js";
 import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
-import createWhatsAppSettingsRouter from "./routes/whatsapp.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createInvoiceDeliveryRouter from "./routes/invoiceDelivery.js";
 import createAdminRouter from "./routes/admin.js";
@@ -2013,7 +2012,6 @@ app.use("/api", createSettingsRouter({
   },
 }));
 app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
-app.use("/api", createWhatsAppSettingsRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createSmsGateWebhookRouter({ pool }));
 app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool, writeAudit }));
 
