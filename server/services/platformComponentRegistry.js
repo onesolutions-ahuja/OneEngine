@@ -15,7 +15,7 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   // Custom Page Builder layout components. `multi_container` is record-bound:
   // it renders a Record Collection through the shared page renderer and never
   // embeds its own query logic (collection → existing Platform record APIs).
-  { key: "container", api: "container.v1", version: 1, label: "Container", category: "layout", kind: "layout", bindable: false, containsChildren: true, rendererKey: "container" },
+  { key: "container", api: "container.v1", version: 1, label: "Container", category: "layout", kind: "layout", bindable: false, containsChildren: true, rendererKey: "container", defaults: { columns: 2, spacing: 3 }, configurable: [{ key: "columns", type: "number", label: "Columns", min: 1, max: 4 }, { key: "spacing", type: "number", label: "Spacing", min: 1, max: 6 }] },
   { key: "multi_container", api: "multi_container.v1", version: 1, label: "MultiContainer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false },
   { key: "table", api: "table.v1", version: 1, label: "Table / List", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, rendererKey: "table" },
   { key: "tree_view", api: "tree_view.v1", version: 1, label: "Tree View", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "parentField", "labelField", "secondaryField", "rootFilter", "sort", "maxDepth", "showCounts", "allowCollapse", "defaultExpandedDepth", "clickAction"] },
@@ -29,10 +29,10 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   { key: "hierarchy_viewer", api: "hierarchy_viewer.v1", version: 1, label: "Hierarchy Viewer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "parentField", "titleField", "subtitleFields", "imageField", "statusField", "maxDepth", "orientation", "clickAction"] },
   { key: "file_viewer", api: "file_viewer.v1", version: 1, label: "File Viewer", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "fileRelation", "displayMode", "filenameField", "typeField", "dateField", "uploaderField", "allowedFileTypes", "maxItems"] },
   { key: "signature", api: "signature.v1", version: 1, label: "Signature", category: "record", kind: "record", bindable: true, recordBound: true, containsChildren: false, configurable: ["objectKey", "fieldKey", "label", "required", "clearPermission", "displayMode", "width", "height"] },
-  { key: "header", api: "header.v1", version: 1, label: "Header", category: "content", kind: "content", bindable: false },
-  { key: "text", api: "text.v1", version: 1, label: "Information Text", category: "content", kind: "content", bindable: false },
+  { key: "header", api: "header.v1", version: 1, label: "Header", category: "content", kind: "content", bindable: false, defaults: { text: "Heading" }, configurable: [{ key: "text", type: "text", label: "Heading text" }] },
+  { key: "text", api: "text.v1", version: 1, label: "Information Text", category: "content", kind: "content", bindable: false, defaults: { text: "Text" }, configurable: [{ key: "text", type: "text", label: "Text" }] },
   { key: "divider", api: "divider.v1", version: 1, label: "Divider", category: "layout", kind: "layout", bindable: false },
-  { key: "spacer", api: "spacer.v1", version: 1, label: "Spacer", category: "layout", kind: "layout", bindable: false },
+  { key: "spacer", api: "spacer.v1", version: 1, label: "Spacer", category: "layout", kind: "layout", bindable: false, defaults: { spacing: 3 }, configurable: [{ key: "spacing", type: "number", label: "Spacing", min: 1, max: 6 }] },
   { key: "text_input", label: "Text Box", category: "field", kind: "field", bindable: true, fieldTypes: ["text", "email", "phone", "url", "time", "auto_number"] },
   { key: "long_text", label: "Long Text", category: "field", kind: "field", bindable: true, fieldTypes: ["long_text", "rich_text", "textarea"] },
   { key: "number", label: "Number", category: "field", kind: "field", bindable: true, fieldTypes: ["number", "percent"] },
@@ -43,8 +43,8 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   { key: "picklist", label: "Picklist / Dropdown", category: "field", kind: "field", bindable: true, fieldTypes: ["select", "picklist", "multiselect"] },
   { key: "lookup", label: "Lookup", category: "field", kind: "field", bindable: true, fieldTypes: ["lookup"] },
   { key: "structured_field", label: "Address / Location", category: "field", kind: "field", bindable: true, fieldTypes: ["address", "location", "json"] },
-  { key: "related_list", api: "related_list.v1", version: 1, label: "Related List / Table", category: "record", kind: "record", bindable: true, relationship: true },
-  { key: "field_value", api: "field_value.v1", version: 1, label: "Field Value", category: "record", kind: "record", bindable: true, displayOnly: true },
+  { key: "related_list", api: "related_list.v1", version: 1, label: "Related List / Table", category: "record", kind: "record", bindable: true, relationship: true, defaults: { relationshipKey: "", limit: 10 }, configurable: [{ key: "relationshipKey", type: "text", label: "Relationship key" }, { key: "limit", type: "number", label: "Limit", min: 1, max: 50 }] },
+  { key: "field_value", api: "field_value.v1", version: 1, label: "Field Value", category: "record", kind: "record", bindable: true, displayOnly: true, defaults: { field: "" }, configurable: [{ key: "field", type: "text", label: "Field API name" }] },
   // Dashboard Builder / runtime components. Every entry is GENERIC: a rendering
   // shape plus the configuration an administrator supplies (datasource, metric,
   // grouping, date range). None of them is Sales- or Product-specific, and all
@@ -118,7 +118,7 @@ export const PLATFORM_COMPONENTS = Object.freeze([
   { key: "dashboard_text", label: "Dashboard Text", category: "dashboard", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["PAGE","DASHBOARD"], supportedContexts: ["page","dashboard"], supportsPageContext: true, supportsDashboardContext: true, runtimeKind: "analytics", rendererKey: "text", defaults: { title: "Text", config: { content: "" }, layout: { w: 6, h: 3 } }, configurable: ["content"] },
   { key: "dashboard_image", label: "Dashboard Image", category: "dashboard", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["DASHBOARD"], supportedContexts: ["dashboard"], supportsPageContext: false, supportsDashboardContext: true, runtimeKind: "analytics", rendererKey: "image", defaults: { title: "Image", config: { imageUrl: "", altText: "", imageFit: "contain", linkUrl: "" }, layout: { w: 6, h: 4 } }, configurable: ["imageUrl","altText","imageFit","linkUrl"] },
   // Reserved canonical trigger component. Behaviour/variants are configured in UI Batch 2.
-  { key: "button", api: "button.v1", version: 1, label: "Custom Button", category: "action", kind: "action", bindable: false, reserved: true, rendererKey: "button" },
+  { key: "button", api: "button.v1", version: 1, label: "Custom Button", category: "action", kind: "action", bindable: false, reserved: true, rendererKey: "button", defaults: { label: "Button", variant: "primary", size: "medium", interaction: { type: "none" } }, configurable: [{ key: "label", type: "text", label: "Label" }, { key: "variant", type: "select", label: "Style", options: ["primary","secondary","ghost","danger"] }, { key: "size", type: "select", label: "Size", options: ["small","medium","large"] }], interactions: true },
   { key: "jarves", label: "JARVES", category: "action", kind: "assistant", bindable: false, registered: true, behaviours: ["behaviour_1", "behaviour_2", "behaviour_3"], interactions: ["voice", "message", "ask_input"] },
 ]);
 
