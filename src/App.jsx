@@ -29,14 +29,7 @@ const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/Worksp
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const SalesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
-const ProductsPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const CategoriesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
-const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
-const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
-const CustomersPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
@@ -2343,13 +2336,13 @@ function Desktop({ onLock, onSignOut }) {
             onNavigate={openItem}
           />
         ) : activeApp === 'sales' ? (
-          <SalesPage initialObjectKey="sale" appKey="sales" />
+          <WorkspacePage initialObjectKey="sale" appKey="sales" />
         ) : activeApp === 'supplier-returns' ? (
-          <SupplierReturnsPage />
+          <WorkspacePage initialObjectKey="purchase_line" appKey="supplier-returns" />
         ) : activeApp === 'products' ? (
-          <ProductsPage initialObjectKey="product" appKey="products" />
+          <WorkspacePage initialObjectKey="product" appKey="products" />
         ) : activeApp === 'categories' ? (
-          <CategoriesPage initialObjectKey="category" appKey="categories" />
+          <WorkspacePage initialObjectKey="category" appKey="categories" />
         ) : activeApp === 'global-products' ? (
           <GlobalProductLookupPage
             onBack={() => openItem('products')}
@@ -2360,11 +2353,11 @@ function Desktop({ onLock, onSignOut }) {
           />
 
         ) : activeApp === 'purchases' ? (
-          <PurchasesPage />
+          <WorkspacePage initialObjectKey="purchase" appKey="purchases" />
         ) : activeApp === 'suppliers' ? (
-          <SuppliersPage />
+          <WorkspacePage initialObjectKey="supplier" appKey="suppliers" />
         ) : activeApp === 'customers' ? (
-          <CustomersPage initialObjectKey="customer" appKey="customers" />
+          <WorkspacePage initialObjectKey="customer" appKey="customers" />
         ) : activeApp === 'gift-cards' ? (
           <WorkspacePage initialObjectKey="gift_card" appKey="gift-cards" />
         ) : activeApp === 'employees' ? (
