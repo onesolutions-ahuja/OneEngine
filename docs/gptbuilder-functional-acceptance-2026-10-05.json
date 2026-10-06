@@ -571,8 +571,23 @@
     }
   ],
   "phase3": {
+    "status": "COMPLETE",
+    "evidence": {
+      "ci_run": 37499102400,
+      "build_and_audit": "PASS",
+      "browser_e2e": "PASS",
+      "coverage": [
+        "all five supported flow types",
+        "all supported element families exposed in correct flow contexts",
+        "$Record and related fields",
+        "Platform Event field_schema resources",
+        "save/list/reopen/edit",
+        "Run/Debug/Test"
+      ]
+    }
+  },
+  "phase4": {
     "status": "IN_PROGRESS",
-    "note": "Till and Kiosk legacy pages/routes/packages removed by user direction; reusable retail platform capabilities retained as generic metadata/runtime primitives.",
-    "lastVerificationHead": "c359e72675b95c73bb86f1b1bc654aaf15954799"
+    "goal": "Negative tests and permanent regression coverage; fix every failure before progression."
   }
 }
