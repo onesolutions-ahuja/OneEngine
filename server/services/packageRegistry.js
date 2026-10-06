@@ -1281,7 +1281,7 @@ export function packageDefinition(entry) {
           { parentObjectKey: "product", childObjectKey: "supplier_product", relationshipKey: "supplier_products", relationshipType: "one_to_many", childFieldApiName: "product_id" },
           { parentObjectKey: "supplier_product", childObjectKey: "supplier", relationshipKey: "supplier", relationshipType: "lookup", parentFieldApiName: "supplier_id" },
           { parentObjectKey: "supplier_product", childObjectKey: "product", relationshipKey: "product", relationshipType: "lookup", parentFieldApiName: "product_id" },
-          { parentObjectKey: "supplier", childObjectKey: "purchase", relationshipKey: "purchases", relationshipType: "one_to_many", childFieldApiName: "supplier_id" },
+          { parentObjectKey: "supplier", childObjectKey: "purchase_ledger", relationshipKey: "purchases", relationshipType: "one_to_many", childFieldApiName: "supplier_id" },
         ],
         listViews: [
           { objectKey: "supplier", viewKey: "all", label: "All Suppliers", columns: ["name", "contact_name", "phone", "email", "outstanding_balance", "account_balance", "active", "updated_at"], isDefault: true },
