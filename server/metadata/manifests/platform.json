@@ -1,0 +1,1785 @@
+{
+  "objects": [
+    {
+      "objectKey": "system_settings",
+      "label": "System Settings",
+      "pluralLabel": "System Settings",
+      "description": "Canonical company-wide onePOS configuration. All Settings UI reads and writes these existing company_settings values through Platform Object metadata.",
+      "sourceTable": "company_settings",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "System",
+        "settingsLabel": "System Settings",
+        "settingsOrder": 10,
+        "settingsSectionSource": "field-config"
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "date_format",
+          "label": "Date Format",
+          "fieldType": "select",
+          "sourceColumn": "date_format",
+          "required": true,
+          "writable": true,
+          "options": [
+            "DD/MM/YYYY",
+            "MM/DD/YYYY",
+            "YYYY-MM-DD"
+          ],
+          "config": {
+            "settingsSection": "General"
+          }
+        },
+        {
+          "apiName": "vat_enabled",
+          "label": "VAT Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "vat_enabled",
+          "required": true,
+          "writable": true,
+          "config": {
+            "settingsSection": "Tax / VAT"
+          }
+        },
+        {
+          "apiName": "default_vat_rate",
+          "label": "Default VAT Rate",
+          "fieldType": "decimal",
+          "sourceColumn": "default_vat_rate",
+          "required": true,
+          "writable": true,
+          "config": {
+            "settingsSection": "Tax / VAT",
+            "suffix": "%"
+          }
+        },
+        {
+          "apiName": "loyalty_enabled",
+          "label": "Loyalty Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "loyalty_enabled",
+          "required": true,
+          "writable": true,
+          "config": {
+            "settingsSection": "Customer Loyalty"
+          }
+        },
+        {
+          "apiName": "loyalty_earning_rate",
+          "label": "Loyalty Earning Rate",
+          "fieldType": "decimal",
+          "sourceColumn": "loyalty_earning_rate",
+          "required": true,
+          "writable": true,
+          "config": {
+            "settingsSection": "Customer Loyalty"
+          }
+        },
+        {
+          "apiName": "loyalty_min_sale_total",
+          "label": "Minimum Sale Total",
+          "fieldType": "currency",
+          "sourceColumn": "loyalty_min_sale_total",
+          "writable": true,
+          "config": {
+            "settingsSection": "Customer Loyalty"
+          }
+        },
+        {
+          "apiName": "loyalty_redeem_value_per_point",
+          "label": "Redeem Value Per Point",
+          "fieldType": "currency",
+          "sourceColumn": "loyalty_redeem_value_per_point",
+          "writable": true,
+          "config": {
+            "settingsSection": "Customer Loyalty"
+          }
+        },
+        {
+          "apiName": "loyalty_min_points_redeem",
+          "label": "Minimum Points To Redeem",
+          "fieldType": "number",
+          "sourceColumn": "loyalty_min_points_redeem",
+          "writable": true,
+          "config": {
+            "settingsSection": "Customer Loyalty"
+          }
+        },
+        {
+          "apiName": "allow_negative_inventory_billing",
+          "label": "Allow Negative Inventory Billing",
+          "fieldType": "boolean",
+          "sourceColumn": "allow_negative_inventory_billing",
+          "writable": true,
+          "config": {
+            "settingsSection": "Store & Till"
+          }
+        },
+        {
+          "apiName": "scan_go_enabled",
+          "label": "Scan & Go Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "scan_go_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Store & Till"
+          }
+        },
+        {
+          "apiName": "exchange_mode",
+          "label": "Exchange Mode",
+          "fieldType": "select",
+          "sourceColumn": "exchange_mode",
+          "writable": true,
+          "options": [
+            "receipt",
+            "normal",
+            "both"
+          ],
+          "config": {
+            "settingsSection": "Store & Till"
+          }
+        },
+        {
+          "apiName": "batch_inventory_mode",
+          "label": "Batch Inventory Mode",
+          "fieldType": "select",
+          "sourceColumn": "batch_inventory_mode",
+          "writable": true,
+          "options": [
+            "required_dates",
+            "optional_dates",
+            "none"
+          ],
+          "config": {
+            "settingsSection": "Store & Till"
+          }
+        },
+        {
+          "apiName": "batch_default_mfg_rule",
+          "label": "Default Manufacturing Date Rule",
+          "fieldType": "text",
+          "sourceColumn": "batch_default_mfg_rule",
+          "writable": true,
+          "config": {
+            "settingsSection": "Store & Till"
+          }
+        },
+        {
+          "apiName": "batch_default_expiry_rule",
+          "label": "Default Expiry Rule",
+          "fieldType": "text",
+          "sourceColumn": "batch_default_expiry_rule",
+          "writable": true,
+          "config": {
+            "settingsSection": "Store & Till"
+          }
+        },
+        {
+          "apiName": "batch_default_expiry_days",
+          "label": "Default Expiry Days",
+          "fieldType": "number",
+          "sourceColumn": "batch_default_expiry_days",
+          "writable": true,
+          "config": {
+            "settingsSection": "Store & Till"
+          }
+        },
+        {
+          "apiName": "product_view",
+          "label": "Product View",
+          "fieldType": "select",
+          "sourceColumn": "product_view",
+          "writable": true,
+          "options": [
+            "image",
+            "compact"
+          ],
+          "config": {
+            "settingsSection": "Store & Till"
+          }
+        },
+        {
+          "apiName": "dock_quick_access",
+          "label": "Dock Quick Access",
+          "fieldType": "multiselect",
+          "sourceColumn": "dock_quick_access",
+          "writable": true,
+          "options": [
+            "Dashboard",
+            "Sales",
+            "Returns",
+            "Supplier Returns",
+            "Order Prep",
+            "Payments",
+            "Products",
+            "Global Products",
+            "Categories",
+            "Purchases",
+            "Suppliers",
+            "Inventory",
+            "Replenishment",
+            "Customers",
+            "Employees",
+            "Stores",
+            "Reports",
+            "Integrations",
+            "Accounting",
+            "Settings"
+          ],
+          "config": {
+            "settingsSection": "General",
+            "maxSelections": 8
+          }
+        },
+        {
+          "apiName": "customer_display_enabled",
+          "label": "Customer Display Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "customer_display_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Hardware"
+          }
+        },
+        {
+          "apiName": "online_ordering_enabled",
+          "label": "Online Ordering Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "online_ordering_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "online_payment_methods",
+          "label": "Online Payment Methods",
+          "fieldType": "multiselect",
+          "sourceColumn": "online_payment_methods",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_enabled",
+          "label": "Client Web Shop Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "client_web_shop_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_slug",
+          "label": "Shop Slug",
+          "fieldType": "text",
+          "sourceColumn": "client_web_shop_slug",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_name",
+          "label": "Shop Name",
+          "fieldType": "text",
+          "sourceColumn": "client_web_shop_name",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_store_id",
+          "label": "Web Shop Store",
+          "fieldType": "lookup",
+          "sourceColumn": "client_web_shop_store_id",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop",
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "client_web_shop_price_list_id",
+          "label": "Web Shop Price List",
+          "fieldType": "lookup",
+          "sourceColumn": "client_web_shop_price_list_id",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop",
+            "relatedObjectKey": "price_list"
+          }
+        },
+        {
+          "apiName": "client_web_shop_pickup_enabled",
+          "label": "Pickup Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "client_web_shop_pickup_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_delivery_enabled",
+          "label": "Delivery Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "client_web_shop_delivery_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_own_delivery_enabled",
+          "label": "Own Delivery Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "client_web_shop_own_delivery_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_minimum_order",
+          "label": "Minimum Order",
+          "fieldType": "currency",
+          "sourceColumn": "client_web_shop_minimum_order",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_delivery_fee",
+          "label": "Delivery Fee",
+          "fieldType": "currency",
+          "sourceColumn": "client_web_shop_delivery_fee",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_guest_checkout",
+          "label": "Guest Checkout",
+          "fieldType": "boolean",
+          "sourceColumn": "client_web_shop_guest_checkout",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "client_web_shop_sandbox_payments_enabled",
+          "label": "Sandbox Payments",
+          "fieldType": "boolean",
+          "sourceColumn": "client_web_shop_sandbox_payments_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Client Web Shop"
+          }
+        },
+        {
+          "apiName": "till_invoice_prefix",
+          "label": "Till Invoice Prefix",
+          "fieldType": "text",
+          "sourceColumn": "till_invoice_prefix",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "delivery_invoice_prefix",
+          "label": "Delivery Invoice Prefix",
+          "fieldType": "text",
+          "sourceColumn": "delivery_invoice_prefix",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "self_checkout_invoice_prefix",
+          "label": "Self Checkout Invoice Prefix",
+          "fieldType": "text",
+          "sourceColumn": "self_checkout_invoice_prefix",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "receipt_qr_show_after_payment",
+          "label": "Receipt QR After Payment",
+          "fieldType": "select",
+          "sourceColumn": "receipt_qr_show_after_payment",
+          "writable": true,
+          "options": [
+            "OFF",
+            "ALWAYS",
+            "ONLY_WHEN_PRINTER_UNAVAILABLE"
+          ],
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "receipt_qr_expiry_minutes",
+          "label": "Receipt QR Expiry Minutes",
+          "fieldType": "number",
+          "sourceColumn": "receipt_qr_expiry_minutes",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "receipt_qr_allow_manual",
+          "label": "Allow Manual Receipt QR",
+          "fieldType": "boolean",
+          "sourceColumn": "receipt_qr_allow_manual",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "receipt_qr_allow_regenerate",
+          "label": "Allow Receipt QR Regenerate",
+          "fieldType": "boolean",
+          "sourceColumn": "receipt_qr_allow_regenerate",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "receipt_qr_auto_close_on_new_sale",
+          "label": "Close Receipt QR On New Sale",
+          "fieldType": "boolean",
+          "sourceColumn": "receipt_qr_auto_close_on_new_sale",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "receipt_qr_show_countdown",
+          "label": "Show Receipt QR Countdown",
+          "fieldType": "boolean",
+          "sourceColumn": "receipt_qr_show_countdown",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "receipt_qr_download_filename_format",
+          "label": "Receipt Filename Format",
+          "fieldType": "text",
+          "sourceColumn": "receipt_qr_download_filename_format",
+          "writable": true,
+          "config": {
+            "settingsSection": "Receipts"
+          }
+        },
+        {
+          "apiName": "default_landing_page",
+          "label": "Default Landing Page",
+          "fieldType": "text",
+          "sourceColumn": "default_landing_page",
+          "writable": true,
+          "config": {
+            "settingsSection": "General"
+          }
+        },
+        {
+          "apiName": "domain_users_only",
+          "label": "Domain Users Only",
+          "fieldType": "boolean",
+          "sourceColumn": "domain_users_only",
+          "writable": true,
+          "config": {
+            "settingsSection": "Users"
+          }
+        },
+        {
+          "apiName": "email_registration_enabled",
+          "label": "Email Registration Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "email_registration_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Users"
+          }
+        },
+        {
+          "apiName": "password_reset_email_enabled",
+          "label": "Password Reset Email Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "password_reset_email_enabled",
+          "writable": true,
+          "config": {
+            "settingsSection": "Users"
+          }
+        },
+        {
+          "apiName": "registration_link_expiry_minutes",
+          "label": "Registration Link Expiry Minutes",
+          "fieldType": "number",
+          "sourceColumn": "registration_link_expiry_minutes",
+          "writable": true,
+          "config": {
+            "settingsSection": "Users"
+          }
+        },
+        {
+          "apiName": "password_reset_expiry_minutes",
+          "label": "Password Reset Expiry Minutes",
+          "fieldType": "number",
+          "sourceColumn": "password_reset_expiry_minutes",
+          "writable": true,
+          "config": {
+            "settingsSection": "Users"
+          }
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "server_setting",
+      "label": "Server Setting",
+      "pluralLabel": "Server Settings",
+      "description": "Per-device backend origin used by onePOS clients. Metadata drives the Settings UI; the selected device record is mirrored locally so the client can reach its configured backend on the next request.",
+      "sourceTable": "server_settings",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "System",
+        "settingsLabel": "Server / API Configuration",
+        "settingsOrder": 300,
+        "settingsAllowDelete": false,
+        "settingsDeviceScoped": true,
+        "settingsDeviceKeyField": "device_key",
+        "settingsServerUrlField": "server_url"
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "device_key",
+          "label": "Device Key",
+          "fieldType": "text",
+          "sourceColumn": "device_key",
+          "required": true,
+          "writable": true,
+          "config": {
+            "settingsHidden": true,
+            "defaultFromDeviceKey": true
+          }
+        },
+        {
+          "apiName": "device_name",
+          "label": "Device Name",
+          "fieldType": "text",
+          "sourceColumn": "device_name",
+          "writable": true,
+          "config": {
+            "defaultFromDeviceName": true
+          }
+        },
+        {
+          "apiName": "server_url",
+          "label": "Server URL",
+          "fieldType": "text",
+          "sourceColumn": "server_url",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true,
+          "config": {
+            "defaultValue": true
+          }
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "payment_terminal",
+      "label": "Payment Terminal",
+      "pluralLabel": "Payment Terminals",
+      "description": "Company payment terminals exposed through Platform metadata without exposing stored credentials.",
+      "sourceTable": "payment_terminals",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Sales & Tax",
+        "settingsLabel": "Payment Terminals",
+        "settingsOrder": 80
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "provider",
+          "label": "Provider",
+          "fieldType": "text",
+          "sourceColumn": "provider",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "terminal_identifier",
+          "label": "Terminal ID",
+          "fieldType": "text",
+          "sourceColumn": "terminal_identifier",
+          "writable": true
+        },
+        {
+          "apiName": "connection_url",
+          "label": "Connection URL",
+          "fieldType": "text",
+          "sourceColumn": "connection_url",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true,
+          "config": {
+            "defaultValue": true
+          }
+        },
+        {
+          "apiName": "last_test_result",
+          "label": "Last Test Result",
+          "fieldType": "text",
+          "sourceColumn": "last_test_result",
+          "writable": false
+        },
+        {
+          "apiName": "last_tested_at",
+          "label": "Last Tested",
+          "fieldType": "datetime",
+          "sourceColumn": "last_tested_at",
+          "writable": false
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "hardware_configuration",
+      "label": "Hardware Configuration",
+      "pluralLabel": "Hardware",
+      "description": "Store-scoped scanner, cash drawer and receipt-printer configuration.",
+      "sourceTable": "hardware_configurations",
+      "storeScoped": true,
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Hardware",
+        "settingsLabel": "Hardware",
+        "settingsOrder": 100
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": false,
+          "config": {
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "device_type",
+          "label": "Device Type",
+          "fieldType": "select",
+          "sourceColumn": "device_type",
+          "required": true,
+          "writable": true,
+          "options": [
+            "BARCODE_SCANNER",
+            "CASH_DRAWER",
+            "RECEIPT_PRINTER"
+          ]
+        },
+        {
+          "apiName": "device_name",
+          "label": "Device Name",
+          "fieldType": "text",
+          "sourceColumn": "device_name",
+          "writable": true
+        },
+        {
+          "apiName": "connection_type",
+          "label": "Connection Type",
+          "fieldType": "text",
+          "sourceColumn": "connection_type",
+          "writable": true
+        },
+        {
+          "apiName": "connection_address",
+          "label": "Connection Address",
+          "fieldType": "text",
+          "sourceColumn": "connection_address",
+          "writable": true
+        },
+        {
+          "apiName": "paper_width",
+          "label": "Paper Width",
+          "fieldType": "text",
+          "sourceColumn": "paper_width",
+          "writable": true
+        },
+        {
+          "apiName": "is_default",
+          "label": "Default Device",
+          "fieldType": "boolean",
+          "sourceColumn": "is_default",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true,
+          "config": {
+            "defaultValue": true
+          }
+        },
+        {
+          "apiName": "last_test_result",
+          "label": "Last Test Result",
+          "fieldType": "text",
+          "sourceColumn": "last_test_result",
+          "writable": false
+        },
+        {
+          "apiName": "last_tested_at",
+          "label": "Last Tested",
+          "fieldType": "datetime",
+          "sourceColumn": "last_tested_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "integration",
+      "label": "Connection",
+      "pluralLabel": "Connections",
+      "description": "Company integration records. Secret provider configuration remains protected behind provider-specific commands and is never exposed as a Platform field.",
+      "sourceTable": "integrations",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Integrations",
+        "settingsLabel": "Connections",
+        "settingsOrder": 230,
+        "settingsAllowCreate": false,
+        "settingsAllowDelete": false
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "provider",
+          "label": "Provider",
+          "fieldType": "text",
+          "sourceColumn": "provider",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": false
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "message_template",
+      "label": "Message Template",
+      "pluralLabel": "Message Templates",
+      "description": "Metadata-driven EMAIL, SMS and WhatsApp templates used by Platform actions.",
+      "sourceTable": "platform_message_templates",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Platform",
+        "settingsLabel": "Message Templates",
+        "settingsOrder": 310
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "api_key",
+          "label": "API Key",
+          "fieldType": "text",
+          "sourceColumn": "api_key",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "description",
+          "label": "Description",
+          "fieldType": "text",
+          "sourceColumn": "description",
+          "writable": true
+        },
+        {
+          "apiName": "channel",
+          "label": "Channel",
+          "fieldType": "select",
+          "sourceColumn": "channel",
+          "required": true,
+          "writable": true,
+          "options": [
+            "EMAIL",
+            "SMS",
+            "WHATSAPP"
+          ]
+        },
+        {
+          "apiName": "object_id",
+          "label": "Object",
+          "fieldType": "lookup",
+          "sourceColumn": "object_id",
+          "writable": true
+        },
+        {
+          "apiName": "subject",
+          "label": "Subject",
+          "fieldType": "text",
+          "sourceColumn": "subject",
+          "writable": true
+        },
+        {
+          "apiName": "body",
+          "label": "Body",
+          "fieldType": "text",
+          "sourceColumn": "body",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true,
+          "config": {
+            "defaultValue": true
+          }
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "role",
+      "label": "Role",
+      "pluralLabel": "Roles",
+      "description": "Tenant roles used by RBAC.",
+      "sourceTable": "roles",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Users",
+        "settingsLabel": "Roles & Permissions",
+        "settingsOrder": 210
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "api_key",
+          "label": "API Key",
+          "fieldType": "text",
+          "sourceColumn": "api_key",
+          "writable": false
+        },
+        {
+          "apiName": "description",
+          "label": "Description",
+          "fieldType": "text",
+          "sourceColumn": "description",
+          "writable": true
+        },
+        {
+          "apiName": "parent_role_id",
+          "label": "Parent Role",
+          "fieldType": "lookup",
+          "sourceColumn": "parent_role_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "role"
+          }
+        },
+        {
+          "apiName": "default_landing_page",
+          "label": "Default Landing Page",
+          "fieldType": "text",
+          "sourceColumn": "default_landing_page",
+          "writable": true
+        },
+        {
+          "apiName": "is_system_role",
+          "label": "System Role",
+          "fieldType": "boolean",
+          "sourceColumn": "is_system_role",
+          "writable": false
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "permission",
+      "label": "Permission",
+      "pluralLabel": "Permissions",
+      "description": "Global permission catalogue. Permission definitions are read-only metadata.",
+      "sourceTable": "permissions",
+      "config": {
+        "settingsHost": false,
+        "settingsParentObjectKey": "role"
+      },
+      "companyScoped": false,
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "code",
+          "label": "Code",
+          "fieldType": "text",
+          "sourceColumn": "code",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "description",
+          "label": "Description",
+          "fieldType": "text",
+          "sourceColumn": "description",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "role_permission",
+      "label": "Role Permission",
+      "pluralLabel": "Role Permissions",
+      "description": "Metadata-driven role to permission assignments.",
+      "sourceTable": "role_permissions",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Users",
+        "settingsLabel": "Permission Assignments",
+        "settingsOrder": 211,
+        "settingsParentObjectKey": "role",
+        "settingsAllowDelete": true
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false
+        },
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "role_id",
+          "label": "Role",
+          "fieldType": "lookup",
+          "sourceColumn": "role_id",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "role"
+          }
+        },
+        {
+          "apiName": "permission_id",
+          "label": "Permission",
+          "fieldType": "lookup",
+          "sourceColumn": "permission_id",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "permission"
+          }
+        }
+      ]
+    },
+    {
+      "objectKey": "payment_terminal",
+      "label": "Payment Terminal",
+      "pluralLabel": "Payment Terminals",
+      "description": "Company card terminals and connection settings.",
+      "sourceTable": "payment_terminals",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Sales & Tax",
+        "settingsLabel": "Payment Terminals",
+        "settingsOrder": 70,
+        "settingsAllowDelete": true
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "provider",
+          "label": "Provider",
+          "fieldType": "text",
+          "sourceColumn": "provider",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "terminal_identifier",
+          "label": "Terminal Identifier",
+          "fieldType": "text",
+          "sourceColumn": "terminal_identifier",
+          "writable": true
+        },
+        {
+          "apiName": "connection_url",
+          "label": "Connection URL",
+          "fieldType": "text",
+          "sourceColumn": "connection_url",
+          "writable": true
+        },
+        {
+          "apiName": "api_credentials",
+          "label": "API Credentials",
+          "fieldType": "text",
+          "sourceColumn": "api_credentials",
+          "readable": false,
+          "writable": true,
+          "config": {
+            "writeOnly": true,
+            "secret": true
+          }
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true
+        },
+        {
+          "apiName": "last_test_result",
+          "label": "Last Test Result",
+          "fieldType": "text",
+          "sourceColumn": "last_test_result",
+          "writable": false
+        },
+        {
+          "apiName": "last_tested_at",
+          "label": "Last Tested",
+          "fieldType": "datetime",
+          "sourceColumn": "last_tested_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "hardware_configuration",
+      "label": "Hardware Configuration",
+      "pluralLabel": "Hardware",
+      "description": "Store-scoped barcode scanner, cash drawer and receipt-printer configuration.",
+      "sourceTable": "hardware_configurations",
+      "storeScoped": true,
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Hardware",
+        "settingsLabel": "Hardware",
+        "settingsOrder": 80,
+        "settingsAllowDelete": true
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": false,
+          "config": {
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "device_type",
+          "label": "Device Type",
+          "fieldType": "select",
+          "sourceColumn": "device_type",
+          "required": true,
+          "writable": true,
+          "options": [
+            "BARCODE_SCANNER",
+            "CASH_DRAWER",
+            "RECEIPT_PRINTER"
+          ]
+        },
+        {
+          "apiName": "device_name",
+          "label": "Device Name",
+          "fieldType": "text",
+          "sourceColumn": "device_name",
+          "writable": true
+        },
+        {
+          "apiName": "connection_type",
+          "label": "Connection Type",
+          "fieldType": "text",
+          "sourceColumn": "connection_type",
+          "writable": true
+        },
+        {
+          "apiName": "connection_address",
+          "label": "Connection Address",
+          "fieldType": "text",
+          "sourceColumn": "connection_address",
+          "writable": true
+        },
+        {
+          "apiName": "paper_width",
+          "label": "Paper Width",
+          "fieldType": "text",
+          "sourceColumn": "paper_width",
+          "writable": true
+        },
+        {
+          "apiName": "is_default",
+          "label": "Default",
+          "fieldType": "boolean",
+          "sourceColumn": "is_default",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true
+        },
+        {
+          "apiName": "last_test_result",
+          "label": "Last Test Result",
+          "fieldType": "text",
+          "sourceColumn": "last_test_result",
+          "writable": false
+        },
+        {
+          "apiName": "last_tested_at",
+          "label": "Last Tested",
+          "fieldType": "datetime",
+          "sourceColumn": "last_tested_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "integration",
+      "label": "Integration",
+      "pluralLabel": "Connections",
+      "description": "Company integration connection state. Provider secrets remain protected by provider-specific domain actions.",
+      "sourceTable": "integrations",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Integrations",
+        "settingsLabel": "Connections",
+        "settingsOrder": 100,
+        "settingsAllowCreate": false,
+        "settingsAllowDelete": false
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "provider",
+          "label": "Provider",
+          "fieldType": "text",
+          "sourceColumn": "provider",
+          "readable": true,
+          "writable": false
+        },
+        {
+          "apiName": "enabled",
+          "label": "Enabled",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "message_template",
+      "label": "Message Template",
+      "pluralLabel": "Message Templates",
+      "description": "Metadata-driven email, SMS and WhatsApp templates.",
+      "sourceTable": "platform_message_templates",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Platform",
+        "settingsLabel": "Message Templates",
+        "settingsOrder": 310,
+        "settingsAllowDelete": true
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "writable": false
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "api_key",
+          "label": "API Key",
+          "fieldType": "text",
+          "sourceColumn": "api_key",
+          "writable": false
+        },
+        {
+          "apiName": "description",
+          "label": "Description",
+          "fieldType": "text",
+          "sourceColumn": "description",
+          "writable": true
+        },
+        {
+          "apiName": "channel",
+          "label": "Channel",
+          "fieldType": "select",
+          "sourceColumn": "channel",
+          "required": true,
+          "writable": true,
+          "options": [
+            "EMAIL",
+            "SMS",
+            "WHATSAPP"
+          ]
+        },
+        {
+          "apiName": "object_id",
+          "label": "Object",
+          "fieldType": "lookup",
+          "sourceColumn": "object_id",
+          "writable": true
+        },
+        {
+          "apiName": "subject",
+          "label": "Subject",
+          "fieldType": "text",
+          "sourceColumn": "subject",
+          "writable": true
+        },
+        {
+          "apiName": "body",
+          "label": "Body",
+          "fieldType": "text",
+          "sourceColumn": "body",
+          "required": true,
+          "writable": true,
+          "config": {
+            "multiline": true
+          }
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true
+        },
+        {
+          "apiName": "total_invoiced",
+          "label": "Total Invoiced",
+          "fieldType": "rollup",
+          "writable": false,
+          "config": {
+            "operation": "SUM",
+            "relationshipKey": "invoices",
+            "field": "total",
+            "resultType": "currency"
+          }
+        },
+        {
+          "apiName": "total_paid",
+          "label": "Total Paid",
+          "fieldType": "rollup",
+          "writable": false,
+          "config": {
+            "operation": "SUM",
+            "relationshipKey": "payments",
+            "field": "amount",
+            "condition": {
+              "match": "all",
+              "conditions": [
+                {
+                  "field": "status",
+                  "operator": "equals",
+                  "value": "COMPLETED"
+                }
+              ]
+            },
+            "resultType": "currency"
+          }
+        },
+        {
+          "apiName": "total_credits",
+          "label": "Credits",
+          "fieldType": "rollup",
+          "writable": false,
+          "config": {
+            "operation": "SUM",
+            "relationshipKey": "ledger_entries",
+            "field": "amount",
+            "condition": {
+              "match": "all",
+              "conditions": [
+                {
+                  "field": "debit",
+                  "operator": "equals",
+                  "value": false
+                }
+              ]
+            },
+            "resultType": "currency"
+          }
+        },
+        {
+          "apiName": "total_debits",
+          "label": "Debits",
+          "fieldType": "rollup",
+          "writable": false,
+          "config": {
+            "operation": "SUM",
+            "relationshipKey": "ledger_entries",
+            "field": "amount",
+            "condition": {
+              "match": "all",
+              "conditions": [
+                {
+                  "field": "debit",
+                  "operator": "equals",
+                  "value": true
+                }
+              ]
+            },
+            "resultType": "currency"
+          }
+        },
+        {
+          "apiName": "outstanding_balance",
+          "label": "Outstanding",
+          "fieldType": "formula",
+          "writable": false,
+          "config": {
+            "expression": "MAX(total_invoiced - total_paid, 0)",
+            "resultType": "currency"
+          }
+        },
+        {
+          "apiName": "account_balance",
+          "label": "Account Balance",
+          "fieldType": "formula",
+          "writable": false,
+          "config": {
+            "expression": "total_debits - total_credits",
+            "resultType": "currency"
+          }
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "role",
+      "childObjectKey": "role_permission",
+      "relationshipKey": "permissions",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "role_id"
+    },
+    {
+      "parentObjectKey": "permission",
+      "childObjectKey": "role_permission",
+      "relationshipKey": "roles",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "permission_id"
+    },
+    {
+      "parentObjectKey": "role",
+      "childObjectKey": "role",
+      "relationshipKey": "child_roles",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "parent_role_id"
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "system_settings",
+      "viewKey": "company_settings",
+      "label": "System Settings",
+      "columns": [
+        "date_format",
+        "vat_enabled",
+        "default_vat_rate",
+        "product_view",
+        "updated_at"
+      ],
+      "isDefault": true
+    },
+    {
+      "objectKey": "role",
+      "viewKey": "all_roles",
+      "label": "Roles",
+      "columns": [
+        "name",
+        "description",
+        "parent_role_id",
+        "is_system_role"
+      ],
+      "isDefault": true
+    },
+    {
+      "objectKey": "permission",
+      "viewKey": "all_permissions",
+      "label": "Permissions",
+      "columns": [
+        "code",
+        "name",
+        "description"
+      ],
+      "isDefault": true
+    },
+    {
+      "objectKey": "role_permission",
+      "viewKey": "role_permissions",
+      "label": "Role Permissions",
+      "columns": [
+        "role_id",
+        "permission_id"
+      ],
+      "isDefault": true
+    }
+  ]
+}
