@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Background, Controls, NodeResizer, ReactFlow, useNodesState } from '@xyflow/react'
+import { Background, Controls, ReactFlow, useNodesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Search, Trash2 } from 'lucide-react'
 import {
@@ -17,7 +17,6 @@ function PageComponentNode({ data, selected }) {
   const Icon = componentIcon(data.meta)
   return (
     <div className={`gptpb-node ${selected ? 'is-selected' : ''}`}>
-      <NodeResizer minWidth={120} minHeight={64} isVisible={selected} />
       <div className="gptpb-node-head">
         <span className="gptpb-node-icon"><Icon size={16} /></span>
         <strong>{data.instance.title || data.instance.label || data.meta.label}</strong>
