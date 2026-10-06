@@ -1,4 +1,4 @@
-import { decryptSecret } from "./onlineOrders/platformConfig.js";
+import { decryptSecret } from "./secretCrypto.js";
 import { getCompanyEntitlements, hasEntitlement } from "./licensing.js";
 import { sendEmailViaProvider, sendSmsViaProvider, sendSmsViaTwilio } from "./communicationTransports.js";
 import { oneHttpRequest } from "./oneCoreFunctions.js";
