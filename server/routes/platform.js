@@ -4,7 +4,7 @@ import { registerPlatformDeveloperRoutes } from "./platform/developerRoutes.js";
 import express from "express";
 import { createHash } from "node:crypto";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformMetadata.js";
-import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
+import { normalizeObjectPageDefinition, objectNavigationEntries, objectRuntimeRoute, DEFAULT_OBJECT_NAV_ORDER, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
 import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, workflowFormulaReferences } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
@@ -2197,7 +2197,6 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
         const module = await db("SELECT id FROM platform_modules WHERE id=$1", [moduleId]);
         if (!module.rows.length) return res.status(400).json({ success: false, message: "Module not found" });
       }
-      const storageTable = sourceTable || await ensureCustomObjectStorage(db, objectKey);
       const rawObjectConfig = req.body?.config && typeof req.body.config === "object" && !Array.isArray(req.body.config) ? req.body.config : {};
       const { historicalTrending: _tenantHistoricalTrending, ...baseObjectConfig } = rawObjectConfig;
       const objectConfig = {
@@ -2218,6 +2217,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
       let defaultPage;
       try {
         await client.query("BEGIN");
+        const storageTable = sourceTable || await ensureCustomObjectStorage((sql, params = []) => client.query(sql, params), objectKey);
         const result = await client.query(
           "INSERT INTO platform_objects (object_key,api_name,label,plural_label,description,source_table,module_id,company_id,config) VALUES (COALESCE($1,$2 || '_' || substr(gen_random_uuid()::text,1,8)),$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *",
           [req.body.objectKey || null, apiName, label.trim(), pluralLabel || `${label.trim()}s`, req.body.description || null, storageTable, moduleId, req.user.companyId, JSON.stringify(objectConfig)]
