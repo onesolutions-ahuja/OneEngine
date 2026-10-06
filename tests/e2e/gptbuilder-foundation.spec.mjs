@@ -173,4 +173,26 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
 
     expect(failures, failures.join('\n')).toEqual([])
   })
+  test('all five supported flow types open the correct editable Builder context', async ({ page }) => {
+    if (!(await loginIfConfigured(page))) test.skip(true, 'E2E credentials are not configured')
+    const failures = watchRuntimeFailures(page)
+    const cases = [
+      ['Screen Flow', false],
+      ['Record-Triggered Flow', true],
+      ['Schedule-Triggered Flow', true],
+      ['Platform Event-Triggered Flow', true],
+      ['Autolaunched Flow (No Trigger)', false],
+    ]
+    for (const [label, needsStart] of cases) {
+      await page.goto('developer/gptbuilder')
+      await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
+      await page.getByRole('button', { name: /^New Flow$/ }).click()
+      await page.getByLabel('Search automations').fill(label)
+      await page.getByRole('button', { name: new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).click()
+      await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
+      if (needsStart) await expect(page.getByLabel('Configure Start')).toBeVisible()
+      else await expect(page.getByLabel('Start')).toBeVisible()
+    }
+    expect(failures, failures.join('\n')).toEqual([])
+  })
 })
