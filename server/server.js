@@ -428,23 +428,8 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
 app.locals.connectorDrivers = connectorDrivers;
-
-async function testPaymentTerminal(terminal) {
-  if (!terminal || !terminal.active || !terminal.provider || !terminal.connection_url) {
-    return { status: "NOT_CONFIGURED", message: "Not configured" };
-  }
-
-  const provider = paymentProviders.get(terminal.provider.toLowerCase());
-
-  if (!provider) {
-    return { status: "PROVIDER_NOT_SUPPORTED", message: "Provider not supported" };
-  }
-
-  return provider.testConnection(terminal);
-}
 
 /*
  * Audit logging must never break the operation being audited - see
@@ -1898,19 +1883,7 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createSettingsRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  writeAudit,
-  testPaymentTerminal,
-  requireLoyaltyEntitlement: (req, res, next) => {
-    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
-    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
-    return requireEntitlement(db, "loyalty")(req, res, next);
-  },
-}));
+app.use("/api", createSettingsRouter({ authenticate, authorize, db }));
 
 /*
 |--------------------------------------------------------------------------
