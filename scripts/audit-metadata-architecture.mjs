@@ -17,7 +17,6 @@ const exempt = new Set([
   "server/services/platformMetadata.js",
   "server/services/platformSystemObjects.js",
   "server/services/packageRegistry.js",
-  "server/services/systemWorkflowCatalog.js",
   "server/services/tenantDatabase.js",
 ]);
 const declarativePrefixes=["server/packages/","server/metadata/"];
@@ -26,16 +25,24 @@ const retired = new Set(["server/routes/dashboard.js","server/services/reportSal
 // authoritative POS tables, but every entry is named here so additions cannot
 // silently expand the exception surface.
 const legacyBusinessRuntime = new Set([
-  "server/services/receiptQr.js","server/services/secureInvoiceLinks.js","server/services/invoiceDelivery.js",
-  "server/routes/invoiceDelivery.js","server/routes/secureInvoice.js","server/routes/selfCheckout.js",
-  "server/routes/admin.js","server/routes/settings.js","server/routes/integrations.js",
+  "server/routes/settings.js","server/routes/integrations.js",
   "server/services/jarvis/tools/index.js","server/services/jarvis/index.js",
   "server/routes/productFeatures.js","server/services/productFeatures.js","server/services/productImportExport.js",
   "server/routes/eanLookup.js","server/routes/globalProductLookup.js","server/services/globalProductLookup.js",
   "server/routes/customerAuth.js","server/routes/audit.js","server/services/licensing.js",
   "server/services/paypalQrConnector.js","server/services/integrationFieldResolver.js"
 ]);
-const businessTables=["sales","sale_items","customers","payments","products","suppliers","purchases","purchase_items","refunds"];
+const businessTables=[
+  "sales","sale_ledger","sale_items","customers","payments","products","suppliers",
+  "purchases","purchase_ledger","purchase_items","purchase_receipts","refunds",
+  "sales_orders","sales_order_items","supplier_invoices","supplier_payments",
+  "supplier_payment_allocations","stock_returns","stock_return_items"
+];
+const hardcodedBusinessObjectKeys=[
+  "sale","sale_ledger","sale_item","payment","refund","customer","product",
+  "purchase","purchase_ledger","purchase_line","purchase_receipt",
+  "supplier_invoice","supplier_payment","sales_order","sales_order_line","stock_return"
+];
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
 const findings=[];
 
@@ -56,6 +63,10 @@ for(const file of roots.flatMap(walk)){
   for(const table of businessTables){
     const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
     if(sql.test(text)) findings.push({rule:"DIRECT_BUSINESS_SQL",file:name,table});
+  }
+  for(const objectKey of hardcodedBusinessObjectKeys){
+    const objectRef=new RegExp("\\b(?:objectKey|object_key)\\s*[:=]\\s*[\"']"+objectKey+"[\"']","i");
+    if(objectRef.test(text)) findings.push({rule:"HARDCODED_BUSINESS_OBJECT",file:name,objectKey});
   }
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
