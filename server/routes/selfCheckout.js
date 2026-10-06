@@ -247,16 +247,17 @@ export default createSelfCheckoutRouter;
  * read-only and sale operations Self-Checkout actually needs — and only via
  * the HTTP methods the mode uses. Anything else is refused server-side.
  */
-/* path prefix -> allowed methods (empty array = all methods for that prefix) */
-const SCO_ALLOWED = [
-  { prefix: "/api/platform/runtime/objects/sale_ledger", methods: ["GET", "POST"] }, // metadata-driven Sale actions
-  { prefix: "/api/platform/objects/sale_ledger", methods: ["GET", "POST"] },         // Sale records + record actions
-  { prefix: "/api/platform/objects/product", methods: ["GET"] }, // metadata-driven product records
-  { prefix: "/api/settings", methods: ["GET"] },               // VAT/store context only — no configuration writes
-  { prefix: "/api/self-checkout", methods: ["DELETE", "POST"] }, // auditable mode endpoints
-];
+/*
+ * Restricted-mode access is capability based. Business object/page paths are
+ * supplied by metadata/session claims rather than being embedded in this core
+ * middleware.
+ */
+const DEFAULT_SELF_CHECKOUT_CAPABILITIES = Object.freeze([
+  { prefix: "/api/settings", methods: ["GET"] },
+  { prefix: "/api/self-checkout", methods: ["DELETE", "POST"] },
+]);
 
-export function createSelfCheckoutModeGate() {
+export function createSelfCheckoutModeGate({ allowedCapabilities = DEFAULT_SELF_CHECKOUT_CAPABILITIES } = {}) {
   return function selfCheckoutModeGate(req, res, next) {
     const header = req.headers.authorization;
     if (!header || !header.startsWith("Bearer ")) return next();
@@ -272,7 +273,7 @@ export function createSelfCheckoutModeGate() {
 
     const path = req.originalUrl || req.url || "";
     const method = (req.method || "GET").toUpperCase();
-    const allowed = SCO_ALLOWED.some(
+    const allowed = allowedCapabilities.some(
       (rule) =>
         (path === rule.prefix || path.startsWith(rule.prefix)) &&
         (rule.methods.length === 0 || rule.methods.includes(method))
