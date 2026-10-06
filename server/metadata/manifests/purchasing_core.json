@@ -476,7 +476,7 @@
     {
       "parentObjectKey": "supplier",
       "childObjectKey": "purchase_ledger",
-      "relationshipKey": "purchase_ledger",
+      "relationshipKey": "purchases",
       "relationshipType": "one_to_many",
       "childFieldApiName": "supplier_id"
     },
@@ -585,7 +585,7 @@
       "lifecycleStatus": "ACTIVE",
       "inputContract": [
         {
-          "name": "purchase_ledger",
+          "name": "purchase",
           "type": "record",
           "required": true
         },
@@ -597,7 +597,7 @@
       ],
       "outputContract": [
         {
-          "name": "purchase_ledger",
+          "name": "purchase",
           "type": "record",
           "source": "variables.purchase"
         }
@@ -685,7 +685,7 @@
       "variables": [
         {
           "value": "variables.purchase",
-          "apiName": "purchase_ledger",
+          "apiName": "purchase",
           "label": "Purchase",
           "type": "Variable",
           "dataType": "Record",
@@ -927,7 +927,7 @@
           "required": true
         },
         {
-          "name": "purchase_ledger",
+          "name": "purchase",
           "type": "record",
           "required": true
         }
@@ -1040,7 +1040,7 @@
         },
         {
           "value": "variables.purchase",
-          "apiName": "purchase_ledger",
+          "apiName": "purchase",
           "label": "Purchase Update",
           "type": "Variable",
           "dataType": "Record",
