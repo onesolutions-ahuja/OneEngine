@@ -1,5 +1,6 @@
 import express from "express";
 import crypto from "crypto";
+import { selectMetadataRecords } from "../services/metadataRecordStore.js";
 
 import {
   buildSmsInvoiceConfiguration,
@@ -305,14 +306,16 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
         }
 
         // Tenant scope check (company + store where applicable).
-        const saleCheck = await db(
-          `SELECT id FROM sales
-           WHERE id = $1 AND company_id = $2
-           ${req.user.storeId ? "AND store_id = $3" : ""}
-           LIMIT 1`,
-          req.user.storeId ? [saleId, req.user.companyId, req.user.storeId] : [saleId, req.user.companyId]
-        );
-        if (!saleCheck.rows.length) {
+        const saleFilters = { id: saleId };
+        if (req.user.storeId) saleFilters.store_id = req.user.storeId;
+        const saleCheck = await selectMetadataRecords(db, {
+          objectKey: "sale",
+          companyId: req.user.companyId,
+          filters: saleFilters,
+          columns: ["id"],
+          limit: 1,
+        });
+        if (!saleCheck.length) {
           return res.status(404).json({ success: false, message: "Sale not found in your company" });
         }
 
@@ -371,14 +374,16 @@ export default function createInvoiceDeliveryRouter({ db, pool, authenticate, au
         if (!saleId || typeof saleId !== "string") {
           return res.status(400).json({ success: false, message: "A sale ID is required." });
         }
-        const saleCheck = await db(
-          `SELECT id FROM sales
-           WHERE id = $1 AND company_id = $2
-           ${req.user.storeId ? "AND store_id = $3" : ""}
-           LIMIT 1`,
-          req.user.storeId ? [saleId, req.user.companyId, req.user.storeId] : [saleId, req.user.companyId]
-        );
-        if (!saleCheck.rows.length) {
+        const saleFilters = { id: saleId };
+        if (req.user.storeId) saleFilters.store_id = req.user.storeId;
+        const saleCheck = await selectMetadataRecords(db, {
+          objectKey: "sale",
+          companyId: req.user.companyId,
+          filters: saleFilters,
+          columns: ["id"],
+          limit: 1,
+        });
+        if (!saleCheck.length) {
           return res.status(404).json({ success: false, message: "Sale not found in your company" });
         }
 
