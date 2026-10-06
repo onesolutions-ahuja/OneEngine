@@ -6,7 +6,7 @@ import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.
 test("supplier accounting functions are package-owned", async () => {
   const registry = await readFile(new URL("../server/services/platformFunctionRegistry.js", import.meta.url), "utf8");
   assert.equal(registry.includes('key: "supplier.payment.execute"'), false);
-  for (const key of ["supplier.payment.execute","supplier.invoice.create","supplier.ledger.adjust"]) assert.ok(PLATFORM_FUNCTIONS.some((item) => item.key === key), key);
+  for (const key of ["supplier.payment.execute","supplier.invoice.create","supplier.ledger.adjust"]) assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
 });
 test("finance metadata has real workflows and no phantom handlers", async () => {
   const source = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
@@ -33,6 +33,6 @@ test("supplier finance legacy route stays read-only while package functions own 
   assert.equal(source.includes("INSERT INTO supplier_invoices"), false);
   assert.equal(source.includes("INSERT INTO supplier_ledger_entries"), false);
   for (const key of ["supplier.payment.execute","supplier.invoice.create","supplier.ledger.adjust"]) {
-    assert.ok(PLATFORM_FUNCTIONS.some((item) => item.key === key), key);
+    assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
   }
 });
