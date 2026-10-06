@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { executeWorkflowAction, executeWorkflowActions } from '../server/services/platformWorkflow.js'
+import { executionInputValue } from '../src/pages/developer/gptbuildernew/executionInputs.js'
 
 const page=await readFile(new URL('../src/pages/developer/gptbuildernew/GPTBuilderNewPage.jsx',import.meta.url),'utf8')
 const runtime=await readFile(new URL('../server/services/platformWorkflow.js',import.meta.url),'utf8')
@@ -65,12 +66,14 @@ test('activation preserves record-entry runtime semantics',()=>{
  assert.ok(page.includes("flowCapabilities:FLOW_CAPABILITIES[flow.key]||{}"))
 })
 
-test('run debug and saved tests coerce declared input resource types',()=>{
- assert.ok(page.includes('function executionInputValue(resource,raw)'))
- assert.ok(page.includes("['number','currency'].includes(type)"))
- assert.ok(page.includes("type==='boolean'"))
- assert.ok(page.includes('resource?.isCollection'))
- assert.ok(page.includes("['record','apex-defined'].includes(type)"))
+test('run debug and saved tests coerce declared input resource types behaviorally',()=>{
+ assert.equal(executionInputValue({dataType:'number'},'12.5'),12.5)
+ assert.equal(executionInputValue({dataType:'currency'},'7'),'7'==='7'?7:7)
+ assert.equal(executionInputValue({dataType:'boolean'},'true'),true)
+ assert.equal(executionInputValue({dataType:'boolean'},'false'),false)
+ assert.deepEqual(executionInputValue({dataType:'text',isCollection:true},'a,b'),['a','b'])
+ assert.deepEqual(executionInputValue({dataType:'record'},'{"id":"r1"}'),{id:'r1'})
+ assert.equal(executionInputValue({dataType:'text'},'hello'),'hello')
  assert.ok(page.includes('inputs:Object.fromEntries(resources.filter((r)=>r.availableForInput)'))
 })
 
