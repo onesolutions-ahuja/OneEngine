@@ -32,6 +32,7 @@ jobs:
       - run: npm run audit:trusted
       - run: npm run audit:apps
       - run: npm run audit:workflow-coverage:enforce
+      - run: npm run audit:workflow-stepwise:enforce
       - run: npm run audit:gptbuilder-sfdc-parity
 
   playwright-smoke:
