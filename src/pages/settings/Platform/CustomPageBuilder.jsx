@@ -56,6 +56,8 @@ const labelClass = "block text-xs font-medium text-slate-500";
 const BUILDER_CSS = `
   .cpb-builder{display:flex;flex-direction:column;gap:10px;min-width:0;color:#17212b}
   .cpb-toolbar{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;padding:0 2px}
+  .cpb-back-button{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border:1px solid #d9dde2;border-radius:999px;background:#fff;color:#3f4a54;box-shadow:0 1px 2px rgba(15,23,42,.04);cursor:pointer}
+  .cpb-back-button:hover{background:#f5f7f7;border-color:#bcc6c8;color:#176f6a}
   .cpb-shell{
     display:grid;
     grid-template-columns:minmax(230px,260px) minmax(420px,1fr) minmax(280px,320px);
@@ -1000,7 +1002,7 @@ const updateNode = (nodeId, changes) => {
 
       {/* Toolbar — page name, device modes, preview, undo/redo, save. */}
       <div className="cpb-toolbar">
-        {onBack ? <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={onBack}><ArrowLeft size={13}/> Back</button> : null}
+        {onBack ? <button type="button" className="cpb-back-button" onClick={onBack} aria-label="Back to Settings" title="Back to Settings"><ArrowLeft size={17}/></button> : null}
         {context === "developer" ? <span className="cpb-chip">Developer Page Builder</span> : null}
         {!lockApp ? (
           <select className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" value={appId} onChange={(event) => { setAppId(event.target.value); setPageId(""); setPage(null); }} aria-label="App">
