@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock, ChevronLeft, Copy, MousePointer2, Play, Plus, Redo2, Search, Trash2, Undo2, Workflow, X, Zap, ZoomIn, ZoomOut } from 'lucide-react'
 import { apiRequest } from '../../../services/api'
 import GPTBuilderFormulaBuilder, { basicFormulaCheck } from './GPTBuilderNewFormulaBuilder'
+import { executionInputValue } from './executionInputs'
 import './GPTBuilderNewPage.css'
 
 export const FLOW_TYPES = [
@@ -144,15 +145,6 @@ function CanvasPicker({onPick,onClose}) {
 
 
 
-function executionInputValue(resource,raw) {
- const type=String(resource?.dataType||resource?.type||'Text').toLowerCase()
- if(raw===''||raw===undefined||raw===null)return raw
- if(['number','currency'].includes(type)){const value=Number(raw);return Number.isFinite(value)?value:raw}
- if(type==='boolean')return raw===true||String(raw).toLowerCase()==='true'
- if(resource?.isCollection){if(Array.isArray(raw))return raw;try{const value=JSON.parse(raw);return Array.isArray(value)?value:raw}catch{return String(raw).split(',').map((value)=>value.trim()).filter(Boolean)}}
- if(['record','apex-defined'].includes(type)){if(typeof raw==='object')return raw;try{return JSON.parse(raw)}catch{return raw}}
- return raw
-}
 function ExecutionPanel({mode,workflowId,flowType,resources,nodes,onClose}) {
  const [running,setRunning]=useState(false),[result,setResult]=useState(null),[error,setError]=useState(''),[rollback,setRollback]=useState(mode!=='run'),[scenarioName,setScenarioName]=useState(''),[assertions,setAssertions]=useState([]),[savedTests,setSavedTests]=useState([]),[inputs,setInputs]=useState({}),[skipStartConditions,setSkipStartConditions]=useState(false),[debugWaitBehavior,setDebugWaitBehavior]=useState(false)
  useEffect(()=>{try{const v=JSON.parse(sessionStorage.getItem(`gptbuildernew.execution.${workflowId}.${mode}`)||'null');if(v){setInputs(v.inputs||{});setRollback(v.rollback??mode!=='run');setAssertions(v.assertions||[]);setSkipStartConditions(v.skipStartConditions===true);setDebugWaitBehavior(v.debugWaitBehavior===true)}}catch{}},[workflowId,mode])
