@@ -44,8 +44,9 @@ test("related action choices scope through record relationships", async () => {
 });
 test("bootstrap foundations honor dependency order", async () => {
   const source = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  assert.match(source,/visitFoundation/);
+  assert.match(source,/const visit = \(item\) =>/);
   assert.match(source,/manifest\?\.dependencies/);
+  assert.match(source,/ordered\.push\(item\)/);
 });
 
 
