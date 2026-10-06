@@ -160,7 +160,7 @@ const RAW_PLATFORM_COMPONENTS = Object.freeze([
   { key: "record_picker", label: "Record Picker", category: "record", kind: "record", bindable: true, recordBound: true, supportedBuilders: ["PAGE"], supportedContexts: ["page", "record"], supportsPageContext: true, supportsRecordContext: true, rendererKey: "record_picker", configurable: ["objectKey", "valueField", "labelField", "secondaryField", "filters", "sort", "multiple", "visibility"] },
   { key: "pagination", label: "Pagination", category: "navigation", kind: "navigation", bindable: false, supportedBuilders: ["PAGE"], supportedContexts: ["page"], supportsPageContext: true, rendererKey: "pagination", configurable: ["pageSize", "showPageSize", "showCount", "visibility"] },
   { key: "filter_bar", label: "Filter Bar", category: "navigation", kind: "navigation", bindable: true, supportedBuilders: ["PAGE"], supportedContexts: ["page", "record"], supportsPageContext: true, supportsRecordContext: true, rendererKey: "filter_bar", configurable: ["objectKey", "fields", "layout", "clearable", "visibility"] },
-  { key: "product_image_card", label: "Product Image Card", category: "record", kind: "card", bindable: true, recordBound: true, supportedBuilders: ["PAGE"], supportedContexts: ["page", "record"], supportsPageContext: true, supportsRecordContext: true, rendererKey: "product_image_card", configurable: ["objectKey", "imageField", "titleField", "subtitleFields", "priceField", "badgeField", "statusField", "clickAction", "imageFit", "visibility"] },
+  { key: "image_detail_card", label: "Image Detail Card", category: "record", kind: "card", bindable: true, recordBound: true, supportedBuilders: ["PAGE"], supportedContexts: ["page", "record"], supportsPageContext: true, supportsRecordContext: true, rendererKey: "image_detail_card", configurable: ["objectKey", "imageField", "titleField", "subtitleFields", "primaryValueField", "secondaryValueFields", "badgeField", "statusField", "clickAction", "imageFit", "visibility"] },
   { key: "search_box", label: "Search Box", category: "input", kind: "input", bindable: false, supportedBuilders: ["PAGE"], supportedContexts: ["page"], supportsPageContext: true, rendererKey: "search_box", configurable: ["placeholder", "valueBinding", "searchFields", "debounceMs", "clearable", "visibility"] },
   { key: "searchable_dropdown", label: "Searchable Dropdown", category: "input", kind: "input", bindable: true, supportedBuilders: ["PAGE"], supportedContexts: ["page", "record"], supportsPageContext: true, supportsRecordContext: true, rendererKey: "searchable_dropdown", configurable: ["objectKey", "valueField", "labelField", "secondaryField", "filters", "sort", "placeholder", "allowClear", "visibility"] },
   { key: "jarves", label: "JARVES", category: "action", kind: "assistant", bindable: false, registered: true, behaviours: ["behaviour_1", "behaviour_2", "behaviour_3"], interactions: ["voice", "message", "ask_input"] },
@@ -172,6 +172,21 @@ export const PLATFORM_COMPONENTS = Object.freeze(RAW_PLATFORM_COMPONENTS.map((co
 })));
 
 const COMPONENT_MAP = new Map(PLATFORM_COMPONENTS.map((component) => [component.key, component]));
+const COMPONENT_ID_MAP = new Map(PLATFORM_COMPONENTS.map((component) => [component.id, component]));
+
+/**
+ * Resolve either the canonical 14-digit definition ID or the legacy key.
+ * Existing tenant metadata remains readable while page definitions migrate.
+ */
+export function resolvePlatformComponent(reference) {
+  const value = String(reference || "").trim();
+  return COMPONENT_ID_MAP.get(value) || COMPONENT_MAP.get(value) || null;
+}
+
+export function canonicalComponentReference(reference) {
+  const component = resolvePlatformComponent(reference);
+  return component ? { componentId: component.id, componentKey: component.key } : null;
+}
 
 const FLOW_SCREEN_RENDERABLE_COMPONENTS = new Set([
   "header","text","divider","spacer",
@@ -187,8 +202,8 @@ export function listPlatformComponents() {
   }));
 }
 
-export function getPlatformComponent(key) {
-  return COMPONENT_MAP.get(String(key || "")) || null;
+export function getPlatformComponent(reference) {
+  return resolvePlatformComponent(reference);
 }
 
 export function componentForFieldType(fieldType) {
