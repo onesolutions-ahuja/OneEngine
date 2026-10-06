@@ -1,0 +1,1029 @@
+{
+  "packageKey": "open_food_facts",
+  "workflows": [
+    {
+      "objectKey": "product",
+      "name": "GPT - Open Food Facts - Lookup Product",
+      "triggerKey": "manual",
+      "conditions": [],
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemKey": "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+        "scope": "open_food_facts",
+        "capabilityType": "workflow",
+        "capabilityKey": "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+        "apiName": "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
+        "flowType": "AUTOLAUNCHED",
+        "inputs": [
+          {
+            "name": "barcode",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "outputs": [
+          "found",
+          "barcode",
+          "productName",
+          "brand",
+          "imageUrl",
+          "ingredients"
+        ],
+        "resources": [
+          {
+            "value": "variables.barcode",
+            "apiName": "barcode",
+            "label": "barcode",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": true,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.found",
+            "apiName": "found",
+            "label": "found",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.productName",
+            "apiName": "productName",
+            "label": "productName",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.brand",
+            "apiName": "brand",
+            "label": "brand",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.imageUrl",
+            "apiName": "imageUrl",
+            "label": "imageUrl",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.ingredients",
+            "apiName": "ingredients",
+            "label": "ingredients",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "lookup_http",
+            "label": "Lookup Product",
+            "apiName": "lookup_http",
+            "key": "ONE_HTTP_REQUEST",
+            "providerKey": "open_food_facts",
+            "method": "GET",
+            "endpoint": "/api/v2/product/{{barcode}}.json"
+          },
+          {
+            "id": "product_found",
+            "label": "Product Found?",
+            "apiName": "product_found",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "found",
+                "label": "Found",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.lookup_http.success",
+                      "operator": "equals",
+                      "value": true
+                    },
+                    {
+                      "field": "steps.lookup_http.data.status",
+                      "operator": "equals",
+                      "value": 1
+                    }
+                  ]
+                },
+                "branch": [
+                  "set_found",
+                  "set_barcode",
+                  "set_product_name",
+                  "set_brand",
+                  "set_image_url",
+                  "set_ingredients"
+                ]
+              }
+            ],
+            "defaultLabel": "Not Found",
+            "defaultBranch": [
+              "set_not_found"
+            ]
+          },
+          {
+            "id": "set_found",
+            "label": "Set Found",
+            "apiName": "set_found",
+            "key": "ASSIGNMENT",
+            "variableName": "found",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": true
+          },
+          {
+            "id": "set_barcode",
+            "label": "Set Barcode",
+            "apiName": "set_barcode",
+            "key": "ASSIGNMENT",
+            "variableName": "barcode",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.lookup_http.data.code"
+            }
+          },
+          {
+            "id": "set_product_name",
+            "label": "Set Product Name",
+            "apiName": "set_product_name",
+            "key": "ASSIGNMENT",
+            "variableName": "productName",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.lookup_http.data.product.product_name"
+            }
+          },
+          {
+            "id": "set_brand",
+            "label": "Set Brand",
+            "apiName": "set_brand",
+            "key": "ASSIGNMENT",
+            "variableName": "brand",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.lookup_http.data.product.brands"
+            }
+          },
+          {
+            "id": "set_image_url",
+            "label": "Set Image URL",
+            "apiName": "set_image_url",
+            "key": "ASSIGNMENT",
+            "variableName": "imageUrl",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.lookup_http.data.product.image_front_url"
+            }
+          },
+          {
+            "id": "set_ingredients",
+            "label": "Set Ingredients",
+            "apiName": "set_ingredients",
+            "key": "ASSIGNMENT",
+            "variableName": "ingredients",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.lookup_http.data.product.ingredients_text"
+            }
+          },
+          {
+            "id": "set_not_found",
+            "label": "Set Not Found",
+            "apiName": "set_not_found",
+            "key": "ASSIGNMENT",
+            "variableName": "found",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": false
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "lookup_http",
+            "key": "action",
+            "label": "Lookup Product",
+            "apiName": "lookup_http",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "lookup_http",
+                "label": "Lookup Product",
+                "apiName": "lookup_http",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "open_food_facts",
+                "method": "GET",
+                "endpoint": "/api/v2/product/{{barcode}}.json"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "product_found",
+            "key": "action",
+            "label": "Product Found?",
+            "apiName": "product_found",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "product_found",
+                "label": "Product Found?",
+                "apiName": "product_found",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "found",
+                    "label": "Found",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.lookup_http.success",
+                          "operator": "equals",
+                          "value": true
+                        },
+                        {
+                          "field": "steps.lookup_http.data.status",
+                          "operator": "equals",
+                          "value": 1
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_found",
+                      "set_barcode",
+                      "set_product_name",
+                      "set_brand",
+                      "set_image_url",
+                      "set_ingredients"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Not Found",
+                "defaultBranch": [
+                  "set_not_found"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_found",
+            "key": "action",
+            "label": "Set Found",
+            "apiName": "set_found",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_found",
+                "label": "Set Found",
+                "apiName": "set_found",
+                "key": "ASSIGNMENT",
+                "variableName": "found",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_barcode",
+            "key": "action",
+            "label": "Set Barcode",
+            "apiName": "set_barcode",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_barcode",
+                "label": "Set Barcode",
+                "apiName": "set_barcode",
+                "key": "ASSIGNMENT",
+                "variableName": "barcode",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "steps.lookup_http.data.code"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_product_name",
+            "key": "action",
+            "label": "Set Product Name",
+            "apiName": "set_product_name",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_product_name",
+                "label": "Set Product Name",
+                "apiName": "set_product_name",
+                "key": "ASSIGNMENT",
+                "variableName": "productName",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "steps.lookup_http.data.product.product_name"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_brand",
+            "key": "action",
+            "label": "Set Brand",
+            "apiName": "set_brand",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_brand",
+                "label": "Set Brand",
+                "apiName": "set_brand",
+                "key": "ASSIGNMENT",
+                "variableName": "brand",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "steps.lookup_http.data.product.brands"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_image_url",
+            "key": "action",
+            "label": "Set Image URL",
+            "apiName": "set_image_url",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_image_url",
+                "label": "Set Image URL",
+                "apiName": "set_image_url",
+                "key": "ASSIGNMENT",
+                "variableName": "imageUrl",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "steps.lookup_http.data.product.image_front_url"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_ingredients",
+            "key": "action",
+            "label": "Set Ingredients",
+            "apiName": "set_ingredients",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_ingredients",
+                "label": "Set Ingredients",
+                "apiName": "set_ingredients",
+                "key": "ASSIGNMENT",
+                "variableName": "ingredients",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "steps.lookup_http.data.product.ingredients_text"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_not_found",
+            "key": "action",
+            "label": "Set Not Found",
+            "apiName": "set_not_found",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_not_found",
+                "label": "Set Not Found",
+                "apiName": "set_not_found",
+                "key": "ASSIGNMENT",
+                "variableName": "found",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "product",
+      "name": "GPT - Open Food Facts - Test Connection",
+      "triggerKey": "manual",
+      "conditions": [],
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "action": {
+        "type": "workflow",
+        "systemKey": "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
+        "scope": "open_food_facts",
+        "capabilityType": "workflow",
+        "capabilityKey": "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
+        "apiName": "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
+        "flowType": "AUTOLAUNCHED",
+        "outputs": [
+          "connected",
+          "message",
+          "statusCode"
+        ],
+        "resources": [
+          {
+            "value": "variables.connected",
+            "apiName": "connected",
+            "label": "connected",
+            "type": "Variable",
+            "dataType": "Boolean",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.message",
+            "apiName": "message",
+            "label": "message",
+            "type": "Variable",
+            "dataType": "Text",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          },
+          {
+            "value": "variables.statusCode",
+            "apiName": "statusCode",
+            "label": "statusCode",
+            "type": "Variable",
+            "dataType": "Number",
+            "defaultValue": "",
+            "isCollection": false,
+            "availableInput": false,
+            "availableOutput": true,
+            "objectKey": ""
+          }
+        ],
+        "actions": [
+          {
+            "id": "test_http",
+            "label": "Call Open Food Facts",
+            "apiName": "test_http",
+            "key": "ONE_HTTP_REQUEST",
+            "providerKey": "open_food_facts",
+            "method": "GET",
+            "endpoint": "/api/v2/product/737628064502.json"
+          },
+          {
+            "id": "connection_ok",
+            "label": "Connection Successful?",
+            "apiName": "connection_ok",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "success",
+                "label": "Success",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.test_http.success",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "set_connected",
+                  "set_connected_message",
+                  "set_connected_status"
+                ]
+              }
+            ],
+            "defaultLabel": "Failed",
+            "defaultBranch": [
+              "set_failed",
+              "set_failed_message",
+              "set_failed_status"
+            ]
+          },
+          {
+            "id": "set_connected",
+            "label": "Set Connected",
+            "apiName": "set_connected",
+            "key": "ASSIGNMENT",
+            "variableName": "connected",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": true
+          },
+          {
+            "id": "set_connected_message",
+            "label": "Set Connected Message",
+            "apiName": "set_connected_message",
+            "key": "ASSIGNMENT",
+            "variableName": "message",
+            "variableType": "text",
+            "operator": "set",
+            "value": "Connected"
+          },
+          {
+            "id": "set_connected_status",
+            "label": "Set Connected Status Code",
+            "apiName": "set_connected_status",
+            "key": "ASSIGNMENT",
+            "variableName": "statusCode",
+            "variableType": "number",
+            "operator": "set",
+            "value": {
+              "path": "steps.test_http.statusCode"
+            }
+          },
+          {
+            "id": "set_failed",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "key": "ASSIGNMENT",
+            "variableName": "connected",
+            "variableType": "boolean",
+            "operator": "set",
+            "value": false
+          },
+          {
+            "id": "set_failed_message",
+            "label": "Set Failed Message",
+            "apiName": "set_failed_message",
+            "key": "ASSIGNMENT",
+            "variableName": "message",
+            "variableType": "text",
+            "operator": "set",
+            "value": "Connection failed"
+          },
+          {
+            "id": "set_failed_status",
+            "label": "Set Failed Status Code",
+            "apiName": "set_failed_status",
+            "key": "ASSIGNMENT",
+            "variableName": "statusCode",
+            "variableType": "number",
+            "operator": "set",
+            "value": {
+              "path": "steps.test_http.statusCode"
+            }
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "test_http",
+            "key": "action",
+            "label": "Call Open Food Facts",
+            "apiName": "test_http",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ONE_HTTP_REQUEST",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "test_http",
+                "label": "Call Open Food Facts",
+                "apiName": "test_http",
+                "key": "ONE_HTTP_REQUEST",
+                "providerKey": "open_food_facts",
+                "method": "GET",
+                "endpoint": "/api/v2/product/737628064502.json"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "connection_ok",
+            "key": "action",
+            "label": "Connection Successful?",
+            "apiName": "connection_ok",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "connection_ok",
+                "label": "Connection Successful?",
+                "apiName": "connection_ok",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "success",
+                    "label": "Success",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.test_http.success",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "set_connected",
+                      "set_connected_message",
+                      "set_connected_status"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Failed",
+                "defaultBranch": [
+                  "set_failed",
+                  "set_failed_message",
+                  "set_failed_status"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_connected",
+            "key": "action",
+            "label": "Set Connected",
+            "apiName": "set_connected",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_connected",
+                "label": "Set Connected",
+                "apiName": "set_connected",
+                "key": "ASSIGNMENT",
+                "variableName": "connected",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_connected_message",
+            "key": "action",
+            "label": "Set Connected Message",
+            "apiName": "set_connected_message",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_connected_message",
+                "label": "Set Connected Message",
+                "apiName": "set_connected_message",
+                "key": "ASSIGNMENT",
+                "variableName": "message",
+                "variableType": "text",
+                "operator": "set",
+                "value": "Connected"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_connected_status",
+            "key": "action",
+            "label": "Set Connected Status Code",
+            "apiName": "set_connected_status",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_connected_status",
+                "label": "Set Connected Status Code",
+                "apiName": "set_connected_status",
+                "key": "ASSIGNMENT",
+                "variableName": "statusCode",
+                "variableType": "number",
+                "operator": "set",
+                "value": {
+                  "path": "steps.test_http.statusCode"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed",
+            "key": "action",
+            "label": "Set Failed",
+            "apiName": "set_failed",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed",
+                "label": "Set Failed",
+                "apiName": "set_failed",
+                "key": "ASSIGNMENT",
+                "variableName": "connected",
+                "variableType": "boolean",
+                "operator": "set",
+                "value": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed_message",
+            "key": "action",
+            "label": "Set Failed Message",
+            "apiName": "set_failed_message",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed_message",
+                "label": "Set Failed Message",
+                "apiName": "set_failed_message",
+                "key": "ASSIGNMENT",
+                "variableName": "message",
+                "variableType": "text",
+                "operator": "set",
+                "value": "Connection failed"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_failed_status",
+            "key": "action",
+            "label": "Set Failed Status Code",
+            "apiName": "set_failed_status",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_failed_status",
+                "label": "Set Failed Status Code",
+                "apiName": "set_failed_status",
+                "key": "ASSIGNMENT",
+                "variableName": "statusCode",
+                "variableType": "number",
+                "operator": "set",
+                "value": {
+                  "path": "steps.test_http.statusCode"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
+        ]
+      }
+    }
+  ]
+}
