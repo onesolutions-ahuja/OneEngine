@@ -874,7 +874,7 @@ export default function ObjectPage({
       if (first && onSelectRecord) return onSelectRecord(first, related.relationship?.child_object_key);
       return setError("Open Related List requires a related-record navigation handler.");
     }
-    if (component.action === "run_workflow" || component.action === "call_function") {
+    if (component.action === "run_workflow" || component.action === ) {
       const components = detailLayout?.definition?.components || [];
       const index = components.indexOf(component);
       const actionKey = component.id || component.key || `${component.action}:${index}`;
