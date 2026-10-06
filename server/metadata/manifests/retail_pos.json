@@ -426,6 +426,16 @@
       },
       "fields": [
         {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false,
+          "config": {
+            "settingsHidden": true
+          }
+        },
+        {
           "apiName": "company_id",
           "label": "Company",
           "fieldType": "lookup",
@@ -593,6 +603,16 @@
       },
       "fields": [
         {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false,
+          "config": {
+            "settingsHidden": true
+          }
+        },
+        {
           "apiName": "sale_id",
           "label": "Sale",
           "fieldType": "lookup",
@@ -695,6 +715,16 @@
         "flowWritesOnly": true
       },
       "fields": [
+        {
+          "apiName": "id",
+          "label": "ID",
+          "fieldType": "lookup",
+          "sourceColumn": "id",
+          "writable": false,
+          "config": {
+            "settingsHidden": true
+          }
+        },
         {
           "apiName": "sale_id",
           "label": "Sale",
