@@ -19,31 +19,31 @@
           "apiName": "loyalty_enabled",
           "label": "Enabled",
           "fieldType": "boolean",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "loyalty_earning_rate",
           "label": "Earn Rate",
           "fieldType": "decimal",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "loyalty_min_sale_total",
           "label": "Minimum Qualifying Sale",
           "fieldType": "currency",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "loyalty_redeem_value_per_point",
           "label": "Redemption Value per Point",
           "fieldType": "decimal",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "loyalty_min_points_redeem",
           "label": "Minimum Redemption Points",
           "fieldType": "number",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "updated_at",
@@ -76,13 +76,13 @@
           "label": "Customer",
           "fieldType": "lookup",
           "required": true,
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "balance",
           "label": "Balance",
           "fieldType": "decimal",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "updated_at",
@@ -115,51 +115,51 @@
           "label": "Customer",
           "fieldType": "lookup",
           "required": true,
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "transaction_type",
           "label": "Entry Type",
           "fieldType": "picklist",
           "required": true,
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "amount",
           "label": "Points",
           "fieldType": "decimal",
           "required": true,
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "balance_after",
           "label": "Balance After",
           "fieldType": "decimal",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "reference_type",
           "label": "Reference Type",
           "fieldType": "text",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "reference_id",
           "label": "Reference",
           "fieldType": "lookup",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "description",
           "label": "Reason",
           "fieldType": "text",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "created_by",
           "label": "Operator",
           "fieldType": "lookup",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "created_at",
@@ -192,32 +192,32 @@
           "label": "Customer",
           "fieldType": "lookup",
           "required": true,
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "points",
           "label": "Points",
           "fieldType": "decimal",
           "required": true,
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "reason",
           "label": "Reason",
           "fieldType": "text",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "reference_id",
           "label": "Reference",
           "fieldType": "lookup",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "created_by",
           "label": "Operator",
           "fieldType": "lookup",
-          "writable": false
+          "writable": true
         },
         {
           "apiName": "created_at",
@@ -381,6 +381,24 @@
         },
         "actions": [
           {
+            "id": "get_account",
+            "label": "Get Loyalty Account",
+            "apiName": "get_account",
+            "key": "GET_RECORDS",
+            "objectKey": "loyalty_account",
+            "filters": [
+              {
+                "field": "customer_id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.customerId"
+                }
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
             "id": "create_adjustment",
             "label": "Create Loyalty Adjustment",
             "apiName": "create_adjustment",
@@ -421,6 +439,21 @@
               },
               "description": {
                 "path": "variables.reason"
+              }
+            }
+          },
+          {
+            "id": "update_balance",
+            "label": "Update Loyalty Balance",
+            "apiName": "update_balance",
+            "key": "UPDATE_RECORD",
+            "objectKey": "loyalty_account",
+            "recordId": {
+              "path": "steps.get_account.record.id"
+            },
+            "fieldValues": {
+              "balance": {
+                "path": "steps.create_activity.created.balance_after"
               }
             }
           }
