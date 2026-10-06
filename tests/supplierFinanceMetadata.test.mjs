@@ -27,11 +27,10 @@ test("bootstrap foundations honor dependency order", async () => {
 });
 
 
-test("supplier finance legacy route stays read-only while package functions own writes", async () => {
-  const source = await readFile(new URL("../server/routes/supplierAccounts.js", import.meta.url), "utf8");
-  assert.equal(/router\.(post|put|patch|delete)\(/.test(source), false);
-  assert.equal(source.includes("INSERT INTO supplier_invoices"), false);
-  assert.equal(source.includes("INSERT INTO supplier_ledger_entries"), false);
+test("supplier finance legacy route is removed and writes remain Flow-owned", async () => {
+  const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
+  assert.equal(server.includes("./routes/supplierAccounts.js"), false);
+  assert.equal(server.includes("createSupplierAccountsRouter"), false);
   for (const key of ["supplier.payment.execute","supplier.invoice.create","supplier.ledger.adjust"]) {
     assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
   }
