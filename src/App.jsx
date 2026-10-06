@@ -28,7 +28,6 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const OneKioskPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskPage'))
 const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
@@ -710,7 +709,7 @@ function Desktop({ onLock, onSignOut }) {
     }
 
     const routeMap = new Set([
-      'integrations','google-connect','accounting','kiosk','kiosk-display',
+      'integrations','accounting','kiosk','kiosk-display',
       'audit-log','licensing','app-releases','dashboard','reports','custom-reports',
       'global-products','workspace','till',
     ])
@@ -933,8 +932,6 @@ function Desktop({ onLock, onSignOut }) {
           ) : enginePermissionNotice
         ) : activeApp === 'settings' ? (
           <MetadataSettingsPage initialSection={routeState?.section || ''} />
-        ) : activeApp === 'google-connect' ? (
-          <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeApp === 'till' ? (
