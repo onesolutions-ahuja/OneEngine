@@ -1,6 +1,4 @@
 import { PACKAGE_RUNTIME_FLOWS } from "../packages/runtimeFlowManifests.js";
-import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
-import { TRUSTED_JOB_KINDS } from "./trustedJobKinds.js";
 
 const outputVariable = (name, dataType = "Text", extra = {}) => ({
   value: `variables.${name}`,
@@ -338,57 +336,8 @@ function titleCase(value = "") {
     .trim();
 }
 
-function actionWorkflow(action) {
-  return {
-    systemKey: `action:${action.key}`,
-    name: `System · Action · ${action.displayName || titleCase(action.key)}`,
-    triggerKey: "system_action",
-    action: {
-      type: "workflow",
-      systemGenerated: true,
-      systemKey: `action:${action.key}`,
-      scope: "system",
-      capabilityType: "action",
-      capabilityKey: action.key,
-      // This is the canonical editable wrapper. Phase 3 reroutes callers
-      // through these workflow ids and supplies runtime inputs/config.
-      actions: [{
-        type: action.key,
-        systemTemplate: true,
-        label: action.displayName || action.key,
-      }],
-    },
-  };
-}
-
-function jobWorkflow(kind) {
-  return {
-    systemKey: `job:${kind}`,
-    name: `System · Trigger · ${titleCase(kind)}`,
-    triggerKey: "system_job",
-    action: {
-      type: "workflow",
-      systemGenerated: true,
-      systemKey: `job:${kind}`,
-      scope: "system",
-      capabilityType: "job",
-      capabilityKey: kind,
-      // Job execution is wired to these entries in Phase 3.
-      actions: [{
-        type: "STOP",
-        reason: `System job trigger placeholder for ${kind}`,
-        systemTemplate: true,
-      }],
-    },
-  };
-}
-
 export function systemWorkflowDefinitions() {
-  const actions = PLATFORM_ACTION_REGISTRY
-    .filter((item) => item?.key && item.key !== "WORKFLOW" && item.systemVisible !== false)
-    .map(actionWorkflow);
-  const jobs = TRUSTED_JOB_KINDS.map(jobWorkflow);
-  return [...actions, ...jobs, ...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS];
+  return [...CUSTOMER_CREDIT_SYSTEM_WORKFLOWS, ...TILL_SYSTEM_WORKFLOWS, ...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS];
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {
