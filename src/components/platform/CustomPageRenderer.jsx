@@ -368,7 +368,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     return <FileViewerRecords node={node} records={records} placeholder={placeholder} />;
   }
   if (node.componentKey === "signature") {
-    return <div className="space-y-2">{records.length ? records.map((record, index) => <SignatureRecord key={record.id || index} node={node} record={record} objectKey={collection.objectKey} title={record[titleField] || record.id} builderMode={builderMode} />) : <div className="cpb-empty">{placeholder ? `${config.label || "Signature"} values will appear here.` : "No records available."}</div>}</div>;
+    return <div className="space-y-2">{records.length ? records.map((record, index) => <SignatureRecord key={record.id || index} node={node} record={record} objectKey={collection.objectKey} title={record[titleField] || record.id} builderMode={builderMode} onInteraction={onInteraction} />) : <div className="cpb-empty">{placeholder ? `${config.label || "Signature"} values will appear here.` : "No records available."}</div>}</div>;
   }
   return <div className="cpb-empty">No records match this view.</div>;
 }
