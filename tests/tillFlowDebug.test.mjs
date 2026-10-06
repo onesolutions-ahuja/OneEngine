@@ -13,14 +13,14 @@ const systemFlows = new Map(
 function permissionDb({ products = [], inserted = [] } = {}) {
   const objects = {
     product: { id: "obj-product", object_key: "product", label: "Product", source_table: "products", company_id: null, company_scoped: true, store_scoped: false },
-    cash_movement: { id: "obj-cash", object_key: "cash_ledger", label: "Cash Movement", source_table: "cash_ledger", company_id: null, company_scoped: true, store_scoped: true },
+    cash_ledger: { id: "obj-cash", object_key: "cash_ledger", label: "Cash Movement", source_table: "cash_ledger", company_id: null, company_scoped: true, store_scoped: true },
   };
   const fields = {
     product: [
       { id:"fp1",object_id:"obj-product",api_name:"name",source_column:"name",active:true,readable:true,writable:true,label:"Name",display_order:1 },
       { id:"fp2",object_id:"obj-product",api_name:"price",source_column:"price",active:true,readable:true,writable:true,label:"Price",display_order:2 },
     ],
-    cash_movement: [
+    cash_ledger: [
       { id:"fc1",object_id:"obj-cash",api_name:"till_session_id",source_column:"till_session_id",active:true,readable:true,writable:true,label:"Till Session",display_order:1 },
       { id:"fc2",object_id:"obj-cash",api_name:"user_id",source_column:"user_id",active:true,readable:true,writable:true,label:"User",display_order:2 },
       { id:"fc3",object_id:"obj-cash",api_name:"type",source_column:"type",active:true,readable:true,writable:true,label:"Type",display_order:3 },
