@@ -1,0 +1,35 @@
+{
+  "connectors": [
+    {
+      "connectorKey": "go_upc",
+      "name": "go upc Connection",
+      "description": "Metadata-driven connection for go upc.",
+      "publisher": "OneSolutions",
+      "authType": "bearer",
+      "baseUrl": "https://go-upc.com",
+      "credentialsSchema": [
+        {
+          "key": "token",
+          "type": "secret",
+          "required": true,
+          "label": "API key"
+        }
+      ],
+      "operations": [
+        {
+          "key": "test_connection",
+          "name": "Test Connection",
+          "method": "GET",
+          "path": "/api/v1/code/737628064502"
+        }
+      ],
+      "timeoutMs": 15000,
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "backoffMs": 0
+      },
+      "required": true
+    }
+  ],
+  "iconAssetKey": null
+}
