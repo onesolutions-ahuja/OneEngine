@@ -156,6 +156,33 @@ const PACKAGE_CATALOG = [
     description: "Product Core foundation for the canonical product catalogue and categories.",
     route: "/app/objects/product?appKey=products",
     navigationAliases: [{ slug: "products", route: "/app/objects/product?appKey=products" }, { slug: "categories", route: "/app/objects/category?appKey=products" }],
+    runtimeSurfaces: {
+      globalLookup: {
+        objects: { catalogue: "product", category: "category" },
+        endpoints: {
+          providers: "/api/global-products/providers",
+          lookup: "/api/global-products/lookup",
+          search: "/api/global-products/search",
+          provider: "/api/global-products/providers/{providerKey}",
+          providerTest: "/api/global-products/providers/{providerKey}/test",
+          defaultProvider: "/api/global-products/default-provider",
+        },
+        providerDefaults: { enabled: true, priority: 100, timeoutMs: 5000, fallbackEnabled: true, cacheTtlSeconds: 5 },
+        recordMappings: {
+          category: { id: ["id"], name: ["name"] },
+          lookupProduct: {
+            name: "name",
+            barcode: "barcode",
+            description: "description",
+            category: "category",
+            imageUrl: "image_url",
+            brand: "brand",
+            quantity: "quantity",
+            sourceProvider: "source_provider",
+          },
+        },
+      },
+    },
     permissions: [
       "product.view", "product.create", "product.edit", "product.delete",
       "category.view", "category.create", "category.edit", "category.delete"],
