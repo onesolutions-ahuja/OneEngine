@@ -1,0 +1,108 @@
+{
+  "objects": [
+    {
+      "objectKey": "kds_ticket",
+      "label": "Kitchen Ticket",
+      "pluralLabel": "Kitchen Tickets",
+      "sourceTable": "hospitality_kds_tickets",
+      "fields": [
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "sale_id",
+          "label": "Sale",
+          "fieldType": "lookup",
+          "writable": false
+        },
+        {
+          "apiName": "table_id",
+          "label": "Table",
+          "fieldType": "lookup",
+          "writable": false
+        },
+        {
+          "apiName": "status",
+          "label": "Status",
+          "fieldType": "picklist",
+          "required": true,
+          "writable": true,
+          "options": [
+            "NEW",
+            "IN_PREPARATION",
+            "READY",
+            "COMPLETED"
+          ]
+        },
+        {
+          "apiName": "items",
+          "label": "Items",
+          "fieldType": "text",
+          "writable": false
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "writable": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "sale",
+      "childObjectKey": "kds_ticket",
+      "relationshipKey": "kitchen_tickets",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "sale_id"
+    },
+    {
+      "parentObjectKey": "hospitality_table",
+      "childObjectKey": "kds_ticket",
+      "relationshipKey": "kitchen_tickets",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "table_id"
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "kds_ticket",
+      "viewKey": "active",
+      "label": "Active Kitchen Tickets",
+      "columns": [
+        "sale_id",
+        "table_id",
+        "status",
+        "created_at"
+      ],
+      "isDefault": true
+    }
+  ],
+  "permissionDeclarations": [
+    {
+      "permission": "hospitality.kds.view",
+      "label": "View KDS"
+    },
+    {
+      "permission": "hospitality.kds.manage",
+      "label": "Manage KDS"
+    },
+    {
+      "permission": "hospitality.kitchen.reprint",
+      "label": "Reprint kitchen tickets"
+    }
+  ],
+  "pages": [
+    {
+      "pageKey": "kds",
+      "label": "Kitchen Display",
+      "routePath": "/app/custom/kds",
+      "runtimeComponent": "kitchen_display"
+    }
+  ]
+}
