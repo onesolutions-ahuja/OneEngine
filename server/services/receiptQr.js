@@ -198,3 +198,70 @@ export function buildReceiptQrDownloadUrl(token, baseUrl = null) {
   const prefix = typeof baseUrl === "string" && baseUrl.trim() ? baseUrl.replace(/\/+$/, "") : "";
   return `${prefix || ""}/receipt/download/${encodeURIComponent(token)}`;
 }
+
+
+/**
+ * Load tenant-scoped receipt data for the public temporary receipt endpoint.
+ * This is document-delivery infrastructure only; it does not mutate Sale business state.
+ */
+export async function loadPublicReceiptData({ db, companyId, saleId }) {
+  if (!db || !companyId || !saleId) return null;
+  try {
+    const saleResult = await db(
+      `SELECT s.id, s.company_id, s.store_id, s.receipt_number, s.subtotal,
+              s.tax, s.discount, s.total, s.status, s.created_at, s.completed_at,
+              c.timezone AS company_timezone, c.currency AS company_currency
+         FROM sales s
+         INNER JOIN companies c ON c.id=s.company_id
+        WHERE s.id=$1 AND s.company_id=$2
+        LIMIT 1`,
+      [saleId, companyId]
+    );
+    const row = saleResult.rows?.[0];
+    if (!row) return null;
+    const [itemsResult, paymentsResult, companyResult, storeResult] = await Promise.all([
+      db(`SELECT product_name,quantity,unit_price,discount,tax,total
+            FROM sale_items WHERE sale_id=$1 ORDER BY id ASC`, [row.id]),
+      db(`SELECT payment_method,amount,status FROM payments WHERE sale_id=$1 ORDER BY created_at ASC`, [row.id]),
+      db(`SELECT name,email,phone,currency FROM companies WHERE id=$1 LIMIT 1`, [row.company_id]),
+      db(`SELECT name,phone,address_line1,city,postcode FROM stores WHERE id=$1 LIMIT 1`, [row.store_id]),
+    ]);
+    return {
+      sale: {
+        ...row,
+        receiptNumber: row.receipt_number,
+        createdAt: row.created_at,
+        completedAt: row.completed_at,
+        companyTimezone: row.company_timezone,
+        companyCurrency: row.company_currency,
+        items: (itemsResult.rows || []).map(item => ({
+          name: item.product_name,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unit_price),
+          discount: Number(item.discount),
+          tax: Number(item.tax),
+          total: Number(item.total),
+        })),
+        payments: (paymentsResult.rows || []).map(payment => ({
+          method: payment.payment_method,
+          amount: Number(payment.amount),
+          status: payment.status,
+        })),
+      },
+      company: companyResult.rows?.[0] || null,
+      store: storeResult.rows?.[0]
+        ? {
+            ...storeResult.rows[0],
+            addressLine1: storeResult.rows[0].address_line1,
+          }
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Render receipt PDF bytes using the shared generic document renderer. */
+export function buildReceiptPdfBytes({ sale, company, store }) {
+  return buildInvoicePdf({ sale, company, store });
+}
