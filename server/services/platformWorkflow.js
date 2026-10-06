@@ -91,12 +91,6 @@ export class WorkflowExecutionError extends Error {
   }
 }
 
-const COMMUNICATION_PROVIDER_ALIASES = {
-  EMAIL: ["email", "smtp", "mail", "sendgrid", "mailgun", "postmark", "ses"],
-  SMS: ["sms", "twilio", "textlocal", "messagebird", "vonage", "nexmo", "clickatell"],
-  WHATSAPP: ["whatsapp", "whatsapp_business", "meta_whatsapp"],
-};
-
 const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
     key: "CONNECTOR_HEALTH_CHECK",
