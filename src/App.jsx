@@ -38,7 +38,6 @@ const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/Licensi
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
-const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
 const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
 const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
@@ -116,8 +115,6 @@ const SETTINGS_VISUALS = {
   deliveroo: { icon: Cable, tone: 'purple' },
   whatsapp: { icon: Cable, tone: 'green' },
   'whatsapp-assistant': { icon: Cable, tone: 'green' },
-  'sms-delivery': { icon: CreditCard, tone: 'pink' },
-  'email-delivery': { icon: Mail, tone: 'pink' },
   'server-api': { icon: MonitorCog, tone: 'gray' },
   objects: { icon: LayoutGrid, tone: 'cyan', searchTerms: ['objects', 'object manager', 'fields', 'metadata', 'api name'] },
   'assignment-rules': { icon: LayoutGrid, tone: 'cyan', searchTerms: ['assignment rules', 'routing', 'owner', 'assign'] },
@@ -1233,10 +1230,6 @@ function SettingsPage({ onOpenProfile }) {
                 <HardwareSettings />
               ) : current?.key === 'connections' ? (
                 <ConnectionsSettings />
-              ) : current?.key === 'email-delivery' ? (
-                <DeliverySettingsPage channel="email" />
-              ) : current?.key === 'sms-delivery' ? (
-                <DeliverySettingsPage channel="sms" />
               ) : current?.key === 'whatsapp-assistant' ? (
                 <WhatsAppAssistantSettings />
               ) : current?.key === 'ai-assistant' ? (
