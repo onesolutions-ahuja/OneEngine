@@ -6,7 +6,7 @@
  *          API surface) and carries no IDs: the opaque token is the sole
  *          credential and the sole lookup key (hash-only storage).
  *
- * ADMIN:   GET/DELETE under /api/platform/objects/sale/records/:saleId/secure-links so the existing
+ * ADMIN:   GET/DELETE under /api/platform/objects/sale_ledger/records/:saleId/secure-links so the existing
  *          sales permission model can create/revoke links in a later batch.
  *
  * Enumeration protection: invalid, expired, revoked and unknown tokens all
@@ -238,7 +238,7 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
   /* ---------------- ADMIN: link management for later batches ---------------- */
 
   router.post(
-    "/api/platform/objects/sale/records/:saleId/secure-links",
+    "/api/platform/objects/sale_ledger/records/:saleId/secure-links",
     authenticate,
     authorize("sale.refund"),
     async (req, res) => {
@@ -278,7 +278,7 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
   );
 
   router.post(
-    "/api/platform/objects/sale/records/:saleId/receipt-qr",
+    "/api/platform/objects/sale_ledger/records/:saleId/receipt-qr",
     authenticate,
     authorize("sale.refund"),
     async (req, res) => {
@@ -325,7 +325,7 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
   );
 
   router.delete(
-    "/api/platform/objects/sale/records/:saleId/receipt-qr",
+    "/api/platform/objects/sale_ledger/records/:saleId/receipt-qr",
     authenticate,
     authorize("sale.refund"),
     async (req, res) => {
@@ -344,7 +344,7 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
   );
 
   router.delete(
-    "/api/platform/objects/sale/records/:saleId/secure-links",
+    "/api/platform/objects/sale_ledger/records/:saleId/secure-links",
     authenticate,
     authorize("sale.refund"),
     async (req, res) => {
