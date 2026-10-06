@@ -13,7 +13,7 @@ const systemFlows = new Map(
 function permissionDb({ products = [], inserted = [] } = {}) {
   const objects = {
     product: { id: "obj-product", object_key: "product", label: "Product", source_table: "products", company_id: null, company_scoped: true, store_scoped: false },
-    cash_movement: { id: "obj-cash", object_key: "cash_movement", label: "Cash Movement", source_table: "cash_movements", company_id: null, company_scoped: true, store_scoped: true },
+    cash_movement: { id: "obj-cash", object_key: "cash_movement", label: "Cash Movement", source_table: "cash_ledger", company_id: null, company_scoped: true, store_scoped: true },
   };
   const fields = {
     product: [
@@ -43,7 +43,7 @@ function permissionDb({ products = [], inserted = [] } = {}) {
       return { rows: key ? fields[key] : [] };
     }
     if (s.includes('FROM "products"')) return { rows: products };
-    if (s.includes('INSERT INTO "cash_movements"')) {
+    if (s.includes('INSERT INTO "cash_ledger"')) {
       const row = { id:"cash-1", till_session_id:params[0], user_id:params[1], type:params[2], amount:params[3], reason:params[4], company_id:"c1", store_id:"s1" };
       inserted.push(row);
       return { rows:[row] };
