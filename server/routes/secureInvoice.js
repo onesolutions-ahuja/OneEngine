@@ -26,8 +26,6 @@ import {
 import {
   validateTemporaryReceiptDownload,
   markTemporaryReceiptDownloaded,
-  buildReceiptPdfBytes,
-  loadPublicReceiptData,
 } from "../services/receiptQr.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 
@@ -209,30 +207,10 @@ export default function createSecureInvoiceRouter({ db, pool, authenticate, auth
   router.get("/receipt/download/:token", async (req, res) => {
     const token = String(req.params.token || "");
     if (!token.trim()) return genericNotFound(res);
-
     const validated = await validateTemporaryReceiptDownload({ db, token });
     if (!validated.ok || !validated.receipt) return genericNotFound(res);
-
-    const receiptData = await loadPublicReceiptData({ db, companyId: validated.receipt.company_id, saleId: validated.receipt.sale_id });
-    if (!receiptData || !receiptData.sale) return genericNotFound(res);
-
-    const pdf = buildReceiptPdfBytes({
-      sale: receiptData.sale,
-      company: receiptData.company,
-      store: receiptData.store,
-    });
-
     await markTemporaryReceiptDownloaded({ db, receiptId: validated.receipt.id });
-
-    const filename = `receipt-${String(receiptData.sale.receiptNumber || validated.receipt.sale_id).replace(/[^a-zA-Z0-9._-]/g, "") || "receipt"}.pdf`;
-    res
-      .status(200)
-      .type("application/pdf")
-      .set("Content-Disposition", `attachment; filename="${filename}"`)
-      .set("Cache-Control", "no-store, max-age=0")
-      .set("X-Robots-Tag", "noindex, nofollow")
-      .set("Referrer-Policy", "no-referrer")
-      .send(Buffer.from(pdf));
+    return res.status(410).json({ success:false, code:"METADATA_DOCUMENT_REQUIRED", message:"Receipt document rendering must be provided by a metadata document template." });
   });
 
   /* ---------------- ADMIN: link management for later batches ---------------- */
