@@ -431,6 +431,7 @@ function Desktop({ onLock, onSignOut }) {
   const [launcherOpen, setLauncherOpen] = useState(false)
   const [appSearch, setAppSearch] = useState('')
   const [storeApps, setStoreApps] = useState(() => readMarketplaceCache())
+  const [runtimeApps, setRuntimeApps] = useState([])
   const [storeFocusPackageKey, setStoreFocusPackageKey] = useState('')
   const [storeAppsLoaded, setStoreAppsLoaded] = useState(() => readMarketplaceCache().length > 0)
   const [storeAppsLoading, setStoreAppsLoading] = useState(false)
@@ -567,8 +568,10 @@ function Desktop({ onLock, onSignOut }) {
   }, [])
 
   useEffect(() => {
-    if (storeApps.length) return
-    void refreshStoreApps({ silent: true })
+    if (!storeApps.length) void refreshStoreApps({ silent: true })
+    apiRequest('/api/packages/runtime-navigation', { timeoutMs: 12000, retryGet: true })
+      .then((response) => setRuntimeApps(Array.isArray(response?.data) ? response.data : []))
+      .catch(() => setRuntimeApps([]))
   }, [])
 
   const refreshStoreApps = async ({ silent = false, allowCacheFallback = true } = {}) => {
@@ -713,7 +716,7 @@ function Desktop({ onLock, onSignOut }) {
     setAppSearch('')
     setTopPanel('')
 
-    const metadataApp = catalogAppForNavigation(storeApps, target)
+    const metadataApp = catalogAppForNavigation([...runtimeApps, ...storeApps], target)
     if (metadataApp) {
       const metadataRoute = resolveCatalogNavigationRoute(metadataApp, target)
       if (metadataRoute) {
