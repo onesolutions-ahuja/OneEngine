@@ -1414,6 +1414,36 @@ const PACKAGE_CATALOG = [
       { slug: "kiosk", route: "/app/kiosk" },
     ],
     runtimeSurfaces: {
+      kiosk: {
+        endpoints: {
+          flows: "/api/kiosk/flows",
+          catalogue: "/api/kiosk/catalogue",
+          settings: "/api/settings",
+          runtime: "/api/kiosk/runtime?deviceKey={deviceKey}",
+          health: "/api/health",
+          heartbeat: "/api/kiosk/devices/{deviceId}/heartbeat",
+          registerDevice: "/api/kiosk/devices/register",
+          deviceSession: "/api/kiosk/device-session",
+          availability: "/api/kiosk/availability",
+          quote: "/api/kiosk/quote",
+          ageApproval: "/api/kiosk/age-approval/request",
+          productOptions: "/api/kiosk/products/{productId}/options",
+          orderFromSale: "/api/kiosk/orders/from-sale",
+          customerLookup: "/api/kiosk/customer-lookup",
+          receiptPrint: "/api/kiosk/receipt/print",
+          receiptEmail: "/api/kiosk/receipt/email",
+          assistance: "/api/kiosk/assistance"
+        },
+        values: {
+          saleStatusCompleted: "COMPLETED",
+          syncStatusSynced: "SYNCED",
+          paymentStatusCompleted: "COMPLETED",
+          paymentDirectionIn: "IN",
+          paymentMethodCard: "card",
+          itemTypeProduct: "PRODUCT",
+          paymentUnavailableStatuses: ["NOT_CONFIGURED", "DISABLED"]
+        }
+      },
       collectionDisplay: {
         objects: { order: "online_order" },
         filters: { platformField: "platform", platformValue: "one_kiosk" },
