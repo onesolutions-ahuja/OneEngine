@@ -12,19 +12,11 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.getByRole('button', { name: /^New Flow$/ }).click()
     await expect(page.getByRole('dialog', { name: /New Automation/i })).toBeVisible()
 
-    await expect(page.getByRole('button', { name: /Start From Scratch/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Use a Template/i })).toBeVisible()
-    await page.getByRole('button', { name: /^Next$/ }).click()
-
     await expect(page.getByRole('heading', { name: 'Frequently Used' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Triggered' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Screens' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Autolaunched Automations' })).toBeVisible()
-
-    await page.getByLabel('Search automation types').fill('screen')
+    await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible()
+    await page.getByLabel('Search automations').fill('screen')
     await expect(page.getByRole('button', { name: /Screen Flow/i })).toBeVisible()
     await page.getByRole('button', { name: /Screen Flow/i }).click()
-    await page.getByRole('button', { name: /^Create$/ }).click()
 
     await expect(page.getByLabel('GPT Builder workspace')).toBeVisible()
     await expect(page.getByLabel('Start')).toBeVisible()
@@ -98,11 +90,8 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.goto('developer/gptbuilder')
     await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: /^New Flow$/ }).click()
-    await page.getByRole('button', { name: /Start From Scratch/i }).click()
-    await page.getByRole('button', { name: /^Next$/ }).click()
-    await page.getByLabel('Search automation types').fill('platform event')
+    await page.getByLabel('Search automations').fill('platform event')
     await page.getByRole('button', { name: /Platform Event-Triggered Flow/i }).click()
-    await page.getByRole('button', { name: /^Create$/ }).click()
 
     const startPanel = page.getByLabel('Configure Start')
     await expect(startPanel).toBeVisible()
@@ -157,11 +146,8 @@ test.describe('GPT Builder Salesforce parity foundation', () => {
     await page.goto('developer/gptbuilder')
     await expect(page.getByRole('heading', { name: 'Flows' })).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: /^New Flow$/ }).click()
-    await page.getByRole('button', { name: /Start From Scratch/i }).click()
-    await page.getByRole('button', { name: /^Next$/ }).click()
-    await page.getByLabel('Search automation types').fill('record')
+    await page.getByLabel('Search automations').fill('record')
     await page.getByRole('button', { name: /Record-Triggered Flow/i }).click()
-    await page.getByRole('button', { name: /^Create$/ }).click()
 
     const startPanel = page.getByLabel('Configure Start')
     await expect(startPanel).toBeVisible()
