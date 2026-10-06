@@ -78,7 +78,6 @@ const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/tru
   ? read("server/services/trustedJobKinds.js")
   : trustedRuntime;
 const actionRegistry = read("server/services/platformActionRegistry.js");
-const systemWorkflowCatalog = read("server/services/systemWorkflowCatalog.js");
 
 const workflowBuilderSource = read("src/pages/settings/Platform/WorkflowAdmin.jsx");
 const forbiddenExecutableDefaults = [
@@ -194,24 +193,15 @@ for (const file of walk(SERVER)) {
   }
 }
 
-const catalogueCoverage = {
-  functions: /PLATFORM_FUNCTIONS\.map\s*\(/.test(systemWorkflowCatalog),
-  actions: /PLATFORM_ACTION_REGISTRY[\s\S]*\.map\s*\(/.test(systemWorkflowCatalog),
-  jobs: /TRUSTED_JOB_KINDS\.map\s*\(/.test(systemWorkflowCatalog),
-};
-
 const findings = [
   ...executableDefaultFindings,
-  ...(!catalogueCoverage.functions ? functions.map((key) => ({ severity: "GAP", type: "FUNCTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
-  ...(!catalogueCoverage.actions ? actions.map((key) => ({ severity: "GAP", type: "ACTION_REQUIRES_SYSTEM_WORKFLOW", key })) : []),
-  ...(!catalogueCoverage.jobs ? jobs.map((key) => ({ severity: "GAP", type: "JOB_TRIGGER_REQUIRES_WORKFLOW", key })) : []),
   ...directRuntimeCalls.map((call) => ({ severity: "GAP", type: "DIRECT_RUNTIME_CALL_BYPASS", ...call })),
   ...bypassRoutes.map((route) => ({ severity: "GAP", type: "MUTATION_ROUTE_NOT_WORKFLOW_MEDIATED", ...route })),
 ];
 
 const report = {
   phase: 3,
-  purpose: "Verify system-workflow coverage and identify remaining mutation entry points that still bypass workflow mediation.",
+  purpose: "Verify metadata-workflow mediation and identify mutation entry points that bypass the generic workflow runtime.",
   generatedAt: new Date().toISOString(),
   summary: {
     registeredFunctions: functions.length,
@@ -222,14 +212,10 @@ const report = {
     workflowMediatedMutationRoutes: mediatedRoutes.length,
     bypassMutationRoutes: bypassRoutes.length,
     directRuntimeCallSites: directRuntimeCalls.length,
-    catalogueFunctionsCovered: catalogueCoverage.functions,
-    catalogueActionsCovered: catalogueCoverage.actions,
-    catalogueJobsCovered: catalogueCoverage.jobs,
     globalBusinessCommandGateway: globalGatewayEnabled,
     executableLiteralDefaults: executableDefaultFindings.length,
     totalGaps: findings.length,
   },
-  catalogueCoverage,
   registeredFunctions: functions,
   registeredActions: actions,
   trustedJobKinds: jobs,
@@ -256,9 +242,6 @@ const md = [
   `- Workflow-mediated mutation routes: ${report.summary.workflowMediatedMutationRoutes}`,
   `- Mutation-route bypass candidates: ${report.summary.bypassMutationRoutes}`,
   `- Direct runtime call sites: ${report.summary.directRuntimeCallSites}`,
-  `- Catalogue functions covered: ${report.summary.catalogueFunctionsCovered}`,
-  `- Catalogue actions covered: ${report.summary.catalogueActionsCovered}`,
-  `- Catalogue jobs covered: ${report.summary.catalogueJobsCovered}`,
   `- Executable literal defaults: ${report.summary.executableLiteralDefaults}`,
   `- Total gaps: ${report.summary.totalGaps}`,
   "",
