@@ -137,3 +137,10 @@ test('Subflow falls back to latest saved version snapshot when no version is act
  assert.equal(result.status,'completed')
  assert.equal(c.workflowVariables.variables.childAnswer,'LATEST')
 })
+
+test('specialist flow interaction capabilities match current Salesforce behavior',()=>{
+ assert.ok(page.includes("user_provisioning:{start:'user_provisioning',screens:true,waits:false}"))
+ assert.ok(page.includes("contact_request:{start:'contact_request',screens:true,waits:false}"))
+ assert.ok(page.includes("individual_linking:{start:'invoked',screens:true,waits:false}"))
+ assert.ok(page.includes("identity_registration:{start:'identity_provider',screens:false,waits:false}"))
+})
