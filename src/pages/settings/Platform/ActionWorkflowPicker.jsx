@@ -96,7 +96,7 @@ function NavigationTargetSelector({ value, onChange }) {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [objectKey]);
+  }, []);
 
   const { customPages, objectPages } = targets;
   const type = value?.type || "";
@@ -319,7 +319,7 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
       })) : [];
       setActions([...core, ...custom.filter((item) => !core.some((entry) => entry.key === item.key))]);
     }).catch(() => setActions([]));
-  }, []);
+  }, [objectKey]);
 
   const rankedWorkflows = useMemo(() => {
     const query = search.trim().toLowerCase();
