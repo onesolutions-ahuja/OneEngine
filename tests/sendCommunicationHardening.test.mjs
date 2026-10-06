@@ -76,7 +76,7 @@ test("Send Communication resolves templates and can notify platform admins", asy
 
 test("licence request business orchestration exists only in metadata Flow", () => {
   const runtime = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
-  const metadata = readFileSync(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const metadata = readFileSync(new URL("../server/metadata/manifests/platform.json", import.meta.url), "utf8");
   assert.doesNotMatch(runtime, /executeLicenceRequestPackageAction/);
   assert.doesNotMatch(runtime, /LICENCE_REQUEST_PACKAGE/);
   assert.doesNotMatch(runtime, /Licence Request Created/);
@@ -87,7 +87,7 @@ test("licence request business orchestration exists only in metadata Flow", () =
 });
 
 test("communication upgrade migration converts legacy steps", () => {
-  const source = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../server/database/migrations.js", import.meta.url), "utf8");
   assert.match(source, /0052_migrate_legacy_communication_steps/);
   assert.match(source, /SEND_IN_APP_NOTIFICATION: "IN_APP"/);
   assert.match(source, /next\.key = "SEND_COMMUNICATION"/);
