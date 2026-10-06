@@ -238,7 +238,7 @@ CREATE INDEX IF NOT EXISTS idx_payment_terminals_device
 -- HARDWARE CONFIGURATION
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS hardware_configurations (
+CREATE TABLE IF NOT EXISTS hardware_devices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
@@ -258,10 +258,10 @@ CREATE TABLE IF NOT EXISTS hardware_configurations (
     UNIQUE (company_id, store_id, device_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_hardware_configurations_store
-ON hardware_configurations(company_id, store_id);
+CREATE INDEX IF NOT EXISTS idx_hardware_devices_store
+ON hardware_devices(company_id, store_id);
 
-ALTER TABLE hardware_configurations
+ALTER TABLE hardware_devices
   ADD COLUMN IF NOT EXISTS device_key VARCHAR(120) NOT NULL DEFAULT 'legacy-unassigned';
 
 CREATE TABLE IF NOT EXISTS server_settings (
@@ -775,7 +775,7 @@ WHERE sku = 'MISC'
 -- INVENTORY MOVEMENTS / STOCK LEDGER
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS inventory_movements (
+CREATE TABLE IF NOT EXISTS inventory_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id),
@@ -809,27 +809,27 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_product
-ON inventory_movements(product_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_product
+ON inventory_ledger(product_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_company
-ON inventory_movements(company_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_company
+ON inventory_ledger(company_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_type
-ON inventory_movements(movement_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_type
+ON inventory_ledger(movement_type, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_batch
-ON inventory_movements(batch_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_batch
+ON inventory_ledger(batch_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_transaction
-ON inventory_movements(transaction_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_ledger_transaction
+ON inventory_ledger(transaction_id, created_at);
 
 -- ------------------------------------------------------------
 -- STOCK BY STORE — store/location-level stock positions.
 -- Products stay company-level; the quantity physically living at each
 -- store is tracked here, one row per (company, store, product). Updated
 -- only via services/inventory.js createInventoryMovement, in step with
--- inventory_movements and products.stock_quantity in the same transaction.
+-- inventory_ledger and products.stock_quantity in the same transaction.
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS product_store_stock (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1289,7 +1289,7 @@ CREATE TABLE IF NOT EXISTS customers (
     /*
      * T10Y — Customer credit account fields. Credit is OFF for every
      * existing customer (default FALSE); balance is DERIVED from the
-     * customer_credit_ledger (never stored/mutated here).
+     * customer_ledger (never stored/mutated here).
      */
     credit_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     credit_limit NUMERIC(12,2) NULL
@@ -1309,7 +1309,7 @@ ON customers(company_id);
 -- payment or adjustment that produced it.
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS customer_credit_ledger (
+CREATE TABLE IF NOT EXISTS customer_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     store_id UUID NULL REFERENCES stores(id) ON DELETE SET NULL,
@@ -1336,10 +1336,10 @@ CREATE TABLE IF NOT EXISTS customer_credit_ledger (
 );
 
 CREATE INDEX IF NOT EXISTS idx_credit_ledger_customer
-ON customer_credit_ledger(company_id, customer_id, created_at DESC);
+ON customer_ledger(company_id, customer_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_credit_ledger_reference
-ON customer_credit_ledger(reference_type, reference_id);
+ON customer_ledger(reference_type, reference_id);
 CREATE TABLE IF NOT EXISTS customer_stores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -1372,7 +1372,7 @@ CREATE TABLE IF NOT EXISTS customer_loyalty_balances (
 CREATE INDEX IF NOT EXISTS idx_loyalty_balances_customer
 ON customer_loyalty_balances(customer_id);
 
-CREATE TABLE IF NOT EXISTS customer_loyalty_transactions (
+CREATE TABLE IF NOT EXISTS customer_loyalty_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -1387,16 +1387,16 @@ CREATE TABLE IF NOT EXISTS customer_loyalty_transactions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_customer
-ON customer_loyalty_transactions(customer_id, created_at DESC);
+ON customer_loyalty_ledger(customer_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_loyalty_transactions_reference
-ON customer_loyalty_transactions(reference_type, reference_id);
+ON customer_loyalty_ledger(reference_type, reference_id);
 
 -- T10R: idempotent earning. At most one EARN per sale, enforced by the
 -- database so a retried/lost-acknowledgement sale can never award points
 -- twice. Balance upserts must be reversed when this fires.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_loyalty_earn_per_sale
-ON customer_loyalty_transactions (company_id, reference_id)
+ON customer_loyalty_ledger (company_id, reference_id)
 WHERE transaction_type = 'EARN' AND reference_type = 'sale';
 
 -- T10R: manual/admin point adjustments - permission-controlled,
@@ -1433,7 +1433,7 @@ CREATE TABLE IF NOT EXISTS gift_cards (
     UNIQUE (company_id, code)
 );
 
-CREATE TABLE IF NOT EXISTS gift_card_transactions (
+CREATE TABLE IF NOT EXISTS gift_card_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     gift_card_id UUID NOT NULL REFERENCES gift_cards(id) ON DELETE CASCADE,
@@ -1447,8 +1447,8 @@ CREATE TABLE IF NOT EXISTS gift_card_transactions (
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_gift_card_transactions_card ON gift_card_transactions(company_id, gift_card_id, created_at);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_gift_card_redeem_sale ON gift_card_transactions(company_id, gift_card_id, reference_id)
+CREATE INDEX IF NOT EXISTS idx_gift_card_ledger_card ON gift_card_ledger(company_id, gift_card_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_gift_card_redeem_sale ON gift_card_ledger(company_id, gift_card_id, reference_id)
 WHERE transaction_type = 'redeem' AND reference_type = 'sale';
 
 -- ============================================================
@@ -2037,7 +2037,7 @@ ON sale_price_overrides(sale_id);
 -- TILL SESSIONS
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS till_sessions (
+CREATE TABLE IF NOT EXISTS device_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
     terminal_id UUID NOT NULL REFERENCES terminals(id),
@@ -2057,22 +2057,22 @@ CREATE TABLE IF NOT EXISTS till_sessions (
     closed_by UUID REFERENCES users(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_till_sessions_terminal
-ON till_sessions(terminal_id);
+CREATE INDEX IF NOT EXISTS idx_device_sessions_terminal
+ON device_sessions(terminal_id);
 
 -- T-TILL: at most one open session per till — makes the API's
 -- "no two simultaneously open sessions" rule atomic.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_till_sessions_open_per_terminal
-ON till_sessions(terminal_id)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_device_sessions_open_per_terminal
+ON device_sessions(terminal_id)
 WHERE status = 'open';
 
 -- ============================================================
 -- CASH MOVEMENTS
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS cash_movements (
+CREATE TABLE IF NOT EXISTS cash_ledger (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    till_session_id UUID NOT NULL REFERENCES till_sessions(id),
+    till_session_id UUID NOT NULL REFERENCES device_sessions(id),
     user_id UUID NOT NULL REFERENCES users(id),
 
     type VARCHAR(50) NOT NULL,
@@ -2084,7 +2084,7 @@ CREATE TABLE IF NOT EXISTS cash_movements (
 
 -- T-TILL: who/where recorded the movement (denormalised for audit;
 -- the session row carries till+store via its terminal).
-ALTER TABLE cash_movements
+ALTER TABLE cash_ledger
     ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS terminal_id UUID REFERENCES terminals(id) ON DELETE SET NULL;
 
@@ -2602,7 +2602,7 @@ VALUES
 ('reports.products.view', 'Product Sales Report', 'View the product sales report'),
 ('reports.customers.view', 'Customer Report', 'View the customer spend report'),
 ('reports.inventory.view', 'Inventory Overview', 'View the inventory overview report'),
-('reports.inventory_movements.view', 'Stock Movement Ledger', 'View the stock movement ledger report'),
+('reports.inventory_ledger.view', 'Stock Movement Ledger', 'View the stock movement ledger report'),
 ('reports.low_stock.view', 'Low Stock Report', 'View the low stock report (included in inventory overview)'),
 ('reports.payments.view', 'Payments Report', 'View the payment method breakdown report'),
 ('reports.purchases.view', 'Purchase Report', 'View the purchase orders report'),
