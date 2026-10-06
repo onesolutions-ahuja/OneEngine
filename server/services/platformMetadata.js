@@ -1911,7 +1911,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_cash_in", label: "Create Cash In", apiName: "create_cash_in", key: "CREATE_RECORD", objectKey: "cash_ledger",
+            { id: "create_cash_in", label: "Create Cash In", apiName: "create_cash_in", key: "CREATE_RECORD", objectKey: "cash_movement",
               fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_in", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
           ],
         },
@@ -1926,7 +1926,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
           ],
           outputContract: [],
           actions: [
-            { id: "create_cash_out", label: "Create Cash Out", apiName: "create_cash_out", key: "CREATE_RECORD", objectKey: "cash_ledger",
+            { id: "create_cash_out", label: "Create Cash Out", apiName: "create_cash_out", key: "CREATE_RECORD", objectKey: "cash_movement",
               fieldValues: { till_session_id: { path: "$record.tillSessionId" }, user_id: { path: "$record.userId" }, type: "cash_out", amount: { path: "$record.amount" }, reason: { path: "$record.reason" } } },
           ],
         },
@@ -1997,7 +1997,7 @@ export async function initializePlatformMetadata(pool, { includeOperationalObjec
                 branch: ["create_cash_ledger"] }],
               defaultLabel: "Invalid Amount", defaultBranch: ["invalid_amount"] },
             { id: "create_cash_ledger", label: "Create Cash Ledger Entry", apiName: "create_cash_ledger", key: "CREATE_RECORD",
-              objectKey: "cash_ledger",
+              objectKey: "cash_movement",
               fieldValues: {
                 till_session_id: { path: "$record.tillSessionId" },
                 user_id: { path: "$record.userId" },
