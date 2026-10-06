@@ -153,74 +153,7 @@ const tillFlow = (spec) => {
 
 const TILL_SYSTEM_WORKFLOWS = Object.freeze([]);
 
-const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([
-  {
-    systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
-    name: "GPT - Open Food Facts - Lookup Product",
-    triggerKey: "manual",
-    action: {
-      type: "workflow", systemGenerated: true, systemKey: "flow:GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
-      scope: "system", capabilityType: "workflow", capabilityKey: "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
-      apiName: "GPT_OPEN_FOOD_FACTS_LOOKUP_PRODUCT", flowType: "AUTOLAUNCHED",
-      inputs: [{ name: "barcode", type: "text", required: true }],
-      outputs: ["found","barcode","productName","brand","imageUrl","ingredients"],
-      resources: [
-        outputVariable("barcode", "Text", { availableInput: true }),
-        outputVariable("found", "Boolean"),
-        outputVariable("productName"),
-        outputVariable("brand"),
-        outputVariable("imageUrl"),
-        outputVariable("ingredients"),
-      ],
-      actions: [
-        { id: "lookup_http", label: "Lookup Product", apiName: "lookup_http", key: "ONE_HTTP_REQUEST", providerKey: "open_food_facts", method: "GET", endpoint: "/api/v2/product/{{barcode}}.json" },
-        { id: "product_found", label: "Product Found?", apiName: "product_found", key: "CONDITION",
-          outcomes: [{ id: "found", label: "Found", condition: { match: "all", conditions: [
-            { field: "steps.lookup_http.success", operator: "equals", value: true },
-            { field: "steps.lookup_http.data.status", operator: "equals", value: 1 }
-          ] }, branch: ["set_found","set_barcode","set_product_name","set_brand","set_image_url","set_ingredients"] }],
-          defaultLabel: "Not Found", defaultBranch: ["set_not_found"] },
-        assignment("set_found", "Set Found", "found", "boolean", true),
-        assignment("set_barcode", "Set Barcode", "barcode", "text", { path: "steps.lookup_http.data.code" }),
-        assignment("set_product_name", "Set Product Name", "productName", "text", { path: "steps.lookup_http.data.product.product_name" }),
-        assignment("set_brand", "Set Brand", "brand", "text", { path: "steps.lookup_http.data.product.brands" }),
-        assignment("set_image_url", "Set Image URL", "imageUrl", "text", { path: "steps.lookup_http.data.product.image_front_url" }),
-        assignment("set_ingredients", "Set Ingredients", "ingredients", "text", { path: "steps.lookup_http.data.product.ingredients_text" }),
-        assignment("set_not_found", "Set Not Found", "found", "boolean", false),
-      ]
-    }
-  },
-  {
-    systemKey: "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
-    name: "GPT - Open Food Facts - Test Connection",
-    triggerKey: "manual",
-    action: {
-      type: "workflow", systemGenerated: true, systemKey: "flow:GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
-      scope: "system", capabilityType: "workflow", capabilityKey: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION",
-      apiName: "GPT_OPEN_FOOD_FACTS_TEST_CONNECTION", flowType: "AUTOLAUNCHED",
-      outputs: ["connected","message","statusCode"],
-      resources: [
-        outputVariable("connected", "Boolean"),
-        outputVariable("message"),
-        outputVariable("statusCode", "Number"),
-      ],
-      actions: [
-        { id: "test_http", label: "Call Open Food Facts", apiName: "test_http", key: "ONE_HTTP_REQUEST", providerKey: "open_food_facts", method: "GET", endpoint: "/api/v2/product/737628064502.json" },
-        { id: "connection_ok", label: "Connection Successful?", apiName: "connection_ok", key: "CONDITION",
-          outcomes: [{ id: "success", label: "Success", condition: { match: "all", conditions: [{ field: "steps.test_http.success", operator: "equals", value: true }] },
-            branch: ["set_connected","set_connected_message","set_connected_status"] }],
-          defaultLabel: "Failed", defaultBranch: ["set_failed","set_failed_message","set_failed_status"] },
-        assignment("set_connected", "Set Connected", "connected", "boolean", true),
-        assignment("set_connected_message", "Set Connected Message", "message", "text", "Connected"),
-        assignment("set_connected_status", "Set Connected Status Code", "statusCode", "number", { path: "steps.test_http.statusCode" }),
-        assignment("set_failed", "Set Failed", "connected", "boolean", false),
-        assignment("set_failed_message", "Set Failed Message", "message", "text", "Connection failed"),
-        assignment("set_failed_status", "Set Failed Status Code", "statusCode", "number", { path: "steps.test_http.statusCode" }),
-      ]
-    }
-  },
-
-]);
+const PLATFORM_SYSTEM_WORKFLOWS = Object.freeze([]);
 
 function titleCase(value = "") {
   return String(value)
