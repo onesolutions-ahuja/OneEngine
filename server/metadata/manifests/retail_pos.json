@@ -177,7 +177,31 @@
       "storeScoped": true,
       "required": true,
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "aggregateViews": {
+          "jarvis_returns_today": {
+            "filters": [
+              {
+                "field": "return_type",
+                "operator": "equals",
+                "value": "CUSTOMER"
+              },
+              {
+                "field": "created_at",
+                "operator": "local_date_equals",
+                "value": "$today",
+                "timezone": "$timezone"
+              }
+            ],
+            "summaries": [
+              {
+                "alias": "returns",
+                "aggregate": "SUM",
+                "field": "refund_amount"
+              }
+            ]
+          }
+        }
       },
       "fields": [
         {
@@ -519,6 +543,45 @@
                   "direction": "asc"
                 },
                 "limit": 100
+              }
+            ]
+          }
+        },
+        "aggregateViews": {
+          "jarvis_sales_today": {
+            "filters": [
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "completed"
+              },
+              {
+                "field": "created_at",
+                "operator": "local_date_equals",
+                "value": "$today",
+                "timezone": "$timezone"
+              }
+            ],
+            "summaries": [
+              {
+                "alias": "grossSales",
+                "aggregate": "SUM",
+                "field": "total"
+              },
+              {
+                "alias": "transactions",
+                "aggregate": "COUNT",
+                "field": "total"
+              },
+              {
+                "alias": "vat",
+                "aggregate": "SUM",
+                "field": "tax"
+              },
+              {
+                "alias": "discounts",
+                "aggregate": "SUM",
+                "field": "discount"
               }
             ]
           }
@@ -9132,6 +9195,66 @@
             "source": "runtime_import",
             "position": null
           }
+        ]
+      }
+    }
+  ],
+  "assistantTools": [
+    {
+      "key": "todays_sales",
+      "match": {
+        "anyRegex": [
+          "(?i)daily sales",
+          "(?i)sales summary",
+          "(?i)how much did we sell",
+          "(?i)how many sales",
+          "(?i)(today).*(sales?|sold|sell|selling|revenue|turnover|takings?|till|transactions?)",
+          "(?i)(sales?|sold|sell|selling|revenue|turnover|takings?|till|transactions?).*(today)",
+          "(?i)today.*how much.*(made|make|earn|earned|took|take|turnover|revenue)"
+        ]
+      },
+      "permissionAny": [
+        "reports.summary.view",
+        "reports.sales.view"
+      ],
+      "aggregateViews": [
+        {
+          "viewKey": "jarvis_sales_today",
+          "alias": "sales"
+        },
+        {
+          "viewKey": "jarvis_returns_today",
+          "alias": "returns"
+        }
+      ],
+      "output": {
+        "fields": {
+          "grossSales": "sales.grossSales",
+          "transactions": "sales.transactions",
+          "vat": "sales.vat",
+          "discounts": "sales.discounts",
+          "returns": "returns.returns"
+        },
+        "formulas": {
+          "averageTransaction": "IF(sales.transactions > 0, sales.grossSales / sales.transactions, 0)",
+          "netSales": "sales.grossSales - returns.returns"
+        },
+        "labels": {
+          "grossSales": "Gross sales",
+          "transactions": "Transactions",
+          "averageTransaction": "Average transaction",
+          "vat": "VAT",
+          "discounts": "Discounts",
+          "returns": "Refunds/returns",
+          "netSales": "Net sales"
+        },
+        "currencyFields": [
+          "grossSales",
+          "averageTransaction",
+          "vat",
+          "discounts",
+          "returns",
+          "netSales"
         ]
       }
     }
