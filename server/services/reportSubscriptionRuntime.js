@@ -281,8 +281,8 @@ export async function processReportSubscriptionDeliveryJob({ db, payload = {} } 
       if (deliveryId) {
         try {
           const execution = await executeSystemWorkflow({db,companyId:row.company_id,userId:executionUser.id,systemKey:"flow:communication.send",req:{user:{id:executionUser.id,companyId:row.company_id}},input:{channel:"EMAIL",recipient:recipient.email,subject:`Scheduled report: ${report.name}`,message:body,attachments}});
-          if (!["SUCCESS","COMPLETED"].includes(String(outcome?.status || ""))) {
-            const error = new Error(outcome?.error?.message || outcome?.code || "Report subscription email delivery failed");
+          if (!["SUCCESS","COMPLETED"].includes(String(execution?.result?.status || ""))) {
+            const error = new Error(execution?.result?.error?.message || execution?.result?.code || "Report subscription email delivery failed");
             error.retryable = execution?.result?.retryable === true;
             throw error;
           }
