@@ -155,24 +155,34 @@ export function normalizeDashboardGlobalFilters(filters = []) {
   });
 }
 
-export function applyDashboardGlobalFilters(component, globalDefinitions = [], values = {}) {
-  const report = component?.config?.report;
-  if (!report) return component;
-  const filters = [...(report.filters || [])];
+export function dashboardGlobalFilterValues(globalDefinitions = [], values = {}, componentId = null) {
+  const filters = [];
   for (const definition of globalDefinitions) {
-    const mapping = definition.mappings.find((item) => !item.componentId || String(item.componentId) === String(component.id));
-    if (!mapping) continue;
+    const mappings = (definition.mappings || []).filter((item) => !item.componentId || String(item.componentId) === String(componentId));
+    if (!mappings.length) continue;
     const value = values[definition.key] ?? definition.defaultValue;
     if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) continue;
-    if (definition.type === "date" && report.dataSource === "sales" && mapping.reportField === "date") {
-      const date = String(value);
-      filters.push({ field: "date", operator: "custom", from: date, to: date });
-      continue;
+    for (const mapping of mappings) {
+      filters.push({
+        field: mapping.reportField,
+        operator: definition.type === "multi_select" && Array.isArray(value) ? "in" : mapping.operator,
+        value,
+      });
     }
-    const operator = definition.type === "multi_select" && Array.isArray(value) ? "in" : mapping.operator;
-    filters.push({ field: mapping.reportField, operator, value });
   }
-  return { ...component, config: { ...component.config, report: { ...report, filters } } };
+  return filters;
+}
+
+export function applyDashboardGlobalFilters(component, globalDefinitions = [], values = {}) {
+  const mappedFilters = dashboardGlobalFilterValues(globalDefinitions, values, component?.id);
+  if (!mappedFilters.length) return component;
+  return {
+    ...component,
+    config: {
+      ...component.config,
+      runtimeFilters: [...(component?.config?.runtimeFilters || []), ...mappedFilters],
+    },
+  };
 }
 
 export function normalizeResponsiveLayouts(layouts = {}) {
