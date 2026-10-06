@@ -34,6 +34,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0041_diagnostic_runtime_columns",
   "0042_exact_root_cause_diagnostics",
   "0043_platform_agents",
+  "0047_sale_ledger",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
@@ -225,6 +226,14 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     name: "Tenant agent metadata registry",
     up: client => client.query(
       readFileSync(new URL("./migrations/0043_platform_agents.sql", import.meta.url), "utf8")
+    ),
+  },
+  {
+    key: "0047_sale_ledger",
+    version: "47",
+    name: "Create and backfill canonical sale ledger",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0047_sale_ledger.sql", import.meta.url), "utf8")
     ),
   },
 ]);
