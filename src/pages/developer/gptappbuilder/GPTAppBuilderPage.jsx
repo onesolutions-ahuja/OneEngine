@@ -28,7 +28,7 @@ function safeKey(value) {
 }
 
 export default function GPTAppBuilderPage() {
-  const [apps, setApps] = useState([]);
+  const [apps, setApps] = useState([]);\n  const [appsLoading, setAppsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [selectedAppId, setSelectedAppId] = useState("");
   const [selectedPageId, setSelectedPageId] = useState("");
@@ -43,8 +43,17 @@ export default function GPTAppBuilderPage() {
   const [message, setMessage] = useState("");
 
   const loadApps = async () => {
-    const response = await apiRequest("/api/platform/apps");
-    setApps(Array.isArray(response?.data) ? response.data : []);
+    setAppsLoading(true);
+    setError("");
+    try {
+      const response = await apiRequest("/api/platform/apps");
+      setApps(Array.isArray(response?.data) ? response.data : []);
+    } catch (e) {
+      setError(e?.message || "Unable to load app metadata");
+      throw e;
+    } finally {
+      setAppsLoading(false);
+    }
   };
 
   useEffect(() => { void loadApps().catch((e) => setError(e?.message || "Unable to load app metadata")); }, []);
@@ -243,6 +252,9 @@ export default function GPTAppBuilderPage() {
       <div className="onepos-card"><div className="onepos-card-body"><ConnectorDefinitionEditor value={selectedConnectorKey} onChange={setSelectedConnectorKey} onMessage={setMessage} onError={setError}/></div></div>
       <label className="settings-search"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search app metadata"/></label>
       <div className="developer-record-list">
+        {appsLoading ? <div className="developer-record-empty"><strong>Loading apps…</strong><span>Fetching app metadata.</span></div> : null}
+        {!appsLoading && !error && visibleApps.length === 0 ? <div className="developer-record-empty"><strong>No apps found</strong><span>Create a new app or change your search.</span></div> : null}
+        {!appsLoading && error ? <div className="developer-record-empty"><strong>App metadata unavailable</strong><span>{error}</span><button type="button" className="onepos-btn" onClick={() => void loadApps().catch(() => {})}>Retry</button></div> : null}
         {visibleApps.map((app) => <div key={app.id} className="settings-nav-item"><button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={() => setSelectedAppId(String(app.id))}><AppWindow size={16}/><span>{app.label || app.app_key}</span></button><button type="button" className="onepos-btn" disabled={building} onClick={() => void buildSelectedApp(app)}>{building ? "Building…" : "Build"}</button></div>)}
         {buildResult?.valid ? <div className="settings-success">Portable manifest ready · {buildResult.dependencyCount} dependencies · fingerprint {buildResult.artifact.fingerprint} <button type="button" className="onepos-btn" onClick={testBuild}>Test</button></div> : null}
         {testResult?.valid ? <div className="settings-success">Test passed · artifact is publishable. <button type="button" className="onepos-btn onepos-btn-primary" disabled={publishing} onClick={() => void publishBuild()}>{publishing ? "Publishing…" : "Publish"}</button></div> : null}
