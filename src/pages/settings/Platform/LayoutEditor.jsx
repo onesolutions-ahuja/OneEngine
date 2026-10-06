@@ -1472,7 +1472,7 @@ export default function LayoutEditor({
             className="onepos-input"
             value={form.name || ""}
             onChange={(event) => update("name", event.target.value)}
-            placeholder="Customer Detail"
+            placeholder="Record Detail"
             required
           />
         </label>
