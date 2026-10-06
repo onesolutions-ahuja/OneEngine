@@ -29,6 +29,10 @@ const FREQUENT = ['screen','record','schedule','autolaunched']
 
 const objectKey = (row) => String(row?.object_key || row?.api_name || row?.apiName || row?.key || row?.id || '')
 const objectLabel = (row) => row?.label || row?.name || objectKey(row)
+const fieldKey = (row) => String(row?.api_name || row?.apiName || row?.field_key || row?.key || row?.id || '')
+const fieldLabel = (row) => row?.label || row?.name || fieldKey(row)
+const fieldType = (row) => String(row?.field_type || row?.data_type || row?.type || 'text').toLowerCase()
+const operatorsForField = (field) => { const type=fieldType(field); const base=[['equals','Equals'],['not_equals','Does Not Equal'],['is_null','Is Null']]; if(['number','decimal','currency','date','datetime','time'].includes(type)) return [...base,['greater_than','Greater Than'],['greater_than_or_equal','Greater Than or Equal'],['less_than','Less Than'],['less_than_or_equal','Less Than or Equal']]; if(['text','email','phone','select','multiselect'].includes(type)) return [...base,['starts_with','Starts With'],['ends_with','Ends With'],['contains','Contains']]; return base }
 
 function apiName(label) {
   let value=String(label||'').trim().replace(/[^A-Za-z0-9]+/g,'_').replace(/_+/g,'_').replace(/^_+|_+$/g,'')
@@ -123,7 +127,60 @@ function CanvasPicker({onPick,onClose}) {
   </aside>
 }
 
+
+function DataElementEditor({element,objects,onSave,onCancel}) {
+  const [draft,setDraft]=useState(()=>clone(element||{}))
+  const [fields,setFields]=useState([])
+  const cfg=draft.config||{}
+  const selectedObject=objects.find((row)=>objectKey(row)===cfg.objectKey)
+  const writable=['create_records','update_records'].includes(element.key)
+  useEffect(()=>{let live=true;if(!selectedObject?.id){setFields([]);return()=>{live=false}};apiRequest(`/api/platform/objects/${encodeURIComponent(selectedObject.id)}/fields`).then((r)=>{if(live)setFields((Array.isArray(r?.data)?r.data:[]).filter((field)=>field?.active!==false&&(writable?field?.writable!==false:field?.readable!==false))}).catch(()=>{if(live)setFields([])});return()=>{live=false}},[selectedObject?.id,writable])
+  const patch=(changes)=>setDraft((row)=>({...row,...changes}))
+  const patchCfg=(changes)=>patch({config:{...cfg,...changes}})
+  const rows=Array.isArray(cfg.conditions)?cfg.conditions:[]
+  const values=Array.isArray(cfg.fieldValues)?cfg.fieldValues:[]
+  const patchRow=(name,id,changes)=>patchCfg({[name]:(name==='conditions'?rows:values).map((row)=>row.id===id?{...row,...changes}:row)})
+  const setObject=(value)=>patchCfg({objectKey:value,objectLabel:objectLabel(objects.find((row)=>objectKey(row)===value)),conditions:[],fieldValues:[],sortBy:''})
+  const valid=element.key==='rollback'||Boolean(cfg.objectKey)
+  const save=()=>onSave({...draft,configured:valid,config:{...cfg,conditions:rows,fieldValues:values}})
+  return <aside className="gptbn-panel gptbn-element-editor">
+    <header><h3>{element.label}</h3><button aria-label="Close element" onClick={onCancel}><X size={17}/></button></header>
+    <div className="gptbn-panel-body">
+      <label><span>Label <b>*</b></span><input value={draft.label||''} onChange={(e)=>patch({label:e.target.value,apiName:apiFromElement(e.target.value)})}/></label>
+      <label><span>API Name <b>*</b></span><input value={draft.apiName||''} onChange={(e)=>patch({apiName:e.target.value})}/></label>
+      <label><span>Description</span><textarea rows="3" value={draft.description||''} onChange={(e)=>patch({description:e.target.value})}/></label>
+      {element.key==='rollback'?<p className="gptbn-info">Rolls back record changes made in the current flow transaction.</p>:<>
+        <label><span>Object <b>*</b></span><select value={cfg.objectKey||''} onChange={(e)=>setObject(e.target.value)}><option value="">Select an object</option>{objects.map((row)=><option key={row.id||objectKey(row)} value={objectKey(row)}>{objectLabel(row)}</option>)}</select></label>
+        {element.key==='get_records'?<><label><span>Condition Requirements</span><select value={cfg.conditionLogic||'all'} onChange={(e)=>patchCfg({conditionLogic:e.target.value})}><option value="all">All Conditions Are Met (AND)</option><option value="any">Any Condition Is Met (OR)</option><option value="custom">Custom Condition Logic Is Met</option><option value="none">None—Get All Records</option></select></label><DataConditions rows={rows} fields={fields} patchRow={patchRow} patchCfg={patchCfg}/><label><span>Sort Order</span><select value={cfg.sortOrder||'none'} onChange={(e)=>patchCfg({sortOrder:e.target.value})}><option value="none">Not Sorted</option><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>{cfg.sortOrder&&cfg.sortOrder!=='none'?<label><span>Sort By</span><select value={cfg.sortBy||''} onChange={(e)=>patchCfg({sortBy:e.target.value})}><option value="">Select a field</option>{fields.map((field)=><option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>)}</select></label>:null}<label><span>How Many Records to Store</span><select value={cfg.recordLimit||'first'} onChange={(e)=>patchCfg({recordLimit:e.target.value})}><option value="first">Only the first record</option><option value="all">All records</option></select></label><label><span>How to Store Record Data</span><select value={cfg.storeMode||'auto'} onChange={(e)=>patchCfg({storeMode:e.target.value})}><option value="auto">Automatically store all fields</option><option value="choose">Choose fields and let the platform store values</option><option value="advanced">Choose fields and assign variables</option></select></label></>:null}
+        {element.key==='create_records'?<><fieldset><legend>How to Set Record Field Values</legend><label className="gptbn-radio"><input type="radio" checked={(cfg.valueMode||'manual')==='manual'} onChange={()=>patchCfg({valueMode:'manual',howMany:'one'})}/>Manually</label><label className="gptbn-radio"><input type="radio" checked={cfg.valueMode==='record_variable'} onChange={()=>patchCfg({valueMode:'record_variable'})}/>From a Record Variable</label></fieldset><fieldset><legend>How Many Records to Create</legend><label className="gptbn-radio"><input type="radio" checked={(cfg.howMany||'one')==='one'} onChange={()=>patchCfg({howMany:'one'})}/>One</label><label className="gptbn-radio"><input type="radio" disabled={(cfg.valueMode||'manual')==='manual'} checked={cfg.howMany==='multiple'} onChange={()=>patchCfg({howMany:'multiple'})}/>Multiple</label></fieldset>{(cfg.valueMode||'manual')==='manual'?<DataValues rows={values} fields={fields} patchRow={patchRow} patchCfg={patchCfg}/>:<label><span>{cfg.howMany==='multiple'?'Record Collection':'Record'} <b>*</b></span><input value={cfg.howMany==='multiple'?(cfg.recordCollectionResource||''):(cfg.recordResource||'')} onChange={(e)=>patchCfg(cfg.howMany==='multiple'?{recordCollectionResource:e.target.value}:{recordResource:e.target.value})} placeholder="variables.resourceName"/></label>}</>:null}
+        {element.key==='update_records'?<><fieldset><legend>How to Find Records to Update</legend><label className="gptbn-radio"><input type="radio" checked={(cfg.findMode||'conditions')==='conditions'} onChange={()=>patchCfg({findMode:'conditions'})}/>Specify conditions</label><label className="gptbn-radio"><input type="radio" checked={cfg.findMode==='resource'} onChange={()=>patchCfg({findMode:'resource'})}/>Use record variable IDs and values</label></fieldset>{cfg.findMode==='resource'?<label><span>Record Resource <b>*</b></span><input value={cfg.recordResource||''} onChange={(e)=>patchCfg({recordResource:e.target.value})} placeholder="$record or variables.resourceName"/></label>:<><DataConditions rows={rows} fields={fields} patchRow={patchRow} patchCfg={patchCfg}/><DataValues rows={values} fields={fields} patchRow={patchRow} patchCfg={patchCfg}/></>}</>:null}
+        {element.key==='delete_records'?<><fieldset><legend>How to Find Records to Delete</legend><label className="gptbn-radio"><input type="radio" checked={(cfg.findMode||'conditions')==='conditions'} onChange={()=>patchCfg({findMode:'conditions'})}/>Specify conditions</label><label className="gptbn-radio"><input type="radio" checked={cfg.findMode==='resource'} onChange={()=>patchCfg({findMode:'resource'})}/>Use IDs stored in a record variable</label></fieldset>{cfg.findMode==='resource'?<label><span>Record Resource <b>*</b></span><input value={cfg.recordResource||''} onChange={(e)=>patchCfg({recordResource:e.target.value})} placeholder="$record or variables.resourceName"/></label>:<DataConditions rows={rows} fields={fields} patchRow={patchRow} patchCfg={patchCfg}/>}</>:null}
+      </>}
+    </div>
+    <footer><button onClick={onCancel}>Cancel</button><button className="is-brand" disabled={!valid||!String(draft.label||'').trim()||!String(draft.apiName||'').trim()} onClick={save}>Done</button></footer>
+  </aside>
+}
+
+function DataConditions({rows,fields,patchRow,patchCfg}) {
+  return <div className="gptbn-data-rows"><strong>Filter Records</strong>{rows.map((row,index)=>{const meta=fields.find((field)=>fieldKey(field)===row.field);return <div key={row.id}><span>{index+1}</span><select value={row.field||''} onChange={(e)=>patchRow('conditions',row.id,{field:e.target.value,operator:'equals',value:''})}><option value="">Field</option>{fields.map((field)=><option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>)}</select><select value={row.operator||'equals'} onChange={(e)=>patchRow('conditions',row.id,{operator:e.target.value,value:e.target.value==='is_null'?true:''})}>{operatorsForField(meta).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>{row.operator==='is_null'?<select value={String(row.value??true)} onChange={(e)=>patchRow('conditions',row.id,{value:e.target.value==='true'})}><option value="true">True</option><option value="false">False</option></select>:<input value={row.value??''} onChange={(e)=>patchRow('conditions',row.id,{value:e.target.value})} placeholder="Value or resource"/>}</div>})}<button type="button" onClick={()=>patchCfg({conditions:[...rows,{id:uid(),field:'',operator:'equals',value:''}]})}><Plus size={13}/> Add Condition</button></div>
+}
+function DataValues({rows,fields,patchRow,patchCfg}) {
+  return <div className="gptbn-data-rows"><strong>Set Field Values</strong>{rows.map((row,index)=><div key={row.id}><span>{index+1}</span><select value={row.field||''} onChange={(e)=>patchRow('fieldValues',row.id,{field:e.target.value})}><option value="">Field</option>{fields.map((field)=><option key={fieldKey(field)} value={fieldKey(field)}>{fieldLabel(field)}</option>)}</select><input value={row.value??''} onChange={(e)=>patchRow('fieldValues',row.id,{value:e.target.value})} placeholder="Value or resource"/></div>)}<button type="button" onClick={()=>patchCfg({fieldValues:[...rows,{id:uid(),field:'',value:''}]})}><Plus size={13}/> Add Field</button></div>
+}
+
+function dataRuntimeAction(element) {
+  const c=element.config||{}
+  const configured=(row)=>typeof row?.value==='string'&&row.value.startsWith('variables.')?{path:row.value}:row?.value
+  if(element.key==='get_records') return {id:element.id,key:'GET_RECORDS',label:element.label,apiName:element.apiName,objectKey:c.objectKey,filters:(c.conditionLogic==='none'?[]:(c.conditions||[])).map((row)=>({field:row.field,operator:row.operator||'equals',value:configured(row)})),match:c.conditionLogic==='any'?'any':'all',sortField:c.sortOrder==='none'?undefined:c.sortBy,sortDirection:c.sortOrder==='none'?undefined:c.sortOrder,limit:(c.recordLimit||'first')==='first'?1:20000,store:(c.recordLimit||'first')==='first'?'first':'all',fieldSelection:c.storeMode||'auto'}
+  if(element.key==='create_records') return {id:element.id,key:'CREATE_RECORD',label:element.label,apiName:element.apiName,objectKey:c.objectKey,createMode:c.valueMode||'manual',howMany:c.howMany||'one',fieldValues:Object.fromEntries((c.fieldValues||[]).filter((row)=>row.field).map((row)=>[row.field,configured(row)])),recordResource:c.recordResource?{path:c.recordResource}:undefined,recordCollectionResource:c.recordCollectionResource?{path:c.recordCollectionResource}:undefined}
+  if(element.key==='update_records') return {id:element.id,key:'UPDATE_RECORD',label:element.label,apiName:element.apiName,objectKey:c.objectKey,updateMode:c.findMode||'conditions',recordResource:c.recordResource?{path:c.recordResource}:undefined,conditions:(c.conditions||[]).map((row)=>({field:row.field,operator:row.operator||'equals',value:configured(row)})),fieldValues:Object.fromEntries((c.fieldValues||[]).filter((row)=>row.field).map((row)=>[row.field,configured(row)]))}
+  if(element.key==='delete_records') return {id:element.id,key:'DELETE_RECORD',label:element.label,apiName:element.apiName,objectKey:c.objectKey,deleteMode:c.findMode||'conditions',recordResource:c.recordResource?{path:c.recordResource}:undefined,conditions:(c.conditions||[]).map((row)=>({field:row.field,operator:row.operator||'equals',value:configured(row)}))}
+  if(element.key==='rollback') return {id:element.id,key:'ROLLBACK_RECORDS',label:element.label,apiName:element.apiName}
+  return null
+}
+
 function ElementEditor({element,nodes,objects,onSave,onCancel}) {
+  if(element && ['get_records','create_records','update_records','delete_records','rollback'].includes(element.key)) return <DataElementEditor element={element} objects={objects} onSave={onSave} onCancel={onCancel}/>
   const [draft,setDraft]=useState(()=>clone(element||{}))
   if(!element)return null
   const cfg=draft.config||{}
@@ -255,7 +312,7 @@ function Builder({flow,onBack}) {
   const save=async()=>{
     if(!startValid){setMessage('Configure Start before saving.');return}
     setSaving(true);setMessage('')
-    const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:false,lifecycleStatus:'DRAFT',version:1,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:[],goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:[]}}
+    const payload={name:label||'New Flow',objectKey:start.objectKey||null,triggerKey:triggerKey(flow.key,start),conditions:[],active:false,lifecycleStatus:'DRAFT',version:1,action:{type:'workflow',gptBuilder:true,gptBuilderNew:true,apiName:apiName(label),description:'',apiVersion:'68.0',flowType:flow.key,start,layout:{mode:layout==='free'?'FREE_FORM':'AUTO'},gptBuilderElements:nodes.map((node)=>({...node,source:layout})),resources:[],goToConnections:edges.map((edge)=>({sourceId:edge.source,targetId:edge.target})),actions:nodes.filter((node)=>node.configured).map(dataRuntimeAction).filter(Boolean)}}
     try{const response=await apiRequest(savedId?`/api/platform/rules/${encodeURIComponent(savedId)}`:'/api/platform/rules',{method:savedId?'PUT':'POST',body:JSON.stringify(payload)});if(response?.data?.id)setSavedId(String(response.data.id));setMessage('Flow saved.')}
     catch(error){setMessage(error?.message||'Unable to save flow.')}
     finally{setSaving(false)}
