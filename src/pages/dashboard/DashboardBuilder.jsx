@@ -120,12 +120,16 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
         body: JSON.stringify(payload),
       });
       if (!response.success) return setError(response.message || "Unable to save dashboard");
-      setCurrent(response.data);
+      const savedId = response.data?.id;
+      const reopened = savedId ? await apiRequest(`/api/dashboards/${encodeURIComponent(savedId)}`) : null;
+      if (savedId && !reopened?.success) throw new Error(reopened?.message || "Unable to reopen saved dashboard");
+      const persisted = reopened?.data || response.data;
+      setCurrent(persisted);
       setError("");
       await loadPrincipals();
-      await runPreview(response.data);
+      await runPreview(persisted);
       await load();
-      onSaved?.(response.data);
+      onSaved?.(persisted);
     } catch (error) {
       setError(error.message || "Unable to save dashboard");
     } finally {
