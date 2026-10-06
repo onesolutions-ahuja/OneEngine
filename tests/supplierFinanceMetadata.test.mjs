@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.js";
 
-test("supplier accounting functions are package-owned", async () => {
-  const registry = await readFile(new URL("../server/services/platformFunctionRegistry.js", import.meta.url), "utf8");
-  assert.equal(registry.includes('key: "supplier.payment.execute"'), false);
-  for (const key of ["supplier.payment.execute","supplier.invoice.create","supplier.ledger.adjust"]) assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
+test("supplier accounting has no hidden function registry executors", async () => {
+  const workflow = await readFile(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
+  assert.equal(workflow.includes("CALL_FUNCTION"), false);
+  assert.equal(workflow.includes("platformFunctionRegistry"), false);
 });
 test("finance metadata has real workflows and no phantom handlers", async () => {
   const source = await readFile(new URL("../server/metadata/manifests/finance_core.json", import.meta.url), "utf8");
@@ -54,7 +53,4 @@ test("supplier finance legacy route is removed and writes remain Flow-owned", as
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/supplierAccounts.js"), false);
   assert.equal(server.includes("createSupplierAccountsRouter"), false);
-  for (const key of ["supplier.payment.execute","supplier.invoice.create","supplier.ledger.adjust"]) {
-    assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
-  }
 });
