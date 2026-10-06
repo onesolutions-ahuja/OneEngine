@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
-import { getIntegrationFieldCatalogue } from "../../services/integrationFieldCatalogue.js";
 import { validateMapping } from "../../services/integrationMapping.js";
 
 const MAPPING_TYPES = [
@@ -30,7 +29,7 @@ function rowFromApi(row) {
 }
 
 export default function MappingEditorModal({ integration, endpoint, onClose }) {
-  const catalogue = useMemo(() => getIntegrationFieldCatalogue(), []);
+  const [catalogue, setCatalogue] = useState([]);
   const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,6 +53,39 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
   useEffect(() => {
     loadMappings();
   }, [loadMappings]);
+  useEffect(() => {
+    let live = true;
+    apiRequest("/api/platform/objects")
+      .then(async (response) => {
+        const objects = response?.data?.objects || response?.data || [];
+        const rows = Array.isArray(objects) ? objects : [];
+        const fieldGroups = await Promise.all(rows.map(async (object) => {
+          const objectId = object?.id || object?.object_id;
+          const objectKey = object?.object_key || object?.api_name || object?.key;
+          if (!objectId || !objectKey) return [];
+          try {
+            const fieldResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectId)}/fields`);
+            const fields = fieldResponse?.data?.fields || fieldResponse?.data || [];
+            return (Array.isArray(fields) ? fields : [])
+              .filter((field) => field?.active !== false && field?.readable !== false)
+              .map((field) => ({
+                path: `${objectKey}.${field.api_name || field.field_key || field.key}`,
+                label: `${object.label || object.name || objectKey} · ${field.label || field.name || field.api_name || field.key}`,
+                type: field.field_type || field.type || "string",
+                selectable: true,
+                array: Boolean(field.is_array || field.array),
+              }))
+              .filter((entry) => entry.path && !entry.path.endsWith(".undefined"));
+          } catch {
+            return [];
+          }
+        }));
+        if (live) setCatalogue(fieldGroups.flat());
+      })
+      .catch(() => { if (live) setCatalogue([]); });
+    return () => { live = false; };
+  }, []);
+
 
   const addRow = () => setMappings((rows) => [...rows, { partnerFieldPath: "", oneposSourcePath: "", mappingType: "direct", staticValue: "" }]);
   const removeRow = (index) => setMappings((rows) => rows.filter((_, i) => i !== index));

@@ -9,9 +9,7 @@
       "metadataScope": "global",
       "storeScoped": true,
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true,
         "trackHistory": true
@@ -135,9 +133,7 @@
       "sourceTable": "purchase_items",
       "metadataScope": "global",
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true,
         "internal": true,
@@ -243,9 +239,7 @@
       "metadataScope": "global",
       "storeScoped": true,
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true,
         "internal": true,
@@ -312,9 +306,7 @@
       "metadataScope": "global",
       "storeScoped": true,
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true
       },
@@ -420,9 +412,7 @@
       "sourceTable": "stock_return_items",
       "metadataScope": "global",
       "required": true,
-      "adoptFromPackageKeys": [
-        "retail_pos"
-      ],
+      "adoptFromPackageKeys": [],
       "config": {
         "flowWritesOnly": true
       },

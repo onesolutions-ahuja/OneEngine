@@ -23,20 +23,12 @@ const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
 const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
-const TillPage = lazyWithRecovery(() => import('./pages/till/TillPage'))
-const CustomerDisplay = lazyWithRecovery(() => import('./pages/till/CustomerDisplay'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const SalesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const SupplierReturnsPage = lazyWithRecovery(() => import('./pages/returns/SupplierReturnsPage'))
-const ProductsPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CategoriesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
-const PurchasesPage = lazyWithRecovery(() => import('./pages/purchases/PurchasesPage'))
-const SuppliersPage = lazyWithRecovery(() => import('./pages/suppliers/SuppliersPage'))
-const CustomersPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
@@ -44,7 +36,6 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const StoreTillSettingsPage = lazyWithRecovery(() => import('./pages/settings/StoreTillSettingsPage'))
 const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
@@ -53,7 +44,6 @@ const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
 const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
 const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
-const OneKioskDisplayPage = lazyWithRecovery(() => import('./pages/kiosk/OneKioskDisplayPage'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   LockKeyhole,
@@ -107,7 +97,6 @@ import {
 const SETTINGS_VISUALS = {
   general: { icon: Settings2, tone: 'orange', searchTerms: ['date format', 'currency', 'timezone', 'regional'] },
   company: { icon: Building2, tone: 'blue', searchTerms: ['company name', 'legal name', 'company email', 'company phone', 'logo'] },
-  'store-till': { icon: Store, tone: 'blue', searchTerms: ['store', 'till', 'terminal', 'terminal number', 'product view', 'invoice'] },
   'client-web-shop': { icon: ShoppingCart, tone: 'green' },
   'tax-vat': { icon: ReceiptText, tone: 'green', searchTerms: ['vat', 'tax', 'vat enabled', 'default vat rate', 'rate'] },
   receipts: { icon: ReceiptText, tone: 'green' },
@@ -647,14 +636,9 @@ function SettingsPage({ onOpenProfile }) {
       else if (field === 'batchDefaultMfgRule') cloneSection('inventory').batchDefaultMfgRule = value
       else if (field === 'batchDefaultExpiryRule') cloneSection('inventory').batchDefaultExpiryRule = value
       else if (field === 'batchDefaultExpiryDays') cloneSection('inventory').batchDefaultExpiryDays = Number(value)
-      else if (field === 'productView') cloneSection('till').productView = value
       else if (field === 'dockQuickAccess') cloneSection('dock').quickAccess = Array.isArray(value) ? [...value] : []
-      else if (field === 'customerDisplayEnabled') cloneSection('customerDisplay').enabled = value
       else if (field === 'onlineOrderingEnabled') cloneSection('onlineOrdering').enabled = value
       else if (field === 'onlinePaymentMethods') cloneSection('onlineOrdering').paymentMethods = Array.isArray(value) ? [...value] : []
-      else if (field === 'tillInvoicePrefix') cloneSection('invoicePrefixes').till = value
-      else if (field === 'deliveryInvoicePrefix') cloneSection('invoicePrefixes').delivery = value
-      else if (field === 'selfCheckoutInvoicePrefix') cloneSection('invoicePrefixes').selfCheckout = value
     }
 
     return { ...baseContext, settings: nextSettings }
@@ -1123,11 +1107,6 @@ function SettingsPage({ onOpenProfile }) {
                     ) : null}
                   </section>
                 </div>
-              ) : current?.key === 'store-till' ? (
-                <>
-                  <MetadataSettingsSection section="Store & Till" />
-                  <StoreTillSettingsPage />
-                </>
               ) : current?.key === 'client-web-shop' ? (
                 <MetadataSettingsSection section="Client Web Shop" />
               ) : current?.key === 'tax-vat' ? (
@@ -1838,16 +1817,6 @@ function Desktop({ onLock, onSignOut }) {
   </div>
   const topbarPanelRef = useRef(null)
   const storedUser = getStoredUser()
-  const isTillUser = String(storedUser?.defaultLandingPage || '').toLowerCase() === 'till'
-
-  useEffect(() => {
-    if (!isTillUser || activeApp !== 'home') return
-    const next = { app: 'till', section: null }
-    setRouteState(next)
-    setRoute('till')
-    setActiveApp('till')
-  }, [isTillUser, activeApp])
-
   useEffect(() => {
     const syncRoute = () => {
       const route = readRoute()
@@ -2076,7 +2045,6 @@ function Desktop({ onLock, onSignOut }) {
       contacts: 'customers',
       one_connect_google: 'google-connect',
       one_assistant: 'assistant',
-      one_kiosk: 'kiosk-devices',
     }
     const target = aliases[id] || id
 
@@ -2100,14 +2068,6 @@ function Desktop({ onLock, onSignOut }) {
     setAppSearch('')
     setTopPanel('')
 
-    const routeMap = new Set([
-      'integrations','google-connect','accounting','online-orders','own-delivery',
-      'kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
-      'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
-      'gift-cards','suppliers','purchases','categories',
-      'global-products','products','sales','workspace','till',
-    ])
-
     if (target === 'developer') {
       const next = { app: 'developer', section: 'objects' }
       setRoute('developer', 'objects')
@@ -2123,11 +2083,10 @@ function Desktop({ onLock, onSignOut }) {
       setActiveApp('settings')
       return
     }
-    if (routeMap.has(target)) {
-      const next = { app: target, section: null }
-      setRoute(target)
-      setRouteState(next)
-      setActiveApp(target)
+    const installedApp = storeApps.find((item) => String(item?.package_key || '') === String(target) && item?.is_installed === true)
+    const declaredRoute = installedApp ? resolveAppOpenRoute(installedApp) : ''
+    if (declaredRoute && declaredRoute !== '/app') {
+      openRoutePath(declaredRoute)
       return
     }
 
@@ -2254,7 +2213,6 @@ function Desktop({ onLock, onSignOut }) {
             <AnimatePresence>
               {topPanel === 'help' ? <HelpMenu onSelect={(label) => {
                 setTopPanel('')
-                if (label === 'Till guide') openItem('till')
                 else if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
                 else { setRoute('settings', 'connections'); setRouteState({ app: 'settings', section: 'connections' }); setActiveApp('settings') }
               }} /> : null}
@@ -2341,40 +2299,12 @@ function Desktop({ onLock, onSignOut }) {
           <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
-        ) : activeApp === 'till' ? (
-          <TillPage
-            onOpenSettings={() => { setRoute('settings', 'store-till'); setActiveApp('settings') }}
-            onNavigate={openItem}
+        ) : activeApp === 'workspace' ? (
+          <WorkspacePage
+            initialObjectKey={routeState.objectKey || ''}
+            initialRecordId={routeState.recordId || ''}
+            appKey={routeState.appKey || ''}
           />
-        ) : activeApp === 'sales' ? (
-          <SalesPage initialObjectKey="sale_ledger" appKey="sales" />
-        ) : activeApp === 'supplier-returns' ? (
-          <SupplierReturnsPage />
-        ) : activeApp === 'products' ? (
-          <ProductsPage initialObjectKey="product" appKey="products" />
-        ) : activeApp === 'categories' ? (
-          <CategoriesPage initialObjectKey="category" appKey="categories" />
-        ) : activeApp === 'global-products' ? (
-          <GlobalProductLookupPage
-            onBack={() => openItem('products')}
-            onOpenStore={() => {
-              setAppSearch('')
-              setTopPanel('store')
-            }}
-          />
-
-        ) : activeApp === 'purchases' ? (
-          <PurchasesPage />
-        ) : activeApp === 'suppliers' ? (
-          <SuppliersPage />
-        ) : activeApp === 'customers' ? (
-          <CustomersPage initialObjectKey="customer" appKey="customers" />
-        ) : activeApp === 'gift-cards' ? (
-          <WorkspacePage initialObjectKey="gift_card" appKey="gift-cards" />
-        ) : activeApp === 'employees' ? (
-          <WorkspacePage initialObjectKey="employee" appKey="employees" />
-        ) : activeApp === 'stores' ? (
-          <WorkspacePage initialObjectKey="store" appKey="stores" />
         ) : activeApp === 'reports' ? (
           <ReportsPage />
         ) : activeApp === 'custom-reports' ? (
@@ -2383,14 +2313,6 @@ function Desktop({ onLock, onSignOut }) {
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
         ) : activeApp === 'accounting' ? (
           <IntegrationsAdmin storeId={routeState?.storeId || activeStoreId || storedUser?.storeId || null} />
-        ) : activeApp === 'online-orders' ? (
-          <WorkspacePage initialObjectKey="sales_order" appKey="online-orders" />
-        ) : activeApp === 'own-delivery' ? (
-          <WorkspacePage initialObjectKey="sales_order" appKey="own-delivery" />
-        ) : activeApp === 'kiosk-display' ? (
-          <OneKioskDisplayPage />
-        ) : activeApp === 'kiosk-devices' ? (
-          <WorkspacePage initialObjectKey="kiosk_device" appKey="one_kiosk" />
         ) : activeApp === 'audit-log' ? (
           <AuditLogPage />
         ) : activeApp === 'licensing' ? (
@@ -2434,14 +2356,8 @@ function Desktop({ onLock, onSignOut }) {
 
 export default function App() {
   const route = readRoute()
-  if (route.app === 'customer-display') {
-    return <div data-oneengine-route="customer-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading display…</div>}><CustomerDisplay /></Suspense></LazyLoadBoundary></div>
-  }
   if (route.app === 'flow-runtime') {
     return <div data-oneengine-route="flow-runtime" data-oneengine-session={route.sessionId || ""}><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading flow…</div>}><ScreenFlowRuntimePage sessionId={route.sessionId} /></Suspense></LazyLoadBoundary></div>
-  }
-  if (route.app === 'kiosk-display') {
-    return <div data-oneengine-route="kiosk-display"><LazyLoadBoundary><Suspense fallback={<div className="route-loading" role="status">Loading collection display…</div>}><OneKioskDisplayPage /></Suspense></LazyLoadBoundary></div>
   }
 
   // A browser refresh should restore an authenticated session, not behave like

@@ -23,7 +23,7 @@ test("deleted legacy business engines stay deleted from server wiring",async()=>
 test("phase manifests exist for migrated business domains",async()=>{
  const dir=new URL("../server/metadata/manifests/",import.meta.url);
  const names=new Set(await readdir(dir));
- for(const name of ["retail_pos.json","purchasing_core.json","finance_core.json","products.json","inventory.json","batch_expiry.json","customers.json","customer_credit.json","loyalty.json","gift_cards.json","online_orders.json","uber_eats.json"]){
+ for(const name of ["purchasing_core.json","finance_core.json","products.json","inventory.json","batch_expiry.json","customers.json","customer_credit.json","loyalty.json","gift_cards.json","online_orders.json","uber_eats.json"]){
    assert.ok(names.has(name),name);
  }
 });

@@ -197,9 +197,6 @@ const metadataSeedWorkflows = [
 
 const runtimeWorkflowInventory = [...packageRuntimeWorkflows, ...systemRuntimeWorkflows, ...metadataSeedWorkflows];
 const allowedShortRuntimeWorkflows = new Set([
-  "package:retail_pos::Open Drawer",
-  "package:retail_pos::OneTill - Validate Stock",
-  "package:retail_pos::OneTill - Age Verification",
   "package:staff::Staff - Set Active Status",
   "platform-metadata:onetill::OneTill - Open Drawer",
   "platform-metadata:onetill::OneTill - Receipt QR",

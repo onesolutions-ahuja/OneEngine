@@ -1,6 +1,6 @@
 import { decryptSecret } from "./onlineOrders/platformConfig.js";
 import { getCompanyEntitlements, hasEntitlement } from "./licensing.js";
-import { sendEmailViaProvider, sendSmsViaProvider, sendSmsViaTwilio } from "./invoiceDelivery.js";
+import { sendEmailViaProvider, sendSmsViaProvider, sendSmsViaTwilio } from "./communicationTransports.js";
 import { oneHttpRequest } from "./oneCoreFunctions.js";
 import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationCore.js";
 import { decryptCredentials } from "./integrationCredentials.js";

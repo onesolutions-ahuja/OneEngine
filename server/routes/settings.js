@@ -248,8 +248,7 @@ export default function createSettingsRouter({
           cs.allow_negative_inventory_billing,
           cs.batch_inventory_mode, cs.batch_default_mfg_rule, cs.batch_default_expiry_rule, cs.batch_default_expiry_days,
           cs.scan_go_enabled, cs.exchange_mode, cs.online_ordering_enabled, cs.online_payment_methods,
-          cs.product_view, cs.dock_quick_access,
-          cs.customer_display_enabled,
+          cs.dock_quick_access,
           s.id AS store_id, s.name AS store_name,
           NULL::uuid AS till_id, NULL::text AS till_name, NULL::text AS terminal_number
         FROM companies c
@@ -314,32 +313,6 @@ export default function createSettingsRouter({
               ? settings.exchange_mode
               : "both",
           },
-          till: {
-            id: settings.till_id,
-            name: settings.till_name,
-            terminalNumber: settings.terminal_number,
-            /* Till product browser presentation: 'image' | 'compact'. */
-            productView: settings.product_view === "compact" ? "compact" : "image",
-          },
-          receiptQr: {
-            showAfterSuccessfulPayment: ["OFF", "ALWAYS", "ONLY_WHEN_PRINTER_UNAVAILABLE"].includes(String(settings.receipt_qr_show_after_payment || "OFF").toUpperCase())
-              ? String(settings.receipt_qr_show_after_payment || "OFF").trim().toUpperCase()
-              : "OFF",
-            expiryMinutes: Number.isFinite(Number(settings.receipt_qr_expiry_minutes)) ? Math.max(1, Number(settings.receipt_qr_expiry_minutes)) : 5,
-            allowManualQr: settings.receipt_qr_allow_manual !== false,
-            allowRegenerate: settings.receipt_qr_allow_regenerate !== false,
-            autoCloseOnNewSale: settings.receipt_qr_auto_close_on_new_sale !== false,
-            showCountdown: settings.receipt_qr_show_countdown !== false,
-          },
-          /* Configurable sale invoice/receipt prefixes per sale source.
-             Defaults TO / DEL / SC; till + self-checkout receipts keep the
-             existing PREFIX-YYYYMMDD-NNNN sequencing, delivery receipts
-             become PREFIX-<platform external order id>. */
-          invoicePrefixes: {
-            till: settings.till_invoice_prefix || "TO",
-            delivery: settings.delivery_invoice_prefix || "DEL",
-            selfCheckout: settings.self_checkout_invoice_prefix || "SC",
-          },
           /* Admin dock quick-access (T10W): pages shown directly on the
              bottom bar. Ordered; validated on save; launcher always shows
              every permitted page regardless of this list. */
@@ -347,12 +320,6 @@ export default function createSettingsRouter({
             quickAccess: Array.isArray(settings.dock_quick_access)
               ? settings.dock_quick_access
               : ["Dashboard", "Sales", "Products", "Inventory", "Customers", "Reports"],
-          },
-          /* Customer Display (second monitor): master ON/OFF. When OFF the
-             till shows no entry point and the /customer-display page refuses
-             to connect. */
-          customerDisplay: {
-            enabled: settings.customer_display_enabled === true,
           },
           onlineOrdering: {
             enabled: settings.online_ordering_enabled ?? false,
@@ -534,16 +501,8 @@ export default function createSettingsRouter({
     dateFormat: { column: "date_format", type: "string" },
     vatEnabled: { column: "vat_enabled", type: "boolean" },
     defaultVatRate: { column: "default_vat_rate", type: "vatRate" },
-    allowNegativeInventoryBilling: { column: "allow_negative_inventory_billing", type: "negativeBilling" },
-    productView: { column: "product_view", type: "productView" },
-    dockQuickAccess: { column: "dock_quick_access", type: "dockQuickAccess" },
-    customerDisplayEnabled: { column: "customer_display_enabled", type: "boolean" },
-    onlineOrderingEnabled: { column: "online_ordering_enabled", type: "boolean" },
-    onlinePaymentMethods: { column: "online_payment_methods", type: "paymentMethods" },
-    tillInvoicePrefix: { column: "till_invoice_prefix", type: "invoicePrefix" },
-    deliveryInvoicePrefix: { column: "delivery_invoice_prefix", type: "invoicePrefix" },
-    selfCheckoutInvoicePrefix: { column: "self_checkout_invoice_prefix", type: "invoicePrefix" },
-  };
+    allowNegativeInventoryBilling: { column: "allow_negative_inventory_billing", type: "negativeBilling" },    dockQuickAccess: { column: "dock_quick_access", type: "dockQuickAccess" },    onlineOrderingEnabled: { column: "online_ordering_enabled", type: "boolean" },
+    onlinePaymentMethods: { column: "online_payment_methods", type: "paymentMethods" },  };
 
   /* Sentinel distinguishing "invalid value" from a legitimate SQL NULL
      (loyalty redemption economics use null = "not configured"). */
@@ -578,7 +537,6 @@ export default function createSettingsRouter({
       const days = Math.floor(Number(value));
       return Number.isFinite(days) && days >= 0 && days <= 3650 ? days : SETTINGS_PATCH_INVALID;
     },
-    productView: (value) => (["image", "compact"].includes(value) ? value : SETTINGS_PATCH_INVALID),
     paymentMethods: (value) => {
       if (!Array.isArray(value) || value.some((m) => !["card", "cash", "cod"].includes(m))) return SETTINGS_PATCH_INVALID;
       return JSON.stringify(value);
@@ -587,10 +545,6 @@ export default function createSettingsRouter({
       if (!Array.isArray(value) || value.length > 8 || new Set(value).size !== value.length) return SETTINGS_PATCH_INVALID;
       if (value.some((item) => typeof item !== "string" || !item.trim() || item.length > 120)) return SETTINGS_PATCH_INVALID;
       return JSON.stringify(value.map((item) => item.trim()));
-    },
-    invoicePrefix: (value) => {
-      if (typeof value !== "string" || !/^[A-Za-z0-9]{1,10}$/.test(value.trim())) return SETTINGS_PATCH_INVALID;
-      return value.trim().toUpperCase();
     },
     negativeBilling: (value, patch) => {
       /* T10U safety contract is preserved: enabling requires the explicit
@@ -681,12 +635,9 @@ export default function createSettingsRouter({
       loyaltyMinPointsRedeem,
       scanGoEnabled,
       exchangeMode,
-      productView,
       dockQuickAccess,
-      customerDisplayEnabled,
       onlineOrderingEnabled,
       onlinePaymentMethods,
-      invoicePrefixes,
       batchInventoryMode,
       batchDefaultMfgRule,
       batchDefaultExpiryRule,
@@ -739,11 +690,6 @@ export default function createSettingsRouter({
       loyaltyMinPointsNorm = minPoints;
     }
 
-    // Validate till product view (T10Q: image | compact; default image)
-    if (productView !== undefined && productView !== null && !["image", "compact"].includes(productView)) {
-      return res.status(400).json({ success: false, message: "Till product view must be 'image' or 'compact'" });
-    }
-
     // Validate exchange mode (receipt | normal | both; default both)
     const EXCHANGE_MODES = ["receipt", "normal", "both"];
     const exchangeModeNorm = exchangeMode === undefined || exchangeMode === null
@@ -773,28 +719,6 @@ export default function createSettingsRouter({
       if (!Array.isArray(dockQuickAccess) || dockQuickAccess.length > 8 || new Set(dockQuickAccess).size !== dockQuickAccess.length ||
           dockQuickAccess.some((item) => typeof item !== "string" || !item.trim() || item.length > 120)) {
         return res.status(400).json({ success: false, message: "Dock quick access must contain up to 8 unique metadata keys" });
-      }
-    }
-
-    // customerDisplayEnabled (Customer Display master switch): boolean only.
-    if (customerDisplayEnabled !== undefined && customerDisplayEnabled !== null
-        && typeof customerDisplayEnabled !== "boolean") {
-      return res.status(400).json({ success: false, message: "customerDisplayEnabled must be a boolean" });
-    }
-
-    // Validate invoice prefixes (configurable receipt prefixes per sale
-    // source): uppercase alphanumeric, 1-10 chars. null/undefined = keep.
-    if (invoicePrefixes !== undefined && invoicePrefixes !== null) {
-      if (typeof invoicePrefixes !== "object" || Array.isArray(invoicePrefixes)) {
-        return res.status(400).json({ success: false, message: "invoicePrefixes must be an object" });
-      }
-      const prefixFields = ["till", "delivery", "selfCheckout"];
-      for (const field of prefixFields) {
-        const value = invoicePrefixes[field];
-        if (value === undefined || value === null) continue;
-        if (typeof value !== "string" || !/^[A-Za-z0-9]{1,10}$/.test(value.trim())) {
-          return res.status(400).json({ success: false, message: `Invoice prefix for ${field} must be 1-10 letters/numbers` });
-        }
       }
     }
 
@@ -829,9 +753,9 @@ export default function createSettingsRouter({
          arm below keeps the stored value on update. */
       await client.query(
         `
-        INSERT INTO company_settings (company_id, date_format, vat_enabled, default_vat_rate, loyalty_enabled, loyalty_earning_rate, loyalty_min_sale_total, loyalty_redeem_value_per_point, loyalty_min_points_redeem, scan_go_enabled, exchange_mode, product_view, dock_quick_access, customer_display_enabled, online_ordering_enabled, online_payment_methods, till_invoice_prefix, delivery_invoice_prefix, self_checkout_invoice_prefix, updated_by, updated_at)
-        VALUES ($1,$2,$3,$4,$5,COALESCE($6, 0.0100),$7::numeric,$8::numeric,$9::integer,$10,COALESCE($11, 'both'),COALESCE($12, 'image'),COALESCE($13::jsonb, '["Dashboard", "Sales", "Products", "Inventory", "Customers", "Reports"]'::jsonb),COALESCE($14, false),$15,COALESCE($16::jsonb, '["card", "cash", "cod"]'::jsonb),COALESCE($17,'TO'),COALESCE($18,'DEL'),COALESCE($19,'SC'),$20,NOW())
-        ON CONFLICT (company_id) DO UPDATE SET date_format=$2, vat_enabled=$3, default_vat_rate=$4, loyalty_enabled=$5, loyalty_earning_rate=COALESCE($6, company_settings.loyalty_earning_rate), loyalty_min_sale_total=COALESCE($7::numeric, company_settings.loyalty_min_sale_total), loyalty_redeem_value_per_point=COALESCE($8::numeric, company_settings.loyalty_redeem_value_per_point), loyalty_min_points_redeem=COALESCE($9::integer, company_settings.loyalty_min_points_redeem), scan_go_enabled=$10, exchange_mode=COALESCE($11, company_settings.exchange_mode), product_view=COALESCE($12, company_settings.product_view), dock_quick_access=COALESCE($13::jsonb, company_settings.dock_quick_access), customer_display_enabled=COALESCE($14, company_settings.customer_display_enabled), online_ordering_enabled=$15, online_payment_methods=COALESCE($16::jsonb, company_settings.online_payment_methods), till_invoice_prefix=COALESCE($17, company_settings.till_invoice_prefix), delivery_invoice_prefix=COALESCE($18, company_settings.delivery_invoice_prefix), self_checkout_invoice_prefix=COALESCE($19, company_settings.self_checkout_invoice_prefix), updated_by=$20, updated_at=NOW()
+        INSERT INTO company_settings (company_id, date_format, vat_enabled, default_vat_rate, loyalty_enabled, loyalty_earning_rate, loyalty_min_sale_total, loyalty_redeem_value_per_point, loyalty_min_points_redeem, scan_go_enabled, exchange_mode, dock_quick_access, online_ordering_enabled, online_payment_methods, updated_by, updated_at)
+        VALUES ($1,$2,$3,$4,$5,COALESCE($6,0.0100),$7::numeric,$8::numeric,$9::integer,$10,COALESCE($11,'both'),COALESCE($12::jsonb,'["Dashboard","Sales","Products","Inventory","Customers","Reports"]'::jsonb),$13,COALESCE($14::jsonb,'["card","cash","cod"]'::jsonb),$15,NOW())
+        ON CONFLICT (company_id) DO UPDATE SET date_format=$2, vat_enabled=$3, default_vat_rate=$4, loyalty_enabled=$5, loyalty_earning_rate=COALESCE($6,company_settings.loyalty_earning_rate), loyalty_min_sale_total=COALESCE($7::numeric,company_settings.loyalty_min_sale_total), loyalty_redeem_value_per_point=COALESCE($8::numeric,company_settings.loyalty_redeem_value_per_point), loyalty_min_points_redeem=COALESCE($9::integer,company_settings.loyalty_min_points_redeem), scan_go_enabled=$10, exchange_mode=COALESCE($11,company_settings.exchange_mode), dock_quick_access=COALESCE($12::jsonb,company_settings.dock_quick_access), online_ordering_enabled=$13, online_payment_methods=COALESCE($14::jsonb,company_settings.online_payment_methods), updated_by=$15, updated_at=NOW()
         `,
         [
           req.user.companyId,
@@ -845,27 +769,15 @@ export default function createSettingsRouter({
           loyaltyMinPointsNorm,
           scanGoEnabled === true,
           exchangeModeNorm || null,
-          productView === "compact" ? "compact" : productView === "image" ? "image" : null,
           Array.isArray(dockQuickAccess) ? JSON.stringify(dockQuickAccess) : null,
-          typeof customerDisplayEnabled === "boolean" ? customerDisplayEnabled : null,
           onlineOrderingEnabled === true,
           onlinePaymentMethods !== undefined ? JSON.stringify(onlinePaymentMethods) : null,
-          /* Invoice prefixes: per-source objects only; null = keep existing. */
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.till === "string" ? invoicePrefixes.till.trim().toUpperCase() : null)
-            : null,
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.delivery === "string" ? invoicePrefixes.delivery.trim().toUpperCase() : null)
-            : null,
-          invoicePrefixes && typeof invoicePrefixes === "object" && !Array.isArray(invoicePrefixes)
-            ? (typeof invoicePrefixes.selfCheckout === "string" ? invoicePrefixes.selfCheckout.trim().toUpperCase() : null)
-            : null,
           req.user.id
         ]
       );
       await client.query(
         `INSERT INTO audit_logs (company_id, user_id, action, entity_type, entity_id, details) VALUES ($1,$2,'settings.updated','company',$1,$3)`,
-        [req.user.companyId, req.user.id, JSON.stringify({ currency, timezone, dateFormat, vatEnabled, defaultVatRate: vatRate, loyaltyEnabled, loyaltyEarningRate, scanGoEnabled, productView, dockQuickAccess, customerDisplayEnabled, onlineOrderingEnabled, onlinePaymentMethods, invoicePrefixes })]
+        [req.user.companyId, req.user.id, JSON.stringify({ currency, timezone, dateFormat, vatEnabled, defaultVatRate: vatRate, loyaltyEnabled, loyaltyEarningRate, scanGoEnabled, dockQuickAccess, onlineOrderingEnabled, onlinePaymentMethods })]
       );
       await client.query("COMMIT");
       res.json({ success: true, message: "Settings updated" });
