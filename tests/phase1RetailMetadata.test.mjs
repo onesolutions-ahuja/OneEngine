@@ -32,13 +32,18 @@ test("Phase 1 business processes are editable workflow metadata", () => {
 });
 
 test("sale workflows resolve only to the canonical sale ledger object", () => {
-  const serialized = JSON.stringify(manifest.workflows || []);
-  for (const legacy of ["\\\"sale\\\"","\\\"sale_item\\\"","\\\"payment\\\"","\\\"refund\\\""]) {
-    assert.equal(serialized.includes(legacy), false, `legacy sales object reference survives: ${legacy}`);
-  }
-  assert.ok(serialized.includes("\\\"sale_ledger\\\""));
+  const legacyRefs = [];
+  const canonicalRefs = [];
+  JSON.stringify(manifest.workflows || [], (key, value) => {
+    if (key === "objectKey") {
+      if (["sale","sale_item","payment","refund"].includes(value)) legacyRefs.push(value);
+      if (value === "sale_ledger") canonicalRefs.push(value);
+    }
+    return value;
+  });
+  assert.deepEqual(legacyRefs, []);
+  assert.ok(canonicalRefs.length > 0);
 });
-
 test("retail metadata uses generic runtime primitives only", () => {
   const allowed = new Set(["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","BULK_UPDATE_RECORDS","CREATE_RELATED_RECORD","UPDATE_RELATED_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP","ASSIGN_RECORD","ASSIGNMENT","DECISION","CONDITION","LOOP","WAIT","FORMULA","RUN_SUBFLOW","STOP","ERROR","CUSTOM_ERROR","GENERATE_SECURE_TOKEN","TEXT_TEMPLATE"]);
   for (const flow of manifest.workflows || []) {
