@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { buildInvoicePdf } from "../utils/invoicePdf.js";
+import { loadConfiguredRuntimeView } from "./platformRuntimeViews.js";
 
 export const RECEIPT_QR_DEFAULTS = Object.freeze({
   showAfterSuccessfulPayment: "OFF",
@@ -196,57 +197,61 @@ export async function cleanupExpiredTemporaryReceipts(db) {
 export async function loadPublicReceiptData({ db, companyId, saleId }) {
   if (!db || !companyId || !saleId) return null;
   try {
-    const saleResult = await db(
-      `SELECT s.*, st.name AS store_name, st.address_line1, st.address_line2, st.city, st.postcode, st.phone AS store_phone,
-              u.username AS cashier, cst.name AS customer_name, cst.phone AS customer_phone, cst.email AS customer_email,
-              c.name AS company_name, c.email AS company_email, c.phone AS company_phone, c.currency AS company_currency, c.timezone AS company_timezone
-       FROM sale_ledger s
-       LEFT JOIN stores st ON st.id = s.store_id
-       LEFT JOIN companies c ON c.id = s.company_id
-       LEFT JOIN users u ON u.id = s.user_id
-       LEFT JOIN customers cst ON cst.id = s.customer_id
-       WHERE s.id = $1 AND s.company_id = $2 LIMIT 1`,
-      [saleId, companyId]
-    );
-    if (!saleResult.rows?.[0]) return null;
-    const sale = saleResult.rows[0];
-    const items = await db("SELECT * FROM sale_items WHERE sale_id = $1 ORDER BY id ASC", [saleId]);
-    const payments = await db("SELECT payment_method, amount, status FROM payments WHERE sale_id = $1 ORDER BY created_at ASC", [saleId]);
+    const view = await loadConfiguredRuntimeView({
+      db,
+      companyId,
+      viewKey: "receipt_document",
+      recordId: saleId,
+    });
+    if (!view?.record) return null;
+    const sale = view.record;
+    const company = view.lookups?.company || {};
+    const store = view.lookups?.store || {};
+    const customer = view.lookups?.customer || {};
+    const cashier = view.lookups?.cashier || {};
     return {
       company: {
-        name: sale.company_name || "onePOS",
-        email: sale.company_email || null,
-        phone: sale.company_phone || null,
+        name: company.name || "onePOS",
+        email: company.email || null,
+        phone: company.phone || null,
       },
       store: {
-        name: sale.store_name || "Store",
-        phone: sale.store_phone || null,
-        addressLine1: sale.address_line1 || null,
-        city: sale.city || null,
-        postcode: sale.postcode || null,
+        name: store.name || "Store",
+        phone: store.phone || null,
+        addressLine1: store.addressLine1 || null,
+        city: store.city || null,
+        postcode: store.postcode || null,
       },
       sale: {
         ...sale,
-        receiptNumber: sale.receipt_number || sale.id,
-        createdAt: sale.created_at,
-        completedAt: sale.completed_at || sale.created_at,
-        companyCurrency: sale.company_currency || "GBP",
-        companyTimezone: sale.company_timezone || "Europe/London",
+        receipt_number: sale.receiptNumber || sale.id,
+        created_at: sale.createdAt,
+        completed_at: sale.completedAt || sale.createdAt,
+        customer_name: customer.name || null,
+        customer_phone: customer.phone || null,
+        customer_email: customer.email || null,
+        cashier: cashier.username || null,
+        receiptNumber: sale.receiptNumber || sale.id,
+        createdAt: sale.createdAt,
+        completedAt: sale.completedAt || sale.createdAt,
+        companyCurrency: company.currency || "GBP",
+        companyTimezone: company.timezone || "Europe/London",
         subtotal: Number(sale.subtotal || 0),
         tax: Number(sale.tax || 0),
         discount: Number(sale.discount || 0),
         total: Number(sale.total || 0),
-        items: (items.rows || []).map((item) => ({
-          name: item.product_name || item.description || "Item",
+        items: (view.collections?.items || []).map((item) => ({
+          name: item.name || "Item",
           quantity: Number(item.quantity || 0),
-          unitPrice: Number(item.unit_price || 0),
+          unitPrice: Number(item.unitPrice || 0),
           discount: Number(item.discount || 0),
           tax: Number(item.tax || 0),
           total: Number(item.total || 0),
         })),
-        payments: (payments.rows || []).map((pay) => ({
-          method: pay.payment_method || "Unknown",
+        payments: (view.collections?.payments || []).map((pay) => ({
+          method: pay.method || "Unknown",
           amount: Number(pay.amount || 0),
+          status: pay.status || null,
         })),
       },
     };

@@ -177,7 +177,31 @@
       "storeScoped": true,
       "required": true,
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "aggregateViews": {
+          "jarvis_returns_today": {
+            "filters": [
+              {
+                "field": "return_type",
+                "operator": "equals",
+                "value": "CUSTOMER"
+              },
+              {
+                "field": "created_at",
+                "operator": "local_date_equals",
+                "value": "$today",
+                "timezone": "$timezone"
+              }
+            ],
+            "summaries": [
+              {
+                "alias": "returns",
+                "aggregate": "SUM",
+                "field": "refund_amount"
+              }
+            ]
+          }
+        }
       },
       "fields": [
         {
@@ -425,7 +449,143 @@
       "sourceTable": "sale_ledger",
       "storeScoped": true,
       "config": {
-        "flowWritesOnly": true
+        "flowWritesOnly": true,
+        "runtimeViews": {
+          "receipt_document": {
+            "fields": {
+              "companyId": "company_id",
+              "storeId": "store_id",
+              "userId": "user_id",
+              "customerId": "customer_id",
+              "receiptNumber": "receipt_number",
+              "subtotal": "subtotal",
+              "tax": "tax",
+              "discount": "discount",
+              "total": "total",
+              "status": "status",
+              "createdAt": "created_at",
+              "completedAt": "completed_at"
+            },
+            "lookups": [
+              {
+                "alias": "company",
+                "objectKey": "company",
+                "sourceAlias": "companyId",
+                "fields": {
+                  "name": "name",
+                  "email": "email",
+                  "phone": "phone",
+                  "currency": "currency",
+                  "timezone": "timezone"
+                }
+              },
+              {
+                "alias": "store",
+                "objectKey": "store",
+                "sourceAlias": "storeId",
+                "fields": {
+                  "name": "name",
+                  "addressLine1": "address_line1",
+                  "addressLine2": "address_line2",
+                  "city": "city",
+                  "postcode": "postcode",
+                  "phone": "phone"
+                }
+              },
+              {
+                "alias": "cashier",
+                "objectKey": "user",
+                "sourceAlias": "userId",
+                "fields": {
+                  "username": "username"
+                }
+              },
+              {
+                "alias": "customer",
+                "objectKey": "customer",
+                "sourceAlias": "customerId",
+                "fields": {
+                  "name": "name",
+                  "phone": "phone",
+                  "email": "email"
+                }
+              }
+            ],
+            "collections": [
+              {
+                "alias": "items",
+                "objectKey": "sale_item",
+                "foreignField": "sale_id",
+                "fields": {
+                  "name": "product_name",
+                  "quantity": "quantity",
+                  "unitPrice": "unit_price",
+                  "discount": "discount",
+                  "tax": "tax",
+                  "total": "total",
+                  "discountType": "discount_type",
+                  "discountValue": "discount_value",
+                  "originalUnitPrice": "original_unit_price"
+                },
+                "limit": 500
+              },
+              {
+                "alias": "payments",
+                "objectKey": "payment",
+                "foreignField": "sale_id",
+                "fields": {
+                  "method": "payment_method",
+                  "amount": "amount",
+                  "status": "status"
+                },
+                "orderBy": {
+                  "field": "created_at",
+                  "direction": "asc"
+                },
+                "limit": 100
+              }
+            ]
+          }
+        },
+        "aggregateViews": {
+          "jarvis_sales_today": {
+            "filters": [
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "completed"
+              },
+              {
+                "field": "created_at",
+                "operator": "local_date_equals",
+                "value": "$today",
+                "timezone": "$timezone"
+              }
+            ],
+            "summaries": [
+              {
+                "alias": "grossSales",
+                "aggregate": "SUM",
+                "field": "total"
+              },
+              {
+                "alias": "transactions",
+                "aggregate": "COUNT",
+                "field": "total"
+              },
+              {
+                "alias": "vat",
+                "aggregate": "SUM",
+                "field": "tax"
+              },
+              {
+                "alias": "discounts",
+                "aggregate": "SUM",
+                "field": "discount"
+              }
+            ]
+          }
+        }
       },
       "fields": [
         {
@@ -685,6 +845,27 @@
           "label": "Bundle Components",
           "fieldType": "json",
           "sourceColumn": "bundle_components",
+          "writable": true
+        },
+        {
+          "apiName": "discount_type",
+          "label": "Discount Type",
+          "fieldType": "text",
+          "sourceColumn": "discount_type",
+          "writable": true
+        },
+        {
+          "apiName": "discount_value",
+          "label": "Discount Value",
+          "fieldType": "decimal",
+          "sourceColumn": "discount_value",
+          "writable": true
+        },
+        {
+          "apiName": "original_unit_price",
+          "label": "Original Unit Price",
+          "fieldType": "currency",
+          "sourceColumn": "original_unit_price",
           "writable": true
         }
       ]
@@ -9014,6 +9195,66 @@
             "source": "runtime_import",
             "position": null
           }
+        ]
+      }
+    }
+  ],
+  "assistantTools": [
+    {
+      "key": "todays_sales",
+      "match": {
+        "anyRegex": [
+          "(?i)daily sales",
+          "(?i)sales summary",
+          "(?i)how much did we sell",
+          "(?i)how many sales",
+          "(?i)(today).*(sales?|sold|sell|selling|revenue|turnover|takings?|till|transactions?)",
+          "(?i)(sales?|sold|sell|selling|revenue|turnover|takings?|till|transactions?).*(today)",
+          "(?i)today.*how much.*(made|make|earn|earned|took|take|turnover|revenue)"
+        ]
+      },
+      "permissionAny": [
+        "reports.summary.view",
+        "reports.sales.view"
+      ],
+      "aggregateViews": [
+        {
+          "viewKey": "jarvis_sales_today",
+          "alias": "sales"
+        },
+        {
+          "viewKey": "jarvis_returns_today",
+          "alias": "returns"
+        }
+      ],
+      "output": {
+        "fields": {
+          "grossSales": "sales.grossSales",
+          "transactions": "sales.transactions",
+          "vat": "sales.vat",
+          "discounts": "sales.discounts",
+          "returns": "returns.returns"
+        },
+        "formulas": {
+          "averageTransaction": "IF(sales.transactions > 0, sales.grossSales / sales.transactions, 0)",
+          "netSales": "sales.grossSales - returns.returns"
+        },
+        "labels": {
+          "grossSales": "Gross sales",
+          "transactions": "Transactions",
+          "averageTransaction": "Average transaction",
+          "vat": "VAT",
+          "discounts": "Discounts",
+          "returns": "Refunds/returns",
+          "netSales": "Net sales"
+        },
+        "currencyFields": [
+          "grossSales",
+          "averageTransaction",
+          "vat",
+          "discounts",
+          "returns",
+          "netSales"
         ]
       }
     }

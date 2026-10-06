@@ -21,3 +21,7 @@ function loadManifestMap() {
 export function metadataManifestByPackageKey(packageKey) {
   return loadManifestMap().get(String(packageKey || "")) || null;
 }
+
+export function allMetadataManifests() {
+  return [...loadManifestMap().entries()].map(([packageKey, manifest]) => ({ packageKey, manifest }));
+}

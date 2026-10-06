@@ -35,7 +35,6 @@ import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemAction } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
-import createProductFeaturesRouter from "./routes/productFeatures.js";
 import createEanLookupRouter from "./routes/eanLookup.js";
 
 import createSelfCheckoutRouter, { createSelfCheckoutModeGate } from "./routes/selfCheckout.js";
@@ -54,7 +53,6 @@ import createIntegrationsRouter from "./routes/integrations.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
 import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
-import createCustomerAuthRouter from "./routes/customerAuth.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
@@ -1961,7 +1959,6 @@ app.use("/api", createSettingsRouter({
     return requireEntitlement(db, "loyalty")(req, res, next);
   },
 }));
-app.use("/api", createCustomerAuthRouter); /* routes/customerAuth.js exports a router instance (self-contained) */
 app.use("/api", createSmsGateWebhookRouter({ pool }));
 app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool, writeAudit }));
 
@@ -1984,16 +1981,6 @@ app.use("/api", createInvoiceDeliveryRouter({ authenticate, authorize, db, pool,
 |   PUT  /api/products/:id          (product.edit)
 |   DEL  /api/products/:id          (product.delete)
 */
-app.use(
-  "/api",
-  createProductFeaturesRouter({
-    authenticate,
-    authorize,
-    db,
-    pool,
-  })
-);
-
 
 app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
@@ -2766,7 +2753,7 @@ async function startServer() {
                 );
               }
             }
-            if (["QUICKBOOKS_PROVIDER_SYNC", "SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
+            if (["SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
               await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
                 kind: job.kind,
                 status: failed?.status || "FAILED",
@@ -3651,28 +3638,6 @@ async function startServer() {
               if (outcome?.success === false) {
                 throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
                   retryable: outcome.retryable === true,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "QUICKBOOKS_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
-              if (!actionKey) throw Object.assign(new Error("QuickBooks provider job is missing an action key"), { retryable: false });
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey,
-                req: { method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", user: { companyId: job.company_id, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "QUICKBOOKS_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || outcome.code || "QuickBooks sync failed"), {
-                  retryable: outcome.retryable !== false,
                 });
               }
               return outcome;

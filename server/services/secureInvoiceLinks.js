@@ -17,6 +17,7 @@
  * module is the reusable foundation for any future delivery channel.
  */
 import crypto from "crypto";
+import { loadConfiguredRuntimeView } from "./platformRuntimeViews.js";
 
 export const SECURE_LINK_DEFAULT_EXPIRY_DAYS = 30;
 
@@ -75,16 +76,15 @@ export async function createSecureInvoiceLink({
     return { ok: false, status: 400, message: "db, companyId and saleId are required" };
   }
 
-  // The link may only ever be created by/for a sale the caller's tenant owns.
-  const saleCheck = await db(
-    `SELECT s.id, s.company_id, s.store_id, s.customer_id
-     FROM sale_ledger s
-     WHERE s.id = $1 AND s.company_id = $2
-     ${storeId ? "AND s.store_id = $3" : ""}
-     LIMIT 1`,
-    storeId ? [saleId, companyId, storeId] : [saleId, companyId]
-  );
-  if (!saleCheck.rows.length) {
+  // Ownership and store scope are resolved from metadata, never from a business table name.
+  const saleView = await loadConfiguredRuntimeView({
+    db,
+    companyId,
+    storeId,
+    viewKey: "receipt_document",
+    recordId: saleId,
+  });
+  if (!saleView?.record) {
     return { ok: false, status: 404, message: "Sale not found" };
   }
 
@@ -96,7 +96,7 @@ export async function createSecureInvoiceLink({
        (token_hash, company_id, store_id, sale_id, created_by, expires_at)
      VALUES ($1,$2,$3,$4,$5,$6)
      RETURNING id, expires_at`,
-    [tokenHash, companyId, saleCheck.rows[0].store_id ?? storeId, saleId, createdBy, expiry]
+    [tokenHash, companyId, saleView.record.storeId ?? storeId, saleId, createdBy, expiry]
   );
 
   const row = result.rows[0];
@@ -106,7 +106,7 @@ export async function createSecureInvoiceLink({
     token: plaintext,
     expiresAt: row.expires_at,
     // Convenience audit context for the caller; never includes the plaintext.
-    customerId: customerId ?? saleCheck.rows[0].customer_id ?? null,
+    customerId: customerId ?? saleView.record.customerId ?? null,
   };
 }
 
@@ -139,47 +139,50 @@ export async function validateSecureInvoiceToken({ db, token, includeSale = true
     if (link.revoked_at) return generic;
     if (link.expires_at && new Date(link.expires_at).getTime() <= Date.now()) return generic;
 
-    // Company/store ownership comes from the token relationship itself.
-    const saleResult = await db(
-      `SELECT s.id, s.company_id, s.store_id, s.receipt_number, s.subtotal,
-              s.tax, s.discount, s.total, s.status, s.created_at, s.completed_at,
-              c.timezone AS company_timezone, c.currency AS company_currency
-       FROM sale_ledger s
-       INNER JOIN companies c ON c.id = s.company_id
-       WHERE s.id = $1 AND s.company_id = $2
-       ${link.store_id ? "AND s.store_id = $3" : ""}
-       LIMIT 1`,
-      link.store_id ? [link.sale_id, link.company_id, link.store_id] : [link.sale_id, link.company_id]
-    );
-    const sale = saleResult.rows[0];
-    if (!sale) return generic;
+    // Company/store ownership comes from the token relationship itself;
+    // the record shape is resolved entirely from metadata runtime-view configuration.
+    const view = await loadConfiguredRuntimeView({
+      db,
+      companyId: link.company_id,
+      storeId: link.store_id || null,
+      viewKey: "receipt_document",
+      recordId: link.sale_id,
+    });
+    if (!view?.record) return generic;
+
+    const company = view.lookups?.company || {};
+    const sale = {
+      id: view.record.id,
+      company_id: link.company_id,
+      store_id: view.record.storeId || link.store_id || null,
+      receipt_number: view.record.receiptNumber || view.record.id,
+      subtotal: Number(view.record.subtotal || 0),
+      tax: Number(view.record.tax || 0),
+      discount: Number(view.record.discount || 0),
+      total: Number(view.record.total || 0),
+      status: view.record.status || null,
+      created_at: view.record.createdAt || null,
+      completed_at: view.record.completedAt || null,
+      company_timezone: company.timezone || "Europe/London",
+      company_currency: company.currency || "GBP",
+    };
 
     if (includeSale !== false) {
-      const itemResult = await db(
-        `SELECT product_name, quantity, unit_price, discount, discount_type, discount_value,
-           original_unit_price, tax, total
-         FROM sale_items WHERE sale_id = $1 ORDER BY id ASC`,
-        [sale.id]
-      );
-      sale.items = itemResult.rows.map((item) => ({
-        name: item.product_name,
-        quantity: Number(item.quantity),
-        unitPrice: Number(item.unit_price),
-        discount: Number(item.discount),
-        discountType: item.discount_type || null,
-        discountValue: Number(item.discount_value) || 0,
-        originalUnitPrice: Number(item.original_unit_price) || null,
-        tax: Number(item.tax),
-        total: Number(item.total),
+      sale.items = (view.collections?.items || []).map((item) => ({
+        name: item.name || "Item",
+        quantity: Number(item.quantity || 0),
+        unitPrice: Number(item.unitPrice || 0),
+        discount: Number(item.discount || 0),
+        discountType: item.discountType || null,
+        discountValue: Number(item.discountValue || 0),
+        originalUnitPrice: item.originalUnitPrice == null ? null : Number(item.originalUnitPrice),
+        tax: Number(item.tax || 0),
+        total: Number(item.total || 0),
       }));
-      const payResult = await db(
-        `SELECT payment_method, amount, status FROM payments WHERE sale_id = $1 ORDER BY created_at ASC`,
-        [sale.id]
-      );
-      sale.payments = payResult.rows.map((pay) => ({
-        method: pay.payment_method,
-        amount: Number(pay.amount),
-        status: pay.status,
+      sale.payments = (view.collections?.payments || []).map((pay) => ({
+        method: pay.method || "Unknown",
+        amount: Number(pay.amount || 0),
+        status: pay.status || null,
       }));
     }
 

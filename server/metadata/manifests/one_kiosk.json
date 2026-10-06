@@ -1,0 +1,1990 @@
+{
+  "packageKey": "one_kiosk",
+  "workflows": [
+    {
+      "objectKey": "product",
+      "name": "OneKiosk - Case 1 Restaurant",
+      "triggerKey": "kiosk_experience",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "scope": "one_kiosk",
+        "flowType": "KIOSK_EXPERIENCE",
+        "templateKey": "one_kiosk_case_1_restaurant",
+        "defaultForNewDevices": true,
+        "ui": {
+          "schemaVersion": 1,
+          "profile": "RESTAURANT",
+          "startScreen": "catalogue",
+          "theme": {
+            "density": "touch",
+            "productCard": "image",
+            "accentRole": "primary"
+          },
+          "languages": [
+            {
+              "key": "en",
+              "label": "English"
+            },
+            {
+              "key": "es",
+              "label": "Español"
+            },
+            {
+              "key": "fr",
+              "label": "Français"
+            }
+          ],
+          "translations": {
+            "es": {
+              "screen.catalogue.title": "¿Qué te gustaría?",
+              "screen.upsell.title": "Hazlo a tu gusto",
+              "screen.fulfilment.title": "¿Cómo lo quieres?",
+              "fulfilment.EAT_IN": "Comer aquí",
+              "fulfilment.TAKEAWAY": "Para llevar",
+              "fulfilment.COLLECT": "Recoger",
+              "screen.loyalty.title": "Recompensas",
+              "screen.payment.title": "Pago",
+              "screen.confirmation.title": "Gracias",
+              "confirmation.collectionLabel": "Tu número de recogida",
+              "confirmation.doneLabel": "Nuevo pedido"
+            },
+            "fr": {
+              "screen.catalogue.title": "Que souhaitez-vous ?",
+              "screen.upsell.title": "Personnalisez votre commande",
+              "screen.fulfilment.title": "Comment souhaitez-vous votre commande ?",
+              "fulfilment.EAT_IN": "Sur place",
+              "fulfilment.TAKEAWAY": "À emporter",
+              "fulfilment.COLLECT": "Retrait",
+              "screen.loyalty.title": "Récompenses",
+              "screen.payment.title": "Paiement",
+              "screen.confirmation.title": "Merci",
+              "confirmation.collectionLabel": "Votre numéro de retrait",
+              "confirmation.doneLabel": "Nouvelle commande"
+            }
+          },
+          "orderDisplay": {
+            "title": "Order collection",
+            "activeLabel": "Preparing",
+            "readyLabel": "Ready to collect",
+            "activeStatuses": [
+              "PREPARING",
+              "ACCEPTED"
+            ],
+            "readyStatuses": [
+              "READY",
+              "READY_FOR_PICKUP"
+            ],
+            "activeEmpty": "No orders preparing",
+            "readyEmpty": "No orders ready"
+          },
+          "screens": [
+            {
+              "key": "catalogue",
+              "type": "CATALOGUE",
+              "title": "What would you like?",
+              "search": true,
+              "categories": true,
+              "productAction": "OPEN_DETAIL",
+              "next": "product"
+            },
+            {
+              "key": "product",
+              "type": "PRODUCT_DETAIL",
+              "imageGallery": true,
+              "description": true,
+              "modifiers": true,
+              "nutrition": true,
+              "allergens": true,
+              "next": "upsell"
+            },
+            {
+              "key": "upsell",
+              "type": "RECOMMENDATIONS",
+              "source": "CROSS_SELL",
+              "title": "Make it yours",
+              "optional": true,
+              "next": "fulfilment"
+            },
+            {
+              "key": "fulfilment",
+              "type": "FULFILMENT",
+              "title": "How would you like it?",
+              "defaultOption": "EAT_IN",
+              "next": "service_details",
+              "options": [
+                {
+                  "key": "EAT_IN",
+                  "label": "Eat in",
+                  "canonicalType": "SELF_PICKUP"
+                },
+                {
+                  "key": "TAKEAWAY",
+                  "label": "Takeaway",
+                  "canonicalType": "SELF_PICKUP"
+                },
+                {
+                  "key": "COLLECT",
+                  "label": "Collect",
+                  "canonicalType": "SELF_PICKUP"
+                }
+              ]
+            },
+            {
+              "key": "service_details",
+              "type": "FORM",
+              "title": "Order details",
+              "optional": true,
+              "next": "basket",
+              "showWhen": {
+                "path": "fulfilmentType",
+                "operator": "equals",
+                "value": "EAT_IN"
+              },
+              "fields": [
+                {
+                  "key": "tableNumber",
+                  "label": "Table number",
+                  "type": "text",
+                  "required": false,
+                  "placeholder": "Optional table number"
+                }
+              ]
+            },
+            {
+              "key": "basket",
+              "type": "BASKET",
+              "editable": true,
+              "promotions": true,
+              "next": "loyalty"
+            },
+            {
+              "key": "loyalty",
+              "type": "LOYALTY",
+              "title": "Rewards",
+              "subtitle": "Scan or enter your details to collect rewards, or continue as a guest.",
+              "optional": true,
+              "next": "payment"
+            },
+            {
+              "key": "payment",
+              "type": "PAYMENT",
+              "methods": [
+                "CARD"
+              ],
+              "actionLabel": "Pay & collect",
+              "next": "confirmation"
+            },
+            {
+              "key": "confirmation",
+              "type": "CONFIRMATION",
+              "title": "Thank you",
+              "subtitle": "Your order has been sent for preparation.",
+              "collectionNumber": true,
+              "collectionLabel": "Your collection number",
+              "helpText": "Keep this number and go to the collection counter. Your number will be shown when your order is ready.",
+              "doneLabel": "Start a new order",
+              "receipt": [
+                "PRINT",
+                "QR"
+              ],
+              "resetAfterSeconds": 30
+            }
+          ],
+          "features": {
+            "variants": false,
+            "modifiers": true,
+            "promotions": true,
+            "upsell": true,
+            "loyalty": true,
+            "stockPromise": false,
+            "compare": false,
+            "specifications": false,
+            "warranty": false,
+            "accessibility": true,
+            "language": true,
+            "audio": true,
+            "ageVerification": true,
+            "assistance": true,
+            "idleReset": true
+          }
+        },
+        "actions": [
+          {
+            "id": "kiosk_screen_catalogue",
+            "key": "SCREEN",
+            "label": "What would you like?",
+            "apiName": "kiosk_screen_catalogue",
+            "description": "Kiosk CATALOGUE step",
+            "screen": {
+              "label": "What would you like?",
+              "apiName": "catalogue",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "catalogue",
+                "type": "CATALOGUE",
+                "title": "What would you like?",
+                "search": true,
+                "categories": true,
+                "productAction": "OPEN_DETAIL",
+                "next": "product"
+              }
+            },
+            "allowBack": false,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_product",
+            "key": "SCREEN",
+            "label": "product",
+            "apiName": "kiosk_screen_product",
+            "description": "Kiosk PRODUCT_DETAIL step",
+            "screen": {
+              "label": "product",
+              "apiName": "product",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "product",
+                "type": "PRODUCT_DETAIL",
+                "imageGallery": true,
+                "description": true,
+                "modifiers": true,
+                "nutrition": true,
+                "allergens": true,
+                "next": "upsell"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_upsell",
+            "key": "SCREEN",
+            "label": "Make it yours",
+            "apiName": "kiosk_screen_upsell",
+            "description": "Kiosk RECOMMENDATIONS step",
+            "screen": {
+              "label": "Make it yours",
+              "apiName": "upsell",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "upsell",
+                "type": "RECOMMENDATIONS",
+                "source": "CROSS_SELL",
+                "title": "Make it yours",
+                "optional": true,
+                "next": "fulfilment"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_fulfilment",
+            "key": "SCREEN",
+            "label": "How would you like it?",
+            "apiName": "kiosk_screen_fulfilment",
+            "description": "Kiosk FULFILMENT step",
+            "screen": {
+              "label": "How would you like it?",
+              "apiName": "fulfilment",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "fulfilment",
+                "type": "FULFILMENT",
+                "title": "How would you like it?",
+                "defaultOption": "EAT_IN",
+                "next": "service_details",
+                "options": [
+                  {
+                    "key": "EAT_IN",
+                    "label": "Eat in",
+                    "canonicalType": "SELF_PICKUP"
+                  },
+                  {
+                    "key": "TAKEAWAY",
+                    "label": "Takeaway",
+                    "canonicalType": "SELF_PICKUP"
+                  },
+                  {
+                    "key": "COLLECT",
+                    "label": "Collect",
+                    "canonicalType": "SELF_PICKUP"
+                  }
+                ]
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_service_details",
+            "key": "SCREEN",
+            "label": "Order details",
+            "apiName": "kiosk_screen_service_details",
+            "description": "Kiosk FORM step",
+            "screen": {
+              "label": "Order details",
+              "apiName": "service_details",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "service_details",
+                "type": "FORM",
+                "title": "Order details",
+                "optional": true,
+                "next": "basket",
+                "showWhen": {
+                  "path": "fulfilmentType",
+                  "operator": "equals",
+                  "value": "EAT_IN"
+                },
+                "fields": [
+                  {
+                    "key": "tableNumber",
+                    "label": "Table number",
+                    "type": "text",
+                    "required": false,
+                    "placeholder": "Optional table number"
+                  }
+                ]
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_basket",
+            "key": "SCREEN",
+            "label": "basket",
+            "apiName": "kiosk_screen_basket",
+            "description": "Kiosk BASKET step",
+            "screen": {
+              "label": "basket",
+              "apiName": "basket",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "basket",
+                "type": "BASKET",
+                "editable": true,
+                "promotions": true,
+                "next": "loyalty"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_loyalty",
+            "key": "SCREEN",
+            "label": "Rewards",
+            "apiName": "kiosk_screen_loyalty",
+            "description": "Kiosk LOYALTY step",
+            "screen": {
+              "label": "Rewards",
+              "apiName": "loyalty",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "loyalty",
+                "type": "LOYALTY",
+                "title": "Rewards",
+                "subtitle": "Scan or enter your details to collect rewards, or continue as a guest.",
+                "optional": true,
+                "next": "payment"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_payment",
+            "key": "SCREEN",
+            "label": "payment",
+            "apiName": "kiosk_screen_payment",
+            "description": "Kiosk PAYMENT step",
+            "screen": {
+              "label": "payment",
+              "apiName": "payment",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "payment",
+                "type": "PAYMENT",
+                "methods": [
+                  "CARD"
+                ],
+                "actionLabel": "Pay & collect",
+                "next": "confirmation"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_confirmation",
+            "key": "SCREEN",
+            "label": "Thank you",
+            "apiName": "kiosk_screen_confirmation",
+            "description": "Kiosk CONFIRMATION step",
+            "screen": {
+              "label": "Thank you",
+              "apiName": "confirmation",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "confirmation",
+                "type": "CONFIRMATION",
+                "title": "Thank you",
+                "subtitle": "Your order has been sent for preparation.",
+                "collectionNumber": true,
+                "collectionLabel": "Your collection number",
+                "helpText": "Keep this number and go to the collection counter. Your number will be shown when your order is ready.",
+                "doneLabel": "Start a new order",
+                "receipt": [
+                  "PRINT",
+                  "QR"
+                ],
+                "resetAfterSeconds": 30
+              }
+            },
+            "allowBack": true,
+            "allowNext": false,
+            "allowFinish": true
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "kiosk_screen_catalogue",
+            "key": "action",
+            "label": "What would you like?",
+            "apiName": "kiosk_screen_catalogue",
+            "description": "Kiosk CATALOGUE step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_catalogue",
+                "key": "SCREEN",
+                "label": "What would you like?",
+                "apiName": "kiosk_screen_catalogue",
+                "description": "Kiosk CATALOGUE step",
+                "screen": {
+                  "label": "What would you like?",
+                  "apiName": "catalogue",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "catalogue",
+                    "type": "CATALOGUE",
+                    "title": "What would you like?",
+                    "search": true,
+                    "categories": true,
+                    "productAction": "OPEN_DETAIL",
+                    "next": "product"
+                  }
+                },
+                "allowBack": false,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_product",
+            "key": "action",
+            "label": "product",
+            "apiName": "kiosk_screen_product",
+            "description": "Kiosk PRODUCT_DETAIL step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_product",
+                "key": "SCREEN",
+                "label": "product",
+                "apiName": "kiosk_screen_product",
+                "description": "Kiosk PRODUCT_DETAIL step",
+                "screen": {
+                  "label": "product",
+                  "apiName": "product",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "product",
+                    "type": "PRODUCT_DETAIL",
+                    "imageGallery": true,
+                    "description": true,
+                    "modifiers": true,
+                    "nutrition": true,
+                    "allergens": true,
+                    "next": "upsell"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_upsell",
+            "key": "action",
+            "label": "Make it yours",
+            "apiName": "kiosk_screen_upsell",
+            "description": "Kiosk RECOMMENDATIONS step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_upsell",
+                "key": "SCREEN",
+                "label": "Make it yours",
+                "apiName": "kiosk_screen_upsell",
+                "description": "Kiosk RECOMMENDATIONS step",
+                "screen": {
+                  "label": "Make it yours",
+                  "apiName": "upsell",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "upsell",
+                    "type": "RECOMMENDATIONS",
+                    "source": "CROSS_SELL",
+                    "title": "Make it yours",
+                    "optional": true,
+                    "next": "fulfilment"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_fulfilment",
+            "key": "action",
+            "label": "How would you like it?",
+            "apiName": "kiosk_screen_fulfilment",
+            "description": "Kiosk FULFILMENT step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_fulfilment",
+                "key": "SCREEN",
+                "label": "How would you like it?",
+                "apiName": "kiosk_screen_fulfilment",
+                "description": "Kiosk FULFILMENT step",
+                "screen": {
+                  "label": "How would you like it?",
+                  "apiName": "fulfilment",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "fulfilment",
+                    "type": "FULFILMENT",
+                    "title": "How would you like it?",
+                    "defaultOption": "EAT_IN",
+                    "next": "service_details",
+                    "options": [
+                      {
+                        "key": "EAT_IN",
+                        "label": "Eat in",
+                        "canonicalType": "SELF_PICKUP"
+                      },
+                      {
+                        "key": "TAKEAWAY",
+                        "label": "Takeaway",
+                        "canonicalType": "SELF_PICKUP"
+                      },
+                      {
+                        "key": "COLLECT",
+                        "label": "Collect",
+                        "canonicalType": "SELF_PICKUP"
+                      }
+                    ]
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_service_details",
+            "key": "action",
+            "label": "Order details",
+            "apiName": "kiosk_screen_service_details",
+            "description": "Kiosk FORM step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_service_details",
+                "key": "SCREEN",
+                "label": "Order details",
+                "apiName": "kiosk_screen_service_details",
+                "description": "Kiosk FORM step",
+                "screen": {
+                  "label": "Order details",
+                  "apiName": "service_details",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "service_details",
+                    "type": "FORM",
+                    "title": "Order details",
+                    "optional": true,
+                    "next": "basket",
+                    "showWhen": {
+                      "path": "fulfilmentType",
+                      "operator": "equals",
+                      "value": "EAT_IN"
+                    },
+                    "fields": [
+                      {
+                        "key": "tableNumber",
+                        "label": "Table number",
+                        "type": "text",
+                        "required": false,
+                        "placeholder": "Optional table number"
+                      }
+                    ]
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_basket",
+            "key": "action",
+            "label": "basket",
+            "apiName": "kiosk_screen_basket",
+            "description": "Kiosk BASKET step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_basket",
+                "key": "SCREEN",
+                "label": "basket",
+                "apiName": "kiosk_screen_basket",
+                "description": "Kiosk BASKET step",
+                "screen": {
+                  "label": "basket",
+                  "apiName": "basket",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "basket",
+                    "type": "BASKET",
+                    "editable": true,
+                    "promotions": true,
+                    "next": "loyalty"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_loyalty",
+            "key": "action",
+            "label": "Rewards",
+            "apiName": "kiosk_screen_loyalty",
+            "description": "Kiosk LOYALTY step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_loyalty",
+                "key": "SCREEN",
+                "label": "Rewards",
+                "apiName": "kiosk_screen_loyalty",
+                "description": "Kiosk LOYALTY step",
+                "screen": {
+                  "label": "Rewards",
+                  "apiName": "loyalty",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "loyalty",
+                    "type": "LOYALTY",
+                    "title": "Rewards",
+                    "subtitle": "Scan or enter your details to collect rewards, or continue as a guest.",
+                    "optional": true,
+                    "next": "payment"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_payment",
+            "key": "action",
+            "label": "payment",
+            "apiName": "kiosk_screen_payment",
+            "description": "Kiosk PAYMENT step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_payment",
+                "key": "SCREEN",
+                "label": "payment",
+                "apiName": "kiosk_screen_payment",
+                "description": "Kiosk PAYMENT step",
+                "screen": {
+                  "label": "payment",
+                  "apiName": "payment",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "payment",
+                    "type": "PAYMENT",
+                    "methods": [
+                      "CARD"
+                    ],
+                    "actionLabel": "Pay & collect",
+                    "next": "confirmation"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_confirmation",
+            "key": "action",
+            "label": "Thank you",
+            "apiName": "kiosk_screen_confirmation",
+            "description": "Kiosk CONFIRMATION step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_confirmation",
+                "key": "SCREEN",
+                "label": "Thank you",
+                "apiName": "kiosk_screen_confirmation",
+                "description": "Kiosk CONFIRMATION step",
+                "screen": {
+                  "label": "Thank you",
+                  "apiName": "confirmation",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "confirmation",
+                    "type": "CONFIRMATION",
+                    "title": "Thank you",
+                    "subtitle": "Your order has been sent for preparation.",
+                    "collectionNumber": true,
+                    "collectionLabel": "Your collection number",
+                    "helpText": "Keep this number and go to the collection counter. Your number will be shown when your order is ready.",
+                    "doneLabel": "Start a new order",
+                    "receipt": [
+                      "PRINT",
+                      "QR"
+                    ],
+                    "resetAfterSeconds": 30
+                  }
+                },
+                "allowBack": true,
+                "allowNext": false,
+                "allowFinish": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
+        ]
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE"
+    },
+    {
+      "objectKey": "product",
+      "name": "OneKiosk - Case 2 Retail / Electronics",
+      "triggerKey": "kiosk_experience",
+      "conditions": [],
+      "action": {
+        "type": "workflow",
+        "scope": "one_kiosk",
+        "flowType": "KIOSK_EXPERIENCE",
+        "templateKey": "one_kiosk_case_2_retail",
+        "defaultForNewDevices": false,
+        "ui": {
+          "schemaVersion": 1,
+          "profile": "RETAIL",
+          "startScreen": "catalogue",
+          "theme": {
+            "density": "touch",
+            "productCard": "image_specs",
+            "accentRole": "primary"
+          },
+          "languages": [
+            {
+              "key": "en",
+              "label": "English"
+            },
+            {
+              "key": "es",
+              "label": "Español"
+            },
+            {
+              "key": "fr",
+              "label": "Français"
+            }
+          ],
+          "translations": {
+            "es": {
+              "screen.catalogue.title": "Encuentra tu producto",
+              "screen.extras.title": "Accesorios y protección",
+              "screen.fulfilment.title": "Elige la entrega",
+              "fulfilment.COLLECT": "Recoger aquí",
+              "fulfilment.OTHER_STORE": "Recoger en otra tienda",
+              "fulfilment.DELIVERY": "Entrega a domicilio",
+              "screen.loyalty.title": "Tus datos",
+              "screen.payment.title": "Pago",
+              "screen.confirmation.title": "Pedido confirmado",
+              "confirmation.collectionLabel": "Número de pedido / recogida",
+              "confirmation.doneLabel": "Hacer otro pedido"
+            },
+            "fr": {
+              "screen.catalogue.title": "Trouvez votre produit",
+              "screen.extras.title": "Accessoires et protection",
+              "screen.fulfilment.title": "Choisissez la livraison",
+              "fulfilment.COLLECT": "Retrait ici",
+              "fulfilment.OTHER_STORE": "Retrait dans un autre magasin",
+              "fulfilment.DELIVERY": "Livraison à domicile",
+              "screen.loyalty.title": "Vos coordonnées",
+              "screen.payment.title": "Paiement",
+              "screen.confirmation.title": "Commande confirmée",
+              "confirmation.collectionLabel": "Numéro de commande / retrait",
+              "confirmation.doneLabel": "Nouvelle commande"
+            }
+          },
+          "orderDisplay": {
+            "title": "Collection status",
+            "activeLabel": "Processing",
+            "readyLabel": "Ready for collection",
+            "activeStatuses": [
+              "PREPARING",
+              "ACCEPTED"
+            ],
+            "readyStatuses": [
+              "READY",
+              "READY_FOR_PICKUP"
+            ],
+            "activeEmpty": "No orders being processed",
+            "readyEmpty": "No orders ready for collection"
+          },
+          "screens": [
+            {
+              "key": "catalogue",
+              "type": "CATALOGUE",
+              "title": "Find your product",
+              "search": true,
+              "categories": true,
+              "productAction": "OPEN_DETAIL",
+              "next": "product"
+            },
+            {
+              "key": "product",
+              "type": "PRODUCT_DETAIL",
+              "imageGallery": true,
+              "description": true,
+              "variants": true,
+              "specifications": true,
+              "stockPromise": true,
+              "compare": true,
+              "warranty": true,
+              "next": "extras"
+            },
+            {
+              "key": "extras",
+              "type": "RECOMMENDATIONS",
+              "source": "ACCESSORY",
+              "title": "Accessories & protection",
+              "warranty": true,
+              "optional": true,
+              "next": "fulfilment"
+            },
+            {
+              "key": "fulfilment",
+              "type": "FULFILMENT",
+              "title": "Choose fulfilment",
+              "defaultOption": "COLLECT",
+              "next": "service_details",
+              "options": [
+                {
+                  "key": "COLLECT",
+                  "label": "Collect here",
+                  "canonicalType": "SELF_PICKUP",
+                  "requires": []
+                },
+                {
+                  "key": "OTHER_STORE",
+                  "label": "Collect another store",
+                  "canonicalType": "SELF_PICKUP",
+                  "requires": [
+                    "STORE"
+                  ]
+                },
+                {
+                  "key": "DELIVERY",
+                  "label": "Home delivery",
+                  "canonicalType": "DELIVERY",
+                  "requires": [
+                    "ADDRESS",
+                    "CONTACT"
+                  ]
+                }
+              ],
+              "stockPromise": true
+            },
+            {
+              "key": "service_details",
+              "type": "FORM",
+              "title": "Extra order details",
+              "optional": true,
+              "next": "basket",
+              "fields": [
+                {
+                  "key": "preferredSlot",
+                  "label": "Preferred collection / delivery slot",
+                  "type": "select",
+                  "required": false,
+                  "options": [
+                    "As soon as possible",
+                    "Morning",
+                    "Afternoon",
+                    "Evening"
+                  ]
+                },
+                {
+                  "key": "installationRequired",
+                  "label": "Installation service",
+                  "type": "select",
+                  "required": false,
+                  "options": [
+                    "No installation",
+                    "Installation required"
+                  ]
+                },
+                {
+                  "key": "notes",
+                  "label": "Order notes",
+                  "type": "textarea",
+                  "required": false,
+                  "placeholder": "Optional instructions"
+                }
+              ]
+            },
+            {
+              "key": "basket",
+              "type": "BASKET",
+              "editable": true,
+              "promotions": true,
+              "next": "loyalty"
+            },
+            {
+              "key": "loyalty",
+              "type": "LOYALTY",
+              "title": "Your details",
+              "subtitle": "Enter your phone number or email for rewards and order updates, or continue as a guest.",
+              "optional": true,
+              "next": "payment"
+            },
+            {
+              "key": "payment",
+              "type": "PAYMENT",
+              "methods": [
+                "CARD"
+              ],
+              "actionLabel": "Pay & order",
+              "next": "confirmation"
+            },
+            {
+              "key": "confirmation",
+              "type": "CONFIRMATION",
+              "title": "Order confirmed",
+              "subtitle": "Your order has been placed.",
+              "collectionNumber": true,
+              "collectionLabel": "Order / collection number",
+              "helpText": "Keep this reference. We will show when your order is ready for collection.",
+              "doneLabel": "Start another order",
+              "receipt": [
+                "PRINT",
+                "QR",
+                "EMAIL"
+              ],
+              "collectionVerification": true,
+              "resetAfterSeconds": 30
+            }
+          ],
+          "features": {
+            "variants": true,
+            "modifiers": false,
+            "promotions": true,
+            "upsell": true,
+            "loyalty": true,
+            "stockPromise": true,
+            "compare": true,
+            "specifications": true,
+            "warranty": true,
+            "accessibility": true,
+            "language": true,
+            "audio": true,
+            "ageVerification": true,
+            "assistance": true,
+            "idleReset": true
+          }
+        },
+        "actions": [
+          {
+            "id": "kiosk_screen_catalogue",
+            "key": "SCREEN",
+            "label": "Find your product",
+            "apiName": "kiosk_screen_catalogue",
+            "description": "Kiosk CATALOGUE step",
+            "screen": {
+              "label": "Find your product",
+              "apiName": "catalogue",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "catalogue",
+                "type": "CATALOGUE",
+                "title": "Find your product",
+                "search": true,
+                "categories": true,
+                "productAction": "OPEN_DETAIL",
+                "next": "product"
+              }
+            },
+            "allowBack": false,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_product",
+            "key": "SCREEN",
+            "label": "product",
+            "apiName": "kiosk_screen_product",
+            "description": "Kiosk PRODUCT_DETAIL step",
+            "screen": {
+              "label": "product",
+              "apiName": "product",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "product",
+                "type": "PRODUCT_DETAIL",
+                "imageGallery": true,
+                "description": true,
+                "variants": true,
+                "specifications": true,
+                "stockPromise": true,
+                "compare": true,
+                "warranty": true,
+                "next": "extras"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_extras",
+            "key": "SCREEN",
+            "label": "Accessories & protection",
+            "apiName": "kiosk_screen_extras",
+            "description": "Kiosk RECOMMENDATIONS step",
+            "screen": {
+              "label": "Accessories & protection",
+              "apiName": "extras",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "extras",
+                "type": "RECOMMENDATIONS",
+                "source": "ACCESSORY",
+                "title": "Accessories & protection",
+                "warranty": true,
+                "optional": true,
+                "next": "fulfilment"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_fulfilment",
+            "key": "SCREEN",
+            "label": "Choose fulfilment",
+            "apiName": "kiosk_screen_fulfilment",
+            "description": "Kiosk FULFILMENT step",
+            "screen": {
+              "label": "Choose fulfilment",
+              "apiName": "fulfilment",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "fulfilment",
+                "type": "FULFILMENT",
+                "title": "Choose fulfilment",
+                "defaultOption": "COLLECT",
+                "next": "service_details",
+                "options": [
+                  {
+                    "key": "COLLECT",
+                    "label": "Collect here",
+                    "canonicalType": "SELF_PICKUP",
+                    "requires": []
+                  },
+                  {
+                    "key": "OTHER_STORE",
+                    "label": "Collect another store",
+                    "canonicalType": "SELF_PICKUP",
+                    "requires": [
+                      "STORE"
+                    ]
+                  },
+                  {
+                    "key": "DELIVERY",
+                    "label": "Home delivery",
+                    "canonicalType": "DELIVERY",
+                    "requires": [
+                      "ADDRESS",
+                      "CONTACT"
+                    ]
+                  }
+                ],
+                "stockPromise": true
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_service_details",
+            "key": "SCREEN",
+            "label": "Extra order details",
+            "apiName": "kiosk_screen_service_details",
+            "description": "Kiosk FORM step",
+            "screen": {
+              "label": "Extra order details",
+              "apiName": "service_details",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "service_details",
+                "type": "FORM",
+                "title": "Extra order details",
+                "optional": true,
+                "next": "basket",
+                "fields": [
+                  {
+                    "key": "preferredSlot",
+                    "label": "Preferred collection / delivery slot",
+                    "type": "select",
+                    "required": false,
+                    "options": [
+                      "As soon as possible",
+                      "Morning",
+                      "Afternoon",
+                      "Evening"
+                    ]
+                  },
+                  {
+                    "key": "installationRequired",
+                    "label": "Installation service",
+                    "type": "select",
+                    "required": false,
+                    "options": [
+                      "No installation",
+                      "Installation required"
+                    ]
+                  },
+                  {
+                    "key": "notes",
+                    "label": "Order notes",
+                    "type": "textarea",
+                    "required": false,
+                    "placeholder": "Optional instructions"
+                  }
+                ]
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_basket",
+            "key": "SCREEN",
+            "label": "basket",
+            "apiName": "kiosk_screen_basket",
+            "description": "Kiosk BASKET step",
+            "screen": {
+              "label": "basket",
+              "apiName": "basket",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "basket",
+                "type": "BASKET",
+                "editable": true,
+                "promotions": true,
+                "next": "loyalty"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_loyalty",
+            "key": "SCREEN",
+            "label": "Your details",
+            "apiName": "kiosk_screen_loyalty",
+            "description": "Kiosk LOYALTY step",
+            "screen": {
+              "label": "Your details",
+              "apiName": "loyalty",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "loyalty",
+                "type": "LOYALTY",
+                "title": "Your details",
+                "subtitle": "Enter your phone number or email for rewards and order updates, or continue as a guest.",
+                "optional": true,
+                "next": "payment"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_payment",
+            "key": "SCREEN",
+            "label": "payment",
+            "apiName": "kiosk_screen_payment",
+            "description": "Kiosk PAYMENT step",
+            "screen": {
+              "label": "payment",
+              "apiName": "payment",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "payment",
+                "type": "PAYMENT",
+                "methods": [
+                  "CARD"
+                ],
+                "actionLabel": "Pay & order",
+                "next": "confirmation"
+              }
+            },
+            "allowBack": true,
+            "allowNext": true,
+            "allowFinish": false
+          },
+          {
+            "id": "kiosk_screen_confirmation",
+            "key": "SCREEN",
+            "label": "Order confirmed",
+            "apiName": "kiosk_screen_confirmation",
+            "description": "Kiosk CONFIRMATION step",
+            "screen": {
+              "label": "Order confirmed",
+              "apiName": "confirmation",
+              "showHeader": true,
+              "style": "default",
+              "components": [],
+              "kioskDefinition": {
+                "key": "confirmation",
+                "type": "CONFIRMATION",
+                "title": "Order confirmed",
+                "subtitle": "Your order has been placed.",
+                "collectionNumber": true,
+                "collectionLabel": "Order / collection number",
+                "helpText": "Keep this reference. We will show when your order is ready for collection.",
+                "doneLabel": "Start another order",
+                "receipt": [
+                  "PRINT",
+                  "QR",
+                  "EMAIL"
+                ],
+                "collectionVerification": true,
+                "resetAfterSeconds": 30
+              }
+            },
+            "allowBack": true,
+            "allowNext": false,
+            "allowFinish": true
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "kiosk_screen_catalogue",
+            "key": "action",
+            "label": "Find your product",
+            "apiName": "kiosk_screen_catalogue",
+            "description": "Kiosk CATALOGUE step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_catalogue",
+                "key": "SCREEN",
+                "label": "Find your product",
+                "apiName": "kiosk_screen_catalogue",
+                "description": "Kiosk CATALOGUE step",
+                "screen": {
+                  "label": "Find your product",
+                  "apiName": "catalogue",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "catalogue",
+                    "type": "CATALOGUE",
+                    "title": "Find your product",
+                    "search": true,
+                    "categories": true,
+                    "productAction": "OPEN_DETAIL",
+                    "next": "product"
+                  }
+                },
+                "allowBack": false,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_product",
+            "key": "action",
+            "label": "product",
+            "apiName": "kiosk_screen_product",
+            "description": "Kiosk PRODUCT_DETAIL step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_product",
+                "key": "SCREEN",
+                "label": "product",
+                "apiName": "kiosk_screen_product",
+                "description": "Kiosk PRODUCT_DETAIL step",
+                "screen": {
+                  "label": "product",
+                  "apiName": "product",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "product",
+                    "type": "PRODUCT_DETAIL",
+                    "imageGallery": true,
+                    "description": true,
+                    "variants": true,
+                    "specifications": true,
+                    "stockPromise": true,
+                    "compare": true,
+                    "warranty": true,
+                    "next": "extras"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_extras",
+            "key": "action",
+            "label": "Accessories & protection",
+            "apiName": "kiosk_screen_extras",
+            "description": "Kiosk RECOMMENDATIONS step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_extras",
+                "key": "SCREEN",
+                "label": "Accessories & protection",
+                "apiName": "kiosk_screen_extras",
+                "description": "Kiosk RECOMMENDATIONS step",
+                "screen": {
+                  "label": "Accessories & protection",
+                  "apiName": "extras",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "extras",
+                    "type": "RECOMMENDATIONS",
+                    "source": "ACCESSORY",
+                    "title": "Accessories & protection",
+                    "warranty": true,
+                    "optional": true,
+                    "next": "fulfilment"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_fulfilment",
+            "key": "action",
+            "label": "Choose fulfilment",
+            "apiName": "kiosk_screen_fulfilment",
+            "description": "Kiosk FULFILMENT step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_fulfilment",
+                "key": "SCREEN",
+                "label": "Choose fulfilment",
+                "apiName": "kiosk_screen_fulfilment",
+                "description": "Kiosk FULFILMENT step",
+                "screen": {
+                  "label": "Choose fulfilment",
+                  "apiName": "fulfilment",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "fulfilment",
+                    "type": "FULFILMENT",
+                    "title": "Choose fulfilment",
+                    "defaultOption": "COLLECT",
+                    "next": "service_details",
+                    "options": [
+                      {
+                        "key": "COLLECT",
+                        "label": "Collect here",
+                        "canonicalType": "SELF_PICKUP",
+                        "requires": []
+                      },
+                      {
+                        "key": "OTHER_STORE",
+                        "label": "Collect another store",
+                        "canonicalType": "SELF_PICKUP",
+                        "requires": [
+                          "STORE"
+                        ]
+                      },
+                      {
+                        "key": "DELIVERY",
+                        "label": "Home delivery",
+                        "canonicalType": "DELIVERY",
+                        "requires": [
+                          "ADDRESS",
+                          "CONTACT"
+                        ]
+                      }
+                    ],
+                    "stockPromise": true
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_service_details",
+            "key": "action",
+            "label": "Extra order details",
+            "apiName": "kiosk_screen_service_details",
+            "description": "Kiosk FORM step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_service_details",
+                "key": "SCREEN",
+                "label": "Extra order details",
+                "apiName": "kiosk_screen_service_details",
+                "description": "Kiosk FORM step",
+                "screen": {
+                  "label": "Extra order details",
+                  "apiName": "service_details",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "service_details",
+                    "type": "FORM",
+                    "title": "Extra order details",
+                    "optional": true,
+                    "next": "basket",
+                    "fields": [
+                      {
+                        "key": "preferredSlot",
+                        "label": "Preferred collection / delivery slot",
+                        "type": "select",
+                        "required": false,
+                        "options": [
+                          "As soon as possible",
+                          "Morning",
+                          "Afternoon",
+                          "Evening"
+                        ]
+                      },
+                      {
+                        "key": "installationRequired",
+                        "label": "Installation service",
+                        "type": "select",
+                        "required": false,
+                        "options": [
+                          "No installation",
+                          "Installation required"
+                        ]
+                      },
+                      {
+                        "key": "notes",
+                        "label": "Order notes",
+                        "type": "textarea",
+                        "required": false,
+                        "placeholder": "Optional instructions"
+                      }
+                    ]
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_basket",
+            "key": "action",
+            "label": "basket",
+            "apiName": "kiosk_screen_basket",
+            "description": "Kiosk BASKET step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_basket",
+                "key": "SCREEN",
+                "label": "basket",
+                "apiName": "kiosk_screen_basket",
+                "description": "Kiosk BASKET step",
+                "screen": {
+                  "label": "basket",
+                  "apiName": "basket",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "basket",
+                    "type": "BASKET",
+                    "editable": true,
+                    "promotions": true,
+                    "next": "loyalty"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_loyalty",
+            "key": "action",
+            "label": "Your details",
+            "apiName": "kiosk_screen_loyalty",
+            "description": "Kiosk LOYALTY step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_loyalty",
+                "key": "SCREEN",
+                "label": "Your details",
+                "apiName": "kiosk_screen_loyalty",
+                "description": "Kiosk LOYALTY step",
+                "screen": {
+                  "label": "Your details",
+                  "apiName": "loyalty",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "loyalty",
+                    "type": "LOYALTY",
+                    "title": "Your details",
+                    "subtitle": "Enter your phone number or email for rewards and order updates, or continue as a guest.",
+                    "optional": true,
+                    "next": "payment"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_payment",
+            "key": "action",
+            "label": "payment",
+            "apiName": "kiosk_screen_payment",
+            "description": "Kiosk PAYMENT step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_payment",
+                "key": "SCREEN",
+                "label": "payment",
+                "apiName": "kiosk_screen_payment",
+                "description": "Kiosk PAYMENT step",
+                "screen": {
+                  "label": "payment",
+                  "apiName": "payment",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "payment",
+                    "type": "PAYMENT",
+                    "methods": [
+                      "CARD"
+                    ],
+                    "actionLabel": "Pay & order",
+                    "next": "confirmation"
+                  }
+                },
+                "allowBack": true,
+                "allowNext": true,
+                "allowFinish": false
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "kiosk_screen_confirmation",
+            "key": "action",
+            "label": "Order confirmed",
+            "apiName": "kiosk_screen_confirmation",
+            "description": "Kiosk CONFIRMATION step",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "SCREEN",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "kiosk_screen_confirmation",
+                "key": "SCREEN",
+                "label": "Order confirmed",
+                "apiName": "kiosk_screen_confirmation",
+                "description": "Kiosk CONFIRMATION step",
+                "screen": {
+                  "label": "Order confirmed",
+                  "apiName": "confirmation",
+                  "showHeader": true,
+                  "style": "default",
+                  "components": [],
+                  "kioskDefinition": {
+                    "key": "confirmation",
+                    "type": "CONFIRMATION",
+                    "title": "Order confirmed",
+                    "subtitle": "Your order has been placed.",
+                    "collectionNumber": true,
+                    "collectionLabel": "Order / collection number",
+                    "helpText": "Keep this reference. We will show when your order is ready for collection.",
+                    "doneLabel": "Start another order",
+                    "receipt": [
+                      "PRINT",
+                      "QR",
+                      "EMAIL"
+                    ],
+                    "collectionVerification": true,
+                    "resetAfterSeconds": 30
+                  }
+                },
+                "allowBack": true,
+                "allowNext": false,
+                "allowFinish": true
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
+        ]
+      },
+      "active": true,
+      "lifecycleStatus": "ACTIVE"
+    }
+  ]
+}

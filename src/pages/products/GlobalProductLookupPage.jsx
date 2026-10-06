@@ -28,10 +28,15 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const loadSettings=async()=>{
     try{
       setSettingsLoading(true);setError('')
-      const [p,c]=await Promise.all([apiRequest('/api/global-products/providers'),apiRequest('/api/platform/objects/category/records?active=true')])
+      const p=await apiRequest('/api/global-products/providers')
       if(!p?.success)throw new Error(p?.message||'Unable to load providers')
-      setProviders(Array.isArray(p.data)?p.data:[])
-      setCategories(Array.isArray(c?.data?.records)?c.data.records:Array.isArray(c?.records)?c.records:Array.isArray(c?.data)?c.data:[])
+      const nextProviders=Array.isArray(p.data)?p.data:[]
+      setProviders(nextProviders)
+      const categoryObjectKey=nextProviders.find(provider=>provider.categoryObjectKey)?.categoryObjectKey
+      if(categoryObjectKey){
+        const c=await apiRequest(`/api/platform/objects/${encodeURIComponent(categoryObjectKey)}/records?active=true`)
+        setCategories(Array.isArray(c?.data?.records)?c.data.records:Array.isArray(c?.records)?c.records:Array.isArray(c?.data)?c.data:[])
+      }else setCategories([])
     }catch(err){setError(err?.message||'Unable to load Product Lookup settings')}
     finally{setSettingsLoading(false)}
   }
@@ -118,6 +123,7 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
   const addToCatalogue=(product)=>{
     const category=categories.find(c=>String(c.name||'').toLowerCase()===String(product.category||'').toLowerCase())
     setPreset({
+      __targetObjectKey:activeProvider?.targetObjectKey||'',
       name:product.name||'',
       barcode:product.barcode||'',
       description:product.description||'',
@@ -314,6 +320,6 @@ export default function GlobalProductLookupPage({onBack,onOpenStore}){
       </article>
     </div>:null}
 
-    {preset?<MetadataRecordFormModal objectKey="product" mode="create" record={preset} title="Add Product to Catalogue" onClose={()=>setPreset(null)} onSaved={()=>{setPreset(null);setNotice('Product added to your company catalogue.')}}/>:null}
+    {preset?.__targetObjectKey?<MetadataRecordFormModal objectKey={preset.__targetObjectKey} mode="create" record={Object.fromEntries(Object.entries(preset).filter(([key])=>key!=="__targetObjectKey"))} title="Add Product to Catalogue" onClose={()=>setPreset(null)} onSaved={()=>{setPreset(null);setNotice('Product added to your company catalogue.')}}/>:null}
   </section>
 }

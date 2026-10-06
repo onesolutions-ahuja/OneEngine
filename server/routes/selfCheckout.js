@@ -235,41 +235,6 @@ export function createSelfCheckoutRouter({
     }
   });
 
-  /*
-   * POST /api/self-checkout/customer-lookup
-   * Optional customer identification from the Self-Checkout screen: the
-   * customer enters their own phone or email; an exact, company-scoped match
-   * returns ONLY id + name (loyalty/receipts attach to the sale). No match →
-   * the customer simply continues as a guest. Staff tokens are refused —
-   * this endpoint exists solely for the restricted customer session.
-   */
-  router.post("/self-checkout/customer-lookup", authenticate, async (req, res) => {
-    try {
-      if (req.user?.mode !== "self_checkout") {
-        return res.status(403).json({ success: false, message: "Only available in Self-Checkout mode" });
-      }
-      const query = String(req.body?.query || "").trim().slice(0, 255);
-      if (!query) {
-        return res.status(400).json({ success: false, message: "Enter your phone number or email" });
-      }
-      const digits = query.replace(/[^0-9]/g, "");
-      const result = await db(
-        `SELECT id, name FROM customers
-         WHERE company_id = $1 AND active = true
-           AND (LOWER(email) = LOWER($2) OR phone = $2
-                OR ($3 <> '' AND REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g') = $3))
-         LIMIT 1`,
-        [req.user.companyId, query, digits]
-      );
-      if (!result.rows.length) {
-        return res.status(404).json({ success: false, found: false, message: "We could not find that account — you can continue as a guest" });
-      }
-      res.json({ success: true, found: true, data: { id: result.rows[0].id, name: result.rows[0].name } });
-    } catch (error) {
-      console.error("Self-Checkout customer lookup error:", error);
-      res.status(500).json({ success: false, message: "Lookup failed — you can continue as a guest" });
-    }
-  });
 
   return router;
 }
@@ -288,7 +253,7 @@ const SCO_ALLOWED = [
   { prefix: "/api/platform/objects/sale_ledger", methods: ["GET", "POST"] },         // Sale records + record actions
   { prefix: "/api/platform/objects/product", methods: ["GET"] }, // metadata-driven product records
   { prefix: "/api/settings", methods: ["GET"] },               // VAT/store context only — no configuration writes
-  { prefix: "/api/self-checkout", methods: ["DELETE", "POST"] }, // auditable exit + customer lookup
+  { prefix: "/api/self-checkout", methods: ["DELETE", "POST"] }, // auditable mode endpoints
 ];
 
 export function createSelfCheckoutModeGate() {

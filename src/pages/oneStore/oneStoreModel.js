@@ -2,8 +2,6 @@ const PROVIDER_BRANDS = new Map([
   ["uber_eats", "uber-eats"],
   ["deliveroo", "deliveroo"],
   ["just_eat", "just-eat"],
-  ["quickbooks", "quickbooks"],
-  ["quickbooks_online", "quickbooks"],
   ["shopify", "shopify"],
   ["xero_accounting", "xero-accounting"],
   ["xero", "xero"],
