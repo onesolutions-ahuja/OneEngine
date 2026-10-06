@@ -1303,7 +1303,17 @@ const PACKAGE_CATALOG = [
     name: "OneKiosk",
     description: "Customer self-service ordering and collection workflow for restaurants, retail, electronics and other counter-service businesses.",
     route: "/app/objects/kiosk_device?appKey=one_kiosk",
-    navigationAliases: [{ slug: "kiosk-devices", route: "/app/objects/kiosk_device?appKey=one_kiosk" }],
+    navigationAliases: [
+      { slug: "kiosk-devices", route: "/app/objects/kiosk_device?appKey=one_kiosk" },
+      { slug: "kiosk-display", route: "/app/kiosk-display" },
+      { slug: "kiosk", route: "/app/kiosk" },
+    ],
+    runtimeSurfaces: {
+      collectionDisplay: {
+        objects: { order: "online_order" },
+        filters: { platformField: "platform", platformValue: "one_kiosk" },
+      },
+    },
     permissions: ["sale.create", "online_orders.view", "online_orders.manage"],
     storeScoped: true,
     category: "Operations",
