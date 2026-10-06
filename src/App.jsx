@@ -19,20 +19,12 @@ const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserSto
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
 const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
-const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
 const MetadataPageRuntime = lazyWithRecovery(() => import('./platform/pages/MetadataPageRuntime'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
-const DeliverySettingsPage = lazyWithRecovery(() => import('./pages/settings/DeliverySettingsPage'))
-const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
-const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
-const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
-const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
-const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   LockKeyhole,
@@ -1236,23 +1228,23 @@ function SettingsPage({ onOpenProfile }) {
               ) : current?.key === 'connections' ? (
                 <MetadataPageRuntime objectKey="integration" appKey="settings" />
               ) : current?.key === 'email-delivery' ? (
-                <DeliverySettingsPage channel="email" />
+                <MetadataPageRuntime objectKey="integration" appKey="email-delivery" />
               ) : current?.key === 'sms-delivery' ? (
-                <DeliverySettingsPage channel="sms" />
+                <MetadataPageRuntime objectKey="integration" appKey="sms-delivery" />
               ) : current?.key === 'whatsapp-assistant' ? (
-                <WhatsAppAssistantSettings />
+                <MetadataPageRuntime objectKey="integration" appKey="whatsapp-assistant" />
               ) : current?.key === 'ai-assistant' ? (
-                <AiAssistantSettings />
+                <MetadataPageRuntime objectKey="integration" appKey="ai-assistant" />
               ) : current?.key === 'security-identity' ? (
-                <SecurityIdentitySettings />
+                <MetadataPageRuntime pageKey="security-identity" />
               ) : current?.key === 'mfa-administration' ? (
-                <MfaAdministrationSettings />
+                <MetadataPageRuntime pageKey="mfa-administration" />
               ) : current?.key === 'identity-verification-history' ? (
                 <IdentityAssuranceSettings mode="history" />
               ) : current?.key === 'security-governance' ? (
-                <SecurityGovernanceSettings />
+                <MetadataPageRuntime pageKey="security-governance" />
               ) : current?.key === 'data-protection' ? (
-                <DataProtectionSettings />
+                <MetadataPageRuntime pageKey="data-protection" />
               ) : current?.key === 'users' ? (
                 <RecordListView
                   title="Users"
@@ -2313,7 +2305,7 @@ function Desktop({ onLock, onSignOut }) {
             setActiveApp('profile')
           }} />
         ) : activeApp === 'google-connect' ? (
-          <GoogleConnectSettings />
+          <MetadataPageRuntime objectKey="integration" appKey="google-connect" />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeApp === 'till' ? (
