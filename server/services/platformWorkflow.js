@@ -24,6 +24,8 @@ import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
+import { issueAccountToken } from "./accountPolicy.js";
+import { buildReceiptQrDownloadUrl, createTemporaryReceiptDownload, revokeTemporaryReceiptDownloadsForSale } from "./receiptQr.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const globalProductLookupService = createGlobalProductLookupService();
@@ -3386,6 +3388,60 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
 
 
+  {
+    key: "ISSUE_SECURITY_TOKEN",
+    displayName: "Issue Security Token",
+    description: "Issue a tenant-scoped security token for an approved technical purpose.",
+    validation: (action) => {
+      if (!action?.userId && !action?.inputs?.userId) throw new Error("Issue Security Token requires a user ID");
+      if (!action?.purpose && !action?.inputs?.purpose) throw new Error("Issue Security Token requires a purpose");
+    },
+    async: false,
+    requiredPermissions: ["user.manage"],
+    executor: async ({ action, db, companyId, req, record, previousRecord, object, workflowVariables = {} }) => {
+      const context={record,previousRecord,req,object,workflowVariables};
+      const values={...(action.inputs||{}),userId:action.userId??action.inputs?.userId,purpose:action.purpose??action.inputs?.purpose,expiresMinutes:action.expiresMinutes??action.inputs?.expiresMinutes};
+      const resolved=Object.fromEntries(Object.entries(values).map(([key,value])=>[key,resolveConfiguredResource(value,context,{preserveMissing:false})]));
+      const purpose=String(resolved.purpose||"").trim().toUpperCase();
+      if (!["PASSWORD_RESET","REGISTRATION"].includes(purpose)) throw new Error("Unsupported security token purpose");
+      const requested=Number(resolved.expiresMinutes);
+      const expiresMinutes=Number.isFinite(requested)&&requested>0?Math.min(Math.floor(requested),10080):(purpose==="PASSWORD_RESET"?60:1440);
+      const token=await issueAccountToken(db,{companyId:companyId||req?.user?.companyId,userId:String(resolved.userId||""),purpose,expiresMinutes});
+      return {status:"completed",token,userId:String(resolved.userId||""),purpose,expiresMinutes};
+    },
+  },
+  {
+    key: "CREATE_TEMPORARY_DOCUMENT_LINK",
+    displayName: "Create Temporary Document Link",
+    description: "Create a short-lived public link for a supported document record.",
+    validation: (action) => { if (!action?.recordId && !action?.inputs?.recordId && !action?.inputs?.saleId) throw new Error("Temporary document link requires a record ID"); },
+    async: false,
+    requiredPermissions: ["sale.view"],
+    executor: async ({ action, db, companyId, req, record, previousRecord, object, workflowVariables = {} }) => {
+      const context={record,previousRecord,req,object,workflowVariables};
+      const inputs=Object.fromEntries(Object.entries(action.inputs||{}).map(([key,value])=>[key,resolveConfiguredResource(value,context,{preserveMissing:false})]));
+      const recordId=resolveConfiguredResource(action.recordId,context,{preserveMissing:false})||inputs.recordId||inputs.saleId||record?.id;
+      const result=await createTemporaryReceiptDownload({db,companyId:companyId||req?.user?.companyId,storeId:inputs.storeId||req?.user?.storeId||null,tillId:inputs.tillId||req?.user?.tillId||null,saleId:recordId,expiryMinutes:Number(inputs.expiryMinutes||5)});
+      if(!result.ok) throw new Error(result.message||"Unable to create temporary document link");
+      const url=buildReceiptQrDownloadUrl(result.token,inputs.baseUrl||null);
+      return {status:"completed",id:result.id,recordId,saleId:recordId,token:result.token,url,qrcodeUrl:`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`,expiresAt:result.expiresAt};
+    },
+  },
+  {
+    key: "REVOKE_TEMPORARY_DOCUMENT_LINKS",
+    displayName: "Revoke Temporary Document Links",
+    description: "Revoke active short-lived links for a supported document record.",
+    validation: (action) => { if (!action?.recordId && !action?.inputs?.recordId && !action?.inputs?.saleId) throw new Error("Revoke Temporary Document Links requires a record ID"); },
+    async: false,
+    requiredPermissions: ["sale.view"],
+    executor: async ({ action, db, companyId, req, record, previousRecord, object, workflowVariables = {} }) => {
+      const context={record,previousRecord,req,object,workflowVariables};
+      const inputs=Object.fromEntries(Object.entries(action.inputs||{}).map(([key,value])=>[key,resolveConfiguredResource(value,context,{preserveMissing:false})]));
+      const recordId=resolveConfiguredResource(action.recordId,context,{preserveMissing:false})||inputs.recordId||inputs.saleId||record?.id;
+      const result=await revokeTemporaryReceiptDownloadsForSale({db,companyId:companyId||req?.user?.companyId,saleId:recordId});
+      return {status:"completed",recordId,saleId:recordId,revoked:result.revoked||0};
+    },
+  },
   {
     key: "RUN_SUBFLOW",
     displayName: "Run Subflow",
