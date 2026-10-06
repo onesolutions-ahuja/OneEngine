@@ -1,8 +1,5 @@
 import express from "express";
-import { createHash } from "node:crypto";
 import { decryptCredentials } from "../services/integrationCredentials.js";
-import { enqueuePlatformJob } from "../services/platformJobs.js";
-import { getCompanyEntitlements, hasEntitlement } from "../services/licensing.js";
 import { verifyShopifyWebhook } from "../services/shopifyAdapter.js";
 
 const SHOP_DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.myshopify\.com$/i;
@@ -20,7 +17,7 @@ const ALLOWED_TOPICS = new Set([
   "inventory_levels/update",
 ]);
 
-export default function createShopifyWebhooksRouter({ db, writeAudit, isEntitled = async (companyId) => hasEntitlement(await getCompanyEntitlements(db, companyId), "integrations") }) {
+export default function createShopifyWebhooksRouter({ db }) {
   const router = express.Router();
 
   router.post("/shopify/webhooks", async (req, res) => {
@@ -68,20 +65,8 @@ export default function createShopifyWebhooksRouter({ db, writeAudit, isEntitled
         return res.status(400).json({ success: false, message: "Shopify webhook body is invalid" });
       }
 
-      const entitled = await isEntitled(connection.company_id);
-      const installed = await db(
-        `SELECT 1 FROM company_package_installations i
-           JOIN package_registry p ON p.id=i.package_id
-          WHERE i.company_id=$1 AND p.package_key='shopify'
-            AND i.status='active' AND i.suspended_by_entitlement=false
-          LIMIT 1`,
-        [connection.company_id]
-      );
-      if (!entitled || !installed.rows.length) {
-        if (typeof writeAudit === "function") {
-          await writeAudit(connection.company_id, null, "shopify_webhook_skipped_unlicensed", "integration_connection", connection.id, { topic, deliveryId });
-        }
-        return res.status(200).json({ success: true, skipped: true });
+      await db(`INSERT INTO platform_events (company_id,event_type,payload,metadata) VALUES ($1,$2,$3::jsonb,$4::jsonb)`,[connection.company_id,`connector.webhook.shopify.${topic.replaceAll("/",".")}`,JSON.stringify(payload),JSON.stringify({connectionId:connection.id,storeId:connection.store_id||null,deliveryId,eventId:String(req.get("x-shopify-event-id")||"").slice(0,200)||null})]);
+      return res.status(200).json({ success: true, skipped: true });
       }
 
       const eventId = String(req.get("x-shopify-event-id") || "").slice(0, 200) || null;
@@ -97,7 +82,7 @@ export default function createShopifyWebhooksRouter({ db, writeAudit, isEntitled
       if (typeof writeAudit === "function") {
         await writeAudit(connection.company_id, null, job ? "shopify_webhook_queued" : "shopify_webhook_duplicate", "integration_connection", connection.id, { topic, deliveryId, eventId });
       }
-      return res.status(200).json({ success: true, duplicate: !job });
+      return res.status(200).json({ success: true });
     } catch {
       return res.status(503).json({ success: false, message: "Shopify webhook could not be accepted" });
     }
