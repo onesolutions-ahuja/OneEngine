@@ -164,4 +164,12 @@ export const PACKAGE_RUNTIME_FLOWS=[
   {id:"get_items",label:"Load Sale Items",key:"GET_RECORDS",objectKey:"sale_item",filters:[{field:"sale_id",operator:"equals",value:{path:"steps.create_sale.created.id"}}],limit:500,store:"all"},
   {id:"set_items",label:"Store Sale Items",key:"ASSIGNMENT",variableName:"saleItems",variableType:"collection",operator:"set",value:{path:"steps.get_items.records"}}
  ])
+,
+ flow("flow:inventory.batch.consume","Inventory · Consume Batch",[input("productId"),input("storeId"),input("quantity","number"),input("mode")],[output("consumed","number")],[
+  {id:"get_batches",label:"Get Available Batches",key:"GET_RECORDS",objectKey:"inventory_batch",filters:[{field:"product_id",operator:"equals",value:{path:"$record.productId"}},{field:"store_id",operator:"equals",value:{path:"$record.storeId"}},{field:"quantity",operator:"greater_than",value:0}],sort:[{field:"expiry_date",direction:"asc"}],limit:500,store:"all"},
+  {id:"consume_batches",label:"Consume Batches",key:"LOOP",collection:{path:"steps.get_batches.records"},itemVariable:"currentBatch",bodyBranch:["calculate_take","update_batch"]},
+  {id:"calculate_take",label:"Calculate Batch Take",key:"FORMULA",expression:"MIN(MAX(0, $record.quantity - variables.consumed), variables.currentBatch.quantity)",outputVariable:"batchTake"},
+  {id:"update_batch",label:"Update Batch Quantity",key:"UPDATE_RECORD",objectKey:"inventory_batch",recordId:{path:"variables.currentBatch.id"},fieldValues:{quantity:{expression:"variables.currentBatch.quantity - variables.batchTake"}}},
+  {id:"set_consumed",label:"Set Consumed",key:"ASSIGNMENT",variableName:"consumed",variableType:"number",operator:"set",value:{path:"$record.quantity"}}
+ ])
 ];
