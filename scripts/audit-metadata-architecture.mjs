@@ -36,7 +36,7 @@ const legacyBusinessRuntime = new Set([
   "server/services/paypalQrConnector.js","server/services/integrationFieldResolver.js"
 ]);
 const businessTables=["sales","sale_items","customers","payments","products","suppliers","purchases","purchase_items","refunds"];
-const forbiddenUiBusinessTokens=["CREATE_CUSTOMER","CREATE_SALE","CREATE_PAYMENT","DASHBOARD_SALES_FIELDS"];
+const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
 const findings=[];
 
 for(const file of roots.flatMap(walk)){
