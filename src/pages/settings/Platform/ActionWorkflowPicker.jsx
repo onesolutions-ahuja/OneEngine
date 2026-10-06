@@ -96,7 +96,7 @@ function NavigationTargetSelector({ value, onChange }) {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [objectKey]);
 
   const { customPages, objectPages } = targets;
   const type = value?.type || "";
@@ -302,9 +302,23 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
     apiRequest("/api/platform/rules")
       .then((response) => setWorkflows(Array.isArray(response?.data) ? response.data.filter((rule) => rule?.action?.type === "workflow" && rule.active !== false) : []))
       .catch(() => setWorkflows([]));
-    apiRequest("/api/platform/action-registry")
-      .then((response) => setActions(Array.isArray(response?.data) ? response.data : []))
-      .catch(() => setActions([]));
+    Promise.all([
+      apiRequest("/api/platform/action-registry").catch(() => null),
+      objectKey ? apiRequest("/api/platform/objects").catch(() => null) : Promise.resolve(null),
+    ]).then(async ([registryResponse, objectsResponse]) => {
+      const core = Array.isArray(registryResponse?.data) ? registryResponse.data : [];
+      if (!objectKey) { setActions(core); return; }
+      const objects = Array.isArray(objectsResponse?.data?.objects) ? objectsResponse.data.objects : Array.isArray(objectsResponse?.data) ? objectsResponse.data : [];
+      const object = objects.find((item) => String(item.object_key || item.api_name || item.key) === String(objectKey));
+      if (!object?.id) { setActions(core); return; }
+      const customResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/registered-actions`).catch(() => null);
+      const custom = Array.isArray(customResponse?.data) ? customResponse.data.map((item) => ({
+        key: item.action_key,
+        displayName: item.label || item.action_key,
+        metadataAction: true,
+      })) : [];
+      setActions([...core, ...custom.filter((item) => !core.some((entry) => entry.key === item.key))]);
+    }).catch(() => setActions([]));
   }, []);
 
   const rankedWorkflows = useMemo(() => {
