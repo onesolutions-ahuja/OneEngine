@@ -9,6 +9,7 @@ import { ConnectorService, resolvePersistedConnectorCapability } from "../servic
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
 import { configureSmsGateInboundWebhook } from "../services/smsGateConnector.js";
+import { selectMetadataRecords } from "../services/metadataRecordStore.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
@@ -1735,29 +1736,35 @@ export default function createConnectorsRouter({
 
   router.get("/connector-capabilities/:capabilityKey", authenticate, authorize("sale.create"), async (req, res) => {
     try {
-      let session = await db(
-        `SELECT terminal_id,store_id FROM till_sessions
-          WHERE company_id=$1 AND store_id=$2 AND status='open'
-          ORDER BY opened_at DESC LIMIT 1`,
-        [req.user.companyId, req.user.storeId]
-      );
-      if (!session.rows[0] && req.user.id) {
-        session = await db(
-          `SELECT ts.terminal_id,ts.store_id
-             FROM till_sessions ts
-             JOIN integration_connections c
-               ON c.company_id=ts.company_id
-              AND c.till_id=ts.terminal_id
-              AND c.enabled=TRUE
-              AND (c.store_id IS NULL OR c.store_id=ts.store_id)
-            WHERE ts.company_id=$1
-              AND ts.user_id=$2
-              AND ts.status='open'
-            ORDER BY ts.opened_at DESC
-            LIMIT 1`,
-          [req.user.companyId, req.user.id]
-        );
+      let sessionRows = await selectMetadataRecords(db, {
+        objectKey: "till_session",
+        companyId: req.user.companyId,
+        filters: { store_id: req.user.storeId, status: "open" },
+        columns: ["terminal_id","store_id","opened_at"],
+        orderBy: { field: "opened_at", direction: "DESC" },
+        limit: 1,
+      });
+      if (!sessionRows[0] && req.user.id) {
+        const candidates = await selectMetadataRecords(db, {
+          objectKey: "till_session",
+          companyId: req.user.companyId,
+          filters: { user_id: req.user.id, status: "open" },
+          columns: ["terminal_id","store_id","opened_at"],
+          orderBy: { field: "opened_at", direction: "DESC" },
+          limit: 50,
+        });
+        for (const candidate of candidates) {
+          const connection = await db(
+            `SELECT 1 FROM integration_connections
+              WHERE company_id=$1 AND till_id=$2 AND enabled=TRUE
+                AND (store_id IS NULL OR store_id=$3)
+              LIMIT 1`,
+            [req.user.companyId, candidate.terminal_id, candidate.store_id]
+          );
+          if (connection.rows[0]) { sessionRows = [candidate]; break; }
+        }
       }
+      const session = { rows: sessionRows };
       if (!session.rows[0]) return res.json({ success: true, data: { available: false, code: "DEVICE_OFFLINE" } });
       const result = await resolvePersistedConnectorCapability({
         db,
