@@ -1,18 +1,4 @@
-const DEFAULT_ENTITLEMENTS = Object.freeze({
-  pos: true,
-  inventory: true,
-  purchasing: true,
-  customers: true,
-  reports: true,
-  self_checkout: false,
-  loyalty: false,
-  jarvis: false,
-  crm: false,
-  credit_control: false,
-  online_orders: false,
-  hospitality: false,
-  kds: false,
-});
+const DEFAULT_ENTITLEMENTS = Object.freeze({});
 
 export function normaliseEntitlements(value = {}) {
   const source = value && typeof value === "object" ? value : {};
