@@ -6,7 +6,8 @@ import {
   componentByKey,
   componentCategoryLabel,
   componentIcon,
-  paletteComponents,
+  createRegisteredComponent,
+  registryForBuilder,
   useComponentRegistry,
 } from "./componentRegistry.js";
 
@@ -65,15 +66,25 @@ export default function PageBuilder({ onMessage, onError }) {
   useEffect(() => { if (!appId) return setPages([]); apiRequest(`/api/platform/apps/${appId}/pages`).then((r) => setPages(r.data || [])).catch((e) => onError?.(e.message)); }, [appId]);
 
   /* Palette = the ONE shared registry view, ready-to-place components only. */
-  const palette = useMemo(() => paletteComponents(registry).filter((c) => c.category !== "layout" || !"section|container|multi_container".split("|").includes(c.key)), [registry]);
+  const palette = useMemo(() => registryForBuilder(registry, "PAGE").filter((c) => c.key !== "section"), [registry]);
   const current = definition.components.find((c) => c.id === selected);
   const selectPage = (next) => { setPage(next); setDefinition(normalizeDefinition(next?.definition)); setSelected(""); };
   const patch = (fn) => setDefinition((value) => fn(value));
   const addSection = () => patch((d) => ({ ...d, sections: [...d.sections, { id: uid("section"), label: `Section ${d.sections.length + 1}`, order: d.sections.length, columns: 1, visible: true }] }));
   const addComponent = (sectionId, componentKey) => {
-    const meta = componentByKey(registry, componentKey) || { key: componentKey, label: componentKey };
-    const id = uid(componentKey);
-    patch((d) => ({ ...d, components: [...d.components, { id, component_key: meta.key, type: meta.kind || meta.category, label: meta.label, section_id: sectionId, order: d.components.length, width: "full", visible: true, props: {} }] }));
+    const meta = componentByKey(registry, componentKey);
+    if (!meta) { onError?.("Component metadata is unavailable. Refresh the builder and try again."); return; }
+    const instance = createRegisteredComponent(meta, "PAGE");
+    const id = instance.id;
+    patch((d) => ({ ...d, components: [...d.components, {
+      ...instance,
+      component_key: meta.key,
+      section_id: sectionId,
+      order: d.components.length,
+      width: "full",
+      visible: true,
+      props: {},
+    }] }));
     setSelected(id);
   };
   const updateComponent = (changes) => patch((d) => ({ ...d, components: d.components.map((c) => c.id === selected ? { ...c, ...changes, props: { ...c.props, ...(changes.props || {}) } } : c) }));
