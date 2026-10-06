@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Phase 3A gate: executable runtime must not expose legacy function execution paths.
 const EXECUTABLE_ROOTS = ["server", "src"];
 const IGNORE_PARTS = ["/docs/", "/database/", "/node_modules/"];
 
