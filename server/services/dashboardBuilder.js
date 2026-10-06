@@ -91,7 +91,7 @@ export function normalizeDashboardIdentity(input = {}, fallbackName = "dashboard
  * The canonical dashboard component vocabulary. Every entry is GENERIC: it
  * describes a rendering shape plus the configuration an administrator supplies
  * (a saved report or an inline report definition reusing the existing custom
- * report engine). No Sales-, Product- or payment-specific component exists.
+ * report engine). No business-domain-specific component exists.
  */
 export const DASHBOARD_COMPONENTS = Object.freeze([
   { key: "kpi", label: "Metric / KPI", kind: "metric", valueField: true, labelField: true, formats: VALUE_FORMATS, sizes: KPI_SIZES },
@@ -286,9 +286,6 @@ export const DEFAULT_DASHBOARD_DEFINITION = Object.freeze({
   ],
 });
 
-
-/* The custom-report fields a Dashboard Builder administrator may pick from for
-   the built-in sales datasource. Reuses the reporting engine's field list. */
 
 
 export function mergeDashboardFilters(reportDefinition, dashboardFilters = []) {
