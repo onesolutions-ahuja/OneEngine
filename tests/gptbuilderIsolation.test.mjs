@@ -1429,3 +1429,14 @@ test('GPT Builder resource aliases used by conditional render paths are locally 
 
 
 
+
+
+test('GPT Builder can reopen and round-trip metadata flows that already have runtime steps', async () => {
+  const page = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderPage.jsx', import.meta.url), 'utf8')
+  const action = await readFile(new URL('../src/pages/developer/gptbuilder/GPTBuilderAction.jsx', import.meta.url), 'utf8')
+  assert.match(page, /source: 'runtime_import'/)
+  assert.match(page, /importedRuntimeAction: runtimeAction/)
+  assert.match(action, /Imported runtime configuration/)
+  assert.match(action, /JSON\.parse\(c\.importedRuntimeActionText\)/)
+  assert.match(action, /\.\.\.imported/)
+});

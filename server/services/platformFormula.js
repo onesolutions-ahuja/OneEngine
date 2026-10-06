@@ -6,7 +6,7 @@ const SAFE_PATH = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)*$/;
 const WORKFLOW_SAFE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED = new Set(["id", "company_id", "store_id", "__proto__", "constructor", "prototype"]);
 const PRECEDENCE = { "||": 1, "&&": 2, "==": 3, "!=": 3, ">": 4, ">=": 4, "<": 4, "<=": 4, "&": 5, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 };
-const ARITY = { IF: [3, 3], AND: [2, 20], OR: [2, 20], NOT: [1, 1], ISBLANK: [1, 1], ISPICKVAL: [2, 2], TEXT: [1, 1], BEGINS: [2, 2], CONTAINS: [2, 2], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], ADDMINUTES: [2, 2], PARSEDATE: [1, 1], MINUTESBETWEEN: [2, 2], TRIM: [1, 1], UPPER: [1, 1] };
+const ARITY = { IF: [3, 3], AND: [2, 20], OR: [2, 20], NOT: [1, 1], ISBLANK: [1, 1], ISPICKVAL: [2, 2], TEXT: [1, 1], BEGINS: [2, 2], CONTAINS: [2, 2], COALESCE: [2, 20], CONCAT: [1, 20], ROUND: [1, 2], ABS: [1, 1], MIN: [1, 20], MAX: [1, 20], TODAY: [0, 0], NOW: [0, 0], ADDDAYS: [2, 2], ADDMINUTES: [2, 2], PARSEDATE: [1, 1], MINUTESBETWEEN: [2, 2], TRIM: [1, 1], UPPER: [1, 1], COUNT: [1, 1] };
 export const ROLLUP_OPERATIONS = new Set(["COUNT", "SUM", "MIN", "MAX", "AVG"]);
 const baseType = type => ["number", "decimal", "currency", "percent"].includes(type) ? "number" : type;
 const formulaType = type => STRING_TYPES.has(type) ? "string" : baseType(type);
@@ -163,6 +163,7 @@ function infer(node, resolve, depth = 0) {
   if (["AND", "OR"].includes(node.name)) { types.forEach(t => requireType(t, "boolean")); return "boolean"; }
   if (node.name === "NOT") { requireType(types[0], "boolean"); return "boolean"; }
   if (node.name === "ISBLANK") return "boolean";
+  if (node.name === "COUNT") return "number";
   if (node.name === "ISPICKVAL") return "boolean";
   if (node.name === "TEXT") return "string";
   if (["BEGINS", "CONTAINS"].includes(node.name)) return "boolean";
@@ -214,6 +215,7 @@ function evaluate(node, get) {
   if (node.name === "OR") { for (const arg of node.args) { if (run(arg)) return true; } return false; }
   if (node.name === "NOT") return !Boolean(run(node.args[0]));
   if (node.name === "ISBLANK") { const value = run(node.args[0]); return value === null || value === undefined || value === ""; }
+  if (node.name === "COUNT") { const value = run(node.args[0]); return Array.isArray(value) || typeof value === "string" ? value.length : value && typeof value === "object" ? Object.keys(value).length : 0; }
   if (node.name === "ISPICKVAL") return String(run(node.args[0]) ?? "") === String(run(node.args[1]) ?? "");
   if (node.name === "TEXT") { const value = run(node.args[0]); return value == null ? "" : String(value); }
   if (node.name === "BEGINS") return String(run(node.args[0]) ?? "").startsWith(String(run(node.args[1]) ?? ""));

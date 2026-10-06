@@ -37,3 +37,10 @@ test('structured assignments resolve nested session state and selected slot arra
   const result = await getWorkflowActionDefinition('ASSIGNMENT').executor({ action: { variableName: 'state', variableType: 'record', value: { step: 'WAITING_FOR_TIME', slots: { path: 'variables.slots' } } }, workflowVariables });
   assert.deepEqual(result.value, { step: 'WAITING_FOR_TIME', slots: workflowVariables.variables.slots });
 });
+
+
+test('COUNT is a generic Flow formula primitive for collection validation', () => {
+  assert.equal(evaluateWorkflowFormula('COUNT(items)', { items: [] }), 0);
+  assert.equal(evaluateWorkflowFormula('COUNT(items) > 0', { items: [{ id: 1 }] }), true);
+  assert.equal(evaluateWorkflowFormula('COUNT(items) > 0', { items: [] }), false);
+});
