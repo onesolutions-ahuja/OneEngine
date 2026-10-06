@@ -396,7 +396,8 @@ test('R010 R011 bindings use active/readable metadata and persist canonical path
   assert.match(page, /gptBuilderElements/)
   assert.match(page, /resources/)
   assert.match(page, /structuredClone/)
-  assert.match(page, /resource\.path \|\| \(String\(resource\.apiName \|\| ''\)\.startsWith\('\
+  assert.match(page, /const apiName = String\(resource\.apiName \|\| ''\)/)
+  assert.match(page, /resource\.path \|\| \(apiName\.startsWith\('\
 
 test('S001-S005 Start semantics are metadata-driven and context changes feed downstream resources', async () => {
   const page = await read('src/pages/developer/gptbuilder/GPTBuilderPage.jsx')
