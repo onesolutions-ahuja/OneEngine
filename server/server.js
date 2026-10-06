@@ -35,7 +35,6 @@ import { resolveWorkflowResource } from "./services/platformRecordPaths.js";
 import { evaluateCondition } from "./services/platformConditions.js";
 import { executeSystemAction } from "./services/systemWorkflowRuntime.js";
 import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./services/businessCommandGateway.js";
-import createEanLookupRouter from "./routes/eanLookup.js";
 
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
 import createMobileScannerRouter from "./routes/mobileScanner.js";
@@ -48,8 +47,6 @@ import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit l
 
 import createIntegrationsRouter from "./routes/integrations.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
-import createGlobalProductLookupRouter from "./routes/globalProductLookup.js";
-import { createGlobalProductLookupService } from "./services/globalProductLookup.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createSuperadminRouter from "./routes/superadmin.js";
 import createPlatformRouter from "./routes/platform.js";
@@ -64,11 +61,9 @@ import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enfor
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
-import createPaypalQrRouter from "./routes/paypalQr.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
-import { createPaypalQrDriver } from "./services/paypalQrConnector.js";
 import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
 import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
@@ -447,7 +442,6 @@ app.use("/api", (req, res, next) => {
 const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
 connectorDrivers.register(createReferencePaymentDriver());
-connectorDrivers.register(createPaypalQrDriver());
 connectorDrivers.register(createSmsGateDriver());
 connectorDrivers.register(createBrevoDriver());
 connectorDrivers.register(createMailjetDriver());
@@ -484,7 +478,6 @@ const purgeWorkflowTraceBatch = () => purgeOldBusinessCommandRuns({
 }).catch((error) => console.error("Workflow trace retention cleanup error:", error?.message || error));
 setTimeout(purgeWorkflowTraceBatch, 60_000).unref?.();
 setInterval(purgeWorkflowTraceBatch, 6 * 60 * 60 * 1000).unref?.();
-const globalProductLookupService = createGlobalProductLookupService();
 
 /*
 |--------------------------------------------------------------------------
@@ -1828,7 +1821,6 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 |--------------------------------------------------------------------------
 */
 
-app.use("/api", createEanLookupRouter({ authenticate, db, lookupService: globalProductLookupService }));
 
 
 
@@ -1837,14 +1829,6 @@ app.use("/api", createEanLookupRouter({ authenticate, db, lookupService: globalP
 
 app.use("/api", createMobileScannerRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createGlobalProductLookupRouter({
-  authenticate,
-  authorize,
-  db,
-  writeAudit,
-  lookupService: globalProductLookupService,
-  connectorDrivers,
-}));
 
 app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
 
@@ -1878,7 +1862,6 @@ app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeA
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
-app.use("/api", createPaypalQrRouter({ authenticate, authorize, db, connectorDrivers, writeAudit }));
 app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
 app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
