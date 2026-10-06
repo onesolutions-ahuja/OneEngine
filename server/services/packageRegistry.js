@@ -1036,6 +1036,7 @@ export function packageDefinition(entry) {
               { apiName: "used_at", label: "Used At", fieldType: "datetime", sourceColumn: "used_at", writable: true },
               { apiName: "created_at", label: "Created", fieldType: "datetime", sourceColumn: "created_at", writable: false },
             ],
+          },
         ],
         relationships: [
           { parentObjectKey: "employee", childObjectKey: "attendance", relationshipKey: "attendance_records", relationshipType: "one_to_many", childFieldApiName: "user_id", required: true },
