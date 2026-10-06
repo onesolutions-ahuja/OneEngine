@@ -6,6 +6,7 @@ import {
   validateAppDefinition,
   compilePortableAppManifest,
   buildPortableArtifact,
+  validatePortableArtifact,
 } from "../src/shared/gptAppBuilderMetadata.js";
 
 test("blank app is generic metadata with desktop and mobile pages", () => {
@@ -113,4 +114,21 @@ test("build artifact is deterministic and blocks unresolved metadata", async () 
     type === "action" && key === "sample_action" ? { actionKey: key, label: "Action" } : null
   );
   assert.throws(() => buildPortableArtifact(broken), /build blocked by unresolved metadata/i);
+});
+
+
+test("portable artifact validation detects tampering and duplicate metadata", async () => {
+  const app = createBlankAppDefinition({ appKey: "sample_app", label: "Sample App" });
+  const compiled = await compilePortableAppManifest(app, async () => null);
+  const artifact = buildPortableArtifact(compiled);
+  assert.equal(validatePortableArtifact(artifact).valid, true);
+
+  const tampered = structuredClone(artifact);
+  tampered.manifest.pages[0].label = "Changed after build";
+  assert.equal(validatePortableArtifact(tampered).valid, false);
+
+  const duplicate = structuredClone(artifact);
+  duplicate.manifest.pages.push(structuredClone(duplicate.manifest.pages[0]));
+  duplicate.fingerprint = buildPortableArtifact({ valid: true, unresolved: [], manifest: duplicate.manifest }).fingerprint;
+  assert.equal(validatePortableArtifact(duplicate).valid, false);
 });
