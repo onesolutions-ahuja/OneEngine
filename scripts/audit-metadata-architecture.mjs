@@ -12,15 +12,10 @@ const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 
 // Only generic/declarative platform authorities are excluded. There is deliberately
 // no legacy business-runtime exemption list.
-const declarativeFiles = new Set([
-  "server/services/platformMetadata.js",
-  "server/services/platformSystemObjects.js",
-  "server/services/packageRegistry.js",
-  "server/services/systemWorkflowCatalog.js",
-  "server/services/tenantDatabase.js",
-  "server/services/metadataManifestLoader.js",
-]);
-const declarativePrefixes=["server/packages/","server/metadata/"];
+// Executable JS receives no business-domain exemption. Declarative metadata belongs
+// in data/manifests; JS runtime authorities must stay generic.
+const declarativeFiles = new Set([]);
+const declarativePrefixes=[];
 
 const businessTables=[
   "sales","sale_items","payments","payment_attempts","payment_methods","refunds",
@@ -32,8 +27,8 @@ const businessTables=[
 ];
 
 const businessObjectKeys=[
-  "sale","sale_item","payment","refund","customer","gift_card","layaway","product","inventory",
-  "supplier","purchase","online_order"
+  "sale","sale_item","payment","refund","customer","gift_card","layaway","product","product_variant",
+  "inventory","inventory_movement","supplier","purchase","purchase_receipt","online_order"
 ];
 
 const businessApiRoots=[
@@ -69,6 +64,12 @@ for(const file of files){
   }
 
   if(/\bCALL_FUNCTION\b|\bRUN_ASSISTANT_SUBFLOW\b/.test(text)) findings.push({rule:"LEGACY_EXECUTOR_REFERENCE",file:name});
+  if(["server/services/platformSystemObjects.js","server/services/platformMetadata.js","server/services/packageRegistry.js","server/services/systemWorkflowCatalog.js"].includes(name)){
+    for(const key of businessObjectKeys){
+      const literal=new RegExp("[\\\"']"+key+"[\\\"']","i");
+      if(literal.test(text)) findings.push({rule:"BUSINESS_IDENTIFIER_IN_EXECUTABLE_REGISTRY",file:name,objectKey:key});
+    }
+  }
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
 }
