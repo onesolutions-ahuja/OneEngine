@@ -3578,6 +3578,19 @@ CREATE TABLE IF NOT EXISTS platform_pages (
     UNIQUE(app_id, page_key)
 );
 
+CREATE TABLE IF NOT EXISTS platform_component_availability (
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    component_id VARCHAR(14) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','DEPRECATED','REMOVED')),
+    updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(company_id, component_id),
+    CHECK (component_id ~ '^[0-9]{14}$')
+);
+CREATE INDEX IF NOT EXISTS idx_platform_component_availability_company_status
+    ON platform_component_availability(company_id, status);
+
 -- Tenant field definitions and extension values reuse Platform metadata.
 ALTER TABLE platform_fields ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
 ALTER TABLE platform_fields DROP CONSTRAINT IF EXISTS platform_fields_object_id_api_name_key;
