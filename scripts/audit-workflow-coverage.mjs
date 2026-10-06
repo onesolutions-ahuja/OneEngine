@@ -222,6 +222,10 @@ const retiredRuntimeFlowKeys = [
 ];
 const residualRetiredRuntimeKeys = retiredRuntimeFlowKeys.filter((key) => runtimeFlowManifestsSource.includes(`flow("${key}"`));
 const hardcodedLicenceRuntimePresent = /executeLicenceRequestPackageAction|LICENCE_REQUEST_PACKAGE|Licence Request Created/.test(platformWorkflowSource);
+const expectedRuntimeWorkflowCount = 82;
+const expectedAllowedShortWorkflowCount = 8;
+const workflowDenominatorMatches = runtimeWorkflowInventory.length === expectedRuntimeWorkflowCount;
+const shortWorkflowCountMatches = shortRuntimeWorkflows.length === expectedAllowedShortWorkflowCount;
 
 const workflowBuilderSource = read("src/pages/settings/Platform/WorkflowAdmin.jsx");
 const forbiddenExecutableDefaults = [
@@ -363,6 +367,8 @@ const findings = [
   ...residualRetiredRuntimeKeys.map((key) => ({ severity: "GAP", type: "RETIRED_DUPLICATE_RUNTIME_FLOW_RETURNED", key })),
   ...(!builderFallbackReady ? [{ severity: "GAP", type: "GPT_BUILDER_RUNTIME_ROUNDTRIP_FALLBACK_MISSING" }] : []),
   ...(hardcodedLicenceRuntimePresent ? [{ severity: "GAP", type: "HARDCODED_LICENCE_REQUEST_RUNTIME_RETURNED" }] : []),
+  ...(!workflowDenominatorMatches ? [{ severity: "GAP", type: "WORKFLOW_DENOMINATOR_DRIFT", expected: expectedRuntimeWorkflowCount, actual: runtimeWorkflowInventory.length }] : []),
+  ...(!shortWorkflowCountMatches ? [{ severity: "GAP", type: "SHORT_WORKFLOW_COUNT_DRIFT", expected: expectedAllowedShortWorkflowCount, actual: shortRuntimeWorkflows.length }] : []),
 ];
 
 const report = {
@@ -390,6 +396,8 @@ const report = {
     builderRoundTripFallback: builderFallbackReady,
     retiredDuplicateRuntimeKeys: residualRetiredRuntimeKeys.length,
     hardcodedLicenceRuntime: hardcodedLicenceRuntimePresent,
+    workflowDenominatorMatches,
+    shortWorkflowCountMatches,
     totalGaps: findings.length,
   },
   catalogueCoverage,
