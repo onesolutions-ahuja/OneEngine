@@ -101,7 +101,7 @@
       "label": "Loyalty Activity",
       "pluralLabel": "Loyalty Activity",
       "description": "Canonical loyalty earn, redemption, reversal and adjustment ledger.",
-      "sourceTable": "customer_loyalty_transactions",
+      "sourceTable": "customer_loyalty_ledger",
       "fields": [
         {
           "apiName": "company_id",
