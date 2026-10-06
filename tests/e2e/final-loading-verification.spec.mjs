@@ -10,6 +10,7 @@ async function authFetch(page,path){return page.evaluate(async({path,base})=>{co
 const DEVELOPER_ROUTES=[
   ["developer/objects","objects"],
   ["developer/workflow-builder","gptbuilder"],
+  ["developer/builder-2","gptbuilder"],
   ["developer/gptbuilder","gptbuilder"],
   ["developer/gptappbuilder","gptappbuilder"],
   ["developer/canvas-ux-test","canvas-ux-test"],
@@ -33,7 +34,13 @@ for(const [route,section] of DEVELOPER_ROUTES){
     expect(await loginIfConfigured(page),"authenticated login must run").toBe(true);
     failures.length=0;
     await page.goto(new URL(route,baseURL).href,{waitUntil:"domcontentloaded",timeout:30000});
-    await settle(page,route,"developer",section);
+    const marker=page.locator("[data-oneengine-route]").first();
+    await expect(marker,route+" route identity").toHaveAttribute("data-oneengine-route","developer",{timeout:10000});
+    await expect(marker,route+" section identity").toHaveAttribute("data-oneengine-section",section,{timeout:10000});
+    await page.waitForTimeout(1000);
+    const body=await page.locator("body").innerText();
+    expect(FATAL.test(body),route+" fatal").toBe(false);
+    await expect(page.locator(".route-loading"),route+" route shell loading").toHaveCount(0);
     expect(failures,route+" runtime failures").toEqual([]);
   });
 }

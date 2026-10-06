@@ -15,3 +15,11 @@ test('every Developer surface has a fixed direct route', async () => {
   const missing = itemKeys.filter((key) => !routeKeys.has(key))
   assert.deepEqual(missing, [], `Developer routes missing from fixed route registry: ${missing.join(', ')}`)
 })
+
+
+test('legacy Developer aliases are published as fixed GitHub Pages routes', async () => {
+  const buildRoutes = await readFile(new URL('../scripts/build-pages-routes.mjs', import.meta.url), 'utf8')
+  for (const alias of ['platform-apps', 'builder-2']) {
+    assert.match(buildRoutes, new RegExp(alias.replace('-', '\\-')))
+  }
+})
