@@ -10,7 +10,6 @@ import { ReportTypeManager } from '../reports/ReportTypeDesigner.jsx'
 import ObjectsSettingsPane from '../settings/ObjectsSettingsPane'
 import WorkflowRunsAdmin from '../settings/Platform/WorkflowRunsAdmin'
 import WorkItemsAdmin from '../settings/Platform/WorkItemsAdmin'
-import PackageBuilderAdmin from '../settings/Platform/PackageBuilderAdmin'
 import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
@@ -32,7 +31,6 @@ const DEVELOPER_ITEMS = [
   { key: 'report-builder', label: 'Report Builder', icon: BarChart3 },
   { key: 'workflow-runs', label: 'Workflow Runs', icon: Workflow },
   { key: 'work-items', label: 'Work Items', icon: ListChecks },
-  { key: 'platform-apps', label: 'Package Builder', icon: LayoutGrid },
   { key: 'deployments', label: 'Deployments', icon: Rocket },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'value-sets', label: 'Value Sets', icon: ListChecks },
@@ -41,7 +39,7 @@ const DEVELOPER_ITEMS = [
 
 function normalizeSection(value) {
   const raw = String(value || '').trim().toLowerCase()
-  const migrated = raw === 'workflow-builder' || raw === 'builder-2' ? 'gptbuilder' : raw
+  const migrated = raw === 'workflow-builder' || raw === 'builder-2' ? 'gptbuilder' : raw === 'platform-apps' ? 'gptappbuilder' : raw
   return DEVELOPER_ITEMS.some((item) => item.key === migrated) ? migrated : 'objects'
 }
 
