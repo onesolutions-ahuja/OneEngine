@@ -3070,6 +3070,12 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         conversationId: resolveConfiguredResource(action.conversationId, bindingContext, { preserveMissing: false }),
         objectId: resolveConfiguredResource(action.objectId, bindingContext, { preserveMissing: false }),
         recordId: resolveConfiguredResource(action.recordId, bindingContext, { preserveMissing: false }),
+        providerKey: resolveConfiguredResource(action.providerKey || action.provider_key, bindingContext, { preserveMissing: false }),
+        endpoint: resolveConfiguredResource(action.endpoint, bindingContext, { preserveMissing: false }),
+        method: action.method || "POST",
+        headers: action.headers || {},
+        query: action.query || {},
+        payload: action.payload || null,
       };
 
       const tenantId = companyId || req?.user?.companyId || null;
@@ -3158,45 +3164,15 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "completed", channel: "IN_APP", recipients: recipientUserIds };
       }
 
-      // External communication providers are selected by metadata. The generic
-      // communication runtime delegates transport without provider-specific behavior.
-      const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS" }[channel] || null;
-      if (!legacyKey) {
-        return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
-      }
-      const transport = getWorkflowActionDefinition(legacyKey);
-      if (!transport?.executor) return { status: "failed", code: "COMMUNICATION_TRANSPORT_UNAVAILABLE", channel, retryable: false };
-      return transport.executor({ ...context, action: { ...forwarded, key: legacyKey, type: legacyKey } });
+      return executeRegisteredAction({
+        db,
+        companyId: tenantId,
+        userId: req?.user?.id || null,
+        req,
+        action: { ...forwarded, key: "SEND_COMMUNICATION", type: "SEND_COMMUNICATION", channel },
+      });
     },
   },
-  {
-    key: "IN_APP_NOTIFICATION",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "In-App Notification",
-    description: "Create a persistent internal notification for a user or team.",
-    validation: (action) => {
-      if (!action?.message && !action?.templateKey) throw new Error("In-App Notification requires a message or template");
-    },
-    async: false,
-    requiredPermissions: ["notifications.write"],
-    executor: async ({ db, action, req }) => {
-      if (typeof db !== "function") return { status: "completed", notice: action.message || action.templateKey };
-      try {
-        await db(
-          "INSERT INTO platform_notifications (company_id, user_id, message, status, created_at) VALUES ($1,$2,$3,'UNREAD',NOW())",
-          [req?.user?.companyId || null, req?.user?.id || null, action.message || action.templateKey || ""]
-        );
-      } catch (error) {
-        return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: false, note: error.message };
-      }
-      return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: true };
-    },
-  },
-
-
-
   {
     key: "RUN_SUBFLOW",
     displayName: "Run Subflow",
