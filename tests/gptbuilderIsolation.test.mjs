@@ -810,7 +810,7 @@ test('GPT Builder Decision matches current Salesforce manual outcome behavior wi
   for (const text of ['Outcome Order','Default Outcome','Condition Requirements','Resource','Value']) assert.ok(decision.includes(text), text)
   assert.equal(decision.includes('AI-Assisted'), false)
   assert.equal(decision.includes('Decision Instructions'), false)
-  assert.match(decision, /decisionConfigErrors\(config, flowType\)/)
+  assert.match(decision, /decisionConfigErrors\(config, flowType, resources\)/)
   assert.match(decision, /decisionRuntimeAction/)
   assert.match(page, /activeElement\.key === 'decision'/)
   assert.match(page, /decisionRuntimeAction\(element\)/)
