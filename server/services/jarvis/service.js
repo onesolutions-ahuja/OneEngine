@@ -15,7 +15,6 @@
  */
 import { buildJarvisSystemInstruction, buildJarvisToolNotice, JARVIS_SYSTEM_INSTRUCTION, JARVIS_CONTEXT_FIELDS } from "./prompt.js";
 import { JarvisError, JARVIS_ERROR_CODES, isJarvisError, toJarvisError } from "./errors.js";
-import { formatToolResultBlock } from "./tools/index.js";
 
 /** V1 bound: a question, not a document. */
 export const JARVIS_MAX_MESSAGE_LENGTH = 2000;
@@ -130,7 +129,7 @@ export function createJarvisService({
         const match = tools.matchTool(question);
         if (match?.name) {
           const toolResult = await tools.executeTool(match.name, safeContext);
-          const grounding = formatToolResultBlock(toolResult);
+          const grounding = toolResult == null ? "" : JSON.stringify(toolResult);
           if (grounding) groundingBlock = grounding;
         }
       } catch (toolError) {

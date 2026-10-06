@@ -23,29 +23,9 @@ import { applyFieldSecurity } from "./platformFieldValues.js";
 import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
-import { createGlobalProductLookupService } from "./globalProductLookup.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
-const globalProductLookupService = createGlobalProductLookupService();
-
-async function executeGlobalProductLookupAction(context, providerKey = null) {
-  const companyId = context.companyId || context.req?.user?.companyId;
-  const barcode = context.action?.barcode ?? context.action?.code ?? context.record?.barcode ?? context.trigger?.barcode;
-  try {
-    const result = await globalProductLookupService.lookup({
-      db: context.db,
-      companyId,
-      reqCompanyId: context.req?.user?.companyId || null,
-      barcode,
-      providerKey,
-    });
-    return { success: true, ...result };
-  } catch (error) {
-    return { success: false, code: error?.code || "LOOKUP_FAILED", message: error?.code === "INVALID_BARCODE" ? error.message : "Unable to look up this barcode" };
-  }
-}
-
 function redact(value, depth = 0, inheritedSecureValues = new Set()) {
   if (depth > 5 || value == null) return value;
   const secureValues = new Set(inheritedSecureValues);
@@ -1031,30 +1011,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         operation: action.operation,
       }),
   },
-  {
-    key: "GLOBAL_PRODUCT_LOOKUP_BARCODE",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Global Product - Lookup Barcode",
-    description: "Resolve an external barcode using enabled, installed product lookup providers in configured priority order.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context),
-  },
-  {
-    key: "GO_UPC_LOOKUP_PRODUCT",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Go-UPC - Lookup Product",
-    description: "Look up a barcode using the installed Go-UPC connector and company credential.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["global_product.view"],
-    executor: (context) => executeGlobalProductLookupAction(context, "go_upc"),
-  },
+
   {
     key: "CALL_CONNECTOR_CAPABILITY",
     displayName: "Call Connector Capability",
