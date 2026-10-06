@@ -78,7 +78,6 @@ const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/tru
   ? read("server/services/trustedJobKinds.js")
   : trustedRuntime;
 const actionRegistry = read("server/services/platformActionRegistry.js");
-const systemWorkflowCatalog = read("server/services/systemWorkflowCatalog.js");
 
 const workflowBuilderSource = read("src/pages/settings/Platform/WorkflowAdmin.jsx");
 const forbiddenExecutableDefaults = [
