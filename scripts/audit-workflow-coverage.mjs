@@ -71,7 +71,7 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
   });
 }
 
-const functionRegistry = read("server/services/platformFunctionRegistry.js");
+const functionRegistry = "";
 const workflowRuntime = read("server/services/platformWorkflow.js");
 const trustedRuntime = read("server/services/trustedRuntime.js");
 const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/trustedJobKinds.js"))
