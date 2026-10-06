@@ -248,8 +248,7 @@ export default function createSettingsRouter({
           cs.allow_negative_inventory_billing,
           cs.batch_inventory_mode, cs.batch_default_mfg_rule, cs.batch_default_expiry_rule, cs.batch_default_expiry_days,
           cs.scan_go_enabled, cs.exchange_mode, cs.online_ordering_enabled, cs.online_payment_methods,
-          cs.product_view, cs.dock_quick_access,
-          cs.customer_display_enabled,
+          cs.dock_quick_access,
           s.id AS store_id, s.name AS store_name,
           NULL::uuid AS till_id, NULL::text AS till_name, NULL::text AS terminal_number
         FROM companies c
@@ -314,32 +313,6 @@ export default function createSettingsRouter({
               ? settings.exchange_mode
               : "both",
           },
-          till: {
-            id: settings.till_id,
-            name: settings.till_name,
-            terminalNumber: settings.terminal_number,
-            /* Till product browser presentation: 'image' | 'compact'. */
-            productView: settings.product_view === "compact" ? "compact" : "image",
-          },
-          receiptQr: {
-            showAfterSuccessfulPayment: ["OFF", "ALWAYS", "ONLY_WHEN_PRINTER_UNAVAILABLE"].includes(String(settings.receipt_qr_show_after_payment || "OFF").toUpperCase())
-              ? String(settings.receipt_qr_show_after_payment || "OFF").trim().toUpperCase()
-              : "OFF",
-            expiryMinutes: Number.isFinite(Number(settings.receipt_qr_expiry_minutes)) ? Math.max(1, Number(settings.receipt_qr_expiry_minutes)) : 5,
-            allowManualQr: settings.receipt_qr_allow_manual !== false,
-            allowRegenerate: settings.receipt_qr_allow_regenerate !== false,
-            autoCloseOnNewSale: settings.receipt_qr_auto_close_on_new_sale !== false,
-            showCountdown: settings.receipt_qr_show_countdown !== false,
-          },
-          /* Configurable sale invoice/receipt prefixes per sale source.
-             Defaults TO / DEL / SC; till + self-checkout receipts keep the
-             existing PREFIX-YYYYMMDD-NNNN sequencing, delivery receipts
-             become PREFIX-<platform external order id>. */
-          invoicePrefixes: {
-            till: settings.till_invoice_prefix || "TO",
-            delivery: settings.delivery_invoice_prefix || "DEL",
-            selfCheckout: settings.self_checkout_invoice_prefix || "SC",
-          },
           /* Admin dock quick-access (T10W): pages shown directly on the
              bottom bar. Ordered; validated on save; launcher always shows
              every permitted page regardless of this list. */
@@ -347,12 +320,6 @@ export default function createSettingsRouter({
             quickAccess: Array.isArray(settings.dock_quick_access)
               ? settings.dock_quick_access
               : ["Dashboard", "Sales", "Products", "Inventory", "Customers", "Reports"],
-          },
-          /* Customer Display (second monitor): master ON/OFF. When OFF the
-             till shows no entry point and the /customer-display page refuses
-             to connect. */
-          customerDisplay: {
-            enabled: settings.customer_display_enabled === true,
           },
           onlineOrdering: {
             enabled: settings.online_ordering_enabled ?? false,
@@ -534,16 +501,8 @@ export default function createSettingsRouter({
     dateFormat: { column: "date_format", type: "string" },
     vatEnabled: { column: "vat_enabled", type: "boolean" },
     defaultVatRate: { column: "default_vat_rate", type: "vatRate" },
-    allowNegativeInventoryBilling: { column: "allow_negative_inventory_billing", type: "negativeBilling" },
-    productView: { column: "product_view", type: "productView" },
-    dockQuickAccess: { column: "dock_quick_access", type: "dockQuickAccess" },
-    customerDisplayEnabled: { column: "customer_display_enabled", type: "boolean" },
-    onlineOrderingEnabled: { column: "online_ordering_enabled", type: "boolean" },
-    onlinePaymentMethods: { column: "online_payment_methods", type: "paymentMethods" },
-    tillInvoicePrefix: { column: "till_invoice_prefix", type: "invoicePrefix" },
-    deliveryInvoicePrefix: { column: "delivery_invoice_prefix", type: "invoicePrefix" },
-    selfCheckoutInvoicePrefix: { column: "self_checkout_invoice_prefix", type: "invoicePrefix" },
-  };
+    allowNegativeInventoryBilling: { column: "allow_negative_inventory_billing", type: "negativeBilling" },    dockQuickAccess: { column: "dock_quick_access", type: "dockQuickAccess" },    onlineOrderingEnabled: { column: "online_ordering_enabled", type: "boolean" },
+    onlinePaymentMethods: { column: "online_payment_methods", type: "paymentMethods" },  };
 
   /* Sentinel distinguishing "invalid value" from a legitimate SQL NULL
      (loyalty redemption economics use null = "not configured"). */
