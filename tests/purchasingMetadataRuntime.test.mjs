@@ -190,12 +190,12 @@ test("cleanup leaves no stale deleted UI imports or duplicate canvas component",
 test("final manifest sweep removes obsolete direct business route stacks", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  const inventory = await readFile(new URL("../server/services/inventory.js", import.meta.url), "utf8");
+  const flows = await readFile(new URL("../server/packages/runtimeFlowManifests.js", import.meta.url), "utf8");
   assert.equal(server.includes("createReturnsRouter"), false);
   assert.ok(metadata.includes('objectKey:"stock_return"') || metadata.includes('objectKey: "stock_return"'));
   assert.ok(metadata.includes('objectKey:"product"') || metadata.includes('objectKey: "product"'));
   assert.equal(server.includes("pricingEngine"), false);
-  assert.match(inventory, /export async function createInventoryMovement/);
+  assert.match(flows, /flow:inventory\.movement\.create/);
 });
 
 test("manifest sweep leaves product category segment and gift-card administration to metadata", async () => {
