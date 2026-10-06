@@ -146,9 +146,14 @@ export function normalizeObjectPageDefinition(value) {
       ? region.components.map((component) => ({ ...component, section_id: region.id }))
       : [])
     : [];
+  const normalizeComponentReference = (component) => {
+    if (!component || typeof component !== "object" || Array.isArray(component)) return component;
+    const componentApi = optionalString(component.componentApi ?? component.component_api, 120);
+    return componentApi ? { ...component, componentApi } : component;
+  };
   const definition = {
     sections: Array.isArray(source.sections) ? source.sections : builderSections,
-    components: Array.isArray(source.components) ? source.components : builderComponents,
+    components: (Array.isArray(source.components) ? source.components : builderComponents).map(normalizeComponentReference),
   };
 
   /* Custom Page Builder tree (nested sections.children). Sections/components
