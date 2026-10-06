@@ -4,11 +4,11 @@ import { readFile } from "node:fs/promises";
 import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.js";
 
 test("purchasing package exposes protected metadata flows and functions", async () => {
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(registry, /entry\.key === "purchasing_core"/);
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
+  assert.match(registry, /"objectKey": "purchase"/);
   for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
-  assert.match(registry, /targetKey:"Purchase Create"/);
-  assert.match(registry, /targetKey:"Supplier Return Execute"/);
+  assert.match(registry, /"targetKey": "Purchase Create"/);
+  assert.match(registry, /"targetKey": "Supplier Return Execute"/);
 });
 
 test("purchases and supplier returns use generic workspace", async () => {
@@ -20,9 +20,9 @@ test("purchases and supplier returns use generic workspace", async () => {
 });
 
 test("transactional objects use metadata flow writes instead of protected business routes", async () => {
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   assert.equal(registry.includes('config: { protectedWrites: true'), false);
-  assert.match(registry, /flowWritesOnly:true|flowWritesOnly: true/);
+  assert.match(registry, /"flowWritesOnly": true/);
 });
 
 test("system object helper contains no business-specific purchase metadata", async () => {
@@ -34,10 +34,10 @@ test("system object helper contains no business-specific purchase metadata", asy
 
 
 test("purchase create is generic object flow metadata", async () => {
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(registry, /name:"Purchase Create"/);
-  assert.match(registry, /key:"CREATE_RECORD",objectKey:"purchase"/);
-  assert.match(registry, /key:"CREATE_RECORD",objectKey:"purchase_line"/);
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
+  assert.match(registry, /"name": "Purchase Create"/);
+  assert.match(registry, /"key": "CREATE_RECORD"[\s\S]*"objectKey": "purchase"/);
+  assert.match(registry, /"key": "CREATE_RECORD"[\s\S]*"objectKey": "purchase_line"/);
   assert.equal(registry.includes('subflowApiName:"PURCHASE_CREATE"'), false);
 });
 
@@ -46,8 +46,8 @@ test("purchase create is generic object flow metadata", async () => {
 test("legacy supplier return endpoints are removed in favor of protected metadata action", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("createReturnsRouter"), false);
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(registry, /name:"Supplier Return Execute"/);
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
+  assert.match(registry, /"name": "Supplier Return Execute"/);
 });
 
 
@@ -85,7 +85,7 @@ test("inventory business UI and routes are removed while core stock primitives r
 test("customer administration uses platform metadata without a legacy customer router", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   assert.match(app, /CustomersPage initialObjectKey="customer" appKey="customers"/);
   assert.equal(server.includes("./routes/customers.js"), false);
   assert.equal(server.includes("createCustomersRouter"), false);
@@ -116,7 +116,7 @@ test("pricing promotions and combos remain metadata-owned without legacy adminis
 test("sales products and categories use metadata workspaces without legacy product CRUD routes", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   assert.match(app, /SalesPage initialObjectKey="sale" appKey="sales"/);
   assert.match(app, /ProductsPage initialObjectKey="product" appKey="products"/);
   assert.match(app, /CategoriesPage initialObjectKey="category" appKey="categories"/);
@@ -143,7 +143,7 @@ test("gift cards online orders and attendance use metadata workspaces while runt
 
 
 test("retail transaction model is canonical metadata and Flow owned", async () => {
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   const workflow = await readFile(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
   for (const objectKey of ["sale","sale_item","payment","refund","till_session","cash_movement"]) {
     assert.ok(registry.includes(`objectKey:"${objectKey}"`) || registry.includes(`objectKey: "${objectKey}"`), objectKey);
@@ -160,7 +160,7 @@ test("generic CRUD blocks Flow-owned transaction objects from direct writes", as
 });
 
 test("Phase 1 retail write paths use generic atomic metadata workflows", async () => {
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   const platform = await readFile(new URL("../server/routes/platform.js", import.meta.url), "utf8");
   const till = await readFile(new URL("../src/pages/till/TillPage.jsx", import.meta.url), "utf8");
   const kiosk = await readFile(new URL("../src/pages/kiosk/OneKioskPage.jsx", import.meta.url), "utf8");
@@ -176,7 +176,7 @@ test("Phase 1 retail write paths use generic atomic metadata workflows", async (
 });
 
 test("Complete Sale uses generic idempotent matching", async () => {
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   const workflow = await readFile(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
   assert.match(registry, /checkMatchingRecords:true/);
   assert.match(registry, /client_request_id/);
@@ -272,7 +272,7 @@ test("kiosk administration is metadata-driven while customer runtime remains pac
 
 test("Till operational writes are metadata Flow owned", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   const metadata = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/till.js"), false);
   assert.equal(server.includes("createTillRouter"), false);
@@ -348,7 +348,7 @@ test("generic integration UI and route contain no provider-specific or fixed bus
 });
 
 test("retail transaction writes are metadata Flow owned", async () => {
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.match(registry, /objectKey:"till_session"/);
   assert.match(registry, /objectKey:"cash_movement"/);
@@ -364,7 +364,7 @@ test("retail transaction writes are metadata Flow owned", async () => {
 
 
 test("retail transactions are owned by metadata objects and generic Flow runtime", async () => {
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url), "utf8");
   const workflow = await readFile(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.match(registry, /objectKey:\s*"sale"/);
