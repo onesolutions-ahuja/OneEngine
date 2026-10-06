@@ -414,7 +414,7 @@ function FileViewerRecords({ node, records, placeholder }) {
   return <div className="space-y-2">{downloadError ? <p role="alert" className="text-xs text-red-700">{downloadError}</p> : null}<div className={node.config?.displayMode === "grid" ? "grid gap-2 sm:grid-cols-2" : "space-y-1"}>{files.slice(0, node.config?.maxItems || 12).map((file) => <button type="button" key={file.id} onClick={() => downloadFile(file)} className="flex min-w-0 w-full items-center justify-between gap-3 rounded-md border bg-white px-3 py-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="min-w-0 truncate font-medium">{file.filename}</span><span className="shrink-0 text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{file.mime_type || "File"}</span></button>)}</div></div>;
 }
 
-function SignatureRecord({ node, record, objectKey, title, builderMode }) {
+function SignatureRecord({ node, record, objectKey, title, builderMode, onInteraction }) {
   const canvasRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -440,8 +440,15 @@ function SignatureRecord({ node, record, objectKey, title, builderMode }) {
     }
     setSaving(true);
     setMessage("");
+    const interaction = config.saveInteraction || node.interaction;
+    if (!interaction || interaction.type === "none") {
+      setMessage("Configure a metadata action or Flow for signature capture.");
+      setSaving(false);
+      return;
+    }
     try {
-      await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey)}/records/${encodeURIComponent(record.id)}`, { method: "PUT", body: JSON.stringify({ data: { [fieldKey]: canvasRef.current.toDataURL("image/png") } }) });
+      const value = canvasRef.current.toDataURL("image/png");
+      await onInteraction?.(interaction, { record, recordId: record.id, objectKey, field: fieldKey, value });
       setMessage("Signature saved.");
     } catch (error) {
       setMessage(error?.message || "Unable to save signature");
