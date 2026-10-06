@@ -68,3 +68,20 @@ test("deleted purchasing and supplier business executors do not return", async (
     assert.equal(registry.includes(key), false, key);
   }
 });
+
+
+test("Phase 3 purchasing flows are explicit and Builder-editable", async () => {
+  const manifest = JSON.parse(await readFile(manifestUrl, "utf8"));
+  const byName = new Map(manifest.workflows.map((flow) => [flow.name, flow]));
+  for (const name of ["Purchase Create","Purchase Receive","Supplier Return Execute"]) {
+    const flow = byName.get(name);
+    assert.ok(flow.actions.length >= 5, name + " must expose validation and orchestration steps");
+    assert.equal(flow.gptBuilderElements.length, flow.actions.length, name + " Builder/runtime count");
+    assert.ok(flow.gptBuilderElements.every((node) => node.config?.importedRuntimeAction && node.configured === true), name + " editable Builder nodes");
+    assert.ok(flow.actions.some((action) => action.key === "CONDITION"), name + " decision");
+    assert.ok(flow.actions.some((action) => action.key === "CUSTOM_ERROR"), name + " explicit failure path");
+  }
+  assert.ok(byName.get("Purchase Create").actions.some((action) => action.key === "FORMULA"));
+  assert.ok(byName.get("Purchase Receive").actions.some((action) => action.key === "GET_RECORDS"));
+  assert.ok(byName.get("Supplier Return Execute").actions.some((action) => action.key === "FORMULA"));
+});
