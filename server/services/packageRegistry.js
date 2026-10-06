@@ -3347,31 +3347,6 @@ export function packageDefinition(entry) {
         },
       } : {}),
 
-      ...(entry.key === "batch_expiry" ? {
-        objects: [
-          {
-            objectKey: "inventory_batch", label: "Inventory Batch", pluralLabel: "Inventory Batches",
-            description: "Store-level batch and expiry stock.", sourceTable: "inventory_batches",
-            fields: [
-              { apiName: "store_id", label: "Store", fieldType: "lookup", required: true, writable: false },
-              { apiName: "product_id", label: "Product", fieldType: "lookup", required: true, writable: false },
-              { apiName: "batch_number", label: "Batch Number", fieldType: "text", required: true, writable: false },
-              { apiName: "expiry_date", label: "Expiry Date", fieldType: "date", writable: false },
-              { apiName: "quantity", label: "Quantity", fieldType: "number", required: true, writable: false },
-              { apiName: "created_at", label: "Created", fieldType: "datetime", writable: false }
-            ],
-          },
-        ],
-        relationships: [
-          { parentObjectKey: "product", childObjectKey: "inventory_batch", relationshipKey: "batches", relationshipType: "one_to_many", childFieldApiName: "product_id" },
-          { parentObjectKey: "store", childObjectKey: "inventory_batch", relationshipKey: "inventory_batches", relationshipType: "one_to_many", childFieldApiName: "store_id" },
-        ],
-        listViews: [
-          { objectKey: "inventory_batch", viewKey: "all", label: "All Batches", columns: ["product_id","batch_number","expiry_date","quantity"], isDefault: true },
-          { objectKey: "inventory_batch", viewKey: "expiring", label: "Expiring Batches", columns: ["product_id","batch_number","expiry_date","quantity"] }
-        ],
-      } : {}),
-
       ...(entry.key === "hospitality" ? {
         objects: [
           { objectKey: "hospitality_floor", label: "Floor", pluralLabel: "Floors", sourceTable: "hospitality_floors", fields: [
