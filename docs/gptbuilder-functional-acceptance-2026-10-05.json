@@ -1,0 +1,578 @@
+{
+  "contract": "GPT Builder Functional Parity",
+  "frozen_through": "2026-10-05",
+  "scope_rule": "Functional behavior only. Pixel-perfect color/size parity is excluded; controls must remain usable and behaviorally equivalent.",
+  "completion_rule": "PASS only when every requirement is verified, no requirement is UNTESTED, no known functional gap remains, metadata architecture audit has zero violations, and required build/runtime checks are green.",
+  "status_values": [
+    "PASS",
+    "FAIL",
+    "UNTESTED"
+  ],
+  "requirements": [
+    {
+      "id": "L001",
+      "area": "launch",
+      "requirement": "Flow list is the landing view for existing flows.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "L002",
+      "area": "launch",
+      "requirement": "New Flow opens flow-type creation.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "L003",
+      "area": "launch",
+      "requirement": "Existing flow opens in editable GPT Builder from its list action.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "L004",
+      "area": "launch",
+      "requirement": "Saved flow reopens with the same editable step structure, not collapsed hidden business logic.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "F001",
+      "area": "flow_types",
+      "requirement": "Screen Flow can be created and edited.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "F002",
+      "area": "flow_types",
+      "requirement": "Record-Triggered Flow can be created and edited.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "F003",
+      "area": "flow_types",
+      "requirement": "Schedule-Triggered Flow can be created and edited.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "F004",
+      "area": "flow_types",
+      "requirement": "Platform Event-Triggered Flow can be created and edited.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "F005",
+      "area": "flow_types",
+      "requirement": "Autolaunched Flow can be created and edited.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "S001",
+      "area": "start",
+      "requirement": "Record-triggered Start requires an object and supports created/updated/created-or-updated/deleted semantics.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "S002",
+      "area": "start",
+      "requirement": "Record-triggered entry conditions use metadata fields and supported operators.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "S003",
+      "area": "start",
+      "requirement": "Schedule Start persists schedule settings and optional object/conditions.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "S004",
+      "area": "start",
+      "requirement": "Platform Event Start selects an event from platform event metadata.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "S005",
+      "area": "start",
+      "requirement": "Changing Start context refreshes downstream automatic resources.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R001",
+      "area": "resources",
+      "requirement": "$Record exists whenever the flow has a current record context.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R002",
+      "area": "resources",
+      "requirement": "$Record__Prior exists where prior-record context is supported.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R003",
+      "area": "resources",
+      "requirement": "Record fields are discoverable from metadata under $Record.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R004",
+      "area": "resources",
+      "requirement": "Platform Event $Record fields are generated from the selected event field_schema.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R005",
+      "area": "resources",
+      "requirement": "Changing the selected Platform Event refreshes $Record child fields.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R006",
+      "area": "resources",
+      "requirement": "Relationship/reference fields expose permitted related fields where traversal is supported.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R007",
+      "area": "resources",
+      "requirement": "Resource pickers expose compatible automatic, variable, formula, constant, choice, record and step-output resources.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R008",
+      "area": "resources",
+      "requirement": "Resource pickers preserve data types and reject incompatible resource types.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R009",
+      "area": "resources",
+      "requirement": "Resource search finds nested record/event fields, not only top-level resources.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R010",
+      "area": "resources",
+      "requirement": "Deleted/disabled fields are not offered as valid new bindings.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "R011",
+      "area": "resources",
+      "requirement": "Saved bindings reopen to the same resource path.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E001",
+      "area": "elements",
+      "requirement": "Assignment is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E002",
+      "area": "elements",
+      "requirement": "Decision is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E003",
+      "area": "elements",
+      "requirement": "Loop is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E004",
+      "area": "elements",
+      "requirement": "Get Records is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E005",
+      "area": "elements",
+      "requirement": "Create Records is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E006",
+      "area": "elements",
+      "requirement": "Update Records is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E007",
+      "area": "elements",
+      "requirement": "Delete Records is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E008",
+      "area": "elements",
+      "requirement": "Collection Filter is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E009",
+      "area": "elements",
+      "requirement": "Collection Sort is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E010",
+      "area": "elements",
+      "requirement": "Transform is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E011",
+      "area": "elements",
+      "requirement": "Wait variants are fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E012",
+      "area": "elements",
+      "requirement": "Subflow is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E013",
+      "area": "elements",
+      "requirement": "Screen is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E014",
+      "area": "elements",
+      "requirement": "Action is fully configurable, saveable and editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E015",
+      "area": "elements",
+      "requirement": "Custom Error/Stop paths remain editable and executable where supported.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "E016",
+      "area": "elements",
+      "requirement": "Rollback Records remains available only where supported and works transactionally.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "D001",
+      "area": "decision",
+      "requirement": "Decision supports ordered outcomes plus Default.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "D002",
+      "area": "decision",
+      "requirement": "Decision conditions can choose nested $Record and event fields.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "D003",
+      "area": "decision",
+      "requirement": "Decision operators are type-compatible.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "D004",
+      "area": "decision",
+      "requirement": "Decision resource-vs-resource comparison filters compatible resources.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "D005",
+      "area": "decision",
+      "requirement": "Decision branch edits persist through save/reopen.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "C001",
+      "area": "canvas",
+      "requirement": "Auto-layout add buttons insert at the intended position/path.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "C002",
+      "area": "canvas",
+      "requirement": "Decision branches render and remain independently editable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "C003",
+      "area": "canvas",
+      "requirement": "Groups collapse/expand without losing members or wiring.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "C004",
+      "area": "canvas",
+      "requirement": "Free-form mode supports moving and connecting supported nodes without corrupting flow metadata.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "C005",
+      "area": "canvas",
+      "requirement": "Switching layout modes either preserves semantics or blocks with a clear recoverable error.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "C006",
+      "area": "canvas",
+      "requirement": "Undo/redo restores functional flow state.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "C007",
+      "area": "canvas",
+      "requirement": "Canvas leaves no functional dead zone that prevents reaching or editing nodes.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "C008",
+      "area": "canvas",
+      "requirement": "Toolbar controls remain individually operable without overlap or clipped hit targets.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "P001",
+      "area": "persistence",
+      "requirement": "Save creates or updates a valid editable draft.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "P002",
+      "area": "persistence",
+      "requirement": "Save As New Version preserves prior versions and the editable graph.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "P003",
+      "area": "persistence",
+      "requirement": "Save As New Flow creates an independent editable flow.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "P004",
+      "area": "persistence",
+      "requirement": "Reopen after save preserves Start, resources, nodes, branches, properties and layout semantics.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "P005",
+      "area": "persistence",
+      "requirement": "Activation only succeeds for a valid saved version.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "P006",
+      "area": "persistence",
+      "requirement": "Deactivate preserves the editable definition.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "X001",
+      "area": "execution",
+      "requirement": "Run executes the most recent saved version with correct inputs/context.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "X002",
+      "area": "execution",
+      "requirement": "Debug executes with inspectable inputs/results and supported wait behavior.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "X003",
+      "area": "execution",
+      "requirement": "Tests support saved scenarios and assertions where applicable.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "X004",
+      "area": "execution",
+      "requirement": "Rollback mode prevents committed record changes where promised.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "X005",
+      "area": "execution",
+      "requirement": "Skip-start options behave only where supported.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "X006",
+      "area": "execution",
+      "requirement": "Runtime failures surface actionable errors without corrupting the saved definition.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "M001",
+      "area": "metadata",
+      "requirement": "Builder contains no business-specific object/action/field mappings.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "M002",
+      "area": "metadata",
+      "requirement": "Business behavior is represented as editable metadata/flow steps, not hidden CALL_FUNCTION logic.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "M003",
+      "area": "metadata",
+      "requirement": "Generic runtime primitives may execute metadata but must not encode app-specific business behavior.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "M004",
+      "area": "metadata",
+      "requirement": "Provider secrets remain masked and are referenced through secure provider metadata.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "M005",
+      "area": "metadata",
+      "requirement": "All labels, fields, actions, visibility and bindings are resolved from metadata where business-specific.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "N001",
+      "area": "negative",
+      "requirement": "Missing metadata produces a clear configuration error instead of silently inventing fields or behavior.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "N002",
+      "area": "negative",
+      "requirement": "Wrong resource type cannot be silently accepted into an incompatible input.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "N003",
+      "area": "negative",
+      "requirement": "A removed/renamed field does not resolve to an unrelated field.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "N004",
+      "area": "negative",
+      "requirement": "Malformed/incomplete flow cannot be activated as valid.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "N005",
+      "area": "negative",
+      "requirement": "A backend/runtime error does not get reported as a successful execution.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "Q001",
+      "area": "quality",
+      "requirement": "Every discovered functional defect gets a permanent regression test before closure.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "Q002",
+      "area": "quality",
+      "requirement": "Critical behavior tests are mutation-checked: deliberate breakage must make the relevant test fail.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "Q003",
+      "area": "quality",
+      "requirement": "Final verification is performed fresh against current code, not by trusting earlier audit output.",
+      "status": "UNTESTED",
+      "evidence": []
+    },
+    {
+      "id": "Q004",
+      "area": "quality",
+      "requirement": "No requirement may be counted toward completion while marked UNTESTED.",
+      "status": "UNTESTED",
+      "evidence": []
+    }
+  ],
+  "phase3": {
+    "status": "IN_PROGRESS",
+    "note": "Till and Kiosk legacy pages/routes/packages removed by user direction; reusable retail platform capabilities retained as generic metadata/runtime primitives.",
+    "lastVerificationHead": "c359e72675b95c73bb86f1b1bc654aaf15954799"
+  }
+}
