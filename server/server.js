@@ -76,7 +76,6 @@ import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enfor
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
-import createPaypalQrRouter from "./routes/paypalQr.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
@@ -1954,7 +1953,6 @@ app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeA
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
-app.use("/api", createPaypalQrRouter({ authenticate, authorize, db, connectorDrivers, writeAudit }));
 app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
 app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
