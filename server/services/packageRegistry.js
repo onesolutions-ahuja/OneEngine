@@ -2404,7 +2404,10 @@ export function packageDefinition(entry) {
           { objectKey:"payment",name:"Payment amount must be positive",triggerKey:"before_save",conditions:[{field:"amount",operator:"less_than_or_equal",value:0}],action:{type:"validation",message:"Payment amount must be greater than zero"} },
         ],
         buttons: [
-          { objectKey:"sale",buttonKey:"till_complete_sale",label:"Complete Sale",targetType:"workflow",targetKey:"Complete Sale",placement:"till_checkout",requiredPermission:"workflow.execute",inputMappings:{} }
+          { objectKey:"sale",buttonKey:"till_complete_sale",label:"Complete Sale",targetType:"workflow",targetKey:"Complete Sale",placement:"till_checkout",requiredPermission:"workflow.execute",inputMappings:{} },
+          { objectKey:"sale",buttonKey:"create_return",label:"Return",targetType:"workflow",targetKey:"Create Customer Return",placement:"record_action",requiredPermission:"workflow.execute",inputMappings:{} },
+          { objectKey:"sale",buttonKey:"create_exchange",label:"Exchange",targetType:"workflow",targetKey:"Create Exchange",placement:"record_action",requiredPermission:"workflow.execute",inputMappings:{} },
+          { objectKey:"till_session",buttonKey:"close_till",label:"Close Till",targetType:"workflow",targetKey:"Close Till Session",placement:"record_action",requiredPermission:"workflow.execute",inputMappings:{} }
         ],
         workflows: [
           {
