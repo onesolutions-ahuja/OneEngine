@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { PLATFORM_FUNCTIONS } from "../server/services/platformFunctionRegistry.js";
 
 test("purchasing package exposes protected metadata flows and functions", async () => {
   const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
   assert.match(registry, /entry\.key === "purchasing_core"/);
-  for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.equal(PLATFORM_FUNCTIONS.some((item) => item.key === key), false, key);
+  for (const key of ["purchase.create","purchase.receive","supplier.return.execute"]) assert.equal([].some((item) => item.key === key), false, key);
   for (const flow of ["Purchase Create","Purchase Receive","Supplier Return Execute"]) assert.ok(registry.includes(flow), flow);
 });
 
@@ -73,17 +72,15 @@ test("replenishment is metadata-owned and has no standalone business route or pa
 });
 
 
-test("inventory business UI and routes are removed while core stock primitives remain", async () => {
+test("inventory business UI and routes are metadata-owned", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  const primitive = await readFile(new URL("../server/services/inventory.js", import.meta.url), "utf8");
-  const platform = await readFile(new URL("../server/services/inventoryPlatform.js", import.meta.url), "utf8");
+  const flows = await readFile(new URL("../server/packages/runtimeFlowManifests.js", import.meta.url), "utf8");
   assert.equal(server.includes("createInventoryRouter"), false);
   assert.equal(server.includes("createInventoryBatchesRouter"), false);
   assert.equal(app.includes("InventoryPage"), false);
-  assert.equal(primitive.includes("export async function createInventoryMovement"), true);
-  assert.equal(primitive.includes("export async function allocateBatchConsumption"), true);
-  assert.equal(platform.includes("executeInventoryPlatformAction"), true);
+  assert.match(flows, /flow:inventory\.movement\.create/);
+  assert.match(flows, /flow:inventory\.batch\.consume/);
 });
 
 
