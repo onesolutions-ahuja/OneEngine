@@ -159,6 +159,25 @@ for(const file of roots.flatMap(walk)){
   }
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
+  if (name === "src/pages/developer/OneEngineManager.jsx") {
+    for (const token of [
+      "StoreTillSettingsPage","ClientWebShopSettings","PaymentTerminalSettings","HardwareSettings",
+      "AiAssistantSettings","ConnectionsSettings","GoogleConnectSettings","DeliverySettingsPage","WhatsAppAssistantSettings"
+    ]) if (text.includes(token)) findings.push({rule:"HARDCODED_DEVELOPER_SETTINGS_COMPONENT",file:name,token});
+  }
+  if (name === "src/App.jsx") {
+    for (const token of [
+      "PaymentTerminalSettings","HardwareSettings","AiAssistantSettings","ConnectionsSettings",
+      "WhatsAppAssistantSettings","SecurityIdentitySettings","MfaAdministrationSettings",
+      "SecurityGovernanceSettings","DataProtectionSettings","MetadataSettingsSection"
+    ]) if (text.includes(token)) findings.push({rule:"HARDCODED_APP_SETTINGS_COMPONENT",file:name,token});
+    if (/setRoute\(['"]settings['"]\s*,\s*['"](?:company|connections)['"]/.test(text)) {
+      findings.push({rule:"HARDCODED_SETTINGS_SECTION_ROUTE",file:name});
+    }
+  }
+  if (name === "src/pages/dashboard/DashboardPage.jsx" && /currency\s*=\s*['"]GBP['"]/.test(text)) {
+    findings.push({rule:"HARDCODED_DASHBOARD_CURRENCY_DEFAULT",file:name});
+  }
   if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
 
   // Retired action names may still appear in migration/diagnostic copy, but they
