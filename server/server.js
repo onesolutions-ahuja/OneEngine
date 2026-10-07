@@ -9,7 +9,6 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pg from "pg";
 import { initializeDatabase } from "./database/init.js";
-import { bootstrapInitialSuperadmin } from "./database/rbacBootstrap.js";
 import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs, enqueuePlatformJob } from "./services/platformJobs.js";
@@ -1669,7 +1668,7 @@ app.use(
 app.post("/api/setup/database", authenticate, authorize("oneengine.manage"), async (_req, res) => {
   try {
     if (!pool) return res.status(500).json({ success: false, message: "DATABASE_URL is not configured" });
-    await initializeDatabase(pool, { bootstrapSuperadmin: false });
+    await initializeDatabase(pool);
     return res.json({ success: true, message: "OneEngine database migrations are current" });
   } catch (error) {
     console.error("Database migration error:", error);
@@ -1778,7 +1777,7 @@ async function startServer() {
     if (!pool) throw new Error("DATABASE_URL is not configured");
     console.log(`onePOS: checking database connection host=${primaryDatabaseTarget?.host || "not-configured"} database=${primaryDatabaseTarget?.database || "not-configured"} sslmode=${primaryDatabaseTarget?.sslmode || "not-configured"}`);
     await db("SELECT NOW()");
-    await initializeDatabase(pool, { bootstrapSuperadmin: false });
+    await initializeDatabase(pool);
     console.log("onePOS: core database ready");
 
     // Catalogue availability is a core startup requirement, not part of the
@@ -2049,19 +2048,6 @@ async function startServer() {
       console.log(`onePOS ready and running on port ${PORT}`);
     }
 
-    // Reconcile the canonical company-bound Superadmin immediately after the
-    // core schema and listener are ready. This is intentionally before the
-    // potentially long metadata bootstrap so login/E2E cannot be stranded on
-    // a legacy identity during rolling deploys. The same idempotent bootstrap
-    // runs again after metadata creation to grant any newly-created objects.
-    await bootstrapInitialSuperadmin(pool, {
-      ...process.env,
-      BOOTSTRAP_SUPERADMIN_COMPANY_ID: process.env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || null,
-      BOOTSTRAP_TENANT_SUPERADMIN_EMAIL: "superadmin@onepos.com",
-      BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD: "marvel",
-      BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
-    });
-    console.log("onePOS: identity bootstrap ready");
 
     // Connector-specific lifecycle work is executed by connector metadata/flows.
     // Core startup intentionally contains no provider/package-specific reconciliation.
@@ -2126,15 +2112,6 @@ async function startServer() {
         bootstrapLockClient.release();
       }
     }
-    // Identity/profile synchronization remains idempotent and environment-driven.
-    await bootstrapInitialSuperadmin(pool, {
-      ...process.env,
-      BOOTSTRAP_SUPERADMIN_COMPANY_ID: process.env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || null,
-      BOOTSTRAP_TENANT_SUPERADMIN_EMAIL: "superadmin@onepos.com",
-      BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD: "marvel",
-      BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
-    });
-
     // Installed package manifests are the source of truth for managed metadata.
     // Refresh every active installation after bootstrap so package-owned fields,
     // relationships, layouts, workflows and actions do not drift behind code
