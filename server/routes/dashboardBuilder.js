@@ -13,7 +13,7 @@ import { dashboardAccessAtLeast, dashboardPrincipalExists, loadDashboardPrincipa
 
 
 
-export default function createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }) {
+export default function createDashboardBuilderRouter({ authenticate, authorize, db, hasCompanyWideScope, canAccessStore, writeAudit, hasPermission }) {
 
   const router = express.Router();
 
@@ -21,7 +21,7 @@ export default function createDashboardBuilderRouter({ authenticate, authorize, 
   const createPermission = authorize("dashboard.create");
   const editPermission = authorize("dashboard.edit");
   const subscribePermission = authorize("dashboard.subscribe");
-  const dashboardExecution = createDashboardExecution({ db, canViewCompanyCustomers, canAccessStore, hasPermission });
+  const dashboardExecution = createDashboardExecution({ db, hasCompanyWideScope, canAccessStore, hasPermission });
 
 
 
