@@ -3213,6 +3213,36 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
    * OPTIONAL — the workflow runs with page context (user/company/store) only.
    * There is no second workflow engine and no second action engine here.
    */
+  router.post("/platform/runtime/page-interactions/test", ...manage, async (req, res) => {
+    const startedAt = Date.now();
+    const interaction = req.body?.interaction && typeof req.body.interaction === "object" ? req.body.interaction : {};
+    const type = String(interaction.type || "");
+    const trace = [{ kind: "page_event", status: "started", at: new Date().toISOString(), detail: { nodeId: req.body?.nodeId || null, event: req.body?.event || "click", interactionType: type } }];
+    try {
+      if (!["workflow","screen_flow"].includes(type)) return res.status(422).json({ success:false,message:"Page Test rollback currently executes Flow-backed interactions only",data:{rolledBack:true,trace} });
+      const workflowUuid=String(interaction.workflowUuid||"");
+      if(!recordIdIsValid(workflowUuid)) return res.status(400).json({success:false,message:"A valid Flow reference is required"});
+      const workflowResult=await db("SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",[workflowUuid,req.user.companyId]);
+      const workflow=workflowResult.rows[0]||null;
+      if(!workflow)return res.status(404).json({success:false,message:"Configured Flow not found"});
+      const objectResult=workflow.object_id?await db("SELECT * FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) LIMIT 1",[workflow.object_id,req.user.companyId]):{rows:[]};
+      const object=objectResult.rows[0]||null;
+      const fields=object?((await db("SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",[object.id,req.user.companyId])).rows||[]):[];
+      let record=null;const recordId=req.body?.recordId?String(req.body.recordId):null;
+      if(recordId&&object){if(!recordIdIsValid(recordId))return res.status(400).json({success:false,message:"Invalid test record"});const clauses=["id=$1"],params=[recordId];if(object.company_scoped!==false){params.push(req.user.companyId);clauses.push(`company_id=${params.length}`);}if(object.store_scoped){if(!req.user.storeId)return res.status(403).json({success:false,message:"A store session is required"});params.push(req.user.storeId);clauses.push(`store_id=${params.length}`);}appendSystemReadScope(object,req,clauses,params);record=(await db(`SELECT * FROM "${object.source_table}" WHERE ${clauses.join(" AND ")} LIMIT 1`,params)).rows[0]||null;if(!record)return res.status(404).json({success:false,message:"Test record not found"});}
+      const rawInputs=interaction.inputs&&typeof interaction.inputs==="object"?interaction.inputs:{};
+      const pageContext=req.body?.pageContext&&typeof req.body.pageContext==="object"?req.body.pageContext:{};
+      const suppliedInputs=resolvePageBindingTree(rawInputs,{currentUser:req.user,currentRecord:record,pageParameters:pageContext.params||{},pageVariables:pageContext.variables||{},components:pageContext.components||{},flowOutputs:pageContext.flows||{}});
+      const variables={variables:{},steps:{}};for(const input of Array.isArray(workflow.action?.inputContract)?workflow.action.inputContract:[]){const name=String(input?.name||"").trim();if(!name)continue;const value=Object.prototype.hasOwnProperty.call(suppliedInputs,name)?suppliedInputs[name]:input.defaultValue;if(input.required===true&&(value===undefined||value===null||String(value).trim()===""))return res.status(422).json({success:false,message:`Input ${input.label||name} is required`});if(value!==undefined)variables.variables[name]=value;}
+      trace.push({kind:"flow",status:"started",at:new Date().toISOString(),detail:{workflowId:workflow.id,name:workflow.name,inputs:variables.variables}});
+      const client=await pool.connect();let run=null;
+      try{await client.query("BEGIN");run=await createWorkflowRun({db,companyId:req.user.companyId,workflowId:workflow.id,workflowName:workflow.name,workflowVersion:Number(workflow.active_version||workflow.version||1),objectId:object?.id||null,recordId:record?.id||null,triggerKey:"PAGE_TEST",status:"RUNNING",metadata:{test:true,rollbackMode:true,pageTest:true,actorUserId:req.user.id||null}});
+        const results=await executeWorkflowActions({actions:Array.isArray(workflow.action?.actions)?workflow.action.actions:[],allActions:Array.isArray(workflow.action?.actions)?workflow.action.actions:[],db:(q,p=[])=>client.query(q,p),pool,req,object,fields,record,recordId:record?.id||null,companyId:req.user.companyId,runId:run?.id||null,workflowVersion:Number(workflow.active_version||workflow.version||1),trigger:"PAGE_TEST",workflowVariables:variables,rollbackCurrentTransaction:async()=>{await client.query("ROLLBACK");await client.query("BEGIN");}});
+        await client.query("ROLLBACK");trace.push({kind:"flow",status:"completed",at:new Date().toISOString(),detail:{results,variables}});trace.push({kind:"rollback",status:"completed",at:new Date().toISOString(),detail:{databaseChanges:"rolled_back"}});return res.json({success:true,data:{status:workflowResultsContainStatus(results,"waiting")?"WAITING":"COMPLETED",rolledBack:true,externalActionsSimulated:true,runId:run?.id||null,variables,results,trace,durationMs:Date.now()-startedAt}});
+      }catch(error){await client.query("ROLLBACK").catch(()=>{});trace.push({kind:"error",status:"failed",at:new Date().toISOString(),detail:{message:error.message}});return res.status(error.status||500).json({success:false,message:error.message||"Page Test failed",data:{rolledBack:true,trace,durationMs:Date.now()-startedAt}});}finally{client.release();}
+    } catch(error){trace.push({kind:"error",status:"failed",at:new Date().toISOString(),detail:{message:error.message}});return res.status(error.status||500).json({success:false,message:error.message||"Unable to test page interaction",data:{rolledBack:true,trace,durationMs:Date.now()-startedAt}});}
+  });
+
   router.post("/platform/runtime/page-interactions/execute", authenticate, async (req, res, next) => {
     try {
       const interaction = req.body || {};
