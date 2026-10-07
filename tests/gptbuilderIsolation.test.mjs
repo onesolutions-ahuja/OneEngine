@@ -1376,7 +1376,7 @@ test('GPT Builder exposes masked provider metadata as reusable Flow resources', 
   assert.match(runtime, /workflowVariables\.variables\[variableName\]/)
   assert.match(runtime, /__secureFields/)
   assert.match(runtime, /__secureValues/)
-  assert.match(runtime, /output\.split\(secret\)\.join/)
+  assert.match(runtime, /\.split\(secret\)\.join\("????????"|"\*\*\*\*\*\*\*\*"\)/)
 })
 
 
