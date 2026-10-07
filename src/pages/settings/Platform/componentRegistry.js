@@ -93,6 +93,20 @@ export const FALLBACK_COMPONENT_REGISTRY = Object.freeze([]);
  * ------------------------------------------------------------------------ */
 
 export const COMPONENT_ICONS = {
+  folder_card: FolderTree,
+  avatar_group: UserCircle,
+  modern_app_card: AppWindow,
+  modern_kpi_card: LayoutDashboard,
+  modern_section_header: PanelTop,
+  modern_data_card: Table,
+  icon_action_tile: MousePointerClick,
+  editable_grid: Table,
+  spatial_board: LayoutDashboard,
+  timer: Clock3,
+  route_plan: Map,
+  structured_field: Braces,
+  analytics_table: Table,
+  dashboard_image: ImageIcon,
   section: Square,
   card: Square,
   grid: Columns3,

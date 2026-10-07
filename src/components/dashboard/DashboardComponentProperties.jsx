@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { platformFieldChoices } from "./platformDashboard.js";
 import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";
+import { useComponentRegistry, componentByKey } from "../../pages/settings/Platform/componentRegistry.js";
 
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
 const STYLE = { borderColor: "var(--onepos-border)", background: "var(--onepos-surface-raised)", color: "var(--onepos-text-primary)" };
@@ -39,6 +40,10 @@ function useFields(objectId) {
 export default function DashboardComponentProperties({ component, onChange }) {
   const { reports: drillReports } = useReports();
   const config = component.config || {};
+  const registry = useComponentRegistry();
+  const spec = componentByKey(registry, component.registryKey || component.type);
+  const metadataConfigurable = Array.isArray(spec?.configurable) ? spec.configurable : [];
+  const isMetadataConfigured = Boolean(spec && spec.runtimeKind !== "analytics" && !["text","image","clock_widget","calendar_widget","weather_widget"].includes(component.type));
   const savedReport = drillReports.find((item) => String(item.id) === String(config.reportId || ""));
   const report = savedReport?.definition || config.report || {};
   const isPlatform = true;
@@ -68,7 +73,16 @@ export default function DashboardComponentProperties({ component, onChange }) {
   };
   return <div className="mt-3 grid gap-3 md:grid-cols-2">
     <div className="md:col-span-2"><span className={LABEL}>Title</span><input className={FIELD} style={STYLE} value={component.title || ""} onChange={(event) => onChange({ ...component, title: event.target.value })} /></div>
-    {component.type === "text" ? <div className="md:col-span-2"><span className={LABEL}>Content</span><textarea className={FIELD} rows={3} style={STYLE} value={config.content || ""} onChange={(event) => setConfig({ content: event.target.value })} /></div> : isImage ? <>
+    {isMetadataConfigured ? <>
+      {metadataConfigurable.map((key) => {
+        const value = config[key];
+        if (typeof value === "boolean") return <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={value} onChange={(event) => setConfig({ [key]: event.target.checked })}/>{key.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}</label>;
+        if (value && typeof value === "object") return <div key={key} className="md:col-span-2"><span className={LABEL}>{key.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}</span><textarea className={FIELD} rows={2} style={STYLE} value={JSON.stringify(value)} onChange={(event) => { try { setConfig({ [key]: JSON.parse(event.target.value) }); } catch { /* keep last valid metadata value */ } }} /></div>;
+        return <div key={key}><span className={LABEL}>{key.replace(/([A-Z])/g, " $1").replace(/_/g, " ")}</span><input className={FIELD} style={STYLE} value={value ?? ""} onChange={(event) => setConfig({ [key]: event.target.value })} /></div>;
+      })}
+      <div><span className={LABEL}>Width (grid columns, 1–12)</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.w ?? 6} onChange={layout("w")} /></div>
+      <div><span className={LABEL}>Height</span><input type="number" min={1} max={12} className={FIELD} style={STYLE} value={component.layout?.h ?? 4} onChange={layout("h")} /></div>
+    </> : component.type === "text" ? <div className="md:col-span-2"><span className={LABEL}>Content</span><textarea className={FIELD} rows={3} style={STYLE} value={config.content || ""} onChange={(event) => setConfig({ content: event.target.value })} /></div> : isImage ? <>
       <div className="md:col-span-2"><span className={LABEL}>Image URL</span><input className={FIELD} style={STYLE} value={config.imageUrl || ""} placeholder="https://…" onChange={(event) => setConfig({ imageUrl: event.target.value })} /></div>
       <div><span className={LABEL}>Alternative text</span><input className={FIELD} style={STYLE} value={config.altText || ""} onChange={(event) => setConfig({ altText: event.target.value })} /></div>
       <div><span className={LABEL}>Image fit</span><select className={FIELD} style={STYLE} value={config.imageFit || "contain"} onChange={(event) => setConfig({ imageFit: event.target.value })}><option value="contain">Contain</option><option value="cover">Cover</option></select></div>

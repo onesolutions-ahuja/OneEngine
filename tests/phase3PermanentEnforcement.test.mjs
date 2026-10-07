@@ -65,3 +65,17 @@ test("root production build includes server verification before Vite", async () 
   assert.ok(vite > serverBuild, "Vite must run after server verification");
   assert.match(build, /phase3PermanentEnforcement\.test\.mjs/);
 });
+
+
+test("repository closure gate classifies every executable file and is required by build/CI", async () => {
+  const classifier = await read("scripts/audit-repository-classification.mjs");
+  const pkg = JSON.parse(await read("package.json"));
+  const workflow = await read(".github/workflows/validate.yml");
+  assert.match(classifier, /UNCLASSIFIED_EXECUTABLE/);
+  assert.match(classifier, /repository-classification-audit\.json/);
+  assert.match(classifier, /violationsRemaining/);
+  assert.match(String(pkg.scripts?.build || ""), /audit-repository-classification\.mjs/);
+  assert.match(workflow, /npm ls --all/);
+  assert.match(workflow, /audit:repository-classification/);
+  assert.match(workflow, /repository-closure-evidence/);
+});
