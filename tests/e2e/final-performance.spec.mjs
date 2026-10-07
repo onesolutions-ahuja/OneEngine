@@ -46,6 +46,11 @@ const ROUTES = [
   "developer/debug",
 ];
 
+const BATCH_SIZE = 9;
+const ROUTE_BATCHES = Array.from({ length: Math.ceil(ROUTES.length / BATCH_SIZE) }, (_, index) =>
+  ROUTES.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE)
+);
+
 const FATAL = /Resolving client context|Checking OneEngine permissions|OneEngine service is unavailable|Failed to fetch|Application error|Something went wrong|Unable to load this page|This screen could not be displayed|This app is not available in this workspace/i;
 const MAX_PAGE_MS = 1500;
 
@@ -73,10 +78,9 @@ async function navigateSpa(page, baseURL, route) {
   return ended - started;
 }
 
-test("live login and every app page stay within 1.5 seconds", async ({ page, baseURL }) => {
-  const failures = watchRuntimeFailures(page);
-  const timings = [];
+test.describe.configure({ mode: "serial" });
 
+test("live login server time stays within 1.5 seconds", async ({ page }) => {
   const username = process.env.ONEPOS_E2E_USERNAME || "";
   const password = process.env.ONEPOS_E2E_PASSWORD || "";
   const apiBase = String(process.env.ONEPOS_E2E_API_BASE_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "");
@@ -85,22 +89,43 @@ test("live login and every app page stay within 1.5 seconds", async ({ page, bas
   });
   expect(loginResponse.ok(), `login HTTP ${loginResponse.status()}`).toBe(true);
   const loginServerTotal = serverTotalMs(loginResponse.headers()["server-timing"] || "");
+  console.log(`PERF_LOGIN ${Math.round(loginServerTotal)}ms`);
   expect(Number.isFinite(loginServerTotal), "login must expose total Server-Timing").toBe(true);
-  expect(loginServerTotal, `server login time ${loginServerTotal}ms exceeded 1500ms`).toBeLessThanOrEqual(1500);
-
-  expect(await loginIfConfigured(page), "authenticated login must run").toBe(true);
-
-  // Let authenticated idle-prefetch start before measuring navigation. This is
-  // part of the real post-login experience and removes first-click chunk cost.
-  await page.waitForTimeout(550);
-  failures.length = 0;
-
-  for (const route of ROUTES) {
-    const elapsed = await navigateSpa(page, baseURL, route);
-    timings.push({ route, elapsed: Math.round(elapsed) });
-    expect(elapsed, `${route} navigation took ${Math.round(elapsed)}ms; limit is ${MAX_PAGE_MS}ms`).toBeLessThanOrEqual(MAX_PAGE_MS);
-  }
-
-  expect(failures, failures.join("\n")).toEqual([]);
-  console.table(timings);
+  expect(loginServerTotal, `server login time ${loginServerTotal}ms exceeded 1500ms`).toBeLessThanOrEqual(MAX_PAGE_MS);
 });
+
+for (const [batchIndex, routes] of ROUTE_BATCHES.entries()) {
+  test(`page performance batch ${batchIndex + 1}/${ROUTE_BATCHES.length}`, async ({ page, baseURL }, testInfo) => {
+    test.setTimeout(90_000);
+    const failures = watchRuntimeFailures(page);
+    const timings = [];
+    const slowRoutes = [];
+
+    expect(await loginIfConfigured(page), "authenticated login must run").toBe(true);
+    await page.waitForTimeout(550);
+    failures.length = 0;
+
+    for (const route of routes) {
+      try {
+        const elapsed = await navigateSpa(page, baseURL, route);
+        const rounded = Math.round(elapsed);
+        timings.push({ route, elapsed: rounded });
+        console.log(`PERF_TIMING ${route} ${rounded}ms`);
+        if (elapsed > MAX_PAGE_MS) slowRoutes.push({ route, elapsed: rounded });
+      } catch (error) {
+        timings.push({ route, elapsed: null, error: error?.message || String(error) });
+        slowRoutes.push({ route, elapsed: null, error: error?.message || String(error) });
+        console.log(`PERF_TIMING ${route} ERROR ${error?.message || error}`);
+      }
+    }
+
+    console.table(timings);
+    await testInfo.attach(`performance-batch-${batchIndex + 1}.json`, {
+      body: Buffer.from(JSON.stringify({ timings, slowRoutes, failures }, null, 2)),
+      contentType: "application/json",
+    });
+
+    expect(failures, failures.join("\n")).toEqual([]);
+    expect(slowRoutes, `routes over ${MAX_PAGE_MS}ms: ${JSON.stringify(slowRoutes)}`).toEqual([]);
+  });
+}
