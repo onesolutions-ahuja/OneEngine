@@ -35,7 +35,6 @@ import {
   normalizePermissionState,
 } from "./navCatalogue.js";
 import {
-  PAGE_SLUGS,
   buildAppPath,
   buildCustomPagePath,
   buildObjectPath,
