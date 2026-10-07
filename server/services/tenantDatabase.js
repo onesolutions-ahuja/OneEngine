@@ -272,7 +272,7 @@ export async function initializeTenantSchema(pool) {
   const state = await validateTenantSchema(pool);
   if (![TENANT_SCHEMA_STATES.UNINITIALIZED, TENANT_SCHEMA_STATES.MIGRATION_REQUIRED].includes(state)) return state;
   try {
-    await initializeDatabase(pool, { bootstrapSuperadmin: false });
+    await initializeDatabase(pool);
   } catch (error) {
     const wrapped = sanitizeTenantDatabaseError(error);
     wrapped.operation = "initialize_schema";
