@@ -1,40 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BadgeCheck, Building2, ChevronRight, CreditCard, HardDrive, Mail, MessageSquare, Rocket, Search, Settings2, ShieldCheck, ShoppingCart, Smartphone, Store, Users } from 'lucide-react'
+import { BadgeCheck, ChevronRight, Rocket, Search, Settings2, Users } from 'lucide-react'
 import { apiRequest, getStoredSessionPermissions, loadSessionPermissions, getActingCompanyId, setActingCompanyId } from '../../services/api'
 import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadUsers, saveRolePermissions, updateRole, updateUser } from '../../services/settings'
 import MetadataSettingsPage from '../settings/MetadataSettingsPage'
-import StoreTillSettingsPage from '../settings/StoreTillSettingsPage'
-import ClientWebShopSettings from '../settings/ClientWebShopSettings'
-import PaymentTerminalSettings from '../settings/PaymentTerminalSettings'
-import HardwareSettings from '../settings/HardwareSettings'
-import AiAssistantSettings from '../settings/AiAssistantSettings'
-import ConnectionsSettings from '../settings/ConnectionsSettings'
-import GoogleConnectSettings from '../settings/GoogleConnectSettings'
-import DeliverySettingsPage from '../settings/DeliverySettingsPage'
-import WhatsAppAssistantSettings from '../settings/WhatsAppAssistantSettings'
 import LicensingAdmin from '../superadmin/LicensingAdmin'
 import AppReleasesAdmin from '../superadmin/AppReleasesAdmin'
 
 const ITEMS=[
-  ['company','Company & Regional',Building2],
+  ['settings','Settings',Settings2],
   ['users','Users & Roles',Users],
-  ['store-till','Store & Till',Store],
-  ['web-shop','Client Web Shop',ShoppingCart],
-  ['payment-terminals','Payment Terminals',CreditCard],
-  ['hardware','Hardware',HardDrive],
-  ['ai','AI Assistant',ShieldCheck],
-  ['connections','Connections',Settings2],
-  ['google','Google Connect',ShieldCheck],
-  ['email','Email Delivery',Mail],
-  ['sms','SMS Delivery',Smartphone],
-  ['whatsapp','WhatsApp',MessageSquare],
   ['licensing','Licences & Entitlements',BadgeCheck],
   ['releases','App Releases',Rocket],
 ]
 
 function CoreCompanySettings() {
-  return <MetadataSettingsPage initialSection="company" />
-}
+  return <MetadataSettingsPage />
+}}
 
 function UsersRoles({companyId}){
   const [users,setUsers]=useState([]),[roles,setRoles]=useState([]),[error,setError]=useState('')
@@ -50,7 +31,7 @@ function UsersRoles({companyId}){
 }
 
 export default function OneEngineManager(){
-  const [clients,setClients]=useState([]),[selected,setSelected]=useState(()=>getActingCompanyId()||''),[active,setActive]=useState('company'),[query,setQuery]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState('')
+  const [clients,setClients]=useState([]),[selected,setSelected]=useState(()=>getActingCompanyId()||''),[active,setActive]=useState('settings'),[query,setQuery]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState('')
   const loadClients=async()=>{try{setLoading(true);setError('');const cached=getStoredSessionPermissions();if(cached&&!cached?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required');const [permissions,r]=await Promise.all([cached?Promise.resolve(cached):loadSessionPermissions(),apiRequest('/api/platform/developer/companies')]);if(!permissions?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required');const rows=Array.isArray(r?.data)?r.data:[];setClients(rows);const valid=rows.some(x=>String(x.id)===String(selected));if(!valid&&rows[0])await chooseClient(rows[0].id)}catch(e){setError(e?.message||'Unable to load clients')}finally{setLoading(false)}}
   useEffect(()=>{void loadClients()},[])
   const chooseClient=async(id)=>{if(!id)return;try{setError('');await apiRequest('/api/platform/developer/acting-company',{method:'PUT',body:JSON.stringify({actingCompanyId:id})});setActingCompanyId(id);setSelected(id)}catch(e){setError(e?.message||'Unable to select client')}}
@@ -59,21 +40,11 @@ export default function OneEngineManager(){
   const render=()=>{
     const key=`${active}:${selected}`
     if(!selected)return <div className="settings-state-card">Select a client.</div>
-    if(active==='company')return <CoreCompanySettings key={key} companyId={selected}/>
+    if(active==='settings')return <CoreCompanySettings key={key} companyId={selected}/>
     if(active==='users')return <UsersRoles key={key} companyId={selected}/>
-    if(active==='store-till')return <StoreTillSettingsPage key={key}/>
-    if(active==='web-shop')return <ClientWebShopSettings key={key}/>
-    if(active==='payment-terminals')return <PaymentTerminalSettings key={key}/>
-    if(active==='hardware')return <HardwareSettings key={key}/>
-    if(active==='ai')return <AiAssistantSettings key={key}/>
-    if(active==='connections')return <ConnectionsSettings key={key}/>
-    if(active==='google')return <GoogleConnectSettings key={key}/>
-    if(active==='email')return <DeliverySettingsPage key={key} channel="email"/>
-    if(active==='sms')return <DeliverySettingsPage key={key} channel="sms"/>
-    if(active==='whatsapp')return <WhatsAppAssistantSettings key={key}/>
     if(active==='licensing')return <div className="superadmin-theme"><LicensingAdmin key={key} companyId={selected} lockCompany/></div>
     if(active==='releases')return <div className="superadmin-theme"><AppReleasesAdmin key={key}/></div>
-    return null
+    return <CoreCompanySettings key={key} companyId={selected}/>
   }
   return <div className="oneengine-manager-shell">
     <aside className="oneengine-client-pane">
