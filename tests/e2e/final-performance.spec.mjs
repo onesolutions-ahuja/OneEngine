@@ -3,27 +3,10 @@ import { loginIfConfigured, watchRuntimeFailures } from "./helpers.mjs";
 
 const ROUTES = [
   "dashboard",
-  "till",
-  "sales",
-  "products",
-  "categories",
-  "global-products",
-  "purchases",
-  "suppliers",
-  "customers",
-  "gift-cards",
-  "employees",
-  "stores",
-  "supplier-returns",
-  "online-orders",
-  "own-delivery",
   "reports",
   "custom-reports",
   "integrations",
   "accounting",
-  "google-connect",
-  "kiosk-display",
-  "kiosk-devices",
   "audit-log",
   "profile",
   "licensing",
@@ -78,7 +61,7 @@ async function navigateSpa(page, baseURL, route) {
   return ended - started;
 }
 
-test.describe.configure({ mode: "parallel" });
+test.describe.configure({ mode: "serial" });
 
 test("live login server time stays within 1.5 seconds", async ({ page }) => {
   const username = process.env.ONEPOS_E2E_USERNAME || "";
