@@ -222,8 +222,8 @@ const retiredRuntimeFlowKeys = [
 ];
 const residualRetiredRuntimeKeys = retiredRuntimeFlowKeys.filter((key) => runtimeFlowManifestsSource.includes(`flow("${key}"`));
 const hardcodedLicenceRuntimePresent = /executeLicenceRequestPackageAction|LICENCE_REQUEST_PACKAGE|Licence Request Created/.test(platformWorkflowSource);
-const expectedRuntimeWorkflowCount = 82;
-const expectedAllowedShortWorkflowCount = 8;
+const expectedRuntimeWorkflowCount = 54;
+const expectedAllowedShortWorkflowCount = 3;
 const workflowDenominatorMatches = runtimeWorkflowInventory.length === expectedRuntimeWorkflowCount;
 const shortWorkflowCountMatches = shortRuntimeWorkflows.length === expectedAllowedShortWorkflowCount;
 
