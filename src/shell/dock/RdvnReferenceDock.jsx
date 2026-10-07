@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import JarvisOrb from '../jarvis/JarvisOrb'
 
-export const dockItems = [
+export const defaultDockItems = [
   { id: 'launchpad', label: 'Launcher', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Launchpad.png`, scaled: true },
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png`, scaled: true },
   { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: true },
@@ -18,7 +18,7 @@ const trashItem = {
   src: 'https://rdvnui.com/assets/Trash%20Full-BoE_wJYh.png',
 }
 
-const mobileDockItems = [
+const defaultMobileDockItems = [
   { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png` },
   { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg?v=20261004a` },
   { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png` },
@@ -42,7 +42,7 @@ function DockItem({ item, mouseX, onActivate }) {
   )
 }
 
-export default function RdvnReferenceDock({ onItemOpen }) {
+export default function RdvnReferenceDock({ onItemOpen, items = defaultDockItems, mobileItems = defaultMobileDockItems }) {
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
 
   return (
@@ -53,7 +53,7 @@ export default function RdvnReferenceDock({ onItemOpen }) {
           onMouseMove={(event) => mouseX.set(event.pageX)}
           onMouseLeave={() => mouseX.set(Number.POSITIVE_INFINITY)}
         >
-          {dockItems.map((item) => (
+          {items.map((item) => (
             <DockItem key={item.id} item={item} mouseX={mouseX} onActivate={() => onItemOpen?.(item.id)} />
           ))}
         </motion.div>
@@ -69,7 +69,7 @@ export default function RdvnReferenceDock({ onItemOpen }) {
       </div>
 
       <div className="efb-mobile-dock" aria-label="OneEngine mobile dock">
-        {mobileDockItems.map((item) => (
+        {mobileItems.map((item) => (
           <button key={item.id} type="button" className="efb-mobile-dock-item" onClick={() => onItemOpen?.(item.id)} aria-label={item.label} title={item.label}>
             <span className="efb-mobile-dock-icon-wrap">
               <img className={`efb-mobile-dock-image${item.id === 'workspace' ? ' efb-mobile-dock-image--app-art' : ''}`} src={item.src} alt="" draggable="false" />
