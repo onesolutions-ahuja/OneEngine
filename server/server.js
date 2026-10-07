@@ -1202,8 +1202,10 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
+    const passwordAwaitStartedAt = Date.now();
     const validPassword = await passwordCheckPromise;
     loginTimings.bcrypt_ms = bcryptDurationMs;
+    loginTimings.password_wait_ms = Date.now() - passwordAwaitStartedAt;
 
     if (validPassword) {
       try {
@@ -1244,6 +1246,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
+    loginTimings.post_password_gap_ms = Date.now() - passwordAwaitStartedAt;
     const authorizationStartedAt = Date.now();
     const [access, assurancePolicy, trustedDevice] = await Promise.all([
       accessDecision(loginDb, {
@@ -1363,6 +1366,8 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       `acting_company;dur=${loginTimings.acting_company_lookup_ms || 0}`,
       `permissions;dur=${loginTimings.permissions_ms || 0}`,
       `security_preflight;dur=${loginTimings.security_preflight_ms || 0}`,
+      `password_wait;dur=${loginTimings.password_wait_ms || 0}`,
+      `post_password_gap;dur=${loginTimings.post_password_gap_ms || 0}`,
       `authorization;dur=${loginTimings.authorization_bundle_ms || 0}`,
       `finalization;dur=${loginTimings.finalization_ms || 0}`,
       `total;dur=${loginTimings.total_ms || 0}`,

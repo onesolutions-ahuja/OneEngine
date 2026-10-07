@@ -68,23 +68,24 @@ test("live login server time stays within 1.5 seconds", async ({ page }) => {
   const password = process.env.ONEPOS_E2E_PASSWORD || "";
   const apiBase = String(process.env.ONEPOS_E2E_API_BASE_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "");
   try {
+    const requestStartedAt = performance.now();
     const loginResponse = await page.request.post(apiBase + "/api/auth/login", {
       data: { email: username, password }, timeout: 30_000,
     });
+    const requestElapsed = performance.now() - requestStartedAt;
     const timingHeader = loginResponse.headers()["server-timing"] || "";
     console.log(`PERF_LOGIN_COMPONENTS ${timingHeader || "missing"}`);
     if (!loginResponse.ok()) {
-      console.log(`PERF_LOGIN_FAIL HTTP_${loginResponse.status()} target=${MAX_PAGE_MS}ms`);
-      return;
+      throw new Error(`PERF_LOGIN_FAIL HTTP_${loginResponse.status()} target=${MAX_PAGE_MS}ms`);
     }
     const loginServerTotal = serverTotalMs(timingHeader);
-    console.log(`PERF_LOGIN ${Number.isFinite(loginServerTotal) ? Math.round(loginServerTotal) + "ms" : "ERROR"}`);
+    console.log(`PERF_LOGIN ${Number.isFinite(loginServerTotal) ? Math.round(loginServerTotal) + "ms" : "ERROR"} request=${Math.round(requestElapsed)}ms`);
     if (!Number.isFinite(loginServerTotal) || loginServerTotal > MAX_PAGE_MS) {
-      console.log(`PERF_LOGIN_FAIL ${Number.isFinite(loginServerTotal) ? Math.round(loginServerTotal) + "ms" : "missing_timing"} target=${MAX_PAGE_MS}ms`);
+      throw new Error(`PERF_LOGIN_FAIL ${Number.isFinite(loginServerTotal) ? Math.round(loginServerTotal) + "ms" : "missing_timing"} request=${Math.round(requestElapsed)}ms target=${MAX_PAGE_MS}ms`);
     }
   } catch (error) {
     console.log(`PERF_LOGIN ERROR ${error?.message || error}`);
-    console.log(`PERF_LOGIN_FAIL request_error target=${MAX_PAGE_MS}ms`);
+    throw error;
   }
 });
 
