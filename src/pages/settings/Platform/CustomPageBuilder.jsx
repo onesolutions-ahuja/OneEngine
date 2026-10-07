@@ -138,7 +138,7 @@ const BUILDER_CSS = `
   .cpb-device-frame.is-desktop{width:100%;min-width:760px;box-shadow:none;background:transparent}
   .cpb-device-frame.is-tablet{width:820px;min-height:1080px;border:10px solid #202428;border-radius:26px;padding:14px}
   .cpb-device-frame.is-mobile{width:390px;min-height:844px;border:10px solid #202428;border-radius:34px;padding:14px}
-  .cpb-device-frame.is-kiosk{width:1024px;min-height:768px;border:12px solid #202428;border-radius:18px;padding:14px}
+  .cpb-device-frame.is-kiosk{width:540px;height:960px;min-height:960px;aspect-ratio:9/16;border:12px solid #202428;border-radius:24px;padding:14px;overflow:auto}
   .cpb-device-frame.is-tablet:before,.cpb-device-frame.is-mobile:before{content:"";display:block;width:42px;height:5px;margin:-5px auto 10px;border-radius:999px;background:#50555a}
   .cpb-canvas .onepos-card{border-color:#dfe3e7!important;box-shadow:none!important;background:#fff!important}
   .cpb-empty{display:grid;place-items:center;min-height:110px;border:1px dashed #cfd5da;border-radius:10px;background:#fbfcfc;color:#76808a;text-align:center;font-size:12px}
