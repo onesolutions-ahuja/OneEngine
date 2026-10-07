@@ -1691,7 +1691,7 @@ function RegistryDrivenProperties({ node, meta, objects, onChange, targetCompone
       return <div key={key} className="space-y-1"><label className={labelClass}>Title</label><input className={inputClass} value={node.title || ""} onChange={(event) => onChange({ title: event.target.value })} /></div>;
     }
     if (key === "objectKey") {
-      return <div key={key} className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={config.objectKey || ""} onChange={(event) => patchConfig("objectKey", event.target.value)}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>;
+      return <div key={key} className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={config.objectKey || ""} onChange={(event) => onChange({ config: { ...config, objectKey: event.target.value, filters: [], conditionMatch: "all", sort: [] } })}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>;
     }
     if (key === "dataSource") {
       return <div key={key} className="space-y-1"><label className={labelClass}>Data Source</label><select className={inputClass} value={config.dataSource || "records"} onChange={(event) => patchConfig("dataSource", event.target.value)}><option value="records">Object records</option><option value="static">Static values</option></select></div>;
