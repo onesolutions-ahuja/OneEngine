@@ -26,7 +26,6 @@ const DEVELOPER_ITEMS = [
   { key: 'canvas-ux-test', label: 'Canvas UX Test', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
   { key: 'gpt-page-builder', label: 'GPT Page Builder', icon: AppWindow },
-    { key: 'page-builder', label: 'Page Builder', icon: AppWindow },
   { key: 'dashboard-builder', label: 'Dashboard Builder', icon: LayoutDashboard },
   { key: 'report-types', label: 'Report Types', icon: ListChecks },
   { key: 'report-builder', label: 'Report Builder', icon: BarChart3 },
@@ -221,7 +220,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'gpt-page-builder' ? <GPTPageBuilder context="developer" onBack={() => select('objects')} /> :
-          current.key === 'page-builder' ? <OneBuilder initialTab="page" singleBuilder />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
             : current.key === 'report-types' ? <ReportTypeManager />
             : current.key === 'report-builder' ? <OneBuilder initialTab="report" singleBuilder />
