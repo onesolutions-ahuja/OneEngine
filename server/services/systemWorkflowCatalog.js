@@ -1,4 +1,3 @@
-import { PACKAGE_RUNTIME_FLOWS } from "../packages/runtimeFlowManifests.js";
 
 const outputVariable = (name, dataType = "Text", extra = {}) => ({
   value: `variables.${name}`,
@@ -63,7 +62,7 @@ function titleCase(value = "") {
 }
 
 export function systemWorkflowDefinitions() {
-  return [...PLATFORM_SYSTEM_WORKFLOWS, ...PACKAGE_RUNTIME_FLOWS].map(withBuilderMetadata);
+  return PLATFORM_SYSTEM_WORKFLOWS.map(withBuilderMetadata);
 }
 
 export async function ensureSystemWorkflowCatalog({ db, companyId, userId = null }) {
