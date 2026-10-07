@@ -436,9 +436,9 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
       return {
         id: uid("tree_view"), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
         config: {
-          parentField: "parent_id",
-          labelField: "name",
-          secondaryField: "status",
+          parentField: "",
+          labelField: "",
+          secondaryField: "",
           maxDepth: 3,
           showCounts: true,
           allowCollapse: true,
@@ -454,8 +454,8 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
         label: meta.label,
         collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 1, pagination: false, fields: [] },
         config: {
-          statusField: "status",
-          titleField: "name",
+          statusField: "",
+          titleField: "",
           stages: [],
           allowStageChange: false,
           keyFields: [],
@@ -466,15 +466,15 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     }
     if (["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"].includes(componentKey)) {
       const defaults = {
-        timeline: { dateField: "created_at", titleField: "name", secondaryField: "status", groupBy: "day", maxRecords: 10 },
-        kanban: { groupField: "status", titleField: "name", subtitleField: "status", maxRecords: 12, allowDragDrop: true },
-        calendar: { startField: "start_date", endField: "end_date", titleField: "name", subtitleField: "status", categoryField: "status", statusField: "status", statusColors: {}, defaultView: "month" },
-        scheduler: { resourceField: "assignee_id", resourceLabelField: "name", startField: "start_at", endField: "end_at", titleField: "name", statusField: "status", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
-        gantt: { taskLabelField: "name", startField: "start_date", endField: "end_date", progressField: "progress", scale: "week" },
-        map: { locationMode: "latlng", latitudeField: "latitude", longitudeField: "longitude", labelField: "name", defaultZoom: 10 },
-        hierarchy_viewer: { parentField: "parent_id", titleField: "name", maxDepth: 3, orientation: "vertical" },
-        file_viewer: { displayMode: "grid", filenameField: "filename", typeField: "file_type", maxItems: 12 },
-        signature: { fieldKey: "signature", label: "Signature", displayMode: "capture", width: 320, height: 180 },
+        timeline: { dateField: "", titleField: "", secondaryField: "", groupBy: "day", maxRecords: 10 },
+        kanban: { groupField: "", titleField: "", subtitleField: "", maxRecords: 12, allowDragDrop: true },
+        calendar: { startField: "", endField: "", titleField: "", subtitleField: "", categoryField: "", statusField: "", statusColors: {}, defaultView: "month" },
+        scheduler: { resourceField: "", resourceLabelField: "name", startField: "", endField: "", titleField: "", statusField: "", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
+        gantt: { taskLabelField: "", startField: "", endField: "", progressField: "", scale: "week" },
+        map: { locationMode: "latlng", latitudeField: "", longitudeField: "", labelField: "", defaultZoom: 10 },
+        hierarchy_viewer: { parentField: "", titleField: "", maxDepth: 3, orientation: "vertical" },
+        file_viewer: { displayMode: "grid", filenameField: "", typeField: "", maxItems: 12 },
+        signature: { fieldKey: "", label: "Signature", displayMode: "capture", width: 320, height: 180 },
       }[componentKey];
       return {
         id: uid(componentKey), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
@@ -1710,9 +1710,9 @@ function TreeViewProperties({ node, objects, pageResources = {}, onChange, targe
         <div className="space-y-3">
           <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
             <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Hierarchy</legend>
-            <FieldSelect label="Parent Field" value={config.parentField || "parent_id"} fields={availableFields} onChange={(parentField) => onChange({ config: { ...config, parentField } })} />
-            <FieldSelect label="Label Field" value={config.labelField || "name"} fields={availableFields} onChange={(labelField) => onChange({ config: { ...config, labelField } })} />
-            <FieldSelect label="Secondary Field" value={config.secondaryField || "status"} fields={availableFields} onChange={(secondaryField) => onChange({ config: { ...config, secondaryField } })} />
+            <FieldSelect label="Parent Field" value={config.parentField || ""} fields={availableFields} onChange={(parentField) => onChange({ config: { ...config, parentField } })} />
+            <FieldSelect label="Label Field" value={config.labelField || ""} fields={availableFields} onChange={(labelField) => onChange({ config: { ...config, labelField } })} />
+            <FieldSelect label="Secondary Field" value={config.secondaryField || ""} fields={availableFields} onChange={(secondaryField) => onChange({ config: { ...config, secondaryField } })} />
             <div className="space-y-1">
               <label className={labelClass}>Maximum Depth</label>
               <input className={inputClass} type="number" min={1} max={6} value={config.maxDepth ?? 3} onChange={(event) => onChange({ config: { ...config, maxDepth: Number(event.target.value) || 3 } })} />
@@ -1773,28 +1773,28 @@ function AdvancedComponentProperties({ node, objects, pageResources = {}, onChan
           <>
             <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
               <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Fields</legend>
-              <FieldSelect label="Title Field" value={config.titleField || config.labelField || "name"} fields={availableFields} onChange={(titleField) => setConfig({ titleField, labelField: titleField })} />
-              {node.componentKey === "timeline" ? <FieldSelect label="Date Field" value={config.dateField || "created_at"} fields={availableFields} onChange={(dateField) => setConfig({ dateField })} /> : null}
-              {node.componentKey === "timeline" ? <FieldSelect label="Secondary Field" value={config.secondaryField || "status"} fields={availableFields} onChange={(secondaryField) => setConfig({ secondaryField })} /> : null}
-              {node.componentKey === "kanban" ? <FieldSelect label="Group Field" value={config.groupField || "status"} fields={availableFields} onChange={(groupField) => setConfig({ groupField })} /> : null}
-              {node.componentKey === "kanban" ? <FieldSelect label="Subtitle Field" value={config.subtitleField || "status"} fields={availableFields} onChange={(subtitleField) => setConfig({ subtitleField })} /> : null}
-              {node.componentKey === "calendar" ? <FieldSelect label="Start Field" value={config.startField || "start_date"} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
-              {node.componentKey === "calendar" ? <FieldSelect label="End Field" value={config.endField || "end_date"} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
-              {node.componentKey === "calendar" ? <FieldSelect label="Status Field" value={config.statusField || "status"} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
+              <FieldSelect label="Title Field" value={config.titleField || config.labelField || ""} fields={availableFields} onChange={(titleField) => setConfig({ titleField, labelField: titleField })} />
+              {node.componentKey === "timeline" ? <FieldSelect label="Date Field" value={config.dateField || ""} fields={availableFields} onChange={(dateField) => setConfig({ dateField })} /> : null}
+              {node.componentKey === "timeline" ? <FieldSelect label="Secondary Field" value={config.secondaryField || ""} fields={availableFields} onChange={(secondaryField) => setConfig({ secondaryField })} /> : null}
+              {node.componentKey === "kanban" ? <FieldSelect label="Group Field" value={config.groupField || ""} fields={availableFields} onChange={(groupField) => setConfig({ groupField })} /> : null}
+              {node.componentKey === "kanban" ? <FieldSelect label="Subtitle Field" value={config.subtitleField || ""} fields={availableFields} onChange={(subtitleField) => setConfig({ subtitleField })} /> : null}
+              {node.componentKey === "calendar" ? <FieldSelect label="Start Field" value={config.startField || ""} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
+              {node.componentKey === "calendar" ? <FieldSelect label="End Field" value={config.endField || ""} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
+              {node.componentKey === "calendar" ? <FieldSelect label="Status Field" value={config.statusField || ""} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
               {node.componentKey === "calendar" ? <div className="space-y-1"><label className={labelClass}>Status colours (JSON)</label><textarea className={inputClass} rows={3} value={JSON.stringify(config.statusColors || {}, null, 2)} onChange={(event) => { try { const statusColors = JSON.parse(event.target.value || "{}"); setConfig({ statusColors }); } catch { /* keep last valid metadata */ } }} placeholder='{"Available":"#22c55e","Booked":"#ef4444"}' /></div> : null}
-              {node.componentKey === "scheduler" ? <FieldSelect label="Start Field" value={config.startField || "start_at"} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
-              {node.componentKey === "scheduler" ? <FieldSelect label="End Field" value={config.endField || "end_at"} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
-              {node.componentKey === "scheduler" ? <FieldSelect label="Resource Field" value={config.resourceField || "assignee_id"} fields={availableFields} onChange={(resourceField) => setConfig({ resourceField })} /> : null}
-              {node.componentKey === "gantt" ? <FieldSelect label="Start Field" value={config.startField || "start_date"} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
-              {node.componentKey === "gantt" ? <FieldSelect label="End Field" value={config.endField || "end_date"} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
-              {node.componentKey === "map" ? <FieldSelect label="Latitude Field" value={config.latitudeField || "latitude"} fields={availableFields} onChange={(latitudeField) => setConfig({ latitudeField })} /> : null}
-              {node.componentKey === "map" ? <FieldSelect label="Longitude Field" value={config.longitudeField || "longitude"} fields={availableFields} onChange={(longitudeField) => setConfig({ longitudeField })} /> : null}
+              {node.componentKey === "scheduler" ? <FieldSelect label="Start Field" value={config.startField || ""} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
+              {node.componentKey === "scheduler" ? <FieldSelect label="End Field" value={config.endField || ""} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
+              {node.componentKey === "scheduler" ? <FieldSelect label="Resource Field" value={config.resourceField || ""} fields={availableFields} onChange={(resourceField) => setConfig({ resourceField })} /> : null}
+              {node.componentKey === "gantt" ? <FieldSelect label="Start Field" value={config.startField || ""} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
+              {node.componentKey === "gantt" ? <FieldSelect label="End Field" value={config.endField || ""} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
+              {node.componentKey === "map" ? <FieldSelect label="Latitude Field" value={config.latitudeField || ""} fields={availableFields} onChange={(latitudeField) => setConfig({ latitudeField })} /> : null}
+              {node.componentKey === "map" ? <FieldSelect label="Longitude Field" value={config.longitudeField || ""} fields={availableFields} onChange={(longitudeField) => setConfig({ longitudeField })} /> : null}
               {node.componentKey === "map" ? <FieldSelect label="Address Field" value={config.addressField || ""} fields={availableFields} onChange={(addressField) => setConfig({ addressField })} /> : null}
-              {node.componentKey === "hierarchy_viewer" ? <FieldSelect label="Parent Field" value={config.parentField || "parent_id"} fields={availableFields} onChange={(parentField) => setConfig({ parentField })} /> : null}
-              {node.componentKey === "hierarchy_viewer" ? <FieldSelect label="Status Field" value={config.statusField || "status"} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
-              {node.componentKey === "file_viewer" ? <FieldSelect label="Filename Field" value={config.filenameField || "filename"} fields={availableFields} onChange={(filenameField) => setConfig({ filenameField })} /> : null}
-              {node.componentKey === "file_viewer" ? <FieldSelect label="Type Field" value={config.typeField || "file_type"} fields={availableFields} onChange={(typeField) => setConfig({ typeField })} /> : null}
-              {node.componentKey === "signature" ? <FieldSelect label="Target Field" value={config.fieldKey || "signature"} fields={availableFields} onChange={(fieldKey) => setConfig({ fieldKey })} /> : null}
+              {node.componentKey === "hierarchy_viewer" ? <FieldSelect label="Parent Field" value={config.parentField || ""} fields={availableFields} onChange={(parentField) => setConfig({ parentField })} /> : null}
+              {node.componentKey === "hierarchy_viewer" ? <FieldSelect label="Status Field" value={config.statusField || ""} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
+              {node.componentKey === "file_viewer" ? <FieldSelect label="Filename Field" value={config.filenameField || ""} fields={availableFields} onChange={(filenameField) => setConfig({ filenameField })} /> : null}
+              {node.componentKey === "file_viewer" ? <FieldSelect label="Type Field" value={config.typeField || ""} fields={availableFields} onChange={(typeField) => setConfig({ typeField })} /> : null}
+              {node.componentKey === "signature" ? <FieldSelect label="Target Field" value={config.fieldKey || ""} fields={availableFields} onChange={(fieldKey) => setConfig({ fieldKey })} /> : null}
             </fieldset>
             <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
               <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Behavior</legend>
