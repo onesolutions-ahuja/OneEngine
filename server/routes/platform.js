@@ -3111,9 +3111,34 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
        * record-transition operators and are rejected here as meaningless for a
        * standing filter.
        */
-      const conditions = Array.isArray(collection.conditions) ? collection.conditions.slice(0, 20) : [];
+      const rawConditions = Array.isArray(collection.conditions) ? collection.conditions.slice(0, 20) : [];
       const conditionMatch = collection.conditionMatch === "any" ? "any" : "all";
+      const pageContext = collection.pageContext && typeof collection.pageContext === "object" && !Array.isArray(collection.pageContext) ? collection.pageContext : {};
+      const bindingContext = {
+        // Current User is always authoritative server session data. Page-owned
+        // values may drive a query, but never weaken object/FLS/sharing gates.
+        currentUser: req.user,
+        currentRecord: pageContext.currentRecord && typeof pageContext.currentRecord === "object" ? pageContext.currentRecord : null,
+        pageParameters: pageContext.params && typeof pageContext.params === "object" ? pageContext.params : {},
+        pageVariables: pageContext.variables && typeof pageContext.variables === "object" ? pageContext.variables : {},
+        components: pageContext.components && typeof pageContext.components === "object" ? pageContext.components : {},
+        flowOutputs: pageContext.flows && typeof pageContext.flows === "object" ? pageContext.flows : {},
+        resolveFormula: (expression) => evaluateWorkflowFormula(expression, {
+          user: req.user,
+          record: pageContext.currentRecord || {},
+          page: { params: pageContext.params || {}, variables: pageContext.variables || {} },
+          components: pageContext.components || {},
+          flows: pageContext.flows || {},
+        }),
+      };
+      let conditions;
       try {
+        conditions = rawConditions.map((condition) => ({
+          ...condition,
+          value: ["is_empty", "is_not_empty"].includes(condition?.operator)
+            ? null
+            : resolvePageBindingTree(condition?.value, bindingContext),
+        }));
         if (conditions.length) validateConditionConfig({ match: conditionMatch, conditions }, fields, "Record Collection conditions");
       } catch (error) {
         if (error instanceof ConditionError) return res.status(400).json({ success: false, code: error.code, message: error.message });
@@ -3277,6 +3302,23 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
+      const pageContext = interaction.pageContext && typeof interaction.pageContext === "object" && !Array.isArray(interaction.pageContext) ? interaction.pageContext : {};
+      const bindingContext = {
+        currentUser: req.user,
+        currentRecord: record,
+        pageParameters: pageContext.params || {},
+        pageVariables: pageContext.variables || {},
+        components: pageContext.components || {},
+        flowOutputs: pageContext.flows || {},
+        resolveFormula: (expression) => evaluateWorkflowFormula(expression, {
+          user: req.user,
+          record: record || {},
+          page: { params: pageContext.params || {}, variables: pageContext.variables || {} },
+          components: pageContext.components || {},
+          flows: pageContext.flows || {},
+        }),
+      };
+
       if (type === "workflow") {
         const workflowUuid = String(interaction.workflowUuid || "");
         if (!recordIdIsValid(workflowUuid)) return res.status(400).json({ success: false, message: "A valid workflow reference is required" });
@@ -3291,6 +3333,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
         const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
         if (!actions.length) return res.status(422).json({ success: false, message: "Configured workflow contains no executable actions" });
+        const rawInputs = interaction.inputs && typeof interaction.inputs === "object" && !Array.isArray(interaction.inputs) ? interaction.inputs : {};
+        const suppliedInputs = resolvePageBindingTree(rawInputs, bindingContext);
+        const workflowVariables = { variables: {}, steps: {} };
+        for (const input of Array.isArray(workflow.action?.inputContract) ? workflow.action.inputContract : []) {
+          const name = String(input?.name || "").trim();
+          if (!name) continue;
+          const value = Object.prototype.hasOwnProperty.call(suppliedInputs, name) ? suppliedInputs[name] : input.defaultValue;
+          if (input.required === true && (value === undefined || value === null || String(value).trim() === "")) {
+            return res.status(422).json({ success: false, message: `Input ${input.label || name} is required` });
+          }
+          if (value !== undefined) workflowVariables.variables[name] = value;
+        }
         for (const workflowAction of actions) {
           validateWorkflowAction(workflowAction);
           const definition = getWorkflowActionDefinition(workflowAction.type || workflowAction.key);
@@ -3325,6 +3379,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             runId: run?.id || null,
             workflowVersion: Number(workflow.active_version || workflow.version || 1),
             trigger: "page_interaction",
+            workflowVariables,
           });
           const waiting = workflowResultsContainStatus(results, "waiting");
           if (run?.id) {
@@ -3337,7 +3392,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
               [waiting ? "WAITING" : "COMPLETED", run.id, req.user.companyId]
             );
           }
-          return res.json({ success: true, data: { runId: run?.id || null, status: waiting ? "WAITING" : "COMPLETED", results } });
+          return res.json({ success: true, data: { runId: run?.id || null, status: waiting ? "WAITING" : "COMPLETED", results, variables: workflowVariables.variables, steps: workflowVariables.steps } });
         } catch (error) {
           if (run?.id) {
             await db(
@@ -9267,10 +9322,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         trigger: "before_delete",
         req,
       });
-      // Objects with an active field use archive semantics.  This keeps the
-      // RECORD_DELETE command generic while preserving historical relationships
-      // (sales, stock, invoices, etc.). Objects without an active field may be
-      // physically deleted when their metadata permission allows it.
+      // Objects with an active field use archive semantics so generic record
+      // deletion can preserve historical relationships. Objects without an active
+      // field may be physically deleted when their metadata permission allows it.
       const activeField = fields.find(field => field.active !== false && field.source_column === "active");
       let result;
       let archived = false;
