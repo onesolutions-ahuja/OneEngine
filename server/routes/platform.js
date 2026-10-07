@@ -984,7 +984,7 @@ function validAssignmentDates(body) {
     && (!fromDate || !untilDate || untilDate > fromDate);
 }
 
-export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyCustomers = async () => false, hasPermission = null }) {
+export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, hasCompanyWideScope = async () => false, hasPermission = null }) {
   const router = express.Router();
 
   // Express 4 does not forward rejected async route promises to error
@@ -1059,7 +1059,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   // /platform metadata request (objects, fields, relationships, etc.).
   async function resolvePlatformCompanyCustomerScope(req, res, next) {
     try {
-      req.platformCompanyCustomers = await canViewCompanyCustomers(req.user, req);
+      req.platformCompanyCustomers = await hasCompanyWideScope(req.user, req);
       next();
     } catch (error) {
       next(error);
