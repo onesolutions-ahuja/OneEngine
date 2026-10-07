@@ -155,6 +155,17 @@ function normalizeNavigationTargetValue(value) {
   return target;
 }
 
+function normalizeEventInteractions(value, fallbackInteraction) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const allowed = ["click","change","select","submit","load","row_click","scan","success","error"];
+  const result = {};
+  for (const eventName of allowed) {
+    if (source[eventName]) result[eventName] = normalizeInteraction(source[eventName]);
+  }
+  if (!Object.keys(result).length && fallbackInteraction) result.click = normalizeInteraction(fallbackInteraction);
+  return result;
+}
+
 function normalizeInteraction(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const type = ON_CLICK_TYPES.includes(source.type ?? source.onClickType ?? source.on_click) ? (source.type ?? source.onClickType ?? source.on_click) : "none";
@@ -337,6 +348,8 @@ function normalizeComponentNode(node) {
     required: node?.required === true,
     readOnly: node?.readOnly === true || node?.read_only === true,
     conditions: node?.conditions && typeof node.conditions === "object" && !Array.isArray(node.conditions) ? node.conditions : null,
+    eventName: ["click","change","select","submit","load","row_click","scan","success","error"].includes(node?.eventName) ? node.eventName : "click",
+    interactions: normalizeEventInteractions(node?.interactions, node?.interaction ?? node?.on_click),
     layout: {
       width: safeNumber(rawLayout.width, 0, { min: 0, max: 2400 }),
       height: safeNumber(rawLayout.height, 0, { min: 0, max: 1800 }),
