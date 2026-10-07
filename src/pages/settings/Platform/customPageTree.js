@@ -253,7 +253,9 @@ function normalizeAdvancedConfig(componentKey, value) {
       titleField,
       subtitleField: asApiName(source.subtitleField ?? source.subtitle_field),
       categoryField: asApiName(source.categoryField ?? source.category_field, "status"),
-      defaultView: asEnum(source.defaultView ?? source.default_view, ["month", "week", "day"], "month"),
+      statusField: asApiName(source.statusField ?? source.status_field, "status"),
+      statusColors: source.statusColors && typeof source.statusColors === "object" && !Array.isArray(source.statusColors) ? Object.fromEntries(Object.entries(source.statusColors).slice(0, 24).map(([key, value]) => [String(key).slice(0, 80), String(value).slice(0, 64)])) : {},
+      defaultView: asEnum(source.defaultView ?? source.default_view, ["month", "week", "day", "list"], "month"),
       createAction: asBool("createAction", false),
     };
   }
