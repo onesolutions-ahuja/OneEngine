@@ -1145,6 +1145,15 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                   minWidth: 0,
                   width: Number(node.layout?.width) > 0 ? `min(100%, ${Number(node.layout.width)}px)` : undefined,
                   minHeight: Number(node.layout?.height) > 0 ? Number(node.layout.height) : undefined,
+                  backgroundColor: node.style?.backgroundColor || undefined,
+                  color: node.style?.color || undefined,
+                  borderColor: node.style?.borderColor || undefined,
+                  borderStyle: Number(node.style?.borderWidth) > 0 ? "solid" : undefined,
+                  borderWidth: Number(node.style?.borderWidth) > 0 ? Number(node.style.borderWidth) : undefined,
+                  borderRadius: Number(node.style?.borderRadius) >= 0 ? Number(node.style.borderRadius) : undefined,
+                  padding: Number(node.style?.padding) > 0 ? Number(node.style.padding) : undefined,
+                  boxShadow: node.style?.shadow === "small" ? "0 1px 3px rgba(15,23,42,.12)" : node.style?.shadow === "medium" ? "0 4px 12px rgba(15,23,42,.14)" : node.style?.shadow === "large" ? "0 10px 28px rgba(15,23,42,.18)" : undefined,
+                  overflow: node.style?.shape === "pill" || Number(node.style?.borderRadius) > 0 ? "hidden" : undefined,
                 }}
                 className={`${builderMode && selectedId === node.id ? "cpb-selected" : ""}`}
               >
