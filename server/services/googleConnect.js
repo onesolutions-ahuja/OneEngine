@@ -183,7 +183,7 @@ export async function saveGoogleConnectConfiguration(db, companyId, userId, inpu
   if (current.connection?.id) {
     await db(
       `UPDATE integration_connections
-          SET name='Google Connect', provider_name=COALESCE(provider_name,'identity'), integration_type=COALESCE(integration_type,'identity'),
+          SET name=$7, provider_name=$8, integration_type=COALESCE(integration_type,'identity'),
               connector_package_key=$1, connector_configuration=$2::jsonb,
               credentials_encrypted=NULL, enabled=$3,
               connection_status=$4, last_error=NULL, updated_at=NOW()
@@ -195,6 +195,8 @@ export async function saveGoogleConnectConfiguration(db, companyId, userId, inpu
         enabled && configured ? "CONFIGURED" : "NOT_CONNECTED",
         current.connection.id,
         companyId,
+        String(input.name || current.package?.name || connectorPackageKey()),
+        String(input.providerKey || current.package?.manifest?.providerConnector?.providerKey || "identity"),
       ]
     );
   } else {
