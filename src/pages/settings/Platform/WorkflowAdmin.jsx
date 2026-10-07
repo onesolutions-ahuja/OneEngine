@@ -552,7 +552,7 @@ const WORKFLOW_VISUAL_CSS = `
   .workflow-node-card[data-node-type="DELETE_RECORD"]::before { content: "−"; background: #ba0517; }
   .workflow-node-card[data-node-type="RUN_SUBFLOW"]::before { content: "⇢"; background: #0176d3; }
   .workflow-node-card[data-node-type="WAIT"]::before { content: "◷"; background: #9050e9; }
-  .workflow-node-card[data-node-type="SEND_EMAIL"]::before { content: "✉"; background: #0176d3; }
+  .workflow-node-card[data-node-type="SEND_COMMUNICATION"]::before { content: "✉"; background: #0176d3; }
   .workflow-node-card:hover {
     transform: translateY(-1px);
     border-color: #9bbce0;
@@ -3842,11 +3842,11 @@ function flowApiName(label = "") {
   return prefixed.slice(0, 80);
 }
 
-function createBlankWorkflow(scopeKey = null) {
+function createBlankWorkflow() {
   return {
-    name: scopeKey === "whatsapp_assistant" ? "WhatsApp Assistant Flow" : "",
+    name: "",
     object: "",
-    trigger: scopeKey === "whatsapp_assistant" ? "whatsapp_message_received" : "manual",
+    trigger: "manual",
     version: 1,
     lifecycleStatus: "DRAFT",
     active: false,
@@ -3857,21 +3857,16 @@ function createBlankWorkflow(scopeKey = null) {
     inputContract: [],
     outputContract: [],
     actionMetadata: {
-      apiName: scopeKey === "whatsapp_assistant" ? "WhatsApp_Assistant_Flow" : "",
+      apiName: "",
       description: "",
-      flowType: scopeKey === "whatsapp_assistant" ? "PLATFORM_EVENT_TRIGGERED" : "AUTOLAUNCHED",
+      flowType: "AUTOLAUNCHED",
       optimizeFor: "ACTIONS_AND_RELATED_RECORDS",
       includeAsyncPath: false,
       schedule: { scheduleType: "DAILY", timezone: "", definition: { time: "" } },
       builderLayout: { mode: "AUTO", positions: {} },
       builderGroups: [],
     },
-    steps: scopeKey === "whatsapp_assistant"
-      ? [
-          { ...makeStep("WHEN"), type: "CONDITION", label: "Decision" },
-          { ...makeStep("SEND_COMMUNICATION"), config: { ...makeStep("SEND_COMMUNICATION").config, channel: "", template: "", recipient: "" } },
-        ]
-      : [],
+    steps: [],
   };
 }
 
@@ -6523,7 +6518,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [], flowIssues = [], onOpenFlowProperties, canvasCommand = null }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, registryOptions, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [], flowIssues = [], onOpenFlowProperties, canvasCommand = null }) {
   const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -8854,7 +8849,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
 
 
   useEffect(() => {
-    if (scopeKey === "whatsapp_assistant") return;
     apiRequest("/api/platform/workflow-triggers")
       .then((response) => {
         const options = Array.isArray(response?.data) ? response.data : [];
@@ -9063,7 +9057,8 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const enabledSteps = (workflow.steps || []).filter((step) => step.enabled !== false);
   const conditionSteps = enabledSteps.filter((step) => step.type === "CONDITION");
   const actionSteps = enabledSteps.filter((step) => step.type !== "CONDITION");
-  const triggerNeedsObject = !["manual","whatsapp_message_received","system_function","system_action","system_job"].includes(workflow.trigger);
+  const selectedTriggerDefinition = triggerOptions.find((item) => String(item.key || item.value || "") === String(workflow.trigger || ""));
+  const triggerNeedsObject = selectedTriggerDefinition?.requiresObject === true || selectedTriggerDefinition?.requires_object === true;
   const triggerIssue = !workflow.trigger
     ? "Choose a trigger."
     : triggerNeedsObject && !workflow.object
@@ -10294,7 +10289,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       ) : null}
 
       <div id="workflow-canvas-section">
-          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} canvasCommand={canvasCommand} />
+          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} registryOptions={registryOptions} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} canvasCommand={canvasCommand} />
         </div>
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
         {reviewIssue || "Trigger, conditions and actions are valid."}
