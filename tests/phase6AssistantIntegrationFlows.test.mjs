@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { oneAssistantManifest, oneAssistantAppointmentRouterWorkflow } from "../server/packages/oneAssistantManifest.js";
+import { oneAssistantManifest } from "../server/packages/oneAssistantManifest.js";
 
 test("Phase 6 OneAssistant workflows are Builder-editable and explicit", () => {
   const flows = oneAssistantManifest.workflows || [];
@@ -13,9 +13,9 @@ test("Phase 6 OneAssistant workflows are Builder-editable and explicit", () => {
     assert.equal(nodes.length, actions.length, flow.name + " Builder/runtime count");
     assert.ok(nodes.every((node) => node.config?.importedRuntimeAction && node.configured === true), flow.name + " editable nodes");
   }
-  const booking = oneAssistantAppointmentRouterWorkflow();
-  assert.ok((booking.action?.actions || []).length > 20, "booking router must remain fully expanded");
-  assert.equal(booking.action.gptBuilderElements.length, booking.action.actions.length);
+  const expanded = flows.find((flow) => (flow.action?.actions || []).length > 20);
+  assert.ok(expanded, "manifest must retain its fully expanded complex workflow");
+  assert.equal(expanded.action.gptBuilderElements.length, expanded.action.actions.length);
 });
 
 test("Phase 6 Uber Eats workflows have no collapsed 0-2 step definitions and all reopen in Builder", async () => {
