@@ -106,12 +106,10 @@ export const AGGREGATES = Object.freeze(["COUNT", "SUM", "AVG", "MIN", "MAX"]);
 export const AGGREGATABLE_FIELD_TYPES = Object.freeze(["number", "decimal", "currency", "date", "datetime", "formula", "rollup"]);
 export const SUMMARY_COLUMN = (aggregate, field) => `${String(aggregate).toLowerCase()}_${field}`;
 
-export const DATE_FILTER_FIELDS = Object.freeze([
-  { key: "date", label: "Date", kind: "date" },
-  { key: "store", label: "Store", kind: "id" },
-  { key: "user", label: "Operator", kind: "id" },
-  { key: "product", label: "Product", kind: "id" },
-]);
+export function dateFilterFields(fields = []) {
+  return platformFieldChoices(fields).all.filter((field) => ["date", "datetime"].includes(String(field.type || "").toLowerCase()));
+}
+
 
 /* Field-type driven operator lists — the same rules the Custom Report builder
    already uses, so a condition authored here executes unchanged there. */
