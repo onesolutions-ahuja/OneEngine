@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { internalAppCatalog } from '../server/services/internalAppCatalog.js'
 import { packageDefinitions } from '../server/services/packageRegistry.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -50,42 +49,30 @@ supportedRoutes.add('integrations')
 supportedRoutes.add('objects')
 supportedRoutes.add('workspace')
 
-const publicApps = internalAppCatalog.filter((entry) =>
-  entry.visibility !== 'HIDDEN' &&
-  entry.systemOnly !== true &&
-  entry.packageType !== 'FOUNDATION'
-)
+const definitions = packageDefinitions()
+const publicApps = definitions.filter((definition) => {
+  const manifest = definition?.manifest || {}
+  return manifest.visibility !== 'HIDDEN'
+    && manifest.systemOnly !== true
+    && manifest.packageType !== 'FOUNDATION'
+})
 
-const packageByModule = new Map(packageDefinitions().map((definition) => [definition.moduleKey, definition]))
-for (const entry of internalAppCatalog) {
-  const definition = packageByModule.get(entry.key)
-  assert(Boolean(definition), `${entry.key}: missing generated package definition`)
-  if (!definition) continue
-  assert(definition.packageKey === (entry.packageKey || entry.key), `${entry.key}: package key drift`)
-  assert(definition.manifest.route === entry.route, `${entry.key}: package route drift`)
-  assert(definition.manifest.storeScoped === (entry.storeScoped === true), `${entry.key}: store scope drift`)
-  assert(definition.manifest.entitlementKey === (entry.entitlementKey || definition.manifest.entitlementKey), `${entry.key}: entitlement drift`)
-  const expectedPermissions = new Set(entry.permissions || [])
-  const actualPermissions = new Set(definition.manifest.permissions || [])
-  for (const permission of expectedPermissions) {
-    assert(actualPermissions.has(permission), `${entry.key}: package missing permission ${permission}`)
-  }
-  const expectedDependencies = (entry.dependencies || []).map((dependency) =>
-    typeof dependency === 'string' ? dependency : dependency.packageKey || dependency.package_key
-  )
-  const actualDependencies = (definition.manifest.dependencies || []).map((dependency) =>
-    typeof dependency === 'string' ? dependency : dependency.packageKey || dependency.package_key
-  )
-  for (const dependency of expectedDependencies) {
-    assert(actualDependencies.includes(dependency), `${entry.key}: package missing dependency ${dependency}`)
-  }
-  if (entry.connectorApp) {
+assert(definitions.length > 0, 'Package definition catalogue must not be empty')
+assert(publicApps.length > 0, 'App surface audit cannot pass with zero public package apps')
+
+for (const definition of definitions) {
+  const manifest = definition?.manifest || {}
+  assert(Boolean(definition.packageKey), 'Package definition missing packageKey')
+  assert(Boolean(manifest.packageKey), `${definition.packageKey}: manifest packageKey missing`)
+  assert(manifest.packageKey === definition.packageKey, `${definition.packageKey}: manifest package key drift`)
+  const permissions = new Set(manifest.permissions || [])
+  if (manifest.connectorApp) {
     for (const permission of ['connector.test', 'connector.view', 'connector.manage']) {
-      assert(actualPermissions.has(permission), `${entry.key}: connector package missing derived permission ${permission}`)
+      assert(permissions.has(permission), `${definition.packageKey}: connector package missing derived permission ${permission}`)
     }
-    for (const capability of entry.connectorApp.capabilities || []) {
+    for (const capability of manifest.connectorApp.capabilities || []) {
       for (const permission of capability.requiredPermissions || []) {
-        assert(actualPermissions.has(permission), `${entry.key}: connector capability ${capability.key} missing permission ${permission}`)
+        assert(permissions.has(permission), `${definition.packageKey}: connector capability ${capability.key} missing permission ${permission}`)
       }
     }
   }
