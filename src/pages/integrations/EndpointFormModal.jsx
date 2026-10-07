@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { Toggle } from "../../components/ui.jsx";
-import { ENTITY_TYPES, ENTITY_EVENT_HINT } from "./shared.jsx";
+import { ENTITY_EVENT_HINT } from "./shared.jsx";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
@@ -60,9 +60,7 @@ export default function EndpointFormModal({ integration, endpoint, onClose, onSa
               </label>
               <label className="block">
                 <span className="block text-xs font-medium text-slate-600 mb-1">Entity / event type</span>
-                <select value={entityType} onChange={(e) => setEntityType(e.target.value)} className="w-full h-9 px-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {ENTITY_TYPES.map((t) => <option key={t}>{t}</option>)}
-                </select>
+                <input value={entityType} onChange={(e) => setEntityType(e.target.value)} placeholder="Metadata event key" className="w-full h-9 px-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </label>
             </div>
             <p className="text-xs text-slate-400 -mt-1.5">{ENTITY_EVENT_HINT}</p>
