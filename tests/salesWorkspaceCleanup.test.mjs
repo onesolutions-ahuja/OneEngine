@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-test("Sales app list surface uses generic sale Workspace runtime", async () => {
+test("Sales app list surface resolves through the generic Workspace runtime", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  assert.match(app, /const SalesPage = lazyWithRecovery\(\(\) => import\('\.\/platform\/workspace\/WorkspacePage'\)\)/);
-  assert.match(app, /<SalesPage initialObjectKey="sale_ledger" appKey="sales" \/>/);
+  assert.match(app, /const WorkspacePage = lazyWithRecovery\(\(\) => import\('\.\/platform\/workspace\/WorkspacePage'\)\)/);
+  assert.match(app, /activeApp === 'workspace'/);
+  assert.match(app, /initialObjectKey=\{routeState\.objectKey \|\| ''\}/);
+  assert.match(app, /appKey=\{routeState\.appKey \|\| ''\}/);
   assert.equal(app.includes("./pages/sales/SalesPage"), false);
 });
 
