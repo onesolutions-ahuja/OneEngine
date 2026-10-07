@@ -54,9 +54,9 @@ const PUBLIC_MESSAGE_BY_CODE = Object.freeze({
   [JARVIS_ERROR_CODES.PROVIDER_BLOCKED]: "The AI service declined to answer that request.",
   [JARVIS_ERROR_CODES.EMPTY_RESPONSE]: "The AI service returned an empty answer. Please try again.",
   [JARVIS_ERROR_CODES.TOOL_PERMISSION_DENIED]:
-    "JARVES cannot view Sales for this account. Ask an administrator for Sales report access.",
+    "JARVES cannot use that tool for this account. Ask an administrator for the required access.",
   [JARVIS_ERROR_CODES.TOOL_UNAVAILABLE]:
-    "Sales data is not available right now. Please try again shortly.",
+    "The requested tool is not available right now. Please try again shortly.",
   [JARVIS_ERROR_CODES.JARVES_NOT_ENABLED]:
     "JARVES is not enabled for your user account. Ask an administrator to enable it.",
   [JARVIS_ERROR_CODES.UNKNOWN]: "JARVIS could not answer that question. Please try again.",
