@@ -1554,6 +1554,22 @@ export function seedPackageRegistry(pool) {
           )).rows
         : [];
       const moduleByKey = new Map(moduleRows.map((row) => [row.module_key, row]));
+      // Purge business metadata left in package_registry by older manifest-based builds.
+      // Current catalogue entries own package identity/entitlements only; business metadata lives in DB metadata.
+      const definitionKeys = definitions.map((definition) => definition.packageKey);
+      if (definitionKeys.length) {
+        await pool.query(
+          `UPDATE package_registry
+              SET manifest = manifest
+                - 'objects' - 'fields' - 'relationships' - 'forms' - 'layouts'
+                - 'rules' - 'workflows' - 'actions' - 'buttons' - 'reports'
+                - 'assistantTools' - 'templates',
+                  updated_at = NOW()
+            WHERE package_key=ANY($1::text[])`,
+          [definitionKeys]
+        );
+      }
+
       for (const definition of definitions) {
       const moduleRow = moduleByKey.get(definition.moduleKey);
       if (!moduleRow) continue;
