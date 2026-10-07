@@ -67,16 +67,18 @@ test('per-request session security skips unused trusted-network lookup and paral
   assert.match(source, /const \[sessionResult, state\] = await Promise\.all/)
 })
 
-test('login defers expensive permission-set expansion to authenticated session hydration', async () => {
+test('login defers permission expansion and uses generic identity-provider runtime', async () => {
   const server = await read('../server/server.js')
   const client = await read('../src/services/api.js')
-  assert.match(server, /const \[securityContext, googleRuntime\] = await Promise\.all/)
+  assert.equal(server.includes('getGoogleConnectPasswordLoginRuntime'), false)
+  assert.equal(server.includes('googleRuntime'), false)
   assert.equal(server.includes('const permissionsPromise = (async () =>'), false)
   assert.equal(server.includes('permissions: effectivePermissions'), false)
+  assert.match(server, /loadLoginSecurityContext\(loginDb/)
+  assert.match(server, /createIdentityProviderLoginRouter/)
   assert.match(client, /loadSessionPermissions/)
   assert.match(server, /app\.get\("\/api\/auth\/me\/permissions"/)
 })
-
 
 test('login reuses one preloaded security context instead of re-querying settings and policy', async () => {
   const server = await read('../server/server.js')
@@ -89,35 +91,6 @@ test('login reuses one preloaded security context instead of re-querying setting
   assert.match(security, /export async function loadLoginSecurityContext/)
   assert.match(assurance, /settingsOverride !== undefined/)
 })
-
-test('Google Connect login readiness can reuse the bundled login preflight rows', async () => {
-  const source = await read('../server/services/googleConnect.js')
-  assert.match(source, /export async function resolveGoogleConnectPasswordLoginRuntime/)
-  assert.match(source, /return resolveGoogleConnectPasswordLoginRuntime\(/)
-})
-
-test('password login resolves Google package, connection and entitlements in one parallel round', async () => {
-  const source = await read('../server/services/googleConnect.js')
-  const start = source.indexOf('export async function getGoogleConnectPasswordLoginRuntime')
-  const end = source.indexOf('export async function getGoogleConnectRuntimeForEmail', start)
-  const block = source.slice(start, end)
-  assert.match(block, /const \[packageResult, connectionResult, entitlements\] = await Promise\.all\(\[/)
-  assert.match(block, /getCompanyEntitlements\(db, companyId\)/)
-  const parallelRound = block.indexOf('const [packageResult, connectionResult, entitlements] = await Promise.all([')
-  const parallelBody = block.slice(parallelRound)
-  assert.equal(parallelBody.includes('return resolveGoogleConnectPasswordLoginRuntime('), false)
-})
-
-
-test('password verification runs alongside all login preflight reads and records its own duration', async () => {
-  const source = await read('../server/server.js')
-  assert.match(source, /const passwordCheckPromise = \(async \(\) =>/)
-  assert.match(source, /const \[securityContext, googleRuntime\] = await Promise\.all/)
-  assert.match(source, /getGoogleConnectPasswordLoginRuntime\(loginDb/)
-  assert.match(source, /const validPassword = await passwordCheckPromise/)
-  assert.match(source, /loginTimings\.bcrypt_ms = bcryptDurationMs/)
-})
-
 
 test('login security preflight keeps the security-policy read compact', async () => {
   const server = await read('../server/server.js')
@@ -200,20 +173,6 @@ test('successful password login durably creates the session before asynchronous 
 })
 
 
-test('password login skips full Google entitlement resolution unless SSO could be authoritative', async () => {
-  const server = await read('../server/server.js')
-  const google = await read('../server/services/googleConnect.js')
-  assert.match(server, /getGoogleConnectPasswordLoginRuntime\(loginDb/)
-  assert.match(google, /export async function resolveGoogleConnectPasswordLoginRuntime/)
-  assert.match(google, /if \(!packageRow \|\| !installed \|\| !enabled \|\| !configured\)/)
-  const fastPath = google.slice(
-    google.indexOf('export async function resolveGoogleConnectPasswordLoginRuntime'),
-    google.indexOf('export async function getGoogleConnectPasswordLoginRuntime')
-  )
-  assert.ok(fastPath.indexOf('if (!packageRow || !installed || !enabled || !configured)') < fastPath.indexOf('getCompanyEntitlements'))
-})
-
-
 test('security governance connected-apps query avoids unsupported FULL OUTER JOIN with OR conditions', async () => {
   const source = await read('../server/routes/securityGovernance.js')
   const start = source.indexOf('router.get("/security/governance/connected-apps"')
@@ -292,16 +251,6 @@ test('OneEngine Manager resolves permission and client discovery concurrently', 
   const source = await read('../src/pages/developer/OneEngineManager.jsx')
   assert.match(source, /const \[permissions,r\]=await Promise\.all/)
   assert.match(source, /getStoredSessionPermissions\(\)/)
-})
-
-
-test('normal password login keeps security and Google readiness on the critical path', async () => {
-  const server = await read('../server/server.js')
-  const security = await read('../server/services/identitySecurity.js')
-  assert.match(server, /const \[securityContext, googleRuntime\] = await Promise\.all/)
-  assert.match(server, /getGoogleConnectPasswordLoginRuntime\(loginDb/)
-  assert.equal(security.includes('row_to_json(gp.*) AS google_package'), false)
-  assert.equal(security.includes('row_to_json(gc.*) AS google_connection'), false)
 })
 
 
