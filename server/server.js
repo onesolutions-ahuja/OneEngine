@@ -78,7 +78,7 @@ import { requireEntitlement } from "./services/licensing.js";
 import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
 import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
-import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // JARVES V2 - licence gate
+import { createUserEntitlementAccessChecker } from "./services/licensing.js";
 import { companyAdministrativeAccess, permissionAllows } from "./services/authorization.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./services/platformPermissionSets.js";
 import { createTenantPoolManager, getRequestHostname, resolveTenantFromHostname } from "./services/tenantResolver.js";
@@ -570,7 +570,7 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
  * runner only ever runs SELECTs scoped to the caller's verified company/store.
 */
 const jarvis = createJarvis({ tools: createJarvisTools({ db, canViewCompanyCustomers }) });
-const jarvesAccess = createJarvesAccessChecker({ db });
+const jarvesAccess = createUserEntitlementAccessChecker({ db, entitlementKey: "jarvis" });
 // Shared, server-only AI service for authenticated Flow actions. No provider
 // credentials are exposed through app.locals; callers only receive ask().
 app.locals.oneEngineAgent = jarvis;
