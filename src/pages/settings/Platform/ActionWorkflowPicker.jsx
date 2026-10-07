@@ -31,6 +31,7 @@ import {
 const ON_CLICK_OPTIONS = [
   { value: "none", label: "None" },
   { value: "workflow", label: "Workflow" },
+  { value: "screen_flow", label: "Screen Flow" },
   { value: "action", label: "Action" },
   { value: "navigate", label: "Navigate" },
   { value: "form_layout", label: "Open Form Layout" },
@@ -40,6 +41,7 @@ const ON_CLICK_OPTIONS = [
 export function describeInteraction(interaction) {
   if (!interaction || interaction.type === "none" || !interaction.type) return "None";
   if (interaction.type === "workflow") return `Workflow · ${interaction.workflowLabel || interaction.workflowUuid || "selected"}`;
+  if (interaction.type === "screen_flow") return `Screen Flow · ${interaction.workflowLabel || interaction.workflowUuid || "selected"}`;
   if (interaction.type === "action") return `Action · ${interaction.actionKey || "selected"}`;
   if (interaction.type === "navigate") return `Navigate · ${describeNavigationTarget(interaction.navigationTarget, interaction.navigateTo) || "target"}`;
   if (interaction.type === "form_layout") return `Form Layout · ${interaction.formLayoutLabel || interaction.formLayoutId || "selected"}`;
@@ -320,6 +322,7 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
   }, [workflows, search, objectKey]);
 
   const selectedWorkflow = workflows.find((workflow) => String(workflow.id) === String(interaction?.workflowUuid)) || null;
+  const screenFlows = rankedWorkflows.filter((workflow) => String(workflow?.action?.flowType || workflow?.action?.flow_type || "").toLowerCase() === "screen");
   const selectedAction = actions.find((action) => action.key === interaction?.actionKey) || null;
 
   const patch = (changes) => onChange?.({ ...(interaction || { type: "none" }), ...changes });
@@ -394,6 +397,25 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
               {objectKey ? <p className="text-[11px] text-slate-400">Workflows for {objectKey} are listed first. The clicked record is passed as Current Record.</p> : null}
             </div>
           )}
+        </div>
+      ) : null}
+
+      {type === "screen_flow" ? (
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-slate-500">Screen Flow</label>
+          <select className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" value={interaction?.workflowUuid || ""} onChange={(event) => {
+            const flow = workflows.find((item) => String(item.id) === event.target.value);
+            patch({ workflowUuid: event.target.value || null, workflowLabel: flow?.name, screenPresentation: interaction?.screenPresentation || "screen_modal" });
+          }}>
+            <option value="">Select Screen Flow…</option>
+            {interaction?.workflowUuid && !screenFlows.some((flow) => String(flow.id) === String(interaction.workflowUuid)) ? <option value={interaction.workflowUuid}>{interaction.workflowLabel || "Saved Screen Flow"}</option> : null}
+            {screenFlows.map((flow) => <option key={flow.id} value={flow.id}>{flow.name}</option>)}
+          </select>
+          <label className="block text-xs font-medium text-slate-500">Presentation</label>
+          <select className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" value={interaction?.screenPresentation || "screen_modal"} onChange={(event) => patch({ screenPresentation: event.target.value })}>
+            <option value="screen_modal">Modal</option><option value="full_screen">Full Screen</option><option value="embedded">Embedded</option>
+          </select>
+          <p className="text-[11px] text-slate-400">Only Screen Flows are offered. Runtime execution still requires Flow execute permission.</p>
         </div>
       ) : null}
 
