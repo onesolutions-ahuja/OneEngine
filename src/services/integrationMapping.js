@@ -6,7 +6,7 @@
  * Reusable validation/normalisation for Integration field-mapping
  * definitions consumed by the payload builder:
  *
- *   { partnerField: "customer.name", sourcePath: "sales.customer.name" }
+ *   { partnerField: "external.record.label", sourcePath: "object.field" }
  *
  * RULES
  * - partnerField and sourcePath are required, must be strings, and must be
