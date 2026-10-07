@@ -97,7 +97,6 @@ export const DASHBOARD_DATE_RANGES = Object.freeze([
  * The aggregation and condition vocabularies, mirrored from the reporting
  * engine so the Builder only ever offers combinations the server will accept:
  *   - services/reportableSources.js  (AGGREGATES, OPERATORS, numeric field types)
- *   - routes/reports.js              (CUSTOM_DATE_FILTERS, sales filter fields)
  * Nothing here is dashboard-specific logic — it is the existing reporting
  * vocabulary, surfaced so the Builder can build the same conditions the
  * reporting engine already validates and executes.
@@ -106,12 +105,6 @@ export const AGGREGATES = Object.freeze(["COUNT", "SUM", "AVG", "MIN", "MAX"]);
 export const AGGREGATABLE_FIELD_TYPES = Object.freeze(["number", "decimal", "currency", "date", "datetime", "formula", "rollup"]);
 export const SUMMARY_COLUMN = (aggregate, field) => `${String(aggregate).toLowerCase()}_${field}`;
 
-export const DATE_FILTER_FIELDS = Object.freeze([
-  { key: "date", label: "Date", kind: "date" },
-  { key: "store", label: "Store", kind: "id" },
-  { key: "user", label: "Operator", kind: "id" },
-  { key: "product", label: "Product", kind: "id" },
-]);
 
 /* Field-type driven operator lists — the same rules the Custom Report builder
    already uses, so a condition authored here executes unchanged there. */
