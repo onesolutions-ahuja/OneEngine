@@ -297,19 +297,48 @@ export function componentByKey(registry, key) {
  * the registry empty so builders cannot persist definitions against stale metadata.
  * ------------------------------------------------------------------------ */
 
+const REGISTRY_CACHE_KEY = "oneengine.platform.component-registry.v1";
+
+function readRegistryCache() {
+  try {
+    return normalizedRegistry(JSON.parse(localStorage.getItem(REGISTRY_CACHE_KEY) || "[]"));
+  } catch {
+    return [];
+  }
+}
+
+function writeRegistryCache(registry) {
+  try { localStorage.setItem(REGISTRY_CACHE_KEY, JSON.stringify(normalizedRegistry(registry))); } catch { /* storage may be disabled */ }
+}
+
 export function useComponentRegistry() {
-  const [registry, setRegistry] = useState([]);
+  // Cache contains only the last server-authoritative registry response. It is
+  // not a second catalogue; it keeps builders usable through a cold-start or
+  // transient OENT timeout while the live metadata request retries.
+  const [registry, setRegistry] = useState(() => readRegistryCache());
 
   useEffect(() => {
     let alive = true;
-    apiRequest("/api/platform/component-registry")
-      .then((response) => {
-        if (!alive) return;
-        const next = normalizedRegistry(response?.data);
-        if (next.length) setRegistry(next);
-      })
-      .catch(() => { if (alive) setRegistry([]); });
-    return () => { alive = false; };
+    let timer = null;
+    let attempt = 0;
+    const load = () => {
+      apiRequest("/api/platform/component-registry")
+        .then((response) => {
+          if (!alive) return;
+          const next = normalizedRegistry(response?.data);
+          if (next.length) {
+            setRegistry(next);
+            writeRegistryCache(next);
+          }
+        })
+        .catch(() => {
+          if (!alive) return;
+          attempt += 1;
+          if (attempt < 4) timer = window.setTimeout(load, Math.min(1200 * attempt, 3600));
+        });
+    };
+    load();
+    return () => { alive = false; if (timer) window.clearTimeout(timer); };
   }, []);
 
   return registry;
