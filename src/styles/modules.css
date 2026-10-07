@@ -1779,9 +1779,42 @@
   background: #0a84ff;
 }
 
+/* Approval Builder keeps longer step labels readable instead of truncating them. */
+.one-flow-guide--approval {
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+}
+
+.one-flow-guide--approval .one-flow-guide-step {
+  min-width: 180px;
+  align-items: start;
+}
+
+.one-flow-guide--approval .one-flow-guide-copy strong,
+.one-flow-guide--approval .one-flow-guide-copy small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.one-flow-guide--approval .one-flow-guide-copy strong {
+  line-height: 1.25;
+}
+
+.one-flow-guide--approval .one-flow-guide-copy small {
+  line-height: 1.35;
+}
+
 @media (max-width: 680px) {
-  .one-flow-guide {
+  .one-flow-guide:not(.one-flow-guide--approval) {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .one-flow-guide--approval {
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
   }
 
   .one-flow-guide-step {
