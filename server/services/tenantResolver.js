@@ -41,10 +41,6 @@ export function resolveDatabaseMode(mode, env = process.env) {
   return "ONEPOS_MANAGED";
 }
 
-export function isCustomerManagedDatabaseMode(mode, env = process.env) {
-  return resolveDatabaseMode(mode, env) === "CUSTOMER_MANAGED";
-}
-
 export function loadTenantDirectory(env = process.env) {
   const directory = {
     tenants: {},
