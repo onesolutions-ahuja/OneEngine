@@ -3766,8 +3766,6 @@ const actionOptions = [
   { value: "SEND_EMAIL", label: "Send Email" },
   { value: "SEND_SMS", label: "Send SMS" },
   { value: "SEND_WHATSAPP", label: "Send WhatsApp" },
-  { value: "SEND_APPOINTMENT_CONFIRMATION", label: "Appointments - Send Booking Confirmation" },
-  { value: "CALL_FUNCTION", label: "Call Function" },
   { value: "RUN_SUBFLOW", label: "Subflow" },
   { value: "WEBHOOK", label: "Webhook" },
   { value: "CONDITION", label: "Decision" },
@@ -4051,7 +4049,7 @@ function workflowActionCategory(type = "") {
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","LIMIT_REPETITIONS","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN","RUN_AGENT"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
-  if (["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","SEND_APPOINTMENT_CONFIRMATION","CALL_FUNCTION","WEBHOOK","HTTP_REQUEST"].includes(key) || key.startsWith("CONNECTOR_") || key.startsWith("PAYMENT_") || key.startsWith("PRINT_") || key.includes("SCANNER") || key.includes("CASH_DRAWER") || key.startsWith("QUICKBOOKS_") || key.startsWith("SHOPIFY_") || key.startsWith("UBER_") || key.includes("APPOINTMENT")) return "Actions";
+  if (["EMAIL_ALERT","SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","WEBHOOK","HTTP_REQUEST","SEND_COMMUNICATION","CALL_API","PLATFORM_WEBHOOK_DELIVERY"].includes(key)) return "Actions";
   return "Actions";
 }
 
@@ -4077,7 +4075,6 @@ export const FLOW_TYPE_OPTIONS = [
   { key: "AUTOLAUNCHED", label: "Autolaunched Flow (No Trigger)", icon: "▶", description: "Run from another flow, action, API, or application context." },
   { key: "RECOMMENDATION_STRATEGY", label: "Recommendation Strategy Flow", icon: "★", description: "Build a recommendation strategy with reusable resources and decisions." },
   { key: "INSTRUCTION_FLOW", label: "Instruction Flow", icon: "✦", description: "Run an instruction-oriented automation without screens." },
-  { key: "KIOSK_EXPERIENCE", label: "Kiosk Experience", icon: "▣", description: "Build a metadata-driven kiosk experience using the same flow runtime." },
 ];
 
 const RECORD_TRIGGER_WHEN_OPTIONS = [
@@ -4379,7 +4376,6 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "IN_APP_NOTIFICATION" && (!config.title || !config.message || !config.recipient)) {
     return "Add title, message and recipient.";
   }
-  if (step.type === "CALL_FUNCTION" && !config.functionKey) return "Choose a registered function.";
   if (step.type === "RUN_SUBFLOW") {
     if (!config.workflowId) return "Choose a subflow.";
     const selectedSubflow = availableWorkflows?.find?.((item) => String(item.id) === String(config.workflowId));
@@ -4853,7 +4849,7 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   );
 }
 
-function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], platformComponents = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
+function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, availableWorkflows, messageTemplates = [], platformComponents = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const [pendingOutcomeRemoval, setPendingOutcomeRemoval] = useState(null);
   const [relationshipOptions, setRelationshipOptions] = useState([]);
@@ -5734,7 +5730,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           <div className="space-y-3">
             <MetadataResourcePicker objectKey={rootObjectKey} extraResources={extraResources.filter((resource) => resource.type === "collection" || String(resource.value || "").endsWith(".records") || String(resource.value || "").endsWith(".collection") || String(resource.value || "").startsWith("variables."))} label="Collection" value={step.config?.collection || ""} onChange={(collection) => updateConfig({ collection })} />
             <label className="block text-xs font-medium text-slate-600">Sort field / item path
-              <input className={inputClass} value={step.config?.sortField || ""} onChange={(event) => updateConfig({ sortField: event.target.value })} placeholder="e.g. total or customer.name" />
+              <input className={inputClass} value={step.config?.sortField || ""} onChange={(event) => updateConfig({ sortField: event.target.value })} placeholder="e.g. amount or related.name" />
             </label>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block text-xs font-medium text-slate-600">Direction
@@ -6183,7 +6179,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           <div className="space-y-3">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <strong className="text-sm text-slate-700">Booking confirmation</strong>
-              <p className="mt-1 text-xs text-slate-500">Sent through the same mobile channel used to book. Leave Recipient blank to reply to the booking customer.</p>
+              <p className="mt-1 text-xs text-slate-500">Recipient and channel are resolved from the configured communication metadata.</p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Confirmation message</label>
@@ -6222,23 +6218,6 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Recipient mapping</label>
               <input className={inputClass} value={step.config?.recipient || ""} onChange={(event) => updateConfig({ recipient: event.target.value })} placeholder="user.id / team" />
-            </div>
-          </div>
-        );
-      case "CALL_FUNCTION":
-        return (
-          <div className="space-y-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Registered function</label>
-              <select className={inputClass} value={step.config?.functionKey || ""} onChange={(event) => updateConfig({ functionKey: event.target.value })}>
-                <option value="">Select a registered function</option>
-                {step.config?.functionKey && !functionRegistry.some((item) => item.key === step.config.functionKey) ? <option value={step.config.functionKey} disabled>{step.config.functionKey} (unavailable)</option> : null}
-                {functionRegistry.map((item) => <option key={item.key} value={item.key}>{item.displayName || item.key}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Inputs</label>
-              <MappingEditor value={step.config?.inputs || {}} onChange={(inputs) => updateConfig({ inputs })} rootObjectKey={rootObjectKey} extraResources={extraResources} keyLabel="Input name" valueLabel="Input value" />
             </div>
           </div>
         );
@@ -8731,7 +8710,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <button type="button" className="workflow-save-button" onClick={finishInspector}>Done</button>
             </div>
           </div>
-        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} platformComponents={platformComponents} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
+        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} platformComponents={platformComponents} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
@@ -8793,7 +8772,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [savedWorkflows, setSavedWorkflows] = useState(() => embedded && normalizedInitialWorkflow ? [normalizedInitialWorkflow] : []);
   const [providerAvailable, setProviderAvailable] = useState({ EMAIL: false, BREVO: false, MAILJET: false, SMS: false, WHATSAPP: false });
   const [registryOptions, setRegistryOptions] = useState(scopeKey ? [] : actionOptions);
-  const [functionRegistry, setFunctionRegistry] = useState([]);
   const [messageTemplates, setMessageTemplates] = useState([]);
   const [workflowListSearch, setWorkflowListSearch] = useState("");
   const [workflowListFilter, setWorkflowListFilter] = useState("all");
@@ -9036,11 +9014,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       .catch((error) => setBuilderLoadIssues((current) => [...new Set([...current, error.message || "Unable to load flow actions."])]));
   }, [scopeKey]);
 
-  useEffect(() => {
-    apiRequest("/api/platform/function-registry")
-      .then((response) => setFunctionRegistry(Array.isArray(response?.data) ? response.data : []))
-      .catch((error) => onError?.(error.message || "Unable to load registered functions"));
-  }, [onError]);
 
   useEffect(() => {
     apiRequest("/api/platform/message-templates")
@@ -9225,74 +9198,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     }));
   };
 
-  const isKioskExperience = String(workflow.actionMetadata?.flowType || "").toUpperCase() === "KIOSK_EXPERIENCE";
-  const kioskUi = workflow.actionMetadata?.ui && typeof workflow.actionMetadata.ui === "object"
-    ? workflow.actionMetadata.ui
-    : { schemaVersion: 1, startScreen: "catalogue", screens: [], features: {} };
-
-  const updateKioskUi = (patch) => setWorkflow((current) => ({
-    ...current,
-    actionMetadata: {
-      ...(current.actionMetadata || {}),
-      flowType: "KIOSK_EXPERIENCE",
-      ui: { ...(current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} }), ...patch },
-    },
-  }));
-
-  const updateKioskScreen = (index, patch) => setWorkflow((current) => {
-    const ui = current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} };
-    const screens = [...(ui.screens || [])];
-    screens[index] = { ...screens[index], ...patch };
-    return { ...current, actionMetadata: { ...(current.actionMetadata || {}), ui: { ...ui, screens } } };
-  });
-
-  const moveKioskScreen = (index, direction) => setWorkflow((current) => {
-    const ui = current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} };
-    const screens = [...(ui.screens || [])];
-    const target = index + direction;
-    if (target < 0 || target >= screens.length) return current;
-    [screens[index], screens[target]] = [screens[target], screens[index]];
-    return { ...current, actionMetadata: { ...(current.actionMetadata || {}), ui: { ...ui, screens } } };
-  });
-
-  const removeKioskScreen = (index) => setWorkflow((current) => {
-    const ui = current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} };
-    const screens = (ui.screens || []).filter((_, screenIndex) => screenIndex !== index);
-    const startScreen = screens.some((screen) => screen.key === ui.startScreen) ? ui.startScreen : (screens[0]?.key || "");
-    return { ...current, actionMetadata: { ...(current.actionMetadata || {}), ui: { ...ui, screens, startScreen } } };
-  });
-
-  const addKioskScreen = (type) => setWorkflow((current) => {
-    const ui = current.actionMetadata?.ui || { schemaVersion: 1, screens: [], features: {} };
-    const keyBase = String(type || "screen").toLowerCase().replace(/[^a-z0-9]+/g, "_");
-    let key = keyBase;
-    let suffix = 2;
-    while ((ui.screens || []).some((screen) => screen.key === key)) key = `${keyBase}_${suffix++}`;
-    const defaults = {
-      CATALOGUE: { title: "Browse products", search: true, categories: true, productAction: "OPEN_DETAIL" },
-      PRODUCT_DETAIL: { title: "Product", description: true, variants: true, modifiers: true },
-      RECOMMENDATIONS: { title: "You may also like", source: "CROSS_SELL", optional: true },
-      FULFILMENT: { title: "Choose fulfilment", options: [{ key: "COLLECT", label: "Collect", canonicalType: "SELF_PICKUP", requires: [] }] },
-      BASKET: { title: "Review your order", editable: true, promotions: true },
-      LOYALTY: { title: "Rewards", subtitle: "Enter phone or email, or continue as a guest.", optional: true },
-      FORM: { title: "Order details", optional: true, fields: [] },
-      PAYMENT: { title: "Payment", methods: ["CARD"], actionLabel: "Pay now" },
-      CONFIRMATION: { title: "Order confirmed", collectionNumber: true, receipt: ["PRINT","QR"], resetAfterSeconds: 30 },
-    };
-    const nextScreen = { key, type, ...(defaults[type] || { title: type }) };
-    const screens = [...(ui.screens || []), nextScreen];
-    return {
-      ...current,
-      actionMetadata: {
-        ...(current.actionMetadata || {}),
-        flowType: "KIOSK_EXPERIENCE",
-        ui: { ...ui, screens, startScreen: ui.startScreen || screens[0]?.key || key },
-      },
-    };
-  });
-
-  const updateKioskFeature = (key, value) => updateKioskUi({ features: { ...(kioskUi.features || {}), [key]: value } });
-
   const enabledSteps = (workflow.steps || []).filter((step) => step.enabled !== false);
   const conditionSteps = enabledSteps.filter((step) => step.type === "CONDITION");
   const actionSteps = enabledSteps.filter((step) => step.type !== "CONDITION");
@@ -9352,20 +9257,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const screenFlowIssue = isScreenFlow && !enabledSteps.some((step) => step.type === "SCREEN")
     ? "Add at least one Screen element."
     : "";
-  const kioskScreenIssue = isKioskExperience
-    ? !(Array.isArray(kioskUi.screens) && kioskUi.screens.length)
-      ? "Add at least one kiosk screen."
-      : !kioskUi.startScreen || !(kioskUi.screens || []).some((screen) => screen.key === kioskUi.startScreen)
-        ? "Choose a valid kiosk start screen."
-        : (kioskUi.screens || []).some((screen) => !screen.key || !screen.type)
-          ? "Every kiosk screen needs a key and type."
-          : ""
-    : "";
-  const actionsIssue = isKioskExperience
-    ? kioskScreenIssue
-    : screenFlowIssue
-      ? screenFlowIssue
-      : resourceConflict
+  const actionsIssue = screenFlowIssue
+    ? screenFlowIssue
+    : resourceConflict
       ? resourceConflict
       : stageConflict
       ? stageConflict
@@ -9392,7 +9286,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     stageConflict ? { target: "resources", label: "Stages", message: stageConflict } : null,
     contractIssue ? { target: "properties", label: "Input / Output Contract", message: contractIssue } : null,
     screenFlowIssue ? { target: "resources", label: "Screen Flow", message: screenFlowIssue } : null,
-    kioskScreenIssue ? { target: "properties", label: "Kiosk Experience", message: kioskScreenIssue } : null,
   ].filter(Boolean);
   const reviewIssue = triggerIssue || entryConditionIssue || entryTransitionIssue || conditionIssue || actionsIssue || contractIssue || (!workflow.name ? "Enter a flow name." : "");
   const guideSteps = [
@@ -10538,293 +10431,9 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
         </div>
       ) : null}
 
-      {isKioskExperience ? (
-        <div id="workflow-canvas-section" className="space-y-3">
-          <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-slate-800">OneKiosk Experience</div>
-                <p className="mt-1 max-w-3xl text-xs text-slate-600">This ordered screen flow is the customer journey used by kiosks assigned to this workflow. Reorder, add or remove screens here; no application code is required.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","LOYALTY","FORM","PAYMENT","CONFIRMATION"].map((type) => (
-                  <button key={type} type="button" className="rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-blue-700" onClick={() => addKioskScreen(type)}>+ {type.replaceAll("_"," ")}</button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-xs font-semibold text-slate-700">Collection display</div>
-              <div className="mt-2 grid gap-3 md:grid-cols-3">
-                <label className="text-xs font-medium text-slate-700">Display title
-                  <input className={inputClass} value={typeof kioskUi.orderDisplay?.title === "string" ? kioskUi.orderDisplay.title : ""} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),title:e.target.value}})} placeholder="Order collection"/>
-                </label>
-                <label className="text-xs font-medium text-slate-700">In progress label
-                  <input className={inputClass} value={typeof kioskUi.orderDisplay?.activeLabel === "string" ? kioskUi.orderDisplay.activeLabel : ""} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),activeLabel:e.target.value}})} placeholder="Preparing / Processing"/>
-                </label>
-                <label className="text-xs font-medium text-slate-700">Ready label
-                  <input className={inputClass} value={typeof kioskUi.orderDisplay?.readyLabel === "string" ? kioskUi.orderDisplay.readyLabel : ""} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),readyLabel:e.target.value}})} placeholder="Ready to collect"/>
-                </label>
-                <label className="text-xs font-medium text-slate-700">In progress statuses
-                  <input className={inputClass} value={(kioskUi.orderDisplay?.activeStatuses||["PREPARING","ACCEPTED"]).join(", ")} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),activeStatuses:e.target.value.split(",").map(v=>v.trim().toUpperCase()).filter(Boolean)}})}/>
-                </label>
-                <label className="text-xs font-medium text-slate-700">Ready statuses
-                  <input className={inputClass} value={(kioskUi.orderDisplay?.readyStatuses||["READY","READY_FOR_PICKUP"]).join(", ")} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),readyStatuses:e.target.value.split(",").map(v=>v.trim().toUpperCase()).filter(Boolean)}})}/>
-                </label>
-                <label className="text-xs font-medium text-slate-700">Ready empty text
-                  <input className={inputClass} value={typeof kioskUi.orderDisplay?.readyEmpty === "string" ? kioskUi.orderDisplay.readyEmpty : ""} onChange={(e)=>updateKioskUi({orderDisplay:{...(kioskUi.orderDisplay||{}),readyEmpty:e.target.value}})} placeholder="No orders ready"/>
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <label className="text-xs font-medium text-slate-700">Start screen
-                <select className={inputClass} value={kioskUi.startScreen || ""} onChange={(event) => updateKioskUi({ startScreen: event.target.value })}>
-                  {(kioskUi.screens || []).map((screen) => <option key={screen.key} value={screen.key}>{screen.title || screen.key} · {screen.type}</option>)}
-                </select>
-              </label>
-              <label className="text-xs font-medium text-slate-700">Idle timeout (seconds)
-                <input className={inputClass} type="number" min="30" value={kioskUi.idleTimeoutSeconds || 75} onChange={(event) => updateKioskUi({ idleTimeoutSeconds: Math.max(30, Number(event.target.value) || 75) })} />
-              </label>
-              <label className="text-xs font-medium text-slate-700">Attract screen title
-                <input className={inputClass} value={typeof kioskUi.attractTitle === "string" ? kioskUi.attractTitle : ""} onChange={(event) => updateKioskUi({ attractTitle: event.target.value })} placeholder="Touch to start" />
-              </label>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-xs font-semibold text-slate-700">Experience languages</div>
-              <div className="mt-2 space-y-2">
-                {(kioskUi.languages || [{key:"en",label:"English"}]).map((item,languageIndex)=>(
-                  <div key={`${item.key}-${languageIndex}`} className="grid gap-2 md:grid-cols-[120px_1fr_auto]">
-                    <input className={inputClass} value={item.key || ""} placeholder="en" onChange={(e)=>{
-                      const languages=[...(kioskUi.languages||[])]; languages[languageIndex]={...item,key:e.target.value.trim().toLowerCase()}; updateKioskUi({languages});
-                    }}/>
-                    <input className={inputClass} value={item.label || ""} placeholder="Language label" onChange={(e)=>{
-                      const languages=[...(kioskUi.languages||[])]; languages[languageIndex]={...item,label:e.target.value}; updateKioskUi({languages});
-                    }}/>
-                    <button type="button" disabled={item.key==="en"} className="text-xs text-red-700 disabled:opacity-40" onClick={()=>{
-                      const languages=(kioskUi.languages||[]).filter((_,i)=>i!==languageIndex);
-                      const translations={...(kioskUi.translations||{})}; delete translations[item.key];
-                      updateKioskUi({languages,translations});
-                    }}>Remove</button>
-                    {item.key && item.key !== "en" ? (
-                      <label className="md:col-span-3 text-xs font-medium text-slate-700">
-                        {item.label || item.key} translations · one per line as key = translated text
-                        <textarea className={inputClass} rows={7} value={Object.entries(kioskUi.translations?.[item.key] || {}).map(([key,value])=>`${key} = ${value}`).join("\n")} onChange={(e)=>{
-                          const dictionary={};
-                          for(const line of e.target.value.split(/\r?\n/)){
-                            const divider=line.indexOf("=");
-                            if(divider<1)continue;
-                            const key=line.slice(0,divider).trim();
-                            const value=line.slice(divider+1).trim();
-                            if(key&&value)dictionary[key]=value;
-                          }
-                          updateKioskUi({translations:{...(kioskUi.translations||{}),[item.key]:dictionary}});
-                        }} placeholder={"screen.catalogue.title = Find your product\nfulfilment.COLLECT = Collect here\nconfirmation.doneLabel = Start another order"}/>
-                      </label>
-                    ) : null}
-                  </div>
-                ))}
-                <button type="button" className="rounded border border-slate-200 px-3 py-2 text-xs font-medium" onClick={()=>{
-                  const languages=[...(kioskUi.languages||[{key:"en",label:"English"}]),{key:`lang${(kioskUi.languages||[]).length+1}`,label:"New language"}];
-                  updateKioskUi({languages});
-                }}>+ Language</button>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                ["accessibility","Accessibility"],
-                ["language","Language"],
-                ["audio","Read aloud"],
-                ["ageVerification","Age verification"],
-                ["assistance","Need Help"],
-                ["idleReset","Idle privacy reset"],
-                ["loyalty","Loyalty"],
-                ["promotions","Promotions"],
-                ["upsell","Upsell / accessories"],
-                ["compare","Product compare"],
-                ["stockPromise","Stock promise"],
-              ].map(([key,label]) => (
-                <label key={key} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
-                  <input type="checkbox" checked={kioskUi.features?.[key] === true} onChange={(event) => updateKioskFeature(key, event.target.checked)} />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {(kioskUi.screens || []).map((screen, index) => (
-              <div key={screen.key || index} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-9 w-9 place-items-center rounded-full bg-blue-50 text-xs font-bold text-blue-700">{index + 1}</div>
-                    <div>
-                      <strong className="block text-sm text-slate-800">{screen.title || screen.key || "Kiosk screen"}</strong>
-                      <span className="text-xs text-slate-500">{screen.type}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" disabled={index === 0} className="rounded border border-slate-200 px-2 py-1 text-xs disabled:opacity-40" onClick={() => moveKioskScreen(index,-1)}>↑</button>
-                    <button type="button" disabled={index === (kioskUi.screens || []).length - 1} className="rounded border border-slate-200 px-2 py-1 text-xs disabled:opacity-40" onClick={() => moveKioskScreen(index,1)}>↓</button>
-                    <button type="button" className="rounded border border-red-200 px-2 py-1 text-xs text-red-700" onClick={() => removeKioskScreen(index)}>Remove</button>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-4">
-                  <label className="text-xs font-medium text-slate-700">Type
-                    <select className={inputClass} value={screen.type || "CATALOGUE"} onChange={(event) => updateKioskScreen(index,{ type:event.target.value })}>
-                      {["CATALOGUE","PRODUCT_DETAIL","RECOMMENDATIONS","FULFILMENT","BASKET","LOYALTY","FORM","PAYMENT","CONFIRMATION"].map((type) => <option key={type} value={type}>{type.replaceAll("_"," ")}</option>)}
-                    </select>
-                  </label>
-                  <label className="text-xs font-medium text-slate-700">Key
-                    <input className={inputClass} value={screen.key || ""} onChange={(event) => updateKioskScreen(index,{ key:event.target.value.trim().replace(/[^a-zA-Z0-9_-]/g,"_") })} />
-                  </label>
-                  <label className="text-xs font-medium text-slate-700">Title
-                    <input className={inputClass} value={typeof screen.title === "string" ? screen.title : ""} onChange={(event) => updateKioskScreen(index,{ title:event.target.value })} />
-                  </label>
-                  <label className="text-xs font-medium text-slate-700">Next
-                    <select className={inputClass} value={screen.next || ""} onChange={(event) => updateKioskScreen(index,{ next:event.target.value || null })}>
-                      <option value="">Next screen in order</option>
-                      {(kioskUi.screens || []).filter((candidate) => candidate.key !== screen.key).map((candidate) => <option key={candidate.key} value={candidate.key}>{candidate.title || candidate.key}</option>)}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <div className="text-[11px] font-semibold text-slate-600">Conditional display / branching</div>
-                  <div className="mt-2 grid gap-2 md:grid-cols-4">
-                    <input className={inputClass} value={screen.showWhen?.path || ""} onChange={(e)=>updateKioskScreen(index,{showWhen:e.target.value?{...(screen.showWhen||{}),path:e.target.value}:null})} placeholder="Show when path, e.g. fulfilmentType"/>
-                    <select className={inputClass} value={screen.showWhen?.operator || "equals"} onChange={(e)=>updateKioskScreen(index,{showWhen:{...(screen.showWhen||{}),operator:e.target.value}})} disabled={!screen.showWhen?.path}>
-                      <option value="equals">equals</option><option value="not_equals">not equals</option><option value="in">in list</option><option value="not_in">not in list</option><option value="truthy">is set / true</option><option value="falsy">is empty / false</option><option value="greater_than">greater than</option><option value="less_than">less than</option>
-                    </select>
-                    <input className={inputClass} value={screen.showWhen?.value ?? ""} onChange={(e)=>updateKioskScreen(index,{showWhen:{...(screen.showWhen||{}),value:e.target.value}})} placeholder="Value" disabled={!screen.showWhen?.path || ["truthy","falsy"].includes(screen.showWhen?.operator)}/>
-                    <button type="button" className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600" onClick={()=>updateKioskScreen(index,{showWhen:null})}>Clear condition</button>
-                  </div>
-
-                  <div className="mt-3 space-y-2">
-                    {(screen.nextRules || []).map((rule,ruleIndex)=>(
-                      <div key={`${screen.key}-branch-${ruleIndex}`} className="grid gap-2 md:grid-cols-[1fr_150px_1fr_1fr_auto]">
-                        <input className={inputClass} value={rule.when?.path || ""} placeholder="Branch path" onChange={(e)=>{const nextRules=[...(screen.nextRules||[])];nextRules[ruleIndex]={...rule,when:{...(rule.when||{}),path:e.target.value}};updateKioskScreen(index,{nextRules})}}/>
-                        <select className={inputClass} value={rule.when?.operator || "equals"} onChange={(e)=>{const nextRules=[...(screen.nextRules||[])];nextRules[ruleIndex]={...rule,when:{...(rule.when||{}),operator:e.target.value}};updateKioskScreen(index,{nextRules})}}>
-                          <option value="equals">equals</option><option value="not_equals">not equals</option><option value="in">in</option><option value="truthy">truthy</option><option value="falsy">falsy</option>
-                        </select>
-                        <input className={inputClass} value={rule.when?.value ?? ""} placeholder="Value" onChange={(e)=>{const nextRules=[...(screen.nextRules||[])];nextRules[ruleIndex]={...rule,when:{...(rule.when||{}),value:e.target.value}};updateKioskScreen(index,{nextRules})}}/>
-                        <select className={inputClass} value={rule.next || ""} onChange={(e)=>{const nextRules=[...(screen.nextRules||[])];nextRules[ruleIndex]={...rule,next:e.target.value};updateKioskScreen(index,{nextRules})}}>
-                          <option value="">Next screen…</option>{(kioskUi.screens||[]).filter((candidate)=>candidate.key!==screen.key).map((candidate)=><option key={candidate.key} value={candidate.key}>{candidate.title||candidate.key}</option>)}
-                        </select>
-                        <button type="button" className="text-xs text-red-700" onClick={()=>updateKioskScreen(index,{nextRules:(screen.nextRules||[]).filter((_,i)=>i!==ruleIndex)})}>Remove</button>
-                      </div>
-                    ))}
-                    <button type="button" className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700" onClick={()=>updateKioskScreen(index,{nextRules:[...(screen.nextRules||[]),{when:{path:"",operator:"equals",value:""},next:""}]})}>+ Conditional branch</button>
-                  </div>
-                </div>
-
-                {screen.type === "CATALOGUE" ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={screen.search !== false} onChange={(e)=>updateKioskScreen(index,{search:e.target.checked})}/> Search</label>
-                    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={screen.categories !== false} onChange={(e)=>updateKioskScreen(index,{categories:e.target.checked})}/> Categories</label>
-                    <select className={inputClass} style={{maxWidth:220}} value={screen.productAction || "OPEN_DETAIL"} onChange={(e)=>updateKioskScreen(index,{productAction:e.target.value})}>
-                      <option value="OPEN_DETAIL">Open product detail</option>
-                      <option value="ADD">Add directly</option>
-                    </select>
-                  </div>
-                ) : null}
-
-                {screen.type === "PRODUCT_DETAIL" ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {[
-                      ["description","Description"],["variants","Variants"],["modifiers","Modifiers"],["specifications","Specifications"],
-                      ["stockPromise","Stock"],["compare","Compare"],["nutrition","Nutrition"],["allergens","Allergens"],["warranty","Warranty"],
-                    ].map(([key,label]) => <label key={key} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"><input type="checkbox" checked={screen[key] === true} onChange={(e)=>updateKioskScreen(index,{[key]:e.target.checked})}/>{label}</label>)}
-                  </div>
-                ) : null}
-
-                {screen.type === "RECOMMENDATIONS" ? (
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <label className="text-xs font-medium text-slate-700">Relationship source
-                      <select className={inputClass} value={screen.source || "CROSS_SELL"} onChange={(e)=>updateKioskScreen(index,{source:e.target.value})}>
-                        <option value="CROSS_SELL">Cross-sell</option><option value="UPSELL">Upsell</option><option value="ACCESSORY">Accessory</option>
-                      </select>
-                    </label>
-                    <label className="inline-flex items-center gap-2 self-end pb-2 text-xs"><input type="checkbox" checked={screen.optional !== false} onChange={(e)=>updateKioskScreen(index,{optional:e.target.checked})}/> Customer may skip this screen</label>
-                  </div>
-                ) : null}
-
-                {screen.type === "FULFILMENT" ? (
-                  <div className="mt-3 space-y-2">
-                    {(screen.options || []).map((option, optionIndex) => (
-                      <div key={`${screen.key}-option-${optionIndex}`} className="grid gap-2 rounded-lg border border-slate-100 bg-slate-50 p-2 md:grid-cols-[1fr_1fr_1fr_auto]">
-                        <input className={inputClass} value={option.key || ""} placeholder="Key" onChange={(e)=>{
-                          const options=[...(screen.options||[])]; options[optionIndex]={...option,key:e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")}; updateKioskScreen(index,{options});
-                        }}/>
-                        <input className={inputClass} value={typeof option.label==="string"?option.label:""} placeholder="Customer label" onChange={(e)=>{
-                          const options=[...(screen.options||[])]; options[optionIndex]={...option,label:e.target.value}; updateKioskScreen(index,{options});
-                        }}/>
-                        <select className={inputClass} value={option.canonicalType || "SELF_PICKUP"} onChange={(e)=>{
-                          const options=[...(screen.options||[])]; options[optionIndex]={...option,canonicalType:e.target.value}; updateKioskScreen(index,{options});
-                        }}><option value="SELF_PICKUP">Pickup / collection</option><option value="DELIVERY">Delivery</option></select>
-                        <button type="button" className="text-xs text-red-700" onClick={()=>updateKioskScreen(index,{options:(screen.options||[]).filter((_,i)=>i!==optionIndex)})}>Remove</button>
-                        <div className="md:col-span-4 flex gap-3 px-1 text-xs">
-                          {["STORE","ADDRESS","CONTACT"].map((requirement)=><label key={requirement} className="inline-flex items-center gap-1"><input type="checkbox" checked={(option.requires||[]).includes(requirement)} onChange={(e)=>{
-                            const requirements=new Set(option.requires||[]); if(e.target.checked) requirements.add(requirement); else requirements.delete(requirement);
-                            const options=[...(screen.options||[])]; options[optionIndex]={...option,requires:[...requirements]}; updateKioskScreen(index,{options});
-                          }}/>{requirement.toLowerCase()}</label>)}
-                        </div>
-                      </div>
-                    ))}
-                    <button type="button" className="rounded border border-slate-200 px-3 py-2 text-xs font-medium" onClick={()=>updateKioskScreen(index,{options:[...(screen.options||[]),{key:`OPTION_${(screen.options||[]).length+1}`,label:"New option",canonicalType:"SELF_PICKUP",requires:[]}]})}>+ Fulfilment option</button>
-                  </div>
-                ) : null}
-
-                {screen.type === "FORM" ? (
-                  <div className="mt-3 space-y-2">
-                    <label className="inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={screen.optional !== false} onChange={(e)=>updateKioskScreen(index,{optional:e.target.checked})}/> Customer may skip this form</label>
-                    {(screen.fields || []).map((field,fieldIndex)=>(
-                      <div key={`${screen.key}-field-${fieldIndex}`} className="grid gap-2 rounded-lg border border-slate-100 bg-slate-50 p-2 md:grid-cols-[1fr_1fr_140px_auto]">
-                        <input className={inputClass} value={field.key || ""} placeholder="Field key" onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,key:e.target.value.replace(/[^a-zA-Z0-9_]/g,"")};updateKioskScreen(index,{fields})}}/>
-                        <input className={inputClass} value={typeof field.label==="string"?field.label:""} placeholder="Customer label" onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,label:e.target.value};updateKioskScreen(index,{fields})}}/>
-                        <select className={inputClass} value={field.type || "text"} onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,type:e.target.value};updateKioskScreen(index,{fields})}}>
-                          {["text","textarea","select","checkbox","email","tel","number","date","time"].map((type)=><option key={type} value={type}>{type}</option>)}
-                        </select>
-                        <button type="button" className="text-xs text-red-700" onClick={()=>updateKioskScreen(index,{fields:(screen.fields||[]).filter((_,i)=>i!==fieldIndex)})}>Remove</button>
-                        <input className={inputClass} value={typeof field.placeholder==="string"?field.placeholder:""} placeholder="Placeholder" onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,placeholder:e.target.value};updateKioskScreen(index,{fields})}}/>
-                        {field.type==="select" ? <input className={inputClass} value={Array.isArray(field.options)?field.options.map((option)=>typeof option==="string"?option:option.label||option.value).join(", "):""} placeholder="Options, comma separated" onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,options:e.target.value.split(",").map(value=>value.trim()).filter(Boolean)};updateKioskScreen(index,{fields})}}/> : <span />}
-                        <label className="inline-flex items-center gap-2 px-1 text-xs"><input type="checkbox" checked={field.required===true} onChange={(e)=>{const fields=[...(screen.fields||[])];fields[fieldIndex]={...field,required:e.target.checked};updateKioskScreen(index,{fields})}}/> Required</label>
-                      </div>
-                    ))}
-                    <button type="button" className="rounded border border-slate-200 px-3 py-2 text-xs font-medium" onClick={()=>updateKioskScreen(index,{fields:[...(screen.fields||[]),{key:`field_${(screen.fields||[]).length+1}`,label:"New field",type:"text",required:false}]})}>+ Form field</button>
-                  </div>
-                ) : null}
-
-                {screen.type === "PAYMENT" ? (
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <label className="text-xs font-medium text-slate-700">Button label<input className={inputClass} value={screen.actionLabel || ""} onChange={(e)=>updateKioskScreen(index,{actionLabel:e.target.value})}/></label>
-                    <div className="self-end pb-2 text-xs text-slate-500">OneKiosk currently executes card payment through the device's assigned One Connect instance.</div>
-                  </div>
-                ) : null}
-
-                {screen.type === "CONFIRMATION" ? (
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    <label className="text-xs font-medium text-slate-700">Collection label<input className={inputClass} value={screen.collectionLabel || ""} onChange={(e)=>updateKioskScreen(index,{collectionLabel:e.target.value})}/></label>
-                    <label className="text-xs font-medium text-slate-700">Auto reset seconds<input type="number" min="5" className={inputClass} value={screen.resetAfterSeconds || 30} onChange={(e)=>updateKioskScreen(index,{resetAfterSeconds:Math.max(5,Number(e.target.value)||30)})}/></label>
-                    <div className="flex items-end gap-3 pb-2 text-xs">
-                      {["PRINT","QR","EMAIL"].map((method)=><label key={method} className="inline-flex items-center gap-1"><input type="checkbox" checked={(screen.receipt||[]).includes(method)} onChange={(e)=>{
-                        const methods=new Set(screen.receipt||[]); if(e.target.checked) methods.add(method); else methods.delete(method); updateKioskScreen(index,{receipt:[...methods]});
-                      }}/>{method}</label>)}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div id="workflow-canvas-section">
+      <div id="workflow-canvas-section">
           <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} canvasCommand={canvasCommand} />
         </div>
-      )}
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
         {reviewIssue || "Trigger, conditions and actions are valid."}
       </div>
