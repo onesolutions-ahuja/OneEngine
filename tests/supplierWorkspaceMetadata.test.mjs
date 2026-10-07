@@ -24,7 +24,7 @@ test("legacy supplier CRUD route is removed", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/suppliers.js"), false);
   assert.equal(server.includes("createSuppliersRouter"), false);
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(registry, /objectKey: "supplier_product"/);
-  assert.match(registry, /parentObjectKey: "supplier", childObjectKey: "supplier_product", relationshipKey: "products"/);
+  const manifest = JSON.parse(await readFile(new URL("../server/metadata/manifests/supplier_core.json", import.meta.url), "utf8"));
+  assert.ok(manifest.objects.some((item) => item.objectKey === "supplier_product"));
+  assert.ok(manifest.relationships.some((item) => item.parentObjectKey === "supplier" && item.childObjectKey === "supplier_product" && item.relationshipKey === "products"));
 });
