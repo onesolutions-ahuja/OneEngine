@@ -48,13 +48,38 @@ const recordRuntimeMissing = pageComponents
   .filter((component) => component.recordBound === true)
   .filter((component) => !pageRendererSource.includes(`"${component.key}"`))
   .map((component) => component.key);
+
+// Capability gates: presence of a component key is not enough. Components
+// advertising binding, relationships, children or actions must be wired into
+// the corresponding generic runtime primitive.
+const bindingRuntimeMissing = pageComponents
+  .filter((component) => component.bindable === true && component.category !== "field" && component.recordBound !== true && component.relationship !== true)
+  .filter((component) => !pageRendererSource.includes("resolveRuntimeBinding") || !pageRendererSource.includes(`"${component.key}"`))
+  .map((component) => component.key);
+const relationshipRuntimeMissing = pageComponents
+  .filter((component) => component.relationship === true)
+  .filter((component) => !pageRendererSource.includes("RelatedListView") || !pageRendererSource.includes("/related/"))
+  .map((component) => component.key);
+const childRuntimeMissing = pageComponents
+  .filter((component) => component.supportsChildren === true || component.containsChildren === true || ["card","grid","stack","tabs","accordion"].includes(component.key))
+  .filter((component) => component.key !== "section")
+  .filter((component) => !pageRendererSource.includes("renderChildren"))
+  .map((component) => component.key);
+const controlRuntimeMissing = ["search_box","filter_bar","pagination"]
+  .filter((key) => keys.has(key))
+  .filter((key) => !pageRendererSource.includes(`key === "${key}"`) || !pageRendererSource.includes("targetNodeId"));
+const actionRuntimeMissing = ["menu","breadcrumb","stepper","modal","drawer","confirmation_dialog","empty_state","app_icon","dock_item","link"]
+  .filter((key) => keys.has(key))
+  .filter((key) => !pageRendererSource.includes(`key === "${key}"`) && !pageRendererSource.includes(`["${key}"`));
+const pageCalendarCollision = pageComponents.some((component) => component.key === "calendar_widget");
+
 const rendererCoverageMissing = pageComponents
   .filter((component) => component.key !== "section" && component.category !== "field" && component.runtimeKind !== "analytics")
   .filter((component) => !pageRendererSource.includes(`"${component.key}"`))
   .map((component) => component.key);
 
-if (propertyCoverageMissing.length || recordRuntimeMissing.length || rendererCoverageMissing.length) {
-  console.error("Page Builder component coverage audit failed.", { propertyCoverageMissing, recordRuntimeMissing, rendererCoverageMissing });
+if (propertyCoverageMissing.length || recordRuntimeMissing.length || bindingRuntimeMissing.length || relationshipRuntimeMissing.length || childRuntimeMissing.length || controlRuntimeMissing.length || actionRuntimeMissing.length || pageCalendarCollision || rendererCoverageMissing.length) {
+  console.error("Page Builder component coverage audit failed.", { propertyCoverageMissing, recordRuntimeMissing, bindingRuntimeMissing, relationshipRuntimeMissing, childRuntimeMissing, controlRuntimeMissing, actionRuntimeMissing, pageCalendarCollision, rendererCoverageMissing });
   process.exit(1);
 }
 
