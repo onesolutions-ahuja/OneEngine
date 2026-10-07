@@ -61,8 +61,7 @@ const report={
   files:rows,
 };
 fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
-fs.writeFileSync(path.join(ROOT,"artifacts","repository-classification-audit.json"),JSON.stringify(report,null,2)+"
-");
+fs.writeFileSync(path.join(ROOT,"artifacts","repository-classification-audit.json"),JSON.stringify(report,null,2)+"\\n");
 if (violations.length) {
   console.error("Repository classification audit failed.", violations);
   process.exit(1);
