@@ -950,14 +950,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-
-      return res.status(403).json({
-        success: false,
-        code: "GOOGLE_SSO_REQUIRED",
-        message: "This company requires Google SSO. Use Continue with Google.",
-      });
-    }
-
     const passwordAwaitStartedAt = Date.now();
     const validPassword = await passwordCheckPromise;
     loginTimings.bcrypt_ms = bcryptDurationMs;
