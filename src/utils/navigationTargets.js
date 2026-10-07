@@ -96,7 +96,7 @@ export function normalizeNavigationTarget(value) {
   const key = typeof source.key === "string" ? source.key.trim().slice(0, 200) : "";
   const target = { type, key };
   if (type === NAVIGATION_TARGET_TYPES.SYSTEM_PAGE) {
-    /* The page key IS the registry key (PAGE_SLUGS entry) — not a URL. */
+    /* The page key is the runtime navigation metadata key — not a URL. */
     return key ? { type, key } : null;
   }
   if (type === NAVIGATION_TARGET_TYPES.CUSTOM_PAGE) {
