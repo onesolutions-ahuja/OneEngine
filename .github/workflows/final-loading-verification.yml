@@ -89,6 +89,6 @@ jobs:
       - name: Run 1.5s performance verification
         env:
           ONEPOS_E2E_RETRIES: "0"
-        run: npx playwright test tests/e2e/final-performance.spec.mjs --project=desktop-chromium --workers=6
+        run: npx playwright test tests/e2e/final-performance.spec.mjs --project=desktop-chromium --workers=1
       - name: Run exhaustive loading verification
         run: npx playwright test tests/e2e/final-loading-verification.spec.mjs --project=desktop-chromium --workers=4
