@@ -1,5 +1,4 @@
 import { seedInternalAppCatalog } from "./internalAppCatalog.js";
-import { provisionPackageMetadata, seedPackageRegistry } from "./packageRegistry.js";
 import { platformSchema } from "./platformSchema.js";
 
 function splitSqlStatements(sql) {
