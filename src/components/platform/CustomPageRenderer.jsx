@@ -809,7 +809,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
           return {
             objectKey: config.objectKey || "",
             conditions: Array.isArray(config.filters) ? config.filters : [],
-            conditionMatch: "all",
+            conditionMatch: config.conditionMatch === "any" ? "any" : "all",
             sort: Array.isArray(config.sort) ? config.sort : [],
             maxRecords: Math.max(1, Math.min(50, Number(config.maxRecords || config.maxVisible) || 10)),
             fields: [...fields],
