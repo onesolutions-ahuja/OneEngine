@@ -45,12 +45,24 @@ const findings=[];
 
 const retiredMetadataRuntime = "server/services/platformMetadata.js";
 const retiredProviderActionRuntime = "server/services/platformActions.js";
+const retiredInvoiceReceiptArtifacts = [
+  "server/services/invoiceDelivery.js",
+  "server/services/receiptQr.js",
+  "server/utils/invoicePdf.js",
+  "server/utils/invoiceHtml.js",
+  "server/database/secure_invoice_links.sql",
+];
 const allServerRuntimeFiles = walk(path.join(ROOT, "server"));
 if (fs.existsSync(path.join(ROOT, retiredMetadataRuntime))) {
   findings.push({rule:"RETIRED_PLATFORM_METADATA_RUNTIME_PRESENT",file:retiredMetadataRuntime});
 }
 if (fs.existsSync(path.join(ROOT, retiredProviderActionRuntime))) {
   findings.push({rule:"RETIRED_PROVIDER_ACTION_RUNTIME_PRESENT",file:retiredProviderActionRuntime});
+}
+for (const artifact of retiredInvoiceReceiptArtifacts) {
+  if (fs.existsSync(path.join(ROOT, artifact))) {
+    findings.push({rule:"RETIRED_INVOICE_RECEIPT_ARTIFACT_PRESENT",file:artifact});
+  }
 }
 for (const file of allServerRuntimeFiles) {
   const name = rel(file);
@@ -65,6 +77,12 @@ for (const file of allServerRuntimeFiles) {
     for (const actionKey of forbiddenCompiledConnectorActions) {
       if (text.includes(actionKey)) findings.push({rule:"COMPILED_BUSINESS_CONNECTOR_ACTION",file:name,actionKey});
     }
+  }
+  if (name === "server/server.js" && /SECURE INVOICE LINKS|\/i\/:token/.test(text)) {
+    findings.push({rule:"RETIRED_SECURE_INVOICE_RUNTIME_REFERENCE",file:name});
+  }
+  if (name === "server/database/oneSolutionsSeeder.js" && /(?:till|delivery|self_checkout)_invoice_prefix/.test(text)) {
+    findings.push({rule:"HARDCODED_INVOICE_PREFIX_SEED",file:name});
   }
   if (name === "server/routes/connectors.js") {
     for (const token of forbiddenGenericConnectorProviderTokens) {
