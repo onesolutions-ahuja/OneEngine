@@ -96,6 +96,16 @@ test('Google Connect login readiness can reuse the bundled login preflight rows'
   assert.match(source, /return resolveGoogleConnectPasswordLoginRuntime\(/)
 })
 
+test('password login resolves Google package, connection and entitlements in one parallel round', async () => {
+  const source = await read('../server/services/googleConnect.js')
+  const start = source.indexOf('export async function getGoogleConnectPasswordLoginRuntime')
+  const end = source.indexOf('export async function getGoogleConnectRuntimeForEmail', start)
+  const block = source.slice(start, end)
+  assert.match(block, /const \[packageResult, connectionResult, entitlements\] = await Promise\.all\(\[/)
+  assert.match(block, /getCompanyEntitlements\(db, companyId\)/)
+  assert.equal(block.includes('return resolveGoogleConnectPasswordLoginRuntime('), false)
+})
+
 
 test('password verification runs alongside all login preflight reads and records its own duration', async () => {
   const source = await read('../server/server.js')
