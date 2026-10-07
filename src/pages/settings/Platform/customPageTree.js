@@ -92,15 +92,18 @@ export function normalizeRecordCollection(value) {
   const conditions = Array.isArray(source.conditions) ? source.conditions
     .map((condition) => ({
       field: safeApiName(condition?.field) || "",
-      // The canonical condition-engine operator vocabulary — the same operators
-      // workflows and validation rules use. No page-specific operator set.
+      // Preserve Page Resource references. Runtime resolves these values; the
+      // metadata normalizer must not collapse them to null.
       operator: RECORD_CONDITION_OPERATORS.includes(condition?.operator) ? condition.operator : "equals",
-      value: condition && ["string", "number", "boolean"].includes(typeof condition.value) ? condition.value : null,
+      value: condition?.value && typeof condition.value === "object" && !Array.isArray(condition.value)
+        ? { ...condition.value }
+        : (condition?.value ?? null),
     }))
     .filter((condition) => condition.field)
     .slice(0, 20)
     : [];
-  const conditionMatch = source.conditionMatch === "any" ? "any" : "all";
+  const conditionMatch = ["all", "any", "custom"].includes(source.conditionMatch) ? source.conditionMatch : "all";
+  const conditionLogic = conditionMatch === "custom" ? safeString(source.conditionLogic, 1000) : null;
   const sort = Array.isArray(source.sort) ? source.sort
     .map((entry) => ({ field: safeApiName(entry?.field) || "", direction: entry?.direction === "asc" ? "asc" : "desc" }))
     .filter((entry) => entry.field)
@@ -110,6 +113,7 @@ export function normalizeRecordCollection(value) {
     objectKey: safeApiName(source.objectKey ?? source.object_key) || "",
     conditions,
     conditionMatch,
+    ...(conditionLogic ? { conditionLogic } : {}),
     sort,
     maxRecords: safeNumber(source.maxRecords ?? source.max_records, 10, { min: 1, max: MAX_RECORD_LIMIT }),
     pagination: source.pagination !== false,
