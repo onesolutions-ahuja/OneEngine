@@ -33,3 +33,13 @@ test("binding tree resolves nested metadata without business wiring",()=>{
   });
   assert.deepEqual(result,{record:"abc",count:3});
 });
+
+
+test("pageResourceOptions exposes defined page resources and component runtime resources", () => {
+  const options = pageResourceOptions({ definitions: { parameters: [{ key: "recordId", label: "Record" }], variables: [{ key: "search", label: "Search" }] }, components: [{ id: "table_1", label: "Orders" }] });
+  assert.ok(options.some((item) => item.type === "page_parameter" && item.key === "recordId"));
+  assert.ok(options.some((item) => item.type === "page_variable" && item.key === "search"));
+  assert.ok(options.some((item) => item.type === "component_value" && item.key === "table_1"));
+  assert.ok(options.some((item) => item.type === "selected_record" && item.key === "table_1"));
+  assert.ok(options.some((item) => item.type === "flow_output" && item.key === "table_1"));
+});
