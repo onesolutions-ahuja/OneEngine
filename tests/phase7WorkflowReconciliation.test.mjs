@@ -35,7 +35,7 @@ test("Phase 7 every generated system workflow has matching Builder nodes", () =>
 });
 
 test("Phase 7 retired duplicate runtime workflow keys stay removed", async () => {
-  const source = await readFile(new URL("../server/packages/runtimeFlowManifests.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../server/metadata/manifests", import.meta.url), "utf8");
   for (const key of [
     "flow:online_order.transition",
     "flow:supplier.invoice.create",
@@ -54,7 +54,7 @@ test("Phase 7 database cleanup retires duplicate runtime rows", async () => {
 test("Phase 7 no hidden workflow executors return", async () => {
   for (const file of [
     "../server/services/systemWorkflowCatalog.js",
-    "../server/packages/runtimeFlowManifests.js",
+    "../server/metadata/manifests",
     "../server/packages/oneAssistantManifest.js",
   ]) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");
