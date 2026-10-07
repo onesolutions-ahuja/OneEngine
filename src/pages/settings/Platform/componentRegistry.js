@@ -435,6 +435,7 @@ export function createRegisteredComponent(component, builder = "PAGE") {
     label: spec.label,
     title: defaults.title || spec.label,
     config: defaults.config || {},
+    collection: spec.bindable ? { objectKey: "", filters: [], conditionMatch: "all", sort: [], limit: 50 } : null,
     layout: defaults.layout || {},
   };
 }
