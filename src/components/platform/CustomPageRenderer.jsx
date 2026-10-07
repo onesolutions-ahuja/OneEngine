@@ -279,6 +279,8 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   const state = data?.[node.id] || {};
   const records = Array.isArray(state.records) ? state.records : [];
   const [calendarDate, setCalendarDate] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState(null);
+  const [calendarView, setCalendarView] = useState("month");
   const [kanbanRecords, setKanbanRecords] = useState(records);
   const [kanbanError, setKanbanError] = useState("");
   useEffect(() => setKanbanRecords(records), [records]);
@@ -317,8 +319,8 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     const startField = config.startField || config.dateField || "";
     const endField = config.endField || "";
     const statusField = config.statusField || "";
-    const [selectedDay, setSelectedDay] = useState(null);
-    const [calendarView, setCalendarView] = useState("month");
+    const selectedDay = selectedCalendarDay;
+    const setSelectedDay = setSelectedCalendarDay;
     const monthStart = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
     const gridStart = new Date(monthStart);
     gridStart.setDate(1 - ((monthStart.getDay() + 6) % 7));
