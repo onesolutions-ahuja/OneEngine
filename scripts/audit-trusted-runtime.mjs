@@ -27,7 +27,8 @@ function walk(dir) {
 }
 
 function lineNumber(text, index) {
-  return text.slice(0, index).split('\n').length
+  return text.slice(0, index).split('
+').length
 }
 
 const findings = []
@@ -104,7 +105,8 @@ const report = {
   findings,
 }
 fs.mkdirSync(path.join(ROOT, 'artifacts'), { recursive: true })
-fs.writeFileSync(path.join(ROOT, 'artifacts', 'trusted-runtime-audit.json'), JSON.stringify(report, null, 2) + '\n')
+fs.writeFileSync(path.join(ROOT, 'artifacts', 'trusted-runtime-audit.json'), JSON.stringify(report, null, 2) + '
+')
 
 if (report.errors) {
   console.error(`Trusted Runtime audit failed with ${report.errors} finding(s).`)
