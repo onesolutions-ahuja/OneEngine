@@ -367,7 +367,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     return <FileViewerRecords node={node} records={records} placeholder={placeholder} />;
   }
   if (node.componentKey === "signature") {
-    return <div className="space-y-2">{records.length ? records.map((record, index) => <SignatureRecord key={record.id || index} node={node} record={record} objectKey={collection.objectKey} title={record[titleField] || record.id} builderMode={builderMode} />) : <div className="cpb-empty">{placeholder ? `${config.label || "Signature"} values will appear here.` : "No records available."}</div>}</div>;
+    return <div className="space-y-2">{records.length ? records.map((record, index) => <SignatureRecord key={record.id || index} node={node} record={record} title={record[titleField] || record.id} builderMode={builderMode} onRecordClick={onRecordClick} />) : <div className="cpb-empty">{placeholder ? `${config.label || "Signature"} values will appear here.` : "No records available."}</div>}</div>;
   }
   return <div className="cpb-empty">No records match this view.</div>;
 }
@@ -413,13 +413,12 @@ function FileViewerRecords({ node, records, placeholder }) {
   return <div className="space-y-2">{downloadError ? <p role="alert" className="text-xs text-red-700">{downloadError}</p> : null}<div className={node.config?.displayMode === "grid" ? "grid gap-2 sm:grid-cols-2" : "space-y-1"}>{files.slice(0, node.config?.maxItems || 12).map((file) => <button type="button" key={file.id} onClick={() => downloadFile(file)} className="flex min-w-0 w-full items-center justify-between gap-3 rounded-md border bg-white px-3 py-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="min-w-0 truncate font-medium">{file.filename}</span><span className="shrink-0 text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{file.mime_type || "File"}</span></button>)}</div></div>;
 }
 
-function SignatureRecord({ node, record, objectKey, title, builderMode }) {
+function SignatureRecord({ node, record, title, builderMode, onRecordClick }) {
   const canvasRef = useRef(null);
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [hasInk, setHasInk] = useState(false);
   const config = node.config || {};
-  const fieldKey = config.fieldKey || "signature";
+  const fieldKey = config.fieldKey || "";
   const canCapture = config.displayMode === "capture" && !builderMode;
   const drawing = useRef(false);
   const point = (event) => {
@@ -431,24 +430,18 @@ function SignatureRecord({ node, record, objectKey, title, builderMode }) {
     context.strokeStyle = "#172554";
     return { context, x: (event.clientX - bounds.left) * (canvas.width / bounds.width), y: (event.clientY - bounds.top) * (canvas.height / bounds.height) };
   };
-  const save = async () => {
-    if (!canvasRef.current || !objectKey || !record.id) return;
+  const save = () => {
+    if (!canvasRef.current || !record.id || !fieldKey) return;
     if (config.required && !hasInk) {
       setMessage("A signature is required.");
       return;
     }
-    setSaving(true);
-    setMessage("");
-    try {
-      await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey)}/records/${encodeURIComponent(record.id)}`, { method: "PUT", body: JSON.stringify({ data: { [fieldKey]: canvasRef.current.toDataURL("image/png") } }) });
-      setMessage("Signature saved.");
-    } catch (error) {
-      setMessage(error?.message || "Unable to save signature");
-    } finally {
-      setSaving(false);
-    }
+    const value = canvasRef.current.toDataURL("image/png");
+    setMessage("Signature captured.");
+    onRecordClick?.({ record, node, eventName: "submit", value, changes: { [fieldKey]: value } });
   };
-  return <div className="rounded-lg border bg-white p-3" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><div className="mb-2 text-xs font-medium">{config.label || "Signature"} · {title}</div>{record[fieldKey] ? <img className="mb-2 max-h-32 max-w-full object-contain" src={record[fieldKey]} alt={`${config.label || "Signature"} for ${title}`} /> : null}{canCapture ? <><canvas ref={canvasRef} width={config.width || 320} height={config.height || 180} className="block max-w-full touch-none rounded border border-dashed bg-slate-50" style={{ width: "100%", maxWidth: config.width || 320, height: config.height || 180, borderColor: "var(--border-color, #cbd5e1)" }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); drawing.current = true; const { context, x, y } = point(event); context.beginPath(); context.moveTo(x, y); }} onPointerMove={(event) => { if (!drawing.current) return; const { context, x, y } = point(event); context.lineTo(x, y); context.stroke(); setHasInk(true); }} onPointerUp={() => { drawing.current = false; }} onPointerCancel={() => { drawing.current = false; }} /><div className="mt-2 flex gap-2">{config.allowClear !== false ? <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => { const context = canvasRef.current?.getContext("2d"); context?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasInk(false); }}>Clear</button> : null}<button type="button" className="onepos-btn onepos-btn-primary onepos-btn-sm" disabled={saving || (config.required && !hasInk)} onClick={save}>{saving ? "Saving…" : "Save signature"}</button></div></> : null}{message ? <p role="status" className="mt-2 text-xs">{message}</p> : null}</div>;
+
+  return <div className="rounded-lg border bg-white p-3" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><div className="mb-2 text-xs font-medium">{config.label || "Signature"} · {title}</div>{record[fieldKey] ? <img className="mb-2 max-h-32 max-w-full object-contain" src={record[fieldKey]} alt={`${config.label || "Signature"} for ${title}`} /> : null}{canCapture ? <><canvas ref={canvasRef} width={config.width || 320} height={config.height || 180} className="block max-w-full touch-none rounded border border-dashed bg-slate-50" style={{ width: "100%", maxWidth: config.width || 320, height: config.height || 180, borderColor: "var(--border-color, #cbd5e1)" }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); drawing.current = true; const { context, x, y } = point(event); context.beginPath(); context.moveTo(x, y); }} onPointerMove={(event) => { if (!drawing.current) return; const { context, x, y } = point(event); context.lineTo(x, y); context.stroke(); setHasInk(true); }} onPointerUp={() => { drawing.current = false; }} onPointerCancel={() => { drawing.current = false; }} /><div className="mt-2 flex gap-2">{config.allowClear !== false ? <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => { const context = canvasRef.current?.getContext("2d"); context?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasInk(false); }}>Clear</button> : null}<button type="button" className="onepos-btn onepos-btn-primary onepos-btn-sm" disabled={!fieldKey || (config.required && !hasInk)} onClick={save}>Save signature</button></div></> : null}{message ? <p role="status" className="mt-2 text-xs">{message}</p> : null}</div>;
 }
 
 function TreeViewView({ node, builderMode, onRecordClick, data }) {
@@ -456,9 +449,9 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
   const config = node.config || {};
   const state = data?.[node.id] || {};
   const records = Array.isArray(state.records) ? state.records : [];
-  const parentField = config.parentField || "parent_id";
-  const labelField = config.labelField || "name";
-  const secondaryField = config.secondaryField || "status";
+  const parentField = config.parentField || "";
+  const labelField = config.labelField || collection.fields?.[0] || "id";
+  const secondaryField = config.secondaryField || "";
   const maxDepth = Math.max(1, Number(config.maxDepth) || 3);
   const defaultExpandedDepth = Math.max(0, Number(config.defaultExpandedDepth) || 1);
   const canCollapse = config.allowCollapse !== false;
@@ -490,7 +483,7 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
     const children = childMap.get(String(record.id)) || [];
     const isExpanded = canCollapse ? (expanded.has(record.id) || depth < defaultExpandedDepth) : true;
     const isLeaf = !children.length;
-    const label = record[labelField] ?? record.name ?? record.title ?? "Untitled";
+    const label = record[labelField] ?? record.id ?? "Untitled";
     const subtitle = secondaryField && record[secondaryField] ? String(record[secondaryField]) : "";
     const countText = config.showCounts !== false && !isLeaf ? ` (${children.length})` : "";
 
@@ -530,11 +523,11 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
   );
 }
 
-function ProcessPathView({ node, builderMode, data }) {
+function ProcessPathView({ node, builderMode, data, onRecordClick }) {
   const state = data?.[node.id] || {};
   const config = node.config || {};
   const record = state.records?.[0] || null;
-  const statusField = config.statusField || "status";
+  const statusField = config.statusField || "";
   const titleField = config.titleField || "";
   const stages = Array.isArray(config.stages) ? config.stages.filter(Boolean) : [];
   const [optimisticStage, setOptimisticStage] = useState("");
@@ -548,22 +541,11 @@ function ProcessPathView({ node, builderMode, data }) {
   const current = optimisticStage || (record?.[statusField] == null ? "" : String(record[statusField]));
   const stageList = stages.length ? stages : (current ? [current] : []);
 
-  const changeStage = async (stage) => {
-    if (builderMode || config.allowStageChange !== true || !record?.id || !node.collection?.objectKey || stage === current) return;
-    setSavingStage(stage);
-    setMessage("");
-    try {
-      await apiRequest(
-        `/api/platform/objects/${encodeURIComponent(node.collection.objectKey)}/records/${encodeURIComponent(record.id)}`,
-        { method: "PUT", body: JSON.stringify({ data: { [statusField]: stage } }) },
-      );
-      setOptimisticStage(stage);
-      setMessage("Stage updated.");
-    } catch (error) {
-      setMessage(error?.message || "Unable to update stage.");
-    } finally {
-      setSavingStage("");
-    }
+  const changeStage = (stage) => {
+    if (builderMode || config.allowStageChange !== true || !record?.id || !statusField || stage === current) return;
+    setOptimisticStage(stage);
+    setMessage("Stage selected.");
+    onRecordClick?.({ record, node, eventName: "change", value: stage, changes: { [statusField]: stage } });
   };
 
   if (state.loading) return <div className="cpb-empty">Loading process path…</div>;
@@ -583,7 +565,7 @@ function ProcessPathView({ node, builderMode, data }) {
               key={String(stage)}
               type="button"
               role="listitem"
-              disabled={builderMode || config.allowStageChange !== true || savingStage !== ""}
+              disabled={builderMode || config.allowStageChange !== true || !statusField}
               onClick={() => changeStage(String(stage))}
               className={`min-w-[120px] flex-1 rounded-lg border px-3 py-2 text-left text-xs ${active ? "font-semibold" : ""}`}
               style={{
@@ -591,7 +573,7 @@ function ProcessPathView({ node, builderMode, data }) {
                 background: active ? "color-mix(in srgb, var(--primary-color,#176f6a) 10%, white)" : completed ? "var(--muted-background,#f8fafc)" : "var(--card-background,#fff)",
                 color: active ? "var(--primary-color,#176f6a)" : "var(--text-primary,#334155)",
               }}
-              title={savingStage === String(stage) ? "Updating…" : String(stage)}
+              title={String(stage)}
             >
               <span className="block text-[10px] uppercase tracking-wide" style={{ color: "var(--text-secondary,#64748b)" }}>{index + 1}</span>
               <span className="block truncate">{String(stage).replaceAll("_", " ")}</span>
@@ -599,7 +581,7 @@ function ProcessPathView({ node, builderMode, data }) {
           );
         })}
       </div>
-      {message ? <p role="status" className="text-[11px]" style={{ color: message === "Stage updated." ? "var(--primary-color,#176f6a)" : "#b91c1c" }}>{message}</p> : null}
+      {message ? <p role="status" className="text-[11px]" style={{ color: "var(--primary-color,#176f6a)" }}>{message}</p> : null}
       {builderMode ? <p className="text-[11px]" style={{ color: "var(--text-secondary,#64748b)" }}>Runtime highlights the current stage from {statusField}.</p> : null}
     </div>
   );
@@ -767,7 +749,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     return <TreeViewView node={node} builderMode={builderMode} onRecordClick={guardedRecordClick} data={data} />;
   }
   if (key === "process_path") {
-    return <ProcessPathView node={node} builderMode={builderMode} data={data} />;
+    return <ProcessPathView node={node} builderMode={builderMode} data={data} onRecordClick={guardedRecordClick} />;
   }
   if (key === "button") {
     const variantClass = { primary: "onepos-btn-primary", secondary: "onepos-btn-secondary", ghost: "onepos-btn-secondary", danger: "onepos-btn-danger" }[node.variant || "primary"] || "onepos-btn-primary";
