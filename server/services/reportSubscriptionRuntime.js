@@ -4,7 +4,7 @@ import { executeAnalyticsDefinition } from "./reportExecution.js";
 import { buildPlatformObjectQuery, validatePlatformReportDefinition } from "./reportableSources.js";
 import { loadPlatformReportContext } from "./platformReportSecurity.js";
 import { normalizeReportType } from "./reportTypeDefinition.js";
-import { executeMediatedRegisteredAction } from "./platformWorkflow.js";
+import { getWorkflowActionDefinition } from "./platformWorkflow.js";
 import { buildDetailsCsv, buildFormattedXlsx } from "./reportExport.js";
 import {
   filterReportSubscriptionRecipientsByAccess,
@@ -267,19 +267,26 @@ export async function processReportSubscriptionDeliveryJob({ db, payload = {} } 
       const deliveryId = await deliveryNeeded(recipient.id, "EMAIL");
       if (deliveryId) {
         try {
-          const outcome = await executeMediatedRegisteredAction({
-            db,
-            companyId: row.company_id,
-            userId: executionUser.id,
-            req: { user: { id: executionUser.id, companyId: row.company_id } },
-            action: {
-              type: "SEND_EMAIL",
-              recipient: recipient.email,
-              subject: `Scheduled report: ${report.name}`,
-              body,
-              attachments,
-            },
-          });
+          const communication = getWorkflowActionDefinition("SEND_COMMUNICATION");
+      if (!communication?.executor) throw Object.assign(new Error("Communication runtime is unavailable"), { retryable:false });
+      const outcome = await communication.executor({
+        db,
+        companyId: row.company_id,
+        req: { user: { id: executionUser.id, companyId: row.company_id, roleId: executionUser.role_id } },
+        action: {
+          key: "SEND_COMMUNICATION",
+          type: "SEND_COMMUNICATION",
+          channel: "EMAIL",
+          recipient: recipient.email,
+          subject: `Scheduled report: ${report.name}`,
+          message: body,
+          attachments,
+        },
+        record: null,
+        previousRecord: null,
+        object: null,
+        workflowVariables: { variables: {}, steps: {} },
+      });
           if (!["SUCCESS","COMPLETED"].includes(String(outcome?.status || ""))) {
             const error = new Error(outcome?.error?.message || outcome?.code || "Report subscription email delivery failed");
             error.retryable = outcome?.retryable === true;
