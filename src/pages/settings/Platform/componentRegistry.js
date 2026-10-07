@@ -359,8 +359,11 @@ export function registryForBuilder(registry = FALLBACK_COMPONENT_REGISTRY, build
       return ["layout", "content", "action"].includes(category);
     }
     if (target === "PAGE") {
-      if (component.supportsPageContext || category === "layout" || category === "content" || category === "action" || category === "modern") return true;
-      return !component.recordBound;
+      // Page Builder is the generic composition surface. Components that
+      // explicitly declare builder support were handled above; otherwise the
+      // registry entry is available here and its Data/Properties metadata
+      // determines whether binding is required.
+      return true;
     }
     return true;
   });
