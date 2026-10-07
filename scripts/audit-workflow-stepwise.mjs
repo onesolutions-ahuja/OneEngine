@@ -2,8 +2,6 @@ import { readFile } from "node:fs/promises";
 import { packageDefinitions } from "../server/services/packageRegistry.js";
 import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
 
-const atomicAllowlist = new Set();
-
 const rows = [];
 const add = ({ source, packageKey = null, name, apiName = null, action = {}, runtime = true }) => {
   const actions = Array.isArray(action?.actions) ? action.actions : [];
@@ -17,7 +15,7 @@ const add = ({ source, packageKey = null, name, apiName = null, action = {}, run
     steps: actions.length,
     builderNodes: nodes.length,
     builderRoundTrip: !runtime || actions.length === 0 || nodes.length === actions.length,
-    atomicAllowed: atomicAllowlist.has(name || apiName || ""),
+    atomicAllowed: action?.atomic === true,
   });
 };
 
@@ -147,7 +145,7 @@ for (const [marker, sourceName] of [
       steps,
       builderNodes: builderPersisted ? steps : 0,
       builderRoundTrip: builderPersisted,
-      atomicAllowed: atomicAllowlist.has(name),
+      atomicAllowed: /atomic:\s*true/.test(objectSource),
     });
   }
 }
