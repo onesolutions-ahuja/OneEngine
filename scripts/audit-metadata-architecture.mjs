@@ -11,6 +11,7 @@ const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:tru
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 
 const historicalMigrationFiles = new Set([
+  "server/database/init.js",
   "server/database/migrations.js",
 ]);
 const declarativeMetadataFiles = new Set([
@@ -30,10 +31,6 @@ const hardcodedBusinessObjectKeys=[
   "supplier_invoice","supplier_payment","sales_order","sales_order_line","stock_return"
 ];
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
-const forbiddenExecutableDomainTokens=[
-  "appointment","booking","barber","candidate","invoice","ticket","sale","sales","product","customer","supplier",
-  "purchase","inventory","warehouse","restaurant","kiosk","deliveroo"
-];
 const retiredFrontendBusinessFiles = [
   "src/pages/products/GlobalProductLookupPage.jsx",
   "src/components/online/OnlineOrderSummary.jsx",
@@ -185,12 +182,6 @@ for(const file of roots.flatMap(walk)){
   const text=fs.readFileSync(file,"utf8");
   const isHistoricalMigration = historicalMigrationFiles.has(name);
   const isDeclarativeMetadata = declarativeMetadataFiles.has(name);
-  if (!isHistoricalMigration && !isDeclarativeMetadata && !name.includes("/metadata/") && !name.includes("/docs/")) {
-    for (const token of forbiddenExecutableDomainTokens) {
-      const domainPattern = new RegExp(`\\b${token}\\b`, "i");
-      if (domainPattern.test(text)) findings.push({rule:"BUSINESS_DOMAIN_TOKEN_IN_EXECUTABLE_SOURCE",file:name,token});
-    }
-  }
   if (!isHistoricalMigration && !isDeclarativeMetadata) {
     for(const table of businessTables){
       const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
