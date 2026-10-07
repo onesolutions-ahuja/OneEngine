@@ -169,6 +169,7 @@ const packageRuntimeWorkflows = packageDefinitions()
     apiName: workflow.apiName || workflow.action?.apiName || null,
     flowType: workflow.flowType || workflow.action?.flowType || null,
     actions: workflow.actions || workflow.action?.actions || [],
+    atomic: workflow.atomic === true || workflow.action?.atomic === true,
   })))
 ;
 
@@ -178,6 +179,7 @@ const systemRuntimeWorkflows = systemWorkflowDefinitions().map((workflow) => ({
   apiName: workflow.action?.apiName || workflow.systemKey || null,
   flowType: workflow.action?.flowType || null,
   actions: workflow.action?.actions || [],
+  atomic: workflow.atomic === true || workflow.action?.atomic === true,
 }));
 
 const metadataSeedWorkflows = extractTopLevelObjects(platformMetadataSource, "const lifecycleFlows = [").map((block) => ({
@@ -188,9 +190,8 @@ const metadataSeedWorkflows = extractTopLevelObjects(platformMetadataSource, "co
 }));
 
 const runtimeWorkflowInventory = [...packageRuntimeWorkflows, ...systemRuntimeWorkflows, ...metadataSeedWorkflows];
-const allowedShortRuntimeWorkflows = new Set();
 const shortRuntimeWorkflows = runtimeWorkflowInventory.filter((workflow) => workflow.actions.length <= 2);
-const invalidShortRuntimeWorkflows = shortRuntimeWorkflows.filter((workflow) => !allowedShortRuntimeWorkflows.has(workflow.source + "::" + workflow.name));
+const invalidShortRuntimeWorkflows = shortRuntimeWorkflows.filter((workflow) => workflow.atomic !== true);
 const builderFallbackReady =
   /source:\s*'runtime_import'/.test(gptBuilderPageSource)
   && /importedRuntimeAction:\s*runtimeAction/.test(gptBuilderPageSource)
@@ -379,7 +380,7 @@ const report = {
   registeredActions: actions,
   trustedJobKinds: jobs,
   runtimeWorkflowInventory: runtimeWorkflowInventory.map((workflow) => ({ source: workflow.source, name: workflow.name, apiName: workflow.apiName, steps: workflow.actions.length })),
-  shortRuntimeWorkflows: shortRuntimeWorkflows.map((workflow) => ({ source: workflow.source, name: workflow.name, apiName: workflow.apiName, steps: workflow.actions.length, allowed: allowedShortRuntimeWorkflows.has(workflow.source + "::" + workflow.name) })),
+  shortRuntimeWorkflows: shortRuntimeWorkflows.map((workflow) => ({ source: workflow.source, name: workflow.name, apiName: workflow.apiName, steps: workflow.actions.length, allowed: workflow.atomic === true })),
   mutationRoutes,
   ignoredNonMutatingPostRoutes,
   directRuntimeCalls,
