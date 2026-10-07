@@ -1844,6 +1844,24 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
         });
       },
     },
+    {
+      key: "0068_generalize_record_image_component_key",
+      version: "68",
+      name: "Generalize legacy record image component metadata",
+      up: async client => {
+        await client.query(`
+          UPDATE platform_pages
+             SET definition = replace(definition::text, '"product_image_card"', '"image_record_card"')::jsonb,
+                 draft_definition = CASE
+                   WHEN draft_definition IS NULL THEN NULL
+                   ELSE replace(draft_definition::text, '"product_image_card"', '"image_record_card"')::jsonb
+                 END,
+                 updated_at = NOW()
+           WHERE definition::text LIKE '%"product_image_card"%'
+              OR draft_definition::text LIKE '%"product_image_card"%'
+        `);
+      },
+    },
     ]);
 
   if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
