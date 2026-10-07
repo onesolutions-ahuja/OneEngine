@@ -577,7 +577,7 @@ export default function FieldEditor({
               onChange={(event) =>
                 update("label", event.target.value)
               }
-              placeholder="Customer Name"
+              placeholder="Record Name"
               required
             />
           </label>
@@ -588,7 +588,7 @@ export default function FieldEditor({
               type="text"
               value={form.apiName || ""}
               readOnly
-              placeholder="customer_name"
+              placeholder="related_name"
               required
             />
             <small>
