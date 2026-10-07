@@ -823,7 +823,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   const guardedRecordClick = interactive ? onRecordClick : undefined;
   const guardedButtonClick = interactive ? onButtonClick : undefined;
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
-  if (node.rendererKey === "custom_module" && node.componentPath) return <CustomComponentModule registration={{ componentPath: node.componentPath, cssPath: node.cssPath }} node={node} config={node.config || {}} data={data?.[node.id]} builderMode={builderMode} onEvent={onEvent} />;
+  if (node.rendererKey === "custom_module" && node.componentPath) { const bound = data?.[node.id]; return <CustomComponentModule registration={{ componentPath: node.componentPath, cssPath: node.cssPath }} node={node} config={node.config || {}} data={bound} records={Array.isArray(bound?.records) ? bound.records : []} builderMode={builderMode} onEvent={onEvent} />; }
   if (STATIC_DASHBOARD_COMPONENTS.includes(key)) {
     const config = { ...(node.config || {}) };
     if (key === "avatar_group") {
