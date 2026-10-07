@@ -1,6 +1,6 @@
 import { normalizeDashboardSubscription } from "./analyticsManagement.js";
 import { createDashboardExecution } from "./dashboardExecution.js";
-import { executeMediatedRegisteredAction } from "./platformWorkflow.js";
+import { getWorkflowActionDefinition } from "./platformWorkflow.js";
 import { resolveReportSubscriptionRecipients } from "./reportSubscriptionDelivery.js";
 import { dashboardAccessAtLeast, loadDashboardPrincipalContext, resolveDashboardAccess } from "./dashboardSecurity.js";
 import { validateDashboardDefinition } from "./dashboardBuilder.js";
@@ -136,10 +136,17 @@ export async function processDashboardSubscriptionDeliveryJob({
     if(!ledger||ledger.status==="DELIVERED")continue;
     await db("UPDATE dashboard_subscription_deliveries SET status='RUNNING',last_error=NULL,updated_at=NOW() WHERE id=$1",[ledger.id]);
     try{
-      const outcome=await executeMediatedRegisteredAction({
-        db,companyId:row.company_id,userId:executionUser.id,
-        req:{user:{id:executionUser.id,companyId:row.company_id}},
-        action:{type:"SEND_EMAIL",recipient:recipient.email,subject:`Scheduled dashboard: ${dashboard.name}`,body},
+      const communication = getWorkflowActionDefinition("SEND_COMMUNICATION");
+      if (!communication?.executor) throw Object.assign(new Error("Communication runtime is unavailable"), { retryable:false });
+      const outcome=await communication.executor({
+        db,
+        companyId:row.company_id,
+        req:{user:{id:executionUser.id,companyId:row.company_id,roleId:executionUser.role_id,storeId:executionUser.store_id||null}},
+        action:{key:"SEND_COMMUNICATION",type:"SEND_COMMUNICATION",channel:"EMAIL",recipient:recipient.email,subject:`Scheduled dashboard: ${dashboard.name}`,message:body},
+        record:null,
+        previousRecord:null,
+        object:null,
+        workflowVariables:{variables:{},steps:{}},
       });
       if(!["SUCCESS","COMPLETED"].includes(String(outcome?.status||""))){
         const error=new Error(outcome?.error?.message||outcome?.code||"Dashboard subscription email delivery failed");
