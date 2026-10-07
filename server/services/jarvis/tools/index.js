@@ -36,14 +36,14 @@ function toolMatches(tool, question) {
   return patterns.some((pattern) => compilePattern(pattern)?.test(text) === true);
 }
 
-async function canUseTool(context, tool, { canViewCompanyCustomers } = {}) {
+async function canUseTool(context, tool, { canViewCompanyScope } = {}) {
   const required = Array.isArray(tool?.permissionAny) ? tool.permissionAny.filter(Boolean) : [];
   if (!required.length) return true;
   const granted = Array.isArray(context?.permissions) ? context.permissions : [];
   if (required.some((code) => granted.includes(code))) return true;
-  if (typeof canViewCompanyCustomers === "function") {
+  if (typeof canViewCompanyScope === "function") {
     try {
-      if (await canViewCompanyCustomers(context)) return true;
+      if (await canViewCompanyScope(context)) return true;
     } catch (error) {
       console.error("JARVES administrative permission check failed:", error?.message || error);
     }
@@ -81,13 +81,13 @@ function readConfiguredValue(path, flat) {
   return flat[String(path || "")] ?? null;
 }
 
-async function executeConfiguredTool(tool, context, { db, canViewCompanyCustomers }) {
+async function executeConfiguredTool(tool, context, { db, canViewCompanyScope }) {
   if (!context?.companyId) {
     throw new JarvisError(JARVIS_ERROR_CODES.TOOL_UNAVAILABLE, {
       detail: `session has no company scope; tool '${tool.key}' is unavailable`,
     });
   }
-  if (!(await canUseTool(context, tool, { canViewCompanyCustomers }))) {
+  if (!(await canUseTool(context, tool, { canViewCompanyScope }))) {
     throw new JarvisError(JARVIS_ERROR_CODES.TOOL_PERMISSION_DENIED, {
       detail: `user ${context.userId ?? "unknown"} lacks a declared permission for tool '${tool.key}'`,
     });
@@ -126,7 +126,7 @@ async function executeConfiguredTool(tool, context, { db, canViewCompanyCustomer
   };
 }
 
-export function createJarvisTools({ db, canViewCompanyCustomers = null } = {}) {
+export function createJarvisTools({ db, canViewCompanyScope = null } = {}) {
   if (typeof db !== "function") throw new Error("createJarvisTools requires the existing db helper");
   const tools = configuredTools();
 
@@ -142,7 +142,7 @@ export function createJarvisTools({ db, canViewCompanyCustomers = null } = {}) {
         detail: `unknown tool '${name}'`,
       });
     }
-    return executeConfiguredTool(tool, context, { db, canViewCompanyCustomers });
+    return executeConfiguredTool(tool, context, { db, canViewCompanyScope });
   }
 
   return { matchTool, executeTool };
