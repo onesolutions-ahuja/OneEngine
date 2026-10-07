@@ -4,33 +4,66 @@ import { safeSystemFields, systemObject, systemObjectRbacPermission } from "./pl
 import { buildPlatformSharingScope } from "./platformSharing.js";
 import { isSafeIdentifier } from "./platformIdentifiers.js";
 
+const objectPermissionRequestCache = new WeakMap();
+
+function permissionCacheForRequest(req) {
+  let cache = objectPermissionRequestCache.get(req);
+  if (!cache) {
+    cache = {
+      grants: new Map(),
+      objects: new Map(),
+      inheritedRoles: new Map(),
+      rolePermissions: new Map(),
+    };
+    objectPermissionRequestCache.set(req, cache);
+  }
+  return cache;
+}
+
+function requestCachedPromise(cache, key, load) {
+  if (!cache.has(key)) cache.set(key, load());
+  return cache.get(key);
+}
+
 export async function hasPlatformObjectPermission(db, req, objectId, action) {
   if (!objectId || !req.user?.companyId) return false;
   if (!req.user?.roleId) return false;
+  const cache = permissionCacheForRequest(req);
+  const companyId = req.user.companyId;
+  const roleId = req.user.roleId;
+  const objectKey = JSON.stringify([companyId, roleId, objectId]);
   const [permissionResult, permissionSets] = await Promise.all([
-    db("SELECT can_view, can_create, can_edit, can_delete, can_import, can_export FROM platform_object_permissions WHERE object_id=$1 AND role_id=$2 AND company_id=$3", [objectId, req.user.roleId, req.user.companyId]),
+    requestCachedPromise(cache.grants, objectKey, () =>
+      db("SELECT can_view, can_create, can_edit, can_delete, can_import, can_export FROM platform_object_permissions WHERE object_id=$1 AND role_id=$2 AND company_id=$3", [objectId, roleId, companyId])
+    ),
     loadEffectivePermissionSets(db, req.user, req),
   ]);
   if (permissionResult.rows[0]?.[`can_${action}`] === true) return true;
-  const objectResult = await db("SELECT object_key,source_table FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [objectId, req.user.companyId]);
+  const objectResult = await requestCachedPromise(cache.objects, JSON.stringify([companyId, objectId]), () =>
+    db("SELECT object_key,source_table FROM platform_objects WHERE id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)", [objectId, companyId])
+  );
   const object = objectResult.rows[0];
   if (permissionSetAllowsObject(permissionSets, object?.object_key, action)) return true;
   const permission = systemObjectRbacPermission(object, action);
   if (!permission) return false;
   if (permissionSetAllowsSystemPermission(permissionSets, permission)) return true;
-  const inheritedRoles = await db(
-    `WITH RECURSIVE role_tree(id,parent_role_id) AS (
-       SELECT id,parent_role_id FROM roles WHERE id=$1 AND (company_id IS NULL OR company_id=$2)
-       UNION SELECT parent.id,parent.parent_role_id FROM roles parent JOIN role_tree child ON child.parent_role_id=parent.id
-        WHERE parent.company_id=$2 OR parent.company_id IS NULL
-     ) SELECT id FROM role_tree`,
-    [req.user.roleId, req.user.companyId]
+  const inheritedRoles = await requestCachedPromise(cache.inheritedRoles, JSON.stringify([companyId, roleId]), () =>
+    db(
+      `WITH RECURSIVE role_tree(id,parent_role_id) AS (
+         SELECT id,parent_role_id FROM roles WHERE id=$1 AND (company_id IS NULL OR company_id=$2)
+         UNION SELECT parent.id,parent.parent_role_id FROM roles parent JOIN role_tree child ON child.parent_role_id=parent.id
+          WHERE parent.company_id=$2 OR parent.company_id IS NULL
+       ) SELECT id FROM role_tree`,
+      [roleId, companyId]
+    )
   );
   const roleIds = (inheritedRoles.rows || []).map((row) => row.id);
   if (!roleIds.length) return false;
-  const rolePermission = await db(
-    "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=ANY($1::uuid[]) AND p.code=$2 LIMIT 1",
-    [roleIds, permission]
+  const rolePermission = await requestCachedPromise(cache.rolePermissions, JSON.stringify([companyId, roleId, permission]), () =>
+    db(
+      "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=ANY($1::uuid[]) AND p.code=$2 LIMIT 1",
+      [roleIds, permission]
+    )
   );
   return rolePermission.rows.length > 0;
 }
