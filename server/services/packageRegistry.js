@@ -1357,25 +1357,32 @@ export async function capturePackageMetadataSnapshot(db, { packageId, companyId 
   }));
 }
 
-export async function provisionDefaultCompanyPackages(db, { companyId, installedBy = null, packageKeys = ["staff", "products", "customers"] }) {
-  for (const packageKey of packageKeys) {
-    const packageResult = await db(
-      `SELECT p.id, p.version, p.module_id, p.manifest
-       FROM package_registry p
-       WHERE p.package_key=$1 AND p.active=true`,
-      [packageKey]
-    );
-    if (!packageResult.rows.length) continue;
-    const pkg = packageResult.rows[0];
-    if (packageKey === "products") {
-      await provisionPackageMetadata(db, {
-        packageId: pkg.id,
-        moduleId: pkg.module_id,
-        companyId,
-        manifest: pkg.manifest || {},
-        packageVersion: pkg.version,
-      });
-    }
+export async function provisionDefaultCompanyPackages(db, { companyId, installedBy = null, packageKeys = null } = {}) {
+  const selected = Array.isArray(packageKeys) && packageKeys.length
+    ? await db(
+        `SELECT p.id,p.package_key,p.version,p.module_id,p.manifest
+           FROM package_registry p
+          WHERE p.package_key=ANY($1::text[]) AND p.active=true
+          ORDER BY p.package_key`,
+        [packageKeys]
+      )
+    : await db(
+        `SELECT p.id,p.package_key,p.version,p.module_id,p.manifest
+           FROM package_registry p
+          WHERE p.active=true
+            AND COALESCE((p.manifest->>'bootstrapFoundation')::boolean,false)=true
+          ORDER BY p.package_key`
+      );
+
+  for (const pkg of selected.rows || []) {
+    await provisionPackageMetadata(db, {
+      packageId: pkg.id,
+      moduleId: pkg.module_id,
+      companyId,
+      manifest: pkg.manifest || {},
+      packageVersion: pkg.version,
+    });
+
     await db(
       `INSERT INTO company_package_installations
        (company_id,package_id,version,status,installed_by,installation_type)
@@ -1391,15 +1398,6 @@ export async function provisionDefaultCompanyPackages(db, { companyId, installed
        DO UPDATE SET active=true,metadata=EXCLUDED.metadata`,
       [companyId, pkg.id, `platform-default:${pkg.id}`, JSON.stringify({ installationType: "PLATFORM_DEFAULT" })]
     );
-    if (packageKey === "staff" || packageKey === "products") {
-      await provisionPackageMetadata(db, {
-        packageId: pkg.id,
-        moduleId: pkg.module_id,
-        companyId,
-        manifest: pkg.manifest || {},
-        packageVersion: pkg.version,
-      });
-    }
     if (pkg.module_id) {
       await db(
         `INSERT INTO platform_module_access (module_id,company_id,store_id,enabled)
