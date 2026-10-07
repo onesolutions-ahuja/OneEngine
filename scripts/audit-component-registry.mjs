@@ -48,9 +48,13 @@ const recordRuntimeMissing = pageComponents
   .filter((component) => component.recordBound === true)
   .filter((component) => !pageRendererSource.includes(`"${component.key}"`))
   .map((component) => component.key);
+const rendererCoverageMissing = pageComponents
+  .filter((component) => component.key !== "section" && component.category !== "field")
+  .filter((component) => !pageRendererSource.includes(`"${component.key}"`))
+  .map((component) => component.key);
 
-if (propertyCoverageMissing.length || recordRuntimeMissing.length) {
-  console.error("Page Builder component coverage audit failed.", { propertyCoverageMissing, recordRuntimeMissing });
+if (propertyCoverageMissing.length || recordRuntimeMissing.length || rendererCoverageMissing.length) {
+  console.error("Page Builder component coverage audit failed.", { propertyCoverageMissing, recordRuntimeMissing, rendererCoverageMissing });
   process.exit(1);
 }
 
