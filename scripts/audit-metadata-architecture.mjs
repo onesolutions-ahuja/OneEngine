@@ -9,7 +9,7 @@ const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:tru
   return entry.isDirectory()?walk(full):/\.(?:js|jsx|mjs|ts|tsx)$/.test(entry.name)?[full]:[];
 }) : [];
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
-const files=roots.flatMap(walk).filter((file)=>{const name=rel(file);if(/(?:^|\\/)(?:test|tests|scripts|migrations)(?:\\/|$)/.test(name)||name.endsWith(".test.js")||name.endsWith(".test.mjs"))return false;if(name.startsWith("server/src/marketing/")||name.startsWith("src/marketing/"))return false;return true;});
+const files=roots.flatMap(walk).filter((file)=>{const name=rel(file);const parts=name.split("/");if(parts.some((part)=>["test","tests","scripts","migrations"].includes(part))||name.endsWith(".test.js")||name.endsWith(".test.mjs"))return false;if(name.startsWith("server/src/marketing/")||name.startsWith("src/marketing/"))return false;return true;});
 
 const exempt = new Set();
 const declarativePrefixes=[];
