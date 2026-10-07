@@ -2,28 +2,6 @@ import { useRef } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import JarvisOrb from '../jarvis/JarvisOrb'
 
-export const defaultDockItems = [
-  { id: 'launchpad', label: 'Launcher', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Launchpad.png`, scaled: true },
-  { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png`, scaled: true },
-  { id: 'developer', label: 'OneDeveloper', src: `${import.meta.env.BASE_URL || '/'}icons/apps/one-developer-dock.svg`, scaled: true },
-  { id: 'store', label: 'OneStore', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onestore-dock-clean.svg?v=20261004a`, scaled: true },
-  { id: 'till', label: 'OneTill', src: `${import.meta.env.BASE_URL || '/'}icons/apps/onetill-dock-clean.svg?v=20261004a`, scaled: true },
-  { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png`, scaled: true },
-  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg?v=20261004a`, scaled: true },
-]
-
-const trashItem = {
-  id: 'trash',
-  label: 'Recycle Bin',
-  src: 'https://rdvnui.com/assets/Trash%20Full-BoE_wJYh.png',
-}
-
-const defaultMobileDockItems = [
-  { id: 'dashboard', label: 'Dashboard', src: `${import.meta.env.BASE_URL || '/'}icons/apps/dashboard.png` },
-  { id: 'workspace', label: 'Workspace', src: `${import.meta.env.BASE_URL || '/'}icons/apps/workspace.svg?v=20261004a` },
-  { id: 'settings', label: 'Settings', src: `${import.meta.env.BASE_URL || '/'}icons/apps/Settings.png` },
-]
-
 function DockItem({ item, mouseX, onActivate }) {
   const ref = useRef(null)
   const distance = useTransform(mouseX, (value) => {
@@ -42,7 +20,7 @@ function DockItem({ item, mouseX, onActivate }) {
   )
 }
 
-export default function RdvnReferenceDock({ onItemOpen, items = defaultDockItems, mobileItems = defaultMobileDockItems }) {
+export default function RdvnReferenceDock({ onItemOpen, items = [], mobileItems = [], trashItem = null }) {
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY)
 
   return (
@@ -59,9 +37,9 @@ export default function RdvnReferenceDock({ onItemOpen, items = defaultDockItems
         </motion.div>
         <div className="efb-dock-separator" aria-hidden="true" />
         <div className="efb-dock-fixed-zone">
-          <button type="button" className="efb-dock-fixed-item" onClick={() => onItemOpen?.(trashItem.id)} aria-label={trashItem.label}>
+          {trashItem ? <button type="button" className="efb-dock-fixed-item" onClick={() => onItemOpen?.(trashItem.id)} aria-label={trashItem.label}>
             <img className="efb-dock-image" src={trashItem.src} alt="" draggable="false" />
-          </button>
+          </button> : null}
           <div className="efb-dock-jarvis">
             <JarvisOrb onClick={() => onItemOpen?.('jarvis')} />
           </div>
