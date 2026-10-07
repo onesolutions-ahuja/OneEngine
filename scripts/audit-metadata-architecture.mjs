@@ -45,6 +45,9 @@ const findings=[];
 
 const retiredMetadataRuntime = "server/services/platformMetadata.js";
 const retiredProviderActionRuntime = "server/services/platformActions.js";
+const retiredProviderSpecificRoutes = [
+  "server/routes/smsGateWebhooks.js",
+];
 const retiredInvoiceReceiptArtifacts = [
   "server/services/invoiceDelivery.js",
   "server/services/receiptQr.js",
@@ -58,6 +61,11 @@ if (fs.existsSync(path.join(ROOT, retiredMetadataRuntime))) {
 }
 if (fs.existsSync(path.join(ROOT, retiredProviderActionRuntime))) {
   findings.push({rule:"RETIRED_PROVIDER_ACTION_RUNTIME_PRESENT",file:retiredProviderActionRuntime});
+}
+for (const artifact of retiredProviderSpecificRoutes) {
+  if (fs.existsSync(path.join(ROOT, artifact))) {
+    findings.push({rule:"RETIRED_PROVIDER_SPECIFIC_ROUTE_PRESENT",file:artifact});
+  }
 }
 for (const artifact of retiredInvoiceReceiptArtifacts) {
   if (fs.existsSync(path.join(ROOT, artifact))) {
@@ -100,6 +108,9 @@ for (const file of allServerRuntimeFiles) {
     if (/packageKey\s*===\s*["'](?:staff|products|customers)["']/.test(text)) {
       findings.push({rule:"PACKAGE_SPECIFIC_PROVISIONING_BRANCH",file:name});
     }
+  }
+  if (name === "server/routes/admin.js" && /user_email_domain|domain_users_only|email_registration_enabled|company_settings/.test(text)) {
+    findings.push({rule:"HARDCODED_ACCOUNT_POLICY_BINDING_IN_ADMIN",file:name});
   }
   if (name === "server/routes/accountLifecycle.js" && /\/settings\/account-policy/.test(text)) {
     findings.push({rule:"HARDCODED_ACCOUNT_POLICY_SETTINGS_ROUTE",file:name});
