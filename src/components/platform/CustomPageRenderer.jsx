@@ -843,7 +843,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
  * @param builderMode when true, records stay as placeholders and interactions are inert
  * @param device      desktop | tablet | mobile | kiosk (builder device preview / runtime width)
  */
-export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, onEvent = null, onPageStateChange = null, renderSectionChrome = null, pageContext = null }) {
+export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, onEvent = null, onInteractionTrace = null, onPageStateChange = null, renderSectionChrome = null, pageContext = null }) {
   const sections = Array.isArray(definition?.sections) ? definition.sections : [];
 
   /*
@@ -902,6 +902,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
       }
       return current;
     });
+    onInteractionTrace?.({ record, node, eventName, value, interaction });
     return true;
   };
 
