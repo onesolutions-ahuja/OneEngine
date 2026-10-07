@@ -50,9 +50,9 @@ test("related action choices scope through record relationships", async () => {
   assert.match(source,/parentRecordId/);
 });
 test("bootstrap foundations honor dependency order", async () => {
-  const source = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  assert.match(source,/visitFoundation/);
-  assert.match(source,/manifest\?\.dependencies/);
+  const source = await readFile(new URL("../server/packages/runtime/packagePlanning.js", import.meta.url), "utf8");
+  assert.match(source,/function visit\(key\)/);
+  assert.match(source,/for \(const dependency of pkg\.dependencies \|\| \[\]\)/);
 });
 
 
