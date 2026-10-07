@@ -1,43 +1,14 @@
 const BASE = String(import.meta.env.BASE_URL || "/").replace(/\/$/, "");
 
-export const PAGE_SLUGS = Object.freeze({
-  Dashboard: "",
-  Sales: "sales",
-  Returns: "returns",
-  "Supplier Returns": "supplier-returns",
-  Products: "products",
-  "Global Products": "global-products",
-  Categories: "categories",
-  Purchases: "purchases",
-  Suppliers: "suppliers",
-  Inventory: "inventory",
-  Replenishment: "replenishment",
-  Customers: "customers",
-  "Gift Cards": "gift-cards",
-  Employees: "employees",
-  Stores: "stores",
-  Reports: "reports",
-  "My Reports": "custom-reports",
-  Integrations: "integrations",
-  Accounting: "accounting",
-  "Online Orders": "online-orders",
-  "Order Prep": "order-prep",
-  "Own Delivery": "own-delivery",
-  "Audit Log": "audit-log",
-  Licensing: "licensing",
-  "App Releases": "app-releases",
-  Settings: "settings",
-  OneDeveloper: "developer",
-});
-
 function withBase(path="") {
   const clean=String(path||"").replace(/^\/+/, "");
   return clean ? `${BASE}/${clean}` : `${BASE}/`;
 }
 
 export function buildAppPath(page) {
-  const slug=PAGE_SLUGS[page];
-  return slug === undefined ? withBase("") : withBase(slug);
+  const source = page && typeof page === "object" ? page : { route: page };
+  const route = String(source.route || source.path || source.slug || "").replace(/^\/+/, "");
+  return withBase(route);
 }
 
 export function buildCustomPagePath(pageKey) {

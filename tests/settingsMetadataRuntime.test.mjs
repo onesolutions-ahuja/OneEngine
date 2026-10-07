@@ -36,8 +36,8 @@ test("legacy Settings client contract stays removed", async () => {
 });
 
 test("Settings host discovery is metadata-driven", async () => {
-  const platform = await read("server/routes/platform.js");
-  assert.match(platform, /config->>'settingsHost'/);
-  assert.match(platform, /platform_fields/);
-  assert.equal(platform.includes("settingsNavigationCatalog"), false);
+  const settingsAccessSource = await read("src/utils/settingsAccess.js");
+  assert.doesNotMatch(settingsAccessSource, /Customer Loyalty|Client Web Shop|Server \/ API Configuration/);
+  assert.match(settingsAccessSource, /sections/);
+  assert.match(settingsAccessSource, /section\.permissions/);
 });

@@ -2019,5 +2019,3 @@ function InteractionProperties({ node, onChange, targetComponents = [] }) {
     </div>
   );
 }
-
-/* pages redeploy trigger */

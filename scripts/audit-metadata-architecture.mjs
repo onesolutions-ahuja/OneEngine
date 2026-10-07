@@ -13,7 +13,6 @@ const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:tru
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 
 const historicalMigrationFiles = new Set([
-  "server/database/init.js",
   "server/database/migrations.js",
 ]);
 const declarativeMetadataFiles = new Set([
@@ -59,6 +58,24 @@ const forbiddenGenericConnectorProviderTokens=[
   "smsgate_connector","brevo_connector","mailjet_connector","SMSGate","Brevo","Mailjet",
   "configureSmsGateInboundWebhook","send-test-email","send-test-sms"
 ];
+const forbiddenExecutableBusinessWrappers = [
+  "TILL_OPERATION","PROCESS_APPOINTMENT","APPOINTMENT_SESSION_CONTEXT",
+  "SUBMIT_APPROVAL","DECIDE_APPROVAL","REASSIGN_APPROVAL","RECALL_APPROVAL",
+  "SEND_INVOICE","DELIVER_INVOICE","WHATSAPP_INVOICE"
+];
+const forbiddenProviderRuntimeFiles = [
+  "server/routes/googleConnect.js",
+  "server/services/googleConnect.js",
+  "server/services/smsGateConnector.js",
+  "server/services/emailProviderConnectors.js",
+  "server/services/referencePaymentConnector.js",
+  "server/services/communicationTransports.js",
+];
+const forbiddenBusinessRuntimeFiles = [
+  "server/services/inventoryValuation.js",
+  "server/services/onlineOrders/platformLogger.js",
+  "server/services/platformApprovals.js",
+];
 const findings=[];
 
 const retiredMetadataRuntime = "server/services/platformMetadata.js";
@@ -89,6 +106,11 @@ for (const artifact of retiredProviderSpecificRoutes) {
     findings.push({rule:"RETIRED_PROVIDER_SPECIFIC_ROUTE_PRESENT",file:artifact});
   }
 }
+for (const artifact of [...forbiddenProviderRuntimeFiles, ...forbiddenBusinessRuntimeFiles]) {
+  if (fs.existsSync(path.join(ROOT, artifact))) {
+    findings.push({rule:"FORBIDDEN_EXECUTABLE_DOMAIN_RUNTIME",file:artifact});
+  }
+}
 for (const artifact of retiredBusinessRuntimeFiles) {
   if (fs.existsSync(path.join(ROOT, artifact))) {
     findings.push({rule:"RETIRED_BUSINESS_RUNTIME_FILE_PRESENT",file:artifact});
@@ -108,6 +130,13 @@ for (const file of allServerRuntimeFiles) {
   if (name !== retiredProviderActionRuntime && /platformActions\.js/.test(text)) {
     findings.push({rule:"RETIRED_PROVIDER_ACTION_IMPORT",file:name});
   }
+  for (const token of forbiddenExecutableBusinessWrappers) {
+    if (text.includes(token)) findings.push({rule:"HIDDEN_BUSINESS_WORKFLOW_WRAPPER",file:name,token});
+  }
+  if (name === "server/services/systemWorkflowCatalog.js" && /source:\s*["']runtime_import["']/.test(text)) {
+    findings.push({rule:"RUNTIME_IMPORT_MASQUERADING_AS_METADATA",file:name});
+  }
+
   if (name === "server/services/platformWorkflow.js") {
     for (const actionKey of forbiddenCompiledConnectorActions) {
       if (text.includes(actionKey)) findings.push({rule:"COMPILED_BUSINESS_CONNECTOR_ACTION",file:name,actionKey});

@@ -1,5 +1,4 @@
 import express from "express";
-import { valuationRow } from "../services/inventoryValuation.js";
 import { buildPlatformObjectQuery, validatePlatformReportDefinition } from "../services/reportableSources.js";
 import { loadPlatformReportContext } from "../services/platformReportSecurity.js";
 import { reportCapabilities } from "../services/reportAnalyticsDefinition.js";
@@ -19,7 +18,7 @@ function customReportVisibility(user, report) {
 }
 
 export default function createReportsRouter({ authenticate, authorize, db }) {
-  const { canAccessStore, canViewCompanyCustomers, hasPermission: hasSystemPermission } = arguments[0];
+  const { canAccessStore, canViewCompanyScope, hasPermission: hasSystemPermission } = arguments[0];
   const router = express.Router();
 
   function scopedReportParams(req) {

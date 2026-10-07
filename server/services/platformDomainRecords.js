@@ -4,7 +4,6 @@ import { compileFormulas, evaluateWorkflowFormula, isCalculatedField } from "./p
 import { validateConditionalRequired } from "./platformConditions.js";
 import { evaluateValidationRules } from "./platformValidation.js";
 import { executePlatformAutomations } from "./platformAutomation.js";
-import { submitPlatformApproval } from "./platformApprovals.js";
 import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from "./platformPermissionSets.js";
 
 export class PlatformRecordError extends Error {
@@ -298,6 +297,5 @@ export async function saveDomainConfiguration({ db, key, req, record, previous =
     if (JSON.stringify(oldValue) === JSON.stringify(newValue)) continue;
     await db("INSERT INTO platform_record_history (company_id,object_id,object_key,record_id,field_api_name,old_value,new_value,action,actor_user_id) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)", [req.user.companyId, object.id, key, record.id, field.api_name, JSON.stringify(oldValue), JSON.stringify(newValue), previous ? "update" : "create", req.user.id || null]);
   }
-  const approval = await submitPlatformApproval({ db, object, fields, recordId: record.id, record: candidate, req });
-  return { customFields: exposedExtensions(access, custom), recordTypeId: typeId, messages: automated.messages, approval: approval ? { id: approval.id, status: approval.status } : null };
+  return { customFields: exposedExtensions(access, custom), recordTypeId: typeId, messages: automated.messages, approval: null };
 }

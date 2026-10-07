@@ -24,7 +24,7 @@ export default function createAuditRouter({
   authenticate,
   authorize,
   db,
-  canViewCompanyCustomers,
+  canViewCompanyScope,
   canAccessStore,
 }) {
   const router = express.Router();
@@ -45,7 +45,7 @@ export default function createAuditRouter({
     async (req, res) => {
       try {
         const companyId = req.user.companyId;
-        const isAdmin = await canViewCompanyCustomers(req.user);
+        const isAdmin = await canViewCompanyScope(req.user);
 
         const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
         const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
@@ -218,7 +218,7 @@ export default function createAuditRouter({
           ORDER BY created_at ASC`,
         [req.user.companyId, req.query.entityType, req.query.entityId]
       );
-      const admin = await canViewCompanyCustomers(req.user);
+      const admin = await canViewCompanyScope(req.user);
       const visible = admin ? result.rows : (await Promise.all(result.rows.map(async (row) => ({
         row, allowed: !row.store_id || await canAccessStore(req.user, row.store_id),
       })))).filter((item) => item.allowed).map((item) => item.row);
@@ -239,7 +239,7 @@ export default function createAuditRouter({
       );
       if (!result.rows.length) return res.status(404).json({ success: false, message: "Audit record not found" });
       const row = result.rows[0];
-      if (row.store_id && !(await canViewCompanyCustomers(req.user)) &&
+      if (row.store_id && !(await canViewCompanyScope(req.user)) &&
           !(await canAccessStore(req.user, row.store_id))) {
         return res.status(403).json({ success: false, message: "You do not have permission to view this audit record" });
       }
