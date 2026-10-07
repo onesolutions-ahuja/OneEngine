@@ -216,7 +216,6 @@ app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
 
@@ -2592,13 +2591,6 @@ async function startServer() {
                 );
               }
             }
-            if (["SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
-              await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
-                kind: job.kind,
-                status: failed?.status || "FAILED",
-                attempts: failed?.attempts || 0,
-              });
-            }
           },
           handler: async (job) => {
             assertTrustedJobKind(job.kind);
@@ -3460,29 +3452,7 @@ async function startServer() {
               }
             }
             if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
-            if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey: "SHOPIFY_PROCESS_WEBHOOK",
-                req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
-                  retryable: outcome.retryable === true,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
+            const actionKey = String(payload.type || payload.key || "").toUpperCase();
               if (!actionKey) throw Object.assign(new Error("Shopify provider job is missing an action key"), { retryable: false });
               const execution = await executeSystemAction({
                 db,
