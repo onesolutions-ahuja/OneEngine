@@ -3104,8 +3104,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
 
       const clauses = [];
       const params = [];
-      if (object.company_scoped) { params.push(req.user.companyId); clauses.push(`company_id=${params.length}`); }
-      if (object.store_scoped) { params.push(req.user.storeId); clauses.push(`store_id=${params.length}`); }
+      if (object.company_scoped) { params.push(req.user.companyId); clauses.push(`company_id=$${params.length}`); }
+      if (object.store_scoped) { params.push(req.user.storeId); clauses.push(`store_id=$${params.length}`); }
 
       /*
        * Collection conditions — canonical condition engine.
