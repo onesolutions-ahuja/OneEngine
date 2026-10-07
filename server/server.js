@@ -1391,8 +1391,16 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     }
 
     const finalizationStartedAt = Date.now();
-    const sessionId = await finalizeSuccessfulLogin(loginDb, {
+    const sessionId = randomUUID();
+    // The token only needs the cryptographically random session id. Persisting
+    // the successful session/history is independent of JWT signing, so prepare
+    // both in the same event-loop turn and let the single DB round-trip remain
+    // the only awaited finalization work.
+    user.session_id = sessionId;
+    const token = createToken(user);
+    await finalizeSuccessfulLogin(loginDb, {
       user,
+      sessionId,
       identifier: email,
       ip: requestIp,
       userAgent: requestUserAgent,
@@ -1403,8 +1411,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       reason: passwordExpired ? "PASSWORD_EXPIRED" : null,
       req,
     });
-    user.session_id = sessionId;
-    const token = createToken(user);
     markLoginTiming("finalization_ms", finalizationStartedAt);
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
