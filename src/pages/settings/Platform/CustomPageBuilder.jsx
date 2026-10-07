@@ -1367,22 +1367,32 @@ function widthMetaShort(width) {
  * (MultiContainer, Table). One source of collection configuration — the exact
  * same Record Collection shape goes to the renderer and the runtime endpoint.
  */
-function useCollectionFields(collection, objects) {
-  const [fields, setFields] = useState([]);
+function useCollectionFieldState(collection, objects) {
+  const [state, setState] = useState({ fields: [], loading: false, error: "" });
   useEffect(() => {
-    if (!collection.objectKey) { setFields([]); return; }
+    if (!collection.objectKey) { setState({ fields: [], loading: false, error: "" }); return; }
     const object = objects.find((candidate) => candidate.object_key === collection.objectKey);
-    if (!object?.id) { setFields([]); return; }
+    if (!object?.id) { setState({ fields: [], loading: false, error: "Selected object metadata is unavailable." }); return; }
+    let live = true;
+    setState({ fields: [], loading: true, error: "" });
     apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`)
-      .then((response) => setFields((Array.isArray(response?.data) ? response.data : []).filter((field) => field.active !== false && field.readable !== false)))
-      .catch(() => setFields([]));
+      .then((response) => {
+        if (!live) return;
+        const fields = (Array.isArray(response?.data) ? response.data : []).filter((field) => field.active !== false && field.readable !== false);
+        setState({ fields, loading: false, error: fields.length ? "" : "No readable fields are available for this object." });
+      })
+      .catch((error) => { if (live) setState({ fields: [], loading: false, error: error?.message || "Unable to load object fields." }); });
+    return () => { live = false; };
   }, [collection.objectKey, objects]);
-  return fields;
+  return state;
+}
+function useCollectionFields(collection, objects) {
+  return useCollectionFieldState(collection, objects).fields;
 }
 
 function FocusedDataPanel({ node, objects, onChange, targetComponents = [] }) {
   const collection = node.collection || {};
-  const fields = useCollectionFields(collection, objects);
+  const { fields, loading: fieldsLoading, error: fieldsError } = useCollectionFieldState(collection, objects);
   const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
   return (
     <div className="space-y-3">
@@ -1390,6 +1400,22 @@ function FocusedDataPanel({ node, objects, onChange, targetComponents = [] }) {
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Source</legend>
         <div className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={collection.objectKey || ""} onChange={(event) => patchCollection({ objectKey: event.target.value, fields: [], titleField: "", subtitleField: "" })}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>
+      </fieldset>
+      <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+        <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Fields</legend>
+        {fieldsLoading ? <p className="text-xs text-slate-500">Loading fields…</p> : null}
+        {fieldsError ? <p role="alert" className="text-xs text-red-600">{fieldsError}</p> : null}
+        {!fieldsLoading && !fieldsError && collection.objectKey ? <div className="max-h-44 space-y-0.5 overflow-auto rounded-lg border border-slate-200 p-1.5">
+          {fields.map((field) => {
+            const apiName = field.api_name;
+            const checked = (collection.fields || []).includes(apiName);
+            return <label key={apiName} className="flex min-h-7 items-center gap-2 rounded px-1.5 text-xs text-slate-600 hover:bg-slate-50">
+              <input type="checkbox" checked={checked} onChange={() => patchCollection({ fields: checked ? (collection.fields || []).filter((name) => name !== apiName) : [...(collection.fields || []), apiName].slice(0, 12) })}/>
+              <span className="min-w-0 flex-1 truncate">{field.label || apiName}</span><span className="text-[10px] text-slate-400">{field.field_type || ""}</span>
+            </label>;
+          })}
+        </div> : null}
+        <p className="text-[11px] text-slate-400">Only readable fields are shown. Runtime field security is enforced again when data loads.</p>
       </fieldset>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Filters</legend>
