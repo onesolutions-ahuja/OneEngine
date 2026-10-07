@@ -59,8 +59,8 @@ export default function CustomPageRuntimePage({ pageKey }) {
       .catch((err)=>{if(live)setError(err?.message||"Unable to load page");});
     return()=>{live=false;};
   },[pageKey]);
-  const execute=async({node,record=null})=>{
-    const interaction=node?.interaction||{};
+  const execute=async({node,record=null,eventName="click",value=undefined})=>{
+    const interaction=node?.interactions?.[eventName] || (eventName==="click" ? node?.interaction : null) || {};
     if(interaction.type==="none"||interaction.type==="component")return;
     if(interaction.type==="navigate"){
       const resolved=interaction.navigationTarget?resolveNavigationTarget(interaction.navigationTarget,{...(navigationContext||{}),currentRecordId:record?.id||record?.record_id||null}):null;
@@ -77,7 +77,7 @@ export default function CustomPageRuntimePage({ pageKey }) {
     try{
       setBusy(true);setError("");
       const objectKey=node?.collection?.objectKey||null;
-      const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null})});
+      const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null,eventName,eventValue:value})});
       if(!response?.success)throw new Error(response?.message||"Unable to execute page action");
       const result=response?.data||{};
       const output=result?.result??result?.results??result;
@@ -98,7 +98,7 @@ export default function CustomPageRuntimePage({ pageKey }) {
     <div className="onepos-page-header"><div><h1 className="onepos-page-title">{page.label||page.page_key}</h1>{page.description?<p className="onepos-page-subtitle">{page.description}</p>:null}</div></div>
     {error?<div className="onepos-alert onepos-alert-error">{error}</div>:null}
     {busy?<div className="text-xs opacity-70">Running action…</div>:null}
-    <CustomPageRenderer definition={definition} device="desktop" pageContext={pageContext} onRecordClick={({record,node})=>execute({record,node})} onButtonClick={(node)=>execute({node})}/>
+    <CustomPageRenderer definition={definition} device="desktop" pageContext={pageContext} onRecordClick={({record,node})=>execute({record,node,eventName:"row_click"})} onButtonClick={(node)=>execute({node,eventName:"click"})} onEvent={({eventName,node,value,record})=>execute({node,record,eventName,value})}/>
     {formAction?<FormLayoutModal action={formAction} onClose={()=>setFormAction(null)} onSaved={()=>{}}/>:null}
     {screenFlowAction?<ScreenFlowModal action={screenFlowAction} onClose={()=>setScreenFlowAction(null)} onComplete={(result)=>window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:screenFlowAction.nodeId,interactionType:"screen_flow",runId:result?.runId||null,status:result?.status||"COMPLETED",output:result?.variables||result}}))}/>:null}
   </section>;
