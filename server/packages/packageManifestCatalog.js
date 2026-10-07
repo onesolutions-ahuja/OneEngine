@@ -349,7 +349,7 @@ const PACKAGE_CATALOG = [
     packageKey: "one_connect_google",
     name: "Google Connect",
     description: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users with tenant-specific OAuth configuration.",
-    route: "/app/google-connect",
+    route: "/app/connector-settings/one_connect_google",
     permissions: ["integration.manage"],
     storeScoped: false,
     category: "Identity & Access",
@@ -363,7 +363,7 @@ const PACKAGE_CATALOG = [
     providerConnector: {
       providerKey: "google",
       connectionMode: "OAUTH2",
-      settingsRoute: "/app/google-connect",
+      settingsRoute: "/app/connector-settings/one_connect_google",
     },
   },
   {
