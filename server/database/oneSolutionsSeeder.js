@@ -1,12 +1,12 @@
 /**
- * Canonical OneSolutions development/demo seed.
+ * Generic deployment-configured initial tenant seed.
  *
  * Keep startup deliberately small and platform-core only.
  * Business/app data belongs to installable package metadata + flows, not to
  * the server bootstrap. This seeder must never recreate legacy business
  * tables that were intentionally removed from the platform schema.
  */
-export async function seedOneSolutionsDemo(pool, seed = {}) {
+export async function seedInitialTenant(pool, seed = {}) {
   const companyConfig = seed.company || {};
   const storeConfig = seed.store || {};
   const companyName = String(companyConfig.name || process.env.INITIAL_COMPANY_NAME || "").trim();
@@ -56,3 +56,6 @@ export async function seedOneSolutionsDemo(pool, seed = {}) {
     client.release();
   }
 }
+
+// Compatibility alias; callers should migrate to seedInitialTenant.
+export const seedOneSolutionsDemo = seedInitialTenant;
