@@ -341,22 +341,24 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     return <div className="space-y-2">{(records.length ? records : state.placeholder ? [{ name: "Task", [startField]: 0, [endField]: 1 }] : []).map((record, index) => { const start = new Date(record[startField]).getTime(); const end = new Date(record[endField]).getTime(); const left = Number.isFinite(start) && Number.isFinite(minimum) ? Math.max(0, ((start - minimum) / span) * 100) : 0; const width = Number.isFinite(end - start) ? Math.max(4, ((end - start) / span) * 100) : 35; return <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="grid w-full grid-cols-[8rem_1fr] items-center gap-3 text-left"><span className="truncate text-xs">{record[config.taskLabelField || "name"] || "Untitled"}</span><span className="relative h-6 rounded bg-slate-100"><span className="absolute top-1 h-4 rounded bg-emerald-600" style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }} /></span></button>; })}</div>;
   }
   if (node.componentKey === "map") {
-    const valid = config.locationMode === "address" ? records.filter((record) => record[config.addressField]) : records.filter((record) => Number.isFinite(Number(record[config.latitudeField || "latitude"])) && Number.isFinite(Number(record[config.longitudeField || "longitude"])));
+    const hasLocationBinding = config.locationMode === "address" ? Boolean(config.addressField) : Boolean(config.latitudeField && config.longitudeField);
+    if (!hasLocationBinding) return <div className="cpb-empty">Configure location fields for this map.</div>;
+    const valid = config.locationMode === "address" ? records.filter((record) => record[config.addressField]) : records.filter((record) => Number.isFinite(Number(record[config.latitudeField])) && Number.isFinite(Number(record[config.longitudeField])));
     if (!valid.length) return <div className="cpb-empty">{placeholder ? "Location records will appear here." : "No records have valid locations."}</div>;
     const first = valid[0];
-    const firstLatitude = Number(first[config.latitudeField || "latitude"]);
-    const firstLongitude = Number(first[config.longitudeField || "longitude"]);
+    const firstLatitude = Number(first[config.latitudeField]);
+    const firstLongitude = Number(first[config.longitudeField]);
     const mapUrl = new URL("https://www.openstreetmap.org/export/embed.html");
-    const latitudes = valid.map((record) => Number(record[config.latitudeField || "latitude"]));
-    const longitudes = valid.map((record) => Number(record[config.longitudeField || "longitude"]));
+    const latitudes = valid.map((record) => Number(record[config.latitudeField]));
+    const longitudes = valid.map((record) => Number(record[config.longitudeField]));
     const padding = 0.01;
     mapUrl.searchParams.set("bbox", [Math.min(...longitudes) - padding, Math.min(...latitudes) - padding, Math.max(...longitudes) + padding, Math.max(...latitudes) + padding].join(","));
     mapUrl.searchParams.set("layer", "mapnik");
     mapUrl.searchParams.set("marker", `${firstLatitude},${firstLongitude}`);
-    return <div className="space-y-2">{config.locationMode !== "address" ? <iframe title="Record locations map" className="h-64 w-full rounded-lg border" src={mapUrl.toString()} loading="lazy" referrerPolicy="no-referrer" style={{ borderColor: "var(--border-color, #e5e7eb)" }} /> : null}<div className="space-y-1">{valid.map((record, index) => { const location = config.locationMode === "address" ? String(record[config.addressField]) : `${record[config.latitudeField || "latitude"]},${record[config.longitudeField || "longitude"]}`; return <a key={record.id || index} href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(location)}`} target="_blank" rel="noreferrer" className="flex justify-between gap-2 rounded border px-3 py-2 text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="truncate font-medium">{record[config.labelField || "name"] || "Location"}</span><span className="truncate text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{location}</span></a>; })}</div></div>;
+    return <div className="space-y-2">{config.locationMode !== "address" ? <iframe title="Record locations map" className="h-64 w-full rounded-lg border" src={mapUrl.toString()} loading="lazy" referrerPolicy="no-referrer" style={{ borderColor: "var(--border-color, #e5e7eb)" }} /> : null}<div className="space-y-1">{valid.map((record, index) => { const location = config.locationMode === "address" ? String(record[config.addressField]) : `${record[config.latitudeField]},${record[config.longitudeField]}`; return <a key={record.id || index} href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(location)}`} target="_blank" rel="noreferrer" className="flex justify-between gap-2 rounded border px-3 py-2 text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="truncate font-medium">{record[config.labelField || collection.fields?.[0] || "id"] || "Location"}</span><span className="truncate text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{location}</span></a>; })}</div></div>;
   }
   if (node.componentKey === "hierarchy_viewer") {
-    const parentField = config.parentField || "parent_id";
+    const parentField = config.parentField || "";
     const byParent = new Map();
     for (const record of records) { const parent = record[parentField] == null ? "__root__" : String(record[parentField]); byParent.set(parent, [...(byParent.get(parent) || []), record]); }
     const render = (record, depth = 0) => <div key={record.id} className="space-y-1" style={{ marginLeft: depth * 16 }}><button type="button" onClick={() => clickRecord(record)} className="w-full rounded-md border bg-white px-3 py-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}>{record[config.titleField || collection.fields?.[0] || "id"] || "Untitled"}{config.statusField && record[config.statusField] ? <span className="ml-2 text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.statusField]}</span> : null}</button>{depth < (config.maxDepth || 3) ? (byParent.get(String(record.id)) || []).map((child) => render(child, depth + 1)) : null}</div>;
