@@ -82,7 +82,7 @@ test("Phase 3 purchasing flows are explicit and Builder-editable", async () => {
     const flow = byName.get(name);
     assert.ok(flow.actions.length >= 5, name + " must expose validation and orchestration steps");
     assert.equal(flow.gptBuilderElements.length, flow.actions.length, name + " Builder/runtime count");
-    assert.ok(flow.gptBuilderElements.every((node) => node.config?.importedRuntimeAction && node.configured === true), name + " editable Builder nodes");
+    assert.ok(flow.gptBuilderElements.every((node) => node.config?.importedMetadataAction && node.configured === true), name + " editable Builder nodes");
     assert.ok(flow.actions.some((action) => action.key === "CONDITION"), name + " decision");
     assert.ok(flow.actions.some((action) => action.key === "CUSTOM_ERROR"), name + " explicit failure path");
   }
