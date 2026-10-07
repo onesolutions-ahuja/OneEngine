@@ -2,6 +2,31 @@ import { createHash } from "node:crypto";
 import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 
+export const TRUSTED_JOB_KINDS = Object.freeze([
+  "WAIT",
+  "APP_RELEASE_UPGRADE",
+  "PLATFORM_WEBHOOK_DELIVERY",
+  "PLATFORM_SCHEDULED_WORKFLOW",
+  "PLATFORM_EVENT_WORKFLOW",
+  "REPORT_SUBSCRIPTION_DELIVERY",
+  "DASHBOARD_SUBSCRIPTION_DELIVERY",
+  "APPROVAL_DUE",
+]);
+
+const TRUSTED_JOB_KIND_SET = new Set(TRUSTED_JOB_KINDS);
+
+export function assertTrustedJobKind(kind) {
+  const normalized = String(kind || "");
+  if (!TRUSTED_JOB_KIND_SET.has(normalized)) {
+    throw Object.assign(new Error(`Unregistered trusted job kind: ${kind}`), {
+      code: "UNREGISTERED_JOB_KIND",
+      status: 403,
+      retryable: false,
+    });
+  }
+  return normalized;
+}
+
 const PRIVILEGED_ROUTES = Object.freeze([
   { id: "platform.developer.manage", prefixes: ["/api/platform/developer/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "platform.metadata.execute", prefixes: ["/api/platform/"], methods: ["POST","PUT","PATCH","DELETE"] },
@@ -15,6 +40,7 @@ const definitions = [
   ...PRIVILEGED_ROUTES.map((item) => ({ id: item.id, type: "route" })),
   ...PLATFORM_FUNCTIONS.map((item) => ({ id: `function:${item.key}`, type: "function" })),
   ...PLATFORM_ACTION_REGISTRY.map((item) => ({ id: `action:${item.key}`, type: "action" })),
+  ...TRUSTED_JOB_KINDS.map((kind) => ({ id: `job:${kind}`, type: "job" })),
 ];
 
 const duplicateIds = definitions.map((item) => item.id).filter((id, index, all) => all.indexOf(id) !== index);
