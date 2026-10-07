@@ -3761,11 +3761,8 @@ const actionOptions = [
   { value: "ASSIGN_RECORD", label: "Assign Record" },
   { value: "ADD_RELATIONSHIP", label: "Add Relationship" },
   { value: "REMOVE_RELATIONSHIP", label: "Remove Relationship" },
+  { value: "SEND_COMMUNICATION", label: "Send Communication" },
   { value: "IN_APP_NOTIFICATION", label: "In-App Notification" },
-  { value: "EMAIL_ALERT", label: "Email Alert" },
-  { value: "SEND_EMAIL", label: "Send Email" },
-  { value: "SEND_SMS", label: "Send SMS" },
-  { value: "SEND_WHATSAPP", label: "Send WhatsApp" },
   { value: "RUN_SUBFLOW", label: "Subflow" },
   { value: "WEBHOOK", label: "Webhook" },
   { value: "CONDITION", label: "Decision" },
@@ -3778,7 +3775,7 @@ const actionOptions = [
 
 const SALESFORCE_CORE_ELEMENT_TYPES = new Set([
   "ASSIGNMENT","COLLECTION_FILTER","COLLECTION_SORT","TRANSFORM","RECOMMENDATION_ASSIGNMENT","LIMIT_REPETITIONS","RUN_AGENT","SCREEN","LOOP","GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
-  "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","EMAIL_ALERT","RUN_SUBFLOW",
+  "CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","SEND_COMMUNICATION","RUN_SUBFLOW",
 ]);
 
 const FLOW_ELEMENT_VISUALS = {
@@ -3802,7 +3799,7 @@ const FLOW_ELEMENT_VISUALS = {
   UPDATE_RECORD: { icon: "✎", color: "#e83e8c", family: "Data" },
   DELETE_RECORD: { icon: "−", color: "#e83e8c", family: "Data" },
   RUN_SUBFLOW: { icon: "⇢", color: "#0b5cab", family: "Interaction" },
-  EMAIL_ALERT: { icon: "✉", color: "#0b5cab", family: "Interaction" },
+  SEND_COMMUNICATION: { icon: "✉", color: "#0b5cab", family: "Interaction" },
   __ACTION__: { icon: "⚡", color: "#0b5cab", family: "Interaction" },
   __GROUP__: { icon: "▣", color: "#5c6ac4", family: "Logic" },
   __CONNECT__: { icon: "↪", color: "#5c6ac4", family: "Logic" },
@@ -3872,7 +3869,7 @@ function createBlankWorkflow(scopeKey = null) {
     steps: scopeKey === "whatsapp_assistant"
       ? [
           { ...makeStep("WHEN"), type: "CONDITION", label: "Decision" },
-          { ...makeStep("SEND_WHATSAPP"), config: { ...makeStep("SEND_WHATSAPP").config, template: "", recipient: "" } },
+          { ...makeStep("SEND_COMMUNICATION"), config: { ...makeStep("SEND_COMMUNICATION").config, channel: "", template: "", recipient: "" } },
         ]
       : [],
   };
@@ -4049,7 +4046,7 @@ function workflowActionCategory(type = "") {
   if (["CONDITION","WAIT","WAIT_FOR_CONDITIONS","WAIT_UNTIL_DATE","CUSTOM_ERROR","STOP","ASSIGNMENT","RECOMMENDATION_ASSIGNMENT","LIMIT_REPETITIONS","COLLECTION_FILTER","COLLECTION_SORT","LOOP","SCHEDULE_PATH"].includes(key)) return "Logic";
   if (["RUN_SUBFLOW","SCREEN","RUN_AGENT"].includes(key)) return "Interaction";
   if (["GET_RECORDS","TRANSFORM","BULK_UPDATE_RECORDS","CREATE_RECORD","UPDATE_RECORD","UPDATE_RELATED_RECORD","CREATE_RELATED_RECORD","DELETE_RECORD","ASSIGN_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(key)) return "Data";
-  if (["EMAIL_ALERT","SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION","WEBHOOK","HTTP_REQUEST","SEND_COMMUNICATION","CALL_API","PLATFORM_WEBHOOK_DELIVERY"].includes(key)) return "Actions";
+  if (["SEND_COMMUNICATION","IN_APP_NOTIFICATION","WEBHOOK","HTTP_REQUEST","CALL_API","PLATFORM_WEBHOOK_DELIVERY"].includes(key)) return "Actions";
   return "Actions";
 }
 
@@ -4358,20 +4355,12 @@ function workflowActionIssue(step, definition = null) {
   if (step.type === "UPDATE_RELATED_RECORD" && !config.recordId) return "Choose the related record to update.";
   if (step.type === "CREATE_RELATED_RECORD" && (!config.fieldMappings || !Object.keys(config.fieldMappings).length)) return "Map at least one field for the related record.";
   if (["ADD_RELATIONSHIP","REMOVE_RELATIONSHIP"].includes(step.type) && !(config.relatedRecordId || config.recordId)) return "Choose the related record.";
-  if (["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET","SEND_SMS","SEND_WHATSAPP"].includes(step.type)) {
+  if (step.type === "SEND_COMMUNICATION") {
+    if (!config.channel) return "Choose a communication channel.";
     if (!config.recipient) return "Choose a recipient.";
-    const emailAction = ["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET"].includes(step.type);
-    if (emailAction) {
-      const templateMode = step.type === "EMAIL_ALERT" || (config.contentMode || "TEMPLATE") === "TEMPLATE";
-      if (templateMode && !config.templateId && !config.template) return "Choose a message template.";
-      if (!templateMode && (!String(config.subject || "").trim() || !String(config.body || config.text || config.message || "").trim())) {
-        return "Add an email subject and message body.";
-      }
-    } else {
-      const templateMode = (config.contentMode || "CUSTOM") === "TEMPLATE";
-      if (templateMode && !config.templateId && !config.template) return "Choose a message template.";
-      if (!templateMode && !String(config.body || config.text || config.message || "").trim()) return "Add a message body.";
-    }
+    const templateMode = (config.contentMode || "TEMPLATE") === "TEMPLATE";
+    if (templateMode && !config.templateId && !config.template) return "Choose a message template.";
+    if (!templateMode && !String(config.body || config.text || config.message || "").trim()) return "Add a message body.";
   }
   if (step.type === "IN_APP_NOTIFICATION" && (!config.title || !config.message || !config.recipient)) {
     return "Add title, message and recipient.";
@@ -4418,14 +4407,6 @@ function FlowGuide({ steps, current, onSelect }) {
         </button>
       ))}
     </div>
-  );
-}
-
-function ProviderStatusPill({ available }) {
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium ${available ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-      {available ? "Provider configured" : "Provider not configured"}
-    </span>
   );
 }
 
@@ -4849,7 +4830,7 @@ function SchemaActionEditor({ definition, config = {}, onChange, rootObjectKey, 
   );
 }
 
-function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, availableWorkflows, messageTemplates = [], platformComponents = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
+function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicateStep, deleteStep, addStepAt, registryOptions, availableWorkflows, messageTemplates = [], platformComponents = [], rootObjectKey, scopeKey = null, debugInfo = null, objectFieldCatalog = {}, onDone, onCancel }) {
   const updateConfig = (patch) => updateStep(index, { config: { ...(step.config || {}), ...patch } });
   const [pendingOutcomeRemoval, setPendingOutcomeRemoval] = useState(null);
   const [relationshipOptions, setRelationshipOptions] = useState([]);
@@ -6084,91 +6065,38 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           </div>
         );
       }
-      case "EMAIL_ALERT":
-      case "SEND_EMAIL":
-      case "SEND_EMAIL_BREVO":
-      case "SEND_EMAIL_MAILJET":
-      case "SEND_SMS":
-      case "SEND_WHATSAPP": {
-        const isEmail = ["EMAIL_ALERT","SEND_EMAIL","SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET"].includes(step.type);
-        const providerKey = step.type === "SEND_EMAIL_BREVO" ? "BREVO" : step.type === "SEND_EMAIL_MAILJET" ? "MAILJET" : isEmail ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP";
-        const providerLabel = step.type === "SEND_EMAIL_BREVO" ? "Brevo" : step.type === "SEND_EMAIL_MAILJET" ? "Mailjet" : isEmail ? "Configured email provider" : step.type === "SEND_SMS" ? "Configured SMS provider" : "Configured WhatsApp provider";
-        const available = providerAvailable[providerKey];
-        const templateOnly = step.type === "EMAIL_ALERT";
-        const contentMode = templateOnly ? "TEMPLATE" : (step.config?.contentMode || (isEmail ? "TEMPLATE" : "CUSTOM"));
+      case "SEND_COMMUNICATION": {
+        const channelOptions = [...new Set(messageTemplates.map((template) => String(template.channel || "").trim()).filter(Boolean))].sort();
+        const contentMode = step.config?.contentMode || "TEMPLATE";
         return (
           <div className="space-y-3">
-            {isEmail && step.type !== "EMAIL_ALERT" ? (
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Email provider</label>
-                <select
-                  className={inputClass}
-                  value={step.type}
-                  onChange={(event) => updateStep(index, { type: event.target.value, config: { ...(step.config || {}) } })}
-                >
-                  <option value="SEND_EMAIL">Configured default email provider</option>
-                  {(providerAvailable.BREVO || step.type === "SEND_EMAIL_BREVO") ? <option value="SEND_EMAIL_BREVO">Brevo</option> : null}
-                  {(providerAvailable.MAILJET || step.type === "SEND_EMAIL_MAILJET") ? <option value="SEND_EMAIL_MAILJET">Mailjet</option> : null}
-                </select>
-              </div>
-            ) : null}
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div>
-                <span className="text-sm font-medium text-slate-700">{providerLabel}</span>
-                <p className="mt-1 text-[11px] text-slate-500">Provider credentials and sender identity come from connector metadata, never from this Flow.</p>
-              </div>
-              <ProviderStatusPill available={available} />
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Channel</label>
+              <select className={inputClass} value={step.config?.channel || ""} onChange={(event) => updateConfig({ channel: event.target.value, templateId: "" })}>
+                <option value="">Select channel</option>
+                {channelOptions.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
+              </select>
             </div>
-
-            <ResourceOrLiteralInput
-              label={isEmail ? "Recipient email" : step.type === "SEND_SMS" ? "Recipient phone" : "Recipient"}
-              value={step.config?.recipient || ""}
-              onChange={(recipient) => updateConfig({ recipient })}
-              rootObjectKey={rootObjectKey}
-              extraResources={extraResources}
-              required
-            />
-
-            {!templateOnly ? (
-              <div>
-                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Content source</label>
-                <select className={inputClass} value={contentMode} onChange={(event) => updateConfig({ contentMode: event.target.value })}>
-                  <option value="TEMPLATE">Message template</option>
-                  <option value="CUSTOM">Custom subject and body</option>
-                </select>
-              </div>
-            ) : null}
-
+            <ResourceOrLiteralInput label="Recipient" value={step.config?.recipient || ""} onChange={(recipient) => updateConfig({ recipient })} rootObjectKey={rootObjectKey} extraResources={extraResources} required />
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Content source</label>
+              <select className={inputClass} value={contentMode} onChange={(event) => updateConfig({ contentMode: event.target.value })}>
+                <option value="TEMPLATE">Message template</option>
+                <option value="CUSTOM">Custom content</option>
+              </select>
+            </div>
             {contentMode === "TEMPLATE" ? (
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Template</label>
                 <select className={inputClass} value={step.config?.templateId || step.config?.template || ""} onChange={(event) => updateConfig({ templateId: event.target.value, template: "" })}>
                   <option value="">Select message template</option>
-                  {messageTemplates
-                    .filter((template) => String(template.channel || "").toUpperCase() === (isEmail ? "EMAIL" : step.type === "SEND_SMS" ? "SMS" : "WHATSAPP"))
-                    .map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                  {messageTemplates.filter((template) => !step.config?.channel || String(template.channel || "") === String(step.config.channel)).map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
                 </select>
-                <p className="mt-1 text-[11px] text-slate-500">Template merge values are resolved from the current record and Flow resources at runtime.</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {isEmail ? <ResourceOrLiteralInput
-                  label="Subject"
-                  value={step.config?.subject || ""}
-                  onChange={(subject) => updateConfig({ subject })}
-                  rootObjectKey={rootObjectKey}
-                  extraResources={extraResources}
-                  required
-                /> : null}
-                <ResourceOrLiteralInput
-                  label="Message body"
-                  value={step.config?.body || step.config?.text || ""}
-                  onChange={(body) => updateConfig({ body, text: body })}
-                  rootObjectKey={rootObjectKey}
-                  extraResources={extraResources}
-                  required
-                />
-                <p className="text-[11px] text-slate-500">For a composed message with several record fields, create a Text Template Resource and select it as the body. No code or JSON is required.</p>
+                <ResourceOrLiteralInput label="Subject" value={step.config?.subject || ""} onChange={(subject) => updateConfig({ subject })} rootObjectKey={rootObjectKey} extraResources={extraResources} />
+                <ResourceOrLiteralInput label="Message body" value={step.config?.body || step.config?.text || ""} onChange={(body) => updateConfig({ body, text: body })} rootObjectKey={rootObjectKey} extraResources={extraResources} required />
               </div>
             )}
           </div>
@@ -8681,7 +8609,7 @@ function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveSte
               <button type="button" className="workflow-save-button" onClick={finishInspector}>Done</button>
             </div>
           </div>
-        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} platformComponents={platformComponents} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
+        ) : selectedStep ? <StepEditor step={selectedStep} index={selectedIndex} allSteps={workflow.steps} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={removeStep} addStepAt={addStepAt} registryOptions={registryOptions} availableWorkflows={availableWorkflows.filter((item) => (item.runtimeActive === true || item.active !== false) && String(item.id) !== String(workflowId || ""))} messageTemplates={messageTemplates} platformComponents={platformComponents} rootObjectKey={workflow.object || ""} scopeKey={scopeKey} debugInfo={debugTrace?.[selectedStep.id] || null} objectFieldCatalog={objectFieldCatalog} onDone={finishInspector} onCancel={cancelInspector} /> : <p className="text-sm text-slate-500">Select Start or a flow element to configure it.</p>}
       </aside> : null}
     </div>
   );
@@ -8741,7 +8669,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
   const [guideStep, setGuideStep] = useState("trigger");
   const [showBuilder, setShowBuilder] = useState(embedded);
   const [savedWorkflows, setSavedWorkflows] = useState(() => embedded && normalizedInitialWorkflow ? [normalizedInitialWorkflow] : []);
-  const [providerAvailable, setProviderAvailable] = useState({ EMAIL: false, BREVO: false, MAILJET: false, SMS: false, WHATSAPP: false });
   const [registryOptions, setRegistryOptions] = useState(scopeKey ? [] : actionOptions);
   const [messageTemplates, setMessageTemplates] = useState([]);
   const [workflowListSearch, setWorkflowListSearch] = useState("");
@@ -9093,42 +9020,6 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
     return () => { live = false; };
   }, [workflow.steps]);
 
-  useEffect(() => {
-    Promise.all([
-      apiRequest("/api/integrations").catch(() => ({ data: [] })),
-      apiRequest("/api/connector-instances").catch(() => ({ data: [] })),
-    ])
-      .then(([integrationResponse, connectorResponse]) => {
-        const integrations = Array.isArray(integrationResponse?.data) ? integrationResponse.data : [];
-        const connectors = Array.isArray(connectorResponse?.data) ? connectorResponse.data : [];
-        const nextState = { EMAIL: false, BREVO: false, MAILJET: false, SMS: false, WHATSAPP: false };
-        for (const item of integrations) {
-          const provider = String(item.provider || "").toUpperCase();
-          if (provider === "EMAIL" || provider === "SMS" || provider === "WHATSAPP") {
-            nextState[provider] = Boolean(item.active !== false && item.configuration && Object.keys(item.configuration || {}).length > 0);
-          }
-        }
-        for (const item of connectors) {
-          const packageKey = String(item.packageKey || item.connector_package_key || "").toLowerCase();
-          const capabilities = (Array.isArray(item.capabilities) ? item.capabilities : [])
-            .map((capability) => String(typeof capability === "string" ? capability : capability?.key || "").toLowerCase())
-            .filter(Boolean);
-          const ready = item.enabled === true
-            && String(item.status || item.connectionStatus || "").toUpperCase() === "CONNECTED"
-            && (item.testPassed === true || item.health?.success === true);
-          if (!ready) continue;
-          if (packageKey === "brevo_connector") nextState.BREVO = true;
-          if (packageKey === "mailjet_connector") nextState.MAILJET = true;
-          if (packageKey.includes("email") || packageKey.includes("brevo") || packageKey.includes("mailjet") || capabilities.some((key) => key.startsWith("email."))) nextState.EMAIL = true;
-          if (packageKey.includes("sms") || capabilities.some((key) => key.startsWith("sms.") || key.includes("message.sms"))) nextState.SMS = true;
-          if (packageKey.includes("whatsapp") || capabilities.some((key) => key.startsWith("whatsapp.") || key.includes("message.whatsapp"))) nextState.WHATSAPP = true;
-        }
-        setProviderAvailable(nextState);
-      })
-      .catch(() => {
-        setProviderAvailable({ EMAIL: false, BREVO: false, MAILJET: false, SMS: false, WHATSAPP: false });
-      });
-  }, []);
 
   const updateStep = (index, patch) => {
     setWorkflow((current) => ({
