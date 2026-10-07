@@ -3,7 +3,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, hasSessionContext, loadSessionPermissions, login, logout, setActiveStoreId, startGoogleLogin, verifyPin } from './services/api'
-import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/routes'
+import { readRoute, setRoute } from './navigation/routes'
 import { MenuBarClock, useClock } from './shell/clock/ShellClock'
 import RdvnReferenceDock, { dockItems } from './shell/dock/RdvnReferenceDock'
 import { CompanyContextLoading, LockScreen } from './shell/auth/LoginShell'
@@ -549,8 +549,6 @@ function Desktop({ onLock, onSignOut }) {
 
   useEffect(() => {
     if (!activeApp || !storeAppsLoaded) return
-    const platformRoutes = new Set(['home','dashboard','developer','settings','connector-settings','workspace','reports','custom-reports','integrations','accounting','audit-log','licensing','app-releases','profile','custom-page-runtime'])
-    if (platformRoutes.has(activeApp)) return
     const installedApp = storeApps.find((item) => String(item?.package_key || '') === String(activeApp) && item?.is_installed === true)
     const declaredRoute = installedApp ? resolveAppOpenRoute(installedApp) : ''
     if (declaredRoute && declaredRoute !== '/' + activeApp) openRoutePath(declaredRoute)
@@ -632,15 +630,9 @@ function Desktop({ onLock, onSignOut }) {
     const settingsIndex = parts.indexOf('settings')
     if (settingsIndex >= 0) {
       const section = parts[settingsIndex + 1] || ''
-      if (DEVELOPER_SETTINGS_KEYS.has(section)) {
-        setRoute('developer', section)
-        setRouteState({ app: 'developer', section })
-        setActiveApp('developer')
-      } else {
-        setRoute('settings', section)
-        setRouteState({ app: 'settings', section })
-        setActiveApp('settings')
-      }
+      setRoute('settings', section)
+      setRouteState({ app: 'settings', section })
+      setActiveApp('settings')
       return
     }
     const connectorSettingsIndex = parts.indexOf('connector-settings')
