@@ -177,7 +177,8 @@ test('automatic CI does not run competing live E2E suites against production', a
 test('successful password login finalizes session, security state, last-login and history in one database round trip', async () => {
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
-  assert.match(server, /const sessionId = await finalizeSuccessfulLogin\(loginDb/)
+  assert.match(server, /const sessionId = randomUUID\(\)/)
+  assert.match(server, /await finalizeSuccessfulLogin\(loginDb, \{\s*user,\s*sessionId,/s)
   assert.match(security, /export async function finalizeSuccessfulLogin/)
   assert.match(security, /WITH new_session AS \(/)
   assert.match(security, /security_reset AS \(/)
