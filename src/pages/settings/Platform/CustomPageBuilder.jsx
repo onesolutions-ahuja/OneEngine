@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Copy, Eye, GripVertical, Minus, Monitor, MonitorSmartphone, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, GripVertical, Minus, Monitor, MonitorSmartphone, MoveDiagonal2, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
 import { apiRequest } from "../../../services/api.js";
 import {
   componentByKey,
@@ -110,7 +110,9 @@ const BUILDER_CSS = `
   }
   .cpb-canvas.is-panning{cursor:grabbing}
   .cpb-canvas input,.cpb-canvas select,.cpb-canvas textarea,.cpb-canvas button,.cpb-canvas a{user-select:auto}
-  .cpb-node{position:relative;min-width:90px;min-height:38px;max-width:100%;cursor:default;resize:both;overflow:auto}
+  .cpb-node{position:relative;min-width:90px;min-height:38px;max-width:100%;cursor:default;overflow:visible}
+  .cpb-resize-handle{position:absolute;right:-5px;bottom:-5px;z-index:12;width:20px;height:20px;display:grid;place-items:center;border:1px solid #9dbeb8;border-radius:6px;background:#fff;color:#147d70;box-shadow:0 2px 8px rgba(15,23,42,.12);cursor:nwse-resize;touch-action:none}
+  .cpb-resize-handle:hover{background:#edf8f6;border-color:#147d70}
   .cpb-node-actions{position:absolute;top:4px;right:38px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
   .cpb-node-remove{position:absolute;top:4px;right:6px;z-index:9;width:28px;height:28px;display:grid;place-items:center;border:1px solid #d2d7dc;border-radius:999px;background:#fff;color:#5f6972;box-shadow:0 2px 8px rgba(15,23,42,.10);cursor:pointer}
   .cpb-node-remove:hover{border-color:#fecaca;background:#fff1f2;color:#dc2626}
@@ -543,21 +545,49 @@ const updateNode = (nodeId, changes) => {
   };
 
   const beginNodeResize = (nodeId, event) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const nearResizeCorner = event.clientX >= rect.right - 22 && event.clientY >= rect.bottom - 22;
-    resizeNodeRef.current = nearResizeCorner ? nodeId : null;
-  };
-
-  const commitNodeSize = (nodeId, element) => {
-    if (resizeNodeRef.current !== nodeId || !nodeId || !element) return;
-    resizeNodeRef.current = null;
+    if (preview || !nodeId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const element = event.currentTarget.closest(".cpb-node");
+    if (!element) return;
     const rect = element.getBoundingClientRect();
-    const width = Math.round(rect.width);
-    const height = Math.round(rect.height);
-    if (width < 90 || height < 38) return;
-    const currentLayout = findNode(draft.sections, nodeId)?.node?.layout || {};
-    if (Math.abs(Number(currentLayout.width || 0) - width) <= 1 && Math.abs(Number(currentLayout.height || 0) - height) <= 1) return;
-    updateNode(nodeId, { layout: { ...currentLayout, width, height } });
+    const state = {
+      nodeId,
+      element,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: rect.width,
+      startHeight: rect.height,
+    };
+    resizeNodeRef.current = state;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    const move = (moveEvent) => {
+      const active = resizeNodeRef.current;
+      if (!active || active.nodeId !== nodeId) return;
+      const width = Math.max(90, Math.min(2400, active.startWidth + (moveEvent.clientX - active.startX)));
+      const height = Math.max(38, Math.min(1800, active.startHeight + (moveEvent.clientY - active.startY)));
+      active.element.style.width = `${Math.round(width)}px`;
+      active.element.style.height = `${Math.round(height)}px`;
+    };
+    const end = () => {
+      const active = resizeNodeRef.current;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (!active || active.nodeId !== nodeId) return;
+      resizeNodeRef.current = null;
+      const resized = active.element.getBoundingClientRect();
+      const width = Math.round(resized.width);
+      const height = Math.round(resized.height);
+      const currentLayout = findNode(draft.sections, nodeId)?.node?.layout || {};
+      if (Math.abs(Number(currentLayout.width || 0) - width) <= 1 && Math.abs(Number(currentLayout.height || 0) - height) <= 1) return;
+      updateNode(nodeId, { layout: { ...currentLayout, width, height } });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end, { once: true });
+    window.addEventListener("pointercancel", end, { once: true });
   };
 
   /* ------------------------------- save ---------------------------------- */
@@ -723,8 +753,6 @@ const updateNode = (nodeId, changes) => {
           width: Number(node.layout?.width) > 0 ? Math.min(Number(node.layout.width), 2400) : "100%",
           height: Number(node.layout?.height) > 0 ? Math.min(Number(node.layout.height), 1800) : undefined,
         }}
-        onPointerDown={(event) => { event.stopPropagation(); beginNodeResize(node.id, event); }}
-        onPointerUp={(event) => { event.stopPropagation(); commitNodeSize(node.id, event.currentTarget); }}
         onDragOver={(event) => { if (!preview) { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.add("cpb-dropzone"); } }}
         onDragLeave={(event) => event.currentTarget.classList.remove("cpb-dropzone")}
         onDrop={(event) => {
@@ -754,6 +782,9 @@ const updateNode = (nodeId, changes) => {
             <span className="cpb-node-actions">
               <button type="button" title="Duplicate component" aria-label="Duplicate component" onClick={(event) => { event.stopPropagation(); duplicateSelectedNode(); }}><Copy size={13}/></button>
             </span>
+            <button type="button" className="cpb-resize-handle" title="Drag to resize" aria-label="Resize component" onPointerDown={(event) => beginNodeResize(node.id, event)}>
+              <MoveDiagonal2 size={12}/>
+            </button>
           </>
         ) : null}
         <CustomPageRenderer
@@ -863,6 +894,12 @@ const updateNode = (nodeId, changes) => {
         </div>
 
         {node.componentKey === "multi_container" ? <MultiContainerProperties node={node} objects={objects} registry={registry} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        {(() => {
+          const meta = componentMeta(node.componentKey);
+          const specialized = new Set(["multi_container","table","tree_view","process_path","container","button","text","header","spacer","field_value","related_list","timeline","kanban","calendar","scheduler","gantt","map","hierarchy_viewer","file_viewer","signature"]);
+          if (specialized.has(node.componentKey)) return null;
+          return <RegistryDrivenProperties node={node} meta={meta} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} />;
+        })()}
         {node.componentKey === "table" ? <TableProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
         {node.componentKey === "tree_view" ? <TreeViewProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
         {[
@@ -1473,6 +1510,103 @@ function AdvancedComponentProperties({ node, objects, onChange, targetComponents
         );
       }}
     </RecordCollectionDataGroup>
+  );
+}
+
+
+const PROPERTY_BOOLEAN_KEYS = new Set(["visible","dismissible","showValue","disabled","multiple","clearable","allowClear","autoplay","loop","showSeconds","showDate","showWeekday","showMonth","hour12","masked","numeric","border","showPageSize","showCount","defaultOpen","allowCollapse"]);
+const PROPERTY_NUMBER_KEYS = new Set(["maxVisible","overflowCount","size","spacing","padding","elevation","rows","max","min","step","maxFiles","maxSize","length","pageSize","debounceMs","currentStep","duration","temperature"]);
+const PROPERTY_ENUMS = {
+  alignment: ["left","center","right"],
+  orientation: ["horizontal","vertical"],
+  direction: ["row","column"],
+  fit: ["contain","cover","fill"],
+  imageFit: ["contain","cover"],
+  shape: ["circle","rounded","square"],
+  target: ["_self","_blank"],
+  variant: ["default","primary","secondary","success","warning","danger","info"],
+  placement: ["top","right","bottom","left"],
+  side: ["left","right"],
+  mode: ["single","range"],
+  unit: ["C","F"],
+};
+
+function prettyPropertyLabel(key) {
+  return String(key || "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function useRegistryObjectFields(objectKey, objects) {
+  const [fields, setFields] = useState([]);
+  useEffect(() => {
+    if (!objectKey) { setFields([]); return; }
+    const object = objects.find((candidate) => candidate.object_key === objectKey);
+    if (!object?.id) { setFields([]); return; }
+    let live = true;
+    apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`)
+      .then((response) => { if (live) setFields((Array.isArray(response?.data) ? response.data : []).filter((field) => field.active !== false && field.readable !== false)); })
+      .catch(() => { if (live) setFields([]); });
+    return () => { live = false; };
+  }, [objectKey, objects]);
+  return fields;
+}
+
+function RegistryDrivenProperties({ node, meta, objects, onChange, targetComponents = [] }) {
+  const configurable = Array.isArray(meta?.configurable) ? meta.configurable : [];
+  const config = node.config || {};
+  const objectKey = config.objectKey || "";
+  const fields = useRegistryObjectFields(objectKey, objects);
+  const actionKeys = configurable.filter((key) => /action$/i.test(key) || /clickaction/i.test(key));
+  const ordinaryKeys = configurable.filter((key) => !actionKeys.includes(key));
+  const patchConfig = (key, value) => onChange({ config: { ...config, [key]: value } });
+
+  if (!configurable.length) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+        This component has no configurable metadata yet. Size can still be changed from the canvas resize handle.
+      </div>
+    );
+  }
+
+  const renderField = (key) => {
+    if (key === "visibility" || key === "visible") {
+      return <label key={key} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={node.visible !== false} onChange={(event) => onChange({ visible: event.target.checked })} /> Visible at runtime</label>;
+    }
+    if (key === "title") {
+      return <div key={key} className="space-y-1"><label className={labelClass}>Title</label><input className={inputClass} value={node.title || ""} onChange={(event) => onChange({ title: event.target.value })} /></div>;
+    }
+    if (key === "objectKey") {
+      return <div key={key} className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={config.objectKey || ""} onChange={(event) => patchConfig("objectKey", event.target.value)}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>;
+    }
+    if (key === "dataSource") {
+      return <div key={key} className="space-y-1"><label className={labelClass}>Data Source</label><select className={inputClass} value={config.dataSource || "records"} onChange={(event) => patchConfig("dataSource", event.target.value)}><option value="records">Object records</option><option value="static">Static values</option></select></div>;
+    }
+    if ((/Field$/i.test(key) || /Binding$/i.test(key)) && !/Fields$/i.test(key) && fields.length) {
+      return <FieldSelect key={key} label={prettyPropertyLabel(key)} value={config[key] || ""} fields={fields} onChange={(value) => patchConfig(key, value)} />;
+    }
+    if (PROPERTY_BOOLEAN_KEYS.has(key)) {
+      return <label key={key} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={config[key] !== false} onChange={(event) => patchConfig(key, event.target.checked)} /> {prettyPropertyLabel(key)}</label>;
+    }
+    if (PROPERTY_ENUMS[key]) {
+      return <div key={key} className="space-y-1"><label className={labelClass}>{prettyPropertyLabel(key)}</label><select className={inputClass} value={config[key] || PROPERTY_ENUMS[key][0]} onChange={(event) => patchConfig(key, event.target.value)}>{PROPERTY_ENUMS[key].map((value) => <option key={value} value={value}>{prettyPropertyLabel(value)}</option>)}</select></div>;
+    }
+    if (PROPERTY_NUMBER_KEYS.has(key)) {
+      return <div key={key} className="space-y-1"><label className={labelClass}>{prettyPropertyLabel(key)}</label><input className={inputClass} type="number" value={config[key] ?? ""} onChange={(event) => patchConfig(key, event.target.value === "" ? "" : Number(event.target.value))} /></div>;
+    }
+    if (/Fields$|items$|steps$|options$|secondaryValues$|popupFields$/i.test(key)) {
+      const value = Array.isArray(config[key]) ? config[key].join(", ") : (config[key] || "");
+      return <div key={key} className="space-y-1"><label className={labelClass}>{prettyPropertyLabel(key)}</label><textarea className={inputClass} rows={2} value={value} onChange={(event) => patchConfig(key, event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} placeholder="Comma-separated values" /></div>;
+    }
+    return <div key={key} className="space-y-1"><label className={labelClass}>{prettyPropertyLabel(key)}</label><input className={inputClass} value={config[key] ?? ""} onChange={(event) => patchConfig(key, event.target.value)} /></div>;
+  };
+
+  return (
+    <div className="space-y-3">
+      <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+        <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Configuration</legend>
+        {ordinaryKeys.map(renderField)}
+      </fieldset>
+      {actionKeys.length ? <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5"><legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Interaction</legend><InteractionProperties node={node} targetComponents={targetComponents} onChange={onChange} /></fieldset> : null}
+    </div>
   );
 }
 
