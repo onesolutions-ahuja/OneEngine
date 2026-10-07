@@ -267,20 +267,9 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId, 
   // lateral mega-query serialized policy/range planning and dominated login
   // latency on the hosted Postgres connection. These independent reads can
   // execute concurrently without weakening any security decision.
-  const [contextResult, policyResult, trustedResult] = await Promise.all([
-    db(
-      `SELECT row_to_json(s.*) AS settings,
-              row_to_json(us.*) AS state,
-              c.timezone AS company_timezone
-         FROM companies c
-         LEFT JOIN identity_security_settings s ON s.company_id=c.id
-         LEFT JOIN identity_user_security_state us ON us.user_id=$2
-        WHERE c.id=$1
-        LIMIT 1`,
-      [companyId, userId]
-    ),
-    db(
-      `SELECT *
+  const contextResult = await db(
+    `WITH selected_policy AS (
+       SELECT ap.*
          FROM identity_access_policies ap
         WHERE ap.company_id=$1 AND ap.active=TRUE
           AND ((ap.scope_type='USER' AND ap.scope_id=$2)
@@ -288,39 +277,41 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId, 
             OR (ap.scope_type='COMPANY' AND ap.scope_id IS NULL))
         ORDER BY CASE ap.scope_type WHEN 'USER' THEN 3 WHEN 'ROLE' THEN 2 ELSE 1 END DESC,
                  ap.priority ASC, ap.updated_at DESC
-        LIMIT 1`,
-      [companyId, userId, roleId || null]
-    ),
-    db(
-      `SELECT EXISTS(
-         SELECT 1 FROM identity_security_ip_ranges r
-          WHERE r.company_id=$1 AND r.range_type='TRUSTED' AND r.active=TRUE
-            AND r.policy_id IS NULL AND $2::inet IS NOT NULL
-            AND family(r.start_ip)=family($2::inet)
-            AND $2::inet >= r.start_ip AND $2::inet <= r.end_ip
-       ) AS trusted_network`,
-      [companyId, ip]
-    ),
-  ]);
+        LIMIT 1
+     )
+     SELECT row_to_json(s.*) AS settings,
+            row_to_json(us.*) AS state,
+            c.timezone AS company_timezone,
+            row_to_json(sp.*) AS policy,
+            EXISTS(
+              SELECT 1 FROM identity_security_ip_ranges r
+               WHERE r.company_id=$1 AND r.range_type='TRUSTED' AND r.active=TRUE
+                 AND r.policy_id IS NULL AND $4::inet IS NOT NULL
+                 AND family(r.start_ip)=family($4::inet)
+                 AND $4::inet >= r.start_ip AND $4::inet <= r.end_ip
+            ) AS trusted_network,
+            EXISTS(
+              SELECT 1 FROM identity_security_ip_ranges r
+               WHERE r.company_id=$1 AND r.range_type='LOGIN_ALLOWED' AND r.active=TRUE
+                 AND r.policy_id=sp.id AND $4::inet IS NOT NULL
+                 AND family(r.start_ip)=family($4::inet)
+                 AND $4::inet >= r.start_ip AND $4::inet <= r.end_ip
+            ) AS login_allowed_matches,
+            (SELECT COUNT(*)::int FROM identity_security_ip_ranges r
+              WHERE r.company_id=$1 AND r.range_type='LOGIN_ALLOWED' AND r.active=TRUE
+                AND r.policy_id=sp.id) AS login_allowed_count
+       FROM companies c
+       LEFT JOIN identity_security_settings s ON s.company_id=c.id
+       LEFT JOIN identity_user_security_state us ON us.user_id=$2
+       LEFT JOIN selected_policy sp ON TRUE
+      WHERE c.id=$1
+      LIMIT 1`,
+    [companyId, userId, roleId || null, ip]
+  );
 
   const row = contextResult.rows[0] || {};
-  const policy = policyResult.rows[0] || null;
-  const rangeResult = policy?.id
-    ? await db(
-        `SELECT EXISTS(
-           SELECT 1 FROM identity_security_ip_ranges r
-            WHERE r.company_id=$1 AND r.range_type='LOGIN_ALLOWED' AND r.active=TRUE
-              AND r.policy_id=$2 AND $3::inet IS NOT NULL
-              AND family(r.start_ip)=family($3::inet)
-              AND $3::inet >= r.start_ip AND $3::inet <= r.end_ip
-         ) AS login_allowed_matches,
-         (SELECT COUNT(*)::int FROM identity_security_ip_ranges r
-           WHERE r.company_id=$1 AND r.range_type='LOGIN_ALLOWED' AND r.active=TRUE
-             AND r.policy_id=$2) AS login_allowed_count`,
-        [companyId, policy.id, ip]
-      )
-    : { rows: [{ login_allowed_matches: false, login_allowed_count: 0 }] };
-  const range = rangeResult.rows[0] || {};
+  const policy = row.policy || null;
+  const range = row;
   let settings = row.settings || null;
   if (!settings) settings = await loadSecuritySettings(db, companyId);
   return {
@@ -328,7 +319,7 @@ export async function loadLoginSecurityContext(db, { companyId, userId, roleId, 
     state: row.state || null,
     policy,
     companyTimezone: row.company_timezone || null,
-    trustedNetwork: trustedResult.rows[0]?.trusted_network === true,
+    trustedNetwork: row.trusted_network === true,
     loginAllowedMatches: range.login_allowed_matches === true,
     loginAllowedCount: Number(range.login_allowed_count || 0),
   };
