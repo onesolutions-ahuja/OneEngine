@@ -3111,10 +3111,39 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
        * record-transition operators and are rejected here as meaningless for a
        * standing filter.
        */
-      const conditions = Array.isArray(collection.conditions) ? collection.conditions.slice(0, 20) : [];
-      const conditionMatch = collection.conditionMatch === "any" ? "any" : "all";
+      const rawConditions = Array.isArray(collection.conditions) ? collection.conditions.slice(0, 20) : [];
+      const conditionMatch = ["all", "any", "custom"].includes(collection.conditionMatch) ? collection.conditionMatch : "all";
+      const pageContext = collection.pageContext && typeof collection.pageContext === "object" && !Array.isArray(collection.pageContext) ? collection.pageContext : {};
+      const bindingContext = {
+        // Current User is always authoritative server session data. Page-owned
+        // values may drive a query, but never weaken object/FLS/sharing gates.
+        currentUser: req.user,
+        currentRecord: pageContext.currentRecord && typeof pageContext.currentRecord === "object" ? pageContext.currentRecord : null,
+        pageParameters: pageContext.params && typeof pageContext.params === "object" ? pageContext.params : {},
+        pageVariables: pageContext.variables && typeof pageContext.variables === "object" ? pageContext.variables : {},
+        components: pageContext.components && typeof pageContext.components === "object" ? pageContext.components : {},
+        flowOutputs: pageContext.flows && typeof pageContext.flows === "object" ? pageContext.flows : {},
+        resolveFormula: (expression) => evaluateWorkflowFormula(expression, {
+          user: req.user,
+          record: pageContext.currentRecord || {},
+          page: { params: pageContext.params || {}, variables: pageContext.variables || {} },
+          components: pageContext.components || {},
+          flows: pageContext.flows || {},
+        }),
+      };
+      let conditions;
       try {
-        if (conditions.length) validateConditionConfig({ match: conditionMatch, conditions }, fields, "Record Collection conditions");
+        conditions = rawConditions.map((condition) => ({
+          ...condition,
+          value: ["is_empty", "is_not_empty"].includes(condition?.operator)
+            ? null
+            : resolvePageBindingTree(condition?.value, bindingContext),
+        }));
+        if (conditions.length) validateConditionConfig({
+          match: conditionMatch,
+          conditions,
+          ...(conditionMatch === "custom" ? { conditionLogic: String(collection.conditionLogic || "") } : {}),
+        }, fields, "Record Collection conditions");
       } catch (error) {
         if (error instanceof ConditionError) return res.status(400).json({ success: false, code: error.code, message: error.message });
         throw error;
