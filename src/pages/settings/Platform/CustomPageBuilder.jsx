@@ -465,7 +465,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     }
     if (["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"].includes(componentKey)) {
       const defaults = {
-        timeline: { dateField: "created_at", titleField: "name", secondaryField: "status", groupBy: "day", maxRecords: 10 },
+        timeline: { dateField: "", titleField: "", secondaryField: "", groupBy: "day", maxRecords: 10 },
         kanban: { groupField: "status", titleField: "name", subtitleField: "status", maxRecords: 12, allowDragDrop: true },
         calendar: { startField: "start_date", endField: "end_date", titleField: "name", subtitleField: "status", categoryField: "status", statusField: "status", statusColors: {}, defaultView: "month" },
         scheduler: { resourceField: "assignee_id", resourceLabelField: "name", startField: "start_at", endField: "end_at", titleField: "name", statusField: "status", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
