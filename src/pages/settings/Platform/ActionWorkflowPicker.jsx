@@ -415,7 +415,11 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
           <select className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" value={interaction?.screenPresentation || "screen_modal"} onChange={(event) => patch({ screenPresentation: event.target.value })}>
             <option value="screen_modal">Modal</option><option value="full_screen">Full Screen</option><option value="embedded">Embedded</option>
           </select>
-          <p className="text-[11px] text-slate-400">Only Screen Flows are offered. Runtime execution still requires Flow execute permission.</p>
+          {selectedWorkflow && Array.isArray(selectedWorkflow.action?.inputContract) && selectedWorkflow.action.inputContract.length ? <div className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Flow Inputs</p>
+            {selectedWorkflow.action.inputContract.map((input) => <label key={input.name} className="block space-y-1"><span className="text-xs font-medium text-slate-500">{input.label || input.name}{input.required ? " *" : ""}</span><input className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" placeholder="$record.id, $user.id, $page.params.key or a value" value={typeof interaction?.inputs?.[input.name] === "string" ? interaction.inputs[input.name] : ""} onChange={(event) => patch({ inputs: { ...(interaction.inputs || {}), [input.name]: event.target.value } })}/></label>)}
+          </div> : null}
+          <p className="text-[11px] text-slate-400">Only Screen Flows are offered. Resource bindings are resolved server-side and Flow execute permission is enforced at runtime.</p>
         </div>
       ) : null}
 
