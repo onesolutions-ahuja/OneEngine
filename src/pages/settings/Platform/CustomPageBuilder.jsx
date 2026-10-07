@@ -60,7 +60,7 @@ const BUILDER_CSS = `
   .cpb-back-button:hover{background:#f5f7f7;border-color:#bcc6c8;color:#176f6a}
   .cpb-shell{
     display:grid;
-    grid-template-columns:minmax(230px,260px) minmax(420px,1fr) minmax(280px,320px);
+    grid-template-columns:minmax(230px,260px) minmax(420px,1fr) minmax(224px,256px);
     gap:10px;
     width:100%;
     min-width:0;
@@ -103,6 +103,10 @@ const BUILDER_CSS = `
   .cpb-palette-item:nth-child(4n+4) svg{color:#5566aa!important;background:#edf0ff}
   .cpb-palette-empty{padding:18px 8px;text-align:center;font-size:11px;color:#89939d}
   .cpb-section-tools{border-top:1px solid #edf0f2;margin-top:3px;padding-top:9px}
+  .cpb-canvas-column{display:flex;min-width:0;min-height:0;flex-direction:column;gap:6px}
+  .cpb-horizontal-scroll{flex:0 0 auto;display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border:1px solid #e2e5e9;border-radius:8px;background:#fff}
+  .cpb-horizontal-scroll span{font-size:10px;color:#7b858e;white-space:nowrap}
+  .cpb-horizontal-scroll input{width:100%;min-width:0}
   .cpb-canvas{
     min-width:0;min-height:0;height:100%;overflow:scroll;
     border:1px solid #e2e5e9;border-radius:12px;background:#f3f4f5;padding:18px;
@@ -153,7 +157,7 @@ const BUILDER_CSS = `
   .cpb-page-settings p{margin:0;font-size:10.5px;line-height:1.45;color:#7a848e}
   @media(max-width:1180px){
     .cpb-shell{grid-template-columns:220px minmax(380px,1fr);height:clamp(540px,calc(100dvh - 205px),860px)}
-    .cpb-properties{position:absolute;z-index:80;right:12px;width:min(320px,88vw);height:calc(100% - 24px);box-shadow:0 18px 50px rgba(15,23,42,.16)}
+    .cpb-properties{position:absolute;z-index:80;right:12px;width:min(256px,88vw);height:calc(100% - 24px);box-shadow:0 18px 50px rgba(15,23,42,.16)}
   }
   @media(max-width:760px){
     .cpb-shell{grid-template-columns:minmax(180px,220px) minmax(340px,1fr);overflow-x:auto}
@@ -249,6 +253,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const panRef = useRef(null);
   const resizeNodeRef = useRef(null);
   const [canvasPanning, setCanvasPanning] = useState(false);
+  const [canvasScroll, setCanvasScroll] = useState({ left: 0, max: 0 });
 
   useEffect(() => {
     apiRequest("/api/platform/apps").then((response) => setApps(response.data || [])).catch((error) => onError?.(error.message));
@@ -258,6 +263,25 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   useEffect(() => {
     if (initialAppId && String(initialAppId) !== String(appId || "")) setAppId(String(initialAppId));
   }, [initialAppId]);
+
+  useEffect(() => {
+    const viewport = canvasViewportRef.current;
+    if (!viewport || preview) return undefined;
+    const sync = () => setCanvasScroll({
+      left: Math.round(viewport.scrollLeft),
+      max: Math.max(0, Math.round(viewport.scrollWidth - viewport.clientWidth)),
+    });
+    sync();
+    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(sync) : null;
+    resizeObserver?.observe(viewport);
+    const frame = viewport.querySelector(".cpb-device-frame");
+    if (frame) resizeObserver?.observe(frame);
+    viewport.addEventListener("scroll", sync, { passive: true });
+    return () => {
+      viewport.removeEventListener("scroll", sync);
+      resizeObserver?.disconnect();
+    };
+  }, [draft.device, draft.sections, preview]);
 
   useEffect(() => {
     if (!initialPageId || !pages.length) return;
@@ -1191,6 +1215,21 @@ const updateNode = (nodeId, changes) => {
           </aside>
 
           {/* LIVE CANVAS — shared renderer with drop zones. */}
+          <div className="cpb-canvas-column">
+            <div className="cpb-horizontal-scroll" aria-label="Canvas horizontal scroll">
+              <span>Canvas left / right</span>
+              <input
+                type="range"
+                min="0"
+                max={Math.max(0, canvasScroll.max)}
+                value={Math.min(canvasScroll.left, canvasScroll.max)}
+                disabled={canvasScroll.max <= 0}
+                onChange={(event) => {
+                  const viewport = canvasViewportRef.current;
+                  if (viewport) viewport.scrollLeft = Number(event.target.value) || 0;
+                }}
+              />
+            </div>
           <main
             ref={canvasViewportRef}
             className={`cpb-canvas ${canvasPanning ? "is-panning" : ""}`}
@@ -1223,6 +1262,7 @@ const updateNode = (nodeId, changes) => {
               </div>
             </div>
           </main>
+          </div>
 
           {/* PROPERTIES — relevant settings for the selection only. */}
           <aside className="cpb-panel cpb-properties">
