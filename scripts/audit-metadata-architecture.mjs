@@ -129,6 +129,15 @@ for (const file of allServerRuntimeFiles) {
       if (text.includes(token)) findings.push({rule:"HARDCODED_PROVIDER_RUNTIME_IN_SERVER",file:name,token});
     }
   }
+  if (name === "server/packages/packageManifestCatalog.js") {
+    if (/legacyActions\s*:/.test(text)) findings.push({rule:"LEGACY_ACTION_ALIAS_MAP_IN_PACKAGE_METADATA",file:name});
+    for (const token of ["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION"]) {
+      if (text.includes(token)) findings.push({rule:"RETIRED_ACTION_ALIAS_IN_PACKAGE_METADATA",file:name,token});
+    }
+    if (/route:\s*["']\/app\/global-products["']/.test(text)) {
+      findings.push({rule:"RETIRED_FRONTEND_ROUTE_IN_PACKAGE_METADATA",file:name,route:"/app/global-products"});
+    }
+  }
   if (name === "server/services/packageRegistry.js") {
     if (/packageKeys\s*=\s*\[\s*["']staff["']\s*,\s*["']products["']\s*,\s*["']customers["']/.test(text)) {
       findings.push({rule:"HARDCODED_DEFAULT_BUSINESS_PACKAGES",file:name});
