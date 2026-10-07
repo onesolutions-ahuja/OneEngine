@@ -35,7 +35,6 @@ import {
   normalizePermissionState,
 } from "./navCatalogue.js";
 import {
-  PAGE_SLUGS,
   buildAppPath,
   buildCustomPagePath,
   buildObjectPath,
@@ -74,13 +73,13 @@ export function systemNavigationTargets(permissionState = null) {
   const targets = [];
   for (const [page, Icon] of items) {
     if (EXCLUDED_SYSTEM_TARGET_KEYS.has(page)) continue;
-    if (!PAGE_SLUGS[page] || seen.has(page)) continue;
+    if (seen.has(page)) continue;
     seen.add(page);
     targets.push({
       type: NAVIGATION_TARGET_TYPES.SYSTEM_PAGE,
       key: page,
       label: page,
-      route: buildAppPath(page),
+      route: buildAppPath({ route: state.navigation.find((entry) => entry?.label === page)?.route || state.navigation.find((entry) => entry?.label === page)?.path || state.navigation.find((entry) => entry?.label === page)?.slug || "" }),
       iconKey: Icon ? Icon.name || page : null,
     });
   }
@@ -98,7 +97,7 @@ export function normalizeNavigationTarget(value) {
   const target = { type, key };
   if (type === NAVIGATION_TARGET_TYPES.SYSTEM_PAGE) {
     /* The page key IS the registry key (PAGE_SLUGS entry) — not a URL. */
-    return key && PAGE_SLUGS[key] ? { type, key } : null;
+    return key ? { type, key } : null;
   }
   if (type === NAVIGATION_TARGET_TYPES.CUSTOM_PAGE) {
     /* Stable page key only; labels are display state and never identity. */
