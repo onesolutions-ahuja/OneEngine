@@ -2081,7 +2081,7 @@ async function startServer() {
     // runs again after metadata creation to grant any newly-created objects.
     await bootstrapInitialSuperadmin(pool, {
       ...process.env,
-      BOOTSTRAP_SUPERADMIN_COMPANY_ID: null.companyId,
+      BOOTSTRAP_SUPERADMIN_COMPANY_ID: process.env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || null,
       BOOTSTRAP_TENANT_SUPERADMIN_EMAIL: "superadmin@onepos.com",
       BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD: "marvel",
       BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
@@ -2151,15 +2151,10 @@ async function startServer() {
         bootstrapLockClient.release();
       }
     }
-
-    // Identity/profile synchronization remains cheap and intentionally runs on
-    // every start so environment-driven bootstrap credentials can still change.
-    // Re-run the idempotent tenant seed after platform bootstrap so tenant
-    // extension fields/relationships can bind to canonical Platform Objects.
-    await seedOneSolutionsDemo(pool);
+    // Identity/profile synchronization remains idempotent and environment-driven.
     await bootstrapInitialSuperadmin(pool, {
       ...process.env,
-      BOOTSTRAP_SUPERADMIN_COMPANY_ID: null.companyId,
+      BOOTSTRAP_SUPERADMIN_COMPANY_ID: process.env.BOOTSTRAP_SUPERADMIN_COMPANY_ID || null,
       BOOTSTRAP_TENANT_SUPERADMIN_EMAIL: "superadmin@onepos.com",
       BOOTSTRAP_TENANT_SUPERADMIN_PASSWORD: "marvel",
       BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
