@@ -2051,9 +2051,7 @@ async function startServer() {
       technicalMessage: null,
       updatedAt: new Date().toISOString(),
     };
-    startupAttempt = 0;
-
-    // Do not expose a rolling-deploy instance to Render traffic until its
+    // Keep the retry counter until the complete startup sequence succeeds.\n\n    // Do not expose a rolling-deploy instance to Render traffic until its
     // database, core schema and package catalogue are actually ready.
     // Previously the port opened first, so Render could route users to an
     // instance that still returned OESB01 for every authenticated API call.
@@ -2212,6 +2210,9 @@ async function startServer() {
       refreshed: refreshedPackageMetadata,
       failures: packageMetadataRefreshFailures,
     });
+
+    // Reset retries only after the complete startup/bootstrap path succeeds.
+    startupAttempt = 0;
 
     console.log("onePOS: platform bootstrap ready");
 
