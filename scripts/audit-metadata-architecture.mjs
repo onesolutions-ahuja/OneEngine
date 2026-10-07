@@ -15,7 +15,7 @@ const exempt = new Set([
   "server/services/tenantDatabase.js",
 ]);
 const declarativePrefixes=["server/packages/","server/metadata/"];
-const retired = new Set(["server/routes/dashboard.js","server/services/reportSalesDefinition.js"]);
+const retired = new Set(["server/routes/dashboard.js"]);
 const legacyBusinessRuntime = new Set([]);
 const businessTables=[
   "sales","sale_ledger","sale_items","customers","payments","products","suppliers",
@@ -144,7 +144,6 @@ for(const file of roots.flatMap(walk)){
   const text=fs.readFileSync(file,"utf8");
   if(retired.has(name)){
     if(name==="server/routes/dashboard.js" && /FROM\s+sales|FROM\s+products/i.test(text)) findings.push({rule:"RETIRED_BUSINESS_RUNTIME_STILL_IMPLEMENTED",file:name});
-    if(name==="server/services/reportSalesDefinition.js" && /dataSource\s*:\s*["']sales["']|FROM\s+sales/i.test(text)) findings.push({rule:"RETIRED_SALES_REPORT_ENGINE_STILL_IMPLEMENTED",file:name});
     continue;
   }
   if(exempt.has(name)||declarativePrefixes.some((prefix)=>name.startsWith(prefix))) continue;
