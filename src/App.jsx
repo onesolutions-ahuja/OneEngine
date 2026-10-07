@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from
 import { apiRequest, checkBackend, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, hasSessionContext, loadSessionPermissions, login, logout, setActiveStoreId, verifyPin } from './services/api'
 import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/routes'
 import { MenuBarClock, useClock } from './shell/clock/ShellClock'
-import RdvnReferenceDock, { defaultDockItems } from './shell/dock/RdvnReferenceDock'
+import RdvnReferenceDock from './shell/dock/RdvnReferenceDock'
 import { CompanyContextLoading, LockScreen } from './shell/auth/LoginShell'
 import { appIconUrl, applyDefaultAppIcon, marketplaceSearchText, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from './utils/appMarketplace'
 import JarvisOrb, { ORB_STATES } from './shell/jarvis/JarvisOrb'
@@ -720,8 +720,7 @@ function Desktop({ onLock, onSignOut }) {
       return
     }
 
-    const item = defaultDockItems.find((entry) => entry.id === id) ?? null
-    setMessage(`${item?.label ?? 'App'} is not available in this workspace.`)
+    setMessage('App is not available in this workspace.')
   }
 
   return (
@@ -988,7 +987,11 @@ function Desktop({ onLock, onSignOut }) {
       </Suspense>
       </LazyLoadBoundary>
 
-      <RdvnReferenceDock onItemOpen={openItem} />
+      <RdvnReferenceDock
+        onItemOpen={openItem}
+        items={storeApps.filter((item) => item?.is_installed === true && item?.visible !== false).map((item) => ({ id: item.package_key, label: item.name || item.package_key, src: appIconUrl(item), scaled: true }))}
+        mobileItems={storeApps.filter((item) => item?.is_installed === true && item?.visible !== false && item?.manifest?.mobileDock === true).map((item) => ({ id: item.package_key, label: item.name || item.package_key, src: appIconUrl(item) }))}
+      />
     </main>
   )
 }
