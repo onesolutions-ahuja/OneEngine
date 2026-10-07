@@ -69,6 +69,10 @@ const BUILDER_CSS = `
     min-height:0;
     align-items:stretch;
   }
+  .cpb-shell.is-palette-collapsed{grid-template-columns:minmax(420px,1fr) minmax(224px,256px)}
+  .cpb-shell.is-properties-collapsed{grid-template-columns:minmax(230px,260px) minmax(420px,1fr)}
+  .cpb-shell.is-palette-collapsed.is-properties-collapsed{grid-template-columns:minmax(420px,1fr)}
+  .cpb-panel-toggle{white-space:nowrap}
   .cpb-panel{
     min-width:0;
     min-height:0;
@@ -158,6 +162,9 @@ const BUILDER_CSS = `
   .cpb-page-settings p{margin:0;font-size:10.5px;line-height:1.45;color:#7a848e}
   @media(max-width:1180px){
     .cpb-shell{grid-template-columns:220px minmax(380px,1fr);height:clamp(540px,calc(100dvh - 205px),860px)}
+    .cpb-shell.is-palette-collapsed{grid-template-columns:minmax(380px,1fr)}
+    .cpb-shell.is-properties-collapsed{grid-template-columns:220px minmax(380px,1fr)}
+    .cpb-shell.is-palette-collapsed.is-properties-collapsed{grid-template-columns:minmax(380px,1fr)}
     .cpb-properties{position:absolute;z-index:80;right:12px;width:min(256px,88vw);height:calc(100% - 24px);box-shadow:0 18px 50px rgba(15,23,42,.16)}
   }
   @media(max-width:760px){
@@ -245,6 +252,8 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const [versions, setVersions] = useState([]);
   const [showVersions, setShowVersions] = useState(false);
   const [panelMode, setPanelMode] = useState("properties");
+  const [paletteOpen, setPaletteOpen] = useState(true);
+  const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [dirty, setDirty] = useState(false);
   /* Undo/redo: bounded snapshot stack of draft trees. Every mutation pushes. */
   const [undoStack, setUndoStack] = useState([]);
@@ -1122,6 +1131,16 @@ const updateNode = (nodeId, changes) => {
         </select>
         <input className="w-56 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-medium" value={draft.label} onChange={(event) => applyDraft((current) => ({ ...current, label: event.target.value }))} aria-label="Page name" />
         <span className="ml-auto flex items-center gap-1">
+          {!preview ? (
+            <>
+              <button type="button" className="cpb-device-btn cpb-panel-toggle" onClick={() => setPaletteOpen((value) => !value)} aria-pressed={paletteOpen} title={paletteOpen ? "Collapse Components pane" : "Show Components pane"}>
+                {paletteOpen ? "Hide Components" : "Components"}
+              </button>
+              <button type="button" className="cpb-device-btn cpb-panel-toggle" onClick={() => setPropertiesOpen((value) => !value)} aria-pressed={propertiesOpen} title={propertiesOpen ? "Collapse Properties pane" : "Show Properties pane"}>
+                {propertiesOpen ? "Hide Properties" : "Properties"}
+              </button>
+            </>
+          ) : null}
           {(["desktop", "tablet", "mobile", "kiosk"]).map((device) => (
             <button key={device} type="button" className={`cpb-device-btn ${draft.device === device ? "active" : ""}`} onClick={() => applyDraft((current) => ({ ...current, device }), { history: false })} aria-pressed={draft.device === device}>
               {device === "desktop" ? <Monitor size={13} /> : device === "tablet" ? <Tablet size={13} /> : device === "mobile" ? <Smartphone size={13} /> : <MonitorSmartphone size={13} />}
@@ -1163,9 +1182,9 @@ const updateNode = (nodeId, changes) => {
           </div>
         </div>
       ) : (
-        <div className="cpb-shell">
+        <div className={`cpb-shell ${paletteOpen ? "" : "is-palette-collapsed"} ${propertiesOpen ? "" : "is-properties-collapsed"}`}>
           {/* PALETTE — populated from the Component Registry. */}
-          <aside className="cpb-panel cpb-palette">
+          {paletteOpen ? <aside className="cpb-panel cpb-palette">
             <div className="cpb-palette-head">
               <p className="cpb-palette-title">Components</p>
               <label className="cpb-palette-search">
@@ -1213,7 +1232,7 @@ const updateNode = (nodeId, changes) => {
               </div>
             </div>
             </div>
-          </aside>
+          </aside> : null}
 
           {/* LIVE CANVAS — shared renderer with drop zones. */}
           <div className="cpb-canvas-column">
@@ -1266,7 +1285,7 @@ const updateNode = (nodeId, changes) => {
           </div>
 
           {/* PROPERTIES — relevant settings for the selection only. */}
-          <aside className="cpb-panel cpb-properties">
+          {propertiesOpen ? <aside className="cpb-panel cpb-properties">
             <div className="cpb-properties-tabs" role="tablist" aria-label="Builder side panel">
               <button type="button" className={panelMode === "properties" ? "active" : ""} onClick={() => setPanelMode("properties")} role="tab" aria-selected={panelMode === "properties"}>Properties</button>
               <button type="button" className={panelMode === "page" ? "active" : ""} onClick={() => setPanelMode("page")} role="tab" aria-selected={panelMode === "page"}>Page Settings</button>
@@ -1274,7 +1293,7 @@ const updateNode = (nodeId, changes) => {
             <div className="cpb-properties-scroll">
               {panelMode === "page" ? renderPageSettings() : renderProperties()}
             </div>
-          </aside>
+          </aside> : null}
         </div>
       )}
     </div>
