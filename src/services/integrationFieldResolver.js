@@ -4,14 +4,13 @@
  * --------------------------------------------------------------------------
  *
  * Small, dependency-free helper for the upcoming Integration module.
- * Resolves canonical onePOS dot-paths (e.g. "sales.customer.address.postcode"
- * or "purchase.items[].product.ean") against a supplied data object.
+ * Resolves metadata-defined dot-paths against a supplied data object.
  *
  * PATH SYNTAX
  * - Segments are separated by ".".
  * - A segment may carry a trailing "[]" to mark array expansion, e.g.
- *   "purchase.items[].quantity" maps "quantity" over every element of
- *   "purchase.items".
+ *   "record.items[].quantity" maps "quantity" over every element of
+ *   "record.items".
  * - Paths without "[]" resolve to a single scalar/object value.
  * - Paths with at least one "[]" resolve to an array of leaf values.
  *
@@ -46,7 +45,7 @@ function isObjectLike(value) {
 /**
  * Resolve a canonical field path against a data object.
  *
- * @param {object} data - Root object, e.g. { sales: {...}, purchase: {...} }.
+ * @param {object} data - Root object containing metadata-addressable values.
  * @param {string} path - Dot-path with optional [] array markers.
  * @returns {*} Single value (or null) for scalar paths; array for [] paths.
  */
