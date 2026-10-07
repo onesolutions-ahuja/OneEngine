@@ -137,7 +137,7 @@ export default function NotificationSubscriptionsAdmin({ onMessage, onError }) {
 
       <section aria-label="Configured notification subscriptions">
         {loading ? <p className="py-5 text-sm text-slate-500">Loading subscriptions…</p> : subscriptions.length === 0 ? (
-          <div className="flex items-center gap-3 py-6 text-sm text-slate-500"><Bell size={18} aria-hidden="true" /> No notification subscriptions configured.</div>
+          <div className="flex items-start gap-3 py-6 text-sm text-slate-500"><Bell size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><div><strong className="block font-medium text-slate-700">No notification subscriptions configured.</strong><span className="mt-1 block">Create one above to send an in-app notification when a matching object event occurs.</span></div></div>
         ) : (
           <div className="divide-y divide-slate-200">
             {subscriptions.map((subscription) => (
