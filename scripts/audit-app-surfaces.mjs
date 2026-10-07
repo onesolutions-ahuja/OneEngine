@@ -34,7 +34,7 @@ assert(store.includes('readMarketplaceCache()'), 'oneStore must recover from sha
 assert(store.includes('Retry'), 'oneStore must expose retry after catalogue failure')
 
 assert(exists('public/icons/apps/default-app.svg'), 'Missing public default app icon')
-assert(exists('public/icons/apps/onestore.svg'), 'Missing oneStore icon')
+assert(exists('public/icons/apps/onestore-dock-clean.svg'), 'Missing oneStore dock icon')
 
 // App icons are metadata-owned. The shared marketplace helper must not
 // reintroduce a hardcoded package/icon alias table; explicit manifest assets
