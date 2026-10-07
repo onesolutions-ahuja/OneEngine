@@ -166,14 +166,14 @@ test("custom page runtime routes load for every metadata page",async({page,baseU
 });
 
 test("login server timing stays within target",async({page})=>{
-  let loginServerTotal=null;
-  page.on("response",(response)=>{
-    if(!response.url().includes("/api/auth/login")) return;
-    const match=/(?:^|,\s*)total;dur=([0-9.]+)/i.exec(response.headers()["server-timing"]||"");
-    if(match) loginServerTotal=Number(match[1]);
-  });
-  expect(await loginIfConfigured(page),"authenticated login must run").toBe(true);
-  expect(loginServerTotal,"login server timing header").not.toBeNull();
+  const username=process.env.ONEPOS_E2E_USERNAME||"";
+  const password=process.env.ONEPOS_E2E_PASSWORD||"";
+  const apiBase=String(process.env.ONEPOS_E2E_API_BASE_URL||"https://oneengine-6gas.onrender.com").replace(/\/$/,"");
+  const response=await page.request.post(apiBase+"/api/auth/login",{data:{email:username,password}});
+  expect(response.ok(),"login HTTP "+response.status()).toBe(true);
+  const match=/(?:^|,\s*)total;dur=([0-9.]+)/i.exec(response.headers()["server-timing"]||"");
+  const loginServerTotal=match?Number(match[1]):Number.NaN;
+  expect(Number.isFinite(loginServerTotal),"login server timing header").toBe(true);
   expect(loginServerTotal,"login server time <= 1.5s").toBeLessThanOrEqual(1500);
 });
 
