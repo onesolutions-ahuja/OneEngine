@@ -8,7 +8,6 @@ import {
 import { ConnectorService, resolvePersistedConnectorCapability } from "../services/connectorRuntime.js";
 import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { executeSystemAction, executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
-import { configureSmsGateInboundWebhook } from "../services/smsGateConnector.js";
 
 function jsonValue(value, fallback) {
   if (typeof value !== "string") return value ?? fallback;
@@ -326,50 +325,7 @@ export default function createConnectorsRouter({
     };
   }
 
-  async function ensureSmsGateInboundWebhook(instanceId, companyId) {
-    const currentResult = await db(
-      `SELECT id,connector_configuration,credentials_encrypted
-         FROM integration_connections
-        WHERE id=$1 AND company_id=$2 AND connector_package_key='smsgate_connector'
-        LIMIT 1`,
-      [instanceId, companyId]
-    );
-    const current = currentResult.rows[0];
-    if (!current) throw Object.assign(new Error("SMSGate connector instance not found"), { code: "CONNECTOR_NOT_FOUND" });
 
-    const configuration = jsonValue(current.connector_configuration, {});
-    let secrets = {};
-    try { secrets = decryptCredentials(current.credentials_encrypted) || {}; } catch { secrets = {}; }
-
-    const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
-    const publicBaseUrl = String(
-      process.env.PUBLIC_API_URL ||
-      process.env.RENDER_EXTERNAL_URL ||
-      "https://oneengine-6gas.onrender.com"
-    ).replace(/\/$/, "");
-    const webhookUrl = `${publicBaseUrl}/api/smsgate/webhook/${current.id}/${webhookToken}`;
-
-    const webhook = await configureSmsGateInboundWebhook(
-      { ...configuration, ...secrets },
-      { webhookUrl }
-    );
-
-    await db(
-      `UPDATE integration_connections
-          SET credentials_encrypted=$1,
-              connector_configuration=connector_configuration - 'webhookSigningKey',
-              updated_at=NOW()
-        WHERE id=$2 AND company_id=$3`,
-      [encryptCredentials({ ...secrets, webhookToken }), current.id, companyId]
-    );
-
-    return {
-      configured: true,
-      created: webhook?.created === true,
-      removedStale: Number(webhook?.removedStale || 0),
-      webhookId: webhook?.webhookId || null,
-    };
-  }
 
   async function requireOneEngineManage(req, res) {
     const userId = req.user?.id;
@@ -1514,28 +1470,7 @@ export default function createConnectorsRouter({
       // Inbound SMS requires a provider-side sms:received webhook. Reconcile it
       // immediately after a successful SMSGate connection test so connectors
       // configured after process startup do not remain outbound-only.
-      if (instance.connector_package_key === "smsgate_connector" && result?.success === true) {
-        try {
-          const inboundWebhook = await ensureSmsGateInboundWebhook(instance.id, req.user.companyId);
-          result = { ...result, inboundWebhook };
-        } catch (webhookError) {
-          const message = `SMSGate connected, but inbound webhook setup failed: ${webhookError?.message || "unknown error"}`;
-          await db(
-            `UPDATE integration_connections
-                SET last_test_result=$1::jsonb,last_error=$2,updated_at=NOW()
-              WHERE id=$3 AND company_id=$4`,
-            [JSON.stringify({ success: false, code: "WEBHOOK_SETUP_FAILED", message }), message, instance.id, req.user.companyId]
-          );
-          console.error("SMSGate inbound webhook setup after connector test failed:", webhookError?.message || webhookError);
-          return res.status(409).json({
-            success: false,
-            code: "WEBHOOK_SETUP_FAILED",
-            message,
-            workflowRunId: execution.runId,
-            correlationId: execution.correlationId,
-          });
-        }
-      }
+      
 
       res.json({ success: true, data: result, workflowRunId: execution.runId, correlationId: execution.correlationId });
     } catch (error) {
@@ -1545,190 +1480,6 @@ export default function createConnectorsRouter({
         message: error.message || "Unable to test connector instance",
         workflowRunId: error.workflowRunId || null,
         correlationId: error.correlationId || null,
-      });
-    }
-  });
-
-  router.post("/connector-instances/:id/send-test-email", authenticate, authorize("communications.send"), async (req, res) => {
-    try {
-      const recipient = String(req.body?.recipient || "").trim().toLowerCase();
-      const subject = String(req.body?.subject || "Brevo Test").trim();
-      const message = String(req.body?.message || "It works I love chatGPT").trim();
-
-      if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) || recipient.length > 320) {
-        return res.status(400).json({ success: false, code: "INVALID_RECIPIENT", message: "Enter a valid recipient email address" });
-      }
-      if (!subject || subject.length > 200) {
-        return res.status(400).json({ success: false, code: "INVALID_SUBJECT", message: "Email subject is required and must be 200 characters or fewer" });
-      }
-      if (!message || message.length > 2000) {
-        return res.status(400).json({ success: false, code: "INVALID_MESSAGE", message: "Email message is required and must be 2000 characters or fewer" });
-      }
-
-      const instanceResult = await db(
-        `SELECT c.*,p.manifest
-           FROM integration_connections c
-           JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
-          WHERE c.id=$1 AND c.company_id=$2
-          LIMIT 1`,
-        [req.params.id, req.user.companyId]
-      );
-      const instance = instanceResult.rows[0];
-      if (!instance) return res.status(404).json({ success: false, message: "Connector instance not found" });
-      if (!["brevo_connector", "mailjet_connector"].includes(instance.connector_package_key)) {
-        return res.status(400).json({ success: false, message: "This test is only available for supported email connectors" });
-      }
-      const providerLabel = instance.connector_package_key === "mailjet_connector" ? "Mailjet" : "Brevo";
-
-      const lastTest = jsonValue(instance.last_test_result, {});
-      if (lastTest?.success !== true || String(instance.connection_status || "").toUpperCase() !== "CONNECTED") {
-        return res.status(409).json({ success: false, message: `Run a successful ${providerLabel} connection test before sending email` });
-      }
-
-      const driver = drivers?.get(instance.connector_package_key);
-      if (!driver || !driver.capabilities?.has?.("email.send")) {
-        return res.status(409).json({ success: false, message: `${providerLabel} email send capability is unavailable` });
-      }
-
-      const configuration = {
-        ...jsonValue(instance.connector_configuration, {}),
-        ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
-      };
-      const service = new ConnectorService({
-        connectorKey: instance.connector_package_key,
-        capabilities: ["email.send"],
-        adapter: driver.createAdapter({
-          instanceId: instance.id,
-          configuration,
-          companyId: instance.company_id,
-          storeId: instance.store_id,
-          tillId: instance.till_id,
-        }),
-      });
-
-      const connection = await service.connect();
-      if (!connection.healthy) {
-        return res.status(409).json({ success: false, message: connection.lastError || `${providerLabel} is not healthy` });
-      }
-
-      const result = await service.execute("email.send", {
-        to: recipient,
-        subject,
-        text: message,
-      });
-
-      await writeAudit?.(
-        req.user.companyId,
-        req.user.id || null,
-        "connector.test_email.sent",
-        "integration_connection",
-        instance.id,
-        {
-          packageKey: instance.connector_package_key,
-          recipientDomain: recipient.split("@")[1] || null,
-          providerMessageId: result?.providerMessageId || null,
-        }
-      );
-
-      return res.json({
-        success: true,
-        data: {
-          status: result?.status || "SENT",
-          providerMessageId: result?.providerMessageId || null,
-          message: `Test email submitted to ${providerLabel}`,
-        },
-      });
-    } catch (error) {
-      console.error("Send email connector test error:", error);
-      return res.status(error?.status || 500).json({
-        success: false,
-        code: error?.code || undefined,
-        message: error?.message || "Unable to send test email",
-      });
-    }
-  });
-
-  router.post("/connector-instances/:id/send-test-sms", authenticate, authorize("communications.send"), async (req, res) => {
-    try {
-      const recipient = String(req.body?.recipient || "").trim();
-      const message = String(req.body?.message || "onePOS SMSGate test message").trim();
-      if (!recipient) return res.status(400).json({ success: false, message: "Test mobile number is required" });
-      if (!message) return res.status(400).json({ success: false, message: "Test message is required" });
-      if (message.length > 500) return res.status(400).json({ success: false, message: "Test message is too long" });
-
-      const instanceResult = await db(
-        `SELECT c.*,p.manifest
-           FROM integration_connections c
-           JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
-          WHERE c.id=$1 AND c.company_id=$2
-          LIMIT 1`,
-        [req.params.id, req.user.companyId]
-      );
-      const instance = instanceResult.rows[0];
-      if (!instance) return res.status(404).json({ success: false, message: "Connector instance not found" });
-      if (instance.connector_package_key !== "smsgate_connector") {
-        return res.status(400).json({ success: false, message: "This test is only available for SMSGate" });
-      }
-      if (instance.enabled !== true) {
-        return res.status(409).json({ success: false, message: "Enable SMSGate before sending a test SMS" });
-      }
-
-      const lastTest = jsonValue(instance.last_test_result, {});
-      if (lastTest?.success !== true || String(instance.connection_status || "").toUpperCase() !== "CONNECTED") {
-        return res.status(409).json({ success: false, message: "Run a successful connection test before sending SMS" });
-      }
-
-      await req.ensureBusinessCommandRun?.({
-        companyId: req.user.companyId,
-        userId: req.user.id || null,
-        storeId: instance.store_id || null,
-      });
-
-      const driver = drivers?.get(instance.connector_package_key);
-      if (!driver || !driver.capabilities?.has?.("sms.send")) {
-        return res.status(409).json({ success: false, message: "SMSGate send capability is unavailable" });
-      }
-      const configuration = {
-        ...jsonValue(instance.connector_configuration, {}),
-        ...(() => { try { return decryptCredentials(instance.credentials_encrypted) || {}; } catch { return {}; } })(),
-      };
-      const service = new ConnectorService({
-        connectorKey: instance.connector_package_key,
-        capabilities: ["sms.send"],
-        adapter: driver.createAdapter({
-          instanceId: instance.id,
-          configuration,
-          companyId: instance.company_id,
-          storeId: instance.store_id,
-          tillId: instance.till_id,
-        }),
-      });
-      const connection = await service.connect();
-      if (!connection.healthy) {
-        return res.status(409).json({ success: false, message: connection.lastError || "SMSGate is not healthy" });
-      }
-      const result = await service.execute("sms.send", { recipient, text: message });
-      await writeAudit?.(
-        req.user.companyId,
-        req.user.id || null,
-        "connector.test_sms.sent",
-        "integration_connection",
-        instance.id,
-        { packageKey: instance.connector_package_key, recipientLast4: recipient.slice(-4), providerMessageId: result?.providerMessageId || null }
-      );
-      return res.json({
-        success: true,
-        data: {
-          status: result?.status || "SENT",
-          providerMessageId: result?.providerMessageId || null,
-          message: "Test SMS submitted to SMSGate",
-        },
-      });
-    } catch (error) {
-      console.error("Send SMSGate test SMS error:", error);
-      return res.status(error?.status || 500).json({
-        success: false,
-        message: error?.message || "Unable to send test SMS",
       });
     }
   });
