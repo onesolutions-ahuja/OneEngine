@@ -16,14 +16,12 @@ import ValueSetList from '../settings/Platform/ValueSetList'
 import DebugCodesAdmin from './DebugCodesAdmin'
 import GPTBuilderPage from './gptbuilder/GPTBuilderPage'
 import GPTAppBuilderPage from './gptappbuilder/GPTAppBuilderPage'
-import ReactFlowCanvasUXTest from './ReactFlowCanvasUXTest'
 import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
   { key: 'gptbuilder', label: 'GPT Builder', icon: Workflow },
   { key: 'gptappbuilder', label: 'GPTAppBuilder', icon: AppWindow },
-  { key: 'canvas-ux-test', label: 'Canvas UX Test', icon: Workflow },
   { key: 'approval-builder', label: 'Approval Flow Builder', icon: UserCheck },
   { key: 'gpt-page-builder', label: 'GPT Page Builder', icon: AppWindow },
   { key: 'dashboard-builder', label: 'Dashboard Builder', icon: LayoutDashboard },
@@ -217,7 +215,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
           {current.key === 'objects' ? <ObjectsSettingsPane />
             : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onBack={() => select('objects')} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
             : current.key === 'gptappbuilder' ? <GPTAppBuilderPage />
-            : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
             : current.key === 'gpt-page-builder' ? <GPTPageBuilder context="developer" onBack={() => select('objects')} />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
