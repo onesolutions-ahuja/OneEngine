@@ -15,7 +15,7 @@ const ITEMS=[
 
 function CoreCompanySettings() {
   return <MetadataSettingsPage />
-}}
+}
 
 function UsersRoles({companyId}){
   const [users,setUsers]=useState([]),[roles,setRoles]=useState([]),[error,setError]=useState('')
