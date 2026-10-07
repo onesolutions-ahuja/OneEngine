@@ -77,17 +77,18 @@ test("live login and every app page stay within 1.5 seconds", async ({ page, bas
   const failures = watchRuntimeFailures(page);
   const timings = [];
 
-  let loginServerTotal = Number.NaN;
-  page.on("response", (response) => {
-    if (!response.url().includes("/api/auth/login")) return;
-    const timing = response.headers()["server-timing"] || "";
-    const total = serverTotalMs(timing);
-    if (Number.isFinite(total)) loginServerTotal = total;
+  const username = process.env.ONEPOS_E2E_USERNAME || "";
+  const password = process.env.ONEPOS_E2E_PASSWORD || "";
+  const apiBase = String(process.env.ONEPOS_E2E_API_BASE_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "");
+  const loginResponse = await page.request.post(apiBase + "/api/auth/login", {
+    data: { email: username, password },
   });
-
-  expect(await loginIfConfigured(page), "authenticated login must run").toBe(true);
+  expect(loginResponse.ok(), `login HTTP ${loginResponse.status()}`).toBe(true);
+  const loginServerTotal = serverTotalMs(loginResponse.headers()["server-timing"] || "");
   expect(Number.isFinite(loginServerTotal), "login must expose total Server-Timing").toBe(true);
   expect(loginServerTotal, `server login time ${loginServerTotal}ms exceeded 1500ms`).toBeLessThanOrEqual(1500);
+
+  expect(await loginIfConfigured(page), "authenticated login must run").toBe(true);
 
   // Let authenticated idle-prefetch start before measuring navigation. This is
   // part of the real post-login experience and removes first-click chunk cost.
