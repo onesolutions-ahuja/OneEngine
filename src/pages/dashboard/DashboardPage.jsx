@@ -14,10 +14,10 @@ function displayValue(value) {
   return String(value)
 }
 
-function formatNumber(value, format, currency = 'GBP') {
+function formatNumber(value, format, currency = '') {
   const n = Number(value)
   if (!Number.isFinite(n)) return '—'
-  if (format === 'currency') {
+  if (format === 'currency' && currency) {
     try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(n) } catch {}
   }
   if (format === 'percent') return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n)}%`
