@@ -27,8 +27,8 @@ test('session bootstrap preserves cached context and hydrates permissions in one
 
 test('metadata settings runtime owns settings navigation', async () => {
   const source = await read('../src/pages/settings/MetadataSettingsPage.jsx')
-  assert.match(source, /loadSettingsCatalog/)
-  assert.match(source, /loadSettingsContext/)
+  assert.match(source, /\/api\/platform\/runtime\/settings-hosts/)
+  assert.match(source, /writeSettingsCatalogCache/)
 })
 
 
@@ -320,11 +320,10 @@ test('Render shutdown is bounded against stale keep-alive connections', async ()
 })
 
 
-test('trusted runtime accepts package functions protected by permissionsAny', async () => {
+test('trusted runtime no longer depends on package function permissions', async () => {
   const source = await read('../server/services/trustedRuntime.js')
-  assert.match(source, /alternativePermissions/)
-  assert.match(source, /fn\?\.permissionsAny/)
-  assert.match(source, /!requiredPermissions\.length && !alternativePermissions\.length/)
+  assert.equal(source.includes('platformFunctionRegistry'), false)
+  assert.equal(source.includes('PLATFORM_FUNCTIONS'), false)
 })
 
 
@@ -384,9 +383,10 @@ test('stale cache revalidation is deduped by cache key', async () => {
 
 test('Dashboard startup reads are launched together instead of separate mount waterfalls', async () => {
   const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /Promise\.all\(\[\s*apiRequest\('\/api\/settings'\)/)
+  assert.match(source, /Promise\.all\(\[/)
   assert.match(source, /apiRequest\('\/api\/dashboards'\)/)
   assert.match(source, /loadSessionPermissions\(\)/)
+  assert.equal(source.includes("apiRequest('/api/settings')"), false)
 })
 
 test('Dashboard restores saved filter state before building the run request', async () => {
