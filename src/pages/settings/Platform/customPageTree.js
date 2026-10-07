@@ -328,6 +328,10 @@ function normalizeComponentNode(node) {
     componentKey,
     label: safeString(node?.label, 200) || null,
     visible: node?.visible !== false,
+    enabled: node?.enabled !== false,
+    required: node?.required === true,
+    readOnly: node?.readOnly === true || node?.read_only === true,
+    conditions: node?.conditions && typeof node.conditions === "object" && !Array.isArray(node.conditions) ? node.conditions : null,
     layout: {
       width: safeNumber(rawLayout.width, 0, { min: 0, max: 2400 }),
       height: safeNumber(rawLayout.height, 0, { min: 0, max: 1800 }),
