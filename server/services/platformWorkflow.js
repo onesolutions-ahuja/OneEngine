@@ -25,6 +25,53 @@ import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "ONE_HTTP_REQUEST"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
+
+function redact(value, inheritedSecrets = []) {
+  const discovered = new Set((inheritedSecrets || []).map((item) => String(item)).filter((item) => item.length >= 4));
+  const collect = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) collect(item);
+      return;
+    }
+    const secureValues = node.__secureValues;
+    if (Array.isArray(secureValues)) {
+      for (const item of secureValues) {
+        const secret = String(item ?? "");
+        if (secret.length >= 4) discovered.add(secret);
+      }
+    }
+    for (const item of Object.values(node)) collect(item);
+  };
+  collect(value);
+
+  const maskText = (input) => {
+    let text = String(input);
+    for (const secret of discovered) text = text.split(secret).join("********");
+    return text;
+  };
+
+  const visit = (node, key = "") => {
+    if (node === null || node === undefined) return node;
+    if (typeof node === "string") return maskText(node);
+    if (typeof node !== "object") return node;
+    if (Array.isArray(node)) return node.map((item) => visit(item, key));
+    const output = {};
+    for (const [childKey, childValue] of Object.entries(node)) {
+      if (childKey === "__secureValues") {
+        output[childKey] = Array.isArray(childValue) ? childValue.map(() => "********") : "********";
+        continue;
+      }
+      if (SECRET_KEY.test(childKey)) {
+        output[childKey] = "********";
+        continue;
+      }
+      output[childKey] = visit(childValue, childKey);
+    }
+    return output;
+  };
+  return visit(value);
+}
 const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
     key: "CONNECTOR_HEALTH_CHECK",
