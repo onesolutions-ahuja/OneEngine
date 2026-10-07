@@ -897,11 +897,10 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     })();
     const preflightStartedAt = Date.now();
     loginTimings.identity_to_preflight_ms = preflightStartedAt - (identityStartedAt + (loginTimings.identity_bundle_ms || 0));
-    const [securityContext ] = await Promise.all([
+    const securityContext = await (
       user.company_id
         ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id, ip: requestIp })
-        : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null, trustedNetwork: false, loginAllowedMatches: false, loginAllowedCount: 0 })
-    ]);
+        : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null, trustedNetwork: false, loginAllowedMatches: false, loginAllowedCount: 0 }));
     const securitySettings = securityContext.settings;
     const state = securityContext.state;
     const accessPolicy = securityContext.policy;
