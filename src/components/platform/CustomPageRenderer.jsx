@@ -719,7 +719,21 @@ function configText(config, keys, fallback = "") {
   return fallback;
 }
 
-function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, runtimeValue, onValueChange }) {
+function resolveRuntimeBinding(binding, pageContext, runtimeOverrides) {
+  if (binding === undefined || binding === null || binding === "") return undefined;
+  if (typeof binding !== "string") return binding;
+  const raw = binding.trim().replace(/^\{\{\s*|\s*\}\}$/g, "");
+  const parts = raw.split(".").filter(Boolean);
+  const read = (root, path) => path.reduce((value, key) => value == null ? undefined : value[key], root);
+  if (parts[0] === "record") return read(pageContext?.record || pageContext?.selectedRecord, parts.slice(1));
+  if (parts[0] === "page") return read(pageContext, parts.slice(1));
+  if (parts[0] === "components" && parts[1]) return read(runtimeOverrides?.[parts[1]] || pageContext?.components?.[parts[1]], parts.slice(2));
+  if (parts[0] === "flows") return read(pageContext?.flows, parts.slice(1));
+  const direct = read(pageContext?.record || pageContext?.selectedRecord, parts);
+  return direct !== undefined ? direct : undefined;
+}
+
+function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, runtimeValue, onValueChange, pageContext, runtimeOverrides }) {
   const key = node.componentKey;
   const config = node.config || {};
   const title = node.title || config.title || config.label || node.label || key.replace(/_/g, " ");
@@ -727,6 +741,10 @@ function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, r
   const options = Array.isArray(config.options) ? config.options : Array.isArray(config.items) ? config.items : [];
   const disabled = builderMode || node.enabled === false || node.readOnly === true || config.disabled === true;
   const setValue = (value) => { if (!builderMode && !disabled) { onValueChange?.(node, value); onEvent?.({ eventName: "change", node, value }); } };
+  const bound = (name, fallback) => {
+    const resolved = resolveRuntimeBinding(config[name], pageContext, runtimeOverrides);
+    return resolved !== undefined ? resolved : fallback;
+  };
 
   if (key === "card") return <div className="rounded-xl border bg-white p-4 shadow-sm"><div className="text-sm font-semibold">{title}</div>{config.subtitle ? <div className="mt-1 text-xs text-slate-500">{String(config.subtitle)}</div> : null}</div>;
   if (key === "grid") return <div className="grid gap-2 rounded-xl border border-dashed p-3" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(6, Number(config.columns) || 2))}, minmax(0,1fr))` }}>{Array.from({length:Math.max(2,Math.min(6,Number(config.columns)||2))}).map((_,i)=><div key={i} className="h-10 rounded bg-slate-100" />)}</div>;
@@ -735,16 +753,16 @@ function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, r
   if (key === "accordion") return <details open={config.defaultOpen !== false} className="rounded-lg border p-3"><summary className="cursor-default text-sm font-semibold">{title}</summary><div className="pt-2 text-xs text-slate-500">{config.message || "Accordion content"}</div></details>;
   if (["modal","drawer","confirmation_dialog"].includes(key)) return <div className="rounded-xl border bg-white p-4 shadow-lg"><div className="text-sm font-semibold">{title}</div><div className="mt-2 text-xs text-slate-500">{config.message || `${key.replace(/_/g," ")} preview`}</div>{key==="confirmation_dialog"?<div className="mt-3 flex justify-end gap-2"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Cancel</button><button type="button" className="onepos-btn onepos-btn-primary onepos-btn-sm" disabled>Confirm</button></div>:null}</div>;
   if (["alert","toast"].includes(key)) return <div className="rounded-lg border p-3"><div className="text-sm font-semibold">{title}</div><div className="text-xs text-slate-500">{config.message || "Message"}</div></div>;
-  if (key === "badge") return <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{configText(config,["valueBinding","value"],"Badge")}</span>;
-  if (key === "progress") { const max=Math.max(1,Number(config.max)||100); const value=Math.max(0,Math.min(max,Number(config.valueBinding)||0)); return <div className="space-y-1"><div className="flex justify-between text-xs"><span>{config.label||"Progress"}</span>{config.showValue!==false?<span>{Math.round(value/max*100)}%</span>:null}</div><div className="h-2 overflow-hidden rounded bg-slate-100"><div className="h-full bg-teal-600" style={{width:`${value/max*100}%`}}/></div></div>; }
+  if (key === "badge") return <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{formatRecordValue(bound("valueBinding", config.value ?? "Badge"))}</span>;
+  if (key === "progress") { const max=Math.max(1,Number(config.max)||100); const value=Math.max(0,Math.min(max,Number(bound("valueBinding", config.value))||0)); return <div className="space-y-1"><div className="flex justify-between text-xs"><span>{config.label||"Progress"}</span>{config.showValue!==false?<span>{Math.round(value/max*100)}%</span>:null}</div><div className="h-2 overflow-hidden rounded bg-slate-100"><div className="h-full bg-teal-600" style={{width:`${value/max*100}%`}}/></div></div>; }
   if (key === "empty_state") return <div className="rounded-xl border border-dashed p-6 text-center"><div className="text-sm font-semibold">{title}</div><div className="mt-1 text-xs text-slate-500">{config.message||"Nothing to show yet."}</div></div>;
   if (key === "loading_state") return <div className="space-y-2">{Array.from({length:Math.max(1,Math.min(8,Number(config.rows)||3))}).map((_,i)=><div key={i} className="h-3 animate-pulse rounded bg-slate-100"/>)}</div>;
-  if (key === "image") return config.source ? <img src={config.source} alt={config.alt||""} className="max-h-64 w-full rounded-lg object-cover" /> : <div className="cpb-empty">Choose an image source in Properties.</div>;
-  if (key === "video") return config.source ? <video src={config.source} poster={config.poster||undefined} controls={config.controls!==false} className="max-h-72 w-full rounded-lg" /> : <div className="cpb-empty">Choose a video source in Properties.</div>;
-  if (["avatar","app_icon"].includes(key)) { const image=config.image||config.imageBinding; const initials=config.initialsBinding||config.label||title.slice(0,2).toUpperCase(); return <div className="flex items-center gap-2">{image?<img src={image} alt="" className="h-12 w-12 rounded-xl object-cover"/>:<div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold">{initials}</div>}{config.label?<span className="text-sm">{String(config.label)}</span>:null}</div>; }
+  if (key === "image") { const source=bound("sourceBinding",config.source); return source ? <img src={source} alt={config.alt||""} className="max-h-64 w-full rounded-lg object-cover" /> : <div className="cpb-empty">Choose an image source in Properties.</div>; }
+  if (key === "video") { const source=bound("sourceBinding",config.source); return source ? <video src={source} poster={config.poster||undefined} controls={config.controls!==false} className="max-h-72 w-full rounded-lg" /> : <div className="cpb-empty">Choose a video source in Properties.</div>; }
+  if (["avatar","app_icon"].includes(key)) { const image=bound("imageBinding",config.image); const initials=bound("initialsBinding",config.label)||title.slice(0,2).toUpperCase(); return <div className="flex items-center gap-2">{image?<img src={image} alt="" className="h-12 w-12 rounded-xl object-cover"/>:<div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold">{initials}</div>}{config.label?<span className="text-sm">{String(config.label)}</span>:null}</div>; }
   if (key === "icon") return <div className="flex items-center gap-2 text-sm"><span className="text-xl">{config.icon||"◈"}</span>{config.label||title}</div>;
-  if (key === "qr_code") return <div className="inline-flex flex-col items-center gap-2"><div className="grid h-24 w-24 grid-cols-6 gap-0.5 bg-white p-2 ring-1 ring-slate-200">{Array.from({length:36}).map((_,i)=><span key={i} className={i%3===0||i%7===0?"bg-slate-900":"bg-white"}/>)}</div>{config.label?<span className="text-xs">{String(config.label)}</span>:null}</div>;
-  if (key === "barcode") return <div className="inline-flex flex-col items-center gap-1"><div className="flex h-16 items-stretch gap-px bg-white p-2 ring-1 ring-slate-200">{Array.from({length:28}).map((_,i)=><span key={i} className="bg-slate-900" style={{width:i%4===0?3:1}}/>)}</div>{config.showValue!==false?<span className="text-[10px]">{configText(config,["valueBinding"],"000000000000")}</span>:null}</div>;
+  if (key === "qr_code") return <div className="inline-flex flex-col items-center gap-2"><div className="grid h-24 w-24 grid-cols-6 gap-0.5 bg-white p-2 ring-1 ring-slate-200">{Array.from({length:36}).map((_,i)=><span key={i} className={i%3===0||i%7===0?"bg-slate-900":"bg-white"}/>)}</div>{config.label?<span className="text-xs">{String(config.label)}</span>:null}<span className="sr-only">{String(bound("valueBinding",""))}</span></div>;
+  if (key === "barcode") return <div className="inline-flex flex-col items-center gap-1"><div className="flex h-16 items-stretch gap-px bg-white p-2 ring-1 ring-slate-200">{Array.from({length:28}).map((_,i)=><span key={i} className="bg-slate-900" style={{width:i%4===0?3:1}}/>)}</div>{config.showValue!==false?<span className="text-[10px]">{formatRecordValue(bound("valueBinding","000000000000"))}</span>:null}</div>;
   if (key === "search_box") return <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder={config.placeholder||"Search…"} value={runtimeValue ?? ""} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(event.target.value)}/>;
   if (key === "toggle") return <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(runtimeValue)} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(event.target.checked)}/>{config.label||title}</label>;
   if (key === "radio_group") return <div className={`flex gap-3 ${config.orientation==="vertical"?"flex-col":""}`}>{(options.length?options:["Option 1","Option 2"]).map((item,i)=><label key={i} className="inline-flex items-center gap-1.5 text-sm"><input type="radio" disabled={disabled} name={node.id} checked={String(runtimeValue??"")===String(typeof item==="object"?(item.value??item.label):item)} onChange={()=>setValue(typeof item==="object"?(item.value??item.label):item)}/>{typeof item==="object"?(item.label||item.value):String(item)}</label>)}</div>;
@@ -770,7 +788,7 @@ function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, r
   return <div className="rounded-lg border border-dashed p-3 text-sm text-slate-500">{title}</div>;
 }
 
-function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, onValueChange, onEvent, data, runtimeOverrides = {} }) {
+function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, onValueChange, onEvent, data, runtimeOverrides = {}, pageContext = null }) {
   const key = node.componentKey;
   if (node.visible === false && !builderMode) return null;
   const interactive = node.enabled !== false && node.readOnly !== true;
@@ -831,13 +849,13 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
-  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} onEvent={onEvent} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} />;
+  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} onEvent={onEvent} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} pageContext={pageContext} runtimeOverrides={runtimeOverrides} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={guardedRecordClick} builderMode={builderMode} />;
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
-        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} onEvent={onEvent} data={data} runtimeOverrides={runtimeOverrides} />)}
+        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} onEvent={onEvent} data={data} runtimeOverrides={runtimeOverrides} pageContext={pageContext} />)}
       </div>
     );
   }
@@ -871,7 +889,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (key === "spacer") return <div style={{ height: 16 + (Number(node.spacing) || 3) * 6 }} aria-hidden="true" />;
   if (key === "related_list") return <div className="cpb-empty">Related list{node.relationshipKey ? ` · ${node.relationshipKey}` : ""}</div>;
   if (key === "field_value") {
-    const value = currentOverride?.value;
+    const value = currentOverride?.value !== undefined ? currentOverride.value : resolveRuntimeBinding(node.field ? `record.${node.field}` : node.config?.valueBinding, pageContext, runtimeOverrides);
     return <div className="text-sm" style={{ color: "var(--text-primary, #374151)" }}>{value !== undefined ? formatRecordValue(value) : node.field ? `${String(node.field).replace(/_/g, " ")}` : "Field value"}</div>;
   }
   return <div className="text-sm" style={{ color: "var(--text-secondary, #64748b)" }}>{nodeLabel(node)}</div>;
@@ -1101,6 +1119,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                       ? { ...collectionState, [node.id]: { ...(collectionState[node.id] || {}), records: [runtimeOverrides[node.id].record], total: 1, loading: false, error: "", placeholder: false } }
                       : collectionState}
                     runtimeOverrides={runtimeOverrides}
+                    pageContext={effectivePageContext}
                   />
                 </RecordBoundNodeBoundary>
               </div>
