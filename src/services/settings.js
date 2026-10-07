@@ -2,14 +2,6 @@ import { apiRequest } from './api'
 
 const SETTINGS_CONTEXT_CACHE_KEY = 'onepos.settings.context.v2'
 
-function currentScope(user = getStoredUser()) {
-  const companyId = user?.companyId || user?.company_id || ''
-  return {
-    userId: String(user?.id || ''),
-    companyId: String(companyId || ''),
-  }
-}
-
 export function clearSettingsContextCache() {
   try { sessionStorage.removeItem(SETTINGS_CONTEXT_CACHE_KEY) } catch {}
 }
