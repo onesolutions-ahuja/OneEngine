@@ -2,7 +2,6 @@ import { loadEffectivePermissionSets, permissionSetAllowsSystemPermission } from
 import { withDomainSave } from "../services/platformDomainRecords.js";
 import express from "express";
 import { DUPLICATE_EMAIL_MESSAGE, normalizeEmail } from "../services/userIdentity.js";
-import { domainAllowed } from "../services/accountPolicy.js";
 import { toSafeApiName } from "../services/platformIdentifiers.js";
 import { delegatedAdminContext, delegatedRoleAssignable, delegatedUserAllowed } from "../services/delegatedAdministration.js";
 import {
@@ -543,9 +542,6 @@ export default function createAdminRouter({
     const delegatedRole=await delegatedRoleAssignable(db,{companyId:req.user.companyId,actorUserId:req.user.id,roleId});
     if(!delegatedRole.allowed)return res.status(403).json({success:false,message:"This role is outside your delegated administration scope"});
     try {
-      const policy = await db("SELECT c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled FROM companies c JOIN company_settings cs ON cs.company_id=c.id WHERE c.id=$1", [req.user.companyId]);
-      const accountPolicy = policy.rows[0] || {};
-      if (!domainAllowed(email, accountPolicy.user_email_domain, accountPolicy.domain_users_only)) return res.status(400).json({ success: false, code: "EMAIL_DOMAIN_NOT_ALLOWED", message: "User email must use the company email domain" });
       const assignment = await db(
         `
         SELECT
