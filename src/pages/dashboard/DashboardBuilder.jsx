@@ -33,6 +33,8 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   const dashboardPalette = registryForBuilder(registry, "DASHBOARD");
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState("");
+  const [listLoading, setListLoading] = useState(!embedded);
+  const [listError, setListError] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [inspectorTab, setInspectorTab] = useState("components");
@@ -92,9 +94,21 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
   };
 
   const load = useCallback(async () => {
-    const response = await apiRequest("/api/dashboards");
-    if (response.success) setDashboards(response.data || []);
-    else setError(response.message);
+    setListLoading(true);
+    setListError("");
+    try {
+      const response = await apiRequest("/api/dashboards");
+      if (response.success) setDashboards(response.data || []);
+      else {
+        setDashboards([]);
+        setListError(response.message || "Unable to load dashboards.");
+      }
+    } catch (loadError) {
+      setDashboards([]);
+      setListError(loadError?.message || "Unable to load dashboards.");
+    } finally {
+      setListLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -203,7 +217,17 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
         </div>
       </div>
       <div className="grid gap-3">
-        {dashboards.map((item) => (
+        {listLoading ? (
+          <div className="p-8 text-center" style={CARD} role="status">
+            <p style={{ color: "var(--onepos-text-muted)" }}>Loading saved dashboards…</p>
+          </div>
+        ) : listError ? (
+          <div className="p-8 text-center" style={CARD} role="alert">
+            <p className="font-medium">Saved dashboards could not be loaded.</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--onepos-text-muted)" }}>{listError}</p>
+            <button className="onepos-btn onepos-btn-sm mt-3" onClick={load}>Retry</button>
+          </div>
+        ) : dashboards.length ? dashboards.map((item) => (
           <div key={item.id} className="p-4 flex justify-between items-center" style={CARD}>
             <div className="min-w-0">
               <b className="truncate block">{item.name}</b>
@@ -211,8 +235,12 @@ export default function DashboardBuilder({ embedded = false, initialDashboard = 
             </div>
             <button className="onepos-btn onepos-btn-sm" onClick={() => { setCurrent(item); setRuntime([]); setPreview(false); loadPrincipals(); }}>Open</button>
           </div>
-        ))}
-        {!dashboards.length ? <div className="p-8 text-center" style={CARD}><p style={{ color: "var(--onepos-text-muted)" }}>No saved dashboards yet. Start from the default composition or create a new one.</p></div> : null}
+        )) : (
+          <div className="p-8 text-center" style={CARD}>
+            <p className="font-medium">No saved dashboards yet.</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--onepos-text-muted)" }}>Create a blank dashboard or start from the default composition.</p>
+          </div>
+        )}
       </div>
       {error ? <p className="text-sm mt-3" style={{ color: "#b91c1c" }}>{error}</p> : null}
     </div>;
