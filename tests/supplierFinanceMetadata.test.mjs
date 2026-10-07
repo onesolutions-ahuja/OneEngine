@@ -52,9 +52,10 @@ test("related action choices scope through record relationships", async () => {
   assert.match(source,/parentRecordId/);
 });
 test("bootstrap foundations honor dependency order", async () => {
-  const source = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  assert.match(source,/visitFoundation/);
-  assert.match(source,/manifest\?\.dependencies/);
+  const source = await readFile(new URL("../server/services/platformBootstrap.js", import.meta.url), "utf8");
+  assert.match(source,/const visit = \(entry\) =>/);
+  assert.match(source,/entry\.manifest\?\.dependencies/);
+  assert.match(source,/Bootstrap foundation dependency cycle/);
 });
 
 
