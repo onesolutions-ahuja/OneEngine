@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, access } from "node:fs/promises";
 
 const manifestUrl = new URL("../server/metadata/manifests/purchasing_core.json", import.meta.url);
 
@@ -24,14 +24,12 @@ test("purchase and supplier return parent IDs come from created records", async 
   assert.equal(returnLine.commonFieldValues.return_id.path, "steps.create_return.created.id");
 });
 
-test("purchases and supplier returns use generic workspace endpoints", async () => {
-  const purchase = await readFile(new URL("../src/pages/purchases/PurchasesPage.jsx", import.meta.url), "utf8");
-  const returns = await readFile(new URL("../src/pages/returns/SupplierReturnsPage.jsx", import.meta.url), "utf8");
-  assert.match(purchase, /initialObjectKey="purchase"/);
-  assert.match(returns, /initialObjectKey="purchase_line"/);
-  for (const source of [purchase, returns]) {
-    for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(source.includes(value), false, value);
-  }
+test("purchases and supplier returns resolve through generic app metadata", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(app, /api\/platform\/runtime\/apps/);
+  assert.match(app, /<WorkspacePage initialObjectKey=\{activeRuntimeDefinition\.objectKey/);
+  await assert.rejects(access(new URL("../src/pages/purchases/PurchasesPage.jsx", import.meta.url)));
+  await assert.rejects(access(new URL("../src/pages/returns/SupplierReturnsPage.jsx", import.meta.url)));
 });
 
 test("legacy purchasing and supplier-return business routes are removed", async () => {
