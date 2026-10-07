@@ -661,14 +661,7 @@ function Desktop({ onLock, onSignOut }) {
   }
 
   const openItem = (id) => {
-    const aliases = {
-      platform: 'developer',
-      builder: 'developer',
-      contacts: 'customers',
-      one_assistant: 'assistant',
-      one_kiosk: 'kiosk-devices',
-    }
-    const target = aliases[id] || id
+    const target = id
 
     if (target === 'launchpad') {
       setAppSearch('')
@@ -690,14 +683,6 @@ function Desktop({ onLock, onSignOut }) {
     setAppSearch('')
     setTopPanel('')
 
-    const routeMap = new Set([
-      'integrations','connector-settings','accounting','online-orders','own-delivery',
-      'kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
-      'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
-      'gift-cards','suppliers','purchases','categories',
-      'workspace',
-    ])
-
     if (target === 'developer') {
       const next = { app: 'developer', section: 'objects' }
       setRoute('developer', 'objects')
@@ -713,7 +698,7 @@ function Desktop({ onLock, onSignOut }) {
       setActiveApp('settings')
       return
     }
-    if (routeMap.has(target)) {
+    if (target) {
       const next = { app: target, section: null }
       setRoute(target)
       setRouteState(next)
