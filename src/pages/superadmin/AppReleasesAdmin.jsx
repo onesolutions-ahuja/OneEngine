@@ -461,7 +461,7 @@ export default function AppReleasesAdmin() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-lg font-semibold text-slate-900">Customer override conflicts</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Client override conflicts</h3>
               <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                 <p>Package metadata provisioning preserves user-modified fields. Backend-reported upgrade failures remain visible in the tenant table.</p>
                 {conflictReports.length ? <ul className="mt-3 list-disc space-y-2 pl-5 text-amber-900">{conflictReports.map((conflict, index) => <li key={`${conflict}-${index}`}>{conflict}</li>)}</ul> : <p className="mt-3 text-slate-500">No conflict details are available from the backend for this release.</p>}
