@@ -33,7 +33,6 @@ const PRIVILEGED_ROUTES = Object.freeze([
   { id: "package.lifecycle", prefixes: ["/api/packages/", "/api/platform/packages/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "security.manage", prefixes: ["/api/platform/security", "/api/security/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "admin.manage", prefixes: ["/api/admin/"], methods: ["POST","PUT","PATCH","DELETE"] },
-  { id: "settings.manage", prefixes: ["/api/settings/"], methods: ["POST","PUT","PATCH","DELETE"] },
 ].map((item) => Object.freeze({ ...item, prefixes: Object.freeze(item.prefixes), methods: Object.freeze(item.methods) })));
 
 const definitions = [
@@ -73,7 +72,7 @@ export function isPrivilegedMutation(path, method = "GET") {
   if (!["POST","PUT","PATCH","DELETE"].includes(verb)) return false;
   const pathname = canonicalPath(path);
   return pathname.startsWith("/api/platform/") || pathname.startsWith("/api/security/") || pathname.startsWith("/api/packages/")
-    || pathname.startsWith("/api/admin/") || pathname.startsWith("/api/settings/");
+    || pathname.startsWith("/api/admin/");
 }
 
 export function validateTrustedRuntime() {
@@ -94,9 +93,6 @@ export function createTrustedRuntimeGate() {
     const capability = resolveTrustedRoute(req.path, req.method);
     if (!capability) return res.status(403).json({ success: false, code: "UNREGISTERED_CAPABILITY", message: "Operation is not registered in OneEngine Trusted Runtime" });
 
-    // The header is correlation evidence only, never authorization. A caller
-    // cannot gain authority by forging it; normal authenticate/authorize,
-    // tenant/company and entitlement middleware remain authoritative.
     const claimed = String(req.get("X-OneEngine-Capability") || "").trim();
     if (claimed && claimed !== capability.id) {
       return res.status(403).json({ success: false, code: "CAPABILITY_MISMATCH", message: "Capability does not match requested operation" });
