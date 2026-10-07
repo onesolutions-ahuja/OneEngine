@@ -25,13 +25,13 @@ function findScreenWait(value) {
   for (const nested of Object.values(value)) { const found=findScreenWait(nested); if(found)return found; }
   return null;
 }
-function ScreenFlowModal({ action, onClose, onComplete }) {
+function ScreenFlowModal({ action, onClose, onComplete, onError }) {
   const [session,setSession]=useState(action?.session||null),[values,setValues]=useState(action?.session?.values||{}),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const screen=session?.screen||{};
   useEffect(()=>setValues(session?.values||{}),[session?.screenSessionId]);
   const submit=async(navigation)=>{
     if(!session?.screenSessionId)return;
-    try{setBusy(true);setError("");const response=await apiRequest(`/api/platform/flow-sessions/${encodeURIComponent(session.screenSessionId)}/submit`,{method:"POST",body:JSON.stringify({navigation,values})});if(!response?.success)throw new Error(response?.message||"Unable to continue Screen Flow");const next=response.data||{};if(next.status==="WAITING"&&next.screenSessionId){setSession(next);return;}if(next.status==="PAUSED"){onClose?.();return;}onComplete?.(next);onClose?.();}catch(err){setError(err?.message||"Unable to continue Screen Flow");}finally{setBusy(false);}
+    try{setBusy(true);setError("");const response=await apiRequest(`/api/platform/flow-sessions/${encodeURIComponent(session.screenSessionId)}/submit`,{method:"POST",body:JSON.stringify({navigation,values})});if(!response?.success)throw new Error(response?.message||"Unable to continue Screen Flow");const next=response.data||{};if(next.status==="WAITING"&&next.screenSessionId){setSession(next);return;}if(next.status==="PAUSED"){onClose?.();return;}onComplete?.(next);onClose?.();}catch(err){setError(err?.message||"Unable to continue Screen Flow");onError?.(err);}finally{setBusy(false);}
   };
   const components=Array.isArray(screen.components)?screen.components:[];
   const field=(component)=>{
@@ -52,6 +52,7 @@ export default function CustomPageRuntimePage({ pageKey }) {
   const [formAction,setFormAction]=useState(null);
   const [screenFlowAction,setScreenFlowAction]=useState(null);
   const [navigationContext,setNavigationContext]=useState(null);
+  const [runtimeState,setRuntimeState]=useState({components:{},flows:{}});
   useEffect(()=>{
     let live=true;setError("");
     Promise.all([apiRequest(`/api/platform/runtime/pages/${encodeURIComponent(pageKey||"")}`),loadSessionPermissions().catch(()=>null),apiRequest("/api/platform/runtime/navigation-targets").catch(()=>null)])
@@ -59,8 +60,8 @@ export default function CustomPageRuntimePage({ pageKey }) {
       .catch((err)=>{if(live)setError(err?.message||"Unable to load page");});
     return()=>{live=false;};
   },[pageKey]);
-  const execute=async({node,record=null})=>{
-    const interaction=node?.interaction||{};
+  const execute=async({node,record=null,eventName="click",value=undefined})=>{
+    const interaction=node?.interactions?.[eventName] || (eventName==="click" ? node?.interaction : null) || {};
     if(interaction.type==="none"||interaction.type==="component")return;
     if(interaction.type==="navigate"){
       const resolved=interaction.navigationTarget?resolveNavigationTarget(interaction.navigationTarget,{...(navigationContext||{}),currentRecordId:record?.id||record?.record_id||null}):null;
@@ -68,32 +69,39 @@ export default function CustomPageRuntimePage({ pageKey }) {
       if(route){window.history.pushState(null,"",route);window.dispatchEvent(new PopStateEvent("popstate"));return;}
       setError(resolved?.message||"This navigation target is no longer available.");return;
     }
-    if(interaction.type==="form_layout"){if(!interaction.formLayoutId){setError("This form layout is no longer available.");return;}setFormAction({layoutId:interaction.formLayoutId,presentation:interaction.formPresentation||"screen_modal",record});return;}
+    if(interaction.type==="form_layout"){if(!interaction.formLayoutId){setError("This form layout is no longer available.");return;}setFormAction({layoutId:interaction.formLayoutId,presentation:interaction.formPresentation||"screen_modal",record,node,eventName});return;}
     if(interaction.type==="screen_flow"){
       if(!interaction.workflowUuid){setError("This Screen Flow is no longer available.");return;}
-      try{setBusy(true);setError("");const response=await apiRequest(`/api/platform/rules/${encodeURIComponent(interaction.workflowUuid)}/run`,{method:"POST",body:JSON.stringify({recordId:record?.id||null,inputs:interaction.inputs||{}})});if(!response?.success)throw new Error(response?.message||"Unable to start Screen Flow");const wait=findScreenWait(response.data);if(wait?.screenSessionId){setScreenFlowAction({session:wait,presentation:interaction.screenPresentation||"screen_modal",nodeId:node?.id});return;}window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:node?.id||null,interactionType:"screen_flow",runId:response.data?.runId||null,status:response.data?.status||"COMPLETED",output:response.data?.variables||response.data}}));}catch(err){setError(err?.message||"Unable to start Screen Flow");}finally{setBusy(false);}return;
+      try{setBusy(true);setError("");const pageContext={params:Object.fromEntries(new URLSearchParams(window.location.search).entries()),variables:Object.fromEntries((normalizeCustomPageTree(page?.definition||{}).resources?.variables||[]).map((variable)=>[variable.key,variable.defaultValue??null])),components:{...(runtimeState.components||{}),[node?.id]:{...(runtimeState.components?.[node?.id]||{}),value,selectedRecord:record||runtimeState.components?.[node?.id]?.selectedRecord||null}},flows:runtimeState.flows||{}};const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,type:"workflow",objectKey:node?.collection?.objectKey||null,recordId:record?.id||null,eventName,eventValue:value,pageContext})});if(!response?.success)throw new Error(response?.message||"Unable to start Screen Flow");const wait=findScreenWait(response.data);if(wait?.screenSessionId){setScreenFlowAction({session:wait,presentation:interaction.screenPresentation||"screen_modal",nodeId:node?.id,outputTarget:interaction.outputTarget||null,node,record});return;}window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:node?.id||null,interactionType:"screen_flow",runId:response.data?.runId||null,status:response.data?.status||"COMPLETED",output:response.data?.variables||response.data,outputTarget:interaction.outputTarget||null}}));}catch(err){setError(err?.message||"Unable to start Screen Flow");}finally{setBusy(false);}return;
     }
     if(!["workflow","action"].includes(interaction.type))return;
     try{
       setBusy(true);setError("");
       const objectKey=node?.collection?.objectKey||null;
-      const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null})});
+      const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null,eventName,eventValue:value,pageContext:{params:Object.fromEntries(new URLSearchParams(window.location.search).entries()),variables:Object.fromEntries((normalizeCustomPageTree(page?.definition||{}).resources?.variables||[]).map((variable)=>[variable.key,variable.defaultValue??null])),components:{...(runtimeState.components||{}),[node?.id]:{...(runtimeState.components?.[node?.id]||{}),value,selectedRecord:record||runtimeState.components?.[node?.id]?.selectedRecord||null}},flows:runtimeState.flows||{}}})});
       if(!response?.success)throw new Error(response?.message||"Unable to execute page action");
       const result=response?.data||{};
       const output=result?.result??result?.results??result;
-      window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:node?.id||null,interactionType:interaction.type,runId:result?.runId||response?.workflowRunId||null,status:result?.status||"COMPLETED",output}}));
-    }catch(err){setError(err?.message||"Unable to execute page action");}
+      window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:node?.id||null,interactionType:interaction.type,runId:result?.runId||response?.workflowRunId||null,status:result?.status||"COMPLETED",output,outputTarget:interaction.outputTarget||null}}));
+      if(eventName!=="success" && node?.interactions?.success?.type && node.interactions.success.type!=="none") await execute({node,record,eventName:"success",value:output});
+    }catch(err){setError(err?.message||"Unable to execute page action");if(eventName!=="error" && node?.interactions?.error?.type && node.interactions.error.type!=="none") await execute({node,record,eventName:"error",value:{message:err?.message||"Action failed"}});}
     finally{setBusy(false);}
   };
   if(error&&!page)return <div className="onepos-empty">{error}</div>;
   if(!page)return <div className="onepos-empty">Loading page…</div>;
   const definition=normalizeCustomPageTree(page.definition||{});
+  const pageContext={
+    params:Object.fromEntries(new URLSearchParams(window.location.search).entries()),
+    variables:Object.fromEntries((definition.resources?.variables||[]).map((variable)=>[variable.key,variable.defaultValue??null])),
+    components:runtimeState.components||{},
+    flows:runtimeState.flows||{},
+  };
   return <section className="onepos-page space-y-4">
     <div className="onepos-page-header"><div><h1 className="onepos-page-title">{page.label||page.page_key}</h1>{page.description?<p className="onepos-page-subtitle">{page.description}</p>:null}</div></div>
     {error?<div className="onepos-alert onepos-alert-error">{error}</div>:null}
     {busy?<div className="text-xs opacity-70">Running action…</div>:null}
-    <CustomPageRenderer definition={definition} device="desktop" onRecordClick={({record,node})=>execute({record,node})} onButtonClick={(node)=>execute({node})}/>
-    {formAction?<FormLayoutModal action={formAction} onClose={()=>setFormAction(null)} onSaved={()=>{}}/>:null}
-    {screenFlowAction?<ScreenFlowModal action={screenFlowAction} onClose={()=>setScreenFlowAction(null)} onComplete={(result)=>window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:screenFlowAction.nodeId,interactionType:"screen_flow",runId:result?.runId||null,status:result?.status||"COMPLETED",output:result?.variables||result}}))}/>:null}
+    <CustomPageRenderer definition={definition} device="desktop" pageContext={pageContext} onPageStateChange={setRuntimeState} onRecordClick={({record,node,eventName="row_click",value,changes})=>execute({record,node,eventName,value:changes||value})} onButtonClick={(node)=>execute({node,eventName:"click"})} onEvent={({eventName,node,value,record})=>execute({node,record,eventName,value})}/>
+    {formAction?<FormLayoutModal action={formAction} onClose={()=>setFormAction(null)} onSaved={(saved)=>{window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:formAction.node?.id||null,interactionType:"form_layout",status:"COMPLETED",output:saved}}));if(formAction.node?.interactions?.success?.type&&formAction.node.interactions.success.type!=="none")execute({node:formAction.node,record:saved||formAction.record,eventName:"success",value:saved});}}/>:null}
+    {screenFlowAction?<ScreenFlowModal action={screenFlowAction} onClose={()=>setScreenFlowAction(null)} onError={(err)=>{if(screenFlowAction.node?.interactions?.error?.type&&screenFlowAction.node.interactions.error.type!=="none")execute({node:screenFlowAction.node,record:screenFlowAction.record,eventName:"error",value:{message:err?.message||"Screen Flow failed"}});}} onComplete={(result)=>{const output=result?.variables||result;window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:screenFlowAction.nodeId,interactionType:"screen_flow",runId:result?.runId||null,status:result?.status||"COMPLETED",output,outputTarget:screenFlowAction.outputTarget||null}}));if(screenFlowAction.node?.interactions?.success?.type&&screenFlowAction.node.interactions.success.type!=="none")execute({node:screenFlowAction.node,record:screenFlowAction.record,eventName:"success",value:output});}}/>:null}
   </section>;
 }
