@@ -29,9 +29,9 @@ const hardcodedBusinessObjectKeys=[
   "supplier_invoice","supplier_payment","sales_order","sales_order_line","stock_return"
 ];
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
-const retiredRuntimeSymbols=[
+const retiredActionKeys=[
   "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION",
-  "CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION","executeMediatedRegisteredAction"
+  "CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION"
 ];
 const forbiddenCompiledConnectorActions=[
   "PAYMENT_START","PAYMENT_CANCEL","PRINT_RECEIPT","PRINT_KITCHEN_TICKET",
@@ -94,9 +94,20 @@ for(const file of roots.flatMap(walk)){
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
-  for(const symbol of retiredRuntimeSymbols) {
-    const symbolPattern = new RegExp("\\b"+symbol+"\\b");
-    if(symbolPattern.test(text)) findings.push({rule:"RETIRED_RUNTIME_SYMBOL",file:name,symbol});
+
+  // Retired action names may still appear in migration/diagnostic copy, but they
+  // must never be registered, selected, or executed as runtime action keys.
+  if(/\bexecuteMediatedRegisteredAction\b/.test(text)) {
+    findings.push({rule:"RETIRED_RUNTIME_EXECUTOR",file:name,symbol:"executeMediatedRegisteredAction"});
+  }
+  for(const symbol of retiredActionKeys) {
+    const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    const executablePatterns = [
+      new RegExp(`\\b(?:actionKey|type|key)\\s*:\\s*[\"']${escaped}[\"']`),
+      new RegExp(`\\bgetWorkflowActionDefinition\\(\\s*[\"']${escaped}[\"']\\s*\\)`),
+      new RegExp(`\\bexecuteSystemAction\\([\\s\\S]{0,800}\\bactionKey\\s*:\\s*[\"']${escaped}[\"']`),
+    ];
+    if(executablePatterns.some((pattern)=>pattern.test(text))) findings.push({rule:"RETIRED_RUNTIME_ACTION_KEY",file:name,symbol});
   }
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
@@ -105,7 +116,7 @@ fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
 fs.writeFileSync(path.join(ROOT,"artifacts","metadata-architecture-audit.json"),JSON.stringify(report,null,2)+"\n");
 if(unique.length){
   console.error(`Metadata architecture audit failed with ${unique.length} violation(s).`);
-  for(const item of unique) console.error(`- ${item.rule}: ${item.file}${item.table?` [${item.table}]`:""}`);
+  for(const item of unique) console.error(`- ${item.rule}: ${item.file}${item.table?` [${item.table}]`:""}${item.symbol?` [${item.symbol}]`:""}`);
   process.exit(1);
 }
 console.log(`Metadata architecture audit passed across ${report.scannedFiles} runtime source files.`);
