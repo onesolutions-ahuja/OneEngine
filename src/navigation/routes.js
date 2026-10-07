@@ -8,7 +8,6 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'canvas-ux-test',
   'approval-builder',
   'gpt-page-builder',
-  'page-builder',
   'dashboard-builder',
   'report-types',
   'report-builder',
@@ -38,14 +37,24 @@ export function readRoute() {
   if (parts[0] === 'settings') {
     const section = !parts[1] || parts[1] === 'general' ? 'company' : parts[1]
     if (DEVELOPER_SETTINGS_KEYS.has(section)) {
-      const developerSection = section === 'platform' || section === 'workflow-builder' ? 'gptbuilder' : section
+      const developerSection = section === 'platform' || section === 'workflow-builder'
+        ? 'gptbuilder'
+        : section === 'page-builder'
+          ? 'gpt-page-builder'
+          : section
       return { app: 'developer', section: developerSection }
     }
     return { app: 'settings', section }
   }
   if (parts[0] === 'developer') {
     const requestedSection = parts[1] || 'objects'
-    const section = requestedSection === 'workflow-builder' || requestedSection === 'builder-2' ? 'gptbuilder' : requestedSection === 'platform-apps' ? 'gptappbuilder' : requestedSection
+    const section = requestedSection === 'workflow-builder' || requestedSection === 'builder-2'
+      ? 'gptbuilder'
+      : requestedSection === 'platform-apps'
+        ? 'gptappbuilder'
+        : requestedSection === 'page-builder'
+          ? 'gpt-page-builder'
+          : requestedSection
     const params = new URLSearchParams(window.location.search || '')
     const workflowId = section === 'gptbuilder'
       ? decodeURIComponent(parts[2] || params.get('workflowId') || '')
