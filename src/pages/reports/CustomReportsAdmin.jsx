@@ -28,7 +28,6 @@ import {
 } from "./ReportExperienceControls.jsx";
 import { AdvancedFilterEditor } from "./ReportTypeDesigner.jsx";
 import ReportManagementPanel from "./ReportManagementPanel.jsx";
-import { apiRequest } from "../../services/api.js";
 import renderDashboardComponent from "../../components/dashboard/DashboardComponents.jsx";
 
 const fresh = () => ({
@@ -116,10 +115,10 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
         canManage:meta.data?.canManage===true,
       });
       setReports(list?.success?list.data||[]:[]);
+      setReportCurrency(String(meta.data?.currency || "GBP"));
     }catch(e){setError(errorMessage(e));}finally{setLoading(false);}
   };
   useEffect(()=>{void load();},[]);
-  useEffect(()=>{let live=true;apiRequest("/api/settings").then((response)=>{if(live&&response?.success)setReportCurrency(response.data?.company?.currency||"GBP");}).catch(()=>{});return()=>{live=false;};},[]);
   useEffect(()=>{
     let live=true;
     if(!initialReport?.id||!runtimeFilters.length)return()=>{live=false;};
