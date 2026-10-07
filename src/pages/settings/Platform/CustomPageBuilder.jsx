@@ -1158,6 +1158,22 @@ const updateNode = (nodeId, changes) => {
     return renderProperties();
   };
 
+  const updateResourceDefinitions = (kind, next) => applyDraft((current) => ({ ...current, resources: { ...(current.resources || {}), [kind]: next } }));
+  const resourceRows = (kind) => Array.isArray(draft.resources?.[kind]) ? draft.resources[kind] : [];
+  const addResourceDefinition = (kind) => updateResourceDefinitions(kind, [...resourceRows(kind), { key: `${kind === "parameters" ? "param" : "variable"}_${resourceRows(kind).length + 1}`, label: kind === "parameters" ? "Page Parameter" : "Page Variable", dataType: "text", defaultValue: "" }]);
+  const patchResourceDefinition = (kind, index, patch) => updateResourceDefinitions(kind, resourceRows(kind).map((item, rowIndex) => rowIndex === index ? { ...item, ...patch } : item));
+  const removeResourceDefinition = (kind, index) => updateResourceDefinitions(kind, resourceRows(kind).filter((_, rowIndex) => rowIndex !== index));
+  const renderResourceDefinitions = (kind, title, description) => <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+    <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{title}</legend>
+    <p className="text-[11px] text-slate-500">{description}</p>
+    {resourceRows(kind).map((item,index)=><div key={`${kind}-${index}`} className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-2">
+      <div className="grid grid-cols-2 gap-1"><input className={inputClass} value={item.label || ""} onChange={(event)=>patchResourceDefinition(kind,index,{label:event.target.value})} placeholder="Label"/><input className={inputClass} value={item.key || ""} onChange={(event)=>patchResourceDefinition(kind,index,{key:event.target.value.replace(/[^A-Za-z0-9_]/g,"")})} placeholder="API name"/></div>
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-1"><select className={inputClass} value={item.dataType || "text"} onChange={(event)=>patchResourceDefinition(kind,index,{dataType:event.target.value})}><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option><option value="collection">Collection</option></select><input className={inputClass} value={item.defaultValue ?? ""} disabled={kind === "parameters"} onChange={(event)=>patchResourceDefinition(kind,index,{defaultValue:event.target.value})} placeholder={kind === "parameters" ? "From URL/runtime" : "Default value"}/><button type="button" className="rounded px-2 text-red-600" onClick={()=>removeResourceDefinition(kind,index)} aria-label={`Remove ${title}`}><Trash2 size={13}/></button></div>
+    </div>)}
+    {!resourceRows(kind).length ? <p className="text-[11px] text-slate-400">None defined.</p> : null}
+    <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={()=>addResourceDefinition(kind)}>+ Add {kind === "parameters" ? "parameter" : "variable"}</button>
+  </fieldset>;
+
   const renderPageSettings = () => (
     <div className="cpb-page-settings">
       <div>
@@ -1189,6 +1205,8 @@ const updateNode = (nodeId, changes) => {
           <option value="kiosk">Kiosk</option>
         </select>
       </div>
+      {renderResourceDefinitions("parameters","Page Parameters","Inputs supplied when the page opens, such as recordId, date or source.")}
+      {renderResourceDefinitions("variables","Page Variables","Mutable page state that components, filters and Flow mappings can reference.")}
     </div>
   );
 
