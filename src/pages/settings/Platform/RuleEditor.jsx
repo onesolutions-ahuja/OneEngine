@@ -17,10 +17,8 @@ const ACTIONS = [
   { value: "validate", label: "Legacy Validate (configuration only)" },
   { value: "set_field", label: "Set Field" },
   { value: "show_message", label: "Show Message" },
-  { value: "SEND_EMAIL", label: "Send Email" },
-  { value: "SEND_SMS", label: "Send SMS" },
-  { value: "SEND_WHATSAPP", label: "Send WhatsApp" },
-  { value: "CALL_WEBHOOK", label: "Call Connector Webhook" },
+  { value: "SEND_COMMUNICATION", label: "Send Communication" },
+  { value: "CALL_API", label: "Call API" },
   { value: "restrict", label: "Restrict" },
 ];
 
@@ -296,7 +294,7 @@ export default function RuleEditor({
         <strong>{form.action === "validation" ? "Validation rule" : "Configuration only"}</strong>
         <span>
           {form.action === "validation"
-            ? "An active rule blocks Platform record saves when its conditions match. Other entry points keep their existing business validation."
+            ? "An active rule blocks Platform record saves when its conditions match. Other entry points keep their existing validation."
             : "Workflow actions are stored as metadata and do not execute."}
         </span>
       </div>
