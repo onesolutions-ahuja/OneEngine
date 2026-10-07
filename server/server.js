@@ -1187,19 +1187,7 @@ app.post("/api/auth/unlock-pin", authenticate, async (req, res) => {
     /*
      * Bootstrap only for a global profile holding oneengine.manage. This is an
      * RBAC check, not an identity/profile-name bypass.
-     */
-    if (!user.pin_hash && user.company_id == null && process.env.SUPERADMIN_BOOTSTRAP_PIN) {
-      const platformAccess = user.role_id
-        ? await db(
-            "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
-            [user.role_id]
-          )
-        : { rows: [] };
-      if (platformAccess.rows.length) {
-        if (pin !== String(process.env.SUPERADMIN_BOOTSTRAP_PIN)) {
-          return res.status(401).json({ success: false, code: "INVALID_PIN", message: "Incorrect PIN" });
-        }
-        const pinHash = await bcrypt.hash(pin, PASSWORD_BCRYPT_ROUNDS);
+     */        const pinHash = await bcrypt.hash(pin, PASSWORD_BCRYPT_ROUNDS);
         await db(
           "UPDATE users SET pin_hash=$1, updated_at=NOW() WHERE id=$2 AND company_id IS NOT DISTINCT FROM $3",
           [pinHash, req.user.id, req.user.companyId]
