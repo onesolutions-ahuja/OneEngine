@@ -138,6 +138,8 @@ const BUILDER_CSS = `
   .cpb-canvas .onepos-card{border-color:#dfe3e7!important;box-shadow:none!important;background:#fff!important}
   .cpb-empty{display:grid;place-items:center;min-height:110px;border:1px dashed #cfd5da;border-radius:10px;background:#fbfcfc;color:#76808a;text-align:center;font-size:12px}
   .cpb-dropzone{outline:2px dashed #2d8b80;outline-offset:2px;border-radius:8px}
+  .cpb-insert-target{min-height:22px;margin:3px 0;display:flex;align-items:center;justify-content:center;border:1px dashed #c9d2d8;border-radius:7px;background:#f8fafb;color:#7b858e;font-size:10px;opacity:.72;transition:.12s ease}
+  .cpb-insert-target:hover,.cpb-insert-target.cpb-dropzone{min-height:34px;border-color:#2d8b80;background:#edf8f6;color:#176f6a;opacity:1}
   .cpb-node-selected{outline:2px solid #2d8b80;outline-offset:3px;border-radius:8px}
   .cpb-section-selected{outline:2px solid #2d8b80;outline-offset:3px}
   .cpb-device-btn{
@@ -478,6 +480,15 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     if (componentKey === "field_value") return { id: uid("field_value"), componentKey, field: "" };
     if (componentKey === "related_list") return { id: uid("related_list"), componentKey, relationshipKey: "", limit: 10 };
     return createRegisteredComponent(meta, "PAGE");
+  };
+
+  const addComponentToNewSection = (componentKey, width = "full") => {
+    if (!canDropNode({ parentComponentKey: null, droppedComponentKey: componentKey, droppedIsSection: false })) return;
+    const node = newNodeFor(componentKey);
+    const section = { id: uid("section"), width, children: [node] };
+    applyDraft((current) => ({ ...current, sections: [...current.sections, section] }));
+    setSelectedNodeId(node.id);
+    setSelectedSectionId(null);
   };
 
   const dropIntoSection = (sectionId, payload, index = null) => {
@@ -888,9 +899,41 @@ const updateNode = (nodeId, changes) => {
             if (paletteRaw) dropIntoSection(section.id, JSON.parse(paletteRaw));
           }}
         >
-          {section.children.map((node, childIndex) => renderNode({ ...node, sectionId: section.id }, null, childIndex, null))}
-          {!section.children.length && !preview ? <div className="cpb-empty">Drop components here</div> : null}
-          {!section.children.length && preview ? null : null}
+          {!preview ? (
+            <>
+              {section.children.map((node, childIndex) => (
+                <div key={node.id}>
+                  <div
+                    className="cpb-insert-target"
+                    onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.add("cpb-dropzone"); }}
+                    onDragLeave={(event) => event.currentTarget.classList.remove("cpb-dropzone")}
+                    onDrop={(event) => {
+                      event.preventDefault(); event.stopPropagation();
+                      event.currentTarget.classList.remove("cpb-dropzone");
+                      const paletteRaw = event.dataTransfer.getData(DRAG_MIME_PALETTE);
+                      if (paletteRaw) dropIntoSection(section.id, JSON.parse(paletteRaw), childIndex);
+                    }}
+                  >
+                    Drop component here
+                  </div>
+                  {renderNode({ ...node, sectionId: section.id }, null, childIndex, null)}
+                </div>
+              ))}
+              <div
+                className={section.children.length ? "cpb-insert-target" : "cpb-empty"}
+                onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.add("cpb-dropzone"); }}
+                onDragLeave={(event) => event.currentTarget.classList.remove("cpb-dropzone")}
+                onDrop={(event) => {
+                  event.preventDefault(); event.stopPropagation();
+                  event.currentTarget.classList.remove("cpb-dropzone");
+                  const paletteRaw = event.dataTransfer.getData(DRAG_MIME_PALETTE);
+                  if (paletteRaw) dropIntoSection(section.id, JSON.parse(paletteRaw), section.children.length);
+                }}
+              >
+                {section.children.length ? "Drop component at end" : "Drop components here"}
+              </div>
+            </>
+          ) : section.children.map((node, childIndex) => renderNode({ ...node, sectionId: section.id }, null, childIndex, null))}
         </div>
       </div>
     );
@@ -1211,7 +1254,7 @@ const updateNode = (nodeId, changes) => {
                     onClick={() => {
                       if (component.key === "section") addSection("full");
                       else if (draft.sections.length) dropIntoSection(draft.sections[draft.sections.length - 1].id, { kind: "palette", componentKey: component.key });
-                      else addSection("full");
+                      else addComponentToNewSection(component.key);
                     }}
                     title={`Drag onto the canvas${component.key === "section" ? "" : " or into a Section"}`}
                   >
@@ -1266,7 +1309,7 @@ const updateNode = (nodeId, changes) => {
                 const payload = JSON.parse(paletteRaw);
                 if (payload.kind === "section-palette" || payload.componentKey === "section") addSection("full");
                 else if (draft.sections.length) dropIntoSection(draft.sections[draft.sections.length - 1].id, payload);
-                else addSection("full");
+                else if (payload.kind === "palette") addComponentToNewSection(payload.componentKey);
               }
             }}
           >
