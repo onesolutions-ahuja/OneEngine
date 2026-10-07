@@ -203,6 +203,7 @@ function newPageDraft() {
     label: "New Custom Page",
     presentation_mode: "landing",
     device: "desktop",
+    resources: { parameters: [], variables: [] },
     sections: [],
   };
 }
@@ -355,7 +356,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     setPageId(row?.id || "");
     setPage(row || null);
     const tree = normalizeCustomPageTree(row?.draft_definition || row?.definition || {});
-    setDraft({ pageKey: row?.page_key || "", label: row?.label || "Custom Page", presentation_mode: tree.presentation_mode, device: tree.device, sections: tree.sections });
+    setDraft({ pageKey: row?.page_key || "", label: row?.label || "Custom Page", presentation_mode: tree.presentation_mode, device: tree.device, resources: tree.resources, sections: tree.sections });
     setUndoStack([]); setRedoStack([]); setSelectedNodeId(null); setSelectedSectionId(null); setDirty(false); setPreview(false); setShowVersions(false);
     if (row?.id) void loadVersions(row.id); else setVersions([]);
   };
@@ -640,6 +641,7 @@ const updateNode = (nodeId, changes) => {
   const definitionForSave = () => normalizeCustomPageTree({
     device: draft.device,
     presentation_mode: draft.presentation_mode,
+    resources: draft.resources,
     sections: draft.sections.map((section) => ({
       id: section.id,
       width: section.width,
