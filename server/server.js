@@ -1213,23 +1213,14 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       try {
         const currentRounds = bcrypt.getRounds(user.password_hash);
         if (currentRounds !== PASSWORD_BCRYPT_ROUNDS) {
-          const previousHash = user.password_hash;
-          const userId = user.id;
-          const passwordForRehash = password;
-          setImmediate(() => {
-            void (async () => {
-              try {
-                const replacementHash = await bcrypt.hash(passwordForRehash, PASSWORD_BCRYPT_ROUNDS);
-                await loginPool.query(
-                  "UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2 AND password_hash=$3",
-                  [replacementHash, userId, previousHash]
-                );
-                console.log(`onePOS: calibrated password hash cost for user ${userId} from ${currentRounds} to ${PASSWORD_BCRYPT_ROUNDS}`);
-              } catch (rehashError) {
-                console.warn("onePOS: password hash calibration failed", rehashError?.message || rehashError);
-              }
-            })();
-          });
+          /*
+           * Do not re-hash on the login process. bcrypt's worker competes with
+           * the live request and, on the small hosted instance, can starve the
+           * event loop for seconds even when launched via setImmediate().
+           * Existing hashes remain fully valid and are upgraded on the normal
+           * password-change/reset path instead.
+           */
+          console.log(`onePOS: password hash cost differs for user ${user.id} (stored=${currentRounds}, target=${PASSWORD_BCRYPT_ROUNDS}); deferred until password change`);
         }
       } catch (roundError) {
         console.warn("onePOS: password hash cost inspection skipped", roundError?.message || roundError);
