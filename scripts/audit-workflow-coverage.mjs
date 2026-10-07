@@ -93,26 +93,12 @@ for (const file of executableFiles) {
   if (/\bexecuteMediatedRegisteredAction\b/.test(text)) findings.push({ type: "RETIRED_MEDIATED_ACTION_EXECUTOR", file: name });
 }
 
-// The old hidden flow-manifest shims must not return after migration.
-const runtimeFlowManifestPath = path.join(ROOT, "server/metadata/manifests");
-if (fs.existsSync(runtimeFlowManifestPath)) {
-  const source = fs.readFileSync(runtimeFlowManifestPath, "utf8");
-  const retiredRuntimeFlowKeys = [
-    "flow:online_order.transition",
-    "flow:supplier.invoice.create",
-    "flow:supplier.payment.create",
-    "flow:purchase.create",
-    "flow:purchase.receive",
-    "flow:supplier.return.execute",
-  ];
-  for (const key of retiredRuntimeFlowKeys) {
-    if (source.includes(`flow("${key}"`) || source.includes(`flow('${key}'`)) {
-      findings.push({ type: "RETIRED_DUPLICATE_RUNTIME_FLOW", key, file: "server/metadata/manifests" });
-    }
-  }
+// Executable source-defined business Flow authorities must stay retired.
+if (fs.existsSync(path.join(ROOT, "server/packages/runtimeFlowManifests.js"))) {
+  findings.push({ type: "EXECUTABLE_BUSINESS_FLOW_MANIFEST_PRESENT", file: "server/packages/runtimeFlowManifests.js" });
 }
 
-// GPT Builder must preserve imported runtime actions rather than flattening
+// GPT Builder must preserve imported metadata actions rather than flattening
 // metadata into hardcoded UI defaults.
 const builderPage = read("src/pages/developer/gptbuilder/GPTBuilderPage.jsx");
 const builderAction = read("src/pages/developer/gptbuilder/GPTBuilderAction.jsx");
@@ -120,7 +106,7 @@ const builderRoundTripReady =
   /source:\s*['"]metadata_import['"]/.test(builderPage)
   && /importedMetadataAction\s*:\s*runtimeAction/.test(builderPage)
   && /Imported metadata configuration/.test(builderAction);
-if (!builderRoundTripReady) findings.push({ type: "GPT_BUILDER_RUNTIME_ROUNDTRIP_FALLBACK_MISSING" });
+if (!builderRoundTripReady) findings.push({ type: "GPT_BUILDER_METADATA_ROUNDTRIP_FALLBACK_MISSING" });
 
 const report = {
   generatedAt: new Date().toISOString(),
