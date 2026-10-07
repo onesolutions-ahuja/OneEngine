@@ -55,8 +55,8 @@ export default function AppReleasesAdmin() {
     setSubmitState((current) => ({ ...current, error: "", success: "" }));
     try {
       const [packagesResult, releasesResult] = await Promise.all([
-        apiRequest("/api/superadmin/packages"),
-        apiRequest("/api/superadmin/packages/releases"),
+        apiRequest("/api/platform-admin/packages"),
+        apiRequest("/api/platform-admin/packages/releases"),
       ]);
       if (!packagesResult.success) throw new Error(packagesResult.message || "Unable to load packages");
       if (!releasesResult.success) throw new Error(releasesResult.message || "Unable to load releases");
@@ -79,7 +79,7 @@ export default function AppReleasesAdmin() {
       return;
     }
     try {
-      const result = await apiRequest(`/api/superadmin/packages/releases/${encodeURIComponent(releaseId)}/status`);
+      const result = await apiRequest(`/api/platform-admin/packages/releases/${encodeURIComponent(releaseId)}/status`);
       if (!result.success) throw new Error(result.message || "Unable to load rollout status");
       setRolloutStatus(result.data || null);
     } catch (error) {
@@ -135,7 +135,7 @@ export default function AppReleasesAdmin() {
 
     setSubmitState({ busy: true, error: "", success: "" });
     try {
-      const result = await apiRequest("/api/superadmin/packages/releases", {
+      const result = await apiRequest("/api/platform-admin/packages/releases", {
         method: "POST",
         body: JSON.stringify({
           packageKey: selectedPackage,
@@ -160,7 +160,7 @@ export default function AppReleasesAdmin() {
     if (!releaseId) return;
     setSubmitState({ busy: true, error: "", success: "" });
     try {
-      const path = `/api/superadmin/packages/releases/${encodeURIComponent(releaseId)}/${action}`;
+      const path = `/api/platform-admin/packages/releases/${encodeURIComponent(releaseId)}/${action}`;
       const payload = extraBody ? { method: "POST", body: JSON.stringify(extraBody) } : { method: "POST" };
       const result = await apiRequest(path, payload);
       if (!result.success) throw new Error(result.message || `Unable to ${action} this release`);
