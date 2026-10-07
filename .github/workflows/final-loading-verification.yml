@@ -1,15 +1,16 @@
 name: Final OneEngine Loading Verification
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' && 'oneengine-final-loading' || format('oneengine-final-loading-non-success-{0}', github.run_id) }}
+  group: oneengine-final-loading
   cancel-in-progress: true
 
 jobs:
   verify:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
