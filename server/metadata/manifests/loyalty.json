@@ -556,7 +556,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "validate_loyalty_adjustment",
                 "label": "Validate Loyalty Adjustment",
                 "apiName": "validate_loyalty_adjustment",
@@ -576,10 +576,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -598,7 +598,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "get_account",
                 "label": "Get Loyalty Account",
                 "apiName": "get_account",
@@ -616,10 +616,10 @@
                 "limit": 1,
                 "store": "first"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -638,7 +638,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "loyalty_ready",
                 "label": "Loyalty Adjustment Ready?",
                 "apiName": "loyalty_ready",
@@ -674,10 +674,10 @@
                   "loyalty_invalid"
                 ]
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -696,7 +696,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_adjustment",
                 "label": "Create Loyalty Adjustment",
                 "apiName": "create_adjustment",
@@ -717,10 +717,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -739,7 +739,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_activity",
                 "label": "Create Loyalty Activity",
                 "apiName": "create_activity",
@@ -762,10 +762,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -784,7 +784,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "update_balance",
                 "label": "Update Loyalty Balance",
                 "apiName": "update_balance",
@@ -799,10 +799,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -821,7 +821,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "loyalty_invalid",
                 "label": "Loyalty Adjustment Rejected",
                 "apiName": "loyalty_invalid",
@@ -829,10 +829,10 @@
                 "errorMessage": "Loyalty adjustment requires an existing loyalty account, a non-zero points value, and a reason.",
                 "errorLocation": "record"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           }
         ]
