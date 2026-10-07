@@ -120,7 +120,7 @@ const BUILDER_CSS = `
   .cpb-canvas.is-panning{cursor:grabbing}
   .cpb-canvas input,.cpb-canvas select,.cpb-canvas textarea,.cpb-canvas button,.cpb-canvas a{user-select:auto}
   .cpb-node{position:relative;min-width:90px;min-height:38px;cursor:default;overflow:visible;box-sizing:border-box}
-  .cpb-resize-handle{position:sticky;left:calc(100% - 32px);bottom:8px;z-index:30;width:28px;height:28px;margin:-28px 4px 4px auto;display:grid;place-items:center;border:2px solid #147d70;border-radius:7px;background:#fff;color:#147d70;box-shadow:0 3px 12px rgba(15,23,42,.22);cursor:nwse-resize;touch-action:none}
+  .cpb-resize-handle{position:absolute;right:4px;bottom:4px;z-index:30;width:28px;height:28px;display:grid;place-items:center;border:2px solid #147d70;border-radius:7px;background:#fff;color:#147d70;box-shadow:0 3px 12px rgba(15,23,42,.22);cursor:nwse-resize;touch-action:none}
   .cpb-resize-handle:hover{background:#edf8f6;border-color:#147d70}
   .cpb-node-actions{position:absolute;top:4px;right:38px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
   .cpb-node-remove{position:absolute;top:4px;right:6px;z-index:9;width:28px;height:28px;display:grid;place-items:center;border:1px solid #d2d7dc;border-radius:999px;background:#fff;color:#5f6972;box-shadow:0 2px 8px rgba(15,23,42,.10);cursor:pointer}
@@ -610,7 +610,12 @@ const updateNode = (nodeId, changes) => {
       startHeight: rect.height,
     };
     resizeNodeRef.current = state;
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    // Do not capture the pointer on the handle while listening for movement on
+    // window. Chromium can retarget captured pointer events to the handle and
+    // prevent the window listener from receiving a usable drag sequence.
+    // Window-level listeners already keep resizing alive outside the handle.
+    document.body.style.cursor = "nwse-resize";
+    document.body.style.userSelect = "none";
 
     const move = (moveEvent) => {
       const active = resizeNodeRef.current;
@@ -625,6 +630,8 @@ const updateNode = (nodeId, changes) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
       if (!active || active.nodeId !== nodeId) return;
       resizeNodeRef.current = null;
       const resized = active.element.getBoundingClientRect();
@@ -634,9 +641,9 @@ const updateNode = (nodeId, changes) => {
       if (Math.abs(Number(currentLayout.width || 0) - width) <= 1 && Math.abs(Number(currentLayout.height || 0) - height) <= 1) return;
       updateNode(nodeId, { layout: { ...currentLayout, width, height } });
     };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end, { once: true });
-    window.addEventListener("pointercancel", end, { once: true });
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
   };
 
   const testNodeInteraction = async ({ node, record = null, eventName = "click", value = undefined, changes = undefined, interaction: explicitInteraction = null }) => {
