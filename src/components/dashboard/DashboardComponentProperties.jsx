@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { platformFieldChoices } from "./platformDashboard.js";
-import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";\nimport { useComponentRegistry, componentByKey } from "../../pages/settings/Platform/componentRegistry.js";
+import { ConditionalFormattingEditor, DrillActionEditor } from "../../pages/reports/ReportAdvancedEditors.jsx";
+import { useComponentRegistry, componentByKey } from "../../pages/settings/Platform/componentRegistry.js";
 
 const FIELD = "w-full border rounded-lg px-2 py-1.5 text-sm";
 const STYLE = { borderColor: "var(--onepos-border)", background: "var(--onepos-surface-raised)", color: "var(--onepos-text-primary)" };
