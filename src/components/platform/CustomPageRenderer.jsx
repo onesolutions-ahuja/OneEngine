@@ -866,7 +866,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (key === "image_record_card") {
     const config = node.config || {};
     const state = data?.[node.id] || {};
-    if (!config.objectKey) return <div className="cpb-empty">Select an Object in Properties to preview product records.</div>;
+    if (!(node.collection?.objectKey || config.objectKey)) return <div className="cpb-empty">Select an Object in Data to preview records.</div>;
     const records = Array.isArray(state.records) ? state.records : [];
     if (state.loading) return <div className="cpb-empty">Loading records…</div>;
     if (state.error && !records.length) return <div className="cpb-empty">{state.error}</div>;
@@ -937,21 +937,22 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
     ? advancedCollection(node)
     : REGISTRY_RECORD_COMPONENTS.includes(node.componentKey)
       ? (() => {
+          const collection = node.collection || {};
           const config = node.config || {};
-          const fields = new Set();
+          const legacyFields = new Set();
           for (const [key, value] of Object.entries(config)) {
-            if (/(Field|Binding)$/i.test(key) && typeof value === "string" && /^[a-z_][a-z0-9_]*$/.test(value)) fields.add(value);
+            if (/(Field|Binding)$/i.test(key) && typeof value === "string" && /^[a-z_][a-z0-9_]*$/.test(value)) legacyFields.add(value);
             if (/Fields$/i.test(key) && Array.isArray(value)) value.forEach((field) => {
-              if (typeof field === "string" && /^[a-z_][a-z0-9_]*$/.test(field)) fields.add(field);
+              if (typeof field === "string" && /^[a-z_][a-z0-9_]*$/.test(field)) legacyFields.add(field);
             });
           }
           return {
-            objectKey: config.objectKey || "",
-            conditions: Array.isArray(config.filters) ? config.filters : [],
-            conditionMatch: config.conditionMatch === "any" ? "any" : "all",
-            sort: Array.isArray(config.sort) ? config.sort : [],
-            maxRecords: Math.max(1, Math.min(50, Number(config.maxRecords || config.maxVisible) || 10)),
-            fields: [...fields],
+            objectKey: collection.objectKey || config.objectKey || "",
+            conditions: Array.isArray(collection.conditions) ? collection.conditions : (Array.isArray(config.filters) ? config.filters : []),
+            conditionMatch: collection.conditionMatch === "any" || config.conditionMatch === "any" ? "any" : "all",
+            sort: Array.isArray(collection.sort) ? collection.sort : (Array.isArray(config.sort) ? config.sort : []),
+            maxRecords: Math.max(1, Math.min(50, Number(collection.maxRecords || config.maxRecords || config.maxVisible) || 10)),
+            fields: Array.isArray(collection.fields) && collection.fields.length ? collection.fields : [...legacyFields],
           };
         })()
       : (node.collection || {});
