@@ -11,7 +11,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { ChevronDown, ChevronRight, Minus, Plus, Sparkles, WandSparkles, Zap } from 'lucide-react'
 import { elementByKey } from './GPTBuilderElements'
-import '../ReactFlowCanvasUXTest.css'
+import './GPTBuilderReactFlowCanvas.css'
 
 const CHILD_COLORS = [
   { key: 'red', hex: '#dc2626' },
