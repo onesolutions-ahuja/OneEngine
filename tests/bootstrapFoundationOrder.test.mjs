@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { resolvePackagePlan } from "../server/packages/runtime/packagePlanning.js";
 
-test("bootstrap foundations provision only after core object seed", async () => {
-  const source = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  const coreSeed = source.indexOf("for (const object of [...retailObjects");
-  const foundations = source.indexOf("const bootstrapFoundations");
-  assert.ok(coreSeed >= 0);
-  assert.ok(foundations > coreSeed);
+test("bootstrap foundations provision dependencies before dependent packages", () => {
+  const foundation = { packageKey: "foundation", version: "1.0.0", dependencies: [] };
+  const feature = { packageKey: "feature", version: "1.0.0", dependencies: ["foundation"] };
+  assert.deepEqual(resolvePackagePlan("feature", [feature, foundation]).map((item) => item.packageKey), ["foundation", "feature"]);
 });
