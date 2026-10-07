@@ -17,7 +17,7 @@ const bootstrapSources = await Promise.all([
   try { return await fs.readFile(file, 'utf8') } catch { return '' }
 }))
 const html = await fs.readFile('dist/index.html', 'utf8')
-const routes = new Set([...source.matchAll(/parts\[0\] === '([a-z-]+)'/g)].map(match => match[1]))
+const routes = new Set([...source.matchAll(/parts\[0\]\s*===\s*'([a-z-]+)'/g)].map(match => match[1]))
 
 // Publish every concrete shell route the current runtime can mount. This keeps
 // GitHub Pages document requests on HTTP 200 without maintaining a second,
