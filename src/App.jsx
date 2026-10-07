@@ -851,7 +851,7 @@ function Desktop({ onLock, onSignOut }) {
             <AnimatePresence>
               {topPanel === 'help' ? <HelpMenu onSelect={(label) => {
                 setTopPanel('')
-                else if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
+                if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
                 else { setRoute('settings', 'connections'); setRouteState({ app: 'settings', section: 'connections' }); setActiveApp('settings') }
               }} /> : null}
             </AnimatePresence>
