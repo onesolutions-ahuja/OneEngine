@@ -29,6 +29,38 @@ function redact(value) {
   return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, /password|passwd|secret|token|api[_-]?key|client[_-]?secret|access[_-]?token/i.test(key) ? "[REDACTED]" : nested && typeof nested === "object" ? redact(nested) : nested]));
 }
 
+function humanizeTraceKey(key) {
+  return String(key || "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function summarizeTraceValue(value) {
+  if (value == null || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.length ? `${value.length} item${value.length === 1 ? "" : "s"}` : "None";
+  if (typeof value === "object") return `${Object.keys(value).length} detail${Object.keys(value).length === 1 ? "" : "s"}`;
+  return String(value);
+}
+
+function traceSummaryRows(metadata) {
+  if (!metadata || typeof metadata !== "object") return [];
+  const safe = redact(metadata);
+  const priority = ["method", "path", "capabilityType", "capabilityKey", "actorUserId", "storeId", "tillId", "source", "trigger", "event"];
+  const entries = Object.entries(safe).filter(([key]) => !["friendlyError", "rootError", "error", "last_error", "finalVariables"].includes(key));
+  entries.sort(([a], [b]) => {
+    const ai = priority.indexOf(a);
+    const bi = priority.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+  return entries.slice(0, 12).map(([key, value]) => ({ key, label: humanizeTraceKey(key), value: summarizeTraceValue(value) }));
+}
+
 export default function WorkflowRunsAdmin({ onMessage, onError }) {
   const [runs, setRuns] = useState([]);
   const [selectedRunId, setSelectedRunId] = useState(null);
@@ -243,10 +275,20 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
             })() : null}
 
             {run.metadata ? (
-              <details className="workflow-run-trace">
-                <summary>Trace summary</summary>
-                <pre>{JSON.stringify(redact(run.metadata), null, 2)}</pre>
-              </details>
+              <div className="workflow-run-steps">
+                <div className="workflow-run-section-title">Execution summary</div>
+                {traceSummaryRows(run.metadata).length ? (
+                  <div className="workflow-run-facts">
+                    {traceSummaryRows(run.metadata).map((item) => (
+                      <div key={item.key}><span>{item.label}</span><strong>{item.value}</strong></div>
+                    ))}
+                  </div>
+                ) : <div className="workflow-runs-empty compact">No additional execution details recorded.</div>}
+                <details className="workflow-run-trace">
+                  <summary>Technical details</summary>
+                  <pre>{JSON.stringify(redact(run.metadata), null, 2)}</pre>
+                </details>
+              </div>
             ) : null}
 
             {(details?.children || []).length > 0 ? (
