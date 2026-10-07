@@ -3092,7 +3092,13 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order",
         [object.id, req.user.companyId]
       );
-      const fields = await applyFieldSecurity(db, fieldsResult.rows, req);
+      // Use the exact same metadata safety pipeline as the canonical object
+      // record reader. System-backed objects can expose metadata fields that
+      // are not physical source-table columns; safeSystemFields removes those
+      // before SQL is generated so visual components cannot produce 500s.
+      if (systemObject(object)) object.company_scoped = true;
+      const safeFields = safeSystemFields(object, fieldsResult.rows);
+      const fields = await applyFieldSecurity(db, safeFields, req);
       const readable = fields.filter((field) => field.readable !== false && field.field_type !== "formula" && field.field_type !== "rollup" && isSafeIdentifier(field.api_name) && Boolean(platformFieldSql(field, object)));
       const fieldByApiName = new Map(readable.map((field) => [field.api_name, field]));
 
@@ -3160,12 +3166,12 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       let conditionClauses = conditionClauseCount > 0 ? clauses.splice(scopeClauseCount, conditionClauseCount) : [];
       if (conditionClauses.length && conditionMatch === "any") conditionClauses = [`(${conditionClauses.join(" OR ")})`];
       clauses.push(...conditionClauses);
-      if (["customers"].includes(object.source_table) && !req.platformCompanyCustomers) {
-        /* Mirror the appendSystemReadScope customer-store rule for record feeds. */
-        if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
-        params.push(req.user.storeId, req.user.companyId);
-        clauses.push(`EXISTS (SELECT 1 FROM customer_stores cs WHERE cs.customer_id="customers".id AND cs.store_id=$${params.length - 1} AND cs.company_id=$${params.length} AND cs.active=true)`);
-      }
+      // Sharing is mandatory scope, so append it only after optional collection
+      // conditions have been grouped; it must never participate in Match ANY.
+      const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "read", paramsOffset: params.length });
+      if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
+      // Canonical metadata/system read scope. Do not duplicate business-object
+      // special cases here; appendSystemReadScope is the shared policy boundary.
       appendSystemReadScope(object, req, clauses, params);
 
       /* Sort entries must name readable fields. */

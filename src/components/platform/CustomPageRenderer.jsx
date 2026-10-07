@@ -249,6 +249,8 @@ export function TableView({ node, builderMode, onRecordClick, data }) {
 }
 
 const ADVANCED_RECORD_COMPONENTS = ["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"];
+const REGISTRY_RECORD_COMPONENTS = ["avatar_group", "record_picker", "product_image_card", "searchable_dropdown"];
+const STATIC_DASHBOARD_COMPONENTS = ["folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile", "clock_widget", "calendar_widget", "weather_widget"];
 
 function advancedCollection(node) {
   const config = node.config || {};
@@ -624,6 +626,57 @@ function AnalyticsNodeView({ node }) {
 function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
+  if (STATIC_DASHBOARD_COMPONENTS.includes(key)) {
+    const config = { ...(node.config || {}) };
+    if (key === "avatar_group") {
+      const records = Array.isArray(data?.[node.id]?.records) ? data[node.id].records : [];
+      if (records.length) {
+        const imageField = config.imageField || "";
+        const initialsField = config.initialsField || "name";
+        config.avatars = records.slice(0, Number(config.maxVisible) || 5).map((record) => ({
+          label: record[initialsField] || record.name || record.title || "",
+          initials: String(record[initialsField] || record.name || record.title || "?").trim().slice(0, 2).toUpperCase(),
+          image: imageField ? record[imageField] : "",
+        }));
+      }
+    }
+    return renderDashboardComponent({
+      id: node.id,
+      registryKey: key,
+      type: node.rendererKey || key,
+      title: node.title || node.label || "",
+      config,
+      layout: node.layout || {},
+    }, null, "ready");
+  }
+  if (["record_picker", "searchable_dropdown"].includes(key)) {
+    const config = node.config || {};
+    const state = data?.[node.id] || {};
+    const records = Array.isArray(state.records) ? state.records : [];
+    const valueField = config.valueField || "id";
+    const labelField = config.labelField || "name";
+    const secondaryField = config.secondaryField || "";
+    return (
+      <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" disabled={builderMode || state.loading}>
+        <option value="">{state.loading ? "Loading…" : (config.placeholder || "Select record…")}</option>
+        {records.map((record, index) => <option key={record[valueField] || record.id || index} value={record[valueField] || record.id || ""}>{String(record[labelField] || record.name || record.id || "Record")}{secondaryField && record[secondaryField] ? ` · ${record[secondaryField]}` : ""}</option>)}
+      </select>
+    );
+  }
+  if (key === "product_image_card") {
+    const config = node.config || {};
+    const state = data?.[node.id] || {};
+    const records = Array.isArray(state.records) ? state.records : [];
+    if (state.loading) return <div className="cpb-empty">Loading records…</div>;
+    if (state.error && !records.length) return <div className="cpb-empty">{state.error}</div>;
+    const shown = records.slice(0, Math.max(1, Number(config.maxRecords) || 8));
+    return <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>{shown.map((record, index) => {
+      const image = config.imageField ? record[config.imageField] : "";
+      const title = record[config.titleField || "name"] || "Record";
+      const subtitleFields = Array.isArray(config.subtitleFields) ? config.subtitleFields : [];
+      return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
+    })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
+  }
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
   if (key === "container") {
@@ -677,7 +730,28 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
  * stay in perfect sync without extra wiring.
  */
 function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeState, setPage, runtimeOverride, children }) {
-  const baseCollection = ADVANCED_RECORD_COMPONENTS.includes(node.componentKey) ? advancedCollection(node) : (node.collection || {});
+  const baseCollection = ADVANCED_RECORD_COMPONENTS.includes(node.componentKey)
+    ? advancedCollection(node)
+    : REGISTRY_RECORD_COMPONENTS.includes(node.componentKey)
+      ? (() => {
+          const config = node.config || {};
+          const fields = new Set();
+          for (const [key, value] of Object.entries(config)) {
+            if (/(Field|Binding)$/i.test(key) && typeof value === "string" && /^[a-z_][a-z0-9_]*$/.test(value)) fields.add(value);
+            if (/Fields$/i.test(key) && Array.isArray(value)) value.forEach((field) => {
+              if (typeof field === "string" && /^[a-z_][a-z0-9_]*$/.test(field)) fields.add(field);
+            });
+          }
+          return {
+            objectKey: config.objectKey || "",
+            conditions: Array.isArray(config.filters) ? config.filters : [],
+            conditionMatch: "all",
+            sort: Array.isArray(config.sort) ? config.sort : [],
+            maxRecords: Math.max(1, Math.min(50, Number(config.maxRecords || config.maxVisible) || 10)),
+            fields: [...fields],
+          };
+        })()
+      : (node.collection || {});
   const dynamicFilter = runtimeOverride?.filter?.field
     ? [{ field: runtimeOverride.filter.field, operator: "equals", value: runtimeOverride.filter.value }]
     : [];
@@ -686,7 +760,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
     conditions: [...(baseCollection.conditions || []), ...dynamicFilter],
     __refreshNonce: runtimeOverride?.refreshNonce || 0,
   };
-  const isRecordBound = ["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS].includes(node.componentKey);
+  const isRecordBound = ["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS, ...REGISTRY_RECORD_COMPONENTS].includes(node.componentKey);
   const page = pageByNode[node.id] || 1;
   const live = useRecordCollection(collection, {
     enabled: isRecordBound && Boolean(collection.objectKey),
@@ -769,7 +843,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     for (const section of sections) {
       const visit = (list) => {
         for (const node of list || []) {
-          if (["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS].includes(node.componentKey)) nodes.push(node);
+          if (["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS, ...REGISTRY_RECORD_COMPONENTS].includes(node.componentKey)) nodes.push(node);
           if (Array.isArray(node.children)) visit(node.children);
         }
       };
