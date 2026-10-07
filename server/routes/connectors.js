@@ -211,8 +211,11 @@ export default function createConnectorsRouter({ authenticate, authorize, db, wr
 
   router.post("/connector-instances/:id/execute", authenticate, authorize("integration.manage"), async (req, res) => {
     try {
-      const capability = String(req.body?.capability || "").trim();
-      const execution = await executeInstalledConnectorCapability({ db, drivers, companyId: req.user.companyId, connectorInstanceId: req.params.id, capability, payload: req.body?.payload || {} });
+      const capability = String(req.body?.capability || req.query?.capability || "").trim();
+      const payload = req.body?.payload && typeof req.body.payload === "object"
+        ? req.body.payload
+        : Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => key !== "capability"));
+      const execution = await executeInstalledConnectorCapability({ db, drivers, companyId: req.user.companyId, connectorInstanceId: req.params.id, capability, payload });
       await writeAudit?.(req.user.companyId, req.user.id || null, "connector.capability.executed", "integration_connection", req.params.id, { capability });
       res.json({ success: true, data: execution.result });
     } catch (error) {
