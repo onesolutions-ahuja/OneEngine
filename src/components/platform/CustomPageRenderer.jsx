@@ -892,6 +892,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
           lastInteraction: detail,
           refreshNonce: Number(current[detail.nodeId]?.refreshNonce || 0) + 1,
           ...(detail.output !== undefined ? { flowOutput: detail.output } : {}),
+          ...(detail.outputTarget && detail.output !== undefined ? { outputTarget: detail.outputTarget } : {}),
         },
       }));
     };
@@ -982,7 +983,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     },
     flows: {
       ...(pageContext?.flows || {}),
-      ...Object.fromEntries(Object.entries(runtimeOverrides).filter(([, state]) => state?.flowOutput !== undefined).map(([id, state]) => [id, state.flowOutput])),
+      ...Object.fromEntries(Object.entries(runtimeOverrides).filter(([, state]) => state?.flowOutput !== undefined).map(([id, state]) => [state.outputTarget || id, state.flowOutput])),
     },
   };
 
