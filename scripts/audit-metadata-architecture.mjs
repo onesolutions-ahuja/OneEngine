@@ -29,6 +29,9 @@ const hardcodedBusinessObjectKeys=[
   "supplier_invoice","supplier_payment","sales_order","sales_order_line","stock_return"
 ];
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
+const retiredFrontendBusinessFiles = [
+  "src/pages/products/GlobalProductLookupPage.jsx",
+];
 const retiredActionKeys=[
   "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION",
   "CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION"
@@ -139,6 +142,10 @@ for (const file of allServerRuntimeFiles) {
   }
 }
 
+for (const artifact of retiredFrontendBusinessFiles) {
+  if (fs.existsSync(path.join(ROOT, artifact))) findings.push({rule:"RETIRED_FRONTEND_BUSINESS_FILE_PRESENT",file:artifact});
+}
+
 for(const file of roots.flatMap(walk)){
   const name=rel(file);
   const text=fs.readFileSync(file,"utf8");
@@ -177,6 +184,14 @@ for(const file of roots.flatMap(walk)){
   }
   if (name === "src/pages/dashboard/DashboardPage.jsx" && /currency\s*=\s*['"]GBP['"]/.test(text)) {
     findings.push({rule:"HARDCODED_DASHBOARD_CURRENCY_DEFAULT",file:name});
+  }
+  if (name.startsWith("src/") && /\/api\/global-products(?:\/|['"`])/.test(text)) {
+    findings.push({rule:"HARDCODED_GLOBAL_PRODUCT_API_IN_FRONTEND",file:name});
+  }
+  if (name === "src/App.jsx") {
+    for (const alias of ["contacts: 'customers'","one_connect_google: 'google-connect'","one_assistant: 'assistant'"]) {
+      if (text.includes(alias)) findings.push({rule:"HARDCODED_BUSINESS_APP_ALIAS",file:name,alias});
+    }
   }
   if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
 
