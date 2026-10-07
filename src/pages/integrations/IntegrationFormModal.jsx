@@ -11,7 +11,6 @@ import { useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { Toggle } from "../../components/ui.jsx";
 import { AUTH_TYPES } from "./shared.jsx";
-import { BrandIcon } from "../../components/BrandIcons.jsx";
 
 export default function IntegrationFormModal({ integration, storeId, onClose, onSaved }) {
   const isEdit = Boolean(integration);
@@ -34,8 +33,7 @@ export default function IntegrationFormModal({ integration, storeId, onClose, on
     if (baseUrl.trim()) payload.baseUrl = baseUrl.trim();
     payload.authType = authType;
 
-    // Store scope: company-wide (storeId omitted/null) or this till's store.
-    // The backend only accepts the caller's own store id (403 otherwise).
+    // Store scope is supplied by the authenticated workspace context.
     payload.storeId = storeScope === "store" && storeId ? storeId : null;
 
     // Only send credential fields the user entered; an edit with empty
@@ -90,7 +88,6 @@ export default function IntegrationFormModal({ integration, storeId, onClose, on
         <form onSubmit={submit}>
           <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-              {String(providerName || "").toLowerCase() === "shopify" && <span className="w-5 h-5" title="Shopify"><BrandIcon name="shopify" /></span>}
               {isEdit ? "Edit Integration" : "Add Integration"}
             </h2>
             <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">✕</button>
@@ -103,7 +100,7 @@ export default function IntegrationFormModal({ integration, storeId, onClose, on
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="block text-xs font-medium text-slate-600 mb-1">Provider name</span>
-                <input value={providerName} onChange={(e) => setProviderName(e.target.value)} placeholder="e.g. Xero, Shopify" className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input value={providerName} onChange={(e) => setProviderName(e.target.value)} placeholder="Provider name" className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </label>
               <label className="block">
                 <span className="block text-xs font-medium text-slate-600 mb-1">Integration type</span>
