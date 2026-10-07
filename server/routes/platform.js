@@ -9322,10 +9322,9 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         trigger: "before_delete",
         req,
       });
-      // Objects with an active field use archive semantics.  This keeps the
-      // RECORD_DELETE command generic while preserving historical relationships
-      // (sales, stock, invoices, etc.). Objects without an active field may be
-      // physically deleted when their metadata permission allows it.
+      // Objects with an active field use archive semantics so generic record
+      // deletion can preserve historical relationships. Objects without an active
+      // field may be physically deleted when their metadata permission allows it.
       const activeField = fields.find(field => field.active !== false && field.source_column === "active");
       let result;
       let archived = false;
