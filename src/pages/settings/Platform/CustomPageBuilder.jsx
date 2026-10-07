@@ -1774,7 +1774,7 @@ function useRegistryObjectFields(objectKey, objects) {
   return fields;
 }
 
-function RegistryDrivenProperties({ node, meta, objects, onChange, targetComponents = [] }) {
+function RegistryDrivenProperties({ node, meta, objects, pageResources = {}, onChange, targetComponents = [] }) {
   const configurable = Array.isArray(meta?.configurable) ? meta.configurable : [];
   const config = node.config || {};
   const objectKey = config.objectKey || "";
@@ -1847,7 +1847,7 @@ function RegistryDrivenProperties({ node, meta, objects, onChange, targetCompone
           <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Conditions & Filters</legend>
           {objectKey ? (
             <>
-              <ConditionsEditor collection={conditionCollection} fields={fields} onChange={patchConditionCollection} />
+              <ConditionsEditor collection={conditionCollection} fields={fields} onChange={patchConditionCollection} pageResources={pageResources} targetComponents={targetComponents} />
               <SortEditor collection={conditionCollection} fields={fields} onChange={patchConditionCollection} />
             </>
           ) : (
