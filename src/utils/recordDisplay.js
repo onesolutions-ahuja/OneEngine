@@ -18,26 +18,16 @@ export function parseBooleanValue(value) {
   return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-export function getRecordDisplayTitle(record, fallback = "Record") {
-  const candidates = [
-    record?.name,
-    record?.display_name,
-    record?.title,
-    record?.reference,
-    record?.reference_number,
-    record?.receipt_number,
-    record?.number,
-    record?.code,
-    record?.sku,
-    fallback,
-  ];
-  const title = candidates.find((value) => (
-    value !== null &&
-    value !== undefined &&
-    String(value).trim() !== "" &&
-    !isUuid(String(value).trim())
-  ));
-  return title === undefined ? "Record" : String(title);
+export function getRecordDisplayTitle(record, fields = [], fallback = "Record") {
+  const candidates = [...(Array.isArray(fields) ? fields : [])]
+    .filter((field) => field?.active !== false && field?.readable !== false)
+    .sort((a, b) => Number(b?.config?.recordTitle === true || b?.config?.primaryLabel === true) - Number(a?.config?.recordTitle === true || a?.config?.primaryLabel === true) || Number(a?.display_order ?? 999) - Number(b?.display_order ?? 999));
+  for (const field of candidates) {
+    const key = field?.apiName || field?.api_name || field?.fieldKey || field?.field_key || "";
+    const value = key ? record?.[key] : null;
+    if (value !== null && value !== undefined && String(value).trim() && !isUuid(String(value).trim())) return String(value);
+  }
+  return record?.id && !isUuid(String(record.id)) ? String(record.id) : fallback;
 }
 
 function currencyCodeOf(field) {
