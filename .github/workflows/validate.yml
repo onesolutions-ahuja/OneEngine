@@ -26,7 +26,7 @@ jobs:
       - run: npm ls --all
         working-directory: server
       # Build first so deploy-blocking syntax/audit failures are always visible, 
-      # even when unrelated unit tests on main are already failing.  
+      # even when unrelated unit tests on main are already failing.   
       - run: npm run build
       - run: npm run build
         working-directory: server
