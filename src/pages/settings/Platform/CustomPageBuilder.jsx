@@ -661,7 +661,7 @@ const updateNode = (nodeId, changes) => {
         saved = response.data;
         setPage(saved);
         const tree = normalizeCustomPageTree(saved?.draft_definition || definition);
-        setDraft({ ...draft, label: saved?.label || draft.label, presentation_mode: tree.presentation_mode, device: tree.device, sections: tree.sections });
+        setDraft({ ...draft, label: saved?.label || draft.label, presentation_mode: tree.presentation_mode, device: tree.device, resources: tree.resources, sections: tree.sections });
         setPages((current) => current.map((row) => row.id === saved?.id ? saved : row));
         if (saved?.id) await loadVersions(saved.id);
         onMessage?.("Draft saved.");
@@ -764,7 +764,7 @@ const updateNode = (nodeId, changes) => {
       const restored = response?.data;
       setPage(restored);
       const tree = normalizeCustomPageTree(restored?.draft_definition || restored?.definition || {});
-      setDraft({ pageKey: restored?.page_key || draft.pageKey, label: restored?.label || draft.label, presentation_mode: tree.presentation_mode, device: tree.device, sections: tree.sections });
+      setDraft({ pageKey: restored?.page_key || draft.pageKey, label: restored?.label || draft.label, presentation_mode: tree.presentation_mode, device: tree.device, resources: tree.resources, sections: tree.sections });
       setDirty(false);
       await loadVersions(pageId);
       onMessage?.(`Version ${version} restored as a new draft.`);
