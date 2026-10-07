@@ -94,7 +94,7 @@ for (const file of executableFiles) {
 }
 
 // The old hidden flow-manifest shims must not return after migration.
-const runtimeFlowManifestPath = path.join(ROOT, "server/packages/runtimeFlowManifests.js");
+const runtimeFlowManifestPath = path.join(ROOT, "server/metadata/manifests");
 if (fs.existsSync(runtimeFlowManifestPath)) {
   const source = fs.readFileSync(runtimeFlowManifestPath, "utf8");
   const retiredRuntimeFlowKeys = [
@@ -107,7 +107,7 @@ if (fs.existsSync(runtimeFlowManifestPath)) {
   ];
   for (const key of retiredRuntimeFlowKeys) {
     if (source.includes(`flow("${key}"`) || source.includes(`flow('${key}'`)) {
-      findings.push({ type: "RETIRED_DUPLICATE_RUNTIME_FLOW", key, file: "server/packages/runtimeFlowManifests.js" });
+      findings.push({ type: "RETIRED_DUPLICATE_RUNTIME_FLOW", key, file: "server/metadata/manifests" });
     }
   }
 }
@@ -117,9 +117,9 @@ if (fs.existsSync(runtimeFlowManifestPath)) {
 const builderPage = read("src/pages/developer/gptbuilder/GPTBuilderPage.jsx");
 const builderAction = read("src/pages/developer/gptbuilder/GPTBuilderAction.jsx");
 const builderRoundTripReady =
-  /source:\s*['"]runtime_import['"]/.test(builderPage)
-  && /importedRuntimeAction\s*:\s*runtimeAction/.test(builderPage)
-  && /Imported runtime configuration/.test(builderAction);
+  /source:\s*['"]metadata_import['"]/.test(builderPage)
+  && /importedMetadataAction\s*:\s*runtimeAction/.test(builderPage)
+  && /Imported metadata configuration/.test(builderAction);
 if (!builderRoundTripReady) findings.push({ type: "GPT_BUILDER_RUNTIME_ROUNDTRIP_FALLBACK_MISSING" });
 
 const report = {
