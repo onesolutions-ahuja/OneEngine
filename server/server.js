@@ -61,9 +61,7 @@ import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
-import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
-import { createSmsGateDriver } from "./services/smsGateConnector.js";
-import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
+import { loadConnectorDriversFromMetadata } from "./services/connectorDriverLoader.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
 import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
@@ -438,10 +436,6 @@ app.use("/api", (req, res, next) => {
 });
 
 const connectorDrivers = new ConnectorDriverRegistry();
-connectorDrivers.register(createReferencePaymentDriver());
-connectorDrivers.register(createSmsGateDriver());
-connectorDrivers.register(createBrevoDriver());
-connectorDrivers.register(createMailjetDriver());
 app.locals.connectorDrivers = connectorDrivers;
 
 /*
@@ -2111,6 +2105,8 @@ async function startServer() {
     console.log("onePOS: syncing package catalogue...");
     await seedInternalAppCatalog(pool);
     await seedPackageRegistry(pool);
+    const loadedConnectorDrivers = await loadConnectorDriversFromMetadata({ db, registry: connectorDrivers });
+    console.log(`onePOS: connector runtime drivers loaded (${loadedConnectorDrivers.length})`);
     const startupRegistryHealth = await verifyPublicPackageRegistry(pool);
     if (!startupRegistryHealth.healthy) {
       const details = [
