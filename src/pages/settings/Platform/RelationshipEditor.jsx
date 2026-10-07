@@ -342,7 +342,7 @@ export default function RelationshipEditor({
                     };
                   });
                 }}
-                placeholder="Customer Sales"
+                placeholder="Related Records"
                 required
               />
             </label>
