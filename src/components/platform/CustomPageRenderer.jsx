@@ -870,13 +870,19 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     const records = Array.isArray(state.records) ? state.records : [];
     if (state.loading) return <div className="cpb-empty">Loading records…</div>;
     if (state.error && !records.length) return <div className="cpb-empty">{state.error}</div>;
-    const shown = records.slice(0, Math.max(1, Number(config.maxRecords) || 8));
+    const selectedFields = Array.isArray(node.collection?.fields) ? node.collection.fields : [];
+    const shown = records.slice(0, Math.max(1, Number(node.collection?.maxRecords || config.maxRecords) || 8));
     return <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>{shown.map((record, index) => {
-      const image = config.imageField ? record[config.imageField] : "";
-      const fallbackField = state.fields?.[0]?.apiName || state.fields?.[0]?.api_name || "id";
-      const title = record[config.titleField || fallbackField] || record.id || "Record";
-      const subtitleFields = Array.isArray(config.subtitleFields) ? config.subtitleFields : [];
-      return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
+      const orderedFields = selectedFields.length ? selectedFields : (state.fields || []).map((field) => field.apiName || field.api_name).filter(Boolean);
+      const imageField = orderedFields.find((field) => {
+        const value = record[field];
+        return typeof value === "string" && (/^https?:\/\//i.test(value) || /^data:image\//i.test(value) || /^\/[^/]/.test(value));
+      }) || "";
+      const image = imageField ? record[imageField] : "";
+      const textFields = orderedFields.filter((field) => field !== imageField);
+      const titleField = textFields[0] || "";
+      const title = titleField ? record[titleField] : (record.id || "Record");
+      return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title ?? "")}</div>{textFields.slice(1).map((field) => record[field] !== undefined && record[field] !== null && record[field] !== "" ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
   if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} onEvent={onEvent} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} pageContext={pageContext} runtimeOverrides={runtimeOverrides} data={data} pageState={pageState} renderChildren={(activeIndex)=>node.children?.length ? node.children.filter((child,index)=>activeIndex===undefined || child.config?.tabIndex===undefined || Number(child.config.tabIndex)===activeIndex).map((child)=><NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} onEvent={onEvent} data={data} runtimeOverrides={runtimeOverrides} pageContext={pageContext} pageState={pageState} />) : null} />;
