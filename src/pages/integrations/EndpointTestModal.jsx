@@ -13,12 +13,12 @@ import { apiRequest } from "../../services/api.js";
 import { safeParse } from "./shared.jsx";
 
 export const SAMPLE_JSON = `{
-  "sales": {
+  "record": {
     "sale_id": "S-1001",
     "receipt_number": "T01-20260916-0001",
     "total": 42.5,
-    "customer": { "name": "Acme Ltd", "address": { "postcode": "SW1A 1AA" } },
-    "items": [ { "quantity": 2, "product": { "ean": "5000111000011" } } ]
+    "related_record": { "name": "Acme Ltd", "address": { "postcode": "SW1A 1AA" } },
+    "items": [ { "quantity": 2, "item": { "ean": "5000111000011" } } ]
   }
 }`;
 
