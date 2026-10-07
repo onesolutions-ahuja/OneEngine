@@ -21,7 +21,6 @@ const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/Cu
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
 const CategoriesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
@@ -668,9 +667,6 @@ function Desktop({ onLock, onSignOut }) {
     const aliases = {
       platform: 'developer',
       builder: 'developer',
-      contacts: 'customers',
-      one_connect_google: 'google-connect',
-      one_assistant: 'assistant',
     }
     const target = aliases[id] || id
 
@@ -702,9 +698,9 @@ function Desktop({ onLock, onSignOut }) {
       return
     }
     if (target === 'settings') {
-      const section = readRoute().section || 'company'
+      const section = readRoute().section || null
       const next = { app: 'settings', section }
-      setRoute('settings', section)
+      setRoute('settings', section || undefined)
       setRouteState(next)
       setActiveApp('settings')
       return
