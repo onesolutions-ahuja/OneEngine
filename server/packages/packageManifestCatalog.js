@@ -676,7 +676,7 @@ const PACKAGE_CATALOG = [
           key: "email.send",
           label: "Send test email",
           description: "Verify the full OneEngine to Brevo email delivery path.",
-          endpoint: "/api/connector-instances/{instanceId}/send-test-email",
+          endpoint: "/api/connector-instances/{instanceId}/execute?capability=email.send",
           permission: "communications.send",
           requiresEnabled: false,
           fields: [
@@ -738,7 +738,7 @@ const PACKAGE_CATALOG = [
           key: "email.send",
           label: "Send test email",
           description: "Verify the full OneEngine to Mailjet email delivery path.",
-          endpoint: "/api/connector-instances/{instanceId}/send-test-email",
+          endpoint: "/api/connector-instances/{instanceId}/execute?capability=email.send",
           permission: "communications.send",
           requiresEnabled: false,
           fields: [
@@ -839,7 +839,7 @@ const PACKAGE_CATALOG = [
           key: "sms.send",
           label: "Send test SMS",
           description: "Verify the full onePOS to SMSGate to Android phone delivery path.",
-          endpoint: "/api/connector-instances/{instanceId}/send-test-sms",
+          endpoint: "/api/connector-instances/{instanceId}/execute?capability=sms.send",
           permission: "communications.send",
           requiresEnabled: true,
           fields: [
