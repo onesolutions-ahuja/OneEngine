@@ -7,33 +7,20 @@ import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/route
 import { MenuBarClock, useClock } from './shell/clock/ShellClock'
 import RdvnReferenceDock, { dockItems } from './shell/dock/RdvnReferenceDock'
 import { CompanyContextLoading, LockScreen } from './shell/auth/LoginShell'
-import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
 import { appIconUrl, applyDefaultAppIcon, localAppIcon, marketplaceSearchText, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from './utils/appMarketplace'
 import JarvisOrb, { ORB_STATES } from './shell/jarvis/JarvisOrb'
 import JarvisPanel from './shell/jarvis/JarvisPanel'
-import IdentityAssuranceSettings from './pages/settings/IdentityAssuranceSettings'
-const RecordListView = lazyWithRecovery(() => import('./platform/records/RecordListView'))
-const MetadataRecordFormModal = lazyWithRecovery(() => import('./platform/forms/MetadataRecordFormModal'))
-const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
-const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
-const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
-const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
-const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
 const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage'))
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
-const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
-const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
-const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
-const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   LockKeyhole,
