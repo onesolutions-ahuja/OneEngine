@@ -58,12 +58,6 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       up: client => client.query(platformFoundation),
     },
     {
-      key: "0003_legacy_compatibility",
-      version: "3",
-      name: "Core compatibility migrations and system seeds",
-      up: client => initializeLegacyDatabase(client),
-    },
-    {
       key: "0004_app_release_manager",
       version: "4",
       name: "App release rollout state",
