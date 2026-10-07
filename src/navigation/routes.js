@@ -1,4 +1,5 @@
 export const DEVELOPER_SETTINGS_KEYS = new Set([
+  'components',
   'objects',
   'assignment-rules',
   'sharing-rules',
