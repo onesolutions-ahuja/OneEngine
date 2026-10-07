@@ -99,9 +99,10 @@ const dashboardRuntimeMissing = dashboardComponents
   .filter((component) => component.key !== "section")
   .filter((component) => { const runtimeKey = component.rendererKey || component.key; return !dashboardRendererSource.includes(`"${runtimeKey}"`) && !dashboardRendererSource.includes(`${runtimeKey}:`) && !dashboardRendererSource.includes(`"${component.key}"`) && !dashboardRendererSource.includes(`${component.key}:`); })
   .map((component) => component.key);
+const hasMetadataDrivenDashboardProperties = dashboardPropertiesSource.includes("useComponentRegistry") && dashboardPropertiesSource.includes("metadataConfigurable");
 const dashboardPropertiesMissing = dashboardComponents
   .filter((component) => Array.isArray(component.configurable) && component.configurable.length)
-  .filter((component) => !component.runtimeKind && !dashboardPropertiesSource.includes(`"${component.rendererKey || component.key}"`) && !dashboardPropertiesSource.includes(`"${component.key}"`))
+  .filter((component) => !component.runtimeKind && !hasMetadataDrivenDashboardProperties && !dashboardPropertiesSource.includes(`"${component.rendererKey || component.key}"`) && !dashboardPropertiesSource.includes(`"${component.key}"`))
   .map((component) => component.key);
 const iconCoverageMissing = PLATFORM_COMPONENTS
   .filter((component) => !clientRegistrySource.includes(`${component.key}:`))
