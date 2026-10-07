@@ -93,6 +93,12 @@ for (const file of allServerRuntimeFiles) {
     findings.push({rule:"HARDCODED_INVOICE_PREFIX_SEED",file:name});
   }
   if (name === "server/server.js") {
+    const providerJobTokens = [
+      "SHOPIFY_PROVIDER_SYNC","SHOPIFY_WEBHOOK_EVENT","SHOPIFY_PROCESS_WEBHOOK","/api/shopify/webhooks"
+    ];
+    for (const token of providerJobTokens) {
+      if (text.includes(token)) findings.push({rule:"HARDCODED_PROVIDER_JOB_RUNTIME_IN_SERVER",file:name,token});
+    }
     const providerDriverTokens = [
       "createReferencePaymentDriver","createSmsGateDriver","createBrevoDriver","createMailjetDriver",
       "connector_package_key='smsgate_connector'","configureSmsGateInboundWebhook","getSmsGateDiagnostics"
@@ -111,6 +117,12 @@ for (const file of allServerRuntimeFiles) {
   }
   if (name === "server/routes/admin.js" && /user_email_domain|domain_users_only|email_registration_enabled|company_settings/.test(text)) {
     findings.push({rule:"HARDCODED_ACCOUNT_POLICY_BINDING_IN_ADMIN",file:name});
+  }
+  if (name === "server/routes/accountLifecycle.js") {
+    if (/\/account\/invite\/:userId/.test(text)) findings.push({rule:"LEGACY_STAFF_INVITE_ROUTE",file:name});
+    if (/user_email_domain|domain_users_only|email_registration_enabled|password_reset_email_enabled|company_settings/.test(text)) {
+      findings.push({rule:"HARDCODED_ACCOUNT_LIFECYCLE_SETTINGS_BINDING",file:name});
+    }
   }
   if (name === "server/routes/accountLifecycle.js" && /\/settings\/account-policy/.test(text)) {
     findings.push({rule:"HARDCODED_ACCOUNT_POLICY_SETTINGS_ROUTE",file:name});
