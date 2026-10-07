@@ -1393,6 +1393,9 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       `last_login;dur=${loginTimings.last_login_update_ms || 0}`,
       `acting_company;dur=${loginTimings.acting_company_lookup_ms || 0}`,
       `permissions;dur=${loginTimings.permissions_ms || 0}`,
+      `security_preflight;dur=${loginTimings.security_preflight_ms || 0}`,
+      `authorization;dur=${loginTimings.authorization_ms || 0}`,
+      `finalization;dur=${loginTimings.finalization_ms || 0}`,
       `total;dur=${loginTimings.total_ms || 0}`,
     ].join(", "));
 
