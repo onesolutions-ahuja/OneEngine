@@ -26,7 +26,7 @@ const REMOVED_PROVIDER_TEST_ADAPTERS = [
   "UBER_SET_ITEM_AVAILABLE",
 ];
 
-const INTERNAL = [
+const RETIRED_BUSINESS_ADAPTERS = [
   "PAYMENT_START",
   "PAYMENT_CANCEL",
   "GLOBAL_PRODUCT_LOOKUP_BARCODE",
@@ -34,7 +34,7 @@ const INTERNAL = [
 ];
 
 
-test("internal adapters stay executable but are hidden from Flow Builder", () => {
+test("business adapters stay removed while generic primitives remain in Flow Builder", () => {
   const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
   const builder = new Set(getWorkflowBuilderActionRegistry().map((item) => item.key));
 
@@ -42,9 +42,9 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
     assert.ok(builder.has(key), key + " must remain available to Flow Builder");
   }
 
-  for (const key of INTERNAL) {
-    assert.ok(all.has(key), key + " must remain executable for generic runtime callers");
-    assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
+  for (const key of RETIRED_BUSINESS_ADAPTERS) {
+    assert.equal(all.has(key), false, key + " business adapter must remain removed");
+    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as hidden business code");
     assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
   }
   for (const key of ["ONLINE_ORDER_TRANSITION","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_EXPORT_REFUND"]) {
