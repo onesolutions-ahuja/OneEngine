@@ -28,7 +28,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-1.56.0
+      - name: Install Chromium
+        run: npx playwright install chromium
       - name: Verify current Pages deployment
         shell: bash
         run: |
@@ -80,5 +86,7 @@ jobs:
           set -euo pipefail
           test -n "${ONEPOS_E2E_USERNAME:-}" || { echo "::error::ONEPOS_PLAYWRIGHT_USERNAME repository variable is required"; exit 1; }
           test -n "${ONEPOS_E2E_PASSWORD:-}" || { echo "::error::ONEPOS_PLAYWRIGHT_PASSWORD repository variable is required"; exit 1; }
-      - name: Run final loading and 1.5s performance verification
-        run: npx playwright test tests/e2e/final-loading-verification.spec.mjs tests/e2e/final-performance.spec.mjs --project=desktop-chromium --workers=4
+      - name: Run 1.5s performance verification
+        run: npx playwright test tests/e2e/final-performance.spec.mjs --project=desktop-chromium --workers=1 --retries=0
+      - name: Run exhaustive loading verification
+        run: npx playwright test tests/e2e/final-loading-verification.spec.mjs --project=desktop-chromium --workers=4
