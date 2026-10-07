@@ -3,10 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
-const roots=["server/routes","server/services","src"].map((x)=>path.join(ROOT,x));
+const roots=["server","src"].map((x)=>path.join(ROOT,x));
 const walk=(dir)=>fs.existsSync(dir)?fs.readdirSync(dir,{withFileTypes:true}).flatMap((e)=>{const full=path.join(dir,e.name);return e.isDirectory()?walk(full):/\.(?:js|jsx|mjs|ts|tsx)$/.test(e.name)?[full]:[];}):[];
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
-const files=roots.flatMap(walk);
+const files=roots.flatMap(walk).filter((file)=>{const name=rel(file);return !/(?:^|\/)(?:test|tests|scripts|migrations)(?:\/|$)/.test(name)&&!name.endsWith(".test.js")&&!name.endsWith(".test.mjs");});
 const businessTables=["sales","sale_items","payments","payment_attempts","payment_methods","refunds","customers","customer_ledger","customer_loyalty_ledger","gift_card_ledger","gift_cards","layaways","products","product_variants","product_bundles","product_store_pricing","product_supplier_costs","inventory_ledger","inventory_movements","inventory_levels","inventory_batches","suppliers","purchases","purchase_items","purchase_ledger","supplier_invoices","supplier_payments","online_orders","online_order_items","online_order_events"];
 const businessObjectKeys=["sale","sale_item","payment","refund","customer","gift_card","layaway","product","product_variant","inventory","inventory_movement","supplier","purchase","purchase_receipt","online_order"];
 const businessApiRoots=["sales","products","customers","suppliers","purchases","inventory","returns","exchanges","payments","payment","self-checkout","kiosk","online-orders","online_orders","ean","global-product","global_product","gift","loyalty","layaway","invoice","secure-invoice"];
