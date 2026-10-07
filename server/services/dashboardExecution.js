@@ -6,7 +6,7 @@ import { loadPlatformReportContext } from "./platformReportSecurity.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function createDashboardExecution({ db, canViewCompanyCustomers, canAccessStore, hasPermission } = {}) {
+export function createDashboardExecution({ db, hasCompanyWideScope, canAccessStore, hasPermission } = {}) {
   if (typeof db !== "function") throw new Error("Dashboard execution requires a database");
 
   async function resolveComponentReport(req, component, dashboardFilters = []) {
@@ -20,7 +20,7 @@ export function createDashboardExecution({ db, canViewCompanyCustomers, canAcces
       );
       if (!report.rows[0]) throw new Error("Saved report unavailable");
       const savedReport = report.rows[0];
-      const companyAdmin = canViewCompanyCustomers ? await canViewCompanyCustomers(req.user) : false;
+      const companyAdmin = hasCompanyWideScope ? await hasCompanyWideScope(req.user) : false;
       if (!companyAdmin && String(savedReport.created_by) !== String(req.user.id)) {
         const accessResult = await db(
           "SELECT 1 FROM custom_report_users WHERE report_id=$1 AND user_id=$2",
