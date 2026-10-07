@@ -730,7 +730,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_purchase",
               "label": "Validate Purchase",
               "apiName": "validate_purchase",
@@ -747,10 +747,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -769,7 +769,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "purchase_ready",
               "label": "Purchase Ready?",
               "apiName": "purchase_ready",
@@ -799,10 +799,10 @@
                 "purchase_invalid"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -821,7 +821,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_purchase",
               "label": "Create Purchase",
               "key": "CREATE_RECORD",
@@ -830,10 +830,10 @@
                 "path": "variables.purchase"
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -852,7 +852,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_purchase_lines",
               "label": "Create Purchase Lines",
               "key": "CREATE_RECORD",
@@ -866,10 +866,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -888,7 +888,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "purchase_invalid",
               "label": "Purchase Rejected",
               "apiName": "purchase_invalid",
@@ -896,10 +896,10 @@
               "errorMessage": "A purchase requires a supplier and at least one purchase line.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
@@ -1062,7 +1062,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "get_purchase",
               "label": "Get Purchase",
               "apiName": "get_purchase",
@@ -1081,10 +1081,10 @@
               "limit": 1,
               "store": "first"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1103,7 +1103,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "purchase_can_receive",
               "label": "Purchase Can Be Received?",
               "apiName": "purchase_can_receive",
@@ -1138,10 +1138,10 @@
                 "purchase_receive_invalid"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1160,7 +1160,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_receipt",
               "label": "Create Purchase Receipt",
               "key": "CREATE_RECORD",
@@ -1169,10 +1169,10 @@
                 "path": "variables.receipt"
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1191,7 +1191,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "update_purchase",
               "label": "Update Purchase Receipt Status",
               "key": "UPDATE_RECORD",
@@ -1211,10 +1211,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1233,7 +1233,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "purchase_receive_invalid",
               "label": "Purchase Receipt Rejected",
               "apiName": "purchase_receive_invalid",
@@ -1241,10 +1241,10 @@
               "errorMessage": "The purchase is missing or has already been received.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
@@ -1408,7 +1408,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_supplier_return",
               "label": "Validate Supplier Return",
               "apiName": "validate_supplier_return",
@@ -1428,10 +1428,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1450,7 +1450,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "supplier_return_ready",
               "label": "Supplier Return Ready?",
               "apiName": "supplier_return_ready",
@@ -1480,10 +1480,10 @@
                 "supplier_return_invalid"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1502,7 +1502,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_return",
               "label": "Create Supplier Return",
               "key": "CREATE_RECORD",
@@ -1511,10 +1511,10 @@
                 "path": "variables.return"
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1533,7 +1533,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_return_lines",
               "label": "Create Return Lines",
               "key": "CREATE_RECORD",
@@ -1547,10 +1547,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1569,7 +1569,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "supplier_return_invalid",
               "label": "Supplier Return Rejected",
               "apiName": "supplier_return_invalid",
@@ -1577,10 +1577,10 @@
               "errorMessage": "A supplier return requires a supplier, purchase, and at least one return line.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
@@ -1665,7 +1665,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "validate_adjustment",
                 "label": "Validate Ledger Adjustment",
                 "key": "FORMULA",
@@ -1684,10 +1684,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1706,7 +1706,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "adjustment_ready",
                 "label": "Ledger Adjustment Ready?",
                 "key": "CONDITION",
@@ -1735,10 +1735,10 @@
                   "adjustment_invalid"
                 ]
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1757,7 +1757,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_ledger",
                 "label": "Create Ledger Adjustment",
                 "key": "CREATE_RECORD",
@@ -1781,10 +1781,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1803,7 +1803,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_ledger_id",
                 "label": "Return Ledger Entry",
                 "key": "ASSIGNMENT",
@@ -1814,10 +1814,10 @@
                   "path": "steps.create_ledger.record.id"
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1836,17 +1836,17 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "adjustment_invalid",
                 "label": "Ledger Adjustment Rejected",
                 "key": "CUSTOM_ERROR",
                 "errorMessage": "Supplier ledger adjustment requires a supplier, entry type, and positive amount.",
                 "errorLocation": "record"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           }
         ],
