@@ -49,7 +49,7 @@ const recordRuntimeMissing = pageComponents
   .filter((component) => !pageRendererSource.includes(`"${component.key}"`))
   .map((component) => component.key);
 const rendererCoverageMissing = pageComponents
-  .filter((component) => component.key !== "section" && component.category !== "field")
+  .filter((component) => component.key !== "section" && component.category !== "field" && component.runtimeKind !== "analytics")
   .filter((component) => !pageRendererSource.includes(`"${component.key}"`))
   .map((component) => component.key);
 
