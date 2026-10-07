@@ -900,25 +900,24 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     return () => window.removeEventListener("oneengine:page-interaction-complete", onInteractionComplete);
   }, []);
 
-  const applyComponentInteraction = ({ record = null, node }) => {
-    const interaction = node?.interaction;
+  const applyComponentInteraction = ({ record = null, node, eventName = "click", value = undefined }) => {
+    const interaction = node?.interactions?.[eventName] || (eventName === "click" ? node?.interaction : null);
     if (!interaction || interaction.type !== "component" || !interaction.targetNodeId) return false;
     const targetId = String(interaction.targetNodeId);
     setRuntimeOverrides((current) => {
       const existing = current[targetId] || {};
       const operation = interaction.operation || "set_record";
+      const sourceField = interaction.sourceField || "";
+      const sourceValue = sourceField ? record?.[sourceField] : (value !== undefined ? value : record);
       if (operation === "set_record") {
-        return { ...current, [targetId]: { ...existing, record: record || null } };
+        return { ...current, [targetId]: { ...existing, record: record || null, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
       }
       if (operation === "filter_collection") {
-        const sourceField = interaction.sourceField || "id";
-        const targetField = interaction.targetField || sourceField;
-        return { ...current, [targetId]: { ...existing, filter: { field: targetField, value: record?.[sourceField] ?? null }, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
+        const targetField = interaction.targetField || sourceField || "id";
+        return { ...current, [targetId]: { ...existing, filter: { field: targetField, value: sourceValue ?? null }, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
       }
       if (operation === "set_value") {
-        const sourceField = interaction.sourceField || "";
-        const value = sourceField ? record?.[sourceField] : record;
-        return { ...current, [targetId]: { ...existing, value, valueKey: interaction.targetField || "value" } };
+        return { ...current, [targetId]: { ...existing, value: sourceValue, valueKey: interaction.targetField || "value" } };
       }
       if (operation === "refresh") {
         return { ...current, [targetId]: { ...existing, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
@@ -929,7 +928,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
   };
 
   const handleRecordClick = (payload) => {
-    if (applyComponentInteraction(payload)) return;
+    if (applyComponentInteraction({ ...payload, eventName: "row_click" }) || applyComponentInteraction(payload)) return;
     const rowInteraction = payload?.node?.interactions?.row_click;
     if (rowInteraction && rowInteraction.type !== "none") onEvent?.({ ...payload, eventName: "row_click" });
     else onRecordClick?.(payload);
@@ -943,7 +942,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     setRuntimeOverrides((current) => ({ ...current, [node.id]: { ...(current[node.id] || {}), value, ...(selectedRecord !== undefined ? { record: selectedRecord } : {}) } }));
   };
 
-  const emitEvent = (payload) => { if (!builderMode) onEvent?.(payload); };
+  const emitEvent = (payload) => { if (builderMode) return; if (!applyComponentInteraction(payload)) onEvent?.(payload); };
   useEffect(() => {
     if (!builderMode) onPageStateChange?.({ components: effectivePageContext.components, flows: effectivePageContext.flows });
   }, [builderMode, onPageStateChange, runtimeOverrides]);
