@@ -48,6 +48,7 @@ supportedRoutes.add('integrations')
 // into WorkspacePage rather than a business-specific activeApp branch.
 supportedRoutes.add('objects')
 supportedRoutes.add('workspace')
+supportedRoutes.add('connector-settings')
 
 const definitions = packageDefinitions()
 const publicApps = definitions.filter((definition) => {
