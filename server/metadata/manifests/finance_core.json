@@ -952,7 +952,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_invoice",
               "label": "Validate Supplier Invoice",
               "apiName": "validate_invoice",
@@ -975,10 +975,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -997,7 +997,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "find_existing_invoice",
               "label": "Find Existing Supplier Invoice",
               "apiName": "find_existing_invoice",
@@ -1023,10 +1023,10 @@
               "limit": 1,
               "store": "first"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1045,7 +1045,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "invoice_ready",
               "label": "Invoice Ready?",
               "apiName": "invoice_ready",
@@ -1080,10 +1080,10 @@
                 "invoice_invalid"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1102,7 +1102,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_invoice",
               "label": "Create Supplier Invoice",
               "key": "CREATE_RECORD",
@@ -1138,10 +1138,10 @@
                 "status": "OPEN"
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1160,7 +1160,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "post_invoice_ledger",
               "label": "Post Supplier Invoice Ledger",
               "key": "CREATE_RECORD",
@@ -1186,10 +1186,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1208,7 +1208,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "invoice_invalid",
               "label": "Supplier Invoice Rejected",
               "apiName": "invoice_invalid",
@@ -1216,10 +1216,10 @@
               "errorMessage": "Supplier invoice values are invalid or this supplier invoice number already exists.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
@@ -1454,7 +1454,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_payment",
               "label": "Validate Supplier Payment",
               "apiName": "validate_payment",
@@ -1471,10 +1471,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1493,7 +1493,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "payment_ready",
               "label": "Payment Ready?",
               "apiName": "payment_ready",
@@ -1524,10 +1524,10 @@
                 "payment_invalid"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1546,7 +1546,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_payment",
               "label": "Create Supplier Payment",
               "key": "CREATE_RECORD",
@@ -1584,10 +1584,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1606,7 +1606,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_allocation",
               "label": "Allocate Payment To Invoice",
               "key": "CREATE_RECORD",
@@ -1623,10 +1623,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1645,7 +1645,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "post_payment_ledger",
               "label": "Post Supplier Payment Ledger",
               "key": "CREATE_RECORD",
@@ -1682,10 +1682,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1704,7 +1704,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "payment_invalid",
               "label": "Supplier Payment Rejected",
               "apiName": "payment_invalid",
@@ -1712,10 +1712,10 @@
               "errorMessage": "Supplier payment requires a positive amount and an idempotency key.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
@@ -1884,7 +1884,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_credit",
               "label": "Validate Supplier Credit",
               "apiName": "validate_credit",
@@ -1901,10 +1901,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1923,7 +1923,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "credit_ready",
               "label": "Supplier Credit Ready?",
               "apiName": "credit_ready",
@@ -1952,10 +1952,10 @@
                 "credit_invalid"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1974,7 +1974,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_ledger_adjustment",
               "label": "Supplier Credit Create",
               "key": "CREATE_RECORD",
@@ -2010,10 +2010,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -2032,7 +2032,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "credit_invalid",
               "label": "Supplier Credit Rejected",
               "apiName": "credit_invalid",
@@ -2040,10 +2040,10 @@
               "errorMessage": "Supplier Credit requires a positive amount and an idempotency key.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
@@ -2212,7 +2212,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_debit",
               "label": "Validate Supplier Debit",
               "apiName": "validate_debit",
@@ -2229,10 +2229,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -2251,7 +2251,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "debit_ready",
               "label": "Supplier Debit Ready?",
               "apiName": "debit_ready",
@@ -2280,10 +2280,10 @@
                 "debit_invalid"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -2302,7 +2302,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_ledger_adjustment",
               "label": "Supplier Debit Create",
               "key": "CREATE_RECORD",
@@ -2338,10 +2338,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -2360,7 +2360,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "debit_invalid",
               "label": "Supplier Debit Rejected",
               "apiName": "debit_invalid",
@@ -2368,10 +2368,10 @@
               "errorMessage": "Supplier Debit requires a positive amount and an idempotency key.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
@@ -2540,7 +2540,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_credit_note",
               "label": "Validate Supplier Credit Note",
               "apiName": "validate_credit_note",
@@ -2557,10 +2557,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -2579,7 +2579,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "credit_note_ready",
               "label": "Supplier Credit Note Ready?",
               "apiName": "credit_note_ready",
@@ -2608,10 +2608,10 @@
                 "credit_note_invalid"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -2630,7 +2630,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "create_ledger_adjustment",
               "label": "Supplier Credit Note Create",
               "key": "CREATE_RECORD",
@@ -2666,10 +2666,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -2688,7 +2688,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "credit_note_invalid",
               "label": "Supplier Credit Note Rejected",
               "apiName": "credit_note_invalid",
@@ -2696,10 +2696,10 @@
               "errorMessage": "Supplier Credit Note requires a positive amount and an idempotency key.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
