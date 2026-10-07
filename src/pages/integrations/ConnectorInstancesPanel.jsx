@@ -34,7 +34,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     : selectedApp?.manifest?.connectorApp?.settingsUiVariant === "split"
       ? ConnectorSettingsSplit
       : ConnectorSettingsCompact;
-  const visibleSchema = schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type));
+  const visibleSchema = schema.filter((field) => !["action","readonly"].includes(field.type));
   const credentialFirstSchema = [...visibleSchema].sort((a, b) => {
     const credential = (field) => field.type === "secret" || /api|token|secret|password|credential|key/i.test(String(field.key || "") + " " + String(field.label || ""));
     return Number(credential(b)) - Number(credential(a));
@@ -482,7 +482,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                 </select>
               </label>
               <div className="flex items-end"><button type="submit" disabled={saving || !packageKey || !assignmentComplete} className="h-9 px-3 inline-flex items-center gap-2 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"><Check size={15} />{saving ? "Saving…" : existingInstance ? "Update connection" : "Save connection"}</button></div>
-              {schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type)).map((field) => (
+              {schema.filter((field) => !["action","readonly"].includes(field.type)).map((field) => (
                 <label key={field.key} className="text-xs font-medium text-slate-600">{field.label || field.key}
                   {field.enum ? (
                     <select value={configuration[field.key] ?? field.default ?? ""} onChange={(event) => setConfiguration((current) => ({ ...current, [field.key]: event.target.value }))} className={`${inputClass} mt-1`}>
