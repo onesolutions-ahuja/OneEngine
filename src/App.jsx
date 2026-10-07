@@ -972,7 +972,18 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'home' || activeApp === 'dashboard' ? (
           <DashboardPage />
         ) : (
-          <div className="module-state" role="alert">This app is not available in this workspace.</div>
+          <WorkspacePage
+            initialObjectKey={routeState.objectKey || ''}
+            initialRecordId={routeState.recordId || ''}
+            appKey={routeState.appKey || activeApp || ''}
+            onNavigate={openItem}
+            onRouteChange={(objectKey, recordId) => {
+              const appKey = routeState.appKey || activeApp || ''
+              const next = { app: 'workspace', section: null, objectKey, recordId, appKey }
+              setRouteState(next)
+              setRoute('workspace', null, { objectKey, recordId, appKey })
+            }}
+          />
         )}
       </Suspense>
       </LazyLoadBoundary>
