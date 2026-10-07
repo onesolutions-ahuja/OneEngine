@@ -68,7 +68,6 @@ import {
   RefreshCw,
   ExternalLink,
   Clock,
-  CalendarDays,
   Menu,
   ChevronRight,
   ListOrdered,
