@@ -1649,7 +1649,15 @@ app.get("/api/auth/me/stores", authenticate, async (req, res) => {
 app.get("/api/auth/me/permissions", authenticate, async (req, res) => {
   try {
     let permissions = req.user.roleId ? await getRolePermissionCodes(req.user.roleId, req) : [];
-    const permissionSets = await loadEffectivePermissionSets(db, req.user, req);
+    // Permission-set grants supplement role/profile RBAC. A failure while
+    // reading supplemental metadata must not make the caller's direct role
+    // permissions unverifiable (which previously locked the whole Developer
+    // app behind the generic Retry screen). Fail closed for supplemental
+    // grants and keep the direct role permissions authoritative.
+    const permissionSets = await loadEffectivePermissionSets(db, req.user, req).catch((error) => {
+      console.error("Current user supplemental permission sets unavailable:", error);
+      return [];
+    });
     permissions = [...new Set([...permissions, ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : [])])];
 
     const includeEntitlements = !["0", "false", "no"].includes(String(req.query?.includeEntitlements || "").toLowerCase());
