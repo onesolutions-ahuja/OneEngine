@@ -59,13 +59,12 @@ test("staff lifecycle orchestration stays in editable Flow metadata", () => {
     assert.equal(all.has(key), false, key + " must remain removed from hidden runtime actions");
     assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as a hidden executor");
   }
-  const packages = readFileSync(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(packages, /apiName:\s*"STAFF_SEND_PASSWORD_RESET"/);
-  assert.match(packages, /apiName:\s*"STAFF_SEND_INVITATION"/);
-  assert.match(packages, /apiName:\s*"STAFF_ISSUE_LIFECYCLE_TOKEN"/);
-  assert.match(packages, /key:"GENERATE_SECURE_TOKEN"/);
-  assert.doesNotMatch(packages, /CALL_FUNCTION/);
-  assert.match(packages, /handlerKey:\s*"RUN_SUBFLOW"/);
+  const manifest = JSON.parse(readFileSync(new URL("../server/metadata/manifests/staff.json", import.meta.url), "utf8"));
+  const serialized = JSON.stringify(manifest);
+  for (const apiName of ["STAFF_SEND_PASSWORD_RESET","STAFF_SEND_INVITATION","STAFF_ISSUE_LIFECYCLE_TOKEN"]) assert.ok(manifest.workflows.some((flow) => flow.apiName === apiName), apiName);
+  assert.ok(manifest.workflows.some((flow) => flow.actions?.some((step) => step.key === "GENERATE_SECURE_TOKEN")));
+  assert.equal(serialized.includes("CALL_FUNCTION"), false);
+  assert.ok(manifest.actions.every((action) => action.handlerKey === "RUN_SUBFLOW"));
 });
 
 test("provider-specific adapters stay removed in favor of metadata workflows", () => {
