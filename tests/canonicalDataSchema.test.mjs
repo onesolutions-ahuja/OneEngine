@@ -72,18 +72,14 @@ test("fresh schema and startup schema use canonical physical tables", async () =
   }
 });
 
-test("runtime metadata endpoints use canonical sale and sales-order objects", async () => {
-  const paths = [
-    "src/pages/online/useOnlineOrderMetadata.js",
-    "src/pages/online/useOnlineOrderActions.js",
-  ];
-  for (const path of paths) {
-    const source = await read(path);
-    assert.equal(source.includes("/api/platform/objects/sale/"), false, path);
-    assert.equal(source.includes("/api/platform/runtime/objects/sale/"), false, path);
-    assert.equal(source.includes("/api/platform/objects/online_order/"), false, path);
-    assert.equal(source.includes("/api/platform/runtime/objects/online_order/"), false, path);
-  }
+test("runtime no longer ships retired Online Order page helpers or legacy object endpoints", async () => {
+  const app = await read("src/App.jsx");
+  assert.equal(app.includes("useOnlineOrderMetadata"), false);
+  assert.equal(app.includes("useOnlineOrderActions"), false);
+  assert.equal(app.includes("/api/platform/objects/sale/"), false);
+  assert.equal(app.includes("/api/platform/runtime/objects/sale/"), false);
+  assert.equal(app.includes("/api/platform/objects/online_order/"), false);
+  assert.equal(app.includes("/api/platform/runtime/objects/online_order/"), false);
 });
 
 test("canonical ledger migrations are registered in order", async () => {
