@@ -1,26 +1,10 @@
-/*
- * T9M - Endpoint test panel.
- *
- * Sample onePOS JSON in, then: backend builds the partner payload from the
- * saved mappings, performs the real authenticated request and logs it. Shows
- * success/failure + HTTP status, the generated payload (read back from the
- * stored log row) and the redacted response body. Invalid JSON never calls
- * the API.
- */
+/* Generic endpoint test panel. Test data is user-supplied; no domain sample is embedded in the component. */
 import { useState } from "react";
 import { FlaskConical } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
 import { safeParse } from "./shared.jsx";
 
-export const SAMPLE_JSON = `{
-  "sales": {
-    "sale_id": "S-1001",
-    "receipt_number": "T01-20260916-0001",
-    "total": 42.5,
-    "customer": { "name": "Acme Ltd", "address": { "postcode": "SW1A 1AA" } },
-    "items": [ { "quantity": 2, "product": { "ean": "5000111000011" } } ]
-  }
-}`;
+export const SAMPLE_JSON = "{}";
 
 export default function EndpointTestModal({ integration, endpoint, onClose }) {
   const [sampleJson, setSampleJson] = useState(SAMPLE_JSON);
@@ -73,7 +57,7 @@ export default function EndpointTestModal({ integration, endpoint, onClose }) {
         </div>
         <div className="p-5 space-y-3">
           <label className="block">
-            <span className="block text-xs font-medium text-slate-600 mb-1">Sample onePOS data (JSON)</span>
+            <span className="block text-xs font-medium text-slate-600 mb-1">Sample data (JSON)</span>
             <textarea
               value={sampleJson}
               onChange={(e) => setSampleJson(e.target.value)}
