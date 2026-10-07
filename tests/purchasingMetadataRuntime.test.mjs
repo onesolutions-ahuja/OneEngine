@@ -32,14 +32,13 @@ test("purchase and supplier return parent IDs come from created records", async 
   assert.equal(returnLine.commonFieldValues.return_id.path, "steps.create_return.created.id");
 });
 
-test("purchases and supplier returns use generic workspace endpoints", async () => {
-  const purchase = await readFile(new URL("../src/pages/purchases/PurchasesPage.jsx", import.meta.url), "utf8");
-  const returns = await readFile(new URL("../src/pages/returns/SupplierReturnsPage.jsx", import.meta.url), "utf8");
-  assert.match(purchase, /initialObjectKey="purchase_ledger"/);
-  assert.match(returns, /initialObjectKey="purchase_ledger"/);
-  for (const source of [purchase, returns]) {
-    for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(source.includes(value), false, value);
-  }
+test("purchases and supplier returns no longer ship dedicated business pages or endpoints", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const workspace = await readFile(new URL("../src/platform/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
+  assert.equal(app.includes("pages/purchases/PurchasesPage"), false);
+  assert.equal(app.includes("pages/returns/SupplierReturnsPage"), false);
+  assert.ok(workspace.length > 0);
+  for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(app.includes(value), false, value);
 });
 
 test("legacy purchasing and supplier-return business routes are removed", async () => {
