@@ -1584,6 +1584,365 @@
           "position": null
         }
       ]
+    },
+    {
+      "systemKey": "flow:supplier.ledger.adjust",
+      "name": "Supplier · Ledger Adjustment",
+      "triggerKey": "manual",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:supplier.ledger.adjust",
+        "scope": "package",
+        "capabilityType": "workflow",
+        "capabilityKey": "supplier.ledger.adjust",
+        "apiName": "SUPPLIER_LEDGER_ADJUST",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "supplierId",
+            "label": "supplierId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "entryType",
+            "label": "entryType",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "label": "amount",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "debit",
+            "label": "debit",
+            "type": "boolean",
+            "required": true
+          },
+          {
+            "name": "reference",
+            "label": "reference",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "description",
+            "label": "description",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "ledgerId",
+            "label": "ledgerId",
+            "type": "text",
+            "source": "variables.ledgerId"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "validate_adjustment",
+            "key": "action",
+            "label": "Validate Ledger Adjustment",
+            "apiName": "validate_adjustment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "validate_adjustment",
+                "label": "Validate Ledger Adjustment",
+                "key": "FORMULA",
+                "resourceName": "adjustmentValid",
+                "resultType": "boolean",
+                "expression": "amount > 0 && !ISBLANK(supplierId) && !ISBLANK(entryType)",
+                "inputs": {
+                  "amount": {
+                    "path": "$record.amount"
+                  },
+                  "supplierId": {
+                    "path": "$record.supplierId"
+                  },
+                  "entryType": {
+                    "path": "$record.entryType"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "adjustment_ready",
+            "key": "action",
+            "label": "Ledger Adjustment Ready?",
+            "apiName": "adjustment_ready",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "adjustment_ready",
+                "label": "Ledger Adjustment Ready?",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Valid",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "variables.adjustmentValid",
+                          "operator": "equals",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_ledger",
+                      "set_ledger_id"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Invalid",
+                "defaultBranch": [
+                  "adjustment_invalid"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_ledger",
+            "key": "action",
+            "label": "Create Ledger Adjustment",
+            "apiName": "create_ledger",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_ledger",
+                "label": "Create Ledger Adjustment",
+                "key": "CREATE_RECORD",
+                "objectKey": "supplier_ledger",
+                "fieldValues": {
+                  "supplier_id": {
+                    "path": "$record.supplierId"
+                  },
+                  "entry_type": {
+                    "path": "$record.entryType"
+                  },
+                  "reference_type": "SUPPLIER_ADJUSTMENT",
+                  "reference": {
+                    "path": "$record.reference"
+                  },
+                  "amount": {
+                    "path": "$record.amount"
+                  },
+                  "debit": {
+                    "path": "$record.debit"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_ledger_id",
+            "key": "action",
+            "label": "Return Ledger Entry",
+            "apiName": "set_ledger_id",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_ledger_id",
+                "label": "Return Ledger Entry",
+                "key": "ASSIGNMENT",
+                "variableName": "ledgerId",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "steps.create_ledger.record.id"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "adjustment_invalid",
+            "key": "action",
+            "label": "Ledger Adjustment Rejected",
+            "apiName": "adjustment_invalid",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "adjustment_invalid",
+                "label": "Ledger Adjustment Rejected",
+                "key": "CUSTOM_ERROR",
+                "errorMessage": "Supplier ledger adjustment requires a supplier, entry type, and positive amount.",
+                "errorLocation": "record"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
+        ],
+        "actions": [
+          {
+            "id": "validate_adjustment",
+            "label": "Validate Ledger Adjustment",
+            "key": "FORMULA",
+            "resourceName": "adjustmentValid",
+            "resultType": "boolean",
+            "expression": "amount > 0 && !ISBLANK(supplierId) && !ISBLANK(entryType)",
+            "inputs": {
+              "amount": {
+                "path": "$record.amount"
+              },
+              "supplierId": {
+                "path": "$record.supplierId"
+              },
+              "entryType": {
+                "path": "$record.entryType"
+              }
+            }
+          },
+          {
+            "id": "adjustment_ready",
+            "label": "Ledger Adjustment Ready?",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Valid",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "variables.adjustmentValid",
+                      "operator": "equals",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_ledger",
+                  "set_ledger_id"
+                ]
+              }
+            ],
+            "defaultLabel": "Invalid",
+            "defaultBranch": [
+              "adjustment_invalid"
+            ]
+          },
+          {
+            "id": "create_ledger",
+            "label": "Create Ledger Adjustment",
+            "key": "CREATE_RECORD",
+            "objectKey": "supplier_ledger",
+            "fieldValues": {
+              "supplier_id": {
+                "path": "$record.supplierId"
+              },
+              "entry_type": {
+                "path": "$record.entryType"
+              },
+              "reference_type": "SUPPLIER_ADJUSTMENT",
+              "reference": {
+                "path": "$record.reference"
+              },
+              "amount": {
+                "path": "$record.amount"
+              },
+              "debit": {
+                "path": "$record.debit"
+              }
+            }
+          },
+          {
+            "id": "set_ledger_id",
+            "label": "Return Ledger Entry",
+            "key": "ASSIGNMENT",
+            "variableName": "ledgerId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_ledger.record.id"
+            }
+          },
+          {
+            "id": "adjustment_invalid",
+            "label": "Ledger Adjustment Rejected",
+            "key": "CUSTOM_ERROR",
+            "errorMessage": "Supplier ledger adjustment requires a supplier, entry type, and positive amount.",
+            "errorLocation": "record"
+          }
+        ]
+      }
     }
   ],
   "buttons": [
