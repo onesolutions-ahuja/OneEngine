@@ -225,7 +225,6 @@ export default function WorkflowRunsAdmin({ onMessage, onError }) {
                   <div><span>Object</span><strong>{run.object_id || "—"}</strong></div>
                   <div><span>Actor</span><strong>{run.metadata?.actorUserId || "—"}</strong></div>
                   <div><span>Store</span><strong>{run.metadata?.storeId || "—"}</strong></div>
-                  <div><span>Till</span><strong>{run.metadata?.tillId || "—"}</strong></div>
                   <div><span>Parent run</span><strong>{run.parent_run_id || run.parentRunId || "—"}</strong></div>
                 </div>
               </div>
