@@ -2,7 +2,7 @@ name: OneEngine Verification
 
 on:
   push:
-    branches: [main]
+    branches: [main, audit/zero-exemption-metadata]
   pull_request:
     branches: [main]
   workflow_dispatch:
