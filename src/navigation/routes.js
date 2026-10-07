@@ -5,7 +5,6 @@ export const DEVELOPER_SETTINGS_KEYS = new Set([
   'platform',
   'gptbuilder',
   'gptappbuilder',
-  'canvas-ux-test',
   'approval-builder',
   'gpt-page-builder',
   'dashboard-builder',
