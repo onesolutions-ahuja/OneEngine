@@ -467,7 +467,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     if (componentKey === "spacer") return { id: uid("spacer"), componentKey, spacing: 3 };
     if (componentKey === "field_value") return { id: uid("field_value"), componentKey, field: "" };
     if (componentKey === "related_list") return { id: uid("related_list"), componentKey, relationshipKey: "", limit: 10 };
-    return { id: uid(componentKey), componentKey, label: meta.label };
+    return createRegisteredComponent(meta, "PAGE");
   };
 
   const dropIntoSection = (sectionId, payload, index = null) => {
