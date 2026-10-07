@@ -3112,7 +3112,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
        * standing filter.
        */
       const rawConditions = Array.isArray(collection.conditions) ? collection.conditions.slice(0, 20) : [];
-      const conditionMatch = ["all", "any", "custom"].includes(collection.conditionMatch) ? collection.conditionMatch : "all";
+      const conditionMatch = collection.conditionMatch === "any" ? "any" : "all";
       const pageContext = collection.pageContext && typeof collection.pageContext === "object" && !Array.isArray(collection.pageContext) ? collection.pageContext : {};
       const bindingContext = {
         // Current User is always authoritative server session data. Page-owned
@@ -3139,11 +3139,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             ? null
             : resolvePageBindingTree(condition?.value, bindingContext),
         }));
-        if (conditions.length) validateConditionConfig({
-          match: conditionMatch,
-          conditions,
-          ...(conditionMatch === "custom" ? { conditionLogic: String(collection.conditionLogic || "") } : {}),
-        }, fields, "Record Collection conditions");
+        if (conditions.length) validateConditionConfig({ match: conditionMatch, conditions }, fields, "Record Collection conditions");
       } catch (error) {
         if (error instanceof ConditionError) return res.status(400).json({ success: false, code: error.code, message: error.message });
         throw error;
