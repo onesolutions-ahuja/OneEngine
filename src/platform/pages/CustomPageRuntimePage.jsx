@@ -77,7 +77,7 @@ export default function CustomPageRuntimePage({ pageKey }) {
     try{
       setBusy(true);setError("");
       const objectKey=node?.collection?.objectKey||null;
-      const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null,eventName,eventValue:value})});
+      const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null,eventName,eventValue:value,pageContext:{params:Object.fromEntries(new URLSearchParams(window.location.search).entries()),variables:Object.fromEntries((normalizeCustomPageTree(page?.definition||{}).resources?.variables||[]).map((variable)=>[variable.key,variable.defaultValue??null])),components:{[node?.id]:{value,selectedRecord:record||null}},flows:{}}})});
       if(!response?.success)throw new Error(response?.message||"Unable to execute page action");
       const result=response?.data||{};
       const output=result?.result??result?.results??result;
