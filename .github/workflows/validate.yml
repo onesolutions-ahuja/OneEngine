@@ -20,6 +20,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm ls --all
+      - run: npm install --ignore-scripts --no-audit --no-fund
+        working-directory: server
+      - run: npm ls --all
+        working-directory: server
       # Build first so deploy-blocking syntax/audit failures are always visible,
       # even when unrelated unit tests on main are already failing.
       - run: npm run build
