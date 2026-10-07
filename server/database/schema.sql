@@ -178,9 +178,6 @@ CREATE TABLE IF NOT EXISTS company_settings (
     receipt_qr_show_countdown BOOLEAN NOT NULL DEFAULT TRUE,
     receipt_qr_download_filename_format VARCHAR(200) NOT NULL DEFAULT 'receipt-{receipt_number}.pdf',
     default_landing_page VARCHAR(40) NOT NULL DEFAULT 'dashboard',
-    /* JARVES licence control: company allowance (0 = disabled) + per-user
-       opt-in; enforced by services/jarvis/licensing.js. */
-    jarves_licence_users INTEGER NOT NULL DEFAULT 0,
     updated_by UUID,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -352,9 +349,6 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255),
     pin_hash TEXT,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    /* JARVES per-user opt-in; count vs company_settings.jarves_licence_users
-       is enforced by services/jarvis/licensing.js (never above the allowance). */
-    jarves_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
     last_login_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
