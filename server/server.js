@@ -38,7 +38,6 @@ import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./ser
 
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
 import createReportsRouter from "./routes/reports.js";
-import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
 import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createAdminRouter from "./routes/admin.js";
@@ -1914,19 +1913,6 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createSettingsRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  writeAudit,
-  testPaymentTerminal,
-  requireLoyaltyEntitlement: (req, res, next) => {
-    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
-    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
-    return requireEntitlement(db, "loyalty")(req, res, next);
-  },
-}));
 app.use("/api", createSmsGateWebhookRouter({ pool }));
 
 /*
