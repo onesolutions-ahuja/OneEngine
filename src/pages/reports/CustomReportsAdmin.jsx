@@ -117,7 +117,6 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     }catch(e){setError(errorMessage(e));}finally{setLoading(false);}
   };
   useEffect(()=>{void load();},[]);
-  useEffect(()=>{let live=true;apiRequest("/api/settings").then((response)=>{if(live&&response?.success)setReportCurrency(response.data?.company?.currency||"GBP");}).catch(()=>{});return()=>{live=false;};},[]);
   useEffect(()=>{
     let live=true;
     if(!initialReport?.id||!runtimeFilters.length)return()=>{live=false;};
