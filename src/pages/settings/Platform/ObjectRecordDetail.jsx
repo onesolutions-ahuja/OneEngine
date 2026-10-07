@@ -112,7 +112,7 @@ export default function ObjectRecordDetail({
     [fields]
   );
 
-  const recordTitle = getRecordDisplayTitle(record);
+  const recordTitle = getRecordDisplayTitle(record, fields);
 
   if (!record) {
     return (
