@@ -971,20 +971,20 @@ const updateNode = (nodeId, changes) => {
           </span>
         </div>
 
-        {node.componentKey === "multi_container" ? <MultiContainerProperties node={node} objects={objects} registry={registry} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        {node.componentKey === "multi_container" ? <MultiContainerProperties node={node} objects={objects} registry={registry} pageResources={draft.resources} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
         {(() => {
           const meta = componentMeta(node.componentKey);
           const specialized = new Set(["multi_container","table","tree_view","process_path","container","button","text","header","spacer","field_value","related_list","timeline","kanban","calendar","scheduler","gantt","map","hierarchy_viewer","file_viewer","signature"]);
           if (specialized.has(node.componentKey)) return null;
-          return <RegistryDrivenProperties node={node} meta={meta} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} />;
+          return <RegistryDrivenProperties node={node} meta={meta} objects={objects} pageResources={draft.resources} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} />;
         })()}
-        {node.componentKey === "table" ? <TableProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
-        {node.componentKey === "tree_view" ? <TreeViewProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        {node.componentKey === "table" ? <TableProperties node={node} objects={objects} pageResources={draft.resources} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        {node.componentKey === "tree_view" ? <TreeViewProperties node={node} objects={objects} pageResources={draft.resources} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
         {[
           "timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature",
-        ].includes(node.componentKey) ? <AdvancedComponentProperties node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
+        ].includes(node.componentKey) ? <AdvancedComponentProperties node={node} objects={objects} pageResources={draft.resources} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} /> : null}
         {node.componentKey === "process_path" ? (
-          <RecordCollectionDataGroup node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)}>
+          <RecordCollectionDataGroup node={node} objects={objects} pageResources={draft.resources} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)}>
             {({ fields: availableFields }) => {
               const config = node.config || {};
               const picklists = availableFields.filter((field) => ["picklist", "select"].includes(field.field_type));
@@ -1122,7 +1122,7 @@ const updateNode = (nodeId, changes) => {
     if (!selectedNode) return <p className="text-xs text-slate-400">Select a component on the canvas to configure {panelMode}.</p>;
     const node = selectedNode;
     if (panelMode === "data") {
-      if (node.collection) return <FocusedDataPanel node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} />;
+      if (node.collection) return <FocusedDataPanel node={node} objects={objects} pageResources={draft.resources} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} />;
       return <div className="cpb-page-settings"><h3>Data</h3><p>This component has no record collection. Content and registry-defined bindings are configured in Properties.</p></div>;
     }
     if (panelMode === "style") {
@@ -1158,6 +1158,22 @@ const updateNode = (nodeId, changes) => {
     return renderProperties();
   };
 
+  const updateResourceDefinitions = (kind, next) => applyDraft((current) => ({ ...current, resources: { ...(current.resources || {}), [kind]: next } }));
+  const resourceRows = (kind) => Array.isArray(draft.resources?.[kind]) ? draft.resources[kind] : [];
+  const addResourceDefinition = (kind) => updateResourceDefinitions(kind, [...resourceRows(kind), { key: `${kind === "parameters" ? "param" : "variable"}_${resourceRows(kind).length + 1}`, label: kind === "parameters" ? "Page Parameter" : "Page Variable", dataType: "text", defaultValue: "" }]);
+  const patchResourceDefinition = (kind, index, patch) => updateResourceDefinitions(kind, resourceRows(kind).map((item, rowIndex) => rowIndex === index ? { ...item, ...patch } : item));
+  const removeResourceDefinition = (kind, index) => updateResourceDefinitions(kind, resourceRows(kind).filter((_, rowIndex) => rowIndex !== index));
+  const renderResourceDefinitions = (kind, title, description) => <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+    <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{title}</legend>
+    <p className="text-[11px] text-slate-500">{description}</p>
+    {resourceRows(kind).map((item,index)=><div key={`${kind}-${index}`} className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-2">
+      <div className="grid grid-cols-2 gap-1"><input className={inputClass} value={item.label || ""} onChange={(event)=>patchResourceDefinition(kind,index,{label:event.target.value})} placeholder="Label"/><input className={inputClass} value={item.key || ""} onChange={(event)=>patchResourceDefinition(kind,index,{key:event.target.value.replace(/[^A-Za-z0-9_]/g,"")})} placeholder="API name"/></div>
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-1"><select className={inputClass} value={item.dataType || "text"} onChange={(event)=>patchResourceDefinition(kind,index,{dataType:event.target.value})}><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="datetime">Date/Time</option><option value="record">Record</option><option value="collection">Collection</option></select><input className={inputClass} value={item.defaultValue ?? ""} disabled={kind === "parameters"} onChange={(event)=>patchResourceDefinition(kind,index,{defaultValue:event.target.value})} placeholder={kind === "parameters" ? "From URL/runtime" : "Default value"}/><button type="button" className="rounded px-2 text-red-600" onClick={()=>removeResourceDefinition(kind,index)} aria-label={`Remove ${title}`}><Trash2 size={13}/></button></div>
+    </div>)}
+    {!resourceRows(kind).length ? <p className="text-[11px] text-slate-400">None defined.</p> : null}
+    <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={()=>addResourceDefinition(kind)}>+ Add {kind === "parameters" ? "parameter" : "variable"}</button>
+  </fieldset>;
+
   const renderPageSettings = () => (
     <div className="cpb-page-settings">
       <div>
@@ -1189,6 +1205,8 @@ const updateNode = (nodeId, changes) => {
           <option value="kiosk">Kiosk</option>
         </select>
       </div>
+      {renderResourceDefinitions("parameters","Page Parameters","Inputs supplied when the page opens, such as recordId, date or source.")}
+      {renderResourceDefinitions("variables","Page Variables","Mutable page state that components, filters and Flow mappings can reference.")}
     </div>
   );
 
@@ -1456,7 +1474,7 @@ function FocusedDataPanel({ node, objects, onChange, targetComponents = [] }) {
       </fieldset>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Filters</legend>
-        <ConditionsEditor collection={collection} fields={fields} onChange={patchCollection} />
+        <ConditionsEditor collection={collection} fields={fields} onChange={patchCollection} pageResources={pageResources} targetComponents={targetComponents} />
       </fieldset>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Sort & Limit</legend>
@@ -1471,7 +1489,7 @@ function FocusedDataPanel({ node, objects, onChange, targetComponents = [] }) {
   );
 }
 
-function RecordCollectionDataGroup({ node, objects, onChange, children, targetComponents = [] }) {
+function RecordCollectionDataGroup({ node, objects, onChange, children, targetComponents = [], pageResources = {} }) {
   const collection = node.collection || {};
   const fields = useCollectionFields(collection, objects);
   const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
@@ -1507,11 +1525,11 @@ function RecordCollectionDataGroup({ node, objects, onChange, children, targetCo
 }
 
 /** DATA / LAYOUT / CONTENT / INTERACTION groups for MultiContainer. */
-function MultiContainerProperties({ node, objects, registry, onChange, targetComponents = [] }) {
+function MultiContainerProperties({ node, objects, pageResources = {}, registry, onChange, targetComponents = [] }) {
   const collection = node.collection || {};
   const columns = multiContainerColumns({ sectionWidth: "full", containerSize: node.containerSize || "medium", device: "desktop" });
   return (
-    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} onChange={onChange}>
+    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} pageResources={pageResources} onChange={onChange}>
       {({ fields, patchCollection }) => (
         <>
           <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
@@ -1556,9 +1574,9 @@ function MultiContainerProperties({ node, objects, registry, onChange, targetCom
 }
 
 /** DATA / COLUMNS / INTERACTION groups for Table / List. */
-function TableProperties({ node, objects, onChange, targetComponents = [] }) {
+function TableProperties({ node, objects, pageResources = {}, onChange, targetComponents = [] }) {
   return (
-    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} onChange={onChange}>
+    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} pageResources={pageResources} onChange={onChange}>
       {({ fields, patchCollection }) => (
         <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
           <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Columns</legend>
@@ -1582,12 +1600,12 @@ function TableProperties({ node, objects, onChange, targetComponents = [] }) {
   );
 }
 
-function TreeViewProperties({ node, objects, onChange, targetComponents = [] }) {
+function TreeViewProperties({ node, objects, pageResources = {}, onChange, targetComponents = [] }) {
   const collection = node.collection || {};
   const config = node.config || {};
   const { fields, patchCollection } = { fields: [], patchCollection: () => {} };
   return (
-    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} onChange={onChange}>
+    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} pageResources={pageResources} onChange={onChange}>
       {({ fields: availableFields, patchCollection: patchRecordCollection }) => (
         <div className="space-y-3">
           <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
@@ -1644,11 +1662,11 @@ function TreeViewProperties({ node, objects, onChange, targetComponents = [] }) 
   );
 }
 
-function AdvancedComponentProperties({ node, objects, onChange, targetComponents = [] }) {
+function AdvancedComponentProperties({ node, objects, pageResources = {}, onChange, targetComponents = [] }) {
   const collection = node.collection || {};
   const config = node.config || {};
   return (
-    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} onChange={onChange}>
+    <RecordCollectionDataGroup node={node} objects={objects} targetComponents={targetComponents} pageResources={pageResources} onChange={onChange}>
       {({ fields: availableFields, patchCollection }) => {
         const setConfig = (patch) => onChange({ config: { ...config, ...patch } });
         const common = (
@@ -1756,7 +1774,7 @@ function useRegistryObjectFields(objectKey, objects) {
   return fields;
 }
 
-function RegistryDrivenProperties({ node, meta, objects, onChange, targetComponents = [] }) {
+function RegistryDrivenProperties({ node, meta, objects, pageResources = {}, onChange, targetComponents = [] }) {
   const configurable = Array.isArray(meta?.configurable) ? meta.configurable : [];
   const config = node.config || {};
   const objectKey = config.objectKey || "";
@@ -1829,7 +1847,7 @@ function RegistryDrivenProperties({ node, meta, objects, onChange, targetCompone
           <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Conditions & Filters</legend>
           {objectKey ? (
             <>
-              <ConditionsEditor collection={conditionCollection} fields={fields} onChange={patchConditionCollection} />
+              <ConditionsEditor collection={conditionCollection} fields={fields} onChange={patchConditionCollection} pageResources={pageResources} targetComponents={targetComponents} />
               <SortEditor collection={conditionCollection} fields={fields} onChange={patchConditionCollection} />
             </>
           ) : (
@@ -1859,7 +1877,35 @@ function FieldSelect({ label, value, fields, onChange }) {
   );
 }
 
-function ConditionsEditor({ collection, fields, onChange }) {
+function CollectionFilterValue({ value, disabled, pageResources = {}, targetComponents = [], onChange }) {
+  const resource = value && typeof value === "object" && !Array.isArray(value) ? value : { type: "constant", value: value ?? "" };
+  const type = resource.type || "constant";
+  const setType = (next) => {
+    if (next === "constant") onChange({ type: "constant", value: "" });
+    else if (next === "current_user" || next === "current_record") onChange({ type: next, field: "" });
+    else onChange({ type: next, key: "" });
+  };
+  const keyed = ["page_parameter","page_variable","component_value","selected_record","flow_output"].includes(type);
+  const definitions = type === "page_parameter" ? (pageResources.parameters || []) : type === "page_variable" ? (pageResources.variables || []) : [];
+  const componentOptions = ["component_value","selected_record","flow_output"].includes(type) ? targetComponents : [];
+  return <div className="flex min-w-[190px] flex-1 items-center gap-1">
+    <select className="rounded border border-slate-200 px-1 py-1 text-[11px]" value={type} disabled={disabled} onChange={(event)=>setType(event.target.value)}>
+      <option value="constant">Value</option><option value="current_user">Current User</option><option value="current_record">Current Record</option>
+      <option value="page_parameter">Page Parameter</option><option value="page_variable">Page Variable</option>
+      <option value="component_value">Component Value</option><option value="selected_record">Selected Record</option><option value="flow_output">Flow Output</option>
+      <option value="formula">Formula</option>
+    </select>
+    {type === "constant" ? <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.value ?? ""} disabled={disabled} onChange={(event)=>onChange({type:"constant",value:event.target.value})} placeholder="value" /> : null}
+    {(type === "current_user" || type === "current_record") ? <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.field || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,field:event.target.value})} placeholder="Field path" /> : null}
+    {keyed && definitions.length ? <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={resource.key || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,key:event.target.value})}><option value="">Select…</option>{definitions.map((item)=><option key={item.key} value={item.key}>{item.label || item.key}</option>)}</select> : null}
+    {keyed && !definitions.length && componentOptions.length ? <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={resource.key || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,key:event.target.value})}><option value="">Select component…</option>{componentOptions.map((item)=><option key={item.id} value={item.id}>{item.label}</option>)}</select> : null}
+    {keyed && !definitions.length && !componentOptions.length ? <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.key || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,key:event.target.value})} placeholder="Resource key" /> : null}
+    {(type === "selected_record" || type === "flow_output") ? <input className="w-24 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.field || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,field:event.target.value})} placeholder="Field" /> : null}
+    {type === "formula" ? <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.expression || ""} disabled={disabled} onChange={(event)=>onChange({type:"formula",expression:event.target.value})} placeholder="Formula" /> : null}
+  </div>;
+}
+
+function ConditionsEditor({ collection, fields, onChange, pageResources = {}, targetComponents = [] }) {
   const conditions = collection.conditions || [];
   const setConditions = (next) => onChange({ conditions: next });
   /* The CANONICAL platform operator vocabulary — the same set workflows and
@@ -1883,7 +1929,7 @@ function ConditionsEditor({ collection, fields, onChange }) {
           <select className="rounded border border-slate-200 px-1 py-1 text-xs" value={condition.operator} onChange={(event) => setConditions(conditions.map((item, itemIndex) => (itemIndex === index ? { ...item, operator: event.target.value } : item)))}>
             {operators.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <input className="w-20 rounded border border-slate-200 px-1.5 py-1 text-xs" value={condition.value ?? ""} disabled={["is_empty", "is_not_empty"].includes(condition.operator)} onChange={(event) => setConditions(conditions.map((item, itemIndex) => (itemIndex === index ? { ...item, value: event.target.value } : item)))} placeholder="value" />
+          <CollectionFilterValue value={condition.value} disabled={["is_empty", "is_not_empty"].includes(condition.operator)} pageResources={pageResources} targetComponents={targetComponents} onChange={(value)=>setConditions(conditions.map((item,itemIndex)=>(itemIndex===index?{...item,value}:item)))} />
           <button type="button" className="rounded p-1 text-slate-400 hover:text-red-600" aria-label="Remove condition" onClick={() => setConditions(conditions.filter((_, itemIndex) => itemIndex !== index))}>×</button>
         </div>
       ))}
@@ -1918,25 +1964,29 @@ function SortEditor({ collection, fields, onChange }) {
 /** INTERACTION group — delegates to the generic picker. */
 function InteractionProperties({ node, onChange, targetComponents = [] }) {
   const eventName = node.eventName || "click";
+  const interactions = node.interactions || {};
+  const selectedInteraction = interactions[eventName] || (eventName === "click" ? node.interaction : null) || { type: "none" };
   return (
     <div className="space-y-2">
       <div className="space-y-1">
         <label className={labelClass}>Event</label>
         <select className={inputClass} value={eventName} onChange={(event) => onChange({ eventName: event.target.value })}>
-          <option value="click">On Click / Select</option>
+          <option value="click">On Click</option>
           <option value="change">On Change</option>
+          <option value="select">On Select</option>
           <option value="submit">On Submit</option>
           <option value="load">On Load</option>
+          <option value="row_click">On Row Click</option>
+          <option value="scan">On Scan</option>
           <option value="success">On Success</option>
           <option value="error">On Error</option>
         </select>
-        {eventName !== "click" ? <p className="text-[11px] text-amber-600">This event is saved as metadata. Runtime execution is enabled when the component emits this generic event.</p> : null}
       </div>
       <ActionWorkflowPicker
-        interaction={node.interaction || { type: "none" }}
+        interaction={selectedInteraction}
         objectKey={node.collection?.objectKey || node.config?.objectKey || ""}
         targetComponents={targetComponents}
-        onChange={(interaction) => onChange({ interaction })}
+        onChange={(interaction) => onChange({ interactions: { ...interactions, [eventName]: interaction }, ...(eventName === "click" ? { interaction } : {}) })}
       />
     </div>
   );
