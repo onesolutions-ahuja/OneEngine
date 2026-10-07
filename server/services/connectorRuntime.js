@@ -9,27 +9,9 @@ export const CONNECTOR_STATUSES = Object.freeze([
   "DISABLED",
 ]);
 
-export const PAYMENT_OUTCOMES = Object.freeze([
-  "PENDING",
-  "APPROVED",
-  "DECLINED",
-  "CANCELLED",
-  "EXPIRED",
-  "TIMEOUT",
-  "OFFLINE",
-  "ERROR",
-]);
 const TECHNICAL_FALLBACK_CODES = new Set(["OFFLINE", "TIMEOUT", "BRIDGE_UNAVAILABLE", "DEVICE_OFFLINE"]);
 
-const PAYMENT_METADATA_KEYS = new Set([
-  "providerTransactionId",
-  "terminalId",
-  "approvalCode",
-  "referenceCode",
-  "paymentMethod",
-  "timestamp",
-]);
-const PAYMENT_SENSITIVE_KEY = /^(pan|card(number|details)?|cvv|cvc|track(data)?|magneticstripe)$/i;
+const RESTRICTED_CREDENTIAL_KEY = /^(pan|card(number|details)?|cvv|cvc|track(data)?|magneticstripe)$/i;
 
 export function createLocalHardwareAdapter(bridge) {
   if (!bridge || typeof bridge.invoke !== "function") {
@@ -62,27 +44,12 @@ function validateCapability(capability) {
   };
 }
 
-function containsPaymentData(value) {
+function containsRestrictedCredentialData(value) {
   if (!value || typeof value !== "object") return false;
-  if (Array.isArray(value)) return value.some(containsPaymentData);
+  if (Array.isArray(value)) return value.some(containsRestrictedCredentialData);
   return Object.entries(value).some(([key, child]) =>
-    PAYMENT_SENSITIVE_KEY.test(key) || containsPaymentData(child)
+    RESTRICTED_CREDENTIAL_KEY.test(key) || containsRestrictedCredentialData(child)
   );
-}
-
-export function normalizePaymentResponse(response = {}) {
-  const outcome = String(response.status || response.outcome || "ERROR").toUpperCase();
-  if (!PAYMENT_OUTCOMES.includes(outcome)) {
-    throw new TypeError("Payment connector returned an unsupported outcome");
-  }
-  const metadata = {};
-  for (const key of PAYMENT_METADATA_KEYS) {
-    const value = response[key];
-    if (["string", "number"].includes(typeof value) && String(value).length <= 255) {
-      metadata[key] = String(value);
-    }
-  }
-  return { status: outcome, ...metadata };
 }
 
 export class ConnectorRuntimeError extends Error {
@@ -215,10 +182,9 @@ export class ConnectorService {
     const capability = this.capabilities.get(actionKey);
     if (!capability) throw new Error("Connector action is not registered");
     if (this.connectionState !== "CONNECTED") throw new Error("Connector is not healthy");
-    if (containsPaymentData(payload)) throw new Error("Raw payment card data is not accepted");
+    if (containsRestrictedCredentialData(payload)) throw new Error("Restricted credential data is not accepted");
     if (typeof this.adapter.execute !== "function") throw new Error("Connector action is unavailable");
-    const result = await this.adapter.execute(capability.actionKey || actionKey, payload);
-    return actionKey.startsWith("payment.") ? normalizePaymentResponse(result) : result;
+    return this.adapter.execute(capability.actionKey || actionKey, payload);
   }
 
   status() {
