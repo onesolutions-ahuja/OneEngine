@@ -1818,12 +1818,17 @@ function useRegistryObjectFields(objectKey, objects) {
 function RegistryDrivenProperties({ node, meta, objects, pageResources = {}, onChange, targetComponents = [] }) {
   const configurable = Array.isArray(meta?.configurable) ? meta.configurable : [];
   const config = node.config || {};
-  const objectKey = config.objectKey || "";
+  const usesDataCollection = Boolean(node.collection && typeof node.collection === "object");
+  const objectKey = node.collection?.objectKey || config.objectKey || "";
   const fields = useRegistryObjectFields(objectKey, objects);
   const actionKeys = configurable.filter((key) => /action$/i.test(key) || /clickaction/i.test(key));
-  const ordinaryKeys = configurable.filter((key) => !actionKeys.includes(key) && !["filter","filters","sort","conditionMatch"].includes(key));
+  const ordinaryKeys = configurable.filter((key) => {
+    if (actionKeys.includes(key) || ["filter", "filters", "sort", "conditionMatch"].includes(key)) return false;
+    if (usesDataCollection && (key === "objectKey" || /Field$|Fields$|Binding$/i.test(key))) return false;
+    return true;
+  });
   const patchConfig = (key, value) => onChange({ config: { ...config, [key]: value } });
-  const supportsObjectConditions = configurable.includes("objectKey");
+  const supportsObjectConditions = !usesDataCollection && configurable.includes("objectKey");
   const conditionCollection = {
     conditions: Array.isArray(config.filters) ? config.filters : [],
     conditionMatch: config.conditionMatch || "all",
