@@ -25,11 +25,10 @@ test('session bootstrap preserves cached context and hydrates permissions in one
   assert.match(server, /permissions: \{ permissions \}/)
 })
 
-test('settings navigation uses its scoped session cache', async () => {
-  const source = await read('../src/services/settings.js')
-  assert.match(source, /loadSettingsContext\(\{ force = false \} = \{\}\)/)
-  assert.match(source, /const cachedContext = !force \? readSettingsContextCache\(\) : null/)
-  assert.match(source, /if \(cachedContext\) return cachedContext/)
+test('metadata settings runtime owns settings navigation', async () => {
+  const source = await read('../src/pages/settings/MetadataSettingsPage.jsx')
+  assert.match(source, /loadSettingsCatalog/)
+  assert.match(source, /loadSettingsContext/)
 })
 
 
@@ -276,8 +275,9 @@ test('Developer does not write acting-company context for the authenticated tena
 
 test('OneEngine Manager resolves permission and client discovery concurrently', async () => {
   const source = await read('../src/pages/developer/OneEngineManager.jsx')
-  assert.match(source, /const \[permissions,r\]=await Promise\.all/)
+  assert.match(source, /Promise\.all\(\[/)
   assert.match(source, /getStoredSessionPermissions\(\)/)
+  assert.match(source, /apiRequest\('\/api\/platform\/developer\/companies'\)/)
 })
 
 
@@ -371,14 +371,8 @@ test('workspace app routes use cached metadata instead of forcing a blocking ref
   assert.equal(block.includes('forceRefresh: true'), false)
 })
 
-test('Till starts till-session lookup alongside its bootstrap requests', async () => {
-  const source = await read('../src/pages/till/TillPage.jsx')
-  const start = source.indexOf('const tillPromise = loadTill()')
-  const end = source.indexOf('await tillPromise', start)
-  const block = source.slice(start, end)
-  assert.notEqual(start, -1)
-  assert.notEqual(end, -1)
-  assert.match(block, /Promise\.all\(\[/)
+test('retired Till page is not part of frontend runtime', async () => {
+  await assert.rejects(read('../src/pages/till/TillPage.jsx'))
 })
 
 test('stale cache revalidation is deduped by cache key', async () => {
