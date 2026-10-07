@@ -287,7 +287,7 @@ export async function processReportSubscriptionDeliveryJob({ db, payload = {} } 
         object: null,
         workflowVariables: { variables: {}, steps: {} },
       });
-          if (!["SUCCESS","COMPLETED"].includes(String(outcome?.status || ""))) {
+          if (!["SUCCESS","COMPLETED"].includes(String(outcome?.status || "").toUpperCase())) {
             const error = new Error(outcome?.error?.message || outcome?.code || "Report subscription email delivery failed");
             error.retryable = outcome?.retryable === true;
             throw error;
