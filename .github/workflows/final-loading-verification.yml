@@ -1,9 +1,6 @@
 name: Final OneEngine Loading Verification
 
 on:
-  workflow_run:
-    workflows: ["Deploy OneEngine to GitHub Pages"]
-    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -12,7 +9,7 @@ concurrency:
 
 jobs:
   verify:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -20,11 +17,11 @@ jobs:
       ONEPOS_E2E_API_BASE_URL: https://oneengine-6gas.onrender.com/
       ONEPOS_E2E_USERNAME: ${{ vars.ONEPOS_PLAYWRIGHT_USERNAME }}
       ONEPOS_E2E_PASSWORD: ${{ vars.ONEPOS_PLAYWRIGHT_PASSWORD }}
-      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      DEPLOY_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
