@@ -1733,7 +1733,7 @@ export default function createConnectorsRouter({
     }
   });
 
-  router.get("/connector-capabilities/:capabilityKey", authenticate, authorize("sale.create"), async (req, res) => {
+  router.get("/connector-capabilities/:capabilityKey", authenticate, authorize("connector.view"), async (req, res) => {
     try {
       let session = await db(
         `SELECT terminal_id,store_id FROM device_sessions
