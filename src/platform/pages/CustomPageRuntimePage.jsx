@@ -17,11 +17,40 @@ function FormLayoutModal({ action, onClose, onSaved }) {
   const panel=presentation==="screen_modal"?"w-full max-w-3xl max-h-[90vh] overflow-auto rounded-2xl bg-white p-5 shadow-2xl":"";
   return <div className={shell} role="dialog" aria-modal="true"><div className={panel}><div className="mb-4 flex items-center justify-between gap-3"><h2 className="font-semibold">{runtime?.layout?.name||"Form"}</h2><button type="button" className="onepos-btn onepos-btn-secondary" onClick={onClose}>Close</button></div>{error?<div className="onepos-alert onepos-alert-error">{error}</div>:null}{!runtime&&!error?<div className="onepos-empty">Loading form…</div>:null}{runtime?<FormRenderer definition={runtime.layout?.definition||{}} fields={runtime.fields||[]} initialValues={record||{}} mode={recordId?"edit":"create"} onSubmit={save} embedded />:null}</div></div>;
 }
+function findScreenWait(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) { for (const item of value) { const found=findScreenWait(item); if(found)return found; } return null; }
+  if (typeof value !== "object") return null;
+  if (value.screenSessionId && value.screen) return value;
+  for (const nested of Object.values(value)) { const found=findScreenWait(nested); if(found)return found; }
+  return null;
+}
+function ScreenFlowModal({ action, onClose, onComplete }) {
+  const [session,setSession]=useState(action?.session||null),[values,setValues]=useState(action?.session?.values||{}),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+  const screen=session?.screen||{};
+  useEffect(()=>setValues(session?.values||{}),[session?.screenSessionId]);
+  const submit=async(navigation)=>{
+    if(!session?.screenSessionId)return;
+    try{setBusy(true);setError("");const response=await apiRequest(`/api/platform/flow-sessions/${encodeURIComponent(session.screenSessionId)}/submit`,{method:"POST",body:JSON.stringify({navigation,values})});if(!response?.success)throw new Error(response?.message||"Unable to continue Screen Flow");const next=response.data||{};if(next.status==="WAITING"&&next.screenSessionId){setSession(next);return;}if(next.status==="PAUSED"){onClose?.();return;}onComplete?.(next);onClose?.();}catch(err){setError(err?.message||"Unable to continue Screen Flow");}finally{setBusy(false);}
+  };
+  const components=Array.isArray(screen.components)?screen.components:[];
+  const field=(component)=>{
+    const name=component.name;if(!name)return null;const type=String(component.type||"TEXT").toUpperCase();const common={id:name,value:values[name]??component.defaultValue??"",disabled:busy||component.disabled===true,onChange:(e)=>setValues(v=>({...v,[name]:e.target.type==="checkbox"?e.target.checked:e.target.value}))};
+    if(["DISPLAY_TEXT","TEXT_BLOCK","RICH_TEXT"].includes(type))return <div key={name} className="text-sm text-slate-700">{component.text||component.label||""}</div>;
+    if(["CHECKBOX","TOGGLE"].includes(type))return <label key={name} className="flex items-center gap-2 text-sm"><input {...common} type="checkbox" checked={Boolean(values[name]??component.defaultValue??false)}/>{component.label||name}</label>;
+    if(["SELECT","PICKLIST","RADIO"].includes(type)){const options=Array.isArray(component.options)?component.options:[];return <label key={name} className="block space-y-1 text-sm"><span>{component.label||name}{component.required?" *":""}</span><select {...common} className="w-full rounded-lg border border-slate-200 px-3 py-2"><option value="">Select…</option>{options.map((o,i)=><option key={i} value={o.value??o.label}>{o.label??o.value}</option>)}</select></label>;}
+    const htmlType=type==="EMAIL"?"email":type==="NUMBER"||type==="CURRENCY"?"number":type==="DATE"?"date":type==="DATETIME"?"datetime-local":"text";
+    return <label key={name} className="block space-y-1 text-sm"><span>{component.label||name}{component.required?" *":""}</span><input {...common} type={htmlType} required={component.required===true} className="w-full rounded-lg border border-slate-200 px-3 py-2"/></label>;
+  };
+  const full=action?.presentation==="full_screen";
+  return <div className={full?"fixed inset-0 z-[90] overflow-auto bg-white p-6":"fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 p-4"} role="dialog" aria-modal="true"><div className={full?"mx-auto max-w-4xl":"w-full max-w-2xl max-h-[90vh] overflow-auto rounded-2xl bg-white p-5 shadow-2xl"}><header className="mb-4 flex items-center justify-between gap-3"><div><h2 className="font-semibold">{screen.label||"Screen Flow"}</h2>{screen.description?<p className="text-xs text-slate-500">{screen.description}</p>:null}</div><button type="button" className="onepos-btn onepos-btn-secondary" onClick={onClose}>Close</button></header>{error?<div className="onepos-alert onepos-alert-error mb-3">{error}</div>:null}<div className="grid grid-cols-12 gap-3">{components.map(c=><div key={c.name||c.label} className="col-span-12" style={{gridColumn:`span ${Math.min(12,Math.max(1,Number(c.width)||12))} / span ${Math.min(12,Math.max(1,Number(c.width)||12))}`}}>{field(c)}</div>)}</div>{screen.showFooter!==false?<footer className="mt-5 flex justify-end gap-2">{screen.allowBack?<button disabled={busy} className="onepos-btn onepos-btn-secondary" onClick={()=>submit("BACK")}>{screen.previousLabel||"Previous"}</button>:null}{screen.allowPause?<button disabled={busy} className="onepos-btn onepos-btn-secondary" onClick={()=>submit("PAUSE")}>{screen.pauseLabel||"Pause"}</button>:null}{screen.allowNext!==false?<button disabled={busy} className="onepos-btn onepos-btn-primary" onClick={()=>submit("NEXT")}>{busy?"Working…":screen.nextLabel||"Next"}</button>:null}{screen.allowFinish?<button disabled={busy} className="onepos-btn onepos-btn-primary" onClick={()=>submit("FINISH")}>{busy?"Working…":screen.finishLabel||"Finish"}</button>:null}</footer>:null}</div></div>;
+}
 export default function CustomPageRuntimePage({ pageKey }) {
   const [page,setPage]=useState(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
   const [formAction,setFormAction]=useState(null);
+  const [screenFlowAction,setScreenFlowAction]=useState(null);
   const [navigationContext,setNavigationContext]=useState(null);
   useEffect(()=>{
     let live=true;setError("");
@@ -40,6 +69,10 @@ export default function CustomPageRuntimePage({ pageKey }) {
       setError(resolved?.message||"This navigation target is no longer available.");return;
     }
     if(interaction.type==="form_layout"){if(!interaction.formLayoutId){setError("This form layout is no longer available.");return;}setFormAction({layoutId:interaction.formLayoutId,presentation:interaction.formPresentation||"screen_modal",record});return;}
+    if(interaction.type==="screen_flow"){
+      if(!interaction.workflowUuid){setError("This Screen Flow is no longer available.");return;}
+      try{setBusy(true);setError("");const response=await apiRequest(`/api/platform/rules/${encodeURIComponent(interaction.workflowUuid)}/run`,{method:"POST",body:JSON.stringify({recordId:record?.id||null,inputs:interaction.inputs||{}})});if(!response?.success)throw new Error(response?.message||"Unable to start Screen Flow");const wait=findScreenWait(response.data);if(wait?.screenSessionId){setScreenFlowAction({session:wait,presentation:interaction.screenPresentation||"screen_modal",nodeId:node?.id});return;}window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:node?.id||null,interactionType:"screen_flow",runId:response.data?.runId||null,status:response.data?.status||"COMPLETED",output:response.data?.variables||response.data}}));}catch(err){setError(err?.message||"Unable to start Screen Flow");}finally{setBusy(false);}return;
+    }
     if(!["workflow","action"].includes(interaction.type))return;
     try{
       setBusy(true);setError("");
@@ -61,5 +94,6 @@ export default function CustomPageRuntimePage({ pageKey }) {
     {busy?<div className="text-xs opacity-70">Running action…</div>:null}
     <CustomPageRenderer definition={definition} device="desktop" onRecordClick={({record,node})=>execute({record,node})} onButtonClick={(node)=>execute({node})}/>
     {formAction?<FormLayoutModal action={formAction} onClose={()=>setFormAction(null)} onSaved={()=>{}}/>:null}
+    {screenFlowAction?<ScreenFlowModal action={screenFlowAction} onClose={()=>setScreenFlowAction(null)} onComplete={(result)=>window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:screenFlowAction.nodeId,interactionType:"screen_flow",runId:result?.runId||null,status:result?.status||"COMPLETED",output:result?.variables||result}}))}/>:null}
   </section>;
 }
