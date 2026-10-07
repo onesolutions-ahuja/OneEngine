@@ -68,7 +68,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "find_open",
                 "label": "Find Open Attendance",
                 "key": "GET_RECORDS",
@@ -90,10 +90,10 @@
                 "limit": 1,
                 "store": "first"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -112,7 +112,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "open_exists",
                 "label": "Open Attendance Exists?",
                 "key": "CONDITION",
@@ -142,10 +142,10 @@
                   "set_not_already_open"
                 ]
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -164,7 +164,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_attendance",
                 "label": "Create Attendance",
                 "key": "CREATE_RECORD",
@@ -179,10 +179,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -201,7 +201,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_existing_id",
                 "label": "Return Existing Record",
                 "key": "ASSIGNMENT",
@@ -212,10 +212,10 @@
                   "path": "steps.find_open.record.id"
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -234,7 +234,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_created_id",
                 "label": "Return Created Record",
                 "key": "ASSIGNMENT",
@@ -245,10 +245,10 @@
                   "path": "steps.create_attendance.record.id"
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -267,7 +267,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_already_open",
                 "label": "Already Open",
                 "key": "ASSIGNMENT",
@@ -276,10 +276,10 @@
                 "operator": "set",
                 "value": true
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -298,7 +298,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_not_already_open",
                 "label": "New Attendance",
                 "key": "ASSIGNMENT",
@@ -307,10 +307,10 @@
                 "operator": "set",
                 "value": false
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           }
         ],
@@ -487,7 +487,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "find_open",
                 "label": "Find Open Attendance",
                 "key": "GET_RECORDS",
@@ -509,10 +509,10 @@
                 "limit": 1,
                 "store": "first"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -531,7 +531,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "open_exists",
                 "label": "Open Attendance Exists?",
                 "key": "CONDITION",
@@ -561,10 +561,10 @@
                   "set_not_closed"
                 ]
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -583,7 +583,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "worked_minutes",
                 "label": "Calculate Worked Minutes",
                 "key": "FORMULA",
@@ -599,10 +599,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -621,7 +621,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "close_attendance",
                 "label": "Close Attendance",
                 "key": "UPDATE_RECORD",
@@ -639,10 +639,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -661,7 +661,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_closed_id",
                 "label": "Return Closed Record",
                 "key": "ASSIGNMENT",
@@ -672,10 +672,10 @@
                   "path": "steps.find_open.record.id"
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -694,7 +694,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_closed",
                 "label": "Closed",
                 "key": "ASSIGNMENT",
@@ -703,10 +703,10 @@
                 "operator": "set",
                 "value": true
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -725,7 +725,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_not_closed",
                 "label": "Not Closed",
                 "key": "ASSIGNMENT",
@@ -734,10 +734,10 @@
                 "operator": "set",
                 "value": false
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           }
         ],
