@@ -204,39 +204,14 @@ export function componentIcon(componentOrKey) {
   return COMPONENT_ICONS[key] || COMPONENT_ICONS.sparkles;
 }
 
-/** Friendly category labels — one vocabulary, snake_case never surfaces. */
-export const COMPONENT_CATEGORY_LABELS = {
-  layout: "Layout",
-  content: "Content",
-  field: "Fields",
-  record: "Record",
-  dashboard: "Dashboard",
-  action: "Actions",
-  input: "Inputs",
-  navigation: "Navigation",
-  media: "Media",
-  feedback: "Feedback",
-  overlay: "Overlays",
-  modern: "Modern",
-};
-
+/** Category presentation is derived from registry metadata; source code owns no category catalogue. */
 export function componentCategoryLabel(category) {
-  return COMPONENT_CATEGORY_LABELS[category] || "Other";
+  const value = String(category || "other").replaceAll("_", " ").trim();
+  return value ? value.replace(/\b\w/g, (char) => char.toUpperCase()) : "Other";
 }
 
-/** Ordered category sequence for filter tabs (unknown categories appended). */
 export function componentCategories(registry) {
-  const preferred = ["all", "layout", "content", "field", "input", "record", "navigation", "media", "feedback", "overlay", "dashboard", "modern", "action"];
-  const known = new Set(preferred);
-  const extra = [];
-  for (const component of registry || []) {
-    const category = normalizeComponent(component).category;
-    if (category && !known.has(category)) {
-      known.add(category);
-      extra.push(category);
-    }
-  }
-  return [...preferred.filter((category) => category === "all" || (registry || []).some((c) => normalizeComponent(c).category === category)), ...extra];
+  return ["all", ...new Set(normalizedRegistry(registry).map((component) => component.category).filter(Boolean))];
 }
 
 /* ---------------------------------------------------------------------------
