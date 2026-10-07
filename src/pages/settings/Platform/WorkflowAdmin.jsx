@@ -6174,35 +6174,6 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
           </div>
         );
       }
-      case "SEND_APPOINTMENT_CONFIRMATION":
-        return (
-          <div className="space-y-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <strong className="text-sm text-slate-700">Booking confirmation</strong>
-              <p className="mt-1 text-xs text-slate-500">Recipient and channel are resolved from the configured communication metadata.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Confirmation message</label>
-              <textarea
-                className={inputClass}
-                value={step.config?.message || ""}
-                onChange={(event) => updateConfig({ message: event.target.value })}
-                rows={4}
-                placeholder="Your {{serviceName}} appointment is booked for {{startsAt}}."
-              />
-              <p className="mt-1 text-xs text-slate-500">Available values: {"{{serviceName}}"}, {"{{startsAt}}"}, {"{{appointmentId}}"}. If left blank, OneAssistant uses its standard confirmation message.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Recipient override</label>
-              <input
-                className={inputClass}
-                value={step.config?.recipient || ""}
-                onChange={(event) => updateConfig({ recipient: event.target.value })}
-                placeholder="Leave blank to use the booking customer's phone"
-              />
-            </div>
-          </div>
-        );
       case "IN_APP_NOTIFICATION":
         return (
           <div className="space-y-3">
@@ -6624,7 +6595,7 @@ function StepEditor({ step, index, allSteps = [], updateStep, moveStep, duplicat
 }
 
 
-function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, functionRegistry, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [], flowIssues = [], onOpenFlowProperties, canvasCommand = null }) {
+function WorkflowCanvas({ workflow, workflowId, setWorkflow, updateStep, moveStep, duplicateStep, deleteStep, addStepAt, providerAvailable, registryOptions, availableWorkflows, messageTemplates = [], scopeKey = null, onGuideStepChange, debugTrace = null, objectFieldCatalog = {}, triggerOptions = [], flowIssues = [], onOpenFlowProperties, canvasCommand = null }) {
   const [selectedId, setSelectedId] = useState("__start__");
   const [paletteOpen, setPaletteOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -10432,7 +10403,7 @@ export default function WorkflowAdmin({ onMessage, onError, scopeKey = null, tit
       ) : null}
 
       <div id="workflow-canvas-section">
-          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} functionRegistry={functionRegistry} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} canvasCommand={canvasCommand} />
+          <WorkflowCanvas workflow={workflow} workflowId={workflowId} setWorkflow={setWorkflow} updateStep={updateStep} moveStep={moveStep} duplicateStep={duplicateStep} deleteStep={deleteStep} addStepAt={addStepAt} providerAvailable={providerAvailable} registryOptions={registryOptions} availableWorkflows={savedWorkflows} messageTemplates={messageTemplates} scopeKey={scopeKey} onGuideStepChange={setGuideStep} debugTrace={debugTrace} objectFieldCatalog={objectFieldCatalog} triggerOptions={triggerOptions} flowIssues={flowValidationIssues} onOpenFlowProperties={openFlowProperties} canvasCommand={canvasCommand} />
         </div>
       <div id="workflow-review-section" className="workflow-review-compact" aria-live="polite">
         {reviewIssue || "Trigger, conditions and actions are valid."}
