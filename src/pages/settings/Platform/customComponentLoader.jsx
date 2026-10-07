@@ -12,5 +12,5 @@ export function CustomComponentModule({ registration, ...props }) {
   if (!importer) return <div className="cpb-empty">Custom component module not found: {componentPath}</div>;
   if (cssPath) styles[`../../components/custom/${cssPath}`]?.();
   const Component = React.lazy(importer);
-  return <Suspense fallback={<div className="cpb-empty">Loading component…</div>}><Component {...props} config={props.config || {}} records={props.records || props.data || []} registration={registration} /></Suspense>;
+  return <Suspense fallback={<div className="cpb-empty">Loading component…</div>}><Component {...props} config={props.config || {}} registration={registration} /></Suspense>;
 }

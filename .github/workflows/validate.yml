@@ -2,7 +2,7 @@ name: Validate OneEngine
 
 on:
   push:
-    branches: [main, flow-object-migration-work, fix/settings-metadata-closure-20261007, fix/metadata-closure-final-20261007, fix/metadata-hard-closure-20261007]
+    branches: [main, flow-object-migration-work, fix/settings-metadata-closure-20261007, fix/metadata-closure-final-20261007, fix/metadata-hard-closure-20261007, fix/metadata-final-runtime-flow-closure]
   pull_request:
   workflow_dispatch:
 
@@ -25,7 +25,7 @@ jobs:
         working-directory: server
       - run: npm ls --all
         working-directory: server
-      # Build first so deploy-blocking syntax/audit failures are always visible, 
+      # Build first so deploy-blocking syntax/audit failures are always visible,   
       # even when unrelated unit tests on main are already failing.     
       - run: npm run build
       - run: npm run build

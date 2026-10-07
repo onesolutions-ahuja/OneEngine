@@ -3307,7 +3307,7 @@ async function startServer() {
     const transientCodes = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EPIPE", "ENETUNREACH", "EHOSTUNREACH"]);
     const transientDatabaseFailure =
       transientCodes.has(String(error?.code || "").toUpperCase()) ||
-      /before secure TLS connection|connection terminated unexpectedly|timeout expired|query read timeout|timeout exceeded when trying to connect|server closed the connection/i.test(String(error?.message || ""));
+      /before secure TLS connection|connection terminated unexpectedly|timeout expired|server closed the connection/i.test(String(error?.message || ""));
 
     if (!httpServer?.listening) {
       if (transientDatabaseFailure && startupAttempt < 5) {
