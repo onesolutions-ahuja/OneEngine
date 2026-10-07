@@ -46,11 +46,11 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   const load = async () => {
     try {
       const [licenceData, companyData, packageData, bundleData, tierData] = await Promise.all([
-        apiRequest("/api/superadmin/licences"),
-        apiRequest("/api/superadmin/companies"),
-        apiRequest("/api/superadmin/packages"),
-        apiRequest("/api/superadmin/bundles"),
-        apiRequest("/api/superadmin/tiers"),
+        apiRequest("/api/platform-admin/licences"),
+        apiRequest("/api/platform-admin/companies"),
+        apiRequest("/api/platform-admin/packages"),
+        apiRequest("/api/platform-admin/bundles"),
+        apiRequest("/api/platform-admin/tiers"),
       ]);
       if (!licenceData.success || !companyData.success || !packageData.success || !bundleData.success || !tierData.success) {
         throw new Error("Unable to load licensing and marketplace data");
@@ -87,7 +87,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   };
 
   const savePackageSettings = (item) => saveMarketplaceSettings(
-    `/api/superadmin/packages/${item.id}/marketplace`,
+    `/api/platform-admin/packages/${item.id}/marketplace`,
     {
       active: item.active,
       visible: item.visible,
@@ -106,7 +106,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   );
 
   const saveBundleSettings = (item) => saveMarketplaceSettings(
-    `/api/superadmin/bundles/${item.id}/marketplace`,
+    `/api/platform-admin/bundles/${item.id}/marketplace`,
     {
       active: item.active,
       visible: item.visible,
@@ -119,7 +119,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   );
 
   const saveTierSettings = (item) => saveMarketplaceSettings(
-    `/api/superadmin/tiers/${item.id}/marketplace`,
+    `/api/platform-admin/tiers/${item.id}/marketplace`,
     {
       active: item.active,
       visible: item.visible,
@@ -180,14 +180,14 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
         entitlements,
       };
       const result = await apiRequest(editingLicenceId
-        ? `/api/superadmin/licences/${editingLicenceId}`
-        : "/api/superadmin/licences", {
+        ? `/api/platform-admin/licences/${editingLicenceId}`
+        : "/api/platform-admin/licences", {
         method: editingLicenceId ? "PUT" : "POST",
         body: JSON.stringify(payload),
       });
       if (!result.success) throw new Error(result.message || "Unable to save licence");
       const licenceId = editingLicenceId || result.data?.id;
-      const composition = await apiRequest(`/api/superadmin/licences/${licenceId}/packages`, {
+      const composition = await apiRequest(`/api/platform-admin/licences/${licenceId}/packages`, {
         method: "PUT",
         body: JSON.stringify({ packages: licencePackages }),
       });
@@ -229,8 +229,8 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     if (!companyId) return;
     try {
       const [result, jarvesResult] = await Promise.all([
-        apiRequest(`/api/superadmin/companies/${companyId}/entitlements`),
-        apiRequest(`/api/superadmin/companies/${companyId}/jarves-licence`),
+        apiRequest(`/api/platform-admin/companies/${companyId}/entitlements`),
+        apiRequest(`/api/platform-admin/companies/${companyId}/jarves-licence`),
       ]);
       if (!result.success) throw new Error(result.message || "Unable to load company entitlements");
       setCompanyEntitlements(result.data);
@@ -270,7 +270,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     }));
     setError(""); setMessage("");
     try {
-      const result = await apiRequest(`/api/superadmin/companies/${selectedCompany}/${kind}`, {
+      const result = await apiRequest(`/api/platform-admin/companies/${selectedCompany}/${kind}`, {
         method: "PUT",
         body: JSON.stringify({ assignments }),
       });
@@ -311,7 +311,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     if (!selectedCompany) return;
     setError(""); setMessage("");
     try {
-      const result = await apiRequest(`/api/superadmin/companies/${selectedCompany}/jarves-licence`, {
+      const result = await apiRequest(`/api/platform-admin/companies/${selectedCompany}/jarves-licence`, {
         method: "PUT",
         body: JSON.stringify({ allowance: Math.max(0, Math.trunc(Number(jarvesAllowanceDraft) || 0)) }),
       });
@@ -327,7 +327,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   const assignLicence = async () => {
     setError(""); setMessage("");
     try {
-      const result = await apiRequest(`/api/superadmin/companies/${selectedCompany}/licence`, {
+      const result = await apiRequest(`/api/platform-admin/companies/${selectedCompany}/licence`, {
         method: "PUT",
         body: JSON.stringify({ licenceId: selectedLicence || null, startsAt: companyLicenceForm.startsAt ? new Date(companyLicenceForm.startsAt).toISOString() : null, expiresAt: companyLicenceForm.expiresAt ? new Date(companyLicenceForm.expiresAt).toISOString() : null, active: companyLicenceForm.active }),
       });
@@ -340,7 +340,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     setError(""); setMessage("");
     try {
       const form = { ...companyLicenceForm, ...changes };
-      const result = await apiRequest(`/api/superadmin/companies/${selectedCompany}/licence`, {
+      const result = await apiRequest(`/api/platform-admin/companies/${selectedCompany}/licence`, {
         method: "PUT",
         body: JSON.stringify({ licenceId: selectedLicence || null, startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null, expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null, active: form.active }),
       });
@@ -361,7 +361,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     setDatabaseForm((current) => ({ ...current, password: "" }));
     if (!companyId) return;
     try {
-      const result = await apiRequest(`/api/superadmin/companies/${companyId}/database`);
+      const result = await apiRequest(`/api/platform-admin/companies/${companyId}/database`);
       if (!result.success) throw new Error(result.message || "Unable to load database configuration");
       const data = result.data || {};
       setDatabaseConfig(data);
@@ -387,7 +387,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     }
     setDatabaseBusy(true); setError(""); setMessage("");
     try {
-      const result = await apiRequest(`/api/superadmin/companies/${databaseCompany}/provision-admin`, {
+      const result = await apiRequest(`/api/platform-admin/companies/${databaseCompany}/provision-admin`, {
         method: "POST",
         body: JSON.stringify({ email: clientAdminEmail }),
         signal: AbortSignal.timeout(30000),
@@ -404,7 +404,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   const saveDatabaseConfig = async () => {
     setDatabaseBusy(true); setError(""); setMessage("");
     try {
-      const result = await apiRequest(`/api/superadmin/companies/${databaseCompany}/database`, {
+      const result = await apiRequest(`/api/platform-admin/companies/${databaseCompany}/database`, {
         method: "PUT",
         body: JSON.stringify(databaseConfigurationPayload(databaseForm)),
         signal: AbortSignal.timeout(30000),
@@ -424,7 +424,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     }
     setDatabaseBusy(true); setError(""); setMessage("");
     try {
-      const result = await apiRequest(`/api/superadmin/companies/${databaseCompany}/database/${action}`, {
+      const result = await apiRequest(`/api/platform-admin/companies/${databaseCompany}/database/${action}`, {
         method: "POST",
         signal: AbortSignal.timeout(30000),
       });
@@ -589,7 +589,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
                 {composed && <select className="onepos-input" value={composed.entitlement_type || "COMMERCIAL"} onChange={(event) => updateCompositionType(setMarketplaceBundles, item.id, packageItem.id, event.target.value)}><option value="COMMERCIAL">Commercial</option><option value="REQUIRED_DEPENDENCY">Included dependency</option><option value="OPTIONAL">Optional</option></select>}
               </div>;
             })}</div>
-            <button type="button" className="onepos-btn onepos-btn-secondary" onClick={() => saveComposition(`/api/superadmin/bundles/${item.id}/composition`, item, `${item.name} composition saved.`)}>Save bundle composition</button>
+            <button type="button" className="onepos-btn onepos-btn-secondary" onClick={() => saveComposition(`/api/platform-admin/bundles/${item.id}/composition`, item, `${item.name} composition saved.`)}>Save bundle composition</button>
           </div>
         ))}
       </section>
@@ -613,7 +613,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
                 {composed && <select className="onepos-input" value={composed.entitlement_type || "COMMERCIAL"} onChange={(event) => updateCompositionType(setMarketplaceTiers, item.id, packageItem.id, event.target.value)}><option value="COMMERCIAL">Commercial</option><option value="REQUIRED_DEPENDENCY">Included dependency</option><option value="OPTIONAL">Optional</option></select>}
               </div>;
             })}</div>
-            <button type="button" className="onepos-btn onepos-btn-secondary" onClick={() => saveComposition(`/api/superadmin/tiers/${item.id}/composition`, item, `${item.name} composition saved.`)}>Save tier composition</button>
+            <button type="button" className="onepos-btn onepos-btn-secondary" onClick={() => saveComposition(`/api/platform-admin/tiers/${item.id}/composition`, item, `${item.name} composition saved.`)}>Save tier composition</button>
           </div>
         ))}
       </section>
