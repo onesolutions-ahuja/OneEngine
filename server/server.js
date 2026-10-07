@@ -10,7 +10,7 @@ import jwt from "jsonwebtoken";
 import pg from "pg";
 import { initializeDatabase } from "./database/init.js";
 import { bootstrapInitialSuperadmin } from "./database/rbacBootstrap.js";
-import { seedOneSolutionsDemo } from "./database/oneSolutionsSeeder.js";
+import { seedInitialTenant } from "./database/oneSolutionsSeeder.js";
 import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs, enqueuePlatformJob } from "./services/platformJobs.js";
@@ -2089,7 +2089,7 @@ async function startServer() {
 
     // Canonical development tenant seed: a clean database must become usable
     // without manual SQL or copied production data.
-    const oneSolutionsSeed = await seedOneSolutionsDemo(pool);
+    const oneSolutionsSeed = await seedInitialTenant(pool);
 
     // Catalogue availability is a core startup requirement, not part of the
     // heavyweight metadata bootstrap. Keep OneStore/package discovery current
@@ -2443,7 +2443,7 @@ async function startServer() {
     // every start so environment-driven bootstrap credentials can still change.
     // Re-run the idempotent tenant seed after platform bootstrap so tenant
     // extension fields/relationships can bind to canonical Platform Objects.
-    await seedOneSolutionsDemo(pool);
+    await seedInitialTenant(pool);
     await bootstrapInitialSuperadmin(pool, {
       ...process.env,
       BOOTSTRAP_SUPERADMIN_COMPANY_ID: oneSolutionsSeed.companyId,
