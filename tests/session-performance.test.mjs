@@ -100,7 +100,7 @@ test('Google Connect login readiness can reuse the bundled login preflight rows'
 test('password verification runs alongside all login preflight reads and records its own duration', async () => {
   const source = await read('../server/server.js')
   assert.match(source, /const passwordCheckPromise = \(async \(\) =>/)
-  assert.match(source, /const \[securityContext, googleRuntime, permissionBundle\] = await Promise\.all/)
+  assert.match(source, /const \[securityContext, googleRuntime\] = await Promise\.all/)
   assert.match(source, /getGoogleConnectPasswordLoginRuntime\(loginDb/)
   assert.match(source, /const validPassword = await passwordCheckPromise/)
   assert.match(source, /loginTimings\.bcrypt_ms = bcryptDurationMs/)
@@ -282,7 +282,7 @@ test('OneEngine Manager resolves permission and client discovery concurrently', 
 })
 
 
-test('normal password login runs security, Google readiness and permissions concurrently', async () => {
+test('normal password login keeps security and Google readiness on the critical path', async () => {
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
   assert.match(server, /const \[securityContext, googleRuntime, permissionBundle\] = await Promise\.all/)
@@ -339,11 +339,11 @@ test('login network policy uses the preloaded preflight result instead of anothe
 })
 
 
-test('login timing keeps permission and authorization phases separate', async () => {
+test('login timing exposes authorization without permission hydration on the critical path', async () => {
   const source = await read('../server/server.js')
-  assert.match(source, /loginTimings\.permissions_ms = permissionDurationMs/)
+  assert.equal(source.includes('loginTimings.permissions_ms = permissionDurationMs'), false)
   assert.match(source, /loginTimings\.authorization_bundle_ms = Date\.now\(\) - authorizationStartedAt/)
-  assert.equal(source.includes('loginTimings.permissions_ms = loginTimings.authorization_bundle_ms'), false)
+  assert.match(source, /authorization;dur=\$\{loginTimings\.authorization_bundle_ms/)
 })
 
 
