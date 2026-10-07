@@ -28,7 +28,6 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
@@ -623,7 +622,7 @@ function Desktop({ onLock, onSignOut }) {
     }
     const settingsIndex = parts.indexOf('settings')
     if (settingsIndex >= 0) {
-      const section = parts[settingsIndex + 1] || 'company'
+      const section = parts[settingsIndex + 1] || ''
       if (DEVELOPER_SETTINGS_KEYS.has(section)) {
         setRoute('developer', section)
         setRouteState({ app: 'developer', section })
@@ -917,8 +916,6 @@ function Desktop({ onLock, onSignOut }) {
             setRoute('profile')
             setActiveApp('profile')
           }} />
-        ) : activeApp === 'google-connect' ? (
-          <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeApp === 'workspace' ? (
