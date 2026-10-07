@@ -52,10 +52,7 @@ for (const key of objectKeys) {
   routes.add(`objects/${key}`)
 }
 const developerKeys = source.match(/DEVELOPER_SETTINGS_KEYS\s*=\s*new Set\s*\(\s*\[([\s\S]*?)\]\s*\)/)?.[1]
-const settingsVisualsStart = appSource.indexOf('const SETTINGS_VISUALS')
-const settingsVisualsEnd = settingsVisualsStart >= 0 ? appSource.indexOf('\nfunction ', settingsVisualsStart) : -1
-const settingsVisuals = settingsVisualsStart >= 0 ? appSource.slice(settingsVisualsStart, settingsVisualsEnd > settingsVisualsStart ? settingsVisualsEnd : undefined) : ''
-if (!developerKeys || !settingsVisuals) throw new Error('Unable to read Developer/settings route metadata')
+if (!developerKeys) throw new Error('Unable to read Developer route metadata')
 const developerSet = new Set([...developerKeys.matchAll(/'([a-z-]+)'/g)].map(match => match[1]))
 for (const key of developerSet) {
   routes.add(`developer/${key}`)
@@ -64,11 +61,6 @@ for (const key of developerSet) {
 // Keep legacy Developer URLs directly loadable on GitHub Pages. These aliases
 // are normalized by readRoute() to their current builders.
 for (const alias of ['workflow-builder', 'platform-apps', 'builder-2']) routes.add(`developer/${alias}`)
-for (const match of settingsVisuals.matchAll(/^\s*(?:'([a-z-]+)'|([a-z-]+))\s*:/gm)) {
-  const key = match[1] || match[2]
-  if (!key || developerSet.has(key)) continue
-  routes.add(`settings/${key}`)
-}
 for (const route of routes) {
   const directory = path.join('dist', route)
   await fs.mkdir(directory, { recursive: true })
