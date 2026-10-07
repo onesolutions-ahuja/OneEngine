@@ -181,7 +181,7 @@ const RAW_PLATFORM_COMPONENTS = Object.freeze([
   { key: "confirmation_dialog", label: "Confirmation Dialog", category: "overlay", kind: "overlay", bindable: false, supportedBuilders: ["PAGE"], supportedContexts: ["page"], supportsPageContext: true, rendererKey: "confirmation_dialog", configurable: ["title", "message", "confirmLabel", "cancelLabel", "variant", "action", "visibility"] },
   { key: "app_icon", label: "App Icon", category: "media", kind: "media", bindable: false, supportedBuilders: ["PAGE"], supportedContexts: ["page"], supportsPageContext: true, rendererKey: "app_icon", configurable: ["icon", "image", "label", "size", "shape", "visibility"] },
   { key: "dock_item", label: "Dock Item", category: "navigation", kind: "navigation", bindable: false, supportedBuilders: ["PAGE"], supportedContexts: ["page"], supportsPageContext: true, rendererKey: "dock_item", configurable: ["icon", "label", "destination", "action", "badge", "visibility"] },
-  { key: "jarves", label: "JARVES", category: "action", kind: "assistant", bindable: false, registered: true, behaviours: ["behaviour_1", "behaviour_2", "behaviour_3"], interactions: ["voice", "message", "ask_input"] },
+  { key: "jarves", label: "JARVES", category: "action", kind: "assistant", bindable: false, registered: true, supportedBuilders: ["DOCK"], supportedContexts: ["dock"], supportsPageContext: false, behaviours: ["behaviour_1", "behaviour_2", "behaviour_3"], interactions: ["voice", "message", "ask_input"] },
 ]);
 
 export const PLATFORM_COMPONENTS = Object.freeze(RAW_PLATFORM_COMPONENTS.map((component) => Object.freeze({
