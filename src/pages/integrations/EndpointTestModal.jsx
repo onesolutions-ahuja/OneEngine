@@ -14,11 +14,11 @@ import { safeParse } from "./shared.jsx";
 
 export const SAMPLE_JSON = `{
   "record": {
-    "sale_id": "S-1001",
-    "receipt_number": "T01-20260916-0001",
-    "total": 42.5,
-    "related_record": { "name": "Acme Ltd", "address": { "postcode": "SW1A 1AA" } },
-    "items": [ { "quantity": 2, "item": { "ean": "5000111000011" } } ]
+    "id": "example-record-id",
+    "reference": "EXAMPLE-001",
+    "amount": 42.5,
+    "related_record": { "label": "Example" },
+    "items": [ { "quantity": 2, "value": "Example item" } ]
   }
 }`;
 
