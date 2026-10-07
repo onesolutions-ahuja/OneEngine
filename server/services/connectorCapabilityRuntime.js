@@ -1,15 +1,17 @@
-import { ConnectorService } from "./connectorRuntime.js";
-import { decryptCredentials } from "./integrationCredentials.js";
+import { createConnectorActionExecutor } from "./connectorFramework.js";
 
 function jsonValue(value, fallback = {}) {
   if (typeof value !== "string") return value ?? fallback;
-  try { return JSON.parse(value); }
-  catch { return fallback; }
+  try { return JSON.parse(value); } catch { return fallback; }
 }
 
+/**
+ * Execute a connector capability entirely from persisted metadata.
+ * integration_connections selects a platform_connector_definition and the
+ * generic executor resolves credentials + operation mappings.
+ */
 export async function executeInstalledConnectorCapability({
   db,
-  drivers,
   companyId,
   connectorInstanceId,
   capability,
@@ -24,17 +26,15 @@ export async function executeInstalledConnectorCapability({
   if (!capabilityKey) throw new Error("Connector capability is required");
 
   const result = await db(
-    `SELECT c.*,p.manifest
+    `SELECT c.*,d.id AS metadata_connector_definition_id,d.status AS metadata_connector_status
        FROM integration_connections c
-       JOIN package_registry p ON p.package_key=c.connector_package_key AND p.active=TRUE
+       LEFT JOIN platform_connector_definitions d ON d.id=c.connector_definition_id
       WHERE c.id=$1 AND c.company_id=$2
       LIMIT 1`,
     [connectorInstanceId, companyId]
   );
   const instance = result.rows[0];
-  if (!instance) {
-    throw Object.assign(new Error("Connector instance not found"), { code: "CONNECTOR_NOT_FOUND", status: 404 });
-  }
+  if (!instance) throw Object.assign(new Error("Connector instance not found"), { code: "CONNECTOR_NOT_FOUND", status: 404 });
 
   const declaredCapabilities = new Set(
     jsonValue(instance.connector_capabilities, [])
@@ -47,42 +47,20 @@ export async function executeInstalledConnectorCapability({
   if (requireEnabled && instance.enabled !== true) {
     throw Object.assign(new Error("Connector instance is disabled"), { code: "CONNECTOR_DISABLED", status: 409 });
   }
+  if (!instance.connector_definition_id || instance.metadata_connector_status !== "ACTIVE") {
+    throw Object.assign(new Error("Connector instance has no active metadata definition"), { code: "CONNECTOR_DEFINITION_UNAVAILABLE", status: 409 });
+  }
   const lastTest = jsonValue(instance.last_test_result, {});
   if (requireHealthy && (lastTest?.success !== true || String(instance.connection_status || "").toUpperCase() !== "CONNECTED")) {
     throw Object.assign(new Error("Connector instance is not healthy"), { code: "CONNECTOR_NOT_HEALTHY", status: 409 });
   }
 
-  const driver = drivers?.get?.(instance.connector_package_key);
-  if (!driver || !driver.capabilities?.has?.(capabilityKey)) {
-    throw Object.assign(new Error("Connector capability has no installed runtime driver"), { code: "CAPABILITY_UNAVAILABLE", status: 409 });
-  }
-
-  const configuration = {
-    ...jsonValue(instance.connector_configuration, {}),
-    ...(() => {
-      try { return decryptCredentials(instance.credentials_encrypted) || {}; }
-      catch { return {}; }
-    })(),
-  };
-  const service = new ConnectorService({
-    connectorKey: instance.connector_package_key,
-    capabilities: [capabilityKey],
-    adapter: driver.createAdapter({
-      instanceId: instance.id,
-      configuration,
-      companyId: instance.company_id,
-      storeId: instance.store_id,
-      tillId: instance.till_id,
-    }),
+  const execute = createConnectorActionExecutor({ db });
+  const execution = await execute({
+    companyId,
+    connectionId: connectorInstanceId,
+    operation: capabilityKey,
+    input: payload,
   });
-
-  const connection = await service.connect();
-  if (requireHealthy && !connection.healthy) {
-    throw Object.assign(new Error(connection.lastError || "Connector is not healthy"), { code: "CONNECTOR_NOT_HEALTHY", status: 409 });
-  }
-
-  return {
-    instance,
-    result: await service.execute(capabilityKey, payload),
-  };
+  return { instance, result: execution.data, execution };
 }
