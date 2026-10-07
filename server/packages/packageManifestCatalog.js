@@ -240,12 +240,6 @@ const PACKAGE_CATALOG = [
         "communication.handoff"
       ],
       action: "SEND_COMMUNICATION",
-      legacyActions: {
-        EMAIL: "SEND_EMAIL",
-        SMS: "SEND_SMS",
-        WHATSAPP: "SEND_WHATSAPP",
-        IN_APP: "IN_APP_NOTIFICATION"
-      },
       providerMetadataSource: "integrations",
       templateSource: "platform_message_templates",
       deliverySource: "platform_communication_deliveries"
