@@ -2087,6 +2087,24 @@ function Desktop({ onLock, onSignOut }) {
     setMessage(`${item?.label ?? 'App'} is not available in this workspace.`)
   }
 
+  useEffect(() => {
+    if (!activeApp || storeAppsLoading || !storeApps.length) return
+    const installedApp = storeApps.find((item) =>
+      item?.is_installed === true && String(item?.package_key || '') === String(activeApp)
+    )
+    if (!installedApp) return
+
+    const declaredRoute = resolveAppOpenRoute(installedApp)
+    if (!declaredRoute || declaredRoute === '/app') return
+    const routeParts = String(declaredRoute).split('?')[0].split('/').filter(Boolean)
+
+    // Legacy/package-key URLs such as /products are only aliases. Resolve them
+    // through the installed app's metadata-owned landing route instead of
+    // mounting a business-specific page branch.
+    if (!routeParts.some((part) => ['objects', 'workspace', 'developer', 'settings', 'connector-settings'].includes(part))) return
+    openRoutePath(declaredRoute)
+  }, [activeApp, storeAppsLoading, storeApps])
+
   return (
     <main className="screen desktop-screen" data-oneengine-route={activeApp} data-oneengine-section={routeState?.section || ""} data-oneengine-object={routeState?.objectKey || ""} data-oneengine-page={routeState?.pageKey || ""}>
       <header className="demo-menubar" ref={topbarPanelRef}>
