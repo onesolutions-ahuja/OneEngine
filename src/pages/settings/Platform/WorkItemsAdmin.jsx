@@ -24,6 +24,7 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [working, setWorking] = useState("");
   const [comment, setComment] = useState("");
   const [users, setUsers] = useState([]);
@@ -34,13 +35,18 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
 
   const loadItems = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const response = await apiRequest("/api/platform/approval-requests");
       const rows = Array.isArray(response?.data) ? response.data : [];
       setItems(rows);
       setSelectedId((current) => rows.some((row) => String(row.work_item_id || row.id) === String(current)) ? current : (rows[0]?.work_item_id || rows[0]?.id || ""));
     } catch (error) {
-      onError?.(error?.message || "Unable to load work items");
+      const message = error?.message || "Unable to load work items";
+      setItems([]);
+      setSelectedId("");
+      setLoadError(message);
+      onError?.(message);
     } finally {
       setLoading(false);
     }
@@ -165,7 +171,14 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
 
         <div className="developer-record-list-body">
           {loading ? <div className="developer-record-empty">Loading approvals…</div> : null}
-          {!loading && filteredItems.map((item) => (
+          {!loading && loadError ? (
+            <div className="developer-record-empty">
+              <strong>Approvals could not be loaded</strong>
+              <span>{loadError}</span>
+              <button type="button" className="onepos-btn onepos-btn-sm" onClick={loadItems}>Retry</button>
+            </div>
+          ) : null}
+          {!loading && !loadError && filteredItems.map((item) => (
             <button
               key={item.work_item_id || item.id}
               type="button"
@@ -182,8 +195,14 @@ export default function WorkItemsAdmin({ onMessage, onError }) {
               </span>
             </button>
           ))}
-          {!loading && !filteredItems.length ? (
-            <div className="developer-record-empty"><strong>No approvals found</strong><span>Change the search or status filter.</span></div>
+          {!loading && !loadError && items.length === 0 ? (
+            <div className="developer-record-empty">
+              <strong>No approval work items yet</strong>
+              <span>Items will appear here when an approval process creates a request assigned to you or one of your queues.</span>
+            </div>
+          ) : null}
+          {!loading && !loadError && items.length > 0 && !filteredItems.length ? (
+            <div className="developer-record-empty"><strong>No matching approvals</strong><span>Change the search or status filter.</span></div>
           ) : null}
         </div>
 <div className="developer-record-section">
