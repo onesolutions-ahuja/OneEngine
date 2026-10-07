@@ -9,7 +9,7 @@ const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 const files=roots.flatMap(walk).filter((file)=>{
   const name=rel(file);
   if (/(?:^|\/)(?:test|tests|scripts|migrations)(?:\/|$)/.test(name) || name.endsWith(".test.js") || name.endsWith(".test.mjs")) return false;
-  if (name.startsWith("server/src/marketing/")) return false;
+  if (name.startsWith("server/src/marketing/") || name.startsWith("src/marketing/")) return false;
   return true;
 });
 const businessTables=["sales","sale_items","payments","payment_attempts","payment_methods","refunds","customers","customer_ledger","customer_loyalty_ledger","gift_card_ledger","gift_cards","layaways","products","product_variants","product_bundles","product_store_pricing","product_supplier_costs","inventory_ledger","inventory_movements","inventory_levels","inventory_batches","suppliers","purchases","purchase_items","purchase_ledger","supplier_invoices","supplier_payments","online_orders","online_order_items","online_order_events"];
