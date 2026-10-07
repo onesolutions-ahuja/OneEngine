@@ -34,16 +34,12 @@ test("Phase 7 every generated system workflow has matching Builder nodes", () =>
   assert.ok(flows.every((flow) => !String(flow.systemKey || "").startsWith("job:")));
 });
 
-test("Phase 7 retired duplicate runtime workflow keys stay removed", async () => {
-  const source = await readFile(new URL("../server/metadata/manifests", import.meta.url), "utf8");
+test("Phase 7 retired duplicate runtime workflow keys stay removed", () => {
+  const flows = packageDefinitions().flatMap((pkg) => pkg.manifest?.workflows || []);
   for (const key of [
-    "flow:online_order.transition",
-    "flow:supplier.invoice.create",
-    "flow:supplier.payment.create",
-    "flow:purchase.create",
-    "flow:purchase.receive",
-    "flow:supplier.return.execute",
-  ]) assert.equal(source.includes(`flow("${key}"`), false, key);
+    "flow:online_order.transition","flow:supplier.invoice.create","flow:supplier.payment.create",
+    "flow:purchase.create","flow:purchase.receive","flow:supplier.return.execute",
+  ]) assert.equal(flows.some((flow) => flow.systemKey === key), false, key);
 });
 
 test("Phase 7 database cleanup retires duplicate runtime rows", async () => {
@@ -52,15 +48,12 @@ test("Phase 7 database cleanup retires duplicate runtime rows", async () => {
 });
 
 test("Phase 7 no hidden workflow executors return", async () => {
-  for (const file of [
-    "../server/services/systemWorkflowCatalog.js",
-    "../server/metadata/manifests",
-    "../server/packages/oneAssistantManifest.js",
-  ]) {
+  for (const file of ["../server/services/systemWorkflowCatalog.js","../server/packages/oneAssistantManifest.js"]) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");
     assert.equal(source.includes("CALL_FUNCTION"), false, file);
     assert.equal(source.includes("RUN_ASSISTANT_SUBFLOW"), false, file);
   }
+  await assert.rejects(readFile(new URL("../server/packages/runtimeFlowManifests.js", import.meta.url), "utf8"));
 });
 
 test("Phase 7 reports exact remaining short-flow definitions", () => {
