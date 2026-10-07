@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeAuthenticationProviderCallback, consumeGoogleOAuthCallback, getPasskeyOptions, getStoredUser, hasSession, loadAuthenticationProviders, login, startAuthenticationProvider, startGoogleLogin, startPasskeyLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPasskeyLogin, verifyPin } from '../../services/api'
+import { apiRequest, completePasskeyRegistration, completeTotpEnrollment, consumeAuthenticationProviderCallback, getPasskeyOptions, getStoredUser, hasSession, loadAuthenticationProviders, login, startAuthenticationProvider, startPasskeyLogin, startPasskeyRegistration, startTotpEnrollment, verifyMfa, verifyPasskey, verifyPasskeyLogin, verifyPin } from '../../services/api'
 import { useClock } from '../clock/ShellClock'
 
 function normalizeResetEmail(value) {
@@ -56,9 +56,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
   const mobilePasskeyDevice = useMemo(() => isMobilePasskeyDevice(), [])
 
   useEffect(() => {
-    const providerResult = consumeAuthenticationProviderCallback()
-    const googleResult = providerResult.handled ? { handled: false } : consumeGoogleOAuthCallback()
-    const result = providerResult.handled ? providerResult : googleResult
+    const result = consumeAuthenticationProviderCallback()
     if (!result.handled) return
     if (result.error) {
       setError(result.error)
@@ -328,17 +326,6 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
     } finally { setSubmitting(false) }
   }
 
-  const submitGoogle = async () => {
-    try {
-      setSubmitting(true)
-      setError('')
-      await startGoogleLogin(username.trim())
-    } catch (err) {
-      setError(err?.message || 'SSO not connected. Please login with email/password.')
-      setSubmitting(false)
-    }
-  }
-
   const displayName = storedUser?.name || storedUser?.username || 'User'
   const initial = displayName.trim().charAt(0).toUpperCase() || 'U'
 
@@ -585,20 +572,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                 </button>
               ))}
 
-              <button
-                className="google-signin-button"
-                type="button"
-                onClick={submitGoogle}
-                disabled={submitting || !username.trim()}
-              >
-                <svg className="google-signin-logo" viewBox="0 0 18 18" aria-hidden="true">
-                  <path fill="#4285F4" d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.909c1.702-1.567 2.684-3.876 2.684-6.615Z"/>
-                  <path fill="#34A853" d="M9 18c2.43 0 4.468-.806 5.956-2.18l-2.91-2.258c-.805.54-1.836.859-3.046.859-2.344 0-4.328-1.585-5.036-3.714H.957v2.332A9 9 0 0 0 9 18Z"/>
-                  <path fill="#FBBC05" d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.592.102-1.167.282-1.707V4.961H.957A9 9 0 0 0 0 9c0 1.452.347 2.827.957 4.039l3.007-2.332Z"/>
-                  <path fill="#EA4335" d="M9 3.579c1.321 0 2.507.454 3.441 1.346l2.581-2.581C13.464.892 11.425 0 9 0A9 9 0 0 0 .957 4.961l3.007 2.332C4.672 5.164 6.656 3.579 9 3.579Z"/>
-                </svg>
-                Continue with Google
-              </button>
+
               <button className="lock-signout" type="button" disabled={submitting} onClick={()=>{setResetEmail(normalizeResetEmail(username));setResetStage('request');setError('');setResetNotice('')}}>Forgot password?</button>
                 </>
               )}
