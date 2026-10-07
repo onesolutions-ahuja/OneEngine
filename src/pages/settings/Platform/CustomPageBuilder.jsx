@@ -462,7 +462,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
       const defaults = {
         timeline: { dateField: "created_at", titleField: "name", secondaryField: "status", groupBy: "day", maxRecords: 10 },
         kanban: { groupField: "status", titleField: "name", subtitleField: "status", maxRecords: 12, allowDragDrop: true },
-        calendar: { startField: "start_date", endField: "end_date", titleField: "name", subtitleField: "status", categoryField: "status", defaultView: "month" },
+        calendar: { startField: "start_date", endField: "end_date", titleField: "name", subtitleField: "status", categoryField: "status", statusField: "status", statusColors: {}, defaultView: "month" },
         scheduler: { resourceField: "assignee_id", resourceLabelField: "name", startField: "start_at", endField: "end_at", titleField: "name", statusField: "status", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
         gantt: { taskLabelField: "name", startField: "start_date", endField: "end_date", progressField: "progress", scale: "week" },
         map: { locationMode: "latlng", latitudeField: "latitude", longitudeField: "longitude", labelField: "name", defaultZoom: 10 },
@@ -1706,6 +1706,8 @@ function AdvancedComponentProperties({ node, objects, pageResources = {}, onChan
               {node.componentKey === "kanban" ? <FieldSelect label="Subtitle Field" value={config.subtitleField || "status"} fields={availableFields} onChange={(subtitleField) => setConfig({ subtitleField })} /> : null}
               {node.componentKey === "calendar" ? <FieldSelect label="Start Field" value={config.startField || "start_date"} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
               {node.componentKey === "calendar" ? <FieldSelect label="End Field" value={config.endField || "end_date"} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
+              {node.componentKey === "calendar" ? <FieldSelect label="Status Field" value={config.statusField || "status"} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
+              {node.componentKey === "calendar" ? <div className="space-y-1"><label className={labelClass}>Status colours (JSON)</label><textarea className={inputClass} rows={3} value={JSON.stringify(config.statusColors || {}, null, 2)} onChange={(event) => { try { const statusColors = JSON.parse(event.target.value || "{}"); setConfig({ statusColors }); } catch { /* keep last valid metadata */ } }} placeholder='{"Available":"#22c55e","Booked":"#ef4444"}' /></div> : null}
               {node.componentKey === "scheduler" ? <FieldSelect label="Start Field" value={config.startField || "start_at"} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
               {node.componentKey === "scheduler" ? <FieldSelect label="End Field" value={config.endField || "end_at"} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
               {node.componentKey === "scheduler" ? <FieldSelect label="Resource Field" value={config.resourceField || "assignee_id"} fields={availableFields} onChange={(resourceField) => setConfig({ resourceField })} /> : null}
