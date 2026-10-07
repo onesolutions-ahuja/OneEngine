@@ -1471,7 +1471,7 @@ function CollectionLivePreview({ collection }) {
   </div>;
 }
 
-function FocusedDataPanel({ node, objects, onChange, targetComponents = [] }) {
+function FocusedDataPanel({ node, objects, onChange, targetComponents = [], pageResources = {} }) {
   const collection = node.collection || {};
   const { fields, loading: fieldsLoading, error: fieldsError } = useCollectionFieldState(collection, objects);
   const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
