@@ -57,5 +57,3 @@ export async function seedInitialTenant(pool, seed = {}) {
   }
 }
 
-// Compatibility alias; callers should migrate to seedInitialTenant.
-export const seedOneSolutionsDemo = seedInitialTenant;
