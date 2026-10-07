@@ -32,27 +32,7 @@ export function installedPackageVersionState(item) {
   };
 }
 
-export function packageIconUrl(item) {
-  const manifest = item?.manifest || {};
-  const provider = manifest.providerConnector || manifest.provider_connector || {};
-  const assetKey = item?.icon_asset_key || item?.iconAssetKey || manifest.iconAssetKey || manifest.icon_asset_key;
-  if (typeof assetKey === "string" && /^[a-z0-9-]+$/i.test(assetKey)) return `/icons/apps/${assetKey}.svg`;
-  const value = item?.icon_url || item?.logo_url || manifest.iconUrl || manifest.icon_url || manifest.logoUrl || manifest.logo_url || manifest.icon || provider.iconUrl || provider.logoUrl;
-  return typeof value === "string" && value.trim() ? value.trim() : "";
-}
 
-export function packageIconAssets(item) {
-  const manifest = item?.manifest || {};
-  const provider = manifest.providerConnector || manifest.provider_connector || {};
-  const keys = [
-    item?.icon_asset_key, item?.iconAssetKey, manifest.iconAssetKey, manifest.icon_asset_key,
-    item?.package_key, provider.providerKey, provider.provider_key,
-  ].filter((key) => typeof key === "string" && /^[a-z0-9_-]+$/i.test(key));
-  return [...new Set(keys.flatMap((key) => {
-    const filename = key.toLowerCase().replaceAll("_", "-");
-    return ["svg", "png", "jpg", "jpeg"].map((extension) => `/icons/apps/${filename}.${extension}`);
-  }))];
-}
 
 export function packageDependencies(item) {
   const manifest = item?.manifest || {};
@@ -87,11 +67,3 @@ export function filterStorePackages(packages, { search = "", category = "All", v
   });
 }
 
-export function packageBrandName(item) {
-  const manifest = item?.manifest || {};
-  const provider = manifest.providerConnector || manifest.provider_connector || {};
-  const explicit = manifest.brandKey || manifest.brand_key || provider.brandKey || provider.brand_key;
-  if (typeof explicit === "string" && explicit.trim()) return explicit.trim().toLowerCase().replaceAll("_", "-");
-  const key = provider.providerKey || provider.provider_key || item?.package_key || "";
-  return typeof key === "string" && key.trim() ? key.trim().toLowerCase().replaceAll("_", "-") : null;
-}
