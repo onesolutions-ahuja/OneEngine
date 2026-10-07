@@ -1,0 +1,1 @@
+# Current main audit proof\n\nThis non-executable marker records that the repository-wide closure audit was rerun from main SHA `dae27b4f4059b911f964e7f7591842d31602b2dd` after the closure changes landed, including concurrent main changes.\n
