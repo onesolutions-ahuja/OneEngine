@@ -46,6 +46,9 @@ export default function CustomPageRuntimePage({ pageKey }) {
       const objectKey=node?.collection?.objectKey||null;
       const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null})});
       if(!response?.success)throw new Error(response?.message||"Unable to execute page action");
+      const result=response?.data||{};
+      const output=result?.result??result?.results??result;
+      window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:node?.id||null,interactionType:interaction.type,runId:result?.runId||response?.workflowRunId||null,status:result?.status||"COMPLETED",output}}));
     }catch(err){setError(err?.message||"Unable to execute page action");}
     finally{setBusy(false);}
   };
