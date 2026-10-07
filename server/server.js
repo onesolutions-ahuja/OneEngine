@@ -205,19 +205,6 @@ const apiLimiter = createFixedWindowRateLimiter({ windowMs: 60_000, max: 600, ke
 const loginLimiter = createFixedWindowRateLimiter({ windowMs: 15 * 60_000, max: 5, keyPrefix: "login" });
 app.use("/api", apiLimiter);
 
-/*
- * Deliveroo webhooks are HMAC-signed over the RAW request body - parse it
- * before the global JSON parser consumes the stream (express.raw sets
- * req.body to a Buffer; express.json then skips the already-parsed body).
- */
-app.use("/api/online/deliveroo/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-
-/*
- * Uber primary webhook is HMAC-signed (X-Uber-Signature) over the RAW body -
- * same raw-parsing mechanism as the Deliveroo webhook above.
- */
-app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/smsgate/webhook", express.raw({ type: "*/*", limit: "64kb" }));
