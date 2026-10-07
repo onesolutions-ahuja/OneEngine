@@ -15,6 +15,12 @@ test("Page Test exposes the complete generic debug chain and always rolls back",
  assert.match(route,/durationMs/);
  assert.match(route,/resolvePageBindingTree/);
  assert.match(route,/workflowVariables:variables/);
+ assert.match(route,/component_operation/);
+ assert.match(route,/set_record/);
+ assert.match(route,/filter_collection/);
+ assert.match(route,/set_value/);
+ assert.match(route,/refresh/);
+ assert.equal(route.includes("Page Test rollback currently executes Flow-backed interactions only"),false);
 });
 
 test("Page Builder surfaces rollback Test results instead of persisting test changes",async()=>{
@@ -22,4 +28,6 @@ test("Page Builder surfaces rollback Test results instead of persisting test cha
  assert.match(builder,/page-interactions\/test/);
  assert.match(builder,/Database changes rolled back/);
  assert.match(builder,/setTestTrace/);
+ assert.equal(builder.includes("Select a component with a Flow-backed event to run rollback Test."),false);
+ assert.match(builder,/node\?\.interactions\?\.\[eventName\]/);
 });
