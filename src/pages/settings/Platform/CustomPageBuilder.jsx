@@ -122,6 +122,9 @@ const BUILDER_CSS = `
   .cpb-node{position:relative;min-width:90px;min-height:38px;cursor:default;overflow:visible;box-sizing:border-box}
   .cpb-resize-handle{position:absolute;right:4px;bottom:4px;z-index:30;width:28px;height:28px;display:grid;place-items:center;border:2px solid #147d70;border-radius:7px;background:#fff;color:#147d70;box-shadow:0 3px 12px rgba(15,23,42,.22);cursor:nwse-resize;touch-action:none}
   .cpb-resize-handle:hover{background:#edf8f6;border-color:#147d70}
+  .cpb-resize-edge{position:absolute;z-index:29;background:transparent;touch-action:none}
+  .cpb-resize-edge-right{top:8px;right:-5px;bottom:34px;width:10px;cursor:ew-resize}
+  .cpb-resize-edge-bottom{left:8px;right:34px;bottom:-5px;height:10px;cursor:ns-resize}
   .cpb-node-actions{position:absolute;top:4px;right:38px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
   .cpb-node-remove{position:absolute;top:4px;right:6px;z-index:9;width:28px;height:28px;display:grid;place-items:center;border:1px solid #d2d7dc;border-radius:999px;background:#fff;color:#5f6972;box-shadow:0 2px 8px rgba(15,23,42,.10);cursor:pointer}
   .cpb-node-remove:hover{border-color:#fecaca;background:#fff1f2;color:#dc2626}
@@ -593,7 +596,7 @@ const updateNode = (nodeId, changes) => {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
-  const beginNodeResize = (nodeId, event) => {
+  const beginNodeResize = (nodeId, event, axis = "both") => {
     if (preview || !nodeId) return;
     event.preventDefault();
     event.stopPropagation();
@@ -608,6 +611,7 @@ const updateNode = (nodeId, changes) => {
       startY: event.clientY,
       startWidth: rect.width,
       startHeight: rect.height,
+      axis,
     };
     resizeNodeRef.current = state;
     // Do not capture the pointer on the handle while listening for movement on
@@ -622,8 +626,8 @@ const updateNode = (nodeId, changes) => {
       if (!active || active.nodeId !== nodeId) return;
       const width = Math.max(90, Math.min(2400, active.startWidth + (moveEvent.clientX - active.startX)));
       const height = Math.max(38, Math.min(1800, active.startHeight + (moveEvent.clientY - active.startY)));
-      active.element.style.width = `${Math.round(width)}px`;
-      active.element.style.height = `${Math.round(height)}px`;
+      if (active.axis !== "bottom") active.element.style.width = `${Math.round(width)}px`;
+      if (active.axis !== "right") active.element.style.height = `${Math.round(height)}px`;
     };
     const end = () => {
       const active = resizeNodeRef.current;
@@ -866,6 +870,8 @@ const updateNode = (nodeId, changes) => {
         {!preview ? <button type="button" className="cpb-node-remove" aria-label={`Remove ${nodeLabel(node)}`} title="Remove component" onClick={(event) => { event.stopPropagation(); setSelectedNodeId(node.id); setTimeout(() => { applyDraft((current) => ({ ...current, sections: removeNodeFromSections(current.sections, node.id) })); setSelectedNodeId(null); }, 0); }}><Minus size={15}/></button> : null}
         {!preview && selectedNodeId === node.id ? (
           <>
+            <div className="cpb-resize-edge cpb-resize-edge-right" aria-hidden="true" onPointerDown={(event) => beginNodeResize(node.id, event, "right")} />
+            <div className="cpb-resize-edge cpb-resize-edge-bottom" aria-hidden="true" onPointerDown={(event) => beginNodeResize(node.id, event, "bottom")} />
             <span className="cpb-chip" style={{ position: "absolute", top: 4, left: 6, zIndex: 7, background: "#147d70", color: "#fff" }}>
               {nodeLabel(node)}
             </span>
