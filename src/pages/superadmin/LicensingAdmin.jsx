@@ -24,8 +24,6 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   const [companyLicenceForm, setCompanyLicenceForm] = useState({ startsAt: "", expiresAt: "", active: true });
   const [companyBundles, setCompanyBundles] = useState([]);
   const [companyTiers, setCompanyTiers] = useState([]);
-  const [jarvesLicence, setJarvesLicence] = useState({ allowance: 0, enabledUsers: 0, seatsRemaining: 0 });
-  const [jarvesAllowanceDraft, setJarvesAllowanceDraft] = useState("0");
   const [entitlements, setEntitlements] = useState(Object.fromEntries(DEFAULT_KEYS.map((key) => [key, false])));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -228,17 +226,9 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     setCompanyLicenceForm({ startsAt: "", expiresAt: "", active: true });
     if (!companyId) return;
     try {
-      const [result, jarvesResult] = await Promise.all([
-        apiRequest(`/api/superadmin/companies/${companyId}/entitlements`),
-        apiRequest(`/api/superadmin/companies/${companyId}/jarves-licence`),
-      ]);
+      const result = await apiRequest(`/api/superadmin/companies/${companyId}/entitlements`);
       if (!result.success) throw new Error(result.message || "Unable to load company entitlements");
       setCompanyEntitlements(result.data);
-      if (jarvesResult?.success) {
-        const nextJarves = jarvesResult.data || { allowance: 0, enabledUsers: 0, seatsRemaining: 0 };
-        setJarvesLicence(nextJarves);
-        setJarvesAllowanceDraft(String(nextJarves.allowance ?? 0));
-      }
       setCompanyLicenceForm({
         startsAt: result.data.starts_at ? new Date(result.data.starts_at).toISOString().slice(0, 16) : "",
         expiresAt: result.data.expires_at ? new Date(result.data.expires_at).toISOString().slice(0, 16) : "",
@@ -305,23 +295,6 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     setter((items) => items.map((entry) => entry.id === id
       ? { ...entry, packages: (entry.packages || []).map((item) => item.package_id === packageId ? { ...item, entitlement_type: entitlementType } : item) }
       : entry));
-  };
-
-  const saveJarvesLicence = async () => {
-    if (!selectedCompany) return;
-    setError(""); setMessage("");
-    try {
-      const result = await apiRequest(`/api/superadmin/companies/${selectedCompany}/jarves-licence`, {
-        method: "PUT",
-        body: JSON.stringify({ allowance: Math.max(0, Math.trunc(Number(jarvesAllowanceDraft) || 0)) }),
-      });
-      if (!result.success) throw new Error(result.message || "Unable to update JARVES licence seats");
-      setJarvesLicence(result.data);
-      setJarvesAllowanceDraft(String(result.data?.allowance ?? 0));
-      setMessage("JARVES licence seats updated.");
-    } catch (err) {
-      setError(err.message || "Unable to update JARVES licence seats");
-    }
   };
 
   const assignLicence = async () => {
@@ -506,19 +479,6 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
           </div>
           <p className="mt-2 text-sm font-medium">Feature entitlements</p>
           <div className="flex flex-wrap gap-3">{Object.entries(companyEntitlements.entitlements || {}).filter(([, enabled]) => enabled).map(([key]) => <span className="onepos-badge onepos-badge-success" key={key}>{key}</span>)}</div>
-          <div className="mt-4 rounded-xl border border-slate-200 p-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h3 className="font-medium">JARVES licence seats</h3>
-                <p className="text-sm text-slate-500">JARVES capacity is managed here with the company licence, not in Settings.</p>
-                <p className="mt-1 text-xs text-slate-500">{jarvesLicence.enabledUsers} enabled · {jarvesLicence.seatsRemaining} remaining</p>
-              </div>
-              <div className="flex items-end gap-2">
-                <label className="text-sm">Seats<input type="number" min="0" step="1" className="onepos-input mt-1 block w-28" value={jarvesAllowanceDraft} onChange={(event) => setJarvesAllowanceDraft(event.target.value)} /></label>
-                <button type="button" className="onepos-btn onepos-btn-secondary" onClick={saveJarvesLicence}>Save JARVES seats</button>
-              </div>
-            </div>
-          </div>
           <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2">
             <div className="space-y-2"><div className="flex items-center justify-between"><h3 className="font-medium">Company bundles</h3><button type="button" className="onepos-btn onepos-btn-secondary" onClick={() => saveCompanyAssignments("bundles")}>Save bundles</button></div>
               {marketplaceBundles.map((item) => <label className="flex items-center gap-2 text-sm" key={item.id}><input type="checkbox" checked={companyBundles.some((assignment) => assignment.id === item.id)} onChange={(event) => toggleCompanyAssignment(setCompanyBundles, item.id, event.target.checked)} />{item.name}</label>)}
