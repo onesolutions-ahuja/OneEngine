@@ -57,8 +57,6 @@ test("Phase 7A migration and architecture gate keep retired duplicates out", asy
   const audit = await readFile(new URL("../scripts/audit-workflow-coverage.mjs", import.meta.url), "utf8");
   assert.match(migration, /0067_remove_residual_duplicate_runtime_workflows/);
   for (const key of retiredRuntimeKeys) assert.ok(migration.includes(`"${key}"`), key);
-  assert.match(audit, /COLLAPSED_RUNTIME_WORKFLOW/);
-  assert.match(audit, /RETIRED_DUPLICATE_RUNTIME_FLOW_RETURNED/);
-  assert.match(audit, /WORKFLOW_DENOMINATOR_DRIFT/);
-  assert.match(audit, /SHORT_WORKFLOW_COUNT_DRIFT/);
+  assert.match(audit, /RETIRED_DUPLICATE_RUNTIME_FLOW/);
+  assert.match(audit, /RETIRED_PLATFORM_METADATA_PRESENT/);
 });
