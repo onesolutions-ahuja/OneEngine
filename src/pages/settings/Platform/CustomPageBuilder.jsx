@@ -275,6 +275,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const resizeNodeRef = useRef(null);
   const [canvasPanning, setCanvasPanning] = useState(false);
   const [canvasScroll, setCanvasScroll] = useState({ left: 0, max: 0 });
+  const [canvasZoom, setCanvasZoom] = useState(100);
 
   useEffect(() => {
     apiRequest("/api/platform/apps").then((response) => setApps(response.data || [])).catch((error) => onError?.(error.message));
@@ -435,9 +436,9 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
       return {
         id: uid("tree_view"), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
         config: {
-          parentField: "parent_id",
-          labelField: "name",
-          secondaryField: "status",
+          parentField: "",
+          labelField: "",
+          secondaryField: "",
           maxDepth: 3,
           showCounts: true,
           allowCollapse: true,
@@ -453,8 +454,8 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
         label: meta.label,
         collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 1, pagination: false, fields: [] },
         config: {
-          statusField: "status",
-          titleField: "name",
+          statusField: "",
+          titleField: "",
           stages: [],
           allowStageChange: false,
           keyFields: [],
@@ -465,15 +466,15 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     }
     if (["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"].includes(componentKey)) {
       const defaults = {
-        timeline: { dateField: "created_at", titleField: "name", secondaryField: "status", groupBy: "day", maxRecords: 10 },
-        kanban: { groupField: "status", titleField: "name", subtitleField: "status", maxRecords: 12, allowDragDrop: true },
-        calendar: { startField: "start_date", endField: "end_date", titleField: "name", subtitleField: "status", categoryField: "status", statusField: "status", statusColors: {}, defaultView: "month" },
-        scheduler: { resourceField: "assignee_id", resourceLabelField: "name", startField: "start_at", endField: "end_at", titleField: "name", statusField: "status", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
-        gantt: { taskLabelField: "name", startField: "start_date", endField: "end_date", progressField: "progress", scale: "week" },
-        map: { locationMode: "latlng", latitudeField: "latitude", longitudeField: "longitude", labelField: "name", defaultZoom: 10 },
-        hierarchy_viewer: { parentField: "parent_id", titleField: "name", maxDepth: 3, orientation: "vertical" },
-        file_viewer: { displayMode: "grid", filenameField: "filename", typeField: "file_type", maxItems: 12 },
-        signature: { fieldKey: "signature", label: "Signature", displayMode: "capture", width: 320, height: 180 },
+        timeline: { dateField: "", titleField: "", secondaryField: "", groupBy: "day", maxRecords: 10 },
+        kanban: { groupField: "", titleField: "", subtitleField: "", maxRecords: 12, allowDragDrop: true },
+        calendar: { startField: "", endField: "", titleField: "", subtitleField: "", categoryField: "", statusField: "", statusColors: {}, defaultView: "month" },
+        scheduler: { resourceField: "", resourceLabelField: "name", startField: "", endField: "", titleField: "", statusField: "", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
+        gantt: { taskLabelField: "", startField: "", endField: "", progressField: "", scale: "week" },
+        map: { locationMode: "latlng", latitudeField: "", longitudeField: "", labelField: "", defaultZoom: 10 },
+        hierarchy_viewer: { parentField: "", titleField: "", maxDepth: 3, orientation: "vertical" },
+        file_viewer: { displayMode: "grid", filenameField: "", typeField: "", maxItems: 12 },
+        signature: { fieldKey: "", label: "Signature", displayMode: "capture", width: 320, height: 180 },
       }[componentKey];
       return {
         id: uid(componentKey), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
@@ -1170,6 +1171,16 @@ const updateNode = (nodeId, changes) => {
         <p>Generic presentation metadata only. No business-specific styling is stored here.</p>
         <div className="space-y-1"><label className={labelClass}>Width (px, 0 = auto)</label><input className={inputClass} type="number" min="0" max="2400" value={node.layout?.width || 0} onChange={(event) => updateNode(node.id, { layout: { ...(node.layout || {}), width: Math.max(0, Number(event.target.value) || 0) } })}/></div>
         <div className="space-y-1"><label className={labelClass}>Height (px, 0 = auto)</label><input className={inputClass} type="number" min="0" max="1800" value={node.layout?.height || 0} onChange={(event) => updateNode(node.id, { layout: { ...(node.layout || {}), height: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1"><label className={labelClass}>Background</label><input className={inputClass} type="color" value={node.style?.backgroundColor || "#ffffff"} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), backgroundColor: event.target.value } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Text colour</label><input className={inputClass} type="color" value={node.style?.color || "#111827"} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), color: event.target.value } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Border colour</label><input className={inputClass} type="color" value={node.style?.borderColor || "#e5e7eb"} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), borderColor: event.target.value } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Border width</label><input className={inputClass} type="number" min="0" max="12" value={node.style?.borderWidth ?? 0} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), borderWidth: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Corner radius</label><input className={inputClass} type="number" min="0" max="999" value={node.style?.borderRadius ?? 0} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), borderRadius: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Padding</label><input className={inputClass} type="number" min="0" max="96" value={node.style?.padding ?? 0} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), padding: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+        </div>
+        <div className="space-y-1"><label className={labelClass}>Container shape</label><select className={inputClass} value={node.style?.shape || "square"} onChange={(event) => { const shape = event.target.value; const radius = { square: 0, soft: 8, rounded: 16, pill: 999 }[shape]; updateNode(node.id, { style: { ...(node.style || {}), shape, borderRadius: radius } }); }}><option value="square">Square</option><option value="soft">Slightly rounded</option><option value="rounded">Rounded</option><option value="pill">Pill</option></select></div>
+        <div className="space-y-1"><label className={labelClass}>Shadow</label><select className={inputClass} value={node.style?.shadow || "none"} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), shadow: event.target.value } })}><option value="none">None</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
         {node.componentKey === "button" ? <><div className="space-y-1"><label className={labelClass}>Button style</label><select className={inputClass} value={node.variant || "primary"} onChange={(event) => updateNode(node.id, { variant: event.target.value })}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="ghost">Ghost</option><option value="danger">Destructive</option></select></div><div className="space-y-1"><label className={labelClass}>Size</label><select className={inputClass} value={node.size || "medium"} onChange={(event) => updateNode(node.id, { size: event.target.value })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div></> : null}
       </div>;
     }
@@ -1322,7 +1333,7 @@ const updateNode = (nodeId, changes) => {
       {preview ? (
         /* PREVIEW MODE — the unsaved tree rendered exactly like runtime. */
         <div className="cpb-canvas">
-          <div className={`cpb-device-frame is-${draft.device}`}>
+          <div className={`cpb-device-frame is-${draft.device}`} style={{ transform: `scale(${canvasZoom / 100})`, transformOrigin: "top center", marginBottom: canvasZoom < 100 ? `-${Math.round((1 - canvasZoom / 100) * 100)}%` : undefined }}>
             <CustomPageRenderer definition={definitionForSave()} builderMode={false} device={draft.device} onRecordClick={testMode ? ({record,node,eventName="row_click",value,changes})=>testNodeInteraction({record,node,eventName,value,changes}) : undefined} onButtonClick={testMode ? (node)=>testNodeInteraction({node,eventName:"click"}) : undefined} onEvent={testMode ? (payload)=>testNodeInteraction(payload) : undefined} onInteractionTrace={testMode ? (payload)=>testNodeInteraction(payload) : undefined} />
           </div>
           {testMode ? <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs"><div className="mb-2 flex items-center justify-between"><strong>Test Trace</strong><span className="text-emerald-700">Rollback ON</span></div>{testTrace.length ? <div className="max-h-48 space-y-1 overflow-auto">{testTrace.map((entry,index)=><div key={index} className="rounded bg-slate-50 px-2 py-1"><strong>{entry.kind}</strong> · {entry.status}{entry.detail?.message?` · ${entry.detail.message}`:""}</div>)}</div> : <span className="text-slate-500">Interact with a component to trace the complete Page → Event → Action/Flow → UI chain.</span>}</div> : null}
@@ -1385,6 +1396,18 @@ const updateNode = (nodeId, changes) => {
                   if (viewport) viewport.scrollLeft = Number(event.target.value) || 0;
                 }}
               />
+              <div className="ml-auto flex shrink-0 items-center gap-1" aria-label="Canvas zoom">
+                <button type="button" className="cpb-device-btn" onClick={() => setCanvasZoom((value) => Math.max(40, value - 10))} aria-label="Zoom out">−</button>
+                <button type="button" className="cpb-device-btn min-w-[58px]" onClick={() => setCanvasZoom(100)} title="Reset zoom">{canvasZoom}%</button>
+                <button type="button" className="cpb-device-btn" onClick={() => setCanvasZoom((value) => Math.min(160, value + 10))} aria-label="Zoom in">+</button>
+                <button type="button" className="cpb-device-btn" onClick={() => {
+                  const viewport = canvasViewportRef.current;
+                  const frame = viewport?.querySelector(".cpb-device-frame");
+                  if (!viewport || !frame) return;
+                  const naturalWidth = frame.scrollWidth || frame.getBoundingClientRect().width;
+                  setCanvasZoom(Math.max(40, Math.min(100, Math.floor(((viewport.clientWidth - 36) / Math.max(1, naturalWidth)) * 100))));
+                }}>Fit</button>
+              </div>
             </div>
           <main
             ref={canvasViewportRef}
@@ -1486,29 +1509,67 @@ function CollectionLivePreview({ collection }) {
 
 function FocusedDataPanel({ node, objects, onChange, targetComponents = [], pageResources = {} }) {
   const collection = node.collection || {};
+  const [objectQuery, setObjectQuery] = useState("");
+  const [fieldQuery, setFieldQuery] = useState("");
   const { fields, loading: fieldsLoading, error: fieldsError } = useCollectionFieldState(collection, objects);
+  const visibleObjects = objects.filter((object) => !objectQuery.trim() || String(object.label || object.object_key || "").toLowerCase().includes(objectQuery.trim().toLowerCase()) || String(object.object_key || "").toLowerCase().includes(objectQuery.trim().toLowerCase()));
+  const selectedFieldNames = Array.isArray(collection.fields) ? collection.fields : [];
+  const fieldByName = new Map(fields.map((field) => [field.api_name, field]));
+  const visibleFields = fields.filter((field) => !fieldQuery.trim() || String(field.label || field.api_name || "").toLowerCase().includes(fieldQuery.trim().toLowerCase()) || String(field.api_name || "").toLowerCase().includes(fieldQuery.trim().toLowerCase()));
+  const moveSelectedField = (apiName, delta) => {
+    const current = [...selectedFieldNames];
+    const from = current.indexOf(apiName);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= current.length) return;
+    [current[from], current[to]] = [current[to], current[from]];
+    patchCollection({ fields: current });
+  };
   const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
   return (
     <div className="space-y-3">
       <div className="cpb-page-settings"><h3>Data</h3><p>Select the metadata object, filters, sorting and record limit used by this component.</p></div>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Source</legend>
-        <div className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={collection.objectKey || ""} onChange={(event) => patchCollection({ objectKey: event.target.value, fields: [], titleField: "", subtitleField: "" })}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>
+        <div className="space-y-1"><label className={labelClass}>Object</label><input className={inputClass} value={objectQuery} onChange={(event) => setObjectQuery(event.target.value)} placeholder="Search objects…" aria-label="Search objects" /><select className={inputClass} value={collection.objectKey || ""} onChange={(event) => patchCollection({ objectKey: event.target.value, fields: [], titleField: "", subtitleField: "" })}><option value="">Select object…</option>{collection.objectKey && !visibleObjects.some((object) => object.object_key === collection.objectKey) ? objects.filter((object) => object.object_key === collection.objectKey).map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>) : null}{visibleObjects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>
       </fieldset>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Fields</legend>
         {fieldsLoading ? <p className="text-xs text-slate-500">Loading fields…</p> : null}
         {fieldsError ? <p role="alert" className="text-xs text-red-600">{fieldsError}</p> : null}
-        {!fieldsLoading && !fieldsError && collection.objectKey ? <div className="max-h-44 space-y-0.5 overflow-auto rounded-lg border border-slate-200 p-1.5">
-          {fields.map((field) => {
+        {!fieldsLoading && !fieldsError && collection.objectKey ? <>
+          <input className={inputClass} value={fieldQuery} onChange={(event) => setFieldQuery(event.target.value)} placeholder="Search fields…" aria-label="Search fields" />
+          {selectedFieldNames.length ? <div className="space-y-1 rounded-lg border border-slate-200 p-1.5">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Display order</p>
+            {selectedFieldNames.map((apiName, index) => {
+              const field = fieldByName.get(apiName);
+              return <div key={apiName} draggable onDragStart={(event) => event.dataTransfer.setData("text/page-builder-field", apiName)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+                event.preventDefault();
+                const dragged = event.dataTransfer.getData("text/page-builder-field");
+                if (!dragged || dragged === apiName) return;
+                const next = [...selectedFieldNames];
+                const from = next.indexOf(dragged);
+                const to = next.indexOf(apiName);
+                if (from < 0 || to < 0) return;
+                next.splice(to, 0, next.splice(from, 1)[0]);
+                patchCollection({ fields: next });
+              }} className="flex min-h-8 items-center gap-1 rounded bg-slate-50 px-1.5 text-xs text-slate-600">
+                <span className="cursor-grab text-slate-400" title="Drag to reorder">⋮⋮</span><span className="min-w-0 flex-1 truncate">{field?.label || apiName}</span>
+                <button type="button" className="rounded px-1 text-slate-500 disabled:opacity-30" disabled={index === 0} onClick={() => moveSelectedField(apiName, -1)} aria-label={`Move ${field?.label || apiName} up`}>↑</button>
+                <button type="button" className="rounded px-1 text-slate-500 disabled:opacity-30" disabled={index === selectedFieldNames.length - 1} onClick={() => moveSelectedField(apiName, 1)} aria-label={`Move ${field?.label || apiName} down`}>↓</button>
+              </div>;
+            })}
+          </div> : null}
+          <div className="max-h-44 space-y-0.5 overflow-auto rounded-lg border border-slate-200 p-1.5">
+          {visibleFields.map((field) => {
             const apiName = field.api_name;
-            const checked = (collection.fields || []).includes(apiName);
+            const checked = selectedFieldNames.includes(apiName);
             return <label key={apiName} className="flex min-h-7 items-center gap-2 rounded px-1.5 text-xs text-slate-600 hover:bg-slate-50">
-              <input type="checkbox" checked={checked} onChange={() => patchCollection({ fields: checked ? (collection.fields || []).filter((name) => name !== apiName) : [...(collection.fields || []), apiName].slice(0, 12) })}/>
+              <input type="checkbox" checked={checked} onChange={() => patchCollection({ fields: checked ? selectedFieldNames.filter((name) => name !== apiName) : [...selectedFieldNames, apiName].slice(0, 12) })}/>
               <span className="min-w-0 flex-1 truncate">{field.label || apiName}</span><span className="text-[10px] text-slate-400">{field.field_type || ""}</span>
             </label>;
           })}
-        </div> : null}
+          {!visibleFields.length ? <p className="px-1 py-2 text-[11px] text-slate-400">No fields match this search.</p> : null}
+        </div></> : null}
         <p className="text-[11px] text-slate-400">Only readable fields are shown. Runtime field security is enforced again when data loads.</p>
       </fieldset>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
@@ -1530,7 +1591,9 @@ function FocusedDataPanel({ node, objects, onChange, targetComponents = [], page
 
 function RecordCollectionDataGroup({ node, objects, onChange, children, targetComponents = [], pageResources = {} }) {
   const collection = node.collection || {};
+  const [objectQuery, setObjectQuery] = useState("");
   const fields = useCollectionFields(collection, objects);
+  const visibleObjects = objects.filter((object) => !objectQuery.trim() || String(object.label || object.object_key || "").toLowerCase().includes(objectQuery.trim().toLowerCase()) || String(object.object_key || "").toLowerCase().includes(objectQuery.trim().toLowerCase()));
   const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
   return (
     <>
@@ -1538,9 +1601,11 @@ function RecordCollectionDataGroup({ node, objects, onChange, children, targetCo
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Data</legend>
         <div className="space-y-1">
           <label className={labelClass}>Object</label>
+          <input className={inputClass} value={objectQuery} onChange={(event) => setObjectQuery(event.target.value)} placeholder="Search objects…" aria-label="Search objects" />
           <select className={inputClass} value={collection.objectKey || ""} onChange={(event) => patchCollection({ objectKey: event.target.value, fields: [], titleField: "", subtitleField: "" })}>
             <option value="">Select object…</option>
-            {objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}
+            {collection.objectKey && !visibleObjects.some((object) => object.object_key === collection.objectKey) ? objects.filter((object) => object.object_key === collection.objectKey).map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>) : null}
+            {visibleObjects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}
           </select>
         </div>
         <ConditionsEditor collection={collection} fields={fields} onChange={patchCollection} />
@@ -1649,9 +1714,9 @@ function TreeViewProperties({ node, objects, pageResources = {}, onChange, targe
         <div className="space-y-3">
           <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
             <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Hierarchy</legend>
-            <FieldSelect label="Parent Field" value={config.parentField || "parent_id"} fields={availableFields} onChange={(parentField) => onChange({ config: { ...config, parentField } })} />
-            <FieldSelect label="Label Field" value={config.labelField || "name"} fields={availableFields} onChange={(labelField) => onChange({ config: { ...config, labelField } })} />
-            <FieldSelect label="Secondary Field" value={config.secondaryField || "status"} fields={availableFields} onChange={(secondaryField) => onChange({ config: { ...config, secondaryField } })} />
+            <FieldSelect label="Parent Field" value={config.parentField || ""} fields={availableFields} onChange={(parentField) => onChange({ config: { ...config, parentField } })} />
+            <FieldSelect label="Label Field" value={config.labelField || ""} fields={availableFields} onChange={(labelField) => onChange({ config: { ...config, labelField } })} />
+            <FieldSelect label="Secondary Field" value={config.secondaryField || ""} fields={availableFields} onChange={(secondaryField) => onChange({ config: { ...config, secondaryField } })} />
             <div className="space-y-1">
               <label className={labelClass}>Maximum Depth</label>
               <input className={inputClass} type="number" min={1} max={6} value={config.maxDepth ?? 3} onChange={(event) => onChange({ config: { ...config, maxDepth: Number(event.target.value) || 3 } })} />
@@ -1712,28 +1777,28 @@ function AdvancedComponentProperties({ node, objects, pageResources = {}, onChan
           <>
             <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
               <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Fields</legend>
-              <FieldSelect label="Title Field" value={config.titleField || config.labelField || "name"} fields={availableFields} onChange={(titleField) => setConfig({ titleField, labelField: titleField })} />
-              {node.componentKey === "timeline" ? <FieldSelect label="Date Field" value={config.dateField || "created_at"} fields={availableFields} onChange={(dateField) => setConfig({ dateField })} /> : null}
-              {node.componentKey === "timeline" ? <FieldSelect label="Secondary Field" value={config.secondaryField || "status"} fields={availableFields} onChange={(secondaryField) => setConfig({ secondaryField })} /> : null}
-              {node.componentKey === "kanban" ? <FieldSelect label="Group Field" value={config.groupField || "status"} fields={availableFields} onChange={(groupField) => setConfig({ groupField })} /> : null}
-              {node.componentKey === "kanban" ? <FieldSelect label="Subtitle Field" value={config.subtitleField || "status"} fields={availableFields} onChange={(subtitleField) => setConfig({ subtitleField })} /> : null}
-              {node.componentKey === "calendar" ? <FieldSelect label="Start Field" value={config.startField || "start_date"} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
-              {node.componentKey === "calendar" ? <FieldSelect label="End Field" value={config.endField || "end_date"} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
-              {node.componentKey === "calendar" ? <FieldSelect label="Status Field" value={config.statusField || "status"} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
+              <FieldSelect label="Title Field" value={config.titleField || config.labelField || ""} fields={availableFields} onChange={(titleField) => setConfig({ titleField, labelField: titleField })} />
+              {node.componentKey === "timeline" ? <FieldSelect label="Date Field" value={config.dateField || ""} fields={availableFields} onChange={(dateField) => setConfig({ dateField })} /> : null}
+              {node.componentKey === "timeline" ? <FieldSelect label="Secondary Field" value={config.secondaryField || ""} fields={availableFields} onChange={(secondaryField) => setConfig({ secondaryField })} /> : null}
+              {node.componentKey === "kanban" ? <FieldSelect label="Group Field" value={config.groupField || ""} fields={availableFields} onChange={(groupField) => setConfig({ groupField })} /> : null}
+              {node.componentKey === "kanban" ? <FieldSelect label="Subtitle Field" value={config.subtitleField || ""} fields={availableFields} onChange={(subtitleField) => setConfig({ subtitleField })} /> : null}
+              {node.componentKey === "calendar" ? <FieldSelect label="Start Field" value={config.startField || ""} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
+              {node.componentKey === "calendar" ? <FieldSelect label="End Field" value={config.endField || ""} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
+              {node.componentKey === "calendar" ? <FieldSelect label="Status Field" value={config.statusField || ""} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
               {node.componentKey === "calendar" ? <div className="space-y-1"><label className={labelClass}>Status colours (JSON)</label><textarea className={inputClass} rows={3} value={JSON.stringify(config.statusColors || {}, null, 2)} onChange={(event) => { try { const statusColors = JSON.parse(event.target.value || "{}"); setConfig({ statusColors }); } catch { /* keep last valid metadata */ } }} placeholder='{"Available":"#22c55e","Booked":"#ef4444"}' /></div> : null}
-              {node.componentKey === "scheduler" ? <FieldSelect label="Start Field" value={config.startField || "start_at"} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
-              {node.componentKey === "scheduler" ? <FieldSelect label="End Field" value={config.endField || "end_at"} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
-              {node.componentKey === "scheduler" ? <FieldSelect label="Resource Field" value={config.resourceField || "assignee_id"} fields={availableFields} onChange={(resourceField) => setConfig({ resourceField })} /> : null}
-              {node.componentKey === "gantt" ? <FieldSelect label="Start Field" value={config.startField || "start_date"} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
-              {node.componentKey === "gantt" ? <FieldSelect label="End Field" value={config.endField || "end_date"} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
-              {node.componentKey === "map" ? <FieldSelect label="Latitude Field" value={config.latitudeField || "latitude"} fields={availableFields} onChange={(latitudeField) => setConfig({ latitudeField })} /> : null}
-              {node.componentKey === "map" ? <FieldSelect label="Longitude Field" value={config.longitudeField || "longitude"} fields={availableFields} onChange={(longitudeField) => setConfig({ longitudeField })} /> : null}
+              {node.componentKey === "scheduler" ? <FieldSelect label="Start Field" value={config.startField || ""} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
+              {node.componentKey === "scheduler" ? <FieldSelect label="End Field" value={config.endField || ""} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
+              {node.componentKey === "scheduler" ? <FieldSelect label="Resource Field" value={config.resourceField || ""} fields={availableFields} onChange={(resourceField) => setConfig({ resourceField })} /> : null}
+              {node.componentKey === "gantt" ? <FieldSelect label="Start Field" value={config.startField || ""} fields={availableFields} onChange={(startField) => setConfig({ startField })} /> : null}
+              {node.componentKey === "gantt" ? <FieldSelect label="End Field" value={config.endField || ""} fields={availableFields} onChange={(endField) => setConfig({ endField })} /> : null}
+              {node.componentKey === "map" ? <FieldSelect label="Latitude Field" value={config.latitudeField || ""} fields={availableFields} onChange={(latitudeField) => setConfig({ latitudeField })} /> : null}
+              {node.componentKey === "map" ? <FieldSelect label="Longitude Field" value={config.longitudeField || ""} fields={availableFields} onChange={(longitudeField) => setConfig({ longitudeField })} /> : null}
               {node.componentKey === "map" ? <FieldSelect label="Address Field" value={config.addressField || ""} fields={availableFields} onChange={(addressField) => setConfig({ addressField })} /> : null}
-              {node.componentKey === "hierarchy_viewer" ? <FieldSelect label="Parent Field" value={config.parentField || "parent_id"} fields={availableFields} onChange={(parentField) => setConfig({ parentField })} /> : null}
-              {node.componentKey === "hierarchy_viewer" ? <FieldSelect label="Status Field" value={config.statusField || "status"} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
-              {node.componentKey === "file_viewer" ? <FieldSelect label="Filename Field" value={config.filenameField || "filename"} fields={availableFields} onChange={(filenameField) => setConfig({ filenameField })} /> : null}
-              {node.componentKey === "file_viewer" ? <FieldSelect label="Type Field" value={config.typeField || "file_type"} fields={availableFields} onChange={(typeField) => setConfig({ typeField })} /> : null}
-              {node.componentKey === "signature" ? <FieldSelect label="Target Field" value={config.fieldKey || "signature"} fields={availableFields} onChange={(fieldKey) => setConfig({ fieldKey })} /> : null}
+              {node.componentKey === "hierarchy_viewer" ? <FieldSelect label="Parent Field" value={config.parentField || ""} fields={availableFields} onChange={(parentField) => setConfig({ parentField })} /> : null}
+              {node.componentKey === "hierarchy_viewer" ? <FieldSelect label="Status Field" value={config.statusField || ""} fields={availableFields} onChange={(statusField) => setConfig({ statusField })} /> : null}
+              {node.componentKey === "file_viewer" ? <FieldSelect label="Filename Field" value={config.filenameField || ""} fields={availableFields} onChange={(filenameField) => setConfig({ filenameField })} /> : null}
+              {node.componentKey === "file_viewer" ? <FieldSelect label="Type Field" value={config.typeField || ""} fields={availableFields} onChange={(typeField) => setConfig({ typeField })} /> : null}
+              {node.componentKey === "signature" ? <FieldSelect label="Target Field" value={config.fieldKey || ""} fields={availableFields} onChange={(fieldKey) => setConfig({ fieldKey })} /> : null}
             </fieldset>
             <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
               <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Behavior</legend>
@@ -1818,12 +1883,17 @@ function useRegistryObjectFields(objectKey, objects) {
 function RegistryDrivenProperties({ node, meta, objects, pageResources = {}, onChange, targetComponents = [] }) {
   const configurable = Array.isArray(meta?.configurable) ? meta.configurable : [];
   const config = node.config || {};
-  const objectKey = config.objectKey || "";
+  const usesDataCollection = Boolean(node.collection && typeof node.collection === "object");
+  const objectKey = node.collection?.objectKey || config.objectKey || "";
   const fields = useRegistryObjectFields(objectKey, objects);
   const actionKeys = configurable.filter((key) => /action$/i.test(key) || /clickaction/i.test(key));
-  const ordinaryKeys = configurable.filter((key) => !actionKeys.includes(key) && !["filter","filters","sort","conditionMatch"].includes(key));
+  const ordinaryKeys = configurable.filter((key) => {
+    if (actionKeys.includes(key) || ["filter", "filters", "sort", "conditionMatch"].includes(key)) return false;
+    if (usesDataCollection && (key === "objectKey" || /Field$|Fields$|Binding$/i.test(key))) return false;
+    return true;
+  });
   const patchConfig = (key, value) => onChange({ config: { ...config, [key]: value } });
-  const supportsObjectConditions = configurable.includes("objectKey");
+  const supportsObjectConditions = !usesDataCollection && configurable.includes("objectKey");
   const conditionCollection = {
     conditions: Array.isArray(config.filters) ? config.filters : [],
     conditionMatch: config.conditionMatch || "all",
@@ -1906,19 +1976,22 @@ function collection_fields(node) {
 }
 
 function FieldSelect({ label, value, fields, onChange }) {
+  const [query, setQuery] = useState("");
+  const visibleFields = fields.filter((field) => !query.trim() || String(field.label || field.api_name || "").toLowerCase().includes(query.trim().toLowerCase()) || String(field.api_name || "").toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <div className="space-y-1">
       <label className={labelClass}>{label}</label>
+      <input className={inputClass} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search fields…" aria-label={`Search ${label}`} />
       <select className={inputClass} value={value || ""} onChange={(event) => onChange(event.target.value)}>
         <option value="">None</option>
-        {value && !fields.some((field) => field.api_name === value) ? <option value={value}>{value}</option> : null}
-        {fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label || field.api_name}</option>)}
+        {value && !visibleFields.some((field) => field.api_name === value) ? <option value={value}>{fields.find((field) => field.api_name === value)?.label || value}</option> : null}
+        {visibleFields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label || field.api_name}</option>)}
       </select>
     </div>
   );
 }
 
-function CollectionFilterValue({ value, disabled, pageResources = {}, targetComponents = [], onChange }) {
+function CollectionFilterValue({ value, disabled, field = null, pageResources = {}, targetComponents = [], onChange }) {
   const resource = value && typeof value === "object" && !Array.isArray(value) ? value : { type: "constant", value: value ?? "" };
   const type = resource.type || "constant";
   const setType = (next) => {
@@ -1936,7 +2009,14 @@ function CollectionFilterValue({ value, disabled, pageResources = {}, targetComp
       <option value="component_value">Component Value</option><option value="selected_record">Selected Record</option><option value="flow_output">Flow Output</option>
       <option value="formula">Formula</option>
     </select>
-    {type === "constant" ? <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.value ?? ""} disabled={disabled} onChange={(event)=>onChange({type:"constant",value:event.target.value})} placeholder="value" /> : null}
+    {type === "constant" && !disabled ? (() => {
+      const fieldType = String(field?.field_type || field?.type || "").toLowerCase();
+      const choices = Array.isArray(field?.options) ? field.options : Array.isArray(field?.values) ? field.values : [];
+      if (fieldType === "boolean" || fieldType === "checkbox") return <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={String(resource.value ?? "")} onChange={(event)=>onChange({type:"constant",value:event.target.value === "true"})}><option value="">Value…</option><option value="true">True</option><option value="false">False</option></select>;
+      if (choices.length) return <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={resource.value ?? ""} onChange={(event)=>onChange({type:"constant",value:event.target.value})}><option value="">Value…</option>{choices.map((choice) => { const optionValue = typeof choice === "object" ? (choice.value ?? choice.key ?? choice.label) : choice; const optionLabel = typeof choice === "object" ? (choice.label ?? optionValue) : choice; return <option key={String(optionValue)} value={optionValue}>{String(optionLabel)}</option>; })}</select>;
+      const inputType = ["integer","number","decimal","currency","percent"].includes(fieldType) ? "number" : fieldType === "date" ? "date" : ["datetime","date_time","timestamp"].includes(fieldType) ? "datetime-local" : "text";
+      return <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" type={inputType} step={inputType === "number" ? "any" : undefined} value={resource.value ?? ""} onChange={(event)=>onChange({type:"constant",value:event.target.value})} placeholder="Value" />;
+    })() : null}
     {(type === "current_user" || type === "current_record") ? <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.field || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,field:event.target.value})} placeholder="Field path" /> : null}
     {keyed && definitions.length ? <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={resource.key || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,key:event.target.value})}><option value="">Select…</option>{definitions.map((item)=><option key={item.key} value={item.key}>{item.label || item.key}</option>)}</select> : null}
     {keyed && !definitions.length && componentOptions.length ? <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={resource.key || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,key:event.target.value})}><option value="">Select component…</option>{componentOptions.map((item)=><option key={item.id} value={item.id}>{item.label}</option>)}</select> : null}
@@ -1962,7 +2042,7 @@ function ConditionsEditor({ collection, fields, onChange, pageResources = {}, ta
         </select>
       </div>
       {conditions.map((condition, index) => (
-        <div key={index} className="flex items-center gap-1">
+        <div key={index} className="flex flex-wrap items-center gap-1">
           <select className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={condition.field} onChange={(event) => setConditions(conditions.map((item, itemIndex) => (itemIndex === index ? { ...item, field: event.target.value } : item)))}>
             <option value="">Field…</option>
             {fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label || field.api_name}</option>)}
@@ -1970,7 +2050,7 @@ function ConditionsEditor({ collection, fields, onChange, pageResources = {}, ta
           <select className="rounded border border-slate-200 px-1 py-1 text-xs" value={condition.operator} onChange={(event) => setConditions(conditions.map((item, itemIndex) => (itemIndex === index ? { ...item, operator: event.target.value } : item)))}>
             {operators.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <CollectionFilterValue value={condition.value} disabled={["is_empty", "is_not_empty"].includes(condition.operator)} pageResources={pageResources} targetComponents={targetComponents} onChange={(value)=>setConditions(conditions.map((item,itemIndex)=>(itemIndex===index?{...item,value}:item)))} />
+          <CollectionFilterValue value={condition.value} disabled={["is_empty", "is_not_empty"].includes(condition.operator)} field={fields.find((field) => field.api_name === condition.field) || null} pageResources={pageResources} targetComponents={targetComponents} onChange={(value)=>setConditions(conditions.map((item,itemIndex)=>(itemIndex===index?{...item,value}:item)))} />
           <button type="button" className="rounded p-1 text-slate-400 hover:text-red-600" aria-label="Remove condition" onClick={() => setConditions(conditions.filter((_, itemIndex) => itemIndex !== index))}>×</button>
         </div>
       ))}

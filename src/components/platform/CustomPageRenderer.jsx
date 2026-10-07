@@ -866,17 +866,25 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (key === "image_record_card") {
     const config = node.config || {};
     const state = data?.[node.id] || {};
-    if (!config.objectKey) return <div className="cpb-empty">Select an Object in Properties to preview product records.</div>;
+    if (!(node.collection?.objectKey || config.objectKey)) return <div className="cpb-empty">Select an Object in Data to preview records.</div>;
     const records = Array.isArray(state.records) ? state.records : [];
     if (state.loading) return <div className="cpb-empty">Loading records…</div>;
     if (state.error && !records.length) return <div className="cpb-empty">{state.error}</div>;
-    const shown = records.slice(0, Math.max(1, Number(config.maxRecords) || 8));
+    const selectedFields = Array.isArray(node.collection?.fields) ? node.collection.fields : [];
+    const shown = records.slice(0, Math.max(1, Number(node.collection?.maxRecords || config.maxRecords) || 8));
     return <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>{shown.map((record, index) => {
-      const image = config.imageField ? record[config.imageField] : "";
-      const fallbackField = state.fields?.[0]?.apiName || state.fields?.[0]?.api_name || "id";
-      const title = record[config.titleField || fallbackField] || record.id || "Record";
-      const subtitleFields = Array.isArray(config.subtitleFields) ? config.subtitleFields : [];
-      return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
+      const orderedFields = selectedFields.length ? selectedFields : (state.fields || []).map((field) => field.apiName || field.api_name).filter(Boolean);
+      const imageField = orderedFields.find((field) => {
+        const value = record[field];
+        if (value && typeof value === "object") return typeof value.url === "string" || typeof value.src === "string";
+        return typeof value === "string" && (/^https?:\/\//i.test(value) || /^data:image\//i.test(value) || /^blob:/i.test(value) || /^\/[^/]/.test(value) || /\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(value));
+      }) || "";
+      const rawImage = imageField ? record[imageField] : "";
+      const image = rawImage && typeof rawImage === "object" ? (rawImage.url || rawImage.src || "") : rawImage;
+      const textFields = orderedFields.filter((field) => field !== imageField);
+      const titleField = textFields[0] || "";
+      const title = titleField ? record[titleField] : (record.id || "Record");
+      return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title ?? "")}</div>{textFields.slice(1).map((field) => record[field] !== undefined && record[field] !== null && record[field] !== "" ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
   if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} onEvent={onEvent} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} pageContext={pageContext} runtimeOverrides={runtimeOverrides} data={data} pageState={pageState} renderChildren={(activeIndex)=>node.children?.length ? node.children.filter((child,index)=>activeIndex===undefined || child.config?.tabIndex===undefined || Number(child.config.tabIndex)===activeIndex).map((child)=><NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} onEvent={onEvent} data={data} runtimeOverrides={runtimeOverrides} pageContext={pageContext} pageState={pageState} />) : null} />;
@@ -937,21 +945,22 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
     ? advancedCollection(node)
     : REGISTRY_RECORD_COMPONENTS.includes(node.componentKey)
       ? (() => {
+          const collection = node.collection || {};
           const config = node.config || {};
-          const fields = new Set();
+          const legacyFields = new Set();
           for (const [key, value] of Object.entries(config)) {
-            if (/(Field|Binding)$/i.test(key) && typeof value === "string" && /^[a-z_][a-z0-9_]*$/.test(value)) fields.add(value);
+            if (/(Field|Binding)$/i.test(key) && typeof value === "string" && /^[a-z_][a-z0-9_]*$/.test(value)) legacyFields.add(value);
             if (/Fields$/i.test(key) && Array.isArray(value)) value.forEach((field) => {
-              if (typeof field === "string" && /^[a-z_][a-z0-9_]*$/.test(field)) fields.add(field);
+              if (typeof field === "string" && /^[a-z_][a-z0-9_]*$/.test(field)) legacyFields.add(field);
             });
           }
           return {
-            objectKey: config.objectKey || "",
-            conditions: Array.isArray(config.filters) ? config.filters : [],
-            conditionMatch: config.conditionMatch === "any" ? "any" : "all",
-            sort: Array.isArray(config.sort) ? config.sort : [],
-            maxRecords: Math.max(1, Math.min(50, Number(config.maxRecords || config.maxVisible) || 10)),
-            fields: [...fields],
+            objectKey: collection.objectKey || config.objectKey || "",
+            conditions: Array.isArray(collection.conditions) ? collection.conditions : (Array.isArray(config.filters) ? config.filters : []),
+            conditionMatch: collection.conditionMatch === "any" || config.conditionMatch === "any" ? "any" : "all",
+            sort: Array.isArray(collection.sort) ? collection.sort : (Array.isArray(config.sort) ? config.sort : []),
+            maxRecords: Math.max(1, Math.min(50, Number(collection.maxRecords || config.maxRecords || config.maxVisible) || 10)),
+            fields: Array.isArray(collection.fields) && collection.fields.length ? collection.fields : [...legacyFields],
           };
         })()
       : (node.collection || {});
@@ -1138,6 +1147,15 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                   minWidth: 0,
                   width: Number(node.layout?.width) > 0 ? `min(100%, ${Number(node.layout.width)}px)` : undefined,
                   minHeight: Number(node.layout?.height) > 0 ? Number(node.layout.height) : undefined,
+                  backgroundColor: node.style?.backgroundColor || undefined,
+                  color: node.style?.color || undefined,
+                  borderColor: node.style?.borderColor || undefined,
+                  borderStyle: Number(node.style?.borderWidth) > 0 ? "solid" : undefined,
+                  borderWidth: Number(node.style?.borderWidth) > 0 ? Number(node.style.borderWidth) : undefined,
+                  borderRadius: Number(node.style?.borderRadius) >= 0 ? Number(node.style.borderRadius) : undefined,
+                  padding: Number(node.style?.padding) > 0 ? Number(node.style.padding) : undefined,
+                  boxShadow: node.style?.shadow === "small" ? "0 1px 3px rgba(15,23,42,.12)" : node.style?.shadow === "medium" ? "0 4px 12px rgba(15,23,42,.14)" : node.style?.shadow === "large" ? "0 10px 28px rgba(15,23,42,.18)" : undefined,
+                  overflow: node.style?.shape === "pill" || Number(node.style?.borderRadius) > 0 ? "hidden" : undefined,
                 }}
                 className={`${builderMode && selectedId === node.id ? "cpb-selected" : ""}`}
               >

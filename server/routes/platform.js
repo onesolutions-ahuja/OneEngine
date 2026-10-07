@@ -3251,16 +3251,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       if (!orderParts.length) orderParts.push("id ASC");
 
       const limit = boundedInteger(collection.maxRecords ?? collection.maxRecords ?? 10, 10, 50);
-      const requestedFields = Array.isArray(collection.fields) ? collection.fields.map(String).filter((name) => fieldByApiName.has(name)) : [];
-      const selectFields = requestedFields.length ? requestedFields : readable.slice(0, 12).map((field) => field.api_name);
+      const requestedFields = Array.isArray(collection.fields) ? [...new Set(collection.fields.map(String))].filter((name) => name !== "id" && fieldByApiName.has(name)) : [];
+      const selectFields = requestedFields.length ? requestedFields : readable.filter((field) => field.api_name !== "id").slice(0, 12).map((field) => field.api_name);
       const selectList = ["id", ...selectFields.map((name) => `${platformFieldSql(fieldByApiName.get(name), object)} AS "${name}"`)];
       const offset = Math.max(0, Number.parseInt(collection.offset, 10) || 0);
       const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
-      const result = await db(
-        `SELECT ${selectList.join(", ")} FROM "${object.source_table}"${where} ORDER BY ${orderParts.join(", ")} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-        [...params, limit, offset]
-      );
-      const count = await db(`SELECT COUNT(*)::int AS total FROM "${object.source_table}"${where}`, params);
+      const [result, count] = await Promise.all([
+        db(
+          `SELECT ${selectList.join(", ")} FROM "${object.source_table}"${where} ORDER BY ${orderParts.join(", ")} LIMIT ${params.length + 1} OFFSET ${params.length + 2}`,
+          [...params, limit, offset]
+        ),
+        db(`SELECT COUNT(*)::int AS total FROM "${object.source_table}"${where}`, params),
+      ]);
       const records = await populateRollups(db, object, fields, result.rows, req);
       res.json({ success: true, data: records, records, objectKey: object.object_key, limit, offset, total: count.rows[0]?.total || 0 });
     } catch (error) {
