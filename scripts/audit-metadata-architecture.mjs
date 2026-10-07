@@ -11,7 +11,6 @@ const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:tru
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 
 const historicalMigrationFiles = new Set([
-  "server/database/init.js",
   "server/database/migrations.js",
 ]);
 const declarativeMetadataFiles = new Set([
