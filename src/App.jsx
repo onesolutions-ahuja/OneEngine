@@ -547,6 +547,15 @@ function Desktop({ onLock, onSignOut }) {
     void refreshStoreApps({ silent: true })
   }, [])
 
+  useEffect(() => {
+    if (!activeApp || !storeAppsLoaded) return
+    const platformRoutes = new Set(['home','dashboard','developer','settings','connector-settings','workspace','reports','custom-reports','integrations','accounting','audit-log','licensing','app-releases','profile','custom-page-runtime'])
+    if (platformRoutes.has(activeApp)) return
+    const installedApp = storeApps.find((item) => String(item?.package_key || '') === String(activeApp) && item?.is_installed === true)
+    const declaredRoute = installedApp ? resolveAppOpenRoute(installedApp) : ''
+    if (declaredRoute && declaredRoute !== '/' + activeApp) openRoutePath(declaredRoute)
+  }, [activeApp, storeAppsLoaded, storeApps])
+
   const refreshStoreApps = async ({ silent = false, allowCacheFallback = true } = {}) => {
     if (storeRefreshInFlightRef.current) return storeRefreshInFlightRef.current
     const request = (async () => {
