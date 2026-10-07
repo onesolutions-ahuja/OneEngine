@@ -1,5 +1,5 @@
 /*
- * T9M - Field mapping editor (Partner field | onePOS field).
+ * T9M - Field mapping editor (Partner field | Platform field).
  *
  * The onePOS side is a searchable dropdown driven by the T9E field
  * catalogue (never hard-coded here) with a free-text custom path fallback.
@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
-import { getIntegrationFieldCatalogue } from "../../services/integrationFieldCatalogue.js";
 import { validateMapping } from "../../services/integrationMapping.js";
 
 const MAPPING_TYPES = [
@@ -30,13 +29,42 @@ function rowFromApi(row) {
 }
 
 export default function MappingEditorModal({ integration, endpoint, onClose }) {
-  const catalogue = useMemo(() => getIntegrationFieldCatalogue(), []);
+  const [catalogue, setCatalogue] = useState([]);
   const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const objectResponse = await apiRequest("/api/platform/objects");
+        const objects = Array.isArray(objectResponse?.data?.objects) ? objectResponse.data.objects : Array.isArray(objectResponse?.data) ? objectResponse.data : [];
+        const groups = await Promise.all(objects.filter((object) => object?.active !== false).map(async (object) => {
+          const objectId = object.id || object.object_id;
+          const objectKey = object.object_key || object.objectKey || object.api_name || object.apiName || "";
+          if (!objectId || !objectKey) return [];
+          const fieldResponse = await apiRequest(`/api/platform/objects/${encodeURIComponent(objectId)}/fields`);
+          const fields = Array.isArray(fieldResponse?.data) ? fieldResponse.data : [];
+          return fields.filter((field) => field?.active !== false && field?.readable !== false).map((field) => {
+            const fieldKey = field.api_name || field.apiName || "";
+            return {
+              path: `${objectKey}.${fieldKey}`,
+              label: `${object.label || object.name || objectKey} · ${field.label || field.name || fieldKey}`,
+              array: Boolean(field?.config?.collection || field?.config?.array),
+            };
+          }).filter((entry) => entry.path && !entry.path.endsWith("."));
+        }));
+        if (active) setCatalogue(groups.flat());
+      } catch (metadataError) {
+        if (active) setError(metadataError?.message || "Unable to load platform field metadata");
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   const loadMappings = useCallback(async () => {
     setLoading(true);
@@ -80,7 +108,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
         messages.push("Static value is required for constant/template mappings.");
       }
       if (type === "direct" && !row.oneposSourcePath.trim()) {
-        messages.push("Select a onePOS field for direct mappings.");
+        messages.push("Select a Platform field for direct mappings.");
       }
       if (partner) {
         if (seen.has(partner)) duplicates.add(partner);
@@ -148,7 +176,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
           ) : (
             <>
               <div className="grid grid-cols-[1fr_1.5fr_auto] gap-2 px-1 pb-1 text-xs font-medium text-slate-500 uppercase tracking-wide">
-                <span>Partner field</span><span>onePOS field</span><span />
+                <span>Partner field</span><span>Platform field</span><span />
               </div>
               <div className="space-y-2">
                 {mappings.length === 0 && <div className="text-sm text-slate-400 py-3">No mappings yet — add one below.</div>}
@@ -162,7 +190,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                         <input
                           value={row.partnerFieldPath}
                           onChange={(e) => updateRow(index, { partnerFieldPath: e.target.value })}
-                          placeholder="e.g. InvoiceNumber"
+                          placeholder="Partner field path"
                           className={`h-9 w-full px-2.5 border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.length ? "border-red-300" : "border-slate-200"}`}
                         />
                         {validation.duplicates.has(row.partnerFieldPath.trim()) && row.partnerFieldPath.trim() && (
@@ -176,7 +204,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                               value={row.oneposSourcePath || ""}
                               onChange={(e) => updateRow(index, { oneposSourcePath: e.target.value })}
                               className="h-9 px-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[11rem] shrink-0"
-                              aria-label="onePOS source field"
+                              aria-label="Platform source field"
                             >
                               <option value="">Custom / none…</option>
                               {catalogue.some((e) => e.path === row.oneposSourcePath) || !row.oneposSourcePath
@@ -191,7 +219,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                               onChange={(e) => updateRow(index, { oneposSourcePath: e.target.value })}
                               placeholder="record.relationship.field"
                               className="h-9 px-2.5 border border-slate-200 rounded-lg text-sm font-mono flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              aria-label="onePOS source path (custom)"
+                              aria-label="Platform source path (custom)"
                             />
                             {entry?.array && (
                               <span className="shrink-0 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[11px] font-medium" title="Collection field — resolves one value per item">[ ]</span>
@@ -233,7 +261,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search onePOS fields…"
+                  placeholder="Search Platform fields…"
                   className="h-8 px-3 border border-slate-200 rounded-lg text-xs flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
