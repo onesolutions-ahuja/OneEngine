@@ -104,7 +104,8 @@ test('password login resolves Google package, connection and entitlements in one
   assert.match(block, /const \[packageResult, connectionResult, entitlements\] = await Promise\.all\(\[/)
   assert.match(block, /getCompanyEntitlements\(db, companyId\)/)
   const parallelRound = block.indexOf('const [packageResult, connectionResult, entitlements] = await Promise.all([')
-  assert.equal(block.slice(parallelRound).includes('return resolveGoogleConnectPasswordLoginRuntime('), false)
+  const parallelBody = block.slice(parallelRound)
+  assert.equal(parallelBody.includes('return resolveGoogleConnectPasswordLoginRuntime('), false)
 })
 
 
