@@ -101,6 +101,9 @@ for (const file of allServerRuntimeFiles) {
       findings.push({rule:"PACKAGE_SPECIFIC_PROVISIONING_BRANCH",file:name});
     }
   }
+  if (name === "server/routes/accountLifecycle.js" && /\/settings\/account-policy/.test(text)) {
+    findings.push({rule:"HARDCODED_ACCOUNT_POLICY_SETTINGS_ROUTE",file:name});
+  }
   if (name === "server/services/jarvis/prompt.js") {
     if (/till\/POS screen|products, stock, customers|suppliers, purchasing|sales and refunds/.test(text)) {
       findings.push({rule:"HARDCODED_JARVIS_BUSINESS_DOMAIN_PROMPT",file:name});
