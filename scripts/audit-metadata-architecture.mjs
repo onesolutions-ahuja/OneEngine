@@ -14,7 +14,6 @@ const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 // Business names may legitimately occur here as metadata; they must not become
 // executable business persistence/query logic elsewhere.
 const exempt = new Set([
-  "server/services/platformMetadata.js",
   "server/services/platformSystemObjects.js",
   "server/services/tenantDatabase.js",
 ]);
@@ -37,6 +36,25 @@ const hardcodedBusinessObjectKeys=[
 ];
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
 const findings=[];
+
+// platformMetadata.js was a legacy source-defined metadata authority. It has been
+// replaced by the generic platformBootstrap runtime and must never return, even
+// as an "exception" to this audit. Check the whole executable server tree for
+// both the retired file and stale imports/requires before applying the normal
+// business-runtime rules below.
+const retiredMetadataRuntime = "server/services/platformMetadata.js";
+const allServerRuntimeFiles = walk(path.join(ROOT, "server"));
+if (fs.existsSync(path.join(ROOT, retiredMetadataRuntime))) {
+  findings.push({rule:"RETIRED_PLATFORM_METADATA_RUNTIME_PRESENT",file:retiredMetadataRuntime});
+}
+for (const file of allServerRuntimeFiles) {
+  const name = rel(file);
+  const text = fs.readFileSync(file,"utf8");
+  if (name === retiredMetadataRuntime) continue;
+  if (/platformMetadata\.js/.test(text)) {
+    findings.push({rule:"RETIRED_PLATFORM_METADATA_IMPORT",file:name});
+  }
+}
 
 for(const file of roots.flatMap(walk)){
   const name=rel(file);
