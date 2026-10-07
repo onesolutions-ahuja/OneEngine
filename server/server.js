@@ -39,7 +39,6 @@ import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./ser
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
 import createReportsRouter from "./routes/reports.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
-import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
@@ -217,7 +216,6 @@ app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/smsgate/webhook", express.raw({ type: "*/*", limit: "64kb" }));
 app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
@@ -1892,7 +1890,6 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createSmsGateWebhookRouter({ pool }));
 
 /*
 |--------------------------------------------------------------------------
