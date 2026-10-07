@@ -32,6 +32,16 @@ const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
 const retiredFrontendBusinessFiles = [
   "src/pages/products/GlobalProductLookupPage.jsx",
   "src/components/online/OnlineOrderSummary.jsx",
+  "src/pages/settings/AiAssistantSettings.jsx",
+  "src/pages/settings/ConnectionsSettings.jsx",
+  "src/pages/settings/GoogleConnectSettings.jsx",
+  "src/pages/settings/HardwareSettings.jsx",
+  "src/pages/settings/PaymentTerminalSettings.jsx",
+  "src/pages/settings/WhatsAppAssistantSettings.jsx",
+  "src/pages/settings/SecurityIdentitySettings.jsx",
+  "src/pages/settings/MfaAdministrationSettings.jsx",
+  "src/pages/settings/SecurityGovernanceSettings.jsx",
+  "src/pages/settings/DataProtectionSettings.jsx",
 ];
 const retiredActionKeys=[
   "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION",
@@ -186,13 +196,34 @@ for(const file of roots.flatMap(walk)){
   if (name === "src/pages/dashboard/DashboardPage.jsx" && /currency\s*=\s*['"]GBP['"]/.test(text)) {
     findings.push({rule:"HARDCODED_DASHBOARD_CURRENCY_DEFAULT",file:name});
   }
-  if (name.startsWith("src/") && /\/api\/global-products(?:\/|['"`])/.test(text)) {
-    findings.push({rule:"HARDCODED_GLOBAL_PRODUCT_API_IN_FRONTEND",file:name});
+  if (name.startsWith("src/")) {
+    const businessApiPatterns = [
+      /\/api\/products(?:\/|['"`])/,
+      /\/api\/customers(?:\/|['"`])/,
+      /\/api\/suppliers(?:\/|['"`])/,
+      /\/api\/sales(?:\/|['"`])/,
+      /\/api\/till(?:\/|['"`])/,
+      /\/api\/online(?:\/|['"`])/,
+      /\/api\/global-products(?:\/|['"`])/,
+    ];
+    if (businessApiPatterns.some((pattern) => pattern.test(text))) {
+      findings.push({rule:"DIRECT_BUSINESS_API_IN_FRONTEND",file:name});
+    }
   }
   if (name === "src/App.jsx") {
     for (const alias of ["contacts: 'customers'","one_connect_google: 'google-connect'","one_assistant: 'assistant'"]) {
       if (text.includes(alias)) findings.push({rule:"HARDCODED_BUSINESS_APP_ALIAS",file:name,alias});
     }
+    if (/activeApp\s*===\s*['"]google-connect['"]|GoogleConnectSettings/.test(text)) {
+      findings.push({rule:"DEDICATED_PROVIDER_SETTINGS_ROUTE",file:name});
+    }
+    if (/parts\[settingsIndex\s*\+\s*1\]\s*\|\|\s*['"]company['"]/.test(text)) {
+      findings.push({rule:"HARDCODED_SETTINGS_DEFAULT_SECTION",file:name});
+    }
+  }
+  if (name === "src/pages/settings/ConnectorAppSettings.jsx" &&
+      /one_connect_square|one_connect_dojo|one_connect_sumup|smsgate_connector|brevo_connector|mailjet_connector/.test(text)) {
+    findings.push({rule:"PROVIDER_SPECIFIC_GENERIC_CONNECTOR_UI",file:name});
   }
   if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
 
