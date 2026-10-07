@@ -63,7 +63,7 @@ function placeholderRecords(collection) {
  * request shape and canonical server-side condition and permission gates.
  * Pagination state lives with the caller so filters and limits stay aligned.
  */
-export function useRecordCollection(collection, { enabled, page = 1 }) {
+export function useRecordCollection(collection, { enabled, page = 1, pageContext = null } = {}) {
   const [state, setState] = useState(() => ({ records: [], total: 0, fields: [], placeholder: false, loading: false, error: "" }));
   const key = useMemo(() => JSON.stringify(collection || {}), [collection]);
 
@@ -92,6 +92,7 @@ export function useRecordCollection(collection, { enabled, page = 1 }) {
         maxRecords,
         fields: parsed.fields || [],
         offset: (clampedPage - 1) * maxRecords,
+        pageContext: pageContext || undefined,
       }),
     })
       .then((response) => {
@@ -104,7 +105,7 @@ export function useRecordCollection(collection, { enabled, page = 1 }) {
         if (live) setState({ records: [], total: 0, fields: parsed.fields || [], placeholder: true, loading: false, error: error?.message || "Records unavailable" });
       });
     return () => { live = false; };
-  }, [key, enabled, page]);
+  }, [key, enabled, page, pageContext]);
 
   return state;
 }
@@ -802,7 +803,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
  * the shared renderer — so MultiContainer, Table and future record components
  * stay in perfect sync without extra wiring.
  */
-function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeState, setPage, runtimeOverride, children }) {
+function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeState, setPage, runtimeOverride, pageContext, children }) {
   const baseCollection = ADVANCED_RECORD_COMPONENTS.includes(node.componentKey)
     ? advancedCollection(node)
     : REGISTRY_RECORD_COMPONENTS.includes(node.componentKey)
@@ -838,6 +839,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
   const live = useRecordCollection(collection, {
     enabled: isRecordBound && Boolean(collection.objectKey),
     page,
+    pageContext,
   });
   const effectiveLive = isRecordBound && !collection.objectKey
     ? { records: [], total: 0, fields: collection.fields || [], placeholder: true, loading: false, error: "" }
@@ -861,7 +863,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
  * @param builderMode when true, records stay as placeholders and interactions are inert
  * @param device      desktop | tablet | mobile | kiosk (builder device preview / runtime width)
  */
-export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, renderSectionChrome = null }) {
+export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, renderSectionChrome = null, pageContext = null }) {
   const sections = Array.isArray(definition?.sections) ? definition.sections : [];
 
   /*
@@ -963,7 +965,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                 }}
                 className={`${builderMode && selectedId === node.id ? "cpb-selected" : ""}`}
               >
-                <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode} runtimeOverride={runtimeOverrides[node.id]}>
+                <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode} runtimeOverride={runtimeOverrides[node.id]} pageContext={pageContext}>
                   <NodeView
                     node={node}
                     sectionWidth={section.width}
