@@ -116,6 +116,11 @@ for (const file of allServerRuntimeFiles) {
   if (name === "server/database/oneSolutionsSeeder.js" && /(?:till|delivery|self_checkout)_invoice_prefix/.test(text)) {
     findings.push({rule:"HARDCODED_INVOICE_PREFIX_SEED",file:name});
   }
+  if (name === "server/database/init.js") {
+    if (/up:\s*(?:async\s*)?(?:client\s*=>\s*)?initializeLegacyDatabase\s*\(/.test(text)) {
+      findings.push({rule:"EXECUTABLE_LEGACY_BUSINESS_BOOTSTRAP",file:name});
+    }
+  }
   if (name === "server/server.js") {
     const providerJobTokens = [
       "SHOPIFY_PROVIDER_SYNC","SHOPIFY_WEBHOOK_EVENT","SHOPIFY_PROCESS_WEBHOOK","/api/shopify/webhooks"
