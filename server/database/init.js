@@ -8,7 +8,7 @@ import { platformSchema } from "../services/platformSchema.js";
 import { encryptCredentials } from "../services/integrationCredentials.js";
 import { decryptSecret } from "../services/secretCrypto.js";
 
-export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env = process.env } = {}) {
+export async function initializeDatabase(pool) {
   if (!pool) throw new Error("A PostgreSQL connection is required to initialize onePOS");
   console.log("onePOS: checking database...");
   const platformFoundation = readFileSync(new URL("./baseFoundation.sql", import.meta.url), "utf8");
@@ -1862,20 +1862,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
     },
     ]);
 
-  if (bootstrapSuperadmin) await bootstrapInitialSuperadmin(pool, env);
   console.log("onePOS: database ready");
 }
 
 export { ONEENGINE_MANAGE_PERMISSION } from "./rbacBootstrap.js";
-import { bootstrapInitialSuperadmin as canonicalBootstrapInitialSuperadmin } from "./rbacBootstrap.js";
-
-/** @deprecated Global identities are forbidden; retained only for source compatibility. */
-export async function ensureGlobalSystemProfile(pool) {
-  const result = await pool.query(`SELECT id FROM roles WHERE company_id IS NOT NULL AND api_key='platform_superadmin' ORDER BY created_at,id LIMIT 1`);
-  if (!result.rows[0]?.id) throw new Error("Company-bound Superadmin role is not initialized");
-  return result.rows[0].id;
-}
-
-export async function bootstrapInitialSuperadmin(pool, env = process.env) {
-  return canonicalBootstrapInitialSuperadmin(pool, env);
-}
