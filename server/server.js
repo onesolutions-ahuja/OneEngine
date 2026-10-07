@@ -569,7 +569,7 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
  * db helper and admin-bypass helper - no new permission system, and the tool
  * runner only ever runs SELECTs scoped to the caller's verified company/store.
 */
-const jarvis = createJarvis({ tools: createJarvisTools({ db, canViewCompanyCustomers }) });
+const jarvis = createJarvis({ tools: createJarvisTools({ db, canViewCompanyScope }) });
 const jarvesAccess = createJarvesAccessChecker({ db });
 // Shared, server-only AI service for authenticated Flow actions. No provider
 // credentials are exposed through app.locals; callers only receive ask().
@@ -584,7 +584,7 @@ app.locals.oneEngineAgent = jarvis;
 | permission codes granted to `req.user.roleId` via `role_permissions` and
 | requires the user to hold at least one of the supplied codes.
 |
-| Administrator/Owner roles (as defined by `canViewCompanyCustomers`) retain
+| Administrator/Owner roles (as defined by `canViewCompanyScope`) retain
 | full access, matching the existing behaviour for those accounts.
 */
 
@@ -674,7 +674,7 @@ async function hasPermission(req, code) {
 }
 
 
-async function canViewCompanyCustomers(user, request = null) {
+async function canViewCompanyScope(user, request = null) {
   if (!user?.id || !user?.companyId) return false;
   const codes = user.roleId ? await getRolePermissionCodes(user.roleId, request) : [];
   const permissionSets = await loadEffectivePermissionSets(db, user, request);
@@ -1779,7 +1779,7 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 
 
 
-app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
+app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyScope, canAccessStore, writeAudit, hasPermission }));
 
 /*
  * JARVIS AI assistant (V1) - POST /api/jarvis, GET /api/jarvis/status.
@@ -1798,7 +1798,7 @@ app.use(
   })
 );
 app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
-app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasPermission }));
+app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyScope, hasPermission }));
 app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
@@ -1886,7 +1886,7 @@ app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writ
 |   DEL  /api/products/:id          (product.delete)
 */
 
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyScope, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
 /* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
 app.use(
@@ -1895,12 +1895,12 @@ app.use(
     authenticate,
     authorize,
     db,
-    canViewCompanyCustomers,
+    canViewCompanyScope,
     canAccessStore,
   })
 );
 
-app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyCustomers, hasPermission }));
+app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyScope, hasPermission }));
 
 /*
 | T9A - generic integration foundation (provider-agnostic). Credentials are
@@ -3172,7 +3172,7 @@ async function startServer() {
               return processDashboardSubscriptionDeliveryJob({
                 db,
                 payload: { ...(payload || {}), companyId: job.company_id },
-                canViewCompanyCustomers,
+                canViewCompanyScope,
                 canAccessStore,
                 hasPermission,
               });
