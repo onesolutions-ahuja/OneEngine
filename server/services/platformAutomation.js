@@ -247,13 +247,15 @@ export async function executePlatformAutomations({ db, object, fields, record, p
         executions.push({ ruleId: rule.id, action: action.type, status: "completed" });
         continue;
       }
-      if (["SEND_EMAIL", "SEND_SMS", "SEND_WHATSAPP", "CALL_WEBHOOK", "HTTP_REQUEST"].includes(action.type)) {
+      if (["SEND_COMMUNICATION", "CALL_API"].includes(action.type)) {
         const idempotencyKey = `${rule.id}:${recordId}:${executions.length}:${action.type}`;
         const jobAction = {
           type: action.type,
+          channel: action.channel || null,
           templateId: action.templateId || null,
-          recipient: action.recipient || null,
-          connectorId: action.connectorId || null,
+          recipient: action.recipient || action.to || null,
+          connectorId: action.connectorId || action.connectorInstanceId || null,
+          providerKey: action.providerKey || null,
           endpoint: action.endpoint || null,
           method: action.method || null,
         };
