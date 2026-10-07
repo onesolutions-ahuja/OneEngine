@@ -1,6 +1,6 @@
 import { getCompanyEntitlements, isPackageLicensed } from "./licensing.js";
 
-export const GOOGLE_CONNECT_PACKAGE_KEY = "one_connect_google";
+const connectorPackageKey = () => String(process.env.connectorPackageKey() || "one_connect_google").trim();
 
 function normalizedEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -32,7 +32,7 @@ export async function getGoogleConnectRuntime(db, companyId) {
            ON i.package_id=p.id AND i.company_id=$1
         WHERE p.package_key=$2 AND p.active=true
         LIMIT 1`,
-      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+      [companyId, connectorPackageKey()]
     ),
     getCompanyEntitlements(db, companyId),
     db(
@@ -41,7 +41,7 @@ export async function getGoogleConnectRuntime(db, companyId) {
         WHERE company_id=$1 AND connector_package_key=$2
         ORDER BY updated_at DESC
         LIMIT 1`,
-      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+      [companyId, connectorPackageKey()]
     ),
   ]);
   const packageRow = packageResult.rows[0] || null;
@@ -128,7 +128,7 @@ export async function getGoogleConnectPasswordLoginRuntime(db, companyId) {
            ON i.package_id=p.id AND i.company_id=$1
         WHERE p.package_key=$2 AND p.active=true
         LIMIT 1`,
-      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+      [companyId, connectorPackageKey()]
     ),
     db(
       `SELECT *
@@ -136,7 +136,7 @@ export async function getGoogleConnectPasswordLoginRuntime(db, companyId) {
         WHERE company_id=$1 AND connector_package_key=$2
         ORDER BY updated_at DESC
         LIMIT 1`,
-      [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
+      [companyId, connectorPackageKey()]
     ),
   ]);
 
@@ -183,13 +183,13 @@ export async function saveGoogleConnectConfiguration(db, companyId, userId, inpu
   if (current.connection?.id) {
     await db(
       `UPDATE integration_connections
-          SET name='Google Connect', provider_name='google', integration_type='identity',
+          SET name='Google Connect', provider_name=COALESCE(provider_name,'identity'), integration_type=COALESCE(integration_type,'identity'),
               connector_package_key=$1, connector_configuration=$2::jsonb,
               credentials_encrypted=NULL, enabled=$3,
               connection_status=$4, last_error=NULL, updated_at=NOW()
         WHERE id=$5 AND company_id=$6`,
       [
-        GOOGLE_CONNECT_PACKAGE_KEY,
+        connectorPackageKey(),
         JSON.stringify(configuration),
         enabled,
         enabled && configured ? "CONFIGURED" : "NOT_CONNECTED",
@@ -202,14 +202,16 @@ export async function saveGoogleConnectConfiguration(db, companyId, userId, inpu
       `INSERT INTO integration_connections
         (company_id,name,provider_name,integration_type,connector_package_key,
          connector_configuration,auth_type,credentials_encrypted,enabled,connection_status,created_by)
-       VALUES ($1,'Google Connect','google','identity',$2,$3::jsonb,'none',NULL,$4,$5,$6)`,
+       VALUES ($1,$7,$8,$8,$2,$3::jsonb,'none',NULL,$4,$5,$6)`,
       [
         companyId,
-        GOOGLE_CONNECT_PACKAGE_KEY,
+        connectorPackageKey(),
         JSON.stringify(configuration),
         enabled,
         enabled && configured ? "CONFIGURED" : "NOT_CONNECTED",
         userId || null,
+        String(input.name || current.package?.name || connectorPackageKey()),
+        String(input.providerKey || current.package?.manifest?.providerConnector?.providerKey || 'identity'),
       ]
     );
   }
@@ -219,7 +221,7 @@ export async function saveGoogleConnectConfiguration(db, companyId, userId, inpu
 
 export function publicGoogleConnectConfig(runtime) {
   return {
-    packageKey: GOOGLE_CONNECT_PACKAGE_KEY,
+    packageKey: runtime?.package?.package_key || connectorPackageKey(),
     licensed: runtime?.licensed === true,
     installed: runtime?.installed === true,
     configured: runtime?.configured === true,
