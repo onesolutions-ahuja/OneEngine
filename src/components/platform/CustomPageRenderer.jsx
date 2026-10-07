@@ -731,7 +731,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     const labelField = config.labelField || "name";
     const secondaryField = config.secondaryField || "";
     return (
-      <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" disabled={builderMode || state.loading}>
+      <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" disabled={builderMode || state.loading || node.enabled === false || node.readOnly === true} required={node.required===true} value={runtimeOverrides?.[node.id]?.value ?? ""} onChange={(event)=>{ const selected=records.find((record)=>String(record[valueField]||record.id||"")===event.target.value)||null; onValueChange?.(node,event.target.value,selected); }}>
         <option value="">{state.loading ? "Loading…" : !records.length ? "No matching records" : (config.placeholder || "Select record…")}</option>
         {records.map((record, index) => <option key={record[valueField] || record.id || index} value={record[valueField] || record.id || ""}>{String(record[labelField] || record.name || record.id || "Record")}{secondaryField && record[secondaryField] ? ` · ${record[secondaryField]}` : ""}</option>)}
       </select>
@@ -935,8 +935,8 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     if (!applyComponentInteraction({ record: null, node })) onButtonClick?.(node);
   };
 
-  const handleValueChange = (node, value) => {
-    setRuntimeOverrides((current) => ({ ...current, [node.id]: { ...(current[node.id] || {}), value } }));
+  const handleValueChange = (node, value, selectedRecord = undefined) => {
+    setRuntimeOverrides((current) => ({ ...current, [node.id]: { ...(current[node.id] || {}), value, ...(selectedRecord !== undefined ? { record: selectedRecord } : {}) } }));
   };
 
   const recordNodes = useMemo(() => {
