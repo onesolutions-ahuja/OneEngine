@@ -251,7 +251,7 @@ export function TableView({ node, builderMode, onRecordClick, data }) {
 }
 
 const ADVANCED_RECORD_COMPONENTS = ["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"];
-const REGISTRY_RECORD_COMPONENTS = ["avatar_group", "record_picker", "product_image_card", "searchable_dropdown"];
+const REGISTRY_RECORD_COMPONENTS = ["avatar_group", "record_picker", "image_record_card", "searchable_dropdown"];
 const STATIC_DASHBOARD_COMPONENTS = ["folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile", "clock_widget", "calendar_widget", "weather_widget"];
 const GENERIC_PAGE_COMPONENTS = new Set([
   "card","grid","stack","tabs","accordion","modal","drawer","alert","badge","progress","empty_state","loading_state",
@@ -715,7 +715,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       </select>
     );
   }
-  if (key === "product_image_card") {
+  if (key === "image_record_card") {
     const config = node.config || {};
     const state = data?.[node.id] || {};
     if (!config.objectKey) return <div className="cpb-empty">Select an Object in Properties to preview product records.</div>;
