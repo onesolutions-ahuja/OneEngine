@@ -74,16 +74,14 @@ test("Send Communication resolves templates and can notify platform admins", asy
   assert.equal(notifications[0][3], "Acme requested OneAssistant");
 });
 
-test("licence request business orchestration exists only in metadata Flow", () => {
+test("licence request business orchestration is not compiled into the workflow runtime", () => {
   const runtime = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
-  const metadata = readFileSync(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
+  const catalog = readFileSync(new URL("../server/services/systemWorkflowCatalog.js", import.meta.url), "utf8");
   assert.doesNotMatch(runtime, /executeLicenceRequestPackageAction/);
   assert.doesNotMatch(runtime, /LICENCE_REQUEST_PACKAGE/);
   assert.doesNotMatch(runtime, /Licence Request Created/);
-  assert.match(metadata, /OneStore - Request Licence/);
-  assert.match(metadata, /create_licence_request/);
-  assert.match(metadata, /notify_licence_request/);
-  assert.match(metadata, /key: "SEND_COMMUNICATION"/);
+  assert.doesNotMatch(catalog, /OneStore - Request Licence/);
+  assert.doesNotMatch(catalog, /create_licence_request/);
 });
 
 test("communication upgrade migration converts legacy steps", () => {
