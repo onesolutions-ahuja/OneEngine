@@ -1400,6 +1400,30 @@ function useCollectionFields(collection, objects) {
   return fields;
 }
 
+function FocusedDataPanel({ node, objects, onChange, targetComponents = [] }) {
+  const collection = node.collection || {};
+  const fields = useCollectionFields(collection, objects);
+  const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
+  return (
+    <div className="space-y-3">
+      <div className="cpb-page-settings"><h3>Data</h3><p>Select the metadata object, filters, sorting and record limit used by this component.</p></div>
+      <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+        <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Source</legend>
+        <div className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={collection.objectKey || ""} onChange={(event) => patchCollection({ objectKey: event.target.value, fields: [], titleField: "", subtitleField: "" })}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>
+      </fieldset>
+      <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+        <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Filters</legend>
+        <ConditionsEditor collection={collection} fields={fields} onChange={patchCollection} />
+      </fieldset>
+      <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+        <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Sort & Limit</legend>
+        <SortEditor collection={collection} fields={fields} onChange={patchCollection} />
+        <div className="space-y-1"><label className={labelClass}>Maximum Records (1–{MAX_RECORD_LIMIT})</label><input className={inputClass} type="number" min={1} max={MAX_RECORD_LIMIT} value={collection.maxRecords ?? 10} onChange={(event) => patchCollection({ maxRecords: Math.min(Math.max(Number(event.target.value) || 1, 1), MAX_RECORD_LIMIT) })}/></div>
+      </fieldset>
+    </div>
+  );
+}
+
 function RecordCollectionDataGroup({ node, objects, onChange, children, targetComponents = [] }) {
   const collection = node.collection || {};
   const fields = useCollectionFields(collection, objects);
