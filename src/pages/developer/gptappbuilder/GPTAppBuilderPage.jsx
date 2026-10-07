@@ -29,6 +29,7 @@ function safeKey(value) {
 
 export default function GPTAppBuilderPage() {
   const [apps, setApps] = useState([]);
+  const [appsLoading, setAppsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [selectedAppId, setSelectedAppId] = useState("");
   const [selectedPageId, setSelectedPageId] = useState("");
@@ -43,11 +44,20 @@ export default function GPTAppBuilderPage() {
   const [message, setMessage] = useState("");
 
   const loadApps = async () => {
-    const response = await apiRequest("/api/platform/apps");
-    setApps(Array.isArray(response?.data) ? response.data : []);
+    setAppsLoading(true);
+    setError("");
+    try {
+      const response = await apiRequest("/api/platform/apps");
+      setApps(Array.isArray(response?.data) ? response.data : []);
+    } catch (e) {
+      setError(e?.message || "Unable to load app metadata");
+      throw e;
+    } finally {
+      setAppsLoading(false);
+    }
   };
 
-  useEffect(() => { void loadApps().catch((e) => setError(e?.message || "Unable to load app metadata")); }, []);
+  useEffect(() => { void loadApps().catch(() => {}); }, []);
 
   const visibleApps = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -243,7 +253,11 @@ export default function GPTAppBuilderPage() {
       <div className="onepos-card"><div className="onepos-card-body"><ConnectorDefinitionEditor value={selectedConnectorKey} onChange={setSelectedConnectorKey} onMessage={setMessage} onError={setError}/></div></div>
       <label className="settings-search"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search app metadata"/></label>
       <div className="developer-record-list">
-        {visibleApps.map((app) => <div key={app.id} className="settings-nav-item"><button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={() => setSelectedAppId(String(app.id))}><AppWindow size={16}/><span>{app.label || app.app_key}</span></button><button type="button" className="onepos-btn" disabled={building} onClick={() => void buildSelectedApp(app)}>{building ? "Building…" : "Build"}</button></div>)}
+        {appsLoading ? <div className="settings-state-card settings-state-card--inline">Loading apps…</div> : null}
+        {!appsLoading && error ? <div className="settings-state-card settings-state-card--inline">App metadata unavailable. <button type="button" className="onepos-btn" onClick={() => void loadApps().catch(() => {})}>Retry</button></div> : null}
+        {!appsLoading && !error && apps.length === 0 ? <div className="settings-state-card settings-state-card--inline">No apps found. Create a new app to begin.</div> : null}
+        {!appsLoading && !error && apps.length > 0 && visibleApps.length === 0 ? <div className="settings-state-card settings-state-card--inline">No apps match this search.</div> : null}
+        {!appsLoading && !error ? visibleApps.map((app) => <div key={app.id} className="settings-nav-item"><button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={() => setSelectedAppId(String(app.id))}><AppWindow size={16}/><span>{app.label || app.app_key}</span></button><button type="button" className="onepos-btn" disabled={building} onClick={() => void buildSelectedApp(app)}>{building ? "Building…" : "Build"}</button></div>) : null}
         {buildResult?.valid ? <div className="settings-success">Portable manifest ready · {buildResult.dependencyCount} dependencies · fingerprint {buildResult.artifact.fingerprint} <button type="button" className="onepos-btn" onClick={testBuild}>Test</button></div> : null}
         {testResult?.valid ? <div className="settings-success">Test passed · artifact is publishable. <button type="button" className="onepos-btn onepos-btn-primary" disabled={publishing} onClick={() => void publishBuild()}>{publishing ? "Publishing…" : "Publish"}</button></div> : null}
         {buildResult && !buildResult.valid ? <div className="settings-error">Unresolved: {buildResult.unresolved.map((item) => `${item.type}:${item.key}`).join(", ")}</div> : null}
