@@ -40,35 +40,16 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
 
 
 
-  router.post("/account/invite/:userId", authenticate, authorize("admin.users"), async(req,res)=>{
-    const r=await db(`SELECT u.id,u.email,u.company_id,c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.registration_link_expiry_minutes
-      FROM users u JOIN companies c ON c.id=u.company_id JOIN company_settings cs ON cs.company_id=c.id WHERE u.id=$1 AND u.company_id=$2`,[req.params.userId,req.user.companyId]);
-    const u=r.rows[0]; if(!u)return res.status(404).json({success:false,message:"User not found"});
-    if(!u.email_registration_enabled)return res.status(409).json({success:false,message:"Email registration is disabled"});
-    if(!domainAllowed(u.email,u.user_email_domain,u.domain_users_only))return res.status(400).json({success:false,message:"User email is outside the allowed company domain"});
-    const tokenExecution=await executeSystemAction({
-      db,
-      companyId:u.company_id,
-      userId:req.user.id||null,
-      apiName:"STAFF_ISSUE_LIFECYCLE_TOKEN",
-      req,
-      input:{userId:u.id,purpose:"REGISTRATION",expiresMinutes:u.registration_link_expiry_minutes},
-      source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"staff.lifecycle.token.issue"},
-    });
-    const token=tokenExecution.result;
-    // Token is returned only to the workflow caller so the registered message action can merge it into the approved template.
-    res.json({success:true,data:{workflowEvent:"USER_REGISTRATION_REQUESTED",userId:u.id,email:normalizeEmail(u.email),token}});
-  });
+
 
   router.post("/auth/password-reset/request", async(req,res)=>{
     const email=normalizeEmail(req.body?.email);
     const generic={success:true,message:"If the account is eligible, a 6-digit reset code will be sent by email."};
     if(!email)return res.json(generic);
-    const r=await db(`SELECT u.id,u.company_id,cs.password_reset_email_enabled FROM users u
-      JOIN company_settings cs ON cs.company_id=u.company_id
+    const r=await db(`SELECT u.id,u.company_id FROM users u
       WHERE LOWER(u.email)=LOWER($1) AND u.active=TRUE LIMIT 1`,[email]);
     const u=r.rows[0];
-    if(!u?.password_reset_email_enabled)return res.json(generic);
+    if(!u)return res.json(generic);
 
     await writeAudit?.(u.company_id,u.id,"password_reset_otp_requested","user",u.id,{channel:"EMAIL",expiresMinutes:10});
     const otp=await issueAccountOtp(db,{companyId:u.company_id,userId:u.id,purpose:"PASSWORD_RESET",expiresMinutes:10});
