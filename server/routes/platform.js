@@ -1424,8 +1424,56 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.get("/platform/component-registry", ...manage, (req, res) => {
-    res.json({ success: true, data: listPlatformComponents() });
+  router.get("/platform/component-registry", ...manage, async (req, res) => {
+    let custom = [];
+    try {
+      const result = await db(
+        `SELECT id,component_key AS key,label,category,kind,component_path AS "componentPath",css_path AS "cssPath",
+                configurable,supported_builders AS "supportedBuilders",supported_contexts AS "supportedContexts",active
+           FROM platform_component_registrations
+          WHERE active=true AND (company_id IS NULL OR company_id=$1)
+          ORDER BY label`,
+        [req.user.companyId]
+      );
+      custom = result.rows.map((row) => ({ ...row, rendererKey: "custom_module", bindable: false, custom: true }));
+    } catch (error) {
+      if (error?.code !== "42P01") throw error;
+    }
+    res.json({ success: true, data: [...listPlatformComponents(), ...custom] });
+  });
+
+  router.get("/platform/component-registrations", ...manage, async (req, res) => {
+    const result = await db(
+      `SELECT id,component_key AS key,label,category,kind,component_path AS "componentPath",css_path AS "cssPath",
+              configurable,supported_builders AS "supportedBuilders",supported_contexts AS "supportedContexts",active
+         FROM platform_component_registrations
+        WHERE company_id=$1 ORDER BY label`, [req.user.companyId]
+    );
+    res.json({ success: true, data: result.rows });
+  });
+
+  router.post("/platform/component-registrations", ...manage, async (req, res) => {
+    const body = req.body || {};
+    const key = String(body.key || "").trim().toLowerCase();
+    const componentPath = String(body.componentPath || "").trim().replace(/\\/g, "/");
+    const cssPath = String(body.cssPath || "").trim().replace(/\\/g, "/");
+    if (!/^[a-z][a-z0-9_]*$/.test(key)) return res.status(400).json({ success:false, message:"Component key must use lowercase letters, numbers and underscores." });
+    if (!/^[A-Za-z0-9_/-]+\.jsx$/.test(componentPath) || componentPath.includes("..")) return res.status(400).json({ success:false, message:"Component path must be an approved .jsx path under src/components/custom." });
+    if (cssPath && (!/^[A-Za-z0-9_/-]+\.css$/.test(cssPath) || cssPath.includes(".."))) return res.status(400).json({ success:false, message:"CSS path must be an approved .css path under src/components/custom." });
+    const result = await db(
+      `INSERT INTO platform_component_registrations
+       (company_id,component_key,label,category,kind,component_path,css_path,configurable,supported_builders,supported_contexts,active)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11)
+       ON CONFLICT(company_id,component_key) DO UPDATE SET label=EXCLUDED.label,category=EXCLUDED.category,kind=EXCLUDED.kind,
+       component_path=EXCLUDED.component_path,css_path=EXCLUDED.css_path,configurable=EXCLUDED.configurable,
+       supported_builders=EXCLUDED.supported_builders,supported_contexts=EXCLUDED.supported_contexts,active=EXCLUDED.active,updated_at=NOW()
+       RETURNING id,component_key AS key,label,category,kind,component_path AS "componentPath",css_path AS "cssPath",configurable,
+       supported_builders AS "supportedBuilders",supported_contexts AS "supportedContexts",active`,
+      [req.user.companyId,key,String(body.label||key),String(body.category||"custom"),String(body.kind||"custom"),componentPath,cssPath||null,
+       JSON.stringify(Array.isArray(body.configurable)?body.configurable:[]),JSON.stringify(Array.isArray(body.supportedBuilders)?body.supportedBuilders:["PAGE"]),
+       JSON.stringify(Array.isArray(body.supportedContexts)?body.supportedContexts:["page"]),body.active!==false]
+    );
+    res.status(201).json({ success:true, data:result.rows[0] });
   });
 
   router.get("/platform/action-registry", ...manage, async (req, res) => {
