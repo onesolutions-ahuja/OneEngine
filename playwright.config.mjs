@@ -7,7 +7,7 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI && process.env.ONEPOS_E2E_RETRIES !== "0" ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: [
     ["list"],
