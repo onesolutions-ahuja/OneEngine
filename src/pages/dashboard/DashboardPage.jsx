@@ -14,10 +14,10 @@ function displayValue(value) {
   return String(value)
 }
 
-function formatNumber(value, format, currency = 'GBP') {
+function formatNumber(value, format, currency = '') {
   const n = Number(value)
   if (!Number.isFinite(n)) return '—'
-  if (format === 'currency') {
+  if (format === 'currency' && currency) {
     try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(n) } catch {}
   }
   if (format === 'percent') return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n)}%`
@@ -169,7 +169,6 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [currency, setCurrency] = useState('GBP')
   const [globalFilterValues, setGlobalFilterValues] = useState({})
   const [permissionCodes, setPermissionCodes] = useState([])
   const [showSubscriptions, setShowSubscriptions] = useState(false)
@@ -193,12 +192,10 @@ export default function DashboardPage({ onOpenBuilder }) {
   useEffect(() => {
     let live = true
     Promise.all([
-      apiRequest('/api/settings').catch(() => null),
       apiRequest('/api/dashboards').catch(() => null),
       loadSessionPermissions().catch(() => null),
-    ]).then(([settings, dashboards, permissions]) => {
+]).then(([dashboards, permissions]) => {
       if (!live) return
-      if (settings?.success) setCurrency(settings.data?.company?.currency || 'GBP')
       setAvailable(dashboards?.success ? dashboards.data || [] : [])
       setPermissionCodes(Array.isArray(permissions?.permissions) ? permissions.permissions : [])
     })
@@ -419,7 +416,7 @@ export default function DashboardPage({ onOpenBuilder }) {
       <button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={() => updateGlobalFilters({})}>Reset filters</button>
     </div> : null}
     {error ? <div className="dashboard-inline-error">{error}</div> : null}
-    <DashboardGrid components={components} results={results} loading={loading} currency={currency} />
+    <DashboardGrid components={components} results={results} loading={loading} />
     {loading && definition ? <div className="dashboard-refreshing">Refreshing…</div> : null}
   </section>
 }
