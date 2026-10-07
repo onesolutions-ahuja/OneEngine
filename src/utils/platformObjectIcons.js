@@ -53,7 +53,7 @@ export const DEFAULT_OBJECT_ICON_KEY = "box";
 
 export const OBJECT_NAV_ICON_OPTIONS = Object.freeze([
   { key: "box", label: "Object", Icon: Box },
-  { key: "package", label: "Product", Icon: Package },
+  { key: "package", label: "Package", Icon: Package },
   { key: "car", label: "Vehicle", Icon: Car },
   { key: "truck", label: "Delivery", Icon: Truck },
   { key: "tractor", label: "Equipment", Icon: Tractor },
