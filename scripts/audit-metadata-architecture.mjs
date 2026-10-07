@@ -3,18 +3,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const roots = ["server/routes", "server/services", "src"].map((item) => path.join(ROOT, item));
+const roots = ["server", "src"].map((item) => path.join(ROOT, item));
 const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:true}).flatMap((entry)=>{
   const full=path.join(dir,entry.name);
   return entry.isDirectory()?walk(full):/\.(?:js|jsx|mjs|ts|tsx)$/.test(entry.name)?[full]:[];
 }) : [];
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 
-const exempt = new Set([
-  "server/services/platformSystemObjects.js",
-  "server/services/tenantDatabase.js",
+const historicalMigrationFiles = new Set([
+  "server/database/init.js",
+  "server/database/migrations.js",
 ]);
-const declarativePrefixes=["server/packages/","server/metadata/"];
+const declarativeMetadataFiles = new Set([
+  "server/packages/packageManifestCatalog.js",
+  "server/packages/oneAssistantManifest.js",
+  "server/packages/runtimeFlowManifests.js",
+]);
 const retired = new Set(["server/routes/dashboard.js","server/services/reportSalesDefinition.js"]);
 const legacyBusinessRuntime = new Set([]);
 const businessTables=[
@@ -56,6 +60,10 @@ const forbiddenGenericConnectorProviderTokens=[
   "configureSmsGateInboundWebhook","send-test-email","send-test-sms"
 ];
 const findings=[];
+
+if (legacyBusinessRuntime.size) {
+  findings.push({rule:"RUNTIME_ARCHITECTURE_EXEMPTION_PRESENT",file:"scripts/audit-metadata-architecture.mjs",count:legacyBusinessRuntime.size});
+}
 
 const retiredMetadataRuntime = "server/services/platformMetadata.js";
 const retiredProviderActionRuntime = "server/services/platformActions.js";
@@ -165,18 +173,21 @@ for(const file of roots.flatMap(walk)){
     if(name==="server/services/reportSalesDefinition.js" && /dataSource\s*:\s*["']sales["']|FROM\s+sales/i.test(text)) findings.push({rule:"RETIRED_SALES_REPORT_ENGINE_STILL_IMPLEMENTED",file:name});
     continue;
   }
-  if(exempt.has(name)||declarativePrefixes.some((prefix)=>name.startsWith(prefix))) continue;
+  const isHistoricalMigration = historicalMigrationFiles.has(name);
+  const isDeclarativeMetadata = declarativeMetadataFiles.has(name);
   if(legacyBusinessRuntime.has(name)) continue;
-  for(const table of businessTables){
-    const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
-    if(sql.test(text)) findings.push({rule:"DIRECT_BUSINESS_SQL",file:name,table});
+  if (!isHistoricalMigration && !isDeclarativeMetadata) {
+    for(const table of businessTables){
+      const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
+      if(sql.test(text)) findings.push({rule:"DIRECT_BUSINESS_SQL",file:name,table});
+    }
+    for(const objectKey of hardcodedBusinessObjectKeys){
+      const objectRef=new RegExp("\\b(?:objectKey|object_key)\\s*[:=]\\s*[\"']"+objectKey+"[\"']","i");
+      if(objectRef.test(text)) findings.push({rule:"HARDCODED_BUSINESS_OBJECT",file:name,objectKey});
+    }
+    if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
+    if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   }
-  for(const objectKey of hardcodedBusinessObjectKeys){
-    const objectRef=new RegExp("\\b(?:objectKey|object_key)\\s*[:=]\\s*[\"']"+objectKey+"[\"']","i");
-    if(objectRef.test(text)) findings.push({rule:"HARDCODED_BUSINESS_OBJECT",file:name,objectKey});
-  }
-  if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
-  if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   if (name === "src/pages/developer/OneEngineManager.jsx") {
     for (const token of [
       "StoreTillSettingsPage","ClientWebShopSettings","PaymentTerminalSettings","HardwareSettings",
