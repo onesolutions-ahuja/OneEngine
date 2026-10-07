@@ -84,6 +84,28 @@ for (const file of allServerRuntimeFiles) {
   if (name === "server/database/oneSolutionsSeeder.js" && /(?:till|delivery|self_checkout)_invoice_prefix/.test(text)) {
     findings.push({rule:"HARDCODED_INVOICE_PREFIX_SEED",file:name});
   }
+  if (name === "server/server.js") {
+    const providerDriverTokens = [
+      "createReferencePaymentDriver","createSmsGateDriver","createBrevoDriver","createMailjetDriver",
+      "connector_package_key='smsgate_connector'","configureSmsGateInboundWebhook","getSmsGateDiagnostics"
+    ];
+    for (const token of providerDriverTokens) {
+      if (text.includes(token)) findings.push({rule:"HARDCODED_PROVIDER_RUNTIME_IN_SERVER",file:name,token});
+    }
+  }
+  if (name === "server/services/packageRegistry.js") {
+    if (/packageKeys\s*=\s*\[\s*["']staff["']\s*,\s*["']products["']\s*,\s*["']customers["']/.test(text)) {
+      findings.push({rule:"HARDCODED_DEFAULT_BUSINESS_PACKAGES",file:name});
+    }
+    if (/packageKey\s*===\s*["'](?:staff|products|customers)["']/.test(text)) {
+      findings.push({rule:"PACKAGE_SPECIFIC_PROVISIONING_BRANCH",file:name});
+    }
+  }
+  if (name === "server/services/jarvis/prompt.js") {
+    if (/till\/POS screen|products, stock, customers|suppliers, purchasing|sales and refunds/.test(text)) {
+      findings.push({rule:"HARDCODED_JARVIS_BUSINESS_DOMAIN_PROMPT",file:name});
+    }
+  }
   if (name === "server/routes/connectors.js") {
     for (const token of forbiddenGenericConnectorProviderTokens) {
       if (text.includes(token)) findings.push({rule:"PROVIDER_SPECIFIC_GENERIC_CONNECTOR_ROUTE",file:name,token});
