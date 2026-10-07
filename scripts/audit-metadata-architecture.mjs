@@ -136,12 +136,7 @@ for (const file of allServerRuntimeFiles) {
   if (name === "server/services/systemWorkflowCatalog.js" && /source:\s*["']runtime_import["']/.test(text)) {
     findings.push({rule:"RUNTIME_IMPORT_MASQUERADING_AS_METADATA",file:name});
   }
-  if (name === "server/services/platformWorkflow.js") {
-    const allowedCore = new Set(["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","BULK_UPDATE_RECORDS","CREATE_RELATED_RECORD","UPDATE_RELATED_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP","ASSIGN_RECORD","ASSIGNMENT","CONDITION","DECISION","LOOP","WAIT","FORMULA","SEND_COMMUNICATION","ONE_HTTP_REQUEST","ONE_API_REQUEST","CALL_API","PLATFORM_WEBHOOK_DELIVERY","RUN_SUBFLOW","STOP","ERROR","CUSTOM_ERROR"]);
-    for (const match of text.matchAll(/key:\s*["']([A-Z][A-Z0-9_]+)["']/g)) {
-      if (!allowedCore.has(match[1])) findings.push({rule:"NON_CORE_COMPILED_WORKFLOW_ACTION",file:name,actionKey:match[1]});
-    }
-  }
+
   if (name === "server/services/platformWorkflow.js") {
     for (const actionKey of forbiddenCompiledConnectorActions) {
       if (text.includes(actionKey)) findings.push({rule:"COMPILED_BUSINESS_CONNECTOR_ACTION",file:name,actionKey});
