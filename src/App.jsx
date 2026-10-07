@@ -19,7 +19,6 @@ const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/Met
 const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
 const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/PaymentTerminalSettings'))
 const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
-const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
 const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
