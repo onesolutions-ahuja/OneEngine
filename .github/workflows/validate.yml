@@ -23,9 +23,6 @@ jobs:
       # Build first so deploy-blocking syntax/audit failures are always visible,
       # even when unrelated unit tests on main are already failing.
       - run: npm run build
-      # server has its own package.json but no package-lock.json, so npm ci is invalid here.
-      - run: npm install --ignore-scripts --no-audit --no-fund
-        working-directory: server
       - run: npm run build
         working-directory: server
       - run: npm run smoke:start
@@ -36,6 +33,17 @@ jobs:
       - run: npm run audit:workflow-coverage:enforce
       - run: npm run audit:workflow-stepwise:enforce
       - run: npm run audit:gptbuilder-sfdc-parity
+      - run: npm run audit:repository-classification
+      - name: Upload repository closure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-closure-evidence
+          path: |
+            artifacts/metadata-architecture-audit.json
+            artifacts/repository-classification-audit.json
+          if-no-files-found: error
+          retention-days: 14
 
   playwright-smoke:
     if: github.event_name == 'workflow_dispatch'
