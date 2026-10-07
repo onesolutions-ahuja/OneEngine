@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/audit-component-registry.mjs && node scripts/audit-metadata-architecture.mjs && node scripts/audit-trusted-runtime.mjs && node scripts/audit-app-surfaces.mjs && vite build",
+    "build": "node scripts/audit-component-registry.mjs && node scripts/audit-metadata-architecture.mjs && node scripts/audit-trusted-runtime.mjs && node scripts/audit-app-surfaces.mjs && node --test tests/phase1ArchitectureClosure.test.mjs && vite build",
     "preview": "vite preview",
     "audit:apps": "node scripts/audit-app-surfaces.mjs",
     "audit:trusted": "node scripts/audit-trusted-runtime.mjs",
@@ -19,7 +19,8 @@
     "audit:metadata-architecture": "node scripts/audit-metadata-architecture.mjs",
     "audit:workflow-stepwise": "node scripts/audit-workflow-stepwise.mjs",
     "audit:workflow-stepwise:enforce": "node scripts/audit-workflow-stepwise.mjs --enforce",
-    "audit:components": "node scripts/audit-component-registry.mjs"
+    "audit:components": "node scripts/audit-component-registry.mjs",
+    "test:architecture-closure": "node --test tests/phase1ArchitectureClosure.test.mjs"
   },
   "dependencies": {
     "framer-motion": "^12.23.24",
