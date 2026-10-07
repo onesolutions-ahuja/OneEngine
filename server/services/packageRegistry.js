@@ -1562,11 +1562,13 @@ export function seedPackageRegistry(pool) {
             SET manifest = manifest
               - 'objects' - 'fields' - 'relationships' - 'forms' - 'layouts'
               - 'rules' - 'workflows' - 'actions' - 'buttons' - 'reports'
+              - 'listViews' - 'dashboards' - 'navigation' - 'settings' - 'menus'
               - 'assistantTools' - 'templates',
                 updated_at = NOW()
           WHERE manifest ?| ARRAY[
             'objects','fields','relationships','forms','layouts','rules','workflows',
-            'actions','buttons','reports','assistantTools','templates'
+            'actions','buttons','reports','listViews','dashboards','navigation','settings','menus',
+            'assistantTools','templates'
           ]`
       );
 
