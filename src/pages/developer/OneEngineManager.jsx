@@ -3,8 +3,8 @@ import { BadgeCheck, ChevronRight, Rocket, Search, Settings2, Users } from 'luci
 import { apiRequest, getStoredSessionPermissions, loadSessionPermissions, getActingCompanyId, setActingCompanyId } from '../../services/api'
 import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadUsers, saveRolePermissions, updateRole, updateUser } from '../../services/settings'
 import MetadataSettingsPage from '../settings/MetadataSettingsPage'
-import LicensingAdmin from '../superadmin/LicensingAdmin'
-import AppReleasesAdmin from '../superadmin/AppReleasesAdmin'
+import LicensingAdmin from '../platform-admin/LicensingAdmin'
+import AppReleasesAdmin from '../platform-admin/AppReleasesAdmin'
 
 const ITEMS=[
   ['settings','Settings',Settings2],
