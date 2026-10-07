@@ -20,8 +20,10 @@ test("brand icon components are metadata-asset renderers",async()=>{
 
 test("dock component accepts runtime item catalogues",async()=>{
  const source=await read("src/shell/dock/RdvnReferenceDock.jsx");
- assert.match(source,/items = defaultDockItems/);
- assert.match(source,/mobileItems = defaultMobileDockItems/);
+ assert.match(source,/items = \[\]/);
+ assert.match(source,/mobileItems = \[\]/);
+ assert.equal(source.includes("defaultDockItems"),false);
+ assert.equal(/OneTill|onetill|id: 'till'/.test(source),false);
  assert.match(source,/items\.map/);
  assert.match(source,/mobileItems\.map/);
 });
