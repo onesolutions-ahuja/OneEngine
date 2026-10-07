@@ -31,6 +31,11 @@ for(const file of files){
     if(/\bpatchCompanySettings\b|\bpatchSettings\b/.test(text))findings.push({rule:"DIRECT_SETTINGS_FIELD_WIRING",file:name});
   }
   if(!schemaDefinition && /\bCALL_FUNCTION\b|\bRUN_ASSISTANT_SUBFLOW\b/.test(text))findings.push({rule:"LEGACY_EXECUTOR_REFERENCE",file:name});
+  if(!schemaDefinition){
+    const businessSymbol=/\b(?:function|class|const|let|var)\s+[A-Za-z_$][\w$]*(?:Sale|Customer|Product|Purchase|Supplier|Invoice|Receipt|Till|Kiosk|Loyalty|Refund|Payment|OnlineOrder)[A-Za-z0-9_$]*/g;
+    for(const match of code.matchAll(businessSymbol)) findings.push({rule:"BUSINESS_SPECIFIC_EXECUTABLE_SYMBOL",file:name,token:match[0].replace(/^(?:function|class|const|let|var)\s+/,"")});
+  }
+
   if(/dataSource\s*:\s*["\']sales["\']|dataSource\s*===?\s*["\']sales["\']/i.test(text))findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text))findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   const code=text.replace(/\/\*[\s\S]*?\*\//g," ").replace(/(^|[^:])\/\/.*$/gm,"$1 ");
