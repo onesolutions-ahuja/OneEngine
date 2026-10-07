@@ -2,19 +2,44 @@ import { createHash } from "node:crypto";
 import { PLATFORM_FUNCTIONS } from "./platformFunctionRegistry.js";
 import { PLATFORM_ACTION_REGISTRY } from "./platformActionRegistry.js";
 
+export const TRUSTED_JOB_KINDS = Object.freeze([
+  "WAIT",
+  "APP_RELEASE_UPGRADE",
+  "PLATFORM_WEBHOOK_DELIVERY",
+  "PLATFORM_SCHEDULED_WORKFLOW",
+  "PLATFORM_EVENT_WORKFLOW",
+  "REPORT_SUBSCRIPTION_DELIVERY",
+  "DASHBOARD_SUBSCRIPTION_DELIVERY",
+  "APPROVAL_DUE",
+]);
+
+const TRUSTED_JOB_KIND_SET = new Set(TRUSTED_JOB_KINDS);
+
+export function assertTrustedJobKind(kind) {
+  const normalized = String(kind || "");
+  if (!TRUSTED_JOB_KIND_SET.has(normalized)) {
+    throw Object.assign(new Error(`Unregistered trusted job kind: ${kind}`), {
+      code: "UNREGISTERED_JOB_KIND",
+      status: 403,
+      retryable: false,
+    });
+  }
+  return normalized;
+}
+
 const PRIVILEGED_ROUTES = Object.freeze([
   { id: "platform.developer.manage", prefixes: ["/api/platform/developer/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "platform.metadata.execute", prefixes: ["/api/platform/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "package.lifecycle", prefixes: ["/api/packages/", "/api/platform/packages/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "security.manage", prefixes: ["/api/platform/security", "/api/security/"], methods: ["POST","PUT","PATCH","DELETE"] },
   { id: "admin.manage", prefixes: ["/api/admin/"], methods: ["POST","PUT","PATCH","DELETE"] },
-  { id: "settings.manage", prefixes: ["/api/settings/"], methods: ["POST","PUT","PATCH","DELETE"] },
 ].map((item) => Object.freeze({ ...item, prefixes: Object.freeze(item.prefixes), methods: Object.freeze(item.methods) })));
 
 const definitions = [
   ...PRIVILEGED_ROUTES.map((item) => ({ id: item.id, type: "route" })),
   ...PLATFORM_FUNCTIONS.map((item) => ({ id: `function:${item.key}`, type: "function" })),
   ...PLATFORM_ACTION_REGISTRY.map((item) => ({ id: `action:${item.key}`, type: "action" })),
+  ...TRUSTED_JOB_KINDS.map((kind) => ({ id: `job:${kind}`, type: "job" })),
 ];
 
 const duplicateIds = definitions.map((item) => item.id).filter((id, index, all) => all.indexOf(id) !== index);
@@ -47,7 +72,7 @@ export function isPrivilegedMutation(path, method = "GET") {
   if (!["POST","PUT","PATCH","DELETE"].includes(verb)) return false;
   const pathname = canonicalPath(path);
   return pathname.startsWith("/api/platform/") || pathname.startsWith("/api/security/") || pathname.startsWith("/api/packages/")
-    || pathname.startsWith("/api/admin/") || pathname.startsWith("/api/settings/");
+    || pathname.startsWith("/api/admin/");
 }
 
 export function validateTrustedRuntime() {
@@ -68,9 +93,6 @@ export function createTrustedRuntimeGate() {
     const capability = resolveTrustedRoute(req.path, req.method);
     if (!capability) return res.status(403).json({ success: false, code: "UNREGISTERED_CAPABILITY", message: "Operation is not registered in OneEngine Trusted Runtime" });
 
-    // The header is correlation evidence only, never authorization. A caller
-    // cannot gain authority by forging it; normal authenticate/authorize,
-    // tenant/company and entitlement middleware remain authoritative.
     const claimed = String(req.get("X-OneEngine-Capability") || "").trim();
     if (claimed && claimed !== capability.id) {
       return res.status(403).json({ success: false, code: "CAPABILITY_MISMATCH", message: "Capability does not match requested operation" });

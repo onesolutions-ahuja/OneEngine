@@ -45,11 +45,18 @@ test("Phase 7A system workflow catalogue guarantees Builder metadata", () => {
   for (const key of retiredRuntimeKeys) assert.equal(definitions.some((flow) => flow.systemKey === key), false, key);
 });
 
+test("Phase 7A retired source-defined OneTill metadata authority stays deleted", async () => {
+  await assert.rejects(readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8"));
+  const bootstrap = await readFile(new URL("../server/services/platformBootstrap.js", import.meta.url), "utf8");
+  assert.match(bootstrap, /bootstrapFoundation/);
+  assert.match(bootstrap, /provisionPackageMetadata/);
+});
+
 test("Phase 7A migration and architecture gate keep retired duplicates out", async () => {
   const migration = await readFile(new URL("../server/database/init.js", import.meta.url), "utf8");
   const audit = await readFile(new URL("../scripts/audit-workflow-coverage.mjs", import.meta.url), "utf8");
   assert.match(migration, /0067_remove_residual_duplicate_runtime_workflows/);
   for (const key of retiredRuntimeKeys) assert.ok(migration.includes(`"${key}"`), key);
-  assert.match(audit, /COLLAPSED_RUNTIME_WORKFLOW/);
-  assert.match(audit, /RETIRED_DUPLICATE_RUNTIME_FLOW_RETURNED/);
+  assert.match(audit, /RETIRED_DUPLICATE_RUNTIME_FLOW/);
+  assert.match(audit, /RETIRED_PLATFORM_METADATA_PRESENT/);
 });

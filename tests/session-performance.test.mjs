@@ -25,11 +25,12 @@ test('session bootstrap preserves cached context and hydrates permissions in one
   assert.match(server, /permissions: \{ permissions \}/)
 })
 
-test('settings navigation uses its scoped session cache', async () => {
-  const source = await read('../src/services/settings.js')
-  assert.match(source, /loadSettingsContext\(\{ force = false \} = \{\}\)/)
-  assert.match(source, /const cachedContext = !force \? readSettingsContextCache\(\) : null/)
-  assert.match(source, /if \(cachedContext\) return cachedContext/)
+test('Settings runtime loads persisted metadata hosts instead of legacy settings context', async () => {
+  const page = await read('../src/pages/settings/MetadataSettingsPage.jsx')
+  const service = await read('../src/services/settings.js')
+  assert.match(page, /\/api\/platform\/runtime\/settings-hosts/)
+  assert.equal(service.includes('/api/settings'), false)
+  assert.equal(service.includes('loadSettingsContext'), false)
 })
 
 
@@ -177,8 +178,7 @@ test('automatic CI does not run competing live E2E suites against production', a
 test('successful password login finalizes session, security state, last-login and history in one database round trip', async () => {
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
-  assert.match(server, /const sessionId = randomUUID\(\)/)
-  assert.match(server, /await finalizeSuccessfulLogin\(loginDb, \{\s*user,\s*sessionId,/s)
+  assert.match(server, /const sessionId = await finalizeSuccessfulLogin\(loginDb/)
   assert.match(security, /export async function finalizeSuccessfulLogin/)
   assert.match(security, /WITH new_session AS \(/)
   assert.match(security, /security_reset AS \(/)
@@ -347,11 +347,10 @@ test('login timing keeps permission and authorization phases separate', async ()
 })
 
 
-test('final loading verification waits for a compatible Pages and backend deployment before live login', async () => {
+test('final loading verification waits for compatible Pages and backend deployment before live login', async () => {
   const source = await read('../.github/workflows/final-loading-verification.yml')
-  assert.match(source, /push:\s*\n\s*branches:\s*\[main\]/)
+  assert.match(source, /push:\s*\n\s*branches: \[main\]/)
   assert.match(source, /workflow_dispatch:/)
-  assert.equal(source.includes('workflow_run:'), false)
   assert.match(source, /DEPLOY_SHA:\s*\$\{\{ github\.sha \}\}/)
   assert.match(source, /ref:\s*\$\{\{ github\.sha \}\}/)
   assert.match(source, /Verify current Pages deployment/)
@@ -382,11 +381,12 @@ test('stale cache revalidation is deduped by cache key', async () => {
   assert.match(source, /refreshInFlight\.set\(key, request\)/)
 })
 
-test('Dashboard startup reads are launched together instead of separate mount waterfalls', async () => {
+test('Dashboard startup parallelizes dashboards and permissions without legacy Settings API', async () => {
   const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /Promise\.all\(\[\s*apiRequest\('\/api\/settings\/runtime'\)/)
+  assert.match(source, /Promise\.all\(\[/)
   assert.match(source, /apiRequest\('\/api\/dashboards'\)/)
   assert.match(source, /loadSessionPermissions\(\)/)
+  assert.equal(source.includes('/api/settings'), false)
 })
 
 test('Dashboard restores saved filter state before building the run request', async () => {

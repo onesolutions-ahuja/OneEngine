@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { consumeAccountToken, hashAccountToken, issueAccountOtp, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
-import { executeSystemAction, executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeSystemAction } from "../services/systemWorkflowRuntime.js";
 import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
 
 export default function createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit = null }) {
@@ -38,64 +38,36 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     res.json({success:true});
   });
 
-  router.get("/settings/account-policy", authenticate, authorize("settings.manage"), async(req,res)=>{
-    const r=await db(`SELECT c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.password_reset_email_enabled,
-      cs.registration_link_expiry_minutes,cs.password_reset_expiry_minutes FROM companies c JOIN company_settings cs ON cs.company_id=c.id WHERE c.id=$1`,[req.user.companyId]);
-    res.json({success:true,data:r.rows[0]||{}});
-  });
-  router.put("/settings/account-policy", authenticate, authorize("settings.manage"), async(req,res)=>{
-    const b=req.body||{}; const domain=String(b.userEmailDomain||"").trim().toLowerCase().replace(/^@/,"")||null;
-    await db("UPDATE companies SET user_email_domain=$1,updated_at=NOW() WHERE id=$2",[domain,req.user.companyId]);
-    await db(`UPDATE company_settings SET domain_users_only=$1,email_registration_enabled=$2,password_reset_email_enabled=$3,
-      registration_link_expiry_minutes=$4,password_reset_expiry_minutes=$5,updated_by=$6,updated_at=NOW() WHERE company_id=$7`,
-      [b.domainUsersOnly===true,b.emailRegistrationEnabled===true,b.passwordResetEmailEnabled!==false,Math.max(5,Number(b.registrationLinkExpiryMinutes)||1440),Math.max(5,Number(b.passwordResetExpiryMinutes)||60),req.user.id,req.user.companyId]);
-    res.json({success:true});
-  });
 
-  router.post("/account/invite/:userId", authenticate, authorize("admin.users"), async(req,res)=>{
-    const r=await db(`SELECT u.id,u.email,u.company_id,c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.registration_link_expiry_minutes
-      FROM users u JOIN companies c ON c.id=u.company_id JOIN company_settings cs ON cs.company_id=c.id WHERE u.id=$1 AND u.company_id=$2`,[req.params.userId,req.user.companyId]);
-    const u=r.rows[0]; if(!u)return res.status(404).json({success:false,message:"User not found"});
-    if(!u.email_registration_enabled)return res.status(409).json({success:false,message:"Email registration is disabled"});
-    if(!domainAllowed(u.email,u.user_email_domain,u.domain_users_only))return res.status(400).json({success:false,message:"User email is outside the allowed company domain"});
-    const tokenExecution=await executeSystemAction({
-      db,
-      companyId:u.company_id,
-      userId:req.user.id||null,
-      apiName:"STAFF_ISSUE_LIFECYCLE_TOKEN",
-      req,
-      input:{userId:u.id,purpose:"REGISTRATION",expiresMinutes:u.registration_link_expiry_minutes},
-      source:{type:"api",method:req.method,path:req.originalUrl||req.path,capability:"staff.lifecycle.token.issue"},
-    });
-    const token=tokenExecution.result;
-    // Token is returned only to the workflow caller so the registered message action can merge it into the approved template.
-    res.json({success:true,data:{workflowEvent:"USER_REGISTRATION_REQUESTED",userId:u.id,email:normalizeEmail(u.email),token}});
-  });
+
+
 
   router.post("/auth/password-reset/request", async(req,res)=>{
     const email=normalizeEmail(req.body?.email);
     const generic={success:true,message:"If the account is eligible, a 6-digit reset code will be sent by email."};
     if(!email)return res.json(generic);
-    const r=await db(`SELECT u.id,u.company_id,cs.password_reset_email_enabled FROM users u
-      JOIN company_settings cs ON cs.company_id=u.company_id
+    const r=await db(`SELECT u.id,u.company_id FROM users u
       WHERE LOWER(u.email)=LOWER($1) AND u.active=TRUE LIMIT 1`,[email]);
     const u=r.rows[0];
-    if(!u?.password_reset_email_enabled)return res.json(generic);
+    if(!u)return res.json(generic);
 
     await writeAudit?.(u.company_id,u.id,"password_reset_otp_requested","user",u.id,{channel:"EMAIL",expiresMinutes:10});
     const otp=await issueAccountOtp(db,{companyId:u.company_id,userId:u.id,purpose:"PASSWORD_RESET",expiresMinutes:10});
     try {
-      await executeSystemWorkflow({
+      await executeSystemAction({
         db,
         companyId:u.company_id,
         userId:null,
-        actionKey: "SEND_EMAIL",
+        actionKey:"SEND_COMMUNICATION",
         req,
+        connectorDrivers:req.app?.locals?.connectorDrivers || null,
         input:{
+          channel:"EMAIL",
           recipient:email,
           to:email,
           contentMode:"CUSTOM",
           subject:"Your One Solutions password reset code",
+          message:`Your password reset code is ${otp}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
           body:`Your password reset code is ${otp}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
           idempotencyKey:`${u.company_id}:password-reset-otp:${u.id}:${Date.now()}`,
         },

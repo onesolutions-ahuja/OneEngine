@@ -32,6 +32,15 @@ test("purchase and supplier return parent IDs come from created records", async 
   assert.equal(returnLine.commonFieldValues.return_id.path, "steps.create_return.created.id");
 });
 
+test("purchases and supplier returns no longer ship dedicated business pages or endpoints", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const workspace = await readFile(new URL("../src/platform/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
+  assert.equal(app.includes("pages/purchases/PurchasesPage"), false);
+  assert.equal(app.includes("pages/returns/SupplierReturnsPage"), false);
+  assert.ok(workspace.length > 0);
+  for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(app.includes(value), false, value);
+});
+
 test("legacy purchasing and supplier-return business routes are removed", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   for (const legacy of ["./routes/purchases.js","createPurchasesRouter","createReturnsRouter","./routes/suppliers.js","createSuppliersRouter","./routes/supplierAccounts.js","createSupplierAccountsRouter"]) {

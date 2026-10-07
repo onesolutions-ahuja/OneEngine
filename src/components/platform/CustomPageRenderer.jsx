@@ -681,6 +681,10 @@ function GenericPageComponentView({ node, builderMode, onButtonClick }) {
   if (key === "stepper") return <div className={`flex gap-2 ${config.orientation==="vertical"?"flex-col":""}`}>{(Array.isArray(config.steps)&&config.steps.length?config.steps:["Step 1","Step 2","Step 3"]).map((item,i)=><div key={i} className="flex items-center gap-1.5 text-xs"><span className={`flex h-5 w-5 items-center justify-center rounded-full ${i<=(Number(config.currentStep)||0)?"bg-teal-600 text-white":"bg-slate-100"}`}>{i+1}</span><span>{typeof item==="object"?(item.label||item.title):String(item)}</span></div>)}</div>;
   if (key === "tooltip") return <span className="inline-flex rounded border border-dashed px-2 py-1 text-xs" title={config.content||"Tooltip"}>{config.trigger||"Hover target"}</span>;
   if (key === "dock_item") return <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm" disabled={disabled} onClick={action}><span>{config.icon||"◈"}</span><span>{config.label||title}</span>{config.badge?<span className="rounded-full bg-slate-800 px-1.5 text-[10px] text-white">{String(config.badge)}</span>:null}</button>;
+  if (key === "jarves") {
+    const size = Math.max(36, Math.min(96, Number(config.size) || 56));
+    return <button type="button" aria-label={config.label || "JARVES"} disabled={disabled} onClick={action} className="inline-flex items-center gap-2 rounded-full border bg-white p-1.5 shadow-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="flex items-center justify-center rounded-full bg-slate-900 text-white" style={{ width: size, height: size }}>✦</span>{config.label ? <span className="pr-3 text-sm font-medium">{String(config.label)}</span> : null}</button>;
+  }
   return <div className="rounded-lg border border-dashed p-3 text-sm text-slate-500">{title}</div>;
 }
 

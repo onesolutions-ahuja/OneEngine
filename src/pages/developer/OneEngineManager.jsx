@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BadgeCheck, Building2, ChevronRight, CreditCard, HardDrive, Mail, MessageSquare, Rocket, Search, Settings2, ShieldCheck, ShoppingCart, Smartphone, Store, Users } from 'lucide-react'
 import { apiRequest, getStoredSessionPermissions, loadSessionPermissions, getActingCompanyId, setActingCompanyId } from '../../services/api'
-import { clearSettingsContextCache, createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadUsers, patchCompanySettings, patchSettings, saveRolePermissions, updateRole, updateUser } from '../../services/settings'
+import { createRole, createUser, loadPermissions, loadRolePermissions, loadRoles, loadUsers, saveRolePermissions, updateRole, updateUser } from '../../services/settings'
+import MetadataSettingsPage from '../settings/MetadataSettingsPage'
 import StoreTillSettingsPage from '../settings/StoreTillSettingsPage'
 import ClientWebShopSettings from '../settings/ClientWebShopSettings'
 import PaymentTerminalSettings from '../settings/PaymentTerminalSettings'
@@ -31,20 +32,8 @@ const ITEMS=[
   ['releases','App Releases',Rocket],
 ]
 
-function CoreCompanySettings({companyId}){
-  const [data,setData]=useState(null),[draft,setDraft]=useState({}),[error,setError]=useState(''),[message,setMessage]=useState('')
-  const load=async()=>{try{setError('');const r=await apiRequest('/api/settings');setData(r?.data||{});setDraft({name:r?.data?.company?.name||'',legalName:r?.data?.company?.legalName||'',email:r?.data?.company?.email||'',phone:r?.data?.company?.phone||'',currency:r?.data?.company?.currency||'GBP',timezone:r?.data?.company?.timezone||'Europe/London',dateFormat:r?.data?.general?.dateFormat||'DD/MM/YYYY',vatEnabled:r?.data?.tax?.vatEnabled!==false,defaultVatRate:String(r?.data?.tax?.defaultVatRate??20)})}catch(e){setError(e?.message||'Unable to load company settings')}}
-  useEffect(()=>{void load()},[companyId])
-  const save=async()=>{try{setError('');setMessage('');await patchCompanySettings({name:draft.name,legalName:draft.legalName||null,email:draft.email||null,phone:draft.phone||null,currency:draft.currency,timezone:draft.timezone});await patchSettings({dateFormat:draft.dateFormat,vatEnabled:draft.vatEnabled,defaultVatRate:Number(draft.defaultVatRate)});setMessage('Company settings saved.');await load()}catch(e){setError(e?.message||'Unable to save company settings')}}
-  if(!data)return <div className="settings-state-card">{error||'Loading company settings…'}</div>
-  return <div className="oneengine-form">
-    {error?<div className="settings-error">{error}</div>:null}{message?<div className="settings-success">{message}</div>:null}
-    <div className="oneengine-form-grid">
-      {['name','legalName','email','phone','currency','timezone','dateFormat','defaultVatRate'].map(k=><label key={k}><span>{k.replace(/([A-Z])/g,' $1').replace(/^./,m=>m.toUpperCase())}</span><input value={draft[k]??''} onChange={e=>setDraft({...draft,[k]:e.target.value})}/></label>)}
-      <label className="oneengine-check"><input type="checkbox" checked={draft.vatEnabled===true} onChange={e=>setDraft({...draft,vatEnabled:e.target.checked})}/><span>VAT enabled</span></label>
-    </div>
-    <button type="button" className="onepos-btn onepos-btn-primary" onClick={save}>Save settings</button>
-  </div>
+function CoreCompanySettings() {
+  return <MetadataSettingsPage initialSection="company" />
 }
 
 function UsersRoles({companyId}){
@@ -64,7 +53,7 @@ export default function OneEngineManager(){
   const [clients,setClients]=useState([]),[selected,setSelected]=useState(()=>getActingCompanyId()||''),[active,setActive]=useState('company'),[query,setQuery]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState('')
   const loadClients=async()=>{try{setLoading(true);setError('');const cached=getStoredSessionPermissions();if(cached&&!cached?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required');const [permissions,r]=await Promise.all([cached?Promise.resolve(cached):loadSessionPermissions(),apiRequest('/api/platform/developer/companies')]);if(!permissions?.permissions?.includes('oneengine.manage'))throw new Error('OneEngine management permission required');const rows=Array.isArray(r?.data)?r.data:[];setClients(rows);const valid=rows.some(x=>String(x.id)===String(selected));if(!valid&&rows[0])await chooseClient(rows[0].id)}catch(e){setError(e?.message||'Unable to load clients')}finally{setLoading(false)}}
   useEffect(()=>{void loadClients()},[])
-  const chooseClient=async(id)=>{if(!id)return;try{setError('');await apiRequest('/api/platform/developer/acting-company',{method:'PUT',body:JSON.stringify({actingCompanyId:id})});setActingCompanyId(id);clearSettingsContextCache();setSelected(id)}catch(e){setError(e?.message||'Unable to select client')}}
+  const chooseClient=async(id)=>{if(!id)return;try{setError('');await apiRequest('/api/platform/developer/acting-company',{method:'PUT',body:JSON.stringify({actingCompanyId:id})});setActingCompanyId(id);setSelected(id)}catch(e){setError(e?.message||'Unable to select client')}}
   const selectedClient=clients.find(x=>String(x.id)===String(selected))
   const visible=useMemo(()=>clients.filter(x=>!query.trim()||String(x.name||'').toLowerCase().includes(query.trim().toLowerCase())),[clients,query])
   const render=()=>{

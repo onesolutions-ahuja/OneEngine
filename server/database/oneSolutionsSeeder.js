@@ -42,14 +42,12 @@ export async function seedOneSolutionsDemo(pool) {
           company_id,date_format,vat_enabled,default_vat_rate,
           loyalty_enabled,scan_go_enabled,exchange_mode,product_view,
           customer_display_enabled,online_ordering_enabled,
-          online_payment_methods,till_invoice_prefix,
-          delivery_invoice_prefix,self_checkout_invoice_prefix
+          online_payment_methods
         )
        VALUES(
           $1,'DD/MM/YYYY',TRUE,20,
           FALSE,FALSE,'both','image',
-          FALSE,FALSE,'[]'::jsonb,
-          'TO','DEL','SC'
+          FALSE,FALSE,'[]'::jsonb
         )
        ON CONFLICT(company_id) DO UPDATE SET
           date_format=EXCLUDED.date_format,

@@ -10,19 +10,12 @@ const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:tru
 }) : [];
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 
-// These files are platform infrastructure or declarative metadata authorities.
-// Business names may legitimately occur here as metadata; they must not become
-// executable business persistence/query logic elsewhere.
 const exempt = new Set([
-  "server/services/platformMetadata.js",
   "server/services/platformSystemObjects.js",
   "server/services/tenantDatabase.js",
 ]);
 const declarativePrefixes=["server/packages/","server/metadata/"];
 const retired = new Set(["server/routes/dashboard.js","server/services/reportSalesDefinition.js"]);
-// Temporary compatibility inventory: these adapters are allowed to touch the
-// authoritative POS tables, but every entry is named here so additions cannot
-// silently expand the exception surface.
 const legacyBusinessRuntime = new Set([]);
 const businessTables=[
   "sales","sale_ledger","sale_items","customers","payments","products","suppliers",
@@ -36,7 +29,115 @@ const hardcodedBusinessObjectKeys=[
   "supplier_invoice","supplier_payment","sales_order","sales_order_line","stock_return"
 ];
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
+const retiredActionKeys=[
+  "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION",
+  "CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION"
+];
+const forbiddenCompiledConnectorActions=[
+  "PAYMENT_START","PAYMENT_CANCEL","PRINT_RECEIPT","PRINT_KITCHEN_TICKET",
+  "OPEN_CASH_DRAWER","SCANNER_STATUS"
+];
+const forbiddenGenericConnectorProviderTokens=[
+  "smsgate_connector","brevo_connector","mailjet_connector","SMSGate","Brevo","Mailjet",
+  "configureSmsGateInboundWebhook","send-test-email","send-test-sms"
+];
 const findings=[];
+
+const retiredMetadataRuntime = "server/services/platformMetadata.js";
+const retiredProviderActionRuntime = "server/services/platformActions.js";
+const retiredProviderSpecificRoutes = [
+  "server/routes/smsGateWebhooks.js",
+];
+const retiredInvoiceReceiptArtifacts = [
+  "server/services/invoiceDelivery.js",
+  "server/services/receiptQr.js",
+  "server/utils/invoicePdf.js",
+  "server/utils/invoiceHtml.js",
+  "server/database/secure_invoice_links.sql",
+];
+const allServerRuntimeFiles = walk(path.join(ROOT, "server"));
+if (fs.existsSync(path.join(ROOT, retiredMetadataRuntime))) {
+  findings.push({rule:"RETIRED_PLATFORM_METADATA_RUNTIME_PRESENT",file:retiredMetadataRuntime});
+}
+if (fs.existsSync(path.join(ROOT, retiredProviderActionRuntime))) {
+  findings.push({rule:"RETIRED_PROVIDER_ACTION_RUNTIME_PRESENT",file:retiredProviderActionRuntime});
+}
+for (const artifact of retiredProviderSpecificRoutes) {
+  if (fs.existsSync(path.join(ROOT, artifact))) {
+    findings.push({rule:"RETIRED_PROVIDER_SPECIFIC_ROUTE_PRESENT",file:artifact});
+  }
+}
+for (const artifact of retiredInvoiceReceiptArtifacts) {
+  if (fs.existsSync(path.join(ROOT, artifact))) {
+    findings.push({rule:"RETIRED_INVOICE_RECEIPT_ARTIFACT_PRESENT",file:artifact});
+  }
+}
+for (const file of allServerRuntimeFiles) {
+  const name = rel(file);
+  const text = fs.readFileSync(file,"utf8");
+  if (name !== retiredMetadataRuntime && /platformMetadata\.js/.test(text)) {
+    findings.push({rule:"RETIRED_PLATFORM_METADATA_IMPORT",file:name});
+  }
+  if (name !== retiredProviderActionRuntime && /platformActions\.js/.test(text)) {
+    findings.push({rule:"RETIRED_PROVIDER_ACTION_IMPORT",file:name});
+  }
+  if (name === "server/services/platformWorkflow.js") {
+    for (const actionKey of forbiddenCompiledConnectorActions) {
+      if (text.includes(actionKey)) findings.push({rule:"COMPILED_BUSINESS_CONNECTOR_ACTION",file:name,actionKey});
+    }
+  }
+  if (name === "server/server.js" && /SECURE INVOICE LINKS|\/i\/:token/.test(text)) {
+    findings.push({rule:"RETIRED_SECURE_INVOICE_RUNTIME_REFERENCE",file:name});
+  }
+  if (name === "server/database/oneSolutionsSeeder.js" && /(?:till|delivery|self_checkout)_invoice_prefix/.test(text)) {
+    findings.push({rule:"HARDCODED_INVOICE_PREFIX_SEED",file:name});
+  }
+  if (name === "server/server.js") {
+    const providerJobTokens = [
+      "SHOPIFY_PROVIDER_SYNC","SHOPIFY_WEBHOOK_EVENT","SHOPIFY_PROCESS_WEBHOOK","/api/shopify/webhooks"
+    ];
+    for (const token of providerJobTokens) {
+      if (text.includes(token)) findings.push({rule:"HARDCODED_PROVIDER_JOB_RUNTIME_IN_SERVER",file:name,token});
+    }
+    const providerDriverTokens = [
+      "createReferencePaymentDriver","createSmsGateDriver","createBrevoDriver","createMailjetDriver",
+      "connector_package_key='smsgate_connector'","configureSmsGateInboundWebhook","getSmsGateDiagnostics"
+    ];
+    for (const token of providerDriverTokens) {
+      if (text.includes(token)) findings.push({rule:"HARDCODED_PROVIDER_RUNTIME_IN_SERVER",file:name,token});
+    }
+  }
+  if (name === "server/services/packageRegistry.js") {
+    if (/packageKeys\s*=\s*\[\s*["']staff["']\s*,\s*["']products["']\s*,\s*["']customers["']/.test(text)) {
+      findings.push({rule:"HARDCODED_DEFAULT_BUSINESS_PACKAGES",file:name});
+    }
+    if (/packageKey\s*===\s*["'](?:staff|products|customers)["']/.test(text)) {
+      findings.push({rule:"PACKAGE_SPECIFIC_PROVISIONING_BRANCH",file:name});
+    }
+  }
+  if (name === "server/routes/admin.js" && /user_email_domain|domain_users_only|email_registration_enabled|company_settings/.test(text)) {
+    findings.push({rule:"HARDCODED_ACCOUNT_POLICY_BINDING_IN_ADMIN",file:name});
+  }
+  if (name === "server/routes/accountLifecycle.js") {
+    if (/\/account\/invite\/:userId/.test(text)) findings.push({rule:"LEGACY_STAFF_INVITE_ROUTE",file:name});
+    if (/user_email_domain|domain_users_only|email_registration_enabled|password_reset_email_enabled|company_settings/.test(text)) {
+      findings.push({rule:"HARDCODED_ACCOUNT_LIFECYCLE_SETTINGS_BINDING",file:name});
+    }
+  }
+  if (name === "server/routes/accountLifecycle.js" && /\/settings\/account-policy/.test(text)) {
+    findings.push({rule:"HARDCODED_ACCOUNT_POLICY_SETTINGS_ROUTE",file:name});
+  }
+  if (name === "server/services/jarvis/prompt.js") {
+    if (/till\/POS screen|products, stock, customers|suppliers, purchasing|sales and refunds/.test(text)) {
+      findings.push({rule:"HARDCODED_JARVIS_BUSINESS_DOMAIN_PROMPT",file:name});
+    }
+  }
+  if (name === "server/routes/connectors.js") {
+    for (const token of forbiddenGenericConnectorProviderTokens) {
+      if (text.includes(token)) findings.push({rule:"PROVIDER_SPECIFIC_GENERIC_CONNECTOR_ROUTE",file:name,token});
+    }
+  }
+}
 
 for(const file of roots.flatMap(walk)){
   const name=rel(file);
@@ -47,10 +148,6 @@ for(const file of roots.flatMap(walk)){
     continue;
   }
   if(exempt.has(name)||declarativePrefixes.some((prefix)=>name.startsWith(prefix))) continue;
-  // Existing app/domain adapters are compatibility boundaries around authoritative
-  // POS tables. They remain visible debt, but new generic platform/builders may
-  // not introduce direct business SQL. Phase 7B validates these adapters through
-  // their workflow/action gates before deployment.
   if(legacyBusinessRuntime.has(name)) continue;
   for(const table of businessTables){
     const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
@@ -63,6 +160,21 @@ for(const file of roots.flatMap(walk)){
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
+
+  // Retired action names may still appear in migration/diagnostic copy, but they
+  // must never be registered, selected, or executed as runtime action keys.
+  if(/\bexecuteMediatedRegisteredAction\b/.test(text)) {
+    findings.push({rule:"RETIRED_RUNTIME_EXECUTOR",file:name,symbol:"executeMediatedRegisteredAction"});
+  }
+  for(const symbol of retiredActionKeys) {
+    const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    const executablePatterns = [
+      new RegExp(`\\b(?:actionKey|type|key)\\s*:\\s*[\"']${escaped}[\"']`),
+      new RegExp(`\\bgetWorkflowActionDefinition\\(\\s*[\"']${escaped}[\"']\\s*\\)`),
+      new RegExp(`\\bexecuteSystemAction\\([\\s\\S]{0,800}\\bactionKey\\s*:\\s*[\"']${escaped}[\"']`),
+    ];
+    if(executablePatterns.some((pattern)=>pattern.test(text))) findings.push({rule:"RETIRED_RUNTIME_ACTION_KEY",file:name,symbol});
+  }
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
 const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
@@ -70,7 +182,7 @@ fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
 fs.writeFileSync(path.join(ROOT,"artifacts","metadata-architecture-audit.json"),JSON.stringify(report,null,2)+"\n");
 if(unique.length){
   console.error(`Metadata architecture audit failed with ${unique.length} violation(s).`);
-  for(const item of unique) console.error(`- ${item.rule}: ${item.file}${item.table?` [${item.table}]`:""}`);
+  for(const item of unique) console.error(`- ${item.rule}: ${item.file}${item.table?` [${item.table}]`:""}${item.symbol?` [${item.symbol}]`:""}`);
   process.exit(1);
 }
 console.log(`Metadata architecture audit passed across ${report.scannedFiles} runtime source files.`);

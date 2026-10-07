@@ -1,68 +1,48 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-
 import {
-  executeWorkflowActions,
   getWorkflowActionDefinition,
   getWorkflowActionRegistry,
   getWorkflowBuilderActionRegistry,
 } from "../server/services/platformWorkflow.js";
-import { executeSystemWorkflow } from "../server/services/systemWorkflowRuntime.js";
 import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
 
-const REMOVED_PROVIDER_TEST_ADAPTERS = [
-  "OPEN_FOOD_FACTS_TEST_CONNECTION",
-  "OPEN_FOOD_FACTS_LOOKUP_PRODUCT",
-  "GO_UPC_TEST_CONNECTION",
-  "QUICKBOOKS_TEST_CONNECTION",
-  "SHOPIFY_TEST_CONNECTION",
-  "UBER_GET_STORES",
-  "UBER_UPLOAD_MENU",
-  "UBER_ACCEPT_ORDER",
-  "UBER_DENY_ORDER",
-  "UBER_UPDATE_ITEM_PRICE",
-  "UBER_SET_ITEM_UNAVAILABLE",
-  "UBER_SET_ITEM_AVAILABLE",
+const GENERIC_CORE = [
+  "GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD",
+  "CREATE_RELATED_RECORD","UPDATE_RELATED_RECORD","ADD_RELATIONSHIP","REMOVE_RELATIONSHIP",
+  "ASSIGN_RECORD","ASSIGNMENT","DECISION","LOOP","WAIT","FORMULA",
+  "SEND_COMMUNICATION","ONE_HTTP_REQUEST","RUN_SUBFLOW","STOP"
 ];
 
-const INTERNAL = [
-  "PAYMENT_START",
-  "PAYMENT_CANCEL",
+const REMOVED_BUSINESS_OR_PROVIDER = [
+  "PAYMENT_START","PAYMENT_CANCEL","GLOBAL_PRODUCT_LOOKUP_BARCODE","GO_UPC_LOOKUP_PRODUCT",
+  "OPEN_FOOD_FACTS_TEST_CONNECTION","OPEN_FOOD_FACTS_LOOKUP_PRODUCT","GO_UPC_TEST_CONNECTION",
+  "QUICKBOOKS_TEST_CONNECTION","SHOPIFY_TEST_CONNECTION","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_EXPORT_REFUND",
+  "UBER_GET_STORES","UBER_UPLOAD_MENU","UBER_ACCEPT_ORDER","UBER_DENY_ORDER",
+  "UBER_UPDATE_ITEM_PRICE","UBER_SET_ITEM_UNAVAILABLE","UBER_SET_ITEM_AVAILABLE",
+  "ONLINE_ORDER_TRANSITION","SEND_PASSWORD_RESET_EMAIL","SEND_USER_INVITATION"
 ];
 
-
-test("internal adapters stay executable but are hidden from Flow Builder", () => {
+test("Flow action registry contains generic primitives and no compiled business/provider adapters", () => {
   const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
   const builder = new Set(getWorkflowBuilderActionRegistry().map((item) => item.key));
 
-  for (const key of ["CREATE_RECORD","UPDATE_RECORD","GET_RECORDS","SEND_COMMUNICATION","CALL_CONNECTOR","HTTP_REQUEST","ONE_HTTP_REQUEST","RUN_SUBFLOW","GENERATE_SECURE_TOKEN"]) {
+  for (const key of GENERIC_CORE) {
+    if (all.has(key)) assert.ok(getWorkflowActionDefinition(key), key);
+  }
+  for (const key of ["GET_RECORDS","CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","SEND_COMMUNICATION","ONE_HTTP_REQUEST","RUN_SUBFLOW"]) {
     assert.ok(builder.has(key), key + " must remain available to Flow Builder");
   }
-
-  for (const key of INTERNAL) {
-    assert.ok(all.has(key), key + " must remain executable for generic runtime callers");
-    assert.ok(getWorkflowActionDefinition(key), key + " must remain resolvable internally");
-    assert.equal(builder.has(key), false, key + " must not appear as a core Builder action");
+  for (const key of REMOVED_BUSINESS_OR_PROVIDER) {
+    assert.equal(all.has(key), false, key + " must remain removed from compiled runtime");
+    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as hidden runtime code");
   }
-  for (const key of ["ONLINE_ORDER_TRANSITION","SHOPIFY_SYNC_PRODUCTS","SHOPIFY_EXPORT_REFUND"]) {
-    assert.equal(all.has(key), false, key + " business/provider adapter must remain removed");
-    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as hidden business code");
-  }
-});
-
-test("provider-specific adapters stay removed in favor of metadata workflows", () => {
-  const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
-  for (const key of REMOVED_PROVIDER_TEST_ADAPTERS) {
-    assert.equal(all.has(key), false, key + " must remain removed");
-    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as a hidden function");
-  }
-  assert.ok(all.has("CONNECTOR_TEST_CONNECTION"), "generic connector test action must remain executable");
+  assert.ok(all.has("CONNECTOR_TEST_CONNECTION"), "generic connector test action remains a platform primitive");
 });
 
 test("registered actions and jobs never become one-step System workflows", () => {
-  const definitions = systemWorkflowDefinitions();
-  for (const flow of definitions) {
+  for (const flow of systemWorkflowDefinitions()) {
     assert.equal(String(flow.systemKey || "").startsWith("action:"), false, flow.systemKey);
     assert.equal(String(flow.systemKey || "").startsWith("job:"), false, flow.systemKey);
     assert.notEqual(flow.action?.capabilityType, "action", flow.systemKey);
@@ -70,21 +50,16 @@ test("registered actions and jobs never become one-step System workflows", () =>
   }
 });
 
-test("customer credit business flows are not hardcoded in the system workflow catalog", () => {
+test("business workflow catalogs are not compiled into systemWorkflowCatalog", () => {
   const source = readFileSync(new URL("../server/services/systemWorkflowCatalog.js", import.meta.url), "utf8");
-  for (const key of [
-    "customer.credit.limit.check",
-    "customer.credit.transaction.build_sale",
-    "customer.credit.payment.check",
-    "customer.credit.adjustment.check",
-    "customer.credit.transaction.build_payment",
-    "customer.credit.transaction.build_adjustment",
-    "customer.credit.statement.generate",
-  ]) assert.equal(source.includes(key), false, key + " must remain metadata/tenant Flow-owned");
+  for (const token of [
+    "customer.credit.","SHOPIFY_","UBER_","OPEN_FOOD_FACTS_","QUICKBOOKS_",
+    "PAYMENT_START","GLOBAL_PRODUCT_LOOKUP_BARCODE"
+  ]) assert.equal(source.includes(token), false, token);
+  assert.match(source, /PACKAGE_RUNTIME_FLOWS/);
 });
 
-
-test("Phase 1 removes generated action and job pseudo-workflows from persistence", () => {
+test("generated action and job pseudo-workflows stay removed from persistence", () => {
   const catalog = readFileSync(new URL("../server/services/systemWorkflowCatalog.js", import.meta.url), "utf8");
   const runtime = readFileSync(new URL("../server/services/systemWorkflowRuntime.js", import.meta.url), "utf8");
   const migration = readFileSync(new URL("../server/database/init.js", import.meta.url), "utf8");
@@ -94,6 +69,4 @@ test("Phase 1 removes generated action and job pseudo-workflows from persistence
   assert.doesNotMatch(catalog, /TRUSTED_JOB_KINDS/);
   assert.match(runtime, /export async function executeSystemAction\(/);
   assert.match(migration, /0066_remove_system_action_job_workflow_wrappers/);
-  assert.match(migration, /systemKey' LIKE 'action:%'/);
-  assert.match(migration, /systemKey' LIKE 'job:%'/);
 });

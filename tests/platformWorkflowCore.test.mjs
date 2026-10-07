@@ -66,7 +66,7 @@ test("communication event ingestion is idempotent by provider message id", () =>
 test("generic communication workflow action has no connector-definition runtime dependency", () => {
   const source = readFileSync(new URL("../server/services/platformWorkflow.js", import.meta.url), "utf8");
   const start = source.indexOf('key: "SEND_COMMUNICATION"');
-  const end = source.indexOf('key: "IN_APP_NOTIFICATION"', start);
+  const end = source.indexOf('key: "RUN_SUBFLOW"', start);
   const sendCommunication = source.slice(start, end);
   assert.ok(start >= 0);
   assert.doesNotMatch(sendCommunication, /platform_connector_definitions/);

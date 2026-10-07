@@ -8,7 +8,6 @@ import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationC
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
-import { executeRegisteredAction } from "./platformActions.js";
 import { isSafeIdentifier } from "./platformIdentifiers.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
@@ -24,59 +23,52 @@ import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAl
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "ONE_HTTP_REQUEST"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 
-function errorDetails(error) {
-  if (!error) return { message: "Workflow step failed", oeCode: "OEWX01", status: null, retryable: false };
-  if (typeof error === "string") return { message: error, oeCode: "OEWX01", status: null, retryable: false };
-  return {
-    message: String(error.message || error.error || "Workflow step failed"),
-    oeCode: String(error.oeCode || error.code || "OEWX01"),
-    status: Number.isFinite(Number(error.status)) ? Number(error.status) : null,
-    retryable: error.retryable === true,
-  };
-}
-
-function collectSecureValues(value, found = new Set(), seen = new WeakSet()) {
-  if (!value || typeof value !== "object") return found;
-  if (seen.has(value)) return found;
-  seen.add(value);
-  if (Array.isArray(value)) {
-    for (const item of value) collectSecureValues(item, found, seen);
-    return found;
-  }
-  if (Array.isArray(value.__secureValues)) {
-    for (const secret of value.__secureValues) {
-      const normalized = String(secret || "");
-      if (normalized.length >= 4) found.add(normalized);
+function redact(value, inheritedSecrets = []) {
+  const discovered = new Set((inheritedSecrets || []).map((item) => String(item)).filter((item) => item.length >= 4));
+  const collect = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) collect(item);
+      return;
     }
-  }
-  for (const nested of Object.values(value)) collectSecureValues(nested, found, seen);
-  return found;
-}
-
-function redact(value) {
-  const secureValues = [...collectSecureValues(value)];
-  const visit = (input, key = "", seen = new WeakSet()) => {
-    if (SECRET_KEY.test(String(key || "")) && key !== "__secureFields" && key !== "__secureValues") return "[REDACTED]";
-    if (typeof input === "string") {
-      let output = input;
-      for (const secret of secureValues) {
-        if (secret && output.includes(secret)) output = output.split(secret).join("********");
+    const secureValues = node.__secureValues;
+    if (Array.isArray(secureValues)) {
+      for (const item of secureValues) {
+        const secret = String(item ?? "");
+        if (secret.length >= 4) discovered.add(secret);
       }
-      return output;
     }
-    if (!input || typeof input !== "object") return input;
-    if (seen.has(input)) return "[Circular]";
-    seen.add(input);
-    if (Array.isArray(input)) return input.map((item) => visit(item, "", seen));
-    const secureFields = new Set(Array.isArray(input.__secureFields) ? input.__secureFields.map(String) : []);
-    return Object.fromEntries(Object.entries(input).map(([childKey, childValue]) => {
-      if (childKey === "__secureValues") return [childKey, "[REDACTED]"];
-      if (secureFields.has(childKey) || SECRET_KEY.test(childKey)) return [childKey, "[REDACTED]"];
-      return [childKey, visit(childValue, childKey, seen)];
-    }));
+    for (const item of Object.values(node)) collect(item);
+  };
+  collect(value);
+
+  const maskText = (input) => {
+    let text = String(input);
+    for (const secret of discovered) text = text.split(secret).join("********");
+    return text;
+  };
+
+  const visit = (node, key = "") => {
+    if (node === null || node === undefined) return node;
+    if (typeof node === "string") return maskText(node);
+    if (typeof node !== "object") return node;
+    if (Array.isArray(node)) return node.map((item) => visit(item, key));
+    const output = {};
+    for (const [childKey, childValue] of Object.entries(node)) {
+      if (childKey === "__secureValues") {
+        output[childKey] = Array.isArray(childValue) ? childValue.map(() => "********") : "********";
+        continue;
+      }
+      if (SECRET_KEY.test(childKey)) {
+        output[childKey] = "********";
+        continue;
+      }
+      output[childKey] = visit(childValue, childKey);
+    }
+    return output;
   };
   return visit(value);
 }
@@ -112,88 +104,6 @@ const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
     executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "CONNECTOR_DISABLE" } }),
   },
   {
-    key: "PAYMENT_START",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Payment - Start",
-    description: "Start a payment through the assigned connector instance for the current till.",
-    validation: (action) => {
-      if (!action || typeof action !== "object") throw new Error("Payment action payload is required");
-      if (action.amount === undefined && action.total === undefined) throw new Error("Payment action requires an amount or total");
-    },
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "payment.sale",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_START" } }),
-  },
-  {
-    key: "PAYMENT_CANCEL",
-    builderVisible: false,
-    systemVisible: false,
-    internalAdapter: true,
-    displayName: "Payment - Cancel",
-    description: "Cancel an in-flight payment through the assigned connector instance.",
-    validation: (action) => {
-      if (!action?.providerTransactionId && !action?.transactionId && !action?.paymentId) {
-        throw new Error("Payment cancellation requires a transaction reference");
-      }
-    },
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "payment.cancel",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PAYMENT_CANCEL" } }),
-  },
-  {
-    key: "PRINT_RECEIPT",
-    displayName: "Print - Receipt",
-    description: "Print a receipt using the active printer connector on the assigned till.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["sale.invoice.reprint"],
-    capability: "printer.print",
-    executor: async (context) => executeConnectorWorkflowAction({
-      ...context,
-      action: { ...context.action, key: "PRINT_RECEIPT" },
-      payload: context.action?.payload || {
-        saleId: context.record?.id || context.recordId || context.action?.inputs?.saleId || null,
-        receiptNumber: context.record?.receipt_number || context.record?.receiptNumber || null,
-        sale: context.record || null,
-        inputs: context.action?.inputs || {},
-      },
-    }),
-  },
-  {
-    key: "PRINT_KITCHEN_TICKET",
-    displayName: "Print - Kitchen Ticket",
-    description: "Print a kitchen ticket using the active kitchen printer connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["sale.create"],
-    capability: "printer.kitchen.print",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "PRINT_KITCHEN_TICKET" } }),
-  },
-  {
-    key: "OPEN_CASH_DRAWER",
-    displayName: "Cash Drawer - Open",
-    description: "Open the assigned cash drawer connector if the current till supports it.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["till.open"],
-    capability: "drawer.open",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "OPEN_CASH_DRAWER" } }),
-  },
-  {
-    key: "SCANNER_STATUS",
-    displayName: "Scanner - Status",
-    description: "Return the status of the assigned barcode scanner connector.",
-    validation: () => undefined,
-    async: true,
-    requiredPermissions: ["integration.manage"],
-    capability: "scanner.status",
-    executor: async (context) => executeConnectorWorkflowAction({ ...context, action: { ...context.action, key: "SCANNER_STATUS" } }),
-  },
-  {
     key: "CONNECTOR_TEST_CONNECTION",
     displayName: "Connector - Test Connection",
     description: "Run the connector test connection routine for the assigned instance.",
@@ -210,19 +120,6 @@ const GENERIC_CONNECTOR_EVENTS = Object.freeze([
   "connector.offline",
   "connector.enabled",
   "connector.disabled",
-  "payment.pending",
-  "payment.approved",
-  "payment.declined",
-  "payment.cancelled",
-  "payment.failed",
-  "payment.refunded",
-  "print.started",
-  "print.completed",
-  "print.failed",
-  "scanner.connected",
-  "scanner.disconnected",
-  "cash_drawer.opened",
-  "cash_drawer.failed",
 ]);
 
 const DYNAMIC_CONNECTOR_ACTIONS = [];
@@ -3250,45 +3147,70 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "completed", channel: "IN_APP", recipients: recipientUserIds };
       }
 
-      // External communication providers are selected by metadata. The generic
-      // communication runtime delegates transport without provider-specific behavior.
-      const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS" }[channel] || null;
-      if (!legacyKey) {
-        return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
+      // External delivery is connector-capability driven. SEND_COMMUNICATION
+      // owns no provider-specific action names or transport branches.
+      const capability = String(
+        resolveConfiguredResource(action.capability, bindingContext, { preserveMissing: false })
+        || `${channel.toLowerCase()}.send`
+      ).trim();
+      const connectorResult = await executeConnectorWorkflowAction({
+        ...context,
+        action: {
+          ...forwarded,
+          key: "SEND_COMMUNICATION",
+          type: "SEND_COMMUNICATION",
+          capability,
+          connectorInstanceId: resolveConfiguredResource(action.connectorInstanceId || action.connectorId, bindingContext, { preserveMissing: false }) || null,
+          payload: {
+            ...(forwarded.payload && typeof forwarded.payload === "object" ? forwarded.payload : {}),
+            channel,
+            recipient: forwarded.recipient || forwarded.to || null,
+            subject: forwarded.subject || null,
+            message: forwarded.message || forwarded.body || forwarded.text || null,
+            templateId: forwarded.templateId || null,
+            templateKey: forwarded.templateKey || forwarded.template || null,
+            templateContext: forwarded.templateContext || {},
+            objectId: forwarded.objectId || null,
+            recordId: forwarded.recordId || null,
+          },
+        },
+      });
+      if (connectorResult?.success !== true) {
+        return {
+          status: "failed",
+          code: connectorResult?.code || "COMMUNICATION_TRANSPORT_UNAVAILABLE",
+          message: connectorResult?.message || "No eligible communication connector is available",
+          channel,
+          capability,
+          retryable: connectorResult?.retryable === true,
+        };
       }
-      const transport = getWorkflowActionDefinition(legacyKey);
-      if (!transport?.executor) return { status: "failed", code: "COMMUNICATION_TRANSPORT_UNAVAILABLE", channel, retryable: false };
-      return transport.executor({ ...context, action: { ...forwarded, key: legacyKey, type: legacyKey } });
+      const providerResult = connectorResult.result || {};
+      await recordCommunicationEvent({
+        db,
+        companyId: tenantId,
+        channel,
+        eventType: COMMUNICATION_EVENTS.SENT,
+        direction: "OUTBOUND",
+        provider: connectorResult.connectorPackageKey || null,
+        providerMessageId: providerResult.providerMessageId || providerResult.reference || null,
+        recipient: forwarded.recipient || forwarded.to || null,
+        templateId: forwarded.templateId || null,
+        objectId: forwarded.objectId || null,
+        recordId: forwarded.recordId || null,
+        body: forwarded.message || forwarded.body || forwarded.text || null,
+        metadata: { actionType: "SEND_COMMUNICATION", capability },
+      }).catch(() => null);
+      return {
+        status: "completed",
+        channel,
+        capability,
+        connectorInstanceId: connectorResult.connectorInstanceId || null,
+        connectorPackageKey: connectorResult.connectorPackageKey || null,
+        result: providerResult,
+      };
     },
   },
-  {
-    key: "IN_APP_NOTIFICATION",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "In-App Notification",
-    description: "Create a persistent internal notification for a user or team.",
-    validation: (action) => {
-      if (!action?.message && !action?.templateKey) throw new Error("In-App Notification requires a message or template");
-    },
-    async: false,
-    requiredPermissions: ["notifications.write"],
-    executor: async ({ db, action, req }) => {
-      if (typeof db !== "function") return { status: "completed", notice: action.message || action.templateKey };
-      try {
-        await db(
-          "INSERT INTO platform_notifications (company_id, user_id, message, status, created_at) VALUES ($1,$2,$3,'UNREAD',NOW())",
-          [req?.user?.companyId || null, req?.user?.id || null, action.message || action.templateKey || ""]
-        );
-      } catch (error) {
-        return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: false, note: error.message };
-      }
-      return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: true };
-    },
-  },
-
-
-
   {
     key: "RUN_SUBFLOW",
     displayName: "Run Subflow",
@@ -3499,50 +3421,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       };
     },
   },
-  {
-    key: "CALL_WEBHOOK",
-    displayName: "Call Webhook",
-    description: "Send a webhook to an approved endpoint.",
-    schema: {
-      type: "object",
-      properties: {"url":{"type":"string","title":"Webhook URL"},"method":{"type":"string","title":"Method","enum":["POST","GET","PUT","PATCH"]},"headers":{"type":"object","title":"Headers"},"body":{"type":"object","title":"Body"}},
-      required: [],
-    },
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
   oneHttpRequestDefinition(),
-  {
-    key: "HTTP_REQUEST",
-    displayName: "HTTP Request",
-    description: "Send an HTTP request to an approved endpoint.",
-    schema: {
-      type: "object",
-      properties: {"url":{"type":"string","title":"Request URL"},"method":{"type":"string","title":"Method","enum":["POST","GET","PUT","PATCH","DELETE"]},"headers":{"type":"object","title":"Headers"},"body":{"type":"object","title":"Body"}},
-      required: [],
-    },
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
-  {
-    key: "WEBHOOK",
-    displayName: "Webhook",
-    description: "Send a webhook to an approved endpoint.",
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
   {
     key: "CONDITION",
     displayName: "Decision",
@@ -4908,16 +4787,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 
 export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
 
-export async function executeMediatedRegisteredAction({ db, companyId, userId = null, req = null, action }) {
-  return executeRegisteredAction({
-    db,
-    companyId,
-    userId,
-    req: req || { user: { id: userId, companyId } },
-    action,
-  });
-}
-
 export function getWorkflowActionRegistry() {
   return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
 }
@@ -5233,6 +5102,22 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   // SEND_COMMUNICATION is intentionally omitted so external and in-app delivery
   // remains simulated during Debug.
   ]);
+
+function errorDetails(error) {
+  const message = String(error?.message || error?.error || error || "Workflow execution failed");
+  const code = String(error?.code || error?.oeCode || error?.errorCode || "").trim() || null;
+  let classified = null;
+  try {
+    classified = classifyDebugCode(error);
+  } catch {}
+  return {
+    message,
+    code,
+    oeCode: String(error?.oeCode || classified?.code || code || "OEWX01"),
+    retryable: error?.retryable === true || classified?.retryable === true,
+    name: String(error?.name || "Error"),
+  };
+}
 
 export function friendlyWorkflowError(error, actionType = "") {
   const message = String(error?.message || error || "Workflow execution failed");

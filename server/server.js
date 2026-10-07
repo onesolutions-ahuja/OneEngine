@@ -15,8 +15,7 @@ import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs, enqueuePlatformJob } from "./services/platformJobs.js";
 import { processApprovalDueJob } from "./services/platformApprovals.js";
-import { createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
-import { assertPlatformJobKind } from "./services/platformJobKinds.js";
+import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
 import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
@@ -39,9 +38,7 @@ import { createBusinessCommandGateway, purgeOldBusinessCommandRuns } from "./ser
 
 import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js";
 import createReportsRouter from "./routes/reports.js";
-import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
-import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
@@ -63,9 +60,7 @@ import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
-import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
-import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
-import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
+import { loadConnectorDriversFromMetadata } from "./services/connectorDriverLoader.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
 import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
@@ -74,7 +69,7 @@ import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
 import createDebugCodesRouter from "./routes/debugCodes.js";
 import { buildDebugPayload, classifyDebugCode, builtinDebugCode, createDebugReference, normalizeDebugCode, writeDebugEvent } from "./services/debugCodes.js";
-import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformBootstrap.js";
+import { initializePlatformMetadata } from "./services/platformBootstrap.js";
 import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
 import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
@@ -221,8 +216,6 @@ app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/smsgate/webhook", express.raw({ type: "*/*", limit: "64kb" }));
-app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
 
@@ -439,27 +432,8 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
-connectorDrivers.register(createReferencePaymentDriver());
-connectorDrivers.register(createSmsGateDriver());
-connectorDrivers.register(createBrevoDriver());
-connectorDrivers.register(createMailjetDriver());
 app.locals.connectorDrivers = connectorDrivers;
-
-async function testPaymentTerminal(terminal) {
-  if (!terminal || !terminal.active || !terminal.provider || !terminal.connection_url) {
-    return { status: "NOT_CONFIGURED", message: "Not configured" };
-  }
-
-  const provider = paymentProviders.get(terminal.provider.toLowerCase());
-
-  if (!provider) {
-    return { status: "PROVIDER_NOT_SUPPORTED", message: "Provider not supported" };
-  }
-
-  return provider.testConnection(terminal);
-}
 
 /*
  * Audit logging must never break the operation being audited - see
@@ -1391,16 +1365,8 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     }
 
     const finalizationStartedAt = Date.now();
-    const sessionId = randomUUID();
-    // The token only needs the cryptographically random session id. Persisting
-    // the successful session/history is independent of JWT signing, so prepare
-    // both in the same event-loop turn and let the single DB round-trip remain
-    // the only awaited finalization work.
-    user.session_id = sessionId;
-    const token = createToken(user);
-    await finalizeSuccessfulLogin(loginDb, {
+    const sessionId = await finalizeSuccessfulLogin(loginDb, {
       user,
-      sessionId,
       identifier: email,
       ip: requestIp,
       userAgent: requestUserAgent,
@@ -1411,6 +1377,8 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       reason: passwordExpired ? "PASSWORD_EXPIRED" : null,
       req,
     });
+    user.session_id = sessionId;
+    const token = createToken(user);
     markLoginTiming("finalization_ms", finalizationStartedAt);
     loginTimings.total_ms = Date.now() - loginStartedAt;
     console.log("onePOS: auth login timings", {
@@ -1921,20 +1889,6 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createSettingsRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  writeAudit,
-  testPaymentTerminal,
-  requireLoyaltyEntitlement: (req, res, next) => {
-    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
-    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
-    return requireEntitlement(db, "loyalty")(req, res, next);
-  },
-}));
-app.use("/api", createSmsGateWebhookRouter({ pool }));
 
 /*
 |--------------------------------------------------------------------------
@@ -1971,17 +1925,6 @@ app.use(
 );
 
 app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyCustomers, hasPermission }));
-
-/*
-|--------------------------------------------------------------------------
-| SECURE INVOICE LINKS (T9P)
-|--------------------------------------------------------------------------
-|
-| Public token-based invoice download at GET /i/:token (outside /api - the
-| opaque token is the only credential; no IDs in the URL, hash-only token
-| storage, generic 404s) plus admin create/revoke endpoints under
-| Secure invoice links use the Sale platform object and existing permission model.
-*/
 
 /*
 | T9A - generic integration foundation (provider-agnostic). Credentials are
@@ -2158,6 +2101,8 @@ async function startServer() {
     console.log("onePOS: syncing package catalogue...");
     await seedInternalAppCatalog(pool);
     await seedPackageRegistry(pool);
+    const loadedConnectorDrivers = await loadConnectorDriversFromMetadata({ db, registry: connectorDrivers });
+    console.log(`onePOS: connector runtime drivers loaded (${loadedConnectorDrivers.length})`);
     const startupRegistryHealth = await verifyPublicPackageRegistry(pool);
     if (!startupRegistryHealth.healthy) {
       const details = [
@@ -2427,86 +2372,8 @@ async function startServer() {
     });
     console.log("onePOS: identity bootstrap ready");
 
-    // Reconcile SMSGate inbound webhooks after the HTTP listener is live. This
-    // is idempotent: existing callbacks are reused, while missing callbacks
-    // are created. Signing keys stay encrypted in integration credentials.
-    setTimeout(async () => {
-      try {
-        const rows = await pool.query(
-          `SELECT id,connector_configuration,credentials_encrypted,enabled
-             FROM integration_connections
-            WHERE connector_package_key='smsgate_connector'
-              AND enabled=TRUE`
-        );
-        for (const row of rows.rows) {
-          try {
-          const configuration = typeof row.connector_configuration === "string"
-            ? JSON.parse(row.connector_configuration || "{}")
-            : (row.connector_configuration || {});
-          const secrets = (() => {
-            try { return decryptCredentials(row.credentials_encrypted) || {}; }
-            catch { return {}; }
-          })();
-          const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
-          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}/${webhookToken}`;
-
-          const webhook = await configureSmsGateInboundWebhook(
-            { ...configuration, ...secrets },
-            { webhookUrl }
-          );
-
-          const nextSecrets = { ...secrets, webhookToken };
-          await pool.query(
-            `UPDATE integration_connections
-                SET credentials_encrypted=$1,
-                    connector_configuration=connector_configuration - 'webhookSigningKey',
-                    enabled=CASE
-                      WHEN COALESCE((connector_configuration->>'enabled')::boolean,FALSE)=TRUE THEN TRUE
-                      ELSE enabled
-                    END,
-                    updated_at=NOW()
-              WHERE id=$2`,
-            [encryptCredentials(nextSecrets), row.id]
-          );
-
-          console.log(`onePOS: SMSGate inbound webhook ready (${webhook.created ? "created" : "existing"}) connection=${row.id} staleRemoved=${webhook.removedStale || 0}`);
-          const diagnostics = await getSmsGateDiagnostics({ ...configuration, ...nextSecrets }).catch((error) => ({ error: error?.message || String(error) }));
-          const webhookRows = Array.isArray(diagnostics?.webhooks)
-            ? diagnostics.webhooks
-            : Array.isArray(diagnostics?.webhooks?.data)
-              ? diagnostics.webhooks.data
-              : Array.isArray(diagnostics?.webhooks?.webhooks)
-                ? diagnostics.webhooks.webhooks
-                : [];
-          const relevantWebhook = webhookRows.find((item) =>
-            String(item?.url || "") === webhookUrl
-              && String(item?.event || "").toLowerCase() === "sms:received"
-          );
-          const logRows = Array.isArray(diagnostics?.logs)
-            ? diagnostics.logs
-            : Array.isArray(diagnostics?.logs?.data)
-              ? diagnostics.logs.data
-              : Array.isArray(diagnostics?.logs?.logs)
-                ? diagnostics.logs.logs
-                : [];
-          console.log("onePOS: SMSGate diagnostics", {
-            webhookRegistered: Boolean(relevantWebhook),
-            webhookCount: webhookRows.length,
-            recentProviderLogs: logRows.slice(-8).map((entry) => ({
-              level: entry?.level || entry?.type || null,
-              message: String(entry?.message || entry?.event || entry?.action || "").slice(0, 180),
-              createdAt: entry?.createdAt || entry?.created_at || entry?.timestamp || null,
-            })),
-            providerLogError: diagnostics?.logs?.error || diagnostics?.error || null,
-          });
-          } catch (rowError) {
-            console.error(`onePOS: SMSGate inbound webhook reconciliation failed connection=${row.id}:`, rowError?.message || rowError);
-          }
-        }
-      } catch (error) {
-        console.error("onePOS: SMSGate inbound webhook reconciliation failed:", error?.message || error);
-      }
-    }, 1500).unref?.();
+    // Connector-specific lifecycle work is executed by connector metadata/flows.
+    // Core startup intentionally contains no provider/package-specific reconciliation.
 
 
     // The metadata bootstrap is expensive and used to run on every Render restart,
@@ -2537,14 +2404,12 @@ async function startServer() {
         if (!bootstrapState.current) {
           console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
           await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-          await initializeStandardObjectEcosystem(pool);
           bootstrapRan = true;
         } else {
           const initialRegistryHealth = await verifyPublicPackageRegistry(pool);
           if (!initialRegistryHealth.healthy) {
             console.warn("onePOS: package registry drift detected; repairing from source catalogue");
             await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-            await initializeStandardObjectEcosystem(pool);
             bootstrapRan = true;
           } else {
             console.log("onePOS: platform bootstrap metadata unchanged; registry verified");
@@ -2726,16 +2591,9 @@ async function startServer() {
                 );
               }
             }
-            if (["SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
-              await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
-                kind: job.kind,
-                status: failed?.status || "FAILED",
-                attempts: failed?.attempts || 0,
-              });
-            }
           },
           handler: async (job) => {
-            assertPlatformJobKind(job.kind);
+            assertTrustedJobKind(job.kind);
             if (job.kind === "WAIT") {
               const payload = job.payload || {};
               if (payload.scheduledPath === true) {
@@ -3594,50 +3452,6 @@ async function startServer() {
               }
             }
             if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
-            if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey: "SHOPIFY_PROCESS_WEBHOOK",
-                req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
-                  retryable: outcome.retryable === true,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
-              if (!actionKey) throw Object.assign(new Error("Shopify provider job is missing an action key"), { retryable: false });
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey,
-                req: { method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || outcome.code || "Shopify sync failed"), {
-                  retryable: outcome.retryable !== false,
-                });
-              }
-              return outcome;
-            }
             const actionKey = String(payload.type || payload.key || "").toUpperCase();
             if (!actionKey) throw Object.assign(new Error("Platform action job is missing an action key"), { retryable: false });
             const execution = await executeSystemAction({
@@ -3800,4 +3614,8 @@ async function startServer() {
   }
 }
 
-startServer();
+if (process.env.ONEENGINE_STARTUP_SMOKE === "1") {
+  console.log("onePOS: startup import smoke passed");
+} else {
+  startServer();
+}

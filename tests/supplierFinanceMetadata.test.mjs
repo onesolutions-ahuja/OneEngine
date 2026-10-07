@@ -51,6 +51,13 @@ test("related action choices scope through record relationships", async () => {
   assert.match(source,/relationshipKey/);
   assert.match(source,/parentRecordId/);
 });
+test("bootstrap foundations honor dependency order", async () => {
+  const source = await readFile(new URL("../server/services/platformBootstrap.js", import.meta.url), "utf8");
+  assert.match(source,/const visit = \(entry\) =>/);
+  assert.match(source,/entry\.manifest\?\.dependencies/);
+  assert.match(source,/Bootstrap foundation dependency cycle/);
+});
+
 
 test("supplier finance child storage is hidden from standalone OneIDs", async () => {
   const manifest = JSON.parse(await readFile(new URL("../server/metadata/manifests/finance_core.json", import.meta.url), "utf8"));
