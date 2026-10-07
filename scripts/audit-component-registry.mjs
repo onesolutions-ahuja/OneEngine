@@ -96,7 +96,8 @@ const dashboardComponents = PLATFORM_COMPONENTS.filter((component) =>
   component.supportedBuilders?.includes("DASHBOARD") || component.supportsDashboardContext === true
 );
 const dashboardRuntimeMissing = dashboardComponents
-  .filter((component) => component.key !== "section")\n  .filter((component) => { const runtimeKey = component.rendererKey || component.key; return !dashboardRendererSource.includes(`"${runtimeKey}"`) && !dashboardRendererSource.includes(`${runtimeKey}:`) && !dashboardRendererSource.includes(`"${component.key}"`) && !dashboardRendererSource.includes(`${component.key}:`); })
+  .filter((component) => component.key !== "section")
+  .filter((component) => { const runtimeKey = component.rendererKey || component.key; return !dashboardRendererSource.includes(`"${runtimeKey}"`) && !dashboardRendererSource.includes(`${runtimeKey}:`) && !dashboardRendererSource.includes(`"${component.key}"`) && !dashboardRendererSource.includes(`${component.key}:`); })
   .map((component) => component.key);
 const dashboardPropertiesMissing = dashboardComponents
   .filter((component) => Array.isArray(component.configurable) && component.configurable.length)
