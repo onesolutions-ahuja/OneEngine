@@ -3,212 +3,47 @@ import { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, re
 export { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 import { packageManifestCatalog } from "../packages/packageManifestCatalog.js";
 
-const metadataManifestCache = new Map();
+const list = (value) => Array.isArray(value) ? value : [];
 
-const withPackageBuilderMetadata = (workflow) => {
-  const action = workflow?.action || {};
-  let actions = Array.isArray(action.actions) ? action.actions : Array.isArray(workflow?.actions) ? workflow.actions : [];
-  if (action.flowType === "KIOSK_EXPERIENCE" && actions.length === 0 && Array.isArray(action.ui?.screens)) {
-    actions = action.ui.screens.map((screen, index) => ({
-      id: `kiosk_screen_${screen.key || index + 1}`,
-      apiName: `kiosk_screen_${screen.key || index + 1}`,
-      key: "SCREEN",
-      label: screen.title || screen.key || `Screen ${index + 1}`,
-      description: `Kiosk ${screen.type || "screen"} step`,
-      screen: {
-        label: screen.title || screen.key || `Screen ${index + 1}`,
-        apiName: String(screen.key || `screen_${index + 1}`),
-        showHeader: true,
-        style: "default",
-        components: [],
-        kioskDefinition: screen,
-      },
-      allowBack: index > 0,
-      allowNext: index < action.ui.screens.length - 1,
-      allowFinish: index === action.ui.screens.length - 1,
-    }));
-  }
-  const nodes = Array.isArray(action.gptBuilderElements) && action.gptBuilderElements.length === actions.length
-    ? action.gptBuilderElements
-    : actions.map((step, index) => ({
-        id: step.id || `package-step-${index + 1}`,
-        key: "action",
-        label: step.label || step.apiName || step.key || `Step ${index + 1}`,
-        apiName: step.apiName || step.id || `Package_Step_${index + 1}`,
-        description: step.description || "",
-        labelSource: "manual",
-        apiNameSource: "manual",
-        config: {
-          actionKey: step.key || step.type || "",
-          inputs: {},
-          inputModes: {},
-          inputIncluded: {},
-          transforms: {},
-          outputMode: "automatic",
-          manualOutputs: [],
-          importedRuntimeAction: step,
-          importedRuntimeActionText: "",
-        },
-        configured: true,
-        source: "runtime_import",
-        position: null,
-      }));
+export function packageDefinition(entry = {}) {
+  const packageKey = String(entry.packageKey || entry.key || "").trim();
+  if (!packageKey) throw new Error("Package metadata requires packageKey");
+  const external = metadataManifestByPackageKey(packageKey) || {};
+  const metadata = { ...entry, ...external, packageKey, key: packageKey };
+  const packageType = metadata.packageType || (metadata.technical === true ? "FOUNDATION" : "APPLICATION");
+  const dependencies = list(metadata.dependencies);
   return {
-    ...workflow,
-    action: {
-      ...action,
-      actions,
-      gptBuilder: true,
-      layout: action.layout || { mode: "AUTO" },
-      gptBuilderElements: nodes,
-    },
-  };
-};
-function manifestForPackage(packageKey) {
-  if (!packageKey) return null;
-  return metadataManifestCache.get(packageKey) || null;
-}
-
-export function packageDefinition(entry) {
-  // Package identity, presentation, entitlements and dependencies are declared
-  // by packageManifestCatalog/metadata manifests. The registry is only a
-  // generic installer and must not carry a second business-specific catalogue.
-  const packageType = entry.packageType === "FOUNDATION" || entry.technical === true
-    ? "FOUNDATION"
-    : "APPLICATION";
-  const billable = packageType === "APPLICATION" && entry.billable !== false;
-  const licenceMode = entry.licenceMode || (packageType === "FOUNDATION" ? "TECHNICAL" : "COMMERCIAL");
-
-  // Connector package permissions are derived from the connector contract so
-  // a package cannot forget runtime permissions that its actions require.
-  // This keeps current and future connector packages aligned automatically.
-  const manifestPermissions = new Set(Array.isArray(entry.permissions) ? entry.permissions : []);
-  if (entry.connectorApp && typeof entry.connectorApp === "object") {
-    manifestPermissions.add("connector.test");
-    manifestPermissions.add("connector.view");
-    manifestPermissions.add("connector.manage");
-    for (const capability of Array.isArray(entry.connectorApp.capabilities) ? entry.connectorApp.capabilities : []) {
-      if (!capability || typeof capability !== "object") continue;
-      for (const permission of Array.isArray(capability.requiredPermissions) ? capability.requiredPermissions : []) {
-        if (permission) manifestPermissions.add(permission);
-      }
-    }
-  }
-
-  const extractedManifest = manifestForPackage(entry.key || entry.packageKey);
-  return {
-    packageKey: entry.packageKey || entry.key,
-    name: entry.name,
-    version: entry.version || "1.0.0",
-    description: entry.description,
-    dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : [],
-    moduleKey: entry.key,
+    packageKey,
+    moduleKey: metadata.moduleKey || packageKey,
+    name: metadata.name || packageKey,
+    version: metadata.version || "1.0.0",
+    description: metadata.description || "",
+    dependencies,
     manifest: {
-        ...(extractedManifest || {}),
-      packageKey: entry.packageKey || entry.key,
-      name: entry.name,
-      version: entry.version || "1.0.0",
+      ...metadata,
+      packageKey,
       packageType,
-      publisher: entry.publisher || "OneSolutions",
-      category: entry.category || "Business",
-      description: entry.description,
-      route: entry.route,
-      entitlementKey: entry.entitlementKey || entry.key,
-      licenceMode,
-      licenceRequired: entry.licenceRequired !== false && licenceMode === "COMMERCIAL",
-      billable,
-      visibility: entry.visibility || (packageType === "FOUNDATION" ? "HIDDEN" : "PUBLIC"),
-      installable: entry.installable !== false,
-      systemOnly: entry.systemOnly === true || packageType === "FOUNDATION",
-      displayOrder: Number.isInteger(entry.displayOrder) ? entry.displayOrder : 0,
-      lifecycleState: entry.lifecycleState || "PUBLISHED",
-      permissions: [...manifestPermissions],
-      storeScoped: entry.storeScoped === true,
-      bootstrapFoundation: entry.bootstrapFoundation === true,
-      dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : [],
-      optionalDependencies: Array.isArray(entry.optionalDependencies) ? entry.optionalDependencies : [],
-      versionConstraints: Object.fromEntries(
-        (Array.isArray(entry.dependencies) ? entry.dependencies : [])
-          .filter((dependency) => dependency && typeof dependency === "object")
-          .map((dependency) => [
-            dependency.packageKey || dependency.package_key,
-            {
-              minVersion: dependency.minVersion || dependency.min_version || null,
-              maxVersion: dependency.maxVersion || dependency.max_version || null,
-              versionRange: dependency.versionRange || dependency.version_range || null,
-              optional: dependency.optional === true,
-            },
-          ])
-      ),
-      metadataOwnership: {
-        policy: "PACKAGE_MANAGED",
-        preserveUserModified: true,
-        requiredTypes: ["object", "field", "relationship", "form", "layout", "workflow", "action", "report", "permission", "connector", "template"],
-      },
-      optionalFeatures: Array.isArray(entry.optionalFeatures) ? entry.optionalFeatures : [],
-      capabilities: Array.isArray(entry.capabilities) ? entry.capabilities : [entry.key],
-      providerConnector: entry.providerConnector || null,
-      connectorApp: entry.connectorApp || null,
-      connectors: Array.isArray(entry.connectors) ? entry.connectors : [],
-      iconAssetKey: entry.iconAssetKey || null,
-
-      ...(entry.manifest && typeof entry.manifest === "object" ? entry.manifest : {}),
-      ...(metadataManifestByPackageKey(entry.key) || {}),
-
+      publisher: metadata.publisher || "OneSolutions",
+      category: metadata.category || "Business",
+      visibility: metadata.visibility || (packageType === "FOUNDATION" ? "HIDDEN" : "PUBLIC"),
+      installable: metadata.installable !== false,
+      billable: metadata.billable !== false && packageType !== "FOUNDATION",
+      systemOnly: metadata.systemOnly === true,
+      lifecycleState: metadata.lifecycleState || "PUBLISHED",
+      licenceMode: metadata.licenceMode || (packageType === "FOUNDATION" ? "TECHNICAL" : "COMMERCIAL"),
+      permissions: list(metadata.permissions),
+      dependencies,
+      optionalDependencies: list(metadata.optionalDependencies),
+      availableTiers: list(metadata.availableTiers),
+      optionalFeatures: list(metadata.optionalFeatures),
+      capabilities: list(metadata.capabilities),
+      connectors: list(metadata.connectors),
     },
   };
 }
 
 export function packageDefinitions(catalog = packageManifestCatalog) {
-  return catalog.map(packageDefinition).map((definition) => {
-    const manifest = definition?.manifest || {};
-    const workflows = Array.isArray(manifest.workflows) ? manifest.workflows : null;
-    if (!workflows) return definition;
-    return {
-      ...definition,
-      manifest: {
-        ...manifest,
-        workflows: workflows.map((workflow) => {
-          const action = workflow?.action || {};
-          const actions = Array.isArray(action.actions) ? action.actions : [];
-          if (!actions.length || String(action.flowType || "").toUpperCase() === "KIOSK_EXPERIENCE") return workflow;
-          const existing = Array.isArray(action.gptBuilderElements) ? action.gptBuilderElements : [];
-          const nodes = existing.length === actions.length ? existing : actions.map((step, index) => ({
-            id: step.id || `package-step-${index + 1}`,
-            key: "action",
-            label: step.label || step.apiName || step.key || `Step ${index + 1}`,
-            apiName: step.apiName || step.id || `Package_Step_${index + 1}`,
-            description: step.description || "",
-            labelSource: "manual",
-            apiNameSource: "manual",
-            config: {
-              actionKey: step.key || step.type || "",
-              inputs: {},
-              inputModes: {},
-              inputIncluded: {},
-              transforms: {},
-              outputMode: "automatic",
-              manualOutputs: [],
-              importedRuntimeAction: step,
-              importedRuntimeActionText: "",
-            },
-            configured: true,
-            source: "runtime_import",
-            position: null,
-          }));
-          return {
-            ...workflow,
-            action: {
-              ...action,
-              gptBuilder: true,
-              layout: action.layout || { mode: "AUTO" },
-              gptBuilderElements: nodes,
-            },
-          };
-        }),
-      },
-    };
-  });
+  return list(catalog).map(packageDefinition);
 }
 
 export const packageRegistrySchema = `
