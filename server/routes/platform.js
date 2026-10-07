@@ -3244,7 +3244,33 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const type = String(interaction.type || "");
     const trace = [{ kind: "page", status: "started", at: new Date().toISOString(), detail: { nodeId: req.body?.nodeId || null } }, { kind: "component", status: "started", at: new Date().toISOString(), detail: { nodeId: req.body?.nodeId || null } }, { kind: "event", status: "started", at: new Date().toISOString(), detail: { event: req.body?.event || "click", interactionType: type } }];
     try {
-      if (!["workflow","screen_flow"].includes(type)) return res.status(422).json({ success:false,message:"Page Test rollback currently executes Flow-backed interactions only",data:{rolledBack:true,trace} });
+      const clientOnlyTypes = new Set(["none", "component", "navigate", "form_layout"]);
+      if (clientOnlyTypes.has(type) || !type) {
+        const eventValue = req.body?.eventValue;
+        trace.push({ kind: "permission", status: "passed", at: new Date().toISOString(), detail: { companyId: req.user.companyId, storeId: req.user.storeId || null } });
+        trace.push({ kind: "interaction", status: type === "none" || !type ? "skipped" : "completed", at: new Date().toISOString(), detail: { type: type || "none", operation: interaction.operation || null, targetNodeId: interaction.targetNodeId || null, navigationTarget: interaction.navigationTarget || null, formLayoutId: interaction.formLayoutId || null, value: eventValue, changes: req.body?.changes || null } });
+        trace.push({ kind: "ui_refresh", status: "simulated", at: new Date().toISOString(), detail: { componentOnly: type === "component", navigationOnly: type === "navigate", formOnly: type === "form_layout" } });
+        trace.push({ kind: "rollback", status: "not_required", at: new Date().toISOString(), detail: { databaseChanges: "none", transaction: "not_started" } });
+        trace.push({ kind: "timing", status: "completed", at: new Date().toISOString(), detail: { durationMs: Date.now() - startedAt } });
+        return res.json({ success: true, data: { status: "COMPLETED", rolledBack: false, externalActionsSimulated: true, trace, durationMs: Date.now() - startedAt } });
+      }
+      if (type === "action") {
+        const actionKey = String(interaction.actionKey || "").trim();
+        if (!actionKey) return res.status(400).json({ success: false, message: "A registered action key is required", data: { rolledBack: false, trace } });
+        const core = listRegisteredPlatformActions().find((item) => item.key === actionKey);
+        if (!core) return res.status(404).json({ success: false, message: "Registered action not found", data: { rolledBack: false, trace } });
+        if (["RECORD_SAVE", "RECORD_DELETE", "WORKFLOW"].includes(core.key)) return res.status(422).json({ success: false, message: "Use the canonical record or Workflow test path for this action", data: { rolledBack: false, trace } });
+        for (const requiredPermission of core.requiredPermissions || []) {
+          if (!(await hasExecutionPermission(req, requiredPermission))) return res.status(403).json({ success: false, message: `You do not have permission to execute ${core.displayName || core.key}`, data: { rolledBack: false, trace } });
+        }
+        if (!getWorkflowActionDefinition(core.key)) return res.status(422).json({ success: false, message: "Registered action handler is unavailable", data: { rolledBack: false, trace } });
+        trace.push({ kind: "permission", status: "passed", at: new Date().toISOString(), detail: { actionKey: core.key, requiredPermissions: core.requiredPermissions || [] } });
+        trace.push({ kind: "action", status: "validated", at: new Date().toISOString(), detail: { actionKey: core.key, config: interaction.config || {}, execution: "suppressed_in_rollback_test" } });
+        trace.push({ kind: "rollback", status: "not_required", at: new Date().toISOString(), detail: { databaseChanges: "none", externalSideEffects: "suppressed" } });
+        trace.push({ kind: "timing", status: "completed", at: new Date().toISOString(), detail: { durationMs: Date.now() - startedAt } });
+        return res.json({ success: true, data: { status: "COMPLETED", rolledBack: false, externalActionsSimulated: true, trace, durationMs: Date.now() - startedAt } });
+      }
+      if (!["workflow", "screen_flow"].includes(type)) return res.status(400).json({ success: false, message: "Unsupported page interaction type", data: { rolledBack: false, trace } });
       const workflowUuid=String(interaction.workflowUuid||"");
       if(!recordIdIsValid(workflowUuid)) return res.status(400).json({success:false,message:"A valid Flow reference is required"});
       const workflowResult=await db("SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",[workflowUuid,req.user.companyId]);
