@@ -640,13 +640,14 @@ function configText(config, keys, fallback = "") {
   return fallback;
 }
 
-function GenericPageComponentView({ node, builderMode, onButtonClick }) {
+function GenericPageComponentView({ node, builderMode, onButtonClick, runtimeValue, onValueChange }) {
   const key = node.componentKey;
   const config = node.config || {};
   const title = node.title || config.title || config.label || node.label || key.replace(/_/g, " ");
   const action = () => { if (!builderMode) onButtonClick?.(node); };
   const options = Array.isArray(config.options) ? config.options : Array.isArray(config.items) ? config.items : [];
-  const disabled = builderMode || config.disabled === true;
+  const disabled = builderMode || node.enabled === false || node.readOnly === true || config.disabled === true;
+  const setValue = (value) => { if (!builderMode && !disabled) onValueChange?.(node, value); };
 
   if (key === "card") return <div className="rounded-xl border bg-white p-4 shadow-sm"><div className="text-sm font-semibold">{title}</div>{config.subtitle ? <div className="mt-1 text-xs text-slate-500">{String(config.subtitle)}</div> : null}</div>;
   if (key === "grid") return <div className="grid gap-2 rounded-xl border border-dashed p-3" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(6, Number(config.columns) || 2))}, minmax(0,1fr))` }}>{Array.from({length:Math.max(2,Math.min(6,Number(config.columns)||2))}).map((_,i)=><div key={i} className="h-10 rounded bg-slate-100" />)}</div>;
@@ -665,15 +666,15 @@ function GenericPageComponentView({ node, builderMode, onButtonClick }) {
   if (key === "icon") return <div className="flex items-center gap-2 text-sm"><span className="text-xl">{config.icon||"◈"}</span>{config.label||title}</div>;
   if (key === "qr_code") return <div className="inline-flex flex-col items-center gap-2"><div className="grid h-24 w-24 grid-cols-6 gap-0.5 bg-white p-2 ring-1 ring-slate-200">{Array.from({length:36}).map((_,i)=><span key={i} className={i%3===0||i%7===0?"bg-slate-900":"bg-white"}/>)}</div>{config.label?<span className="text-xs">{String(config.label)}</span>:null}</div>;
   if (key === "barcode") return <div className="inline-flex flex-col items-center gap-1"><div className="flex h-16 items-stretch gap-px bg-white p-2 ring-1 ring-slate-200">{Array.from({length:28}).map((_,i)=><span key={i} className="bg-slate-900" style={{width:i%4===0?3:1}}/>)}</div>{config.showValue!==false?<span className="text-[10px]">{configText(config,["valueBinding"],"000000000000")}</span>:null}</div>;
-  if (key === "search_box") return <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder={config.placeholder||"Search…"} disabled={disabled}/>;
-  if (key === "toggle") return <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" disabled={disabled}/>{config.label||title}</label>;
-  if (key === "radio_group") return <div className={`flex gap-3 ${config.orientation==="vertical"?"flex-col":""}`}>{(options.length?options:["Option 1","Option 2"]).map((item,i)=><label key={i} className="inline-flex items-center gap-1.5 text-sm"><input type="radio" disabled name={node.id}/>{typeof item==="object"?(item.label||item.value):String(item)}</label>)}</div>;
-  if (key === "slider") return <div><input className="w-full" type="range" min={config.min??0} max={config.max??100} step={config.step??1} disabled={disabled}/></div>;
+  if (key === "search_box") return <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder={config.placeholder||"Search…"} value={runtimeValue ?? ""} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(event.target.value)}/>;
+  if (key === "toggle") return <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(runtimeValue)} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(event.target.checked)}/>{config.label||title}</label>;
+  if (key === "radio_group") return <div className={`flex gap-3 ${config.orientation==="vertical"?"flex-col":""}`}>{(options.length?options:["Option 1","Option 2"]).map((item,i)=><label key={i} className="inline-flex items-center gap-1.5 text-sm"><input type="radio" disabled={disabled} name={node.id} checked={String(runtimeValue??"")===String(typeof item==="object"?(item.value??item.label):item)} onChange={()=>setValue(typeof item==="object"?(item.value??item.label):item)}/>{typeof item==="object"?(item.label||item.value):String(item)}</label>)}</div>;
+  if (key === "slider") return <div><input className="w-full" type="range" min={config.min??0} max={config.max??100} step={config.step??1} value={runtimeValue ?? config.min ?? 0} disabled={disabled} onChange={(event)=>setValue(Number(event.target.value))}/></div>;
   if (key === "file_upload") return <label className="block rounded-lg border border-dashed p-4 text-center text-xs text-slate-500">Choose files<input type="file" className="hidden" multiple={config.multiple===true} disabled={disabled}/></label>;
   if (key === "pin_input") return <div className="flex gap-1.5">{Array.from({length:Math.max(1,Math.min(12,Number(config.length)||4))}).map((_,i)=><input key={i} className="h-9 w-9 rounded border text-center" disabled={disabled} maxLength={1}/>)}</div>;
-  if (["select","multi_select"].includes(key)) return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><select className="w-full rounded-lg border bg-white px-3 py-2 text-sm" multiple={key==="multi_select"} disabled={disabled}><option>{config.placeholder||"Select…"}</option>{options.map((item,i)=><option key={i}>{typeof item==="object"?(item.label||item.value):String(item)}</option>)}</select></label>;
-  if (key === "time_input") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="time" step={config.step||undefined} disabled={disabled}/></label>;
-  if (key === "date_picker") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="date" min={config.min||undefined} max={config.max||undefined} disabled={disabled}/></label>;
+  if (["select","multi_select"].includes(key)) return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><select className="w-full rounded-lg border bg-white px-3 py-2 text-sm" multiple={key==="multi_select"} disabled={disabled} required={node.required===true} value={key==="multi_select"?(Array.isArray(runtimeValue)?runtimeValue:[]):(runtimeValue??"")} onChange={(event)=>setValue(key==="multi_select"?Array.from(event.target.selectedOptions).map((option)=>option.value):event.target.value)}><option>{config.placeholder||"Select…"}</option>{options.map((item,i)=><option key={i} value={typeof item==="object"?(item.value??item.label):String(item)}>{typeof item==="object"?(item.label||item.value):String(item)}</option>)}</select></label>;
+  if (key === "time_input") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="time" step={config.step||undefined} disabled={disabled} required={node.required===true} value={runtimeValue??""} onChange={(event)=>setValue(event.target.value)}/></label>;
+  if (key === "date_picker") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="date" min={config.min||undefined} max={config.max||undefined} disabled={disabled} required={node.required===true} value={runtimeValue??""} onChange={(event)=>setValue(event.target.value)}/></label>;
   if (key === "pagination") return <div className="flex items-center justify-center gap-2 text-xs"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Previous</button><span>1</span><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Next</button></div>;
   if (key === "filter_bar") return <div className="flex flex-wrap gap-2 rounded-lg border p-2">{(Array.isArray(config.fields)&&config.fields.length?config.fields:["Filter"]).map((field,i)=><span key={i} className="rounded bg-slate-100 px-2 py-1 text-xs">{String(field)}</span>)}</div>;
   if (["icon_button","back_button","close_button","refresh_button","navigation_button"].includes(key)) return <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled={disabled} onClick={action}><span>{config.icon||({back_button:"←",close_button:"×",refresh_button:"↻"}[key]||"◈")}</span>{config.label||title}</button>;
@@ -690,7 +691,7 @@ function GenericPageComponentView({ node, builderMode, onButtonClick }) {
   return <div className="rounded-lg border border-dashed p-3 text-sm text-slate-500">{title}</div>;
 }
 
-function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
+function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, onValueChange, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
   if (node.visible === false && !builderMode) return null;
   const interactive = node.enabled !== false && node.readOnly !== true;
@@ -751,13 +752,13 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
-  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} />;
+  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={guardedRecordClick} builderMode={builderMode} />;
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
-        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} data={data} runtimeOverrides={runtimeOverrides} />)}
+        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} data={data} runtimeOverrides={runtimeOverrides} />)}
       </div>
     );
   }
@@ -934,6 +935,10 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     if (!applyComponentInteraction({ record: null, node })) onButtonClick?.(node);
   };
 
+  const handleValueChange = (node, value) => {
+    setRuntimeOverrides((current) => ({ ...current, [node.id]: { ...(current[node.id] || {}), value } }));
+  };
+
   const recordNodes = useMemo(() => {
     const nodes = [];
     for (const section of sections) {
@@ -989,6 +994,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                     builderMode={builderMode}
                     onRecordClick={handleRecordClick}
                     onButtonClick={handleButtonClick}
+                    onValueChange={handleValueChange}
                     data={runtimeOverrides[node.id]?.record
                       ? { ...collectionState, [node.id]: { ...(collectionState[node.id] || {}), records: [runtimeOverrides[node.id].record], total: 1, loading: false, error: "", placeholder: false } }
                       : collectionState}
