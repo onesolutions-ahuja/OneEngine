@@ -3106,8 +3106,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const params = [];
       if (object.company_scoped) { params.push(req.user.companyId); clauses.push(`company_id=${params.length}`); }
       if (object.store_scoped) { params.push(req.user.storeId); clauses.push(`store_id=${params.length}`); }
-      const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "read", paramsOffset: params.length });
-      if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
 
       /*
        * Collection conditions — canonical condition engine.
@@ -3168,6 +3166,10 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       let conditionClauses = conditionClauseCount > 0 ? clauses.splice(scopeClauseCount, conditionClauseCount) : [];
       if (conditionClauses.length && conditionMatch === "any") conditionClauses = [`(${conditionClauses.join(" OR ")})`];
       clauses.push(...conditionClauses);
+      // Sharing is mandatory scope, so append it only after optional collection
+      // conditions have been grouped; it must never participate in Match ANY.
+      const sharing = await buildPlatformSharingScope({ db, object, fields, req, access: "read", paramsOffset: params.length });
+      if (sharing.sql) { clauses.push(sharing.sql); params.push(...sharing.params); }
       // Canonical metadata/system read scope. Do not duplicate business-object
       // special cases here; appendSystemReadScope is the shared policy boundary.
       appendSystemReadScope(object, req, clauses, params);
