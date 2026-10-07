@@ -1,12 +1,8 @@
 import { getWorkflowActionRegistry } from "./platformWorkflow.js";
 
-// Canonical generic platform actions are safe to initialize independently.
-// Workflow actions are resolved lazily so the workflow runtime can depend on
-// durable jobs without creating an initialization cycle through Trusted Runtime.
-const CORE_ACTIONS = Object.freeze([
-  { key: "RECORD_SAVE", displayName: "Save Record", description: "Run the canonical create/update record save pipeline." },
-  { key: "RECORD_DELETE", displayName: "Delete Record", description: "Run the canonical record delete pipeline." },
-]);
+// Action choices are supplied by the canonical workflow/core-function registry.
+// This module must not own a second static action catalogue.
+const CORE_ACTIONS = Object.freeze([]);
 
 export const PLATFORM_ACTION_REGISTRY = CORE_ACTIONS;
 export const PLATFORM_ACTION_MAP = new Map(PLATFORM_ACTION_REGISTRY.map((item) => [item.key, item]));
