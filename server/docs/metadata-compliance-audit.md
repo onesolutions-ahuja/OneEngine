@@ -17,7 +17,7 @@
 | Action Registry / Buttons / Workflows | `services/platformActionRegistry.js`, `platformButtonRegistry.js`, `platformWorkflow.js`; execute endpoints `.../buttons/:key/execute`, `.../actions/:key/execute`, `/platform/runtime/page-interactions/execute` |
 | Reports | `platform_reports` metadata + generic engine (`services/reportableSources.js`, `routes/reports.js`), Custom Report Builder `CustomReportsAdmin.jsx` |
 | Dashboards | `/api/dashboards` definitions + `/run` engine (`routes/dashboardBuilder.js`, `services/dashboardBuilder.js`); runtime `DashboardGrid` reads saved metadata |
-| Navigation | server-filtered `/api/platform/runtime/app-catalog` (modules + `objectPages`) → `navCatalogue.js` → `DockHost`/`AdminNavDock`/`AdminShell`; configured Object pages via `platformObjectNavigation.js` |
+| Navigation | server-filtered `/api/platform/runtime/app-catalog` (modules + `objectPages`) → `navCatalogue.js` → `DockHost`/`AdminNavDock`/`AdminShell`; configured Object pages via the metadata runtime navigation layer |
 | Packages / Apps | `package_registry`, `company_package_installations`, dependencies, entitlements (`services/packageRegistry.js`, `packageEntitlements.js`); oneStore storefront + App Launcher consume the same payloads |
 | Settings host for Objects | `SettingsObjectHost.jsx` capability (currently zero entries enabled) |
 
@@ -47,7 +47,7 @@ Each finding: Area · Screen · Files · What is hard-coded · Why it violates t
 - **Files:** `src/pages/admin/AdminLayout.jsx` lines ~108–135 (`CATALOG_MODULE_BY_PAGE`, re-declared) and lines ~1190–1450 (the `page === "..."` render ladder with per-page `Access denied` JSX); duplicated again in `src/utils/navCatalogue.js` lines 27–49 (`CATALOG_MODULE_BY_PAGE` copy #2)
 - **Hard-coded:** mapping of 21 page names → module keys, plus per-page `isAdmin || permissions.includes(...)` gates re-implemented in JSX; 25-branch `page ===` component ladder.
 - **Why:** the runtime app-catalog endpoint (`routes/platform.js:3244`) is the authoritative module filter (install + company enablement + licence + permission). Duplicating the map client-side means a package rename/duplicate module key silently breaks filtering, and the two copies of `CATALOG_MODULE_BY_PAGE` can drift (they already exist as two files). Hard-coded permission ladders are weaker/parallel to the server's `moduleRuntimeAccess` decision.
-- **Reuse:** `/api/platform/runtime/app-catalog` `data` entries already carry `module_key`, `route`, permissions; `platformObjectNavigation.js` already shows the correct pattern for Object pages.
+- **Reuse:** `/api/platform/runtime/app-catalog` `data` entries already carry `module_key`, `route`, permissions; the metadata runtime navigation layer already shows the correct pattern for Object pages.
 - **Migration:** derive the page→module mapping (and route) from catalog entries keyed by `route`; collapse the render ladder into a page-registry map `{ page: { component, permission } }`. Effort MEDIUM.
 - **Severity:** CRITICAL (dual maintenance of the security/visibility model) · **Effort:** MEDIUM
 
