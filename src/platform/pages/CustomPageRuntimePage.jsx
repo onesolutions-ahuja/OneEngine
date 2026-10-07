@@ -88,11 +88,17 @@ export default function CustomPageRuntimePage({ pageKey }) {
   if(error&&!page)return <div className="onepos-empty">{error}</div>;
   if(!page)return <div className="onepos-empty">Loading page…</div>;
   const definition=normalizeCustomPageTree(page.definition||{});
+  const pageContext={
+    params:Object.fromEntries(new URLSearchParams(window.location.search).entries()),
+    variables:Object.fromEntries((definition.resources?.variables||[]).map((variable)=>[variable.key,variable.defaultValue??null])),
+    components:{},
+    flows:{},
+  };
   return <section className="onepos-page space-y-4">
     <div className="onepos-page-header"><div><h1 className="onepos-page-title">{page.label||page.page_key}</h1>{page.description?<p className="onepos-page-subtitle">{page.description}</p>:null}</div></div>
     {error?<div className="onepos-alert onepos-alert-error">{error}</div>:null}
     {busy?<div className="text-xs opacity-70">Running action…</div>:null}
-    <CustomPageRenderer definition={definition} device="desktop" onRecordClick={({record,node})=>execute({record,node})} onButtonClick={(node)=>execute({node})}/>
+    <CustomPageRenderer definition={definition} device="desktop" pageContext={pageContext} onRecordClick={({record,node})=>execute({record,node})} onButtonClick={(node)=>execute({node})}/>
     {formAction?<FormLayoutModal action={formAction} onClose={()=>setFormAction(null)} onSaved={()=>{}}/>:null}
     {screenFlowAction?<ScreenFlowModal action={screenFlowAction} onClose={()=>setScreenFlowAction(null)} onComplete={(result)=>window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:screenFlowAction.nodeId,interactionType:"screen_flow",runId:result?.runId||null,status:result?.status||"COMPLETED",output:result?.variables||result}}))}/>:null}
   </section>;
