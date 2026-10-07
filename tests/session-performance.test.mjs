@@ -419,3 +419,14 @@ test('Settings loads values only for the active metadata section', async () => {
   assert.match(source, /rowsLoaded === true/)
   assert.match(source, /void loadSectionedRows\(current\.object\)/)
 })
+
+test('Settings host metadata keeps object permission checks and fields behind a bounded parallel loader', async () => {
+  const source = await read('../server/routes/platform.js')
+  const start = source.indexOf('router.get("/platform/runtime/settings-hosts"')
+  const end = source.indexOf('\n\n  async function assertWorkflowActionPermissions', start)
+  const route = source.slice(start, end)
+  assert.match(route, /const batchSize = 3/)
+  assert.match(route, /Promise\.all\(hostRows\.slice\(offset, offset \+ batchSize\)\.map\(async \(object\)/)
+  assert.ok(route.indexOf('hasPlatformObjectPermission(db, req, object.id, "view")') < route.indexOf('SELECT * FROM platform_fields'))
+  assert.match(route, /hasPlatformObjectPermission\(db, req, object\.id, "create"\)[\s\S]*hasPlatformObjectPermission\(db, req, object\.id, "edit"\)[\s\S]*hasPlatformObjectPermission\(db, req, object\.id, "delete"\)/)
+})
