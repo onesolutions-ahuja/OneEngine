@@ -15,7 +15,8 @@ import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs, enqueuePlatformJob } from "./services/platformJobs.js";
 import { processApprovalDueJob } from "./services/platformApprovals.js";
-import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
+import { createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
+import { assertPlatformJobKind } from "./services/platformJobKinds.js";
 import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
 import { claimDueScheduledWorkflows, completeScheduledWorkflow, failScheduledWorkflow } from "./services/platformSchedules.js";
@@ -2728,7 +2729,7 @@ async function startServer() {
             }
           },
           handler: async (job) => {
-            assertTrustedJobKind(job.kind);
+            assertPlatformJobKind(job.kind);
             if (job.kind === "WAIT") {
               const payload = job.payload || {};
               if (payload.scheduledPath === true) {
