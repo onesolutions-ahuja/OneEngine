@@ -5717,8 +5717,8 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       const rawSuppliedInputs = req.body?.inputs && typeof req.body.inputs === "object" && !Array.isArray(req.body.inputs) ? req.body.inputs : {};
       const pageContext = req.body?.pageContext && typeof req.body.pageContext === "object" && !Array.isArray(req.body.pageContext) ? req.body.pageContext : {};
       const suppliedInputs = resolvePageBindingTree(rawSuppliedInputs, {
-        user: req.user,
-        record,
+        currentUser: req.user,
+        currentRecord: record,
         pageParameters: pageContext.params || {},
         pageVariables: pageContext.variables || {},
         components: pageContext.components || {},
