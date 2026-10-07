@@ -25,7 +25,7 @@ test("Phase 3B certifies all fifteen business scenarios through the same generic
   for (const operation of ["set_record","filter_collection","set_value","refresh"]) {
     assert.ok(renderer.includes(operation), `missing generic component operation: ${operation}`);
   }
-  for (const primitive of ["CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","ASSIGNMENT","DECISION","LOOP","WAIT","RUN_SUBFLOW","SEND_COMMUNICATION"]) {
+  for (const primitive of ["CREATE_RECORD","UPDATE_RECORD","DELETE_RECORD","ASSIGNMENT","CONDITION","LOOP","WAIT","RUN_SUBFLOW","SEND_COMMUNICATION"]) {
     assert.ok(workflow.includes(primitive), `missing generic Flow primitive: ${primitive}`);
   }
   assert.match(route, /resolvePageBindingTree/);
