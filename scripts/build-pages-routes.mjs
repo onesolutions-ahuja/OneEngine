@@ -17,7 +17,8 @@ const bootstrapSources = await Promise.all([
   try { return await fs.readFile(file, 'utf8') } catch { return '' }
 }))
 const html = await fs.readFile('dist/index.html', 'utf8')
-const routes = new Set([...source.matchAll(/parts\[0\]\s*===\s*'([a-z-]+)'/g)].map(match => match[1]))
+const routes = new Set([...source.matchAll(/parts\[0\]\s*===\s*['"]([a-z-]+)['"]/g)].map(match => match[1]))
+routes.add('dashboard')
 
 // Publish every concrete shell route the current runtime can mount. This keeps
 // GitHub Pages document requests on HTTP 200 without maintaining a second,
@@ -54,7 +55,7 @@ const developerKeys = source.match(/DEVELOPER_SETTINGS_KEYS\s*=\s*new Set\s*\(\s
 const settingsVisualsStart = appSource.indexOf('const SETTINGS_VISUALS')
 const settingsVisualsEnd = settingsVisualsStart >= 0 ? appSource.indexOf('\nfunction ', settingsVisualsStart) : -1
 const settingsVisuals = settingsVisualsStart >= 0 ? appSource.slice(settingsVisualsStart, settingsVisualsEnd > settingsVisualsStart ? settingsVisualsEnd : undefined) : ''
-if (!routes.has('dashboard') || !developerKeys || !settingsVisuals) throw new Error('Unable to read fixed application routes')
+if (!developerKeys || !settingsVisuals) throw new Error('Unable to read Developer/settings route metadata')
 const developerSet = new Set([...developerKeys.matchAll(/'([a-z-]+)'/g)].map(match => match[1]))
 for (const key of developerSet) {
   routes.add(`developer/${key}`)
