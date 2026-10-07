@@ -36,7 +36,7 @@ export function readRoute() {
   // authorization error even though the URL is the root.
   const parts = routePath.split('/').filter(Boolean)
   if (parts[0] === 'settings') {
-    const section = !parts[1] || parts[1] === 'general' ? 'company' : parts[1]
+    const section = parts[1] && parts[1] !== 'general' ? parts[1] : ''
     if (DEVELOPER_SETTINGS_KEYS.has(section)) {
       const developerSection = section === 'platform' || section === 'workflow-builder' ? 'gptbuilder' : section
       return { app: 'developer', section: developerSection }
