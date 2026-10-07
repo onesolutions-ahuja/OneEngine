@@ -983,7 +983,7 @@ function validAssignmentDates(body) {
     && (!fromDate || !untilDate || untilDate > fromDate);
 }
 
-export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyCustomers = async () => false, hasPermission = null }) {
+export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyScope = async () => false, hasPermission = null }) {
   const router = express.Router();
 
   // Express 4 does not forward rejected async route promises to error
@@ -1058,7 +1058,7 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   // /platform metadata request (objects, fields, relationships, etc.).
   async function resolvePlatformCompanyCustomerScope(req, res, next) {
     try {
-      req.platformCompanyCustomers = await canViewCompanyCustomers(req.user, req);
+      req.platformCompanyScope = await canViewCompanyScope(req.user, req);
       next();
     } catch (error) {
       next(error);
@@ -3184,7 +3184,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       let conditionClauses = conditionClauseCount > 0 ? clauses.splice(scopeClauseCount, conditionClauseCount) : [];
       if (conditionClauses.length && conditionMatch === "any") conditionClauses = [`(${conditionClauses.join(" OR ")})`];
       clauses.push(...conditionClauses);
-      if (["customers"].includes(object.source_table) && !req.platformCompanyCustomers) {
+      if (["customers"].includes(object.source_table) && !req.platformCompanyScope) {
         /* Mirror the appendSystemReadScope customer-store rule for record feeds. */
         if (!req.user.storeId) return res.status(403).json({ success: false, message: "A store session is required" });
         params.push(req.user.storeId, req.user.companyId);
