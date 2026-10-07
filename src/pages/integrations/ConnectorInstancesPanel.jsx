@@ -8,10 +8,8 @@ const inputClass = "h-9 w-full border border-slate-300 rounded px-2 text-sm";
 export default function ConnectorInstancesPanel({ packageKey: requestedPackageKey = "", settingsMode = false }) {
   const [apps, setApps] = useState([]);
   const [instances, setInstances] = useState([]);
-  const [stores, setStores] = useState([]);
   const [packageKey, setPackageKey] = useState(() => requestedPackageKey);
-  const [storeId, setStoreId] = useState("");
-  const [tillId, setTillId] = useState("");
+  const [assignment, setAssignment] = useState({});
   const [fallbackOrder, setFallbackOrder] = useState("0");
   const [configuration, setConfiguration] = useState({});
   const [loading, setLoading] = useState(true);
@@ -28,10 +26,9 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
   const selectedApp = apps.find((app) => app.package_key === packageKey);
   const schema = selectedApp?.manifest?.connectorApp?.configurationSchema || [];
   const testActions = selectedApp?.manifest?.connectorApp?.testActions || [];
-  const dedicatedName = selectedApp?.name || (requestedPackageKey === "one_connect_square" ? "One Connect - Square" : requestedPackageKey.replaceAll("_", " "));
-  const selectedStore = stores.find((store) => store.id === storeId);
-  const tills = Array.isArray(selectedStore?.tills) ? selectedStore.tills : [];
-  const companyScoped = selectedApp?.manifest?.connectorApp?.scope === "company";
+  const dedicatedName = selectedApp?.name || selectedApp?.manifest?.name || requestedPackageKey.replaceAll("_", " ");
+  const assignmentSchema = selectedApp?.manifest?.connectorApp?.assignmentSchema || selectedApp?.manifest?.connectorApp?.assignment_schema || [];
+  const assignmentComplete = assignmentSchema.every((field) => !field.required || String(assignment[field.key] ?? "").trim());
   const SettingsTemplate = settingsMode
     ? ConnectorSettingsCompact
     : selectedApp?.manifest?.connectorApp?.settingsUiVariant === "split"
@@ -50,11 +47,10 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
       setMessage("");
     }
     try {
-      const [connectorAppsResult, marketplaceResult, installed, storeResult] = await Promise.all([
+      const [connectorAppsResult, marketplaceResult, installed] = await Promise.all([
         apiRequest("/api/connector-apps").catch(() => ({ success: false, data: [] })),
         apiRequest("/api/packages/marketplace"),
         apiRequest("/api/connector-instances"),
-        apiRequest("/api/admin/stores"),
       ]);
       const connectorApps = Array.isArray(connectorAppsResult?.data) ? connectorAppsResult.data : [];
       const marketplaceApps = Array.isArray(marketplaceResult?.data) ? marketplaceResult.data : [];
@@ -71,7 +67,6 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
       );
       setApps(installedApps);
       setInstances((Array.isArray(installed?.data) ? installed.data : []).filter((instance) => !requestedPackageKey || instance.packageKey === requestedPackageKey));
-      setStores(Array.isArray(storeResult?.data) ? storeResult.data : []);
       if (!installedApps.some((app) => app.package_key === packageKey)) {
         setPackageKey(installedApps[0]?.package_key || "");
       }
@@ -92,8 +87,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     setConfiguration({ ...defaults, ...persisted });
     if (existingInstance) {
       setFallbackOrder(String(existingInstance.fallbackOrder ?? 0));
-      setStoreId(existingInstance.storeId || "");
-      setTillId(existingInstance.tillId || "");
+      setAssignment(Object.fromEntries(assignmentSchema.map((field) => [field.key, existingInstance?.[field.key] ?? existingInstance?.assignment?.[field.key] ?? field.default ?? ""])));
       if (settingsMode) setSettingsEditMode("view");
     } else if (settingsMode && packageKey) {
       setSettingsEditMode("add");
@@ -113,8 +107,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
         method: existingInstance ? "PUT" : "POST",
         body: JSON.stringify({
           ...(existingInstance ? {} : { packageKey }),
-          storeId: companyScoped ? null : storeId,
-          tillId: companyScoped ? null : tillId,
+          ...assignment,
           fallbackOrder: Number(fallbackOrder),
           configuration,
         }),
@@ -208,8 +201,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
       .map((field) => [field.key, field.default]));
     setConfiguration({ ...defaults, ...(existingInstance?.configuration || {}) });
     setFallbackOrder(String(existingInstance?.fallbackOrder ?? 0));
-    setStoreId(existingInstance?.storeId || "");
-    setTillId(existingInstance?.tillId || "");
+    setAssignment(Object.fromEntries(assignmentSchema.map((field) => [field.key, existingInstance?.[field.key] ?? existingInstance?.assignment?.[field.key] ?? field.default ?? ""])));
     setSettingsEditMode(existingInstance ? "view" : "add");
     setError("");
     setMessage("");
@@ -294,26 +286,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
           <form onSubmit={createInstance} className="connector-settings-template-form">
             <div className="connector-settings-fields-grid">
               {credentialFirstSchema.map((field) => renderSettingsField(field, disabled))}
-              {!companyScoped ? (
-                <>
-                  <label className="connector-settings-field">
-                    <span className="connector-settings-field-label">Store *</span>
-                    <select disabled={disabled} required value={storeId} onChange={(event) => { setStoreId(event.target.value); setTillId(""); }}>
-                      <option value="">Select store</option>
-                      {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-                    </select>
-                    <ConnectorFieldHelp description="Choose the store this connector is assigned to." />
-                  </label>
-                  <label className="connector-settings-field">
-                    <span className="connector-settings-field-label">Till / terminal *</span>
-                    <select disabled={disabled} required value={tillId} onChange={(event) => setTillId(event.target.value)}>
-                      <option value="">Select till</option>
-                      {tills.map((till) => <option key={till.id} value={till.id}>{till.name || till.terminalNumber}</option>)}
-                    </select>
-                    <ConnectorFieldHelp description="Choose the till or terminal that will use this connector." />
-                  </label>
-                </>
-              ) : null}
+              {assignmentSchema.map((field) => <label key={field.key} className="connector-settings-field"><span className="connector-settings-field-label">{field.label || field.key}{field.required ? " *" : ""}</span>{Array.isArray(field.options) ? <select disabled={disabled} required={field.required} value={assignment[field.key] ?? field.default ?? ""} onChange={(event) => setAssignment((current) => ({ ...current, [field.key]: event.target.value }))}><option value="">Select…</option>{field.options.map((option) => { const value = typeof option === "object" ? option.value : option; const label = typeof option === "object" ? option.label : option; return <option key={String(value)} value={value}>{label}</option> })}</select> : <input disabled={disabled} required={field.required} value={assignment[field.key] ?? field.default ?? ""} onChange={(event) => setAssignment((current) => ({ ...current, [field.key]: event.target.value }))}/>}<ConnectorFieldHelp description={field.description || `Choose ${String(field.label || field.key).toLowerCase()}.`} /></label>)}
               <label className="connector-settings-field">
                 <span className="connector-settings-field-label">Fallback order</span>
                 <select disabled={disabled} value={fallbackOrder} onChange={(event) => setFallbackOrder(event.target.value)}>
@@ -328,7 +301,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
               mode={mode}
               saving={saving}
               onCancel={resetSettingsForm}
-              submitLabel={existingInstance ? "Save changes" : companyScoped ? "Add connection" : "Assign connector"}
+              submitLabel={existingInstance ? "Save changes" : "Add connection"}
             />
           </form>
         </SettingsTemplate>
@@ -390,8 +363,8 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
     <section className={`mb-6 border border-slate-200 rounded-lg bg-white${settingsMode ? " connector-settings-panel" : ""}`}>
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">{settingsMode ? `${dedicatedName} Settings` : "Hardware & Payment Connectors"}</h2>
-          <p className="text-xs text-slate-500">{settingsMode ? "Configure this app, assign it to a store/till, and test its connection." : "Installed connector apps and till assignments"}</p>
+          <h2 className="text-base font-semibold text-slate-900">{settingsMode ? `${dedicatedName} Settings` : "Installed Connectors"}</h2>
+          <p className="text-xs text-slate-500">{settingsMode ? "Configure this app and test its connection." : "Installed connector apps"}</p>
         </div>
         <button type="button" onClick={load} disabled={loading} title="Refresh connectors" className="h-9 w-9 grid place-items-center border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50">
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
@@ -407,7 +380,7 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
             <div className="overflow-x-auto border-b border-slate-200">
               <table className="w-full text-sm">
                 <thead><tr className="bg-slate-50 text-left text-xs text-slate-500">
-                  <th className="px-4 py-2">Connector</th><th className="px-4 py-2">Store / till</th><th className="px-4 py-2">Order</th><th className="px-4 py-2">Health</th><th className="px-4 py-2 text-right">Actions</th>
+                  <th className="px-4 py-2">Connector</th><th className="px-4 py-2">Order</th><th className="px-4 py-2">Health</th><th className="px-4 py-2 text-right">Actions</th>
                 </tr></thead>
                 <tbody>{instances.map((instance) => (
                   <tr key={instance.id} className="border-t border-slate-100">
@@ -415,7 +388,6 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                       <div className="font-medium">{instance.name}</div>
                       <div className="text-xs text-slate-500">{instance.packageKey}{instance.health?.testMode ? " · TEST ONLY" : ""}</div>
                     </td>
-                    <td className="px-4 py-2.5 text-xs">{companyScoped ? "Company" : `${instance.storeName || "No store"} / ${instance.tillName || "No till"}`}</td>
                     <td className="px-4 py-2.5">{instance.fallbackOrder === 0 ? "Primary" : `Backup ${instance.fallbackOrder}`}</td>
                     <td className="px-4 py-2.5">
                       <span className={instance.health?.success === true ? "text-emerald-700" : "text-amber-700"}>
@@ -503,26 +475,13 @@ export default function ConnectorInstancesPanel({ packageKey: requestedPackageKe
                   {apps.map((app) => <option key={app.package_key} value={app.package_key}>{app.name}</option>)}
                 </select>
               </label> : null}
-              {!companyScoped ? <>
-                <label className="text-xs font-medium text-slate-600">Store
-                  <select required value={storeId} onChange={(event) => { setStoreId(event.target.value); setTillId(""); }} className={`${inputClass} mt-1`}>
-                    <option value="">Select store</option>
-                    {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs font-medium text-slate-600">Till / terminal
-                  <select required value={tillId} onChange={(event) => setTillId(event.target.value)} className={`${inputClass} mt-1`}>
-                    <option value="">Select till</option>
-                    {tills.map((till) => <option key={till.id} value={till.id}>{till.name || till.terminalNumber}</option>)}
-                  </select>
-                </label>
-              </> : null}
+              {assignmentSchema.map((field) => <label key={field.key} className="text-xs font-medium text-slate-600">{field.label || field.key}{field.required ? " *" : ""}<input required={field.required} value={assignment[field.key] ?? field.default ?? ""} onChange={(event) => setAssignment((current) => ({ ...current, [field.key]: event.target.value }))} className={`${inputClass} mt-1`}/></label>)}
               <label className="text-xs font-medium text-slate-600">Fallback order
                 <select value={fallbackOrder} onChange={(event) => setFallbackOrder(event.target.value)} className={`${inputClass} mt-1`}>
                   <option value="0">Primary</option><option value="1">Backup 1</option><option value="2">Backup 2</option>
                 </select>
               </label>
-              <div className="flex items-end"><button type="submit" disabled={saving || !packageKey || (!companyScoped && (!storeId || !tillId))} className="h-9 px-3 inline-flex items-center gap-2 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"><Check size={15} />{saving ? "Saving…" : existingInstance ? "Update connection" : companyScoped ? "Save connection" : "Assign connector"}</button></div>
+              <div className="flex items-end"><button type="submit" disabled={saving || !packageKey || !assignmentComplete} className="h-9 px-3 inline-flex items-center gap-2 rounded bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 disabled:opacity-50"><Check size={15} />{saving ? "Saving…" : existingInstance ? "Update connection" : "Save connection"}</button></div>
               {schema.filter((field) => !["action","readonly","store lookup","till lookup"].includes(field.type)).map((field) => (
                 <label key={field.key} className="text-xs font-medium text-slate-600">{field.label || field.key}
                   {field.enum ? (
