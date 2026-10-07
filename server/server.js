@@ -14,7 +14,6 @@ import { seedOneSolutionsDemo } from "./database/oneSolutionsSeeder.js";
 import { createAuditWriter } from "./services/auditLog.js";
 import { createSessionToken, createAuthenticate } from "./services/session.js";
 import { drainDuePlatformJobs, enqueuePlatformJob } from "./services/platformJobs.js";
-import { processApprovalDueJob } from "./services/platformApprovals.js";
 import { assertTrustedJobKind, createTrustedRuntimeGate, validateTrustedRuntime } from "./services/trustedRuntime.js";
 import { validateTrustedPackageCatalogue } from "./services/trustedPackages.js";
 import { executeTenantReleaseUpgrade } from "./services/appReleaseManager.js";
@@ -3181,7 +3180,6 @@ async function startServer() {
                 throw error;
               }
             }
-            if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
             const actionKey = String(payload.type || payload.key || "").toUpperCase();
             if (!actionKey) throw Object.assign(new Error("Platform action job is missing an action key"), { retryable: false });
             const execution = await executeSystemAction({
