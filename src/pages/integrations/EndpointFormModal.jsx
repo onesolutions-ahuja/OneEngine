@@ -68,7 +68,7 @@ export default function EndpointFormModal({ integration, endpoint, onClose, onSa
             <p className="text-xs text-slate-400 -mt-1.5">{ENTITY_EVENT_HINT}</p>
             <label className="block">
               <span className="block text-xs font-medium text-slate-600 mb-1">URL / path *</span>
-              <input required value={path} onChange={(e) => setPath(e.target.value)} placeholder="/v3/sales" className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input required value={path} onChange={(e) => setPath(e.target.value)} placeholder="/v1/resources" className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </label>
             <p className="text-xs text-slate-400">Authentication is inherited from the connection.</p>
             <label className="flex items-center gap-2 text-sm text-slate-700">
