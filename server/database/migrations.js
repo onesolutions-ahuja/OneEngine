@@ -37,6 +37,7 @@ export const CORE_DATABASE_MIGRATION_KEYS = Object.freeze([
   "0044_canonical_data_schema_ledgers",
   "0045_sale_ledger_consolidation",
   "0046_purchase_and_sales_order_consolidation",
+  "0047_platform_component_registrations",
 ]);
 
 const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
