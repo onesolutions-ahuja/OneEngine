@@ -1468,7 +1468,6 @@ export default function createConnectorsRouter({
       let result = execution.result?.result || execution.result || null;
 
       // Inbound SMS requires a provider-side sms:received webhook. Reconcile it
-      // immediately after a successful SMSGate connection test so connectors
       // configured after process startup do not remain outbound-only.
       
 
