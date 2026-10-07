@@ -17,10 +17,6 @@ const ACTIONS = [
   { value: "validate", label: "Legacy Validate (configuration only)" },
   { value: "set_field", label: "Set Field" },
   { value: "show_message", label: "Show Message" },
-  { value: "SEND_EMAIL", label: "Send Email" },
-  { value: "SEND_SMS", label: "Send SMS" },
-  { value: "SEND_WHATSAPP", label: "Send WhatsApp" },
-  { value: "CALL_WEBHOOK", label: "Call Connector Webhook" },
   { value: "restrict", label: "Restrict" },
 ];
 
