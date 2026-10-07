@@ -62,7 +62,7 @@ import createConnectorsRouter from "./routes/connectors.js";
 import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
-import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
+import { createSmsGateDriver } from "./services/smsGateConnector.js";
 import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
@@ -437,27 +437,12 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
 connectorDrivers.register(createReferencePaymentDriver());
 connectorDrivers.register(createSmsGateDriver());
 connectorDrivers.register(createBrevoDriver());
 connectorDrivers.register(createMailjetDriver());
 app.locals.connectorDrivers = connectorDrivers;
-
-async function testPaymentTerminal(terminal) {
-  if (!terminal || !terminal.active || !terminal.provider || !terminal.connection_url) {
-    return { status: "NOT_CONFIGURED", message: "Not configured" };
-  }
-
-  const provider = paymentProviders.get(terminal.provider.toLowerCase());
-
-  if (!provider) {
-    return { status: "PROVIDER_NOT_SUPPORTED", message: "Provider not supported" };
-  }
-
-  return provider.testConnection(terminal);
-}
 
 /*
  * Audit logging must never break the operation being audited - see
@@ -2395,86 +2380,8 @@ async function startServer() {
     });
     console.log("onePOS: identity bootstrap ready");
 
-    // Reconcile SMSGate inbound webhooks after the HTTP listener is live. This
-    // is idempotent: existing callbacks are reused, while missing callbacks
-    // are created. Signing keys stay encrypted in integration credentials.
-    setTimeout(async () => {
-      try {
-        const rows = await pool.query(
-          `SELECT id,connector_configuration,credentials_encrypted,enabled
-             FROM integration_connections
-            WHERE connector_package_key='smsgate_connector'
-              AND enabled=TRUE`
-        );
-        for (const row of rows.rows) {
-          try {
-          const configuration = typeof row.connector_configuration === "string"
-            ? JSON.parse(row.connector_configuration || "{}")
-            : (row.connector_configuration || {});
-          const secrets = (() => {
-            try { return decryptCredentials(row.credentials_encrypted) || {}; }
-            catch { return {}; }
-          })();
-          const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
-          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}/${webhookToken}`;
-
-          const webhook = await configureSmsGateInboundWebhook(
-            { ...configuration, ...secrets },
-            { webhookUrl }
-          );
-
-          const nextSecrets = { ...secrets, webhookToken };
-          await pool.query(
-            `UPDATE integration_connections
-                SET credentials_encrypted=$1,
-                    connector_configuration=connector_configuration - 'webhookSigningKey',
-                    enabled=CASE
-                      WHEN COALESCE((connector_configuration->>'enabled')::boolean,FALSE)=TRUE THEN TRUE
-                      ELSE enabled
-                    END,
-                    updated_at=NOW()
-              WHERE id=$2`,
-            [encryptCredentials(nextSecrets), row.id]
-          );
-
-          console.log(`onePOS: SMSGate inbound webhook ready (${webhook.created ? "created" : "existing"}) connection=${row.id} staleRemoved=${webhook.removedStale || 0}`);
-          const diagnostics = await getSmsGateDiagnostics({ ...configuration, ...nextSecrets }).catch((error) => ({ error: error?.message || String(error) }));
-          const webhookRows = Array.isArray(diagnostics?.webhooks)
-            ? diagnostics.webhooks
-            : Array.isArray(diagnostics?.webhooks?.data)
-              ? diagnostics.webhooks.data
-              : Array.isArray(diagnostics?.webhooks?.webhooks)
-                ? diagnostics.webhooks.webhooks
-                : [];
-          const relevantWebhook = webhookRows.find((item) =>
-            String(item?.url || "") === webhookUrl
-              && String(item?.event || "").toLowerCase() === "sms:received"
-          );
-          const logRows = Array.isArray(diagnostics?.logs)
-            ? diagnostics.logs
-            : Array.isArray(diagnostics?.logs?.data)
-              ? diagnostics.logs.data
-              : Array.isArray(diagnostics?.logs?.logs)
-                ? diagnostics.logs.logs
-                : [];
-          console.log("onePOS: SMSGate diagnostics", {
-            webhookRegistered: Boolean(relevantWebhook),
-            webhookCount: webhookRows.length,
-            recentProviderLogs: logRows.slice(-8).map((entry) => ({
-              level: entry?.level || entry?.type || null,
-              message: String(entry?.message || entry?.event || entry?.action || "").slice(0, 180),
-              createdAt: entry?.createdAt || entry?.created_at || entry?.timestamp || null,
-            })),
-            providerLogError: diagnostics?.logs?.error || diagnostics?.error || null,
-          });
-          } catch (rowError) {
-            console.error(`onePOS: SMSGate inbound webhook reconciliation failed connection=${row.id}:`, rowError?.message || rowError);
-          }
-        }
-      } catch (error) {
-        console.error("onePOS: SMSGate inbound webhook reconciliation failed:", error?.message || error);
-      }
-    }, 1500).unref?.();
+    // Connector-specific lifecycle work is executed by connector metadata/flows.
+    // Core startup intentionally contains no provider/package-specific reconciliation.
 
 
     // The metadata bootstrap is expensive and used to run on every Render restart,
