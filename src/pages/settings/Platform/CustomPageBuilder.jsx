@@ -1129,7 +1129,13 @@ const updateNode = (nodeId, changes) => {
       return <div className="cpb-page-settings">
         <h3>Conditions</h3>
         <p>Control whether this component is rendered. Record filtering belongs in the Data tab and uses the shared condition engine.</p>
-        <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={node.visible !== false} onChange={(event) => updateNode(node.id, { visible: event.target.checked })}/> Visible</label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-2 text-xs text-slate-600"><input type="checkbox" checked={node.visible !== false} onChange={(event) => updateNode(node.id, { visible: event.target.checked })}/> Visible</label>
+          <label className="flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-2 text-xs text-slate-600"><input type="checkbox" checked={node.enabled !== false} onChange={(event) => updateNode(node.id, { enabled: event.target.checked })}/> Enabled</label>
+          <label className="flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-2 text-xs text-slate-600"><input type="checkbox" checked={node.required === true} onChange={(event) => updateNode(node.id, { required: event.target.checked })}/> Required</label>
+          <label className="flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-2 text-xs text-slate-600"><input type="checkbox" checked={node.readOnly === true} onChange={(event) => updateNode(node.id, { readOnly: event.target.checked })}/> Read only</label>
+        </div>
+        <p className="text-[11px] text-slate-400">These states are saved with the component and enforced by the shared renderer. Data filters remain under Data → Filters.</p>
         {node.collection ? <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-500">Data filters are available under Data → Filters.</div> : null}
       </div>;
     }
