@@ -12,12 +12,19 @@ BEGIN
       JOIN LATERAL (
         SELECT a.licence_id
           FROM company_licence_allocations a
-          JOIN licence_entitlements e ON e.licence_id=a.licence_id
          WHERE a.company_id=u.company_id
            AND a.active=true
            AND a.seats>0
-           AND e.entitlement_key='jarvis'
-           AND e.enabled=true
+           AND (
+             EXISTS (SELECT 1 FROM licence_entitlements e WHERE e.licence_id=a.licence_id AND e.entitlement_key='jarvis' AND e.enabled=true)
+             OR EXISTS (
+               SELECT 1 FROM licence_packages lp
+               JOIN package_registry p ON p.id=lp.package_id AND p.active=true
+               WHERE lp.licence_id=a.licence_id AND lp.enabled=true
+                 AND lp.entitlement_type='COMMERCIAL'
+                 AND p.manifest->>'entitlementKey'='jarvis'
+             )
+           )
            AND (a.starts_at IS NULL OR a.starts_at<=NOW())
            AND (a.expires_at IS NULL OR a.expires_at>NOW())
          ORDER BY (a.licence_id=(SELECT c.licence_id FROM companies c WHERE c.id=u.company_id)) DESC,
