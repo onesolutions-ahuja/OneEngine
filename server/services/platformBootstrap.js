@@ -10,7 +10,14 @@ export async function initializePlatformMetadata(pool) {
     console.log(`onePOS: platform bootstrap step ready: ${label} (${Date.now() - startedAt}ms)`);
     return result;
   };
-  await bootstrapQuery("schema", platformSchema);
+  const schemaStatements = platformSchema
+    .split(";")
+    .map((statement) => statement.trim())
+    .filter(Boolean);
+  console.log(`onePOS: platform bootstrap schema statements: ${schemaStatements.length}`);
+  for (let index = 0; index < schemaStatements.length; index += 1) {
+    await bootstrapQuery(`schema ${index + 1}/${schemaStatements.length}`, `${schemaStatements[index]};`);
+  }
   await seedInternalAppCatalog(pool);
   await seedPackageRegistry(pool);
   const result = await pool.query(`SELECT id,module_id,version,manifest FROM package_registry WHERE active=true AND COALESCE((manifest->>'bootstrapFoundation')::boolean,false)=true`);
