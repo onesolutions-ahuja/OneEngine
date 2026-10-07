@@ -17,7 +17,9 @@ export async function loadEffectivePermissionSets(db, { id, companyId } = {}, re
   return loading;
 
   async function load() {
-  const result = await db(
+  let result;
+  try {
+    result = await db(
     `SELECT DISTINCT ps.id, ps.name, ps.api_key, ps.system_permissions,
             ps.object_permissions, ps.field_permissions, ps.source_package_id,
             ps.package_required,
@@ -59,7 +61,19 @@ export async function loadEffectivePermissionSets(db, { id, companyId } = {}, re
         )
       ORDER BY ps.api_key`,
     [id, companyId]
-  );
+    );
+  } catch (error) {
+    // Permission sets are supplemental grants. During a partially applied
+    // metadata migration, fail closed for those grants instead of making the
+    // entire session-permission endpoint unavailable. Direct role/profile
+    // permissions remain authoritative and every protected endpoint still
+    // performs its own RBAC check.
+    if (["42P01", "42703"].includes(String(error?.code || ""))) {
+      console.error("Permission-set schema unavailable; using role permissions only:", error?.code);
+      return [];
+    }
+    throw error;
+  }
   return result.rows;
   }
 }
