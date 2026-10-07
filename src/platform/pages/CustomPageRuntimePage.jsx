@@ -82,7 +82,8 @@ export default function CustomPageRuntimePage({ pageKey }) {
       const result=response?.data||{};
       const output=result?.result??result?.results??result;
       window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:node?.id||null,interactionType:interaction.type,runId:result?.runId||response?.workflowRunId||null,status:result?.status||"COMPLETED",output}}));
-    }catch(err){setError(err?.message||"Unable to execute page action");}
+      if(eventName!=="success" && node?.interactions?.success?.type && node.interactions.success.type!=="none") await execute({node,record,eventName:"success",value:output});
+    }catch(err){setError(err?.message||"Unable to execute page action");if(eventName!=="error" && node?.interactions?.error?.type && node.interactions.error.type!=="none") await execute({node,record,eventName:"error",value:{message:err?.message||"Action failed"}});}
     finally{setBusy(false);}
   };
   if(error&&!page)return <div className="onepos-empty">{error}</div>;
