@@ -219,7 +219,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             : current.key === 'gptappbuilder' ? <GPTAppBuilderPage />
             : current.key === 'canvas-ux-test' ? <ReactFlowCanvasUXTest />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
-            : current.key === 'gpt-page-builder' ? <GPTPageBuilder context="developer" onBack={() => select('objects')} /> :
+            : current.key === 'gpt-page-builder' ? <GPTPageBuilder context="developer" onBack={() => select('objects')} />
             : current.key === 'dashboard-builder' ? <OneBuilder initialTab="dashboard" singleBuilder />
             : current.key === 'report-types' ? <ReportTypeManager />
             : current.key === 'report-builder' ? <OneBuilder initialTab="report" singleBuilder />
