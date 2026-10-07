@@ -28,6 +28,10 @@ if (!result.valid || missing.length) {
 // must have either registry-configured Properties or an intentional specialised
 // Properties implementation. This prevents a newly registered component from
 // silently appearing with a blank side panel or no data runtime.
+const dashboardBuilderSource = fs.readFileSync(new URL("../src/pages/dashboard/DashboardBuilder.jsx", import.meta.url), "utf8");
+const dashboardRendererSource = fs.readFileSync(new URL("../src/components/dashboard/DashboardComponents.jsx", import.meta.url), "utf8");
+const dashboardPropertiesSource = fs.readFileSync(new URL("../src/components/dashboard/DashboardComponentProperties.jsx", import.meta.url), "utf8");
+const clientRegistrySource = fs.readFileSync(new URL("../src/pages/settings/Platform/componentRegistry.js", import.meta.url), "utf8");
 const pageBuilderSource = fs.readFileSync(new URL("../src/pages/settings/Platform/CustomPageBuilder.jsx", import.meta.url), "utf8");
 const pageRendererSource = fs.readFileSync(new URL("../src/components/platform/CustomPageRenderer.jsx", import.meta.url), "utf8");
 const specialisedPropertyKeys = new Set([
@@ -88,13 +92,31 @@ const duplicatePageLabels = Object.entries(pageComponents.reduce((acc, component
   return acc;
 }, {})).filter(([, componentKeys]) => componentKeys.length > 1).map(([label, componentKeys]) => ({ label, componentKeys }));
 
+const dashboardComponents = PLATFORM_COMPONENTS.filter((component) =>
+  component.supportedBuilders?.includes("DASHBOARD") || component.supportsDashboardContext === true
+);
+const dashboardRuntimeMissing = dashboardComponents
+  .filter((component) => !dashboardRendererSource.includes(`"${component.rendererKey || component.key}"`) && !dashboardRendererSource.includes(`"${component.key}"`))
+  .map((component) => component.key);
+const dashboardPropertiesMissing = dashboardComponents
+  .filter((component) => Array.isArray(component.configurable) && component.configurable.length)
+  .filter((component) => !component.runtimeKind && !dashboardPropertiesSource.includes(`"${component.rendererKey || component.key}"`) && !dashboardPropertiesSource.includes(`"${component.key}"`))
+  .map((component) => component.key);
+const iconCoverageMissing = PLATFORM_COMPONENTS
+  .filter((component) => !clientRegistrySource.includes(`${component.key}:`))
+  .map((component) => component.key);
+const builderContractMismatch = PLATFORM_COMPONENTS
+  .filter((component) => component.supportedBuilders?.includes("DASHBOARD") && component.supportsDashboardContext !== true)
+  .concat(PLATFORM_COMPONENTS.filter((component) => component.supportedBuilders?.includes("PAGE") && component.supportsPageContext !== true))
+  .map((component) => component.key);
+
 const rendererCoverageMissing = pageComponents
   .filter((component) => component.key !== "section" && component.category !== "field" && component.runtimeKind !== "analytics")
   .filter((component) => !pageRendererSource.includes(`"${component.key}"`))
   .map((component) => component.key);
 
-if (propertyCoverageMissing.length || recordRuntimeMissing.length || bindingRuntimeMissing.length || relationshipRuntimeMissing.length || childRuntimeMissing.length || controlRuntimeMissing.length || actionRuntimeMissing.length || recordDataConfigMismatch.length || childMetadataMismatch.length || duplicatePageLabels.length || pageCalendarCollision || rendererCoverageMissing.length) {
-  console.error("Page Builder component coverage audit failed.", { propertyCoverageMissing, recordRuntimeMissing, bindingRuntimeMissing, relationshipRuntimeMissing, childRuntimeMissing, controlRuntimeMissing, actionRuntimeMissing, recordDataConfigMismatch, childMetadataMismatch, duplicatePageLabels, pageCalendarCollision, rendererCoverageMissing });
+if (propertyCoverageMissing.length || recordRuntimeMissing.length || bindingRuntimeMissing.length || relationshipRuntimeMissing.length || childRuntimeMissing.length || controlRuntimeMissing.length || actionRuntimeMissing.length || recordDataConfigMismatch.length || childMetadataMismatch.length || duplicatePageLabels.length || dashboardRuntimeMissing.length || dashboardPropertiesMissing.length || iconCoverageMissing.length || builderContractMismatch.length || pageCalendarCollision || rendererCoverageMissing.length) {
+  console.error("Page Builder component coverage audit failed.", { propertyCoverageMissing, recordRuntimeMissing, bindingRuntimeMissing, relationshipRuntimeMissing, childRuntimeMissing, controlRuntimeMissing, actionRuntimeMissing, recordDataConfigMismatch, childMetadataMismatch, duplicatePageLabels, dashboardRuntimeMissing, dashboardPropertiesMissing, iconCoverageMissing, builderContractMismatch, pageCalendarCollision, rendererCoverageMissing });
   process.exit(1);
 }
 
