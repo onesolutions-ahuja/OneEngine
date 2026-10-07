@@ -52,10 +52,7 @@ for (const key of objectKeys) {
   routes.add(`objects/${key}`)
 }
 const developerKeys = source.match(/DEVELOPER_SETTINGS_KEYS\s*=\s*new Set\s*\(\s*\[([\s\S]*?)\]\s*\)/)?.[1]
-const settingsVisualsStart = appSource.indexOf('const SETTINGS_VISUALS')
-const settingsVisualsEnd = settingsVisualsStart >= 0 ? appSource.indexOf('\nfunction ', settingsVisualsStart) : -1
-const settingsVisuals = settingsVisualsStart >= 0 ? appSource.slice(settingsVisualsStart, settingsVisualsEnd > settingsVisualsStart ? settingsVisualsEnd : undefined) : ''
-if (!developerKeys || !settingsVisuals) throw new Error('Unable to read Developer/settings route metadata')
+if (!developerKeys) throw new Error('Unable to read Developer route metadata')
 const developerSet = new Set([...developerKeys.matchAll(/'([a-z-]+)'/g)].map(match => match[1]))
 for (const key of developerSet) {
   routes.add(`developer/${key}`)
