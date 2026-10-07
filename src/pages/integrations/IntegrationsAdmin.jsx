@@ -30,12 +30,9 @@ export default function IntegrationsAdmin({ storeId }) {
     setLoading(true);
     setError("");
     try {
-      const [integ, status] = await Promise.all([
-        apiRequest("/api/integrations"),
-        apiRequest("/api/integrations/dispatch-status").catch(() => ({ data: [] })),
-      ]);
+      const integ = await apiRequest("/api/integrations");
       setIntegrations(Array.isArray(integ?.data) ? integ.data : []);
-      setDispatchRows(Array.isArray(status?.data) ? status.data : []);
+      setDispatchRows([]);
     } catch (err) {
       setError(err.message || "Unable to load integrations");
     } finally {
