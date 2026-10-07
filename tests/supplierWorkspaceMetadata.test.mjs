@@ -1,14 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, access } from "node:fs/promises";
 
-test("supplier app uses generic workspace runtime", async () => {
-  const source = await readFile(new URL("../src/pages/suppliers/SuppliersPage.jsx", import.meta.url), "utf8");
-  assert.match(source, /WorkspacePage/);
-  assert.match(source, /initialObjectKey="supplier"/);
-  for (const forbidden of ["/api/suppliers", "SupplierEditor", "SupplierProductForm", "SupplierAccounts", "purchase_count", "total_purchase_value"]) {
-    assert.equal(source.includes(forbidden), false, forbidden);
-  }
+test("supplier app resolves through generic workspace metadata", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(app, /api\/platform\/runtime\/apps/);
+  assert.match(app, /activeRuntimeDefinition\.objectKey/);
+  await assert.rejects(access(new URL("../src/pages/suppliers/SuppliersPage.jsx", import.meta.url)));
 });
 
 test("supplier master data is not blocked from generic metadata CRUD", async () => {
