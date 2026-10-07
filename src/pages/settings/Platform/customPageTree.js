@@ -37,6 +37,27 @@ export const MAX_RECORD_LIMIT = 50;
 
 export const ON_CLICK_TYPES = Object.freeze(["none", "workflow", "action", "navigate", "form_layout", "component"]);
 
+const PAGE_DATA_TYPES = new Set(["text", "number", "boolean", "date", "datetime", "record", "collection", "object"]);
+function normalizePageResourceDefinitions(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const normalize = (item, index) => {
+    const key = safeApiName(item?.key ?? item?.name);
+    if (!key) return null;
+    const dataType = PAGE_DATA_TYPES.has(item?.dataType ?? item?.data_type) ? (item?.dataType ?? item?.data_type) : "text";
+    return {
+      key,
+      label: safeString(item?.label, 120) || key,
+      dataType,
+      defaultValue: item?.defaultValue ?? item?.default_value ?? null,
+      order: safeNumber(item?.order, index, { min: 0, max: 1000 }),
+    };
+  };
+  return {
+    parameters: (Array.isArray(source.parameters) ? source.parameters : []).map(normalize).filter(Boolean).slice(0, 50),
+    variables: (Array.isArray(source.variables) ? source.variables : []).map(normalize).filter(Boolean).slice(0, 100),
+  };
+}
+
 /** Component Registry keys that may hold children inside a Section. */
 export function isContainerComponentKey(componentKey) {
   return componentKey === "container" || componentKey === "multi_container";
@@ -395,6 +416,7 @@ export function normalizeCustomPageTree(value) {
   const presentation = ["landing", "overlay_rectangle", "overlay_square"].includes(source.presentation_mode ?? source.presentationMode)
     ? (source.presentation_mode ?? source.presentationMode) : "landing";
   const device = ["desktop", "tablet", "mobile", "kiosk"].includes(source.device) ? source.device : "desktop";
+  const resources = normalizePageResourceDefinitions(source.resources);
 
   /* Legacy flat pages (sections + components arrays) migrate in memory so an
      existing page keeps rendering instead of being dropped on the floor. */
@@ -405,6 +427,7 @@ export function normalizeCustomPageTree(value) {
       return {
         device,
         presentation_mode: presentation,
+        resources,
         sections: legacySections.map((section, index) => {
           const sectionId = String(section?.id || `section-${index + 1}`);
           const columns = Math.min(3, Math.max(1, Number(section?.columns) || 1));
@@ -426,7 +449,7 @@ export function normalizeCustomPageTree(value) {
         }),
       };
     }
-    return { device, presentation_mode: presentation, sections: [] };
+    return { device, presentation_mode: presentation, resources, sections: [] };
   }
 
   const sections = source.sections.map((section, index) => ({
@@ -435,7 +458,7 @@ export function normalizeCustomPageTree(value) {
     visible: section?.visible !== false,
     children: normalizeChildren(section?.children),
   }));
-  return { device, presentation_mode: presentation, sections };
+  return { device, presentation_mode: presentation, resources, sections };
 }
 
 /*
