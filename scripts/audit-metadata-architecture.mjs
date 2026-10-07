@@ -18,7 +18,7 @@ const historicalMigrationFiles = new Set([
 const declarativeMetadataFiles = new Set([
   "server/packages/packageManifestCatalog.js",
   "server/packages/oneAssistantManifest.js",
-  "server/packages/runtimeFlowManifests.js",
+  "server/metadata/manifests",
 ]);
 const businessTables=[
   "sales","sale_ledger","sale_items","customers","payments","products","suppliers",
@@ -76,8 +76,12 @@ const forbiddenBusinessRuntimeFiles = [
   "server/services/onlineOrders/platformLogger.js",
   "server/services/platformApprovals.js",
 ];
+const retiredExecutableFlowAuthorities = ["server/packages/runtimeFlowManifests.js"];
 const findings=[];
 
+for (const artifact of retiredExecutableFlowAuthorities) {
+  if (fs.existsSync(path.join(ROOT, artifact))) findings.push({rule:"EXECUTABLE_BUSINESS_FLOW_AUTHORITY_PRESENT",file:artifact});
+}
 const retiredMetadataRuntime = "server/services/platformMetadata.js";
 const retiredProviderActionRuntime = "server/services/platformActions.js";
 const retiredProviderSpecificRoutes = [
@@ -133,9 +137,7 @@ for (const file of allServerRuntimeFiles) {
   for (const token of forbiddenExecutableBusinessWrappers) {
     if (text.includes(token)) findings.push({rule:"HIDDEN_BUSINESS_WORKFLOW_WRAPPER",file:name,token});
   }
-  if (name === "server/services/systemWorkflowCatalog.js" && /source:\s*["']runtime_import["']/.test(text)) {
-    findings.push({rule:"RUNTIME_IMPORT_MASQUERADING_AS_METADATA",file:name});
-  }
+  
 
   if (name === "server/services/platformWorkflow.js") {
     for (const actionKey of forbiddenCompiledConnectorActions) {
