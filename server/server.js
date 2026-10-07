@@ -2189,21 +2189,10 @@ async function startServer() {
           { retryable: false }
         );
       }
-      const fallback = await db(
-        `SELECT u.id,u.role_id,u.store_id,NULL::uuid AS till_id
-           FROM users u
-           JOIN roles r ON r.id=u.role_id
-          WHERE u.company_id=$1 AND u.active=true
-            AND r.api_key='platform_superadmin'
-            AND (r.company_id=$1 OR r.company_id IS NULL)
-          ORDER BY u.created_at,u.id
-          LIMIT 1`,
-        [companyId]
+      throw Object.assign(
+        new Error("Workflow automation has no explicit active RBAC execution user. Reassign or recreate the workflow/schedule with an active user."),
+        { retryable: false }
       );
-      if (!fallback.rows[0]) {
-        throw Object.assign(new Error("Workflow automation has no active RBAC execution user. Assign a tenant Superadmin or recreate the schedule/workflow with an active user."), { retryable: false });
-      }
-      return fallback.rows[0];
     };
 
     const workflowEntriesContainStatus = (entries = [], status = "waiting") =>
