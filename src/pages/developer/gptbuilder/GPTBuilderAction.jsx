@@ -19,8 +19,8 @@ export const ACTION_DEFAULTS = Object.freeze({
   transforms: {},
   outputMode: 'automatic',
   manualOutputs: [],
-  importedRuntimeAction: null,
-  importedRuntimeActionText: '',
+  importedMetadataAction: null,
+  importedMetadataActionText: '',
 })
 
 export function normalizeActionConfig(config = {}) {
@@ -38,12 +38,12 @@ export function normalizeActionConfig(config = {}) {
 export function actionConfigErrors(config = {}, actions = [], resources = []) {
   const c = normalizeActionConfig(config)
   const errors = []
-  if (c.importedRuntimeActionText) {
+  if (c.importedMetadataActionText) {
     try {
-      const parsed = JSON.parse(c.importedRuntimeActionText)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) errors.push('Imported runtime configuration must be a JSON object.')
+      const parsed = JSON.parse(c.importedMetadataActionText)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) errors.push('Imported metadata configuration must be a JSON object.')
     } catch {
-      errors.push('Imported runtime configuration contains invalid JSON.')
+      errors.push('Imported metadata configuration contains invalid JSON.')
     }
   }
   const selected = actions.find((action)=>action.key===c.actionKey)
@@ -81,8 +81,8 @@ export function actionConfigErrors(config = {}, actions = [], resources = []) {
 
 export function actionRuntimeAction(instance) {
   const c = normalizeActionConfig(instance?.config)
-  if (c.importedRuntimeAction || c.importedRuntimeActionText) {
-    const imported = c.importedRuntimeActionText ? JSON.parse(c.importedRuntimeActionText) : c.importedRuntimeAction
+  if (c.importedMetadataAction || c.importedMetadataActionText) {
+    const imported = c.importedMetadataActionText ? JSON.parse(c.importedMetadataActionText) : c.importedMetadataAction
     return {
       ...imported,
       id: instance.id,
@@ -192,15 +192,15 @@ export default function GPTBuilderAction({ draft, updateConfig, resources = [], 
       <div className="gptb-action-search"><Search size={13}/><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search actions..."/></div>
       <label><span>Action <b>*</b></span><select value={config.actionKey} disabled={loading} onChange={(event)=>selectAction(actions.find((action)=>action.key===event.target.value))}><option value="">{loading?'Loading actions...':'Select an action'}</option>{matches.map((action)=><option key={action.key} value={action.key}>{action.displayName||action.key}</option>)}</select>{selected?.description?<small>{selected.description}</small>:null}</label>
     </section>
-    {config.importedRuntimeAction || config.importedRuntimeActionText ? <section><h3>Runtime Configuration</h3>
+    {config.importedMetadataAction || config.importedMetadataActionText ? <section><h3>Runtime Configuration</h3>
       <p className="gptb-help-text">This metadata was imported from an existing Flow step. Edit the JSON to change the step without hiding logic in code.</p>
-      <textarea rows={14} value={config.importedRuntimeActionText || JSON.stringify(config.importedRuntimeAction || {}, null, 2)} onChange={(event)=>patch({importedRuntimeAction:null,importedRuntimeActionText:event.target.value})}/>
+      <textarea rows={14} value={config.importedMetadataActionText || JSON.stringify(config.importedMetadataAction || {}, null, 2)} onChange={(event)=>patch({importedMetadataAction:null,importedMetadataActionText:event.target.value})}/>
     </section> : null}
-    {selected && !(config.importedRuntimeAction || config.importedRuntimeActionText) ? <section><h3>Set Input Values</h3>
+    {selected && !(config.importedMetadataAction || config.importedMetadataActionText) ? <section><h3>Set Input Values</h3>
       {Object.entries(selected.schema?.properties||{}).map(([name,schema])=><ActionInput key={name} name={name} schema={schema} description={schema.description} required={requiredSet.has(name)} includeState={config.inputIncluded[name]||'omit'} mode={config.inputModes[name]||'value'} value={config.inputs[name]} transform={config.transforms[name]} resources={resources} object={object} onInclude={(state)=>patch({inputIncluded:{...config.inputIncluded,[name]:state}})} onMode={(mode)=>patch({inputModes:{...config.inputModes,[name]:mode},inputs:{...config.inputs,[name]:mode==='resource'||mode==='formula'?'':config.inputs[name]}})} onValue={(value)=>patch({inputs:{...config.inputs,[name]:value}})} onTransform={(value)=>patch({transforms:{...config.transforms,[name]:value}})}/>)}
       {!Object.keys(selected.schema?.properties||{}).length?<small>This action doesn't require inputs.</small>:null}
     </section>:null}
-    {selected && !(config.importedRuntimeAction || config.importedRuntimeActionText) ? <section><h3>Store Output Values</h3>
+    {selected && !(config.importedMetadataAction || config.importedMetadataActionText) ? <section><h3>Store Output Values</h3>
       <fieldset className="gptb-gr-radio-group"><label><input type="radio" name={`action-output-${draft.id}`} checked={config.outputMode==='automatic'} onChange={()=>patch({outputMode:'automatic',manualOutputs:[]})}/><span>Automatically store all output values</span></label><label><input type="radio" name={`action-output-${draft.id}`} checked={config.outputMode==='manual'} onChange={()=>patch({outputMode:'manual'})}/><span>Manually assign variables (advanced)</span></label></fieldset>
       {config.outputMode==='automatic'?<small>Outputs are available later in the flow as <b>Outputs from {draft.label||draft.apiName}</b>.</small>:<><div className="gptb-action-output-mappings">{config.manualOutputs.map((mapping,index)=><div key={mapping.id}><span>{index+1}</span>{outputFields.length?<select value={mapping.outputPath||''} onChange={(event)=>patch({manualOutputs:config.manualOutputs.map((item)=>item.id===mapping.id?{...item,outputPath:event.target.value}:item)})}><option value="">Select output</option>{outputFields.map((field)=><option key={field} value={field}>{field}</option>)}</select>:<input value={mapping.outputPath||''} onChange={(event)=>patch({manualOutputs:config.manualOutputs.map((item)=>item.id===mapping.id?{...item,outputPath:event.target.value}:item)})} placeholder="Output name/path"/>}<select value={mapping.targetVariable||''} onChange={(event)=>patch({manualOutputs:config.manualOutputs.map((item)=>item.id===mapping.id?{...item,targetVariable:event.target.value}:item)})}><option value="">Select variable</option>{resources.filter((resource)=>resource.writable!==false&&resource.generatedByElementId!==draft.id).map((resource)=><option key={resource.id||resource.apiName} value={resourcePath(resource)}>{resource.label||resource.apiName}{resource.secure?' — ********':''}</option>)}</select><button type="button" aria-label={`Remove output mapping ${index+1}`} onClick={()=>patch({manualOutputs:config.manualOutputs.filter((item)=>item.id!==mapping.id)})}><Trash2 size={12}/></button></div>)}</div><button type="button" className="gptb-inline-action" onClick={()=>patch({manualOutputs:[...config.manualOutputs,{id:uid('output'),outputPath:'',targetVariable:''}]})}><Plus size={12}/> Add Output Mapping</button></>}
     </section>:null}

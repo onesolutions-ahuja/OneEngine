@@ -11,7 +11,7 @@ test("Phase 6 OneAssistant workflows are Builder-editable and explicit", () => {
     const nodes = flow.action?.gptBuilderElements || [];
     assert.ok(actions.length >= 4, flow.name + " must expose its orchestration");
     assert.equal(nodes.length, actions.length, flow.name + " Builder/runtime count");
-    assert.ok(nodes.every((node) => node.config?.importedRuntimeAction && node.configured === true), flow.name + " editable nodes");
+    assert.ok(nodes.every((node) => node.config?.importedMetadataAction && node.configured === true), flow.name + " editable nodes");
   }
   const booking = oneAssistantAppointmentRouterWorkflow();
   assert.ok((booking.action?.actions || []).length > 20, "booking router must remain fully expanded");
@@ -27,7 +27,7 @@ test("Phase 6 Uber Eats workflows have no collapsed 0-2 step definitions and all
     const nodes = action.gptBuilderElements || [];
     assert.ok(actions.length >= 4, (flow.name || flow.label || flow.key) + " step count");
     assert.equal(nodes.length, actions.length, (flow.name || flow.label || flow.key) + " Builder/runtime count");
-    assert.ok(nodes.every((node) => node.config?.importedRuntimeAction && node.configured === true), (flow.name || flow.label || flow.key) + " editable nodes");
+    assert.ok(nodes.every((node) => node.config?.importedMetadataAction && node.configured === true), (flow.name || flow.label || flow.key) + " editable nodes");
   }
 });
 

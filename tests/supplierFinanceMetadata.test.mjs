@@ -92,7 +92,7 @@ test("Phase 3 supplier finance flows are stepwise and Builder-editable", async (
   for (const flow of manifest.workflows) {
     assert.ok(flow.actions.length >= expectedMinimum.get(flow.name), flow.name + " step count");
     assert.equal(flow.gptBuilderElements.length, flow.actions.length, flow.name + " Builder/runtime count");
-    assert.ok(flow.gptBuilderElements.every((node) => node.config?.importedRuntimeAction && node.configured === true), flow.name + " editable Builder nodes");
+    assert.ok(flow.gptBuilderElements.every((node) => node.config?.importedMetadataAction && node.configured === true), flow.name + " editable Builder nodes");
     assert.ok(flow.actions.some((action) => action.key === "FORMULA"), flow.name + " validation formula");
     assert.ok(flow.actions.some((action) => action.key === "CONDITION"), flow.name + " decision");
     assert.ok(flow.actions.some((action) => action.key === "CUSTOM_ERROR"), flow.name + " failure path");

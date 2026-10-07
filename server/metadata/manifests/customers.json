@@ -504,7 +504,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "validate_customer_name",
                 "label": "Validate Customer Name",
                 "apiName": "validate_customer_name",
@@ -518,10 +518,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -540,7 +540,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "customer_ready",
                 "label": "Customer Ready?",
                 "apiName": "customer_ready",
@@ -569,10 +569,10 @@
                   "customer_invalid"
                 ]
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -591,7 +591,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_customer",
                 "label": "Create Customer",
                 "apiName": "create_customer",
@@ -610,10 +610,10 @@
                   "active": true
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -632,7 +632,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "customer_invalid",
                 "label": "Customer Registration Rejected",
                 "apiName": "customer_invalid",
@@ -640,10 +640,10 @@
                 "errorMessage": "Customer name is required.",
                 "errorLocation": "record"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           }
         ]

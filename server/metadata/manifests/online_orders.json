@@ -1104,7 +1104,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "get_online_order",
               "label": "Get Online Order",
               "apiName": "get_online_order",
@@ -1123,10 +1123,10 @@
               "limit": 1,
               "store": "first"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1145,7 +1145,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_transition",
               "label": "Validate Order Transition",
               "apiName": "validate_transition",
@@ -1553,10 +1553,10 @@
                 "invalid_transition"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1575,7 +1575,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "update_online_order_status",
               "label": "Update Online Order Status",
               "apiName": "update_online_order_status",
@@ -1590,10 +1590,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1612,7 +1612,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "invalid_transition",
               "label": "Order Transition Rejected",
               "apiName": "invalid_transition",
@@ -1620,13 +1620,816 @@
               "errorMessage": "The requested online order status transition is not allowed.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
+    },
+    {
+      "systemKey": "flow:online_order.create",
+      "name": "Online Order · Create",
+      "triggerKey": "manual",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:online_order.create",
+        "scope": "package",
+        "capabilityType": "workflow",
+        "capabilityKey": "online_order.create",
+        "apiName": "ONLINE_ORDER_CREATE",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "externalOrderId",
+            "label": "externalOrderId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "storeId",
+            "label": "storeId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "fulfilmentType",
+            "label": "fulfilmentType",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "items",
+            "label": "items",
+            "type": "collection",
+            "required": true
+          },
+          {
+            "name": "customer",
+            "label": "customer",
+            "type": "object",
+            "required": false
+          },
+          {
+            "name": "notes",
+            "label": "notes",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "orderId",
+            "label": "orderId",
+            "type": "text",
+            "source": "variables.orderId"
+          },
+          {
+            "name": "subtotal",
+            "label": "subtotal",
+            "type": "number",
+            "source": "variables.subtotal"
+          },
+          {
+            "name": "tax",
+            "label": "tax",
+            "type": "number",
+            "source": "variables.tax"
+          },
+          {
+            "name": "total",
+            "label": "total",
+            "type": "number",
+            "source": "variables.total"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "init_subtotal",
+            "key": "action",
+            "label": "Initialize Subtotal",
+            "apiName": "init_subtotal",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "init_subtotal",
+                "label": "Initialize Subtotal",
+                "key": "ASSIGNMENT",
+                "variableName": "subtotal",
+                "variableType": "currency",
+                "operator": "set",
+                "value": 0
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "init_tax",
+            "key": "action",
+            "label": "Initialize Tax",
+            "apiName": "init_tax",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "init_tax",
+                "label": "Initialize Tax",
+                "key": "ASSIGNMENT",
+                "variableName": "tax",
+                "variableType": "currency",
+                "operator": "set",
+                "value": 0
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_order",
+            "key": "action",
+            "label": "Create Online Order",
+            "apiName": "create_order",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_order",
+                "label": "Create Online Order",
+                "key": "CREATE_RECORD",
+                "objectKey": "online_order",
+                "fieldValues": {
+                  "external_order_id": {
+                    "path": "$record.externalOrderId"
+                  },
+                  "platform": "generic",
+                  "store_id": {
+                    "path": "$record.storeId"
+                  },
+                  "fulfilment_type": {
+                    "path": "$record.fulfilmentType"
+                  },
+                  "customer_name": {
+                    "path": "$record.customer.name"
+                  },
+                  "customer_phone": {
+                    "path": "$record.customer.phone"
+                  },
+                  "customer_email": {
+                    "path": "$record.customer.email"
+                  },
+                  "notes": {
+                    "path": "$record.notes"
+                  },
+                  "status": "RECEIVED",
+                  "subtotal": 0,
+                  "tax": 0,
+                  "total": 0
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "set_order_id",
+            "key": "action",
+            "label": "Store Order Id",
+            "apiName": "set_order_id",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "set_order_id",
+                "label": "Store Order Id",
+                "key": "ASSIGNMENT",
+                "variableName": "orderId",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "steps.create_order.record.id"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "order_lines",
+            "key": "action",
+            "label": "Create Order Lines",
+            "apiName": "order_lines",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "LOOP",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "order_lines",
+                "label": "Create Order Lines",
+                "key": "LOOP",
+                "collection": "$record.items",
+                "itemVariable": "currentItem",
+                "bodyBranch": [
+                  "get_product",
+                  "line_subtotal",
+                  "line_tax",
+                  "create_line",
+                  "add_subtotal",
+                  "add_tax"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "get_product",
+            "key": "action",
+            "label": "Get Product",
+            "apiName": "get_product",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "get_product",
+                "label": "Get Product",
+                "key": "GET_RECORDS",
+                "objectKey": "product",
+                "filters": [
+                  {
+                    "field": "id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.currentItem.productId"
+                    }
+                  }
+                ],
+                "limit": 1,
+                "store": "first"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "line_subtotal",
+            "key": "action",
+            "label": "Calculate Line Subtotal",
+            "apiName": "line_subtotal",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "line_subtotal",
+                "label": "Calculate Line Subtotal",
+                "key": "FORMULA",
+                "resourceName": "lineSubtotal",
+                "resultType": "number",
+                "expression": "price * quantity",
+                "inputs": {
+                  "price": {
+                    "path": "steps.get_product.record.price"
+                  },
+                  "quantity": {
+                    "path": "variables.currentItem.quantity"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "line_tax",
+            "key": "action",
+            "label": "Calculate Line Tax",
+            "apiName": "line_tax",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "line_tax",
+                "label": "Calculate Line Tax",
+                "key": "FORMULA",
+                "resourceName": "lineTax",
+                "resultType": "number",
+                "expression": "lineSubtotal * vatRate / 100",
+                "inputs": {
+                  "lineSubtotal": {
+                    "path": "variables.lineSubtotal"
+                  },
+                  "vatRate": {
+                    "path": "steps.get_product.record.vat_rate",
+                    "fallback": 0
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_line",
+            "key": "action",
+            "label": "Create Order Line",
+            "apiName": "create_line",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_line",
+                "label": "Create Order Line",
+                "key": "CREATE_RECORD",
+                "objectKey": "online_order_line",
+                "fieldValues": {
+                  "order_id": {
+                    "path": "variables.orderId"
+                  },
+                  "product_id": {
+                    "path": "steps.get_product.record.id"
+                  },
+                  "product_name": {
+                    "path": "steps.get_product.record.name"
+                  },
+                  "quantity": {
+                    "path": "variables.currentItem.quantity"
+                  },
+                  "unit_price": {
+                    "path": "steps.get_product.record.price"
+                  },
+                  "tax": {
+                    "path": "variables.lineTax"
+                  },
+                  "total": {
+                    "path": "variables.lineSubtotal"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "add_subtotal",
+            "key": "action",
+            "label": "Add Subtotal",
+            "apiName": "add_subtotal",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "add_subtotal",
+                "label": "Add Subtotal",
+                "key": "ASSIGNMENT",
+                "variableName": "subtotal",
+                "variableType": "currency",
+                "operator": "add",
+                "value": {
+                  "path": "variables.lineSubtotal"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "add_tax",
+            "key": "action",
+            "label": "Add Tax",
+            "apiName": "add_tax",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "add_tax",
+                "label": "Add Tax",
+                "key": "ASSIGNMENT",
+                "variableName": "tax",
+                "variableType": "currency",
+                "operator": "add",
+                "value": {
+                  "path": "variables.lineTax"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "calculate_total",
+            "key": "action",
+            "label": "Calculate Total",
+            "apiName": "calculate_total",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "calculate_total",
+                "label": "Calculate Total",
+                "key": "FORMULA",
+                "resourceName": "total",
+                "resultType": "number",
+                "expression": "subtotal + tax",
+                "inputs": {
+                  "subtotal": {
+                    "path": "variables.subtotal"
+                  },
+                  "tax": {
+                    "path": "variables.tax"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "update_order_totals",
+            "key": "action",
+            "label": "Update Order Totals",
+            "apiName": "update_order_totals",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "update_order_totals",
+                "label": "Update Order Totals",
+                "key": "UPDATE_RECORD",
+                "objectKey": "online_order",
+                "recordId": {
+                  "path": "variables.orderId"
+                },
+                "fieldValues": {
+                  "subtotal": {
+                    "path": "variables.subtotal"
+                  },
+                  "tax": {
+                    "path": "variables.tax"
+                  },
+                  "total": {
+                    "path": "variables.total"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ],
+        "actions": [
+          {
+            "id": "init_subtotal",
+            "label": "Initialize Subtotal",
+            "key": "ASSIGNMENT",
+            "variableName": "subtotal",
+            "variableType": "currency",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "init_tax",
+            "label": "Initialize Tax",
+            "key": "ASSIGNMENT",
+            "variableName": "tax",
+            "variableType": "currency",
+            "operator": "set",
+            "value": 0
+          },
+          {
+            "id": "create_order",
+            "label": "Create Online Order",
+            "key": "CREATE_RECORD",
+            "objectKey": "online_order",
+            "fieldValues": {
+              "external_order_id": {
+                "path": "$record.externalOrderId"
+              },
+              "platform": "generic",
+              "store_id": {
+                "path": "$record.storeId"
+              },
+              "fulfilment_type": {
+                "path": "$record.fulfilmentType"
+              },
+              "customer_name": {
+                "path": "$record.customer.name"
+              },
+              "customer_phone": {
+                "path": "$record.customer.phone"
+              },
+              "customer_email": {
+                "path": "$record.customer.email"
+              },
+              "notes": {
+                "path": "$record.notes"
+              },
+              "status": "RECEIVED",
+              "subtotal": 0,
+              "tax": 0,
+              "total": 0
+            }
+          },
+          {
+            "id": "set_order_id",
+            "label": "Store Order Id",
+            "key": "ASSIGNMENT",
+            "variableName": "orderId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_order.record.id"
+            }
+          },
+          {
+            "id": "order_lines",
+            "label": "Create Order Lines",
+            "key": "LOOP",
+            "collection": "$record.items",
+            "itemVariable": "currentItem",
+            "bodyBranch": [
+              "get_product",
+              "line_subtotal",
+              "line_tax",
+              "create_line",
+              "add_subtotal",
+              "add_tax"
+            ]
+          },
+          {
+            "id": "get_product",
+            "label": "Get Product",
+            "key": "GET_RECORDS",
+            "objectKey": "product",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.currentItem.productId"
+                }
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "line_subtotal",
+            "label": "Calculate Line Subtotal",
+            "key": "FORMULA",
+            "resourceName": "lineSubtotal",
+            "resultType": "number",
+            "expression": "price * quantity",
+            "inputs": {
+              "price": {
+                "path": "steps.get_product.record.price"
+              },
+              "quantity": {
+                "path": "variables.currentItem.quantity"
+              }
+            }
+          },
+          {
+            "id": "line_tax",
+            "label": "Calculate Line Tax",
+            "key": "FORMULA",
+            "resourceName": "lineTax",
+            "resultType": "number",
+            "expression": "lineSubtotal * vatRate / 100",
+            "inputs": {
+              "lineSubtotal": {
+                "path": "variables.lineSubtotal"
+              },
+              "vatRate": {
+                "path": "steps.get_product.record.vat_rate",
+                "fallback": 0
+              }
+            }
+          },
+          {
+            "id": "create_line",
+            "label": "Create Order Line",
+            "key": "CREATE_RECORD",
+            "objectKey": "online_order_line",
+            "fieldValues": {
+              "order_id": {
+                "path": "variables.orderId"
+              },
+              "product_id": {
+                "path": "steps.get_product.record.id"
+              },
+              "product_name": {
+                "path": "steps.get_product.record.name"
+              },
+              "quantity": {
+                "path": "variables.currentItem.quantity"
+              },
+              "unit_price": {
+                "path": "steps.get_product.record.price"
+              },
+              "tax": {
+                "path": "variables.lineTax"
+              },
+              "total": {
+                "path": "variables.lineSubtotal"
+              }
+            }
+          },
+          {
+            "id": "add_subtotal",
+            "label": "Add Subtotal",
+            "key": "ASSIGNMENT",
+            "variableName": "subtotal",
+            "variableType": "currency",
+            "operator": "add",
+            "value": {
+              "path": "variables.lineSubtotal"
+            }
+          },
+          {
+            "id": "add_tax",
+            "label": "Add Tax",
+            "key": "ASSIGNMENT",
+            "variableName": "tax",
+            "variableType": "currency",
+            "operator": "add",
+            "value": {
+              "path": "variables.lineTax"
+            }
+          },
+          {
+            "id": "calculate_total",
+            "label": "Calculate Total",
+            "key": "FORMULA",
+            "resourceName": "total",
+            "resultType": "number",
+            "expression": "subtotal + tax",
+            "inputs": {
+              "subtotal": {
+                "path": "variables.subtotal"
+              },
+              "tax": {
+                "path": "variables.tax"
+              }
+            }
+          },
+          {
+            "id": "update_order_totals",
+            "label": "Update Order Totals",
+            "key": "UPDATE_RECORD",
+            "objectKey": "online_order",
+            "recordId": {
+              "path": "variables.orderId"
+            },
+            "fieldValues": {
+              "subtotal": {
+                "path": "variables.subtotal"
+              },
+              "tax": {
+                "path": "variables.tax"
+              },
+              "total": {
+                "path": "variables.total"
+              }
+            }
+          }
+        ]
+      }
     }
   ],
   "actions": [

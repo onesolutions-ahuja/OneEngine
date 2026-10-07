@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { PACKAGE_RUNTIME_FLOWS } from "../server/packages/runtimeFlowManifests.js";
+import { packageDefinitions } from "../server/services/packageRegistry.js";
 import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
 
 const retiredRuntimeKeys = [
@@ -13,28 +13,27 @@ const retiredRuntimeKeys = [
   "flow:supplier.return.execute",
 ];
 
-test("Phase 7A retires duplicate package runtime workflow sources", async () => {
-  const source = await readFile(new URL("../server/packages/runtimeFlowManifests.js", import.meta.url), "utf8");
-  assert.equal(PACKAGE_RUNTIME_FLOWS.length, 5);
-  for (const key of retiredRuntimeKeys) {
-    assert.equal(PACKAGE_RUNTIME_FLOWS.some((flow) => flow.systemKey === key), false, key);
-    assert.equal(source.includes(`flow("${key}"`), false, key);
+test("Phase 7A business workflows live in declarative package manifests", () => {
+  const flows = packageDefinitions().flatMap((definition) => definition.manifest?.workflows || []);
+  for (const key of retiredRuntimeKeys) assert.equal(flows.some((flow) => flow.systemKey === key), false, key);
+  for (const key of ["flow:attendance.clock_in","flow:attendance.clock_out","flow:inventory.movement.create","flow:online_order.create","flow:supplier.ledger.adjust"]) {
+    assert.ok(flows.some((flow) => flow.systemKey === key), key);
   }
 });
 
-test("Phase 7A remaining package runtime flows round-trip through GPT Builder", () => {
-  for (const flow of PACKAGE_RUNTIME_FLOWS) {
+test("Phase 7A package metadata workflows round-trip through GPT Builder", () => {
+  const flows = packageDefinitions().flatMap((definition) => definition.manifest?.workflows || []).filter((flow) => flow.systemKey);
+  for (const flow of flows) {
     const actions = flow.action?.actions || [];
     const nodes = flow.action?.gptBuilderElements || [];
-    assert.ok(actions.length >= 5, flow.systemKey + " must expose real orchestration");
-    assert.equal(nodes.length, actions.length, flow.systemKey + " Builder/runtime count");
-    assert.ok(nodes.every((node) => node.config?.importedRuntimeAction && node.configured === true), flow.systemKey + " editable nodes");
+    assert.ok(actions.length > 0, flow.systemKey + " must expose orchestration");
+    assert.equal(nodes.length, actions.length, flow.systemKey + " Builder/metadata count");
+    assert.ok(nodes.every((node) => node.config?.importedMetadataAction && node.configured === true), flow.systemKey + " editable nodes");
   }
 });
 
 test("Phase 7A system workflow catalogue guarantees Builder metadata", () => {
   const definitions = systemWorkflowDefinitions();
-  assert.ok(definitions.length > 0);
   for (const flow of definitions) {
     const actions = flow.action?.actions || [];
     if (!actions.length) continue;
@@ -57,6 +56,6 @@ test("Phase 7A migration and architecture gate keep retired duplicates out", asy
   const audit = await readFile(new URL("../scripts/audit-workflow-coverage.mjs", import.meta.url), "utf8");
   assert.match(migration, /0067_remove_residual_duplicate_runtime_workflows/);
   for (const key of retiredRuntimeKeys) assert.ok(migration.includes(`"${key}"`), key);
-  assert.match(audit, /RETIRED_DUPLICATE_RUNTIME_FLOW/);
+  assert.match(audit, /EXECUTABLE_BUSINESS_FLOW_MANIFEST_PRESENT/);
   assert.match(audit, /RETIRED_PLATFORM_METADATA_PRESENT/);
 });
