@@ -1952,17 +1952,6 @@ app.use(
 app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyCustomers, hasPermission }));
 
 /*
-|--------------------------------------------------------------------------
-| SECURE INVOICE LINKS (T9P)
-|--------------------------------------------------------------------------
-|
-| Public token-based invoice download at GET /i/:token (outside /api - the
-| opaque token is the only credential; no IDs in the URL, hash-only token
-| storage, generic 404s) plus admin create/revoke endpoints under
-| Secure invoice links use the Sale platform object and existing permission model.
-*/
-
-/*
 | T9A - generic integration foundation (provider-agnostic). Credentials are
 | encrypted at rest; no Sales/Purchases data is sent anywhere by this module.
 */
