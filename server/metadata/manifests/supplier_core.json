@@ -1,0 +1,213 @@
+{
+  "packageKey": "supplier_core",
+  "objects": [
+    {
+      "objectKey": "supplier",
+      "label": "Supplier",
+      "pluralLabel": "Suppliers",
+      "description": "Canonical supplier identity and contact details.",
+      "sourceTable": "suppliers",
+      "metadataScope": "global",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "name",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "contact_name",
+          "label": "Contact Name",
+          "fieldType": "text",
+          "sourceColumn": "contact_name",
+          "writable": true
+        },
+        {
+          "apiName": "phone",
+          "label": "Phone",
+          "fieldType": "phone",
+          "sourceColumn": "phone",
+          "writable": true
+        },
+        {
+          "apiName": "email",
+          "label": "Email",
+          "fieldType": "email",
+          "sourceColumn": "email",
+          "writable": true
+        },
+        {
+          "apiName": "address",
+          "label": "Address",
+          "fieldType": "text",
+          "sourceColumn": "address",
+          "writable": true
+        },
+        {
+          "apiName": "notes",
+          "label": "Notes",
+          "fieldType": "text",
+          "sourceColumn": "notes",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true
+        }
+      ]
+    },
+    {
+      "objectKey": "supplier_product",
+      "label": "Supplier Product",
+      "pluralLabel": "Supplier Products",
+      "description": "Supplier-specific product references, costs and effective dates.",
+      "sourceTable": "supplier_products",
+      "metadataScope": "global",
+      "fields": [
+        {
+          "apiName": "company_id",
+          "label": "Company",
+          "fieldType": "lookup",
+          "sourceColumn": "company_id",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "supplier_id",
+          "label": "Supplier",
+          "fieldType": "lookup",
+          "sourceColumn": "supplier_id",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relationshipKey": "supplier",
+            "relatedObjectKey": "supplier"
+          }
+        },
+        {
+          "apiName": "product_id",
+          "label": "Product",
+          "fieldType": "lookup",
+          "sourceColumn": "product_id",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relationshipKey": "product",
+            "relatedObjectKey": "product"
+          }
+        },
+        {
+          "apiName": "supplier_sku",
+          "label": "Supplier SKU",
+          "fieldType": "text",
+          "sourceColumn": "supplier_sku",
+          "writable": true
+        },
+        {
+          "apiName": "supplier_description",
+          "label": "Supplier Description",
+          "fieldType": "text",
+          "sourceColumn": "supplier_description",
+          "writable": true
+        },
+        {
+          "apiName": "cost_price",
+          "label": "Supplier Cost",
+          "fieldType": "currency",
+          "sourceColumn": "cost_price",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "effective_from",
+          "label": "Effective From",
+          "fieldType": "date",
+          "sourceColumn": "effective_from",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "effective_to",
+          "label": "Effective To",
+          "fieldType": "date",
+          "sourceColumn": "effective_to",
+          "writable": true
+        },
+        {
+          "apiName": "preferred",
+          "label": "Preferred Supplier",
+          "fieldType": "boolean",
+          "sourceColumn": "preferred",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Active",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "writable": true
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "supplier",
+      "childObjectKey": "supplier_product",
+      "relationshipKey": "products",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "supplier_id"
+    },
+    {
+      "parentObjectKey": "supplier_product",
+      "childObjectKey": "supplier",
+      "relationshipKey": "supplier",
+      "relationshipType": "lookup",
+      "parentFieldApiName": "supplier_id"
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "supplier",
+      "viewKey": "all",
+      "label": "All Suppliers",
+      "columns": [
+        "name",
+        "contact_name",
+        "phone",
+        "email",
+        "active"
+      ],
+      "isDefault": true
+    },
+    {
+      "objectKey": "supplier_product",
+      "viewKey": "sourcing",
+      "label": "Supplier Product Sourcing",
+      "columns": [
+        "supplier_id",
+        "product_id",
+        "supplier_sku",
+        "cost_price",
+        "effective_from",
+        "effective_to",
+        "preferred",
+        "active"
+      ],
+      "isDefault": true
+    }
+  ]
+}
