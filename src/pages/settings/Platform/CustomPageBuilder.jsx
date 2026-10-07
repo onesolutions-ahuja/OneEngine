@@ -639,10 +639,36 @@ const updateNode = (nodeId, changes) => {
     window.addEventListener("pointercancel", end, { once: true });
   };
 
-  const testNodeInteraction = async ({ node, record = null }) => {
-    const interaction=node?.interaction||{};
-    if(!["workflow","screen_flow"].includes(interaction.type)){setTestTrace([{kind:"page_event",status:"skipped",detail:{message:"Select a component with a Flow-backed event to run rollback Test."}}]);return;}
-    try{setTestBusy(true);const response=await apiRequest("/api/platform/runtime/page-interactions/test",{method:"POST",body:JSON.stringify({nodeId:node?.id||null,event:"click",interaction,recordId:record?.id||record?.record_id||null,pageContext:{params:{},variables:Object.fromEntries((draft.resources?.variables||[]).map(v=>[v.key,v.defaultValue??null])),components:{},flows:{}}})});setTestTrace(response?.data?.trace||[]);if(!response?.success)throw new Error(response?.message||"Page Test failed");onMessage?.("Test completed. Database changes rolled back.");}catch(error){onError?.(error.message);setTestTrace((current)=>current.length?current:[{kind:"error",status:"failed",detail:{message:error.message}}]);}finally{setTestBusy(false);}
+  const testNodeInteraction = async ({ node, record = null, eventName = "click", value = undefined, changes = undefined, interaction: explicitInteraction = null }) => {
+    const interaction = explicitInteraction || node?.interactions?.[eventName] || (eventName === "click" ? node?.interaction : null) || { type: "none" };
+    try {
+      setTestBusy(true);
+      const response = await apiRequest("/api/platform/runtime/page-interactions/test", {
+        method: "POST",
+        body: JSON.stringify({
+          nodeId: node?.id || null,
+          event: eventName,
+          interaction,
+          eventValue: value,
+          changes,
+          recordId: record?.id || record?.record_id || null,
+          pageContext: {
+            params: {},
+            variables: Object.fromEntries((draft.resources?.variables || []).map((item) => [item.key, item.defaultValue ?? null])),
+            components: {},
+            flows: {},
+          },
+        }),
+      });
+      setTestTrace(response?.data?.trace || []);
+      if (!response?.success) throw new Error(response?.message || "Page Test failed");
+      onMessage?.(response?.data?.rolledBack ? "Test completed. Database changes rolled back." : "Test completed. No database mutation was executed.");
+    } catch (error) {
+      onError?.(error.message);
+      setTestTrace((current) => current.length ? current : [{ kind: "error", status: "failed", detail: { message: error.message } }]);
+    } finally {
+      setTestBusy(false);
+    }
   };
 
   /* ------------------------------- save ---------------------------------- */
@@ -1284,9 +1310,9 @@ const updateNode = (nodeId, changes) => {
         /* PREVIEW MODE — the unsaved tree rendered exactly like runtime. */
         <div className="cpb-canvas">
           <div className={`cpb-device-frame is-${draft.device}`}>
-            <CustomPageRenderer definition={definitionForSave()} builderMode={false} device={draft.device} onRecordClick={testMode ? ({record,node})=>testNodeInteraction({record,node}) : undefined} onButtonClick={testMode ? (node)=>testNodeInteraction({node}) : undefined} />
+            <CustomPageRenderer definition={definitionForSave()} builderMode={false} device={draft.device} onRecordClick={testMode ? ({record,node,eventName="row_click",value,changes})=>testNodeInteraction({record,node,eventName,value,changes}) : undefined} onButtonClick={testMode ? (node)=>testNodeInteraction({node,eventName:"click"}) : undefined} onEvent={testMode ? (payload)=>testNodeInteraction(payload) : undefined} onInteractionTrace={testMode ? (payload)=>testNodeInteraction(payload) : undefined} />
           </div>
-          {testMode ? <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs"><div className="mb-2 flex items-center justify-between"><strong>Test Trace</strong><span className="text-emerald-700">Rollback ON</span></div>{testTrace.length ? <div className="max-h-48 space-y-1 overflow-auto">{testTrace.map((entry,index)=><div key={index} className="rounded bg-slate-50 px-2 py-1"><strong>{entry.kind}</strong> · {entry.status}{entry.detail?.message?` · ${entry.detail.message}`:""}</div>)}</div> : <span className="text-slate-500">Click a Flow-backed component to test the Page → Flow chain.</span>}</div> : null}
+          {testMode ? <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs"><div className="mb-2 flex items-center justify-between"><strong>Test Trace</strong><span className="text-emerald-700">Rollback ON</span></div>{testTrace.length ? <div className="max-h-48 space-y-1 overflow-auto">{testTrace.map((entry,index)=><div key={index} className="rounded bg-slate-50 px-2 py-1"><strong>{entry.kind}</strong> · {entry.status}{entry.detail?.message?` · ${entry.detail.message}`:""}</div>)}</div> : <span className="text-slate-500">Interact with a component to trace the complete Page → Event → Action/Flow → UI chain.</span>}</div> : null}
         </div>
       ) : (
         <div className={`cpb-shell ${paletteOpen ? "" : "is-palette-collapsed"} ${propertiesOpen ? "" : "is-properties-collapsed"}`}>
