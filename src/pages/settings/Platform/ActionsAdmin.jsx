@@ -17,12 +17,6 @@ import { apiRequest } from "../../../services/api.js";
  * flows an admin has already published.
  */
 
-const PROVIDER_ACTION_KIND = {
-  SEND_EMAIL: "EMAIL",
-  SEND_SMS: "SMS",
-  SEND_WHATSAPP: "WHATSAPP",
-};
-
 /** Registry keys with no server executor/validation yet. Shown clearly as
  *  unavailable instead of being hidden, per the capability-first audit. */
 const NOT_IMPLEMENTED = new Set();
@@ -42,19 +36,8 @@ function actionKindLabel(item) {
   return "Other";
 }
 
-function providerPill(available) {
-  return (
-    <span
-      className={"onepos-badge " + (available ? "onepos-badge-success" : "onepos-badge-warning")}
-    >
-      {available ? "Provider configured" : "Provider not configured"}
-    </span>
-  );
-}
-
 export default function ActionsAdmin({ onError }) {
   const [actions, setActions] = useState([]);
-  const [integrations, setIntegrations] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -67,15 +50,11 @@ export default function ActionsAdmin({ onError }) {
       setError("");
 
       try {
-        const [registryResponse, integrationsResponse] = await Promise.all([
-          apiRequest("/api/platform/workflow-actions"),
-          apiRequest("/api/integrations").catch(() => ({ data: [] })),
-        ]);
+        const registryResponse = await apiRequest("/api/platform/workflow-actions");
 
         if (cancelled) return;
 
         setActions(Array.isArray(registryResponse?.data) ? registryResponse.data : []);
-        setIntegrations(Array.isArray(integrationsResponse?.data) ? integrationsResponse.data : []);
       } catch (err) {
         if (!cancelled) {
           setError(err?.message || "Unable to load the action registry.");
@@ -92,23 +71,6 @@ export default function ActionsAdmin({ onError }) {
       cancelled = true;
     };
   }, [onError]);
-
-  const providerAvailability = useMemo(() => {
-    const state = { EMAIL: false, SMS: false, WHATSAPP: false };
-
-    for (const item of integrations) {
-      const provider = String(item.provider || "").toUpperCase();
-      if (provider in state) {
-        state[provider] = Boolean(
-          item.active !== false &&
-          item.configuration &&
-          Object.keys(item.configuration || {}).length > 0
-        );
-      }
-    }
-
-    return state;
-  }, [integrations]);
 
   const filtered = useMemo(() => {
     const value = search.trim().toLowerCase();
@@ -178,8 +140,7 @@ export default function ActionsAdmin({ onError }) {
               </thead>
               <tbody>
                 {filtered.map((item) => {
-                  const providerKind = PROVIDER_ACTION_KIND[item.key];
-                  const available = executable(item) && (!providerKind || providerAvailability[providerKind]);
+                  const available = executable(item);
 
                   return (
                     <tr key={item.key}>
@@ -200,8 +161,6 @@ export default function ActionsAdmin({ onError }) {
                       <td>
                         {item.key === "RUN_SUBFLOW" ? (
                           <span className="onepos-badge onepos-badge-info">Reusable flows</span>
-                        ) : providerKind ? (
-                          providerPill(available)
                         ) : available ? (
                           <span className="onepos-badge onepos-badge-success">Available</span>
                         ) : (
