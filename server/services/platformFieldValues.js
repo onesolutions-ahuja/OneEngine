@@ -142,10 +142,52 @@ export async function valueSetOptions(db, field, req) {
 
 export async function enrichFields(db, fields, req) {
   fields = tenantFields(fields, req.user.companyId);
-  return Promise.all(fields.map(async (field) => {
+  const valueSetFields = fields.filter((field) =>
+    ["select", "picklist", "multiselect"].includes(field.field_type)
+      && (field?.config?.valueSetId || field?.config?.value_set_id)
+  );
+  if (!valueSetFields.length) {
+    return fields.map((field) =>
+      ["select", "picklist", "multiselect"].includes(field.field_type)
+        ? { ...field, options: localPicklistOptions(field) }
+        : field
+    );
+  }
+
+  const valueSetIds = [...new Set(valueSetFields.map((field) =>
+    field?.config?.valueSetId || field?.config?.value_set_id
+  ).filter(Boolean))];
+  const result = await db(
+    `SELECT v.*, s.id AS resolved_value_set_id
+       FROM platform_value_set_values v
+       JOIN platform_value_sets s ON s.id=v.value_set_id
+      WHERE s.id=ANY($1::uuid[]) AND s.company_id=$2 AND s.active=true
+      ORDER BY v.value_set_id, v.display_order, v.label`,
+    [valueSetIds, req.user.companyId]
+  );
+  const optionsBySet = new Map();
+  for (const value of result.rows) {
+    const key = String(value.resolved_value_set_id || value.value_set_id);
+    if (!optionsBySet.has(key)) optionsBySet.set(key, []);
+    optionsBySet.get(key).push({
+      label: value.label,
+      value: value.value,
+      active: value.active !== false,
+      displayOrder: value.display_order,
+    });
+  }
+
+  return fields.map((field) => {
     if (!["select", "picklist", "multiselect"].includes(field.field_type)) return field;
-    return { ...field, options: await valueSetOptions(db, field, req) };
-  }));
+    const valueSetId = field?.config?.valueSetId || field?.config?.value_set_id;
+    if (!valueSetId) return { ...field, options: localPicklistOptions(field) };
+    let options = optionsBySet.get(String(valueSetId)) || [];
+    const config = field?.config && typeof field.config === "object" && !Array.isArray(field.config) ? field.config : {};
+    if (config.sortAlphabetically === true || config.sort_alphabetically === true) {
+      options = [...options].sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" }));
+    }
+    return { ...field, options };
+  });
 }
 
 export async function applyFieldSecurity(db, fields, req) {
