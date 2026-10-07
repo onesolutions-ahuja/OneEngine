@@ -7,14 +7,19 @@
  * format non-secret summaries for the assistant prompt.
  */
 import { JarvisError, JARVIS_ERROR_CODES } from "../errors.js";
-import { allMetadataManifests } from "../../metadataManifestLoader.js";
 import { runConfiguredAggregateView } from "../../platformRuntimeViews.js";
 import { evaluateFormula } from "../../reportAnalyticsRuntime.js";
 
-function configuredTools() {
-  return allMetadataManifests()
-    .flatMap(({ packageKey, manifest }) => (Array.isArray(manifest?.assistantTools) ? manifest.assistantTools : [])
-      .map((tool) => ({ ...tool, packageKey })))
+async function configuredTools(db, companyId) {
+  if (!companyId) return [];
+  const result = await db(
+    `SELECT metadata
+       FROM package_registry
+      WHERE company_id=$1 AND active=TRUE`,
+    [companyId]
+  );
+  return (result.rows || [])
+    .flatMap((row) => Array.isArray(row?.metadata?.assistantTools) ? row.metadata.assistantTools : [])
     .filter((tool) => tool?.key);
 }
 
@@ -128,14 +133,14 @@ async function executeConfiguredTool(tool, context, { db, canViewCompanyScope })
 
 export function createJarvisTools({ db, canViewCompanyScope = null } = {}) {
   if (typeof db !== "function") throw new Error("createJarvisTools requires the existing db helper");
-  const tools = configuredTools();
-
-  function matchTool(question) {
+  async function matchTool(question, context = {}) {
+    const tools = await configuredTools(db, context.companyId);
     const tool = tools.find((candidate) => toolMatches(candidate, question));
     return tool ? { name: tool.key } : null;
   }
 
   async function executeTool(name, context) {
+    const tools = await configuredTools(db, context?.companyId);
     const tool = tools.find((candidate) => String(candidate.key) === String(name));
     if (!tool) {
       throw new JarvisError(JARVIS_ERROR_CODES.TOOL_UNAVAILABLE, {

@@ -43,7 +43,7 @@ import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit l
 import createIntegrationsRouter from "./routes/integrations.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
-import createSuperadminRouter from "./routes/superadmin.js";
+import createPlatformAdminRouter from "./routes/platformAdmin.js";
 import createPlatformRouter from "./routes/platform.js";
 import createPlatformDeploymentsRouter from "./routes/platformDeployments.js";
 import createPlatformSecurityRouter from "./routes/platformSecurity.js";
@@ -1184,29 +1184,6 @@ app.post("/api/auth/unlock-pin", authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: "User account is disabled" });
     }
 
-    /*
-     * Bootstrap only for a global profile holding oneengine.manage. This is an
-     * RBAC check, not an identity/profile-name bypass.
-     */
-    if (!user.pin_hash && user.company_id == null && process.env.SUPERADMIN_BOOTSTRAP_PIN) {
-      const platformAccess = user.role_id
-        ? await db(
-            "SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code='oneengine.manage' LIMIT 1",
-            [user.role_id]
-          )
-        : { rows: [] };
-      if (platformAccess.rows.length) {
-        if (pin !== String(process.env.SUPERADMIN_BOOTSTRAP_PIN)) {
-          return res.status(401).json({ success: false, code: "INVALID_PIN", message: "Incorrect PIN" });
-        }
-        const pinHash = await bcrypt.hash(pin, PASSWORD_BCRYPT_ROUNDS);
-        await db(
-          "UPDATE users SET pin_hash=$1, updated_at=NOW() WHERE id=$2 AND company_id IS NOT DISTINCT FROM $3",
-          [pinHash, req.user.id, req.user.companyId]
-        );
-        return res.json({ success: true, initialized: true });
-      }
-    }
 
     if (!user.pin_hash) {
       return res.status(409).json({ success: false, code: "PIN_NOT_SET", message: "No PIN is configured for this user" });
@@ -1542,7 +1519,7 @@ app.use(
     entitlementAccess: (companyId) => getCompanyEntitlements(db, companyId),
   })
 );
-app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
+app.use("/api", createPlatformAdminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
 app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyScope, hasPermission }));
 app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));

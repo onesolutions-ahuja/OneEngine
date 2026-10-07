@@ -110,8 +110,8 @@ for (const retired of ['src/pages/settings/Platform/PackageBuilderAdmin.jsx', 's
 assert(!developer.includes('PackageBuilderAdmin'), 'OneDeveloper must not import the retired Package Builder')
 assert(!developer.includes("key: 'platform-apps'"), 'OneDeveloper must not expose the retired platform-apps section')
 assert(/requestedSection\s*===\s*['"]platform-apps['"][\s\S]{0,120}?['"]gptappbuilder['"]/.test(routes), 'Legacy platform-apps route must redirect to GPTAppBuilder')
-assert(gptAppBuilder.includes('/api/superadmin/packages/register-portable'), 'GPTAppBuilder publish must use generic portable package registration')
-assert(gptAppBuilder.includes('/api/superadmin/packages/releases'), 'GPTAppBuilder publish must use the generic release lifecycle')
+assert(gptAppBuilder.includes('/api/platform-admin/packages/register-portable'), 'GPTAppBuilder publish must use generic portable package registration')
+assert(gptAppBuilder.includes('/api/platform-admin/packages/releases'), 'GPTAppBuilder publish must use the generic release lifecycle')
 
 if (errors.length) {
   console.error('\nApp surface audit FAILED:')

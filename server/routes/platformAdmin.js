@@ -50,7 +50,7 @@ function licenceStatus({ active, startsAt, expiresAt }) {
   return "ACTIVE";
 }
 
-export default function createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env = process.env, hasPermission = null }) {
+export default function createPlatformAdminRouter({ authenticate, db, pool, tenantDatabaseRouter, env = process.env, hasPermission = null }) {
   const router = express.Router();
   const writeAudit = createAuditWriter({ db });
   const requireOneEngineManage = async (req, res, next) => {
@@ -69,12 +69,12 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   };
 
-  router.use("/superadmin", authenticate, requireOneEngineManage);
+  router.use("/platform-admin", authenticate, requireOneEngineManage);
 
   /* Legacy platform-developer identity/mapping endpoints were removed.
    * OneEngine authority is assigned through RBAC using oneengine.manage. */
 
-  router.get("/superadmin/licences", async (req, res) => {
+  router.get("/platform-admin/licences", async (req, res) => {
     const result = await db(`SELECT l.*, COUNT(c.id)::int AS company_count,
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
         'package_id',p.id,'package_key',p.package_key,'name',p.name,
@@ -91,7 +91,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     })) });
   });
 
-  router.post("/superadmin/licences", async (req, res) => {
+  router.post("/platform-admin/licences", async (req, res) => {
     const name = String(req.body?.name || "").trim();
     if (!name) return res.status(400).json({ success: false, message: "Licence name is required" });
     const body = req.body || {};
@@ -121,7 +121,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.put("/superadmin/licences/:id", async (req, res) => {
+  router.put("/platform-admin/licences/:id", async (req, res) => {
     const body = req.body || {};
     const validLimit = (value) => value === undefined || value === null || (Number.isInteger(value) && value >= 0);
     const validDuration = (value) => value === undefined || value === null || (Number.isInteger(value) && value > 0);
@@ -163,7 +163,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.put("/superadmin/licences/:id/packages", async (req, res) => {
+  router.put("/platform-admin/licences/:id/packages", async (req, res) => {
     const packages = req.body?.packages;
     if (!Array.isArray(packages) || packages.some((item) =>
       !item || typeof item.package_id !== "string" ||
@@ -206,7 +206,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.get("/superadmin/companies", async (req, res) => {
+  router.get("/platform-admin/companies", async (req, res) => {
     const result = await db(`SELECT c.id,c.name,c.active,c.licence_id,l.name AS licence_name,l.active AS licence_active,
       COALESCE(a.active,true) AS allocation_active,COALESCE(a.starts_at,l.starts_at) AS allocation_starts_at,COALESCE(a.expires_at,l.expires_at) AS allocation_expires_at
       FROM companies c LEFT JOIN licences l ON l.id=c.licence_id
@@ -221,7 +221,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     })) });
   });
 
-  router.put("/superadmin/companies/:id/licence", async (req, res) => {
+  router.put("/platform-admin/companies/:id/licence", async (req, res) => {
     const body = req.body || {};
     const company = await db(`SELECT c.id,c.name,c.licence_id,l.name AS licence_name,l.starts_at AS licence_starts_at,l.expires_at AS licence_expires_at,
       a.active AS allocation_active,a.starts_at,a.expires_at
@@ -277,7 +277,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: { ...result.rows[0], licence_name: licence?.name || current.licence_name || null, starts_at: effectiveStartsAt, expires_at: effectiveExpiresAt, active: nextActive, status: newStatus } });
   });
 
-  router.get("/superadmin/companies/:id/jarves-licence", async (req,res) => {
+  router.get("/platform-admin/companies/:id/jarves-licence", async (req,res) => {
     try {
       const [settings, enabled] = await Promise.all([
         db("SELECT jarves_licence_users FROM company_settings WHERE company_id=$1 LIMIT 1", [req.params.id]),
@@ -291,7 +291,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.put("/superadmin/companies/:id/jarves-licence", async (req,res) => {
+  router.put("/platform-admin/companies/:id/jarves-licence", async (req,res) => {
     const allowance = Math.max(0, Math.trunc(Number(req.body?.allowance) || 0));
     try {
       const enabled = await db("SELECT COUNT(*)::int AS count FROM users WHERE company_id=$1 AND active=true AND jarves_enabled=true", [req.params.id]);
@@ -312,11 +312,11 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.get("/superadmin/companies/:id/licence-allocations", async (req,res) => {
+  router.get("/platform-admin/companies/:id/licence-allocations", async (req,res) => {
     const r=await db(`SELECT a.licence_id,l.name,a.seats,(SELECT COUNT(*)::int FROM user_licence_assignments u WHERE u.company_id=a.company_id AND u.licence_id=a.licence_id) AS used FROM company_licence_allocations a JOIN licences l ON l.id=a.licence_id WHERE a.company_id=$1 ORDER BY l.name`,[req.params.id]);
     res.json({success:true,data:r.rows});
   });
-  router.put("/superadmin/companies/:id/licence-allocations/:licenceId", async (req,res) => {
+  router.put("/platform-admin/companies/:id/licence-allocations/:licenceId", async (req,res) => {
     const seats=Math.max(0,Number(req.body?.seats)||0);
     const licence=await db("SELECT seat_limit FROM licences WHERE id=$1",[req.params.licenceId]);
     if(!licence.rows.length)return res.status(404).json({success:false,message:"Licence not found"});
@@ -327,7 +327,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({success:true,data:r.rows[0]});
   });
 
-  router.get("/superadmin/companies/:id/entitlements", async (req, res) => {
+  router.get("/platform-admin/companies/:id/entitlements", async (req, res) => {
     const result = await db(`SELECT c.id,c.name,l.id AS licence_id,l.name AS licence_name,l.active,l.starts_at AS licence_starts_at,l.expires_at AS licence_expires_at,
       COALESCE(a.active,true) AS allocation_active,a.starts_at AS allocation_starts_at,a.expires_at AS allocation_expires_at,
       COALESCE(jsonb_object_agg(le.entitlement_key,le.enabled) FILTER (WHERE le.entitlement_key IS NOT NULL),'{}'::jsonb) AS entitlements
@@ -364,7 +364,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     } });
   });
 
-  router.get("/superadmin/companies/:id/database", async (req, res) => {
+  router.get("/platform-admin/companies/:id/database", async (req, res) => {
     const config = await tenantDatabaseRouter?.loadConfig(req.params.id);
     if (!config) return res.status(404).json({ success: false, message: "Database configuration not found" });
     res.json({
@@ -399,7 +399,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     });
   });
 
-  router.get("/superadmin/companies/:id/users", async (req, res) => {
+  router.get("/platform-admin/companies/:id/users", async (req, res) => {
     try {
       const result = await db(
         `SELECT u.id,u.full_name,u.email,u.username,u.active,r.name AS role_name
@@ -414,7 +414,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.get("/superadmin/users/email-conflicts", async (req, res) => {
+  router.get("/platform-admin/users/email-conflicts", async (req, res) => {
     const conflicts = await listDuplicateNormalizedEmails(db);
     res.json({
       success: true,
@@ -425,7 +425,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     });
   });
 
-  router.post("/superadmin/companies/:id/provision-admin", async (req, res) => {
+  router.post("/platform-admin/companies/:id/provision-admin", async (req, res) => {
     const email = normalizeEmail(req.body?.email);
     if (!email || !isValidEmail(email)) {
       return res.status(400).json({ success: false, message: "A valid client admin email is required" });
@@ -542,7 +542,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/companies/:id/provision-support", async (req, res) => {
+  router.post("/platform-admin/companies/:id/provision-support", async (req, res) => {
     const email = normalizeEmail(req.body?.email);
     const temporaryPassword = String(req.body?.temporaryPassword || "");
     if (!email || !isValidEmail(email)) {
@@ -650,7 +650,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.put("/superadmin/companies/:id/database", async (req, res) => {
+  router.put("/platform-admin/companies/:id/database", async (req, res) => {
     const mode = String(req.body?.databaseMode || "ONEPOS_MANAGED").toUpperCase();
     if (!["ONEPOS_MANAGED", "CUSTOMER_MANAGED"].includes(mode)) {
       return res.status(400).json({ success: false, message: "Invalid database mode" });
@@ -709,7 +709,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     });
   });
 
-  router.post("/superadmin/companies/:id/database/test", async (req, res) => {
+  router.post("/platform-admin/companies/:id/database/test", async (req, res) => {
     try {
       const config = await tenantDatabaseRouter.loadConfig(req.params.id);
       if (config.database_mode !== "CUSTOMER_MANAGED") return res.json({ success: true, data: { status: "SKIPPED", message: "Company uses onePOS Managed storage" } });
@@ -725,7 +725,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/companies/:id/database/validate-schema", async (req, res) => {
+  router.post("/platform-admin/companies/:id/database/validate-schema", async (req, res) => {
     try {
       const config = await tenantDatabaseRouter.loadConfig(req.params.id);
       const pool = await tenantDatabaseRouter.getPoolForConfig(config);
@@ -742,7 +742,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/companies/:id/database/initialize", async (req, res) => {
+  router.post("/platform-admin/companies/:id/database/initialize", async (req, res) => {
     try {
       const config = await tenantDatabaseRouter.loadConfig(req.params.id);
       const pool = await tenantDatabaseRouter.getPoolForConfig(config);
@@ -759,7 +759,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/companies/:id/database/activate", async (req, res) => {
+  router.post("/platform-admin/companies/:id/database/activate", async (req, res) => {
     const config = await tenantDatabaseRouter.loadConfig(req.params.id);
     if (config.database_mode === "CUSTOMER_MANAGED" && config.schema_state !== TENANT_SCHEMA_STATES.COMPATIBLE) {
       return res.status(409).json({ success: false, message: "Customer database schema must be compatible before activation" });
@@ -768,7 +768,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: { active: true } });
   });
 
-  router.get("/superadmin/packages", async (_req, res) => {
+  router.get("/platform-admin/packages", async (_req, res) => {
     const result = await db(
       `SELECT id,package_key,name,version,package_type,publisher,category,publication_state,
               active,visible,installable,billable,featured,system_only,display_order,available_tiers,
@@ -778,7 +778,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: result.rows });
   });
 
-  router.post("/superadmin/packages/register-portable", async (req, res) => {
+  router.post("/platform-admin/packages/register-portable", async (req, res) => {
     try {
       const body = req.body || {};
       const result = await registerPortableApplicationPackage({
@@ -805,7 +805,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.get("/superadmin/packages/releases", async (req, res) => {
+  router.get("/platform-admin/packages/releases", async (req, res) => {
     try {
       const releases = await listPackageReleases(db, { packageKey: req.query?.packageKey || req.query?.package_key || null });
       res.json({ success: true, data: releases });
@@ -814,7 +814,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.get("/superadmin/packages/releases/:releaseId/status", async (req, res) => {
+  router.get("/platform-admin/packages/releases/:releaseId/status", async (req, res) => {
     try {
       const result = await getPackageReleaseRolloutStatus(db, req.params.releaseId);
       res.json({ success: true, data: result });
@@ -823,7 +823,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases", async (req, res) => {
+  router.post("/platform-admin/packages/releases", async (req, res) => {
     try {
       const payload = req.body || {};
       const result = await createPackageRelease({
@@ -852,7 +852,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/validate", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/validate", async (req, res) => {
     try {
       const result = await validatePackageRelease({ db, releaseId: req.params.releaseId, userId: req.user?.id || null });
       await writeAudit.object({
@@ -869,7 +869,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/publish", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/publish", async (req, res) => {
     try {
       const result = await publishPackageRelease({ db, releaseId: req.params.releaseId, publishedBy: req.user?.id || null });
       await writeAudit.object({
@@ -885,7 +885,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/start-rollout", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/start-rollout", async (req, res) => {
     try {
       const result = await startReleaseRollout({ db, releaseId: req.params.releaseId, companyIds: Array.isArray(req.body?.companyIds) ? req.body.companyIds : [], userId: req.user?.id || null, stage: req.body?.stage || "internal" });
       res.json({ success: true, data: result });
@@ -894,7 +894,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/pause", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/pause", async (req, res) => {
     try {
       const result = await setPackageReleasePaused({ db, releaseId: req.params.releaseId, paused: true, userId: req.user?.id || null, companyId: req.user?.companyId || null });
       res.json({ success: true, data: result });
@@ -903,7 +903,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/resume", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/resume", async (req, res) => {
     try {
       const result = await setPackageReleasePaused({ db, releaseId: req.params.releaseId, paused: false, userId: req.user?.id || null, companyId: req.user?.companyId || null });
       res.json({ success: true, data: result });
@@ -912,7 +912,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/retry", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/retry", async (req, res) => {
     try {
       const result = await retryFailedReleaseUpgrades({ db, releaseId: req.params.releaseId, userId: req.user?.id || null });
       res.json({ success: true, data: result });
@@ -921,7 +921,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/rollout", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/rollout", async (req, res) => {
     try {
       const result = await startReleaseRollout({ db, releaseId: req.params.releaseId, companyIds: Array.isArray(req.body?.companyIds) ? req.body.companyIds : [], userId: req.user?.id || null, stage: req.body?.stage || "internal" });
       res.json({ success: true, data: result });
@@ -930,7 +930,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/rollback", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/rollback", async (req, res) => {
     try {
       const companyId = req.body?.companyId || req.body?.company_id;
       if (!companyId) return res.status(400).json({ success: false, message: "companyId is required to roll back a tenant" });
@@ -941,7 +941,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.post("/superadmin/packages/releases/:releaseId/tenant/:companyId/upgrade", async (req, res) => {
+  router.post("/platform-admin/packages/releases/:releaseId/tenant/:companyId/upgrade", async (req, res) => {
     try {
       const result = await executeTenantReleaseUpgrade({
         db,
@@ -956,7 +956,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.put("/superadmin/packages/:packageId/marketplace", async (req, res) => {
+  router.put("/platform-admin/packages/:packageId/marketplace", async (req, res) => {
     const body = req.body || {};
     const validBoolean = ["active", "visible", "installable", "billable", "featured", "system_only"].every((key) => body[key] === undefined || typeof body[key] === "boolean");
     const tiers = body.available_tiers;
@@ -1018,7 +1018,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.get("/superadmin/bundles", async (_req, res) => {
+  router.get("/platform-admin/bundles", async (_req, res) => {
     const result = await db(
       `SELECT b.*,
               COALESCE(jsonb_agg(DISTINCT jsonb_build_object(
@@ -1034,7 +1034,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: result.rows });
   });
 
-  router.post("/superadmin/bundles", async (req, res) => {
+  router.post("/platform-admin/bundles", async (req, res) => {
     const key = String(req.body?.bundle_key || "").trim();
     const name = String(req.body?.name || "").trim();
     if (!/^[a-z][a-z0-9_.-]{1,99}$/i.test(key) || !name) {
@@ -1061,7 +1061,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.status(201).json({ success: true, data: result.rows[0] });
   });
 
-  router.put("/superadmin/bundles/:bundleId/marketplace", async (req, res) => {
+  router.put("/platform-admin/bundles/:bundleId/marketplace", async (req, res) => {
     const body = req.body || {};
     const booleans = ["active", "visible", "installable"].every((key) => body[key] === undefined || typeof body[key] === "boolean");
     const validKeys = (items) => items === undefined || (Array.isArray(items) && items.every((item) => typeof item === "string" && /^[a-z0-9_.-]{1,100}$/i.test(item)));
@@ -1084,7 +1084,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.put("/superadmin/bundles/:bundleId/composition", async (req, res) => {
+  router.put("/platform-admin/bundles/:bundleId/composition", async (req, res) => {
     const packages = req.body?.packages;
     const entitlements = req.body?.entitlements || {};
     if (!Array.isArray(packages) || !entitlements || typeof entitlements !== "object" || Array.isArray(entitlements)) {
@@ -1139,7 +1139,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.put("/superadmin/companies/:id/bundles", async (req, res) => {
+  router.put("/platform-admin/companies/:id/bundles", async (req, res) => {
     const legacyIds = req.body?.bundleIds;
     const input = req.body?.assignments ?? (Array.isArray(legacyIds) ? legacyIds.map((bundleId) => ({ bundleId })) : null);
     if (!Array.isArray(input) || input.some((item) =>
@@ -1197,7 +1197,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.get("/superadmin/tiers", async (_req, res) => {
+  router.get("/platform-admin/tiers", async (_req, res) => {
     const result = await db(
       `SELECT t.*,
               COALESCE(jsonb_agg(DISTINCT jsonb_build_object(
@@ -1213,7 +1213,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: result.rows });
   });
 
-  router.post("/superadmin/tiers", async (req, res) => {
+  router.post("/platform-admin/tiers", async (req, res) => {
     const key = String(req.body?.tier_key || "").trim();
     const name = String(req.body?.name || "").trim();
     const allowedCompanies = req.body?.allowed_companies ?? [];
@@ -1234,7 +1234,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.status(201).json({ success: true, data: result.rows[0] });
   });
 
-  router.put("/superadmin/tiers/:tierId/marketplace", async (req, res) => {
+  router.put("/platform-admin/tiers/:tierId/marketplace", async (req, res) => {
     const body = req.body || {};
     const booleans = ["active", "visible", "installable"].every((key) => body[key] === undefined || typeof body[key] === "boolean");
     const companies = body.allowed_companies;
@@ -1254,7 +1254,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: result.rows[0] });
   });
 
-  router.put("/superadmin/tiers/:tierId/composition", async (req, res) => {
+  router.put("/platform-admin/tiers/:tierId/composition", async (req, res) => {
     const packages = req.body?.packages;
     const entitlements = req.body?.entitlements || {};
     if (!Array.isArray(packages) || !entitlements || typeof entitlements !== "object" || Array.isArray(entitlements)) {
@@ -1310,7 +1310,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.put("/superadmin/companies/:id/tiers", async (req, res) => {
+  router.put("/platform-admin/companies/:id/tiers", async (req, res) => {
     const legacyIds = req.body?.tierIds;
     const input = req.body?.assignments ?? (Array.isArray(legacyIds) ? legacyIds.map((tierId) => ({ tierId })) : null);
     if (!Array.isArray(input) || input.some((item) =>
@@ -1358,7 +1358,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.put("/superadmin/companies/:id/packages/:packageKey/assignment", async (req, res) => {
+  router.put("/platform-admin/companies/:id/packages/:packageKey/assignment", async (req, res) => {
     if (typeof req.body?.active !== "boolean" ||
         !validOptionalDate(req.body?.starts_at) || !validOptionalDate(req.body?.expires_at) ||
         (req.body.starts_at && req.body.expires_at && Date.parse(req.body.expires_at) <= Date.parse(req.body.starts_at))) {
@@ -1405,7 +1405,7 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     }
   });
 
-  router.get("/superadmin/companies/:id/entitlement-sources", async (req, res) => {
+  router.get("/platform-admin/companies/:id/entitlement-sources", async (req, res) => {
     try {
       const data = await reconcileCompanyPackageEntitlements(db, req.params.id);
       res.json({ success: true, data });
