@@ -35,7 +35,7 @@ test("workflow decisions can route on outputs from previous steps", async () => 
 test("generic binding resolver supports indexed collection paths", () => {
   const resolved = resolveBindingTree(
     { value: { path: "steps.lookup.records.0.name" } },
-    { steps: { lookup: { records: [{ name: "First" }] } }, variables: {} },
+    { variables: { steps: { lookup: { records: [{ name: "First" }] } }, variables: {} } },
   );
   assert.deepEqual(resolved, { value: "First" });
 });
