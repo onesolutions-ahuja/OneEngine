@@ -531,7 +531,6 @@ function ProcessPathView({ node, builderMode, data, onRecordClick }) {
   const titleField = config.titleField || "";
   const stages = Array.isArray(config.stages) ? config.stages.filter(Boolean) : [];
   const [optimisticStage, setOptimisticStage] = useState("");
-  const [savingStage, setSavingStage] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
