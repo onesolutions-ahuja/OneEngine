@@ -6,8 +6,8 @@ import { isTechnicalRecordField, isUuid, parseBooleanValue } from "../../utils/r
  * THE global record list presentation.
  *
  * ONE shared component renders every metadata record list — Platform object
- * pages, Settings-hosted object routes and future list surfaces — so Product,
- * Customer, Supplier etc. never grow page-specific list implementations.
+ * pages, Settings-hosted object routes and future list surfaces so no object
+ * grows a page-specific list implementation.
  *
  * The caller owns data + behaviour (records, columns, handlers); this component
  * owns ONLY presentation: the search/filter toolbar, the consistent table
