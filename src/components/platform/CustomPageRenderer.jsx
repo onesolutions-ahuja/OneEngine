@@ -871,7 +871,8 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     const shown = records.slice(0, Math.max(1, Number(config.maxRecords) || 8));
     return <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>{shown.map((record, index) => {
       const image = config.imageField ? record[config.imageField] : "";
-      const title = record[config.titleField || collection.fields?.[0] || "id"] || "Record";
+      const fallbackField = state.fields?.[0]?.apiName || state.fields?.[0]?.api_name || "id";
+      const title = record[config.titleField || fallbackField] || record.id || "Record";
       const subtitleFields = Array.isArray(config.subtitleFields) ? config.subtitleFields : [];
       return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
