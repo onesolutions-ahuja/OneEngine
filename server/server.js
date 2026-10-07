@@ -340,7 +340,7 @@ if (pool) {
 /*
  * Last-resort process guards: a single stray async rejection (fire-and-forget
  * delivery, integration dispatch, a dropped socket mid-write) must never kill
- * the till server - a dead backend shows up to every open POS screen as
+ * the API server - a dead backend shows up to every open client as
  * "Failed to fetch". Log with full stack and keep serving; Node's default
  * behaviour for these events is to terminate the process.
  */
@@ -1465,13 +1465,6 @@ app.put("/api/auth/me/preferences", authenticate, async (req, res) => {
 app.post("/api/auth/change-password", authenticate, createChangePasswordHandler({ db, bcrypt }));
 
 /*
-|--------------------------------------------------------------------------
-| CUSTOMER DATA FOUNDATION
-|--------------------------------------------------------------------------
-*/
-
-
-/*
 
 /*
 |--------------------------------------------------------------------------
@@ -1564,7 +1557,7 @@ app.use("/api", createPlatformEventsRouter({
 }));
 /*
 | T9A - generic integration foundation (provider-agnostic). Credentials are
-| encrypted at rest; no Sales/Purchases data is sent anywhere by this module.
+| encrypted at rest; application data is not sent by this module.
 */
 app.use(
   "/api",
@@ -1639,7 +1632,7 @@ app.use(async (error, req, res, next) => {
 */
 const SMART_THEME_URL = String(process.env.SMART_THEME_URL || "https://onesolutions-ahuja.github.io/OneEngine").replace(/\/$/, "");
 
-app.get(["/", "/login", "/app", "/app/*", "/customer-display"], (req, res) => {
+app.get(["/", "/login", "/app", "/app/*"], (req, res) => {
   return res.redirect(302, SMART_THEME_URL);
 });
 
