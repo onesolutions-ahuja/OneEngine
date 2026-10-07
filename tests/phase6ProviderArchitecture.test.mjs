@@ -6,7 +6,7 @@ test("Phase 6 generic Flow runtime contains no provider-specific communication a
  const workflow=await readFile(new URL("../server/services/platformWorkflow.js",import.meta.url),"utf8");
  for(const key of ["SEND_EMAIL_BREVO","SEND_EMAIL_MAILJET",'key: "SEND_WHATSAPP"']) assert.equal(workflow.includes(key),false,key);
  assert.ok(workflow.includes('key: "SEND_COMMUNICATION"'));
- assert.ok(workflow.includes('key: "ONE_HTTP_REQUEST"') || workflow.includes('key: "HTTP_REQUEST"'));
+ assert.match(workflow, /oneHttpRequestDefinition\(\)/);
 });
 
 test("Phase 6 server does not register hardcoded Dojo SumUp Square business drivers", async () => {
