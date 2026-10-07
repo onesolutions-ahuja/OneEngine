@@ -1,23 +1,3 @@
-export const DEVELOPER_SETTINGS_KEYS = new Set([
-  'objects',
-  'assignment-rules',
-  'sharing-rules',
-  'platform',
-  'gptbuilder',
-  'gptappbuilder',
-  'approval-builder',
-  'gpt-page-builder',
-  'dashboard-builder',
-  'report-types',
-  'report-builder',
-  'workflow-runs',
-  'work-items',
-  'deployments',
-  'notifications',
-  'value-sets',
-  'debug',
-])
-
 const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export function readRoute() {
@@ -33,32 +13,10 @@ export function readRoute() {
   // from session state, because that can strand a normal tenant user on an
   // authorization error even though the URL is the root.
   const parts = routePath.split('/').filter(Boolean)
-  if (parts[0] === 'settings') {
-    const section = !parts[1] || parts[1] === 'general' ? 'company' : parts[1]
-    if (DEVELOPER_SETTINGS_KEYS.has(section)) {
-      const developerSection = section === 'platform' || section === 'workflow-builder'
-        ? 'gptbuilder'
-        : section === 'page-builder'
-          ? 'gpt-page-builder'
-          : section
-      return { app: 'developer', section: developerSection }
-    }
-    return { app: 'settings', section }
-  }
+  if (parts[0] === 'settings') return { app: 'settings', section: parts[1] || 'company' }
   if (parts[0] === 'developer') {
-    const requestedSection = parts[1] || 'objects'
-    const section = requestedSection === 'workflow-builder' || requestedSection === 'builder-2'
-      ? 'gptbuilder'
-      : requestedSection === 'platform-apps'
-        ? 'gptappbuilder'
-        : requestedSection === 'page-builder'
-          ? 'gpt-page-builder'
-          : requestedSection
     const params = new URLSearchParams(window.location.search || '')
-    const workflowId = section === 'gptbuilder'
-      ? decodeURIComponent(parts[2] || params.get('workflowId') || '')
-      : ''
-    return { app: 'developer', section, workflowId }
+    return { app: 'developer', section: parts[1] || '', workflowId: decodeURIComponent(parts[2] || params.get('workflowId') || '') }
   }
   if (parts[0] === 'dashboard') return { app: 'dashboard', section: null }
   if (parts[0] === 'flow' && parts[1]) return { app: 'flow-runtime', section: null, sessionId: decodeURIComponent(parts[1]) }
