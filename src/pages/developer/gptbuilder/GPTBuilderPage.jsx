@@ -1268,11 +1268,11 @@ function FlowShell({ flow, onNew, initialRule = null, onWorkflowSaved, onBack })
             transforms: {},
             outputMode: 'automatic',
             manualOutputs: [],
-            importedRuntimeAction: runtimeAction,
-            importedRuntimeActionText: '',
+            importedMetadataAction: runtimeAction,
+            importedMetadataActionText: '',
           },
           configured: true,
-          source: 'runtime_import',
+          source: 'metadata_import',
           position: null,
         })) : [])
     setFlowProps((current) => ({
