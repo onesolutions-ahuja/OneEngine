@@ -43,7 +43,7 @@ import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit l
 import createIntegrationsRouter from "./routes/integrations.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
-import createSuperadminRouter from "./routes/superadmin.js";
+import createPlatformAdminRouter from "./routes/platformAdmin.js";
 import createPlatformRouter from "./routes/platform.js";
 import createPlatformDeploymentsRouter from "./routes/platformDeployments.js";
 import createPlatformSecurityRouter from "./routes/platformSecurity.js";
@@ -1542,7 +1542,7 @@ app.use(
     entitlementAccess: (companyId) => getCompanyEntitlements(db, companyId),
   })
 );
-app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
+app.use("/api", createPlatformAdminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
 app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyScope, hasPermission }));
 app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
