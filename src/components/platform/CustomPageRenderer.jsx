@@ -640,14 +640,14 @@ function configText(config, keys, fallback = "") {
   return fallback;
 }
 
-function GenericPageComponentView({ node, builderMode, onButtonClick, runtimeValue, onValueChange }) {
+function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, runtimeValue, onValueChange }) {
   const key = node.componentKey;
   const config = node.config || {};
   const title = node.title || config.title || config.label || node.label || key.replace(/_/g, " ");
   const action = () => { if (!builderMode) onButtonClick?.(node); };
   const options = Array.isArray(config.options) ? config.options : Array.isArray(config.items) ? config.items : [];
   const disabled = builderMode || node.enabled === false || node.readOnly === true || config.disabled === true;
-  const setValue = (value) => { if (!builderMode && !disabled) onValueChange?.(node, value); };
+  const setValue = (value) => { if (!builderMode && !disabled) { onValueChange?.(node, value); onEvent?.({ eventName: "change", node, value }); } };
 
   if (key === "card") return <div className="rounded-xl border bg-white p-4 shadow-sm"><div className="text-sm font-semibold">{title}</div>{config.subtitle ? <div className="mt-1 text-xs text-slate-500">{String(config.subtitle)}</div> : null}</div>;
   if (key === "grid") return <div className="grid gap-2 rounded-xl border border-dashed p-3" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(6, Number(config.columns) || 2))}, minmax(0,1fr))` }}>{Array.from({length:Math.max(2,Math.min(6,Number(config.columns)||2))}).map((_,i)=><div key={i} className="h-10 rounded bg-slate-100" />)}</div>;
@@ -691,7 +691,7 @@ function GenericPageComponentView({ node, builderMode, onButtonClick, runtimeVal
   return <div className="rounded-lg border border-dashed p-3 text-sm text-slate-500">{title}</div>;
 }
 
-function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, onValueChange, data, runtimeOverrides = {} }) {
+function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, onValueChange, onEvent, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
   if (node.visible === false && !builderMode) return null;
   const interactive = node.enabled !== false && node.readOnly !== true;
@@ -752,13 +752,13 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
-  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} />;
+  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} onEvent={onEvent} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={guardedRecordClick} builderMode={builderMode} />;
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
-        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} data={data} runtimeOverrides={runtimeOverrides} />)}
+        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} onEvent={onEvent} data={data} runtimeOverrides={runtimeOverrides} />)}
       </div>
     );
   }
@@ -865,7 +865,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
  * @param builderMode when true, records stay as placeholders and interactions are inert
  * @param device      desktop | tablet | mobile | kiosk (builder device preview / runtime width)
  */
-export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, renderSectionChrome = null, pageContext = null }) {
+export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, onEvent = null, renderSectionChrome = null, pageContext = null }) {
   const sections = Array.isArray(definition?.sections) ? definition.sections : [];
 
   /*
@@ -939,6 +939,8 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     setRuntimeOverrides((current) => ({ ...current, [node.id]: { ...(current[node.id] || {}), value, ...(selectedRecord !== undefined ? { record: selectedRecord } : {}) } }));
   };
 
+  const emitEvent = (payload) => { if (!builderMode) onEvent?.(payload); };
+
   const recordNodes = useMemo(() => {
     const nodes = [];
     for (const section of sections) {
@@ -995,6 +997,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                     onRecordClick={handleRecordClick}
                     onButtonClick={handleButtonClick}
                     onValueChange={handleValueChange}
+                    onEvent={emitEvent}
                     data={runtimeOverrides[node.id]?.record
                       ? { ...collectionState, [node.id]: { ...(collectionState[node.id] || {}), records: [runtimeOverrides[node.id].record], total: 1, loading: false, error: "", placeholder: false } }
                       : collectionState}
