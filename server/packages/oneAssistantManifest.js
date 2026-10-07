@@ -76,7 +76,6 @@ export function oneAssistantAppointmentRouterWorkflow() {
   const confirmationMessage = "Appointment confirmed for {{appointmentDate}} at {{appointmentTime}}.";
 
   // IMPORTANT: this definition intentionally uses Builder-visible primitives.
-  // No PROCESS_APPOINTMENT_* or APPOINTMENT_SESSION_CONTEXT action may own the business process.
   const actions = [
     { id:"channel_router", label:"Route Communication Channel", apiName:"channel_router", key:"CONDITION",
       outcomes:[
