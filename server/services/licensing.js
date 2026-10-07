@@ -171,8 +171,19 @@ export async function hasUserEntitlement(db, companyId, userId, entitlementKey) 
   const state = await getUserLicenceState(db, companyId, userId);
   if (state.active !== true || !state.licence_id) return false;
   const result = await db(
-    `SELECT 1 FROM licence_entitlements
-      WHERE licence_id=$1 AND entitlement_key=$2 AND enabled=true
+    `SELECT 1
+       WHERE EXISTS (
+         SELECT 1 FROM licence_entitlements e
+          WHERE e.licence_id=$1 AND e.entitlement_key=$2 AND e.enabled=true
+       ) OR EXISTS (
+         SELECT 1
+           FROM licence_packages lp
+           JOIN package_registry p ON p.id=lp.package_id AND p.active=true
+          WHERE lp.licence_id=$1
+            AND lp.enabled=true
+            AND lp.entitlement_type='COMMERCIAL'
+            AND p.manifest->>'entitlementKey'=$2
+       )
       LIMIT 1`,
     [state.licence_id, entitlementKey]
   );
