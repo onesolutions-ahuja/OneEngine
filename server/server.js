@@ -1284,7 +1284,12 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       const changedAt = state?.password_changed_at;
       if (!changedAt || Date.now() - new Date(changedAt).getTime() >= Number(securitySettings.password_expiry_days) * 86400000) {
         passwordExpired = true;
-        await loginDb("UPDATE users SET must_change_password=TRUE WHERE id=$1", [user.id]);
+        /*
+         * The authenticated response already carries mustChangePassword and
+         * the token is issued with the same user state. Do not put a separate
+         * users-table UPDATE on the login critical path merely to persist the
+         * derived expiry flag; the password-change flow persists the state.
+         */
         user.must_change_password = true;
       }
     }
