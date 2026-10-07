@@ -31,4 +31,3 @@ export async function initializePlatformMetadata(pool) {
   for (const entry of ordered) if (entry.id && entry.module_id) await provisionPackageMetadata(pool.query.bind(pool), { packageId: entry.id, moduleId: entry.module_id, companyId: null, manifest: entry.manifest || {}, packageVersion: entry.version || "1.0.0" });
 }
 
-export async function initializeStandardObjectEcosystem() { return undefined; }
