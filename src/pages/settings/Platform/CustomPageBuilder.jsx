@@ -466,14 +466,14 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     if (["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"].includes(componentKey)) {
       const defaults = {
         timeline: { dateField: "", titleField: "", secondaryField: "", groupBy: "day", maxRecords: 10 },
-        kanban: { groupField: "status", titleField: "name", subtitleField: "status", maxRecords: 12, allowDragDrop: true },
-        calendar: { startField: "start_date", endField: "end_date", titleField: "name", subtitleField: "status", categoryField: "status", statusField: "status", statusColors: {}, defaultView: "month" },
-        scheduler: { resourceField: "assignee_id", resourceLabelField: "name", startField: "start_at", endField: "end_at", titleField: "name", statusField: "status", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
-        gantt: { taskLabelField: "name", startField: "start_date", endField: "end_date", progressField: "progress", scale: "week" },
-        map: { locationMode: "latlng", latitudeField: "latitude", longitudeField: "longitude", labelField: "name", defaultZoom: 10 },
-        hierarchy_viewer: { parentField: "parent_id", titleField: "name", maxDepth: 3, orientation: "vertical" },
-        file_viewer: { displayMode: "grid", filenameField: "filename", typeField: "file_type", maxItems: 12 },
-        signature: { fieldKey: "signature", label: "Signature", displayMode: "capture", width: 320, height: 180 },
+        kanban: { groupField: "", titleField: "", subtitleField: "", maxRecords: 12, allowDragDrop: true },
+        calendar: { startField: "", endField: "", titleField: "", subtitleField: "", categoryField: "", statusField: "", statusColors: {}, defaultView: "month" },
+        scheduler: { resourceField: "", resourceLabelField: "", startField: "", endField: "", titleField: "", statusField: "", workingHours: { start: "09:00", end: "17:00" }, slotInterval: 30 },
+        gantt: { taskLabelField: "", startField: "", endField: "", progressField: "", scale: "week" },
+        map: { locationMode: "latlng", latitudeField: "", longitudeField: "", labelField: "", defaultZoom: 10 },
+        hierarchy_viewer: { parentField: "", titleField: "", maxDepth: 3, orientation: "vertical" },
+        file_viewer: { displayMode: "grid", filenameField: "", typeField: "", maxItems: 12 },
+        signature: { fieldKey: "", label: "Signature", displayMode: "capture", width: 320, height: 180 },
       }[componentKey];
       return {
         id: uid(componentKey), componentKey, label: meta.label, collection: { objectKey: "", conditions: [], conditionMatch: "all", sort: [], maxRecords: 10, pagination: false, fields: [] },
