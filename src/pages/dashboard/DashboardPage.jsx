@@ -88,8 +88,8 @@ function DashboardClock() {
     return () => window.clearInterval(id)
   }, [])
   return <div className="dash-clock">
-    <strong>{new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now)}</strong>
-    <span>{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(now)}</span>
+    <strong>{new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(now)}</strong>
+    <span>{new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(now)}</span>
   </div>
 }
 
@@ -169,7 +169,7 @@ export default function DashboardPage({ onOpenBuilder }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [currency, setCurrency] = useState('GBP')
+  const [currency, setCurrency] = useState('')
   const [globalFilterValues, setGlobalFilterValues] = useState({})
   const [permissionCodes, setPermissionCodes] = useState([])
   const [showSubscriptions, setShowSubscriptions] = useState(false)
@@ -183,7 +183,7 @@ export default function DashboardPage({ onOpenBuilder }) {
     minute: 0,
     weekday: 1,
     monthday: 1,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     recipientPrincipals: [],
   }))
   const [viewportMode, setViewportMode] = useState(() => (
@@ -230,6 +230,7 @@ export default function DashboardPage({ onOpenBuilder }) {
       }
       const state = value?.id ? await apiRequest(`/api/dashboards/${encodeURIComponent(value.id)}/state`).catch(() => null) : null
       setDefinition(value)
+      setCurrency(String(value?.currency || value?.config?.currency || ''))
       if (state?.success && Object.keys(filterValues || {}).length === 0) {
         filterValues = state.data?.filter_values || {}
         setGlobalFilterValues(filterValues)
