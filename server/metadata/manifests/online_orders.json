@@ -1104,7 +1104,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "get_online_order",
               "label": "Get Online Order",
               "apiName": "get_online_order",
@@ -1123,10 +1123,10 @@
               "limit": 1,
               "store": "first"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1145,7 +1145,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "validate_transition",
               "label": "Validate Order Transition",
               "apiName": "validate_transition",
@@ -1553,10 +1553,10 @@
                 "invalid_transition"
               ]
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1575,7 +1575,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "update_online_order_status",
               "label": "Update Online Order Status",
               "apiName": "update_online_order_status",
@@ -1590,10 +1590,10 @@
                 }
               }
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         },
         {
@@ -1612,7 +1612,7 @@
             "transforms": {},
             "outputMode": "automatic",
             "manualOutputs": [],
-            "importedRuntimeAction": {
+            "importedMetadataAction": {
               "id": "invalid_transition",
               "label": "Order Transition Rejected",
               "apiName": "invalid_transition",
@@ -1620,10 +1620,10 @@
               "errorMessage": "The requested online order status transition is not allowed.",
               "errorLocation": "record"
             },
-            "importedRuntimeActionText": ""
+            "importedMetadataActionText": ""
           },
           "configured": true,
-          "source": "runtime_import",
+          "source": "metadata_import",
           "position": null
         }
       ]
@@ -1726,7 +1726,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "init_subtotal",
                 "label": "Initialize Subtotal",
                 "key": "ASSIGNMENT",
@@ -1735,10 +1735,10 @@
                 "operator": "set",
                 "value": 0
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1757,7 +1757,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "init_tax",
                 "label": "Initialize Tax",
                 "key": "ASSIGNMENT",
@@ -1766,10 +1766,10 @@
                 "operator": "set",
                 "value": 0
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1788,7 +1788,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_order",
                 "label": "Create Online Order",
                 "key": "CREATE_RECORD",
@@ -1822,10 +1822,10 @@
                   "total": 0
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1844,7 +1844,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_order_id",
                 "label": "Store Order Id",
                 "key": "ASSIGNMENT",
@@ -1855,10 +1855,10 @@
                   "path": "steps.create_order.record.id"
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1877,7 +1877,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "order_lines",
                 "label": "Create Order Lines",
                 "key": "LOOP",
@@ -1892,10 +1892,10 @@
                   "add_tax"
                 ]
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1914,7 +1914,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "get_product",
                 "label": "Get Product",
                 "key": "GET_RECORDS",
@@ -1931,10 +1931,10 @@
                 "limit": 1,
                 "store": "first"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1953,7 +1953,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "line_subtotal",
                 "label": "Calculate Line Subtotal",
                 "key": "FORMULA",
@@ -1969,10 +1969,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -1991,7 +1991,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "line_tax",
                 "label": "Calculate Line Tax",
                 "key": "FORMULA",
@@ -2008,10 +2008,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -2030,7 +2030,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_line",
                 "label": "Create Order Line",
                 "key": "CREATE_RECORD",
@@ -2059,10 +2059,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -2081,7 +2081,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "add_subtotal",
                 "label": "Add Subtotal",
                 "key": "ASSIGNMENT",
@@ -2092,10 +2092,10 @@
                   "path": "variables.lineSubtotal"
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -2114,7 +2114,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "add_tax",
                 "label": "Add Tax",
                 "key": "ASSIGNMENT",
@@ -2125,10 +2125,10 @@
                   "path": "variables.lineTax"
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -2147,7 +2147,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "calculate_total",
                 "label": "Calculate Total",
                 "key": "FORMULA",
@@ -2163,10 +2163,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -2185,7 +2185,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "update_order_totals",
                 "label": "Update Order Totals",
                 "key": "UPDATE_RECORD",
@@ -2205,10 +2205,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           }
         ],
