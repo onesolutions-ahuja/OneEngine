@@ -22,11 +22,12 @@ function classify(rel) {
   const ext=path.extname(rel).toLowerCase();
   const base=path.basename(rel);
   if (rel.startsWith(".github/workflows/") && AUTOMATION_EXT.has(ext)) return "automation";
-  if (rel.startsWith("tests/") || rel.startsWith("server/test/") || /(?:^|\/)__tests__\//.test(rel) || /\.test\.[^.]+$/.test(rel) || /\.spec\.[^.]+$/.test(rel)) return "test";
+  if (rel.startsWith("tests/") || rel.startsWith("server/test/") || rel.startsWith("cypress/") || /(?:^|\/)__tests__\//.test(rel) || /\.test\.[^.]+$/.test(rel) || /\.spec\.[^.]+$/.test(rel)) return "test";
   if (rel.startsWith("scripts/") || rel.startsWith("server/scripts/")) return "tooling";
   if (CONFIG_NAMES.has(base) || /\.config\.(?:js|mjs|cjs|ts)$/.test(base)) return "config";
   if (rel.startsWith("server/database/") && (EXEC_EXT.has(ext) || ext === ".sql")) return "migration-schema";
   if (rel.startsWith("server/") && EXEC_EXT.has(ext)) return "server-runtime";
+  if (rel.startsWith("shared/") && EXEC_EXT.has(ext)) return "shared-runtime";
   if (rel.startsWith("src/") && EXEC_EXT.has(ext)) return "client-runtime";
   if (EXEC_EXT.has(ext)) return "other-executable";
   return "non-executable";
@@ -34,7 +35,7 @@ function classify(rel) {
 
 const files=walk(ROOT).map((full)=>normalize(path.relative(ROOT,full))).sort();
 const rows=files.map((file)=>({file,classification:classify(file)}));
-const executableClasses=new Set(["automation","test","tooling","config","migration-schema","server-runtime","client-runtime","other-executable"]);
+const executableClasses=new Set(["automation","test","tooling","config","migration-schema","server-runtime","client-runtime","shared-runtime","other-executable"]);
 const executable=rows.filter((row)=>executableClasses.has(row.classification));
 const unclassifiedExecutable=executable.filter((row)=>row.classification==="other-executable");
 const counts=rows.reduce((acc,row)=>{acc[row.classification]=(acc[row.classification]||0)+1;return acc;},{});
@@ -60,7 +61,8 @@ const report={
   files:rows,
 };
 fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
-fs.writeFileSync(path.join(ROOT,"artifacts","repository-classification-audit.json"),JSON.stringify(report,null,2)+"\n");
+fs.writeFileSync(path.join(ROOT,"artifacts","repository-classification-audit.json"),JSON.stringify(report,null,2)+"
+");
 if (violations.length) {
   console.error("Repository classification audit failed.", violations);
   process.exit(1);
