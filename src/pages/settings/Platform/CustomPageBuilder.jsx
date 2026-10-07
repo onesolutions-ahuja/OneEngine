@@ -213,7 +213,7 @@ function newPageDraft() {
  * helper); no second hard-coded component list and no ad-hoc grouping.
  */
 function paletteGroups(registry) {
-  const components = registryForBuilder(normalizedRegistry(registry), "PAGE").filter((component) => !"section|table".split("|").includes(component.key) && component.category !== "field");
+  const components = registryForBuilder(normalizedRegistry(registry), "PAGE").filter((component) => component.key !== "section");
   const groups = [];
   for (const component of components) {
     const label = componentCategoryLabel(component.category);
