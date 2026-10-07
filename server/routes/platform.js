@@ -3086,6 +3086,53 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
   });
 });
 
+  router.get("/platform/runtime/settings-hosts", authenticate, async (req, res, next) => {
+    try {
+      const hostedObjectsResult = await db(
+        `SELECT id,object_key,label,plural_label,config,company_id
+           FROM platform_objects
+          WHERE active=TRUE
+            AND (company_id IS NULL OR company_id=$1)
+            AND COALESCE((config->>'settingsHost')::boolean,FALSE)=TRUE
+          ORDER BY COALESCE((config->>'settingsOrder')::integer,999), label`,
+        [req.user.companyId]
+      );
+      const hostRows = hostedObjectsResult.rows || [];
+      const hosts = [];
+      const batchSize = 3;
+      for (let offset = 0; offset < hostRows.length; offset += batchSize) {
+        const batch = await Promise.all(hostRows.slice(offset, offset + batchSize).map(async (object) => {
+          const canView = await hasPlatformObjectPermission(db, req, object.id, "view");
+          if (!canView && !(await hasOneEngineManageAccess(req))) return null;
+
+          const [fieldsResult, canCreate, canEdit, canDelete] = await Promise.all([
+            db(
+              `SELECT * FROM platform_fields
+                WHERE object_id=$1 AND active=TRUE
+                  AND (company_id IS NULL OR company_id=$2)
+                ORDER BY display_order,label`,
+              [object.id, req.user.companyId]
+            ),
+            hasPlatformObjectPermission(db, req, object.id, "create"),
+            hasPlatformObjectPermission(db, req, object.id, "edit"),
+            hasPlatformObjectPermission(db, req, object.id, "delete"),
+          ]);
+          const fields = await enrichFields(db, fieldsResult.rows || [], req);
+
+          return {
+            ...object,
+            fields,
+            permissions: { can_view: true, can_create: canCreate, can_edit: canEdit, can_delete: canDelete },
+          };
+        }));
+        hosts.push(...batch.filter(Boolean));
+      }
+      res.json({ success: true, data: hosts });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/platform/runtime/pages/:pageKey", authenticate, async (req, res) => {
     const key = String(req.params.pageKey || "").trim();
     if (!isSafeIdentifier(key)) return res.status(400).json({ success: false, message: "Invalid page key" });
