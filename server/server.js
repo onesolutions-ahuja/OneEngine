@@ -1,6 +1,6 @@
 import { createChangePasswordHandler } from "./services/changePassword.js";
 import "dotenv/config";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import express from "express";
 import { installAsyncSafeExpressRouter } from "./bootstrap/asyncRouter.js";
