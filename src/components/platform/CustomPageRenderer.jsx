@@ -294,7 +294,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   if (node.componentKey === "timeline") {
     const sorted = [...records].sort((a, b) => new Date(a[config.dateField] || 0) - new Date(b[config.dateField] || 0));
     if (config.sort === "desc") sorted.reverse();
-    return <div className="space-y-2">{(placeholder ? [{ name: "Timeline entry", created_at: "Date" }] : sorted).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="flex w-full gap-3 rounded-lg border bg-white p-3 text-left" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true" /><span className="min-w-0"><span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{formatRecordValue(record[config.dateField || "created_at"], "datetime")}</span><span className="block truncate text-sm font-medium" style={{ color: "var(--text-primary, #0f172a)" }}>{record[config.titleField || collection.fields?.[0] || "id"] || "Untitled"}</span>{config.secondaryField && record[config.secondaryField] ? <span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.secondaryField]}</span> : null}</span></button>)}</div>;
+    return <div className="space-y-2">{(placeholder ? [{ name: "Timeline entry", created_at: "Date" }] : sorted).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="flex w-full gap-3 rounded-lg border bg-white p-3 text-left" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true" /><span className="min-w-0"><span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{formatRecordValue(record[config.dateField || ""], "datetime")}</span><span className="block truncate text-sm font-medium" style={{ color: "var(--text-primary, #0f172a)" }}>{record[config.titleField || collection.fields?.[0] || "id"] || "Untitled"}</span>{config.secondaryField && record[config.secondaryField] ? <span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.secondaryField]}</span> : null}</span></button>)}</div>;
   }
   if (node.componentKey === "kanban") {
     const groupField = config.groupField;
@@ -334,11 +334,11 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   }
   if (node.componentKey === "gantt") {
     const startField = config.startField || config.dateField || "";
-    const endField = config.endField || "end_date";
+    const endField = config.endField || "";
     const dates = records.flatMap((record) => [new Date(record[startField]).getTime(), new Date(record[endField]).getTime()]).filter(Number.isFinite);
     const minimum = Math.min(...dates);
     const span = Math.max(1, Math.max(...dates) - minimum);
-    return <div className="space-y-2">{(records.length ? records : state.placeholder ? [{ name: "Task", [startField]: 0, [endField]: 1 }] : []).map((record, index) => { const start = new Date(record[startField]).getTime(); const end = new Date(record[endField]).getTime(); const left = Number.isFinite(start) && Number.isFinite(minimum) ? Math.max(0, ((start - minimum) / span) * 100) : 0; const width = Number.isFinite(end - start) ? Math.max(4, ((end - start) / span) * 100) : 35; return <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="grid w-full grid-cols-[8rem_1fr] items-center gap-3 text-left"><span className="truncate text-xs">{record[config.taskLabelField || "name"] || "Untitled"}</span><span className="relative h-6 rounded bg-slate-100"><span className="absolute top-1 h-4 rounded bg-emerald-600" style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }} /></span></button>; })}</div>;
+    return <div className="space-y-2">{(records.length ? records : state.placeholder ? [{ name: "Task", [startField]: 0, [endField]: 1 }] : []).map((record, index) => { const start = new Date(record[startField]).getTime(); const end = new Date(record[endField]).getTime(); const left = Number.isFinite(start) && Number.isFinite(minimum) ? Math.max(0, ((start - minimum) / span) * 100) : 0; const width = Number.isFinite(end - start) ? Math.max(4, ((end - start) / span) * 100) : 35; return <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="grid w-full grid-cols-[8rem_1fr] items-center gap-3 text-left"><span className="truncate text-xs">{record[config.taskLabelField || collection.fields?.[0] || "id"] || "Untitled"}</span><span className="relative h-6 rounded bg-slate-100"><span className="absolute top-1 h-4 rounded bg-emerald-600" style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }} /></span></button>; })}</div>;
   }
   if (node.componentKey === "map") {
     const hasLocationBinding = config.locationMode === "address" ? Boolean(config.addressField) : Boolean(config.latitudeField && config.longitudeField);
@@ -682,10 +682,10 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       const records = Array.isArray(data?.[node.id]?.records) ? data[node.id].records : [];
       if (records.length) {
         const imageField = config.imageField || "";
-        const initialsField = config.initialsField || "name";
+        const initialsField = config.initialsField || "";
         config.avatars = records.slice(0, Number(config.maxVisible) || 5).map((record) => ({
-          label: record[initialsField] || record.name || record.title || "",
-          initials: String(record[initialsField] || record.name || record.title || "?").trim().slice(0, 2).toUpperCase(),
+          label: (initialsField ? record[initialsField] : record.id) || "",
+          initials: String((initialsField ? record[initialsField] : record.id) || "?").trim().slice(0, 2).toUpperCase(),
           image: imageField ? record[imageField] : "",
         }));
       }
@@ -706,12 +706,12 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     const records = Array.isArray(state.records) ? state.records : [];
     if (state.error && !records.length) return <div className="cpb-empty" role="alert">{state.error}</div>;
     const valueField = config.valueField || "id";
-    const labelField = config.labelField || "name";
+    const labelField = config.labelField || state.fields?.[0]?.apiName || state.fields?.[0]?.api_name || "id";
     const secondaryField = config.secondaryField || "";
     return (
       <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" disabled={builderMode || state.loading || node.enabled === false || node.readOnly === true} required={node.required===true} value={runtimeOverrides?.[node.id]?.value ?? ""} onChange={(event)=>{ const selected=records.find((record)=>String(record[valueField]||record.id||"")===event.target.value)||null; onValueChange?.(node,event.target.value,selected); onEvent?.({eventName:"select",node,value:event.target.value,record:selected}); }}>
         <option value="">{state.loading ? "Loading…" : !records.length ? "No matching records" : (config.placeholder || "Select record…")}</option>
-        {records.map((record, index) => <option key={record[valueField] || record.id || index} value={record[valueField] || record.id || ""}>{String(record[labelField] || record.name || record.id || "Record")}{secondaryField && record[secondaryField] ? ` · ${record[secondaryField]}` : ""}</option>)}
+        {records.map((record, index) => <option key={record[valueField] || record.id || index} value={record[valueField] || record.id || ""}>{String(record[labelField] || record.id || "Record")}{secondaryField && record[secondaryField] ? ` · ${record[secondaryField]}` : ""}</option>)}
       </select>
     );
   }
