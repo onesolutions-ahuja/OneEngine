@@ -8,7 +8,6 @@ import { COMMUNICATION_EVENTS, recordCommunicationEvent } from "./communicationC
 import { classifyDebugCode } from "./debugCodes.js";
 import { evaluateWorkflowFormula, workflowFormulaReferences } from "./platformFormula.js";
 import { enqueuePlatformJob } from "./platformJobs.js";
-import { executeRegisteredAction } from "./platformActions.js";
 import { isSafeIdentifier } from "./platformIdentifiers.js";
 import { resolveBindingTree, resolveRecordPathValue, resolveWorkflowResource } from "./platformRecordPaths.js";
 import { createConnectorActionExecutor } from "./connectorFramework.js";
@@ -3101,15 +3100,68 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
         return { status: "completed", channel: "IN_APP", recipients: recipientUserIds };
       }
 
-      // External communication providers are selected by metadata. The generic
-      // communication runtime delegates transport without provider-specific behavior.
-      const legacyKey = { EMAIL: "SEND_EMAIL", SMS: "SEND_SMS" }[channel] || null;
-      if (!legacyKey) {
-        return { status: "failed", code: "UNSUPPORTED_COMMUNICATION_CHANNEL", channel, retryable: false };
+      // External delivery is connector-capability driven. SEND_COMMUNICATION
+      // owns no provider-specific action names or transport branches.
+      const capability = String(
+        resolveConfiguredResource(action.capability, bindingContext, { preserveMissing: false })
+        || `${channel.toLowerCase()}.send`
+      ).trim();
+      const connectorResult = await executeConnectorWorkflowAction({
+        ...context,
+        action: {
+          ...forwarded,
+          key: "SEND_COMMUNICATION",
+          type: "SEND_COMMUNICATION",
+          capability,
+          connectorInstanceId: resolveConfiguredResource(action.connectorInstanceId || action.connectorId, bindingContext, { preserveMissing: false }) || null,
+          payload: {
+            ...(forwarded.payload && typeof forwarded.payload === "object" ? forwarded.payload : {}),
+            channel,
+            recipient: forwarded.recipient || forwarded.to || null,
+            subject: forwarded.subject || null,
+            message: forwarded.message || forwarded.body || forwarded.text || null,
+            templateId: forwarded.templateId || null,
+            templateKey: forwarded.templateKey || forwarded.template || null,
+            templateContext: forwarded.templateContext || {},
+            objectId: forwarded.objectId || null,
+            recordId: forwarded.recordId || null,
+          },
+        },
+      });
+      if (connectorResult?.success !== true) {
+        return {
+          status: "failed",
+          code: connectorResult?.code || "COMMUNICATION_TRANSPORT_UNAVAILABLE",
+          message: connectorResult?.message || "No eligible communication connector is available",
+          channel,
+          capability,
+          retryable: connectorResult?.retryable === true,
+        };
       }
-      const transport = getWorkflowActionDefinition(legacyKey);
-      if (!transport?.executor) return { status: "failed", code: "COMMUNICATION_TRANSPORT_UNAVAILABLE", channel, retryable: false };
-      return transport.executor({ ...context, action: { ...forwarded, key: legacyKey, type: legacyKey } });
+      const providerResult = connectorResult.result || {};
+      await recordCommunicationEvent({
+        db,
+        companyId: tenantId,
+        channel,
+        eventType: COMMUNICATION_EVENTS.SENT,
+        direction: "OUTBOUND",
+        provider: connectorResult.connectorPackageKey || null,
+        providerMessageId: providerResult.providerMessageId || providerResult.reference || null,
+        recipient: forwarded.recipient || forwarded.to || null,
+        templateId: forwarded.templateId || null,
+        objectId: forwarded.objectId || null,
+        recordId: forwarded.recordId || null,
+        body: forwarded.message || forwarded.body || forwarded.text || null,
+        metadata: { actionType: "SEND_COMMUNICATION", capability },
+      }).catch(() => null);
+      return {
+        status: "completed",
+        channel,
+        capability,
+        connectorInstanceId: connectorResult.connectorInstanceId || null,
+        connectorPackageKey: connectorResult.connectorPackageKey || null,
+        result: providerResult,
+      };
     },
   },
   {
@@ -4758,16 +4810,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
 ]);
 
 export const WORKFLOW_ACTION_MAP = new Map(WORKFLOW_ACTION_REGISTRY.map((definition) => [String(definition.key || "").toUpperCase(), definition]));
-
-export async function executeMediatedRegisteredAction({ db, companyId, userId = null, req = null, action }) {
-  return executeRegisteredAction({
-    db,
-    companyId,
-    userId,
-    req: req || { user: { id: userId, companyId } },
-    action,
-  });
-}
 
 export function getWorkflowActionRegistry() {
   return [...WORKFLOW_ACTION_REGISTRY, ...DYNAMIC_CONNECTOR_ACTIONS].filter((definition, index, all) => all.findIndex((entry) => String(entry.key || "").toUpperCase() === String(definition.key || "").toUpperCase()) === index);
