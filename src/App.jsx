@@ -665,7 +665,7 @@ function Desktop({ onLock, onSignOut }) {
       platform: 'developer',
       builder: 'developer',
       contacts: 'customers',
-      one_connect_google: 'google-connect',
+      one_connect_google: 'connector-settings',
       one_assistant: 'assistant',
       one_kiosk: 'kiosk-devices',
     }
@@ -692,7 +692,7 @@ function Desktop({ onLock, onSignOut }) {
     setTopPanel('')
 
     const routeMap = new Set([
-      'integrations','google-connect','accounting','online-orders','own-delivery',
+      'integrations','connector-settings','accounting','online-orders','own-delivery',
       'kiosk-display','kiosk-devices','supplier-returns','audit-log','licensing',
       'app-releases','dashboard','reports','custom-reports','stores','employees','customers',
       'gift-cards','suppliers','purchases','categories',
