@@ -233,8 +233,8 @@ function ModernAvatarGroup({ component, config }) {
   return <div className="h-full flex items-center justify-between gap-3">
     <div className="flex -space-x-2 items-center">
       {visible.map((avatar, index) => (
-        <div key={`${avatar.label || avatar.initials || "a"}-${index}`} className="flex items-center justify-center h-9 w-9 rounded-full border-2 border-white text-[10px] font-semibold" style={{ background: avatar.color || "var(--onepos-accent-600)", color: "#fff", marginLeft: index === 0 ? 0 : undefined }}>
-          {avatar.initials || avatar.label?.slice(0, 2)?.toUpperCase() || "A"}
+        <div key={`${avatar.label || avatar.initials || "a"}-${index}`} className="flex items-center justify-center h-9 w-9 overflow-hidden rounded-full border-2 border-white text-[10px] font-semibold" style={{ background: avatar.color || "var(--onepos-accent-600)", color: "#fff", marginLeft: index === 0 ? 0 : undefined }}>
+          {avatar.image ? <img src={avatar.image} alt={avatar.label || avatar.initials || "Avatar"} className="h-full w-full object-cover" /> : (avatar.initials || avatar.label?.slice(0, 2)?.toUpperCase() || "A")}
         </div>
       ))}
       {overflow > 0 ? <div className="flex items-center justify-center h-9 w-9 rounded-full border-2 border-white text-[10px] font-semibold" style={{ background: "var(--onepos-surface-alt)", color: "var(--onepos-text-heading)" }}>+{overflow}</div> : null}
@@ -244,11 +244,22 @@ function ModernAvatarGroup({ component, config }) {
 }
 
 function ModernActionCard({ component, config }) {
-  const title = component.title || config?.title || "Modern component";
+  const title = component.title || config?.title || config?.label || "Modern component";
+  const type = component.type;
+  const primaryValue = config?.value ?? config?.metric;
+  const secondary = config?.subtitle || config?.meta || config?.status || "";
+  const eyebrow = config?.eyebrow || (type === "modern_kpi_card" ? "Metric" : type === "modern_data_card" ? "Data" : type === "modern_section_header" ? "" : "Action");
   return <div className="h-full flex flex-col justify-center gap-2">
-    <div className="text-xs uppercase tracking-[0.14em]" style={{ color: "var(--onepos-text-muted)" }}>{config?.eyebrow || "Action"}</div>
-    <div className="text-lg font-semibold" style={{ color: "var(--onepos-text-heading)" }}>{title}</div>
-    <div className="text-sm" style={{ color: "var(--onepos-text-secondary)" }}>{config?.subtitle || "Ready to launch"}</div>
+    {eyebrow ? <div className="text-xs uppercase tracking-[0.14em]" style={{ color: "var(--onepos-text-muted)" }}>{eyebrow}</div> : null}
+    <div className="flex items-start gap-2">
+      {config?.icon ? <div className="shrink-0 text-lg" aria-hidden="true">{config.icon}</div> : null}
+      <div className="min-w-0">
+        <div className="text-lg font-semibold" style={{ color: "var(--onepos-text-heading)" }}>{title}</div>
+        {secondary ? <div className="mt-0.5 text-sm" style={{ color: "var(--onepos-text-secondary)" }}>{secondary}</div> : null}
+      </div>
+    </div>
+    {primaryValue !== undefined && primaryValue !== "" ? <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--onepos-text-heading)" }}>{String(primaryValue)}</div> : null}
+    {config?.trend || config?.delta ? <div className="text-xs" style={{ color: "var(--onepos-text-secondary)" }}>{[config.trend, config.delta].filter(Boolean).join(" · ")}</div> : null}
   </div>;
 }
 
