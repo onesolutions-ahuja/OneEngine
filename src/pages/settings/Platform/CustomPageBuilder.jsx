@@ -241,7 +241,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     return paletteGroups(registry)
       .map((group) => ({
         ...group,
-        items: group.items.filter((component) => !query || [component.label, component.key, group.label].some((value) => String(value || "").toLowerCase().includes(query))),
+        items: group.items.filter((component) => component.key !== "section" && (!query || [component.label, component.key, group.label].some((value) => String(value || "").toLowerCase().includes(query))),
       }))
       .filter((group) => group.items.length);
   }, [registry, paletteQuery]);
@@ -865,7 +865,7 @@ const updateNode = (nodeId, changes) => {
       <div
         key={section.id}
         className={`onepos-card p-4 cpb-section ${!preview && selectedSectionId === section.id ? "cpb-section-selected" : ""}`}
-        style={{ flexBasis: widthMeta.basis, width: section.width === "full" ? "100%" : widthMeta.basis, minWidth: 0, position: "relative" }}
+        style={{ flexBasis: "100%", width: "100%", minWidth: 0, position: "relative", border: 0, boxShadow: "none", padding: 0 }}
 
         onDragOver={(event) => { if (!preview) { event.preventDefault(); event.currentTarget.classList.add("cpb-dropzone"); } }}
         onDragLeave={(event) => event.currentTarget.classList.remove("cpb-dropzone")}
@@ -878,18 +878,7 @@ const updateNode = (nodeId, changes) => {
         }}
         onClick={(event) => { if (preview) return; event.stopPropagation(); setSelectedSectionId(section.id); setSelectedNodeId(null); }}
       >
-        {!preview ? (
-          <div className="mb-3 flex items-center gap-2">
-            <GripVertical size={14} className="text-slate-400" />
-            <span className="text-xs font-semibold text-slate-600">{widthMeta.label}</span>
-            <span className="ml-auto flex items-center gap-1">
-              {(["full", "half", "third"]).map((width) => (
-                <button key={width} type="button" className={`cpb-device-btn ${section.width === width ? "active" : ""}`} style={{ padding: "3px 8px", fontSize: 10.5 }} onClick={(event) => { event.stopPropagation(); updateSection(section.id, { width }); }}>{widthMetaLabel(width)}</button>
-              ))}
-              <button type="button" className="rounded p-1 text-slate-400 hover:text-red-600" title="Remove section" aria-label="Remove section" onClick={(event) => { event.stopPropagation(); removeSection(section.id); }}><Trash2 size={13} /></button>
-            </span>
-          </div>
-        ) : null}
+
         <div
           className="cpb-section-body"
           onDragOver={onDragOver}
@@ -1283,15 +1272,13 @@ const updateNode = (nodeId, changes) => {
                     className="cpb-palette-item"
                     draggable
                     onDragStart={(event) => {
-                      if (component.key === "section") event.dataTransfer.setData(DRAG_MIME_PALETTE, JSON.stringify({ kind: "section-palette", componentKey: "section" }));
-                      else event.dataTransfer.setData(DRAG_MIME_PALETTE, JSON.stringify({ kind: "palette", componentKey: component.key }));
+                      event.dataTransfer.setData(DRAG_MIME_PALETTE, JSON.stringify({ kind: "palette", componentKey: component.key }));
                     }}
                     onClick={() => {
-                      if (component.key === "section") addSection("full");
-                      else if (draft.sections.length) dropIntoSection(draft.sections[draft.sections.length - 1].id, { kind: "palette", componentKey: component.key });
+                      if (draft.sections.length) dropIntoSection(draft.sections[draft.sections.length - 1].id, { kind: "palette", componentKey: component.key });
                       else addComponentToNewSection(component.key);
                     }}
-                    title={`Drag onto the canvas${component.key === "section" ? "" : " or into a Section"}`}
+                    title="Drag onto the canvas or click to add"
                   >
                     <Icon size={12} className="shrink-0 text-slate-400" aria-hidden="true" /> {component.label}
                   </button>
@@ -1300,15 +1287,7 @@ const updateNode = (nodeId, changes) => {
                 </div>
               </div>
             ))}
-            {!visiblePaletteGroups.length ? <div className="cpb-palette-empty">No components match “{paletteQuery}”.</div> : null}
-            <div className="cpb-section-tools">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Sections</p>
-              <div className="grid grid-cols-3 gap-1">
-                {Object.values(SECTION_WIDTHS).map((width) => (
-                  <button key={width.key} type="button" className="cpb-device-btn justify-center" style={{ padding: "4px 2px", fontSize: 10 }} onClick={() => addSection(width.key)}>{widthMetaShort(width.key)}</button>
-                ))}
-              </div>
-            </div>
+            {!visiblePaletteGroups.length ? <div className="cpb-palette-empty">{registry.length ? `No components match “${paletteQuery}”.` : "Loading component metadata… The registry will retry automatically."}</div> : null}
             </div>
           </aside> : null}
 
@@ -1342,8 +1321,7 @@ const updateNode = (nodeId, changes) => {
               const paletteRaw = event.dataTransfer.getData(DRAG_MIME_PALETTE);
               if (paletteRaw) {
                 const payload = JSON.parse(paletteRaw);
-                if (payload.kind === "section-palette" || payload.componentKey === "section") addSection("full");
-                else if (draft.sections.length) dropIntoSection(draft.sections[draft.sections.length - 1].id, payload);
+                if (draft.sections.length) dropIntoSection(draft.sections[draft.sections.length - 1].id, payload);
                 else if (payload.kind === "palette") addComponentToNewSection(payload.componentKey);
               }
             }}
@@ -1354,7 +1332,7 @@ const updateNode = (nodeId, changes) => {
                 {!draft.sections.length ? (
                   <div className="cpb-empty w-full py-14">
                     <strong className="mb-1 block text-sm">Blank canvas</strong>
-                    Drag a <b>Section</b> from the palette to begin, then drop components inside it.
+                    Drag any component here to begin. Components can be resized directly on the canvas.
                   </div>
                 ) : null}
               </div>
