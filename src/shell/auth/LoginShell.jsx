@@ -407,12 +407,12 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
                     </button>
                   ) : null}
                   {mfa.allowedEnrollmentMethods?.includes('PLATFORM_PASSKEY') ? (
-                    <button className="google-signin-button" type="button" disabled={submitting} onClick={()=>registerPasskey('PLATFORM')}>
+                    <button className="external-signin-button" type="button" disabled={submitting} onClick={()=>registerPasskey('PLATFORM')}>
                       Set up built-in passkey
                     </button>
                   ) : null}
                   {mfa.allowedEnrollmentMethods?.includes('SECURITY_KEY') ? (
-                    <button className="google-signin-button" type="button" disabled={submitting} onClick={()=>registerPasskey('SECURITY_KEY')}>
+                    <button className="external-signin-button" type="button" disabled={submitting} onClick={()=>registerPasskey('SECURITY_KEY')}>
                       Set up physical security key
                     </button>
                   ) : null}
@@ -544,7 +544,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               {mobilePasskeyDevice ? (
                 <>
                   <button
-                    className="google-signin-button"
+                    className="external-signin-button"
                     type="button"
                     onClick={submitPasskeyLogin}
                     disabled={submitting || !username.trim()}
@@ -560,7 +560,7 @@ export function LockScreen({ onUnlock, onSignOut, preparing = false }) {
               {providers.map((provider) => (
                 <button
                   key={provider.key}
-                  className="google-signin-button"
+                  className="external-signin-button"
                   type="button"
                   onClick={() => {
                     try { setSubmitting(true); setError(''); startAuthenticationProvider(provider, username.trim()) }
