@@ -3614,4 +3614,8 @@ async function startServer() {
   }
 }
 
-startServer();
+if (process.env.ONEENGINE_STARTUP_SMOKE === "1") {
+  console.log("onePOS: startup import smoke passed");
+} else {
+  startServer();
+}
