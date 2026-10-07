@@ -91,6 +91,8 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
   const [metadata,setMetadata]=useState({ fields:[],filters:[],stores:[],users:[],roles:[],publicGroups:[],platformObjects:[],reportTypes:[],sources:[],relationships:[],canManage:false });
   const [platformFields,setPlatformFields]=useState([]);
   const [platformRelationships,setPlatformRelationships]=useState([]);
+  const [platformFieldsLoading,setPlatformFieldsLoading]=useState(false);
+  const [platformFieldsError,setPlatformFieldsError]=useState("");
   const [editingId,setEditingId]=useState(initialReport?.id||null);
   const [definition,setDefinition]=useState(()=>initialReport?.definition?{...fresh(),...initialReport.definition,name:initialReport.name||"",description:initialReport.description||""}:fresh());
   const [results,setResults]=useState(null);
@@ -117,6 +119,7 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     }catch(e){setError(errorMessage(e));}finally{setLoading(false);}
   };
   useEffect(()=>{void load();},[]);
+  useEffect(()=>{let live=true;apiRequest("/api/settings").then((response)=>{if(live&&response?.success)setReportCurrency(response.data?.company?.currency||"GBP");}).catch(()=>{});return()=>{live=false;};},[]);
   useEffect(()=>{
     let live=true;
     if(!initialReport?.id||!runtimeFilters.length)return()=>{live=false;};
@@ -128,13 +131,20 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
     return()=>{live=false;};
   },[]);
 
-  useEffect(()=>{
+  const loadPlatformFields=async()=>{
     const objectId=definition.objectId;
-    if(definition.dataSource!=="platform_object"||!objectId){setPlatformFields([]);setPlatformRelationships([]);return;}
-    getPlatformReportFields(objectId,definition.reportTypeId||null).then((response)=>{
-      if(response?.success){setPlatformFields(response.data?.fields||[]);setPlatformRelationships(response.data?.relationships||[]);}
-    }).catch(()=>{setPlatformFields([]);setPlatformRelationships([]);});
-  },[definition.dataSource,definition.objectId,definition.reportTypeId]);
+    if(definition.dataSource!=="platform_object"||!objectId){setPlatformFields([]);setPlatformRelationships([]);setPlatformFieldsError("");setPlatformFieldsLoading(false);return;}
+    try{
+      setPlatformFieldsLoading(true);setPlatformFieldsError("");
+      const response=await getPlatformReportFields(objectId,definition.reportTypeId||null);
+      if(!response?.success)throw new Error(response?.message||"Unable to load report fields");
+      setPlatformFields(response.data?.fields||[]);
+      setPlatformRelationships(response.data?.relationships||[]);
+    }catch(error){
+      setPlatformFields([]);setPlatformRelationships([]);setPlatformFieldsError(errorMessage(error));
+    }finally{setPlatformFieldsLoading(false);}
+  };
+  useEffect(()=>{void loadPlatformFields();},[definition.dataSource,definition.objectId,definition.reportTypeId]);
 
   const relatedPlatformFields=useMemo(()=>platformRelationships.flatMap((relationship)=>(relationship.fields||[]).map((field)=>({
     ...field,
@@ -240,7 +250,12 @@ export default function CustomReportsAdmin({ embedded = false, initialReport = n
       </div>
       <div className="grid md:grid-cols-4 gap-3"><label className="onepos-label">Format<select className="onepos-input mt-1" value={definition.format||"tabular"} onChange={(e)=>{const format=e.target.value;update(format==="joined"?{format,buckets:[],rowFormulas:[],crossFilters:[],conditionalFormatting:[],historicalTrend:{enabled:false,snapshotDates:[],historicalFilters:[]},snapshot:false}:{format});}}><option value="tabular">Tabular</option><option value="summary">Summary</option><option value="matrix">Matrix</option><option value="joined">Joined</option></select></label><label className="onepos-label">Row limit<input type="number" min="1" max="1000" disabled={historicalEnabled} className="onepos-input mt-1" value={definition.rowLimit||1000} onChange={(e)=>update({rowLimit:Number(e.target.value)})}/>{historicalEnabled?<small className="block">Historical Trending does not use row-limit filtering.</small>:null}</label><label className="flex items-end gap-2 text-sm pb-2"><input type="checkbox" checked={definition.showDetails!==false} onChange={(e)=>update({showDetails:e.target.checked})}/>Detail rows</label><label className="flex items-end gap-2 text-sm pb-2"><input type="checkbox" checked={definition.showSubtotals!==false} onChange={(e)=>update({showSubtotals:e.target.checked})}/>Subtotals</label><label className="flex items-end gap-2 text-sm pb-2"><input type="checkbox" checked={definition.showGrandTotal!==false} onChange={(e)=>update({showGrandTotal:e.target.checked})}/>Grand total</label></div>
 
-      <fieldset><legend className="text-sm font-medium mb-2">Fields</legend><div className="grid grid-cols-2 md:grid-cols-4 gap-2">{availableFields.map((field)=><label key={field.key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={definition.fields.includes(field.key)} onChange={()=>toggleField(field.key)}/>{field.label}</label>)}</div></fieldset>
+      <fieldset><legend className="text-sm font-medium mb-2">Fields</legend>
+        {definition.dataSource==="platform_object"&&definition.objectId&&platformFieldsLoading?<div className="onepos-empty">Loading report fields…</div>:null}
+        {definition.dataSource==="platform_object"&&definition.objectId&&!platformFieldsLoading&&platformFieldsError?<div className="onepos-alert onepos-alert-error"><span>Fields unavailable: {platformFieldsError}</span><button type="button" className="onepos-btn onepos-btn-sm onepos-btn-secondary" onClick={()=>void loadPlatformFields()}>Retry</button></div>:null}
+        {definition.dataSource==="platform_object"&&definition.objectId&&!platformFieldsLoading&&!platformFieldsError&&!availableFields.length?<div className="onepos-empty">No active report fields are available for this object.</div>:null}
+        {!platformFieldsLoading&&!platformFieldsError?<div className="grid grid-cols-2 md:grid-cols-4 gap-2">{availableFields.map((field)=><label key={field.key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={definition.fields.includes(field.key)} onChange={()=>toggleField(field.key)}/>{field.label}</label>)}</div>:null}
+      </fieldset>
       {selectedFields.length?<div className="space-y-1"><div className="text-sm font-medium">Column order</div>{selectedFields.map((field,index)=><div key={field.key} className="flex items-center gap-2 text-sm"><span className="flex-1">{field.label}</span><button type="button" disabled={index===0} onClick={()=>{const next=[...definition.fields];[next[index-1],next[index]]=[next[index],next[index-1]];update({fields:next});}}>↑</button><button type="button" disabled={index===selectedFields.length-1} onClick={()=>{const next=[...definition.fields];[next[index],next[index+1]]=[next[index+1],next[index]];update({fields:next});}}>↓</button></div>)}</div>:null}
 
       {definition.dataSource==="platform_object"?<AdvancedFilterEditor filters={definition.filters||[]} crossFilters={definition.format==="joined"?[]:(definition.crossFilters||[])} fields={availableFields} relationships={definition.format==="joined"?[]:platformRelationships} allowFieldComparisons={definition.format!=="joined"&&!platformRelationships.some((relationship)=>String(relationship.reportJoinType||relationship.joinType||"").toUpperCase()==="WITH_OR_WITHOUT")} onChange={({filters,crossFilters})=>update({filters,crossFilters:definition.format==="joined"?[]:crossFilters})}/>:<div className="grid md:grid-cols-2 gap-3"><label className="onepos-label">Date range<select className="onepos-input mt-1" value={definition.filters?.[0]?.operator||"this_week"} onChange={(e)=>update({filters:[{field:"date",operator:e.target.value}]})}>{metadata.filters.map((item)=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label></div>}
