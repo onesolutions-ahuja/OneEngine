@@ -26,6 +26,60 @@ import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
 const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
+
+function errorDetails(error) {
+  if (!error) return { message: "Workflow step failed", oeCode: "OEWX01", status: null, retryable: false };
+  if (typeof error === "string") return { message: error, oeCode: "OEWX01", status: null, retryable: false };
+  return {
+    message: String(error.message || error.error || "Workflow step failed"),
+    oeCode: String(error.oeCode || error.code || "OEWX01"),
+    status: Number.isFinite(Number(error.status)) ? Number(error.status) : null,
+    retryable: error.retryable === true,
+  };
+}
+
+function collectSecureValues(value, found = new Set(), seen = new WeakSet()) {
+  if (!value || typeof value !== "object") return found;
+  if (seen.has(value)) return found;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) collectSecureValues(item, found, seen);
+    return found;
+  }
+  if (Array.isArray(value.__secureValues)) {
+    for (const secret of value.__secureValues) {
+      const normalized = String(secret || "");
+      if (normalized.length >= 4) found.add(normalized);
+    }
+  }
+  for (const nested of Object.values(value)) collectSecureValues(nested, found, seen);
+  return found;
+}
+
+function redact(value) {
+  const secureValues = [...collectSecureValues(value)];
+  const visit = (input, key = "", seen = new WeakSet()) => {
+    if (SECRET_KEY.test(String(key || "")) && key !== "__secureFields" && key !== "__secureValues") return "[REDACTED]";
+    if (typeof input === "string") {
+      let output = input;
+      for (const secret of secureValues) {
+        if (secret && output.includes(secret)) output = output.split(secret).join("********");
+      }
+      return output;
+    }
+    if (!input || typeof input !== "object") return input;
+    if (seen.has(input)) return "[Circular]";
+    seen.add(input);
+    if (Array.isArray(input)) return input.map((item) => visit(item, "", seen));
+    const secureFields = new Set(Array.isArray(input.__secureFields) ? input.__secureFields.map(String) : []);
+    return Object.fromEntries(Object.entries(input).map(([childKey, childValue]) => {
+      if (childKey === "__secureValues") return [childKey, "[REDACTED]"];
+      if (secureFields.has(childKey) || SECRET_KEY.test(childKey)) return [childKey, "[REDACTED]"];
+      return [childKey, visit(childValue, childKey, seen)];
+    }));
+  };
+  return visit(value);
+}
 const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
     key: "CONNECTOR_HEALTH_CHECK",

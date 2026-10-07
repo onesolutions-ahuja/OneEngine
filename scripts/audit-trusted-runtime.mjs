@@ -10,6 +10,7 @@ const SERVER = path.join(ROOT, 'server')
 const SERVER_ENTRY = path.join(SERVER, 'server.js')
 const SERVER_RUNTIME = path.join(SERVER, 'services', 'trustedRuntime.js')
 const SERVER_JOBS = path.join(SERVER, 'services', 'platformJobs.js')
+const SERVER_JOB_KINDS = path.join(SERVER, 'services', 'platformJobKinds.js')
 const SERVER_PACKAGES = path.join(SERVER, 'services', 'trustedPackages.js')
 const PACKAGE_ROUTES = path.join(SERVER, 'routes', 'packages.js')
 const ALLOWED_FETCH_FILES = new Set([
@@ -69,16 +70,20 @@ for (const file of walk(SRC)) {
 const serverEntry = fs.readFileSync(SERVER_ENTRY, 'utf8')
 const serverRuntime = fs.readFileSync(SERVER_RUNTIME, 'utf8')
 const serverJobs = fs.readFileSync(SERVER_JOBS, 'utf8')
+const serverJobKinds = fs.readFileSync(SERVER_JOB_KINDS, 'utf8')
 const serverPackages = fs.readFileSync(SERVER_PACKAGES, 'utf8')
 const packageRoutes = fs.readFileSync(PACKAGE_ROUTES, 'utf8')
-for (const required of ['createTrustedRuntimeGate()', 'validateTrustedRuntime()', 'assertTrustedJobKind(job.kind)']) {
+for (const required of ['createTrustedRuntimeGate()', 'validateTrustedRuntime()', 'assertPlatformJobKind(job.kind)']) {
   if (!serverEntry.includes(required)) findings.push({ severity: 'ERROR', rule: 'SERVER_GATE_MISSING', file: path.relative(ROOT, SERVER_ENTRY), detail: required })
 }
-for (const required of ['PLATFORM_FUNCTIONS', 'PLATFORM_ACTION_REGISTRY', 'TRUSTED_JOB_KINDS', 'UNREGISTERED_CAPABILITY', 'prefixes: ["/api/platform/"]']) {
+for (const required of ['PLATFORM_FUNCTIONS', 'PLATFORM_ACTION_REGISTRY', 'UNREGISTERED_CAPABILITY', 'prefixes: ["/api/platform/"]']) {
   if (!serverRuntime.includes(required)) findings.push({ severity: 'ERROR', rule: 'SERVER_RUNTIME_INVALID', file: path.relative(ROOT, SERVER_RUNTIME), detail: required })
 }
-if (!serverJobs.includes('assertTrustedJobKind(kind)')) {
+if (!serverJobs.includes('assertPlatformJobKind(kind)')) {
   findings.push({ severity: 'ERROR', rule: 'JOB_ENQUEUE_GATE_MISSING', file: path.relative(ROOT, SERVER_JOBS) })
+}
+for (const required of ['PLATFORM_JOB_KINDS', 'assertPlatformJobKind', 'UNREGISTERED_JOB_KIND']) {
+  if (!serverJobKinds.includes(required)) findings.push({ severity: 'ERROR', rule: 'JOB_KIND_REGISTRY_INVALID', file: path.relative(ROOT, SERVER_JOB_KINDS), detail: required })
 }
 for (const required of ['hashPackageManifest', 'assertTrustedPackageManifest', 'validateTrustedPackageCatalogue', 'authority: "package_registry"', 'TRUSTED_PACKAGE_MANIFESTS = Object.freeze([])']) {
   if (!serverPackages.includes(required)) findings.push({ severity: 'ERROR', rule: 'TRUSTED_PACKAGE_CATALOGUE_INVALID', file: path.relative(ROOT, SERVER_PACKAGES), detail: required })

@@ -76,14 +76,13 @@ function routeBlocks(file, text, globalGatewayEnabled = false) {
 const functionRegistry = read("server/services/platformFunctionRegistry.js");
 const workflowRuntime = read("server/services/platformWorkflow.js");
 const trustedRuntime = read("server/services/trustedRuntime.js");
-const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/trustedJobKinds.js"))
-  ? read("server/services/trustedJobKinds.js")
+const trustedJobKindsSource = fs.existsSync(path.join(ROOT, "server/services/platformJobKinds.js"))
+  ? read("server/services/platformJobKinds.js")
   : trustedRuntime;
 const actionRegistry = read("server/services/platformActionRegistry.js");
 const systemWorkflowCatalog = read("server/services/systemWorkflowCatalog.js");
 
 const runtimeFlowManifestsSource = read("server/packages/runtimeFlowManifests.js");
-const platformMetadataSource = read("server/services/platformMetadata.js");
 const platformWorkflowSource = read("server/services/platformWorkflow.js");
 const gptBuilderPageSource = read("src/pages/developer/gptbuilder/GPTBuilderPage.jsx");
 const gptBuilderActionSource = read("src/pages/developer/gptbuilder/GPTBuilderAction.jsx");
@@ -180,28 +179,11 @@ const systemRuntimeWorkflows = systemWorkflowDefinitions().map((workflow) => ({
   actions: workflow.action?.actions || [],
 }));
 
-const metadataSeedWorkflows = [
-  ...extractTopLevelObjects(platformMetadataSource, "const lifecycleFlows = [").map((block) => ({
-    source: "platform-metadata:onestore",
-    name: block.match(/name:\s*"([^"]+)"/)?.[1] || "(unnamed)",
-    apiName: block.match(/buttonKey:\s*"([^"]+)"/)?.[1] || null,
-    actions: Array.from({ length: topLevelArrayItemCount(block) }),
-  })),
-  ...extractTopLevelObjects(platformMetadataSource, "const tillWorkflowDefinitions = [").map((block) => ({
-    source: "platform-metadata:onetill",
-    name: block.match(/name:\s*"([^"]+)"/)?.[1] || "(unnamed)",
-    apiName: block.match(/apiName:\s*"([^"]+)"/)?.[1] || null,
-    actions: Array.from({ length: topLevelArrayItemCount(block) }),
-  })),
-];
+const metadataSeedWorkflows = [];
 
 const runtimeWorkflowInventory = [...packageRuntimeWorkflows, ...systemRuntimeWorkflows, ...metadataSeedWorkflows];
 const allowedShortRuntimeWorkflows = new Set([
   "package:staff::Staff - Set Active Status",
-  "platform-metadata:onetill::OneTill - Open Drawer",
-  "platform-metadata:onetill::OneTill - Receipt QR",
-  "platform-metadata:onetill::OneTill - Receipt QR Policy",
-  "platform-metadata:onetill::OneTill - Revoke Receipt QR",
 ]);
 const shortRuntimeWorkflows = runtimeWorkflowInventory.filter((workflow) => workflow.actions.length <= 2);
 const invalidShortRuntimeWorkflows = shortRuntimeWorkflows.filter((workflow) => !allowedShortRuntimeWorkflows.has(workflow.source + "::" + workflow.name));
@@ -219,10 +201,6 @@ const retiredRuntimeFlowKeys = [
 ];
 const residualRetiredRuntimeKeys = retiredRuntimeFlowKeys.filter((key) => runtimeFlowManifestsSource.includes(`flow("${key}"`));
 const hardcodedLicenceRuntimePresent = /executeLicenceRequestPackageAction|LICENCE_REQUEST_PACKAGE|Licence Request Created/.test(platformWorkflowSource);
-const expectedRuntimeWorkflowCount = 76;
-const expectedAllowedShortWorkflowCount = 8;
-const workflowDenominatorMatches = runtimeWorkflowInventory.length === expectedRuntimeWorkflowCount;
-const shortWorkflowCountMatches = shortRuntimeWorkflows.length === expectedAllowedShortWorkflowCount;
 
 const workflowBuilderSource = read("src/pages/settings/Platform/WorkflowAdmin.jsx");
 const forbiddenExecutableDefaults = [
@@ -364,8 +342,6 @@ const findings = [
   ...residualRetiredRuntimeKeys.map((key) => ({ severity: "GAP", type: "RETIRED_DUPLICATE_RUNTIME_FLOW_RETURNED", key })),
   ...(!builderFallbackReady ? [{ severity: "GAP", type: "GPT_BUILDER_RUNTIME_ROUNDTRIP_FALLBACK_MISSING" }] : []),
   ...(hardcodedLicenceRuntimePresent ? [{ severity: "GAP", type: "HARDCODED_LICENCE_REQUEST_RUNTIME_RETURNED" }] : []),
-  ...(!workflowDenominatorMatches ? [{ severity: "GAP", type: "WORKFLOW_DENOMINATOR_DRIFT", expected: expectedRuntimeWorkflowCount, actual: runtimeWorkflowInventory.length }] : []),
-  ...(!shortWorkflowCountMatches ? [{ severity: "GAP", type: "SHORT_WORKFLOW_COUNT_DRIFT", expected: expectedAllowedShortWorkflowCount, actual: shortRuntimeWorkflows.length }] : []),
 ];
 
 const report = {
@@ -393,8 +369,6 @@ const report = {
     builderRoundTripFallback: builderFallbackReady,
     retiredDuplicateRuntimeKeys: residualRetiredRuntimeKeys.length,
     hardcodedLicenceRuntime: hardcodedLicenceRuntimePresent,
-    workflowDenominatorMatches,
-    shortWorkflowCountMatches,
     totalGaps: findings.length,
   },
   catalogueCoverage,

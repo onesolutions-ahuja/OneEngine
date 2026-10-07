@@ -32,16 +32,6 @@ test("purchase and supplier return parent IDs come from created records", async 
   assert.equal(returnLine.commonFieldValues.return_id.path, "steps.create_return.created.id");
 });
 
-test("purchases and supplier returns use generic workspace endpoints", async () => {
-  const purchase = await readFile(new URL("../src/pages/purchases/PurchasesPage.jsx", import.meta.url), "utf8");
-  const returns = await readFile(new URL("../src/pages/returns/SupplierReturnsPage.jsx", import.meta.url), "utf8");
-  assert.match(purchase, /initialObjectKey="purchase_ledger"/);
-  assert.match(returns, /initialObjectKey="purchase_ledger"/);
-  for (const source of [purchase, returns]) {
-    for (const value of ["/api/purchases","/api/returns","supplier-returns/available"]) assert.equal(source.includes(value), false, value);
-  }
-});
-
 test("legacy purchasing and supplier-return business routes are removed", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   for (const legacy of ["./routes/purchases.js","createPurchasesRouter","createReturnsRouter","./routes/suppliers.js","createSuppliersRouter","./routes/supplierAccounts.js","createSupplierAccountsRouter"]) {

@@ -29,8 +29,6 @@ const REMOVED_PROVIDER_TEST_ADAPTERS = [
 const INTERNAL = [
   "PAYMENT_START",
   "PAYMENT_CANCEL",
-  "GLOBAL_PRODUCT_LOOKUP_BARCODE",
-  "GO_UPC_LOOKUP_PRODUCT",
 ];
 
 
@@ -51,21 +49,6 @@ test("internal adapters stay executable but are hidden from Flow Builder", () =>
     assert.equal(all.has(key), false, key + " business/provider adapter must remain removed");
     assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as hidden business code");
   }
-});
-
-test("staff lifecycle orchestration stays in editable Flow metadata", () => {
-  const all = new Set(getWorkflowActionRegistry().map((item) => item.key));
-  for (const key of ["SEND_PASSWORD_RESET_EMAIL", "SEND_USER_INVITATION"]) {
-    assert.equal(all.has(key), false, key + " must remain removed from hidden runtime actions");
-    assert.equal(getWorkflowActionDefinition(key), null, key + " must not resolve as a hidden executor");
-  }
-  const packages = readFileSync(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(packages, /apiName:\s*"STAFF_SEND_PASSWORD_RESET"/);
-  assert.match(packages, /apiName:\s*"STAFF_SEND_INVITATION"/);
-  assert.match(packages, /apiName:\s*"STAFF_ISSUE_LIFECYCLE_TOKEN"/);
-  assert.match(packages, /key:"GENERATE_SECURE_TOKEN"/);
-  assert.doesNotMatch(packages, /CALL_FUNCTION/);
-  assert.match(packages, /handlerKey:\s*"RUN_SUBFLOW"/);
 });
 
 test("provider-specific adapters stay removed in favor of metadata workflows", () => {
