@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/audit-component-registry.mjs && node scripts/audit-metadata-architecture.mjs && node scripts/audit-trusted-runtime.mjs && node scripts/audit-app-surfaces.mjs",
+    "build": "node scripts/audit-component-registry.mjs && node scripts/audit-metadata-architecture.mjs && node scripts/audit-trusted-runtime.mjs && node scripts/audit-app-surfaces.mjs && vite build",
     "preview": "vite preview",
     "audit:apps": "node scripts/audit-app-surfaces.mjs",
     "audit:trusted": "node scripts/audit-trusted-runtime.mjs",
