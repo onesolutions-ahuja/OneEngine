@@ -705,6 +705,7 @@ const updateNode = (nodeId, changes) => {
             label: saved?.label || current.label,
             presentation_mode: persistedTree.presentation_mode,
             device: persistedTree.device,
+            resources: persistedTree.resources,
             sections: persistedTree.sections,
           }));
           setPages((current) => current.map((row) => row.id === saved.id ? saved : row));
