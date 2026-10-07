@@ -404,7 +404,7 @@ CREATE TABLE IF NOT EXISTS custom_reports (
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(150) NOT NULL,
     description VARCHAR(500),
-    data_source VARCHAR(30) NOT NULL DEFAULT 'sales' CHECK (data_source IN ('sales', 'platform_object')),
+    data_source VARCHAR(30) NOT NULL DEFAULT 'platform_object' CHECK (data_source = 'platform_object'),
     definition JSONB NOT NULL DEFAULT '{}'::jsonb,
     archived_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -416,7 +416,7 @@ DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='custom_reports'::regclass AND conname='custom_reports_data_source_check') THEN
     ALTER TABLE custom_reports DROP CONSTRAINT custom_reports_data_source_check;
   END IF;
-  ALTER TABLE custom_reports ADD CONSTRAINT custom_reports_data_source_check CHECK (data_source IN ('sales','platform_object'));
+  ALTER TABLE custom_reports ADD CONSTRAINT custom_reports_data_source_check CHECK (data_source = 'platform_object');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 CREATE TABLE IF NOT EXISTS custom_report_users (
@@ -2598,22 +2598,10 @@ VALUES
 ('returns.create', 'Create Returns', 'Process customer and supplier returns'),
 ('returns.approve', 'Approve / Process Returns', 'Approve and process pending returns'),
 
-('reports.sales.view', 'Sales Report', 'View the daily sales report'),
-('reports.products.view', 'Product Sales Report', 'View the product sales report'),
-('reports.customers.view', 'Customer Report', 'View the customer spend report'),
-('reports.inventory.view', 'Inventory Overview', 'View the inventory overview report'),
-('reports.inventory_ledger.view', 'Stock Movement Ledger', 'View the stock movement ledger report'),
-('reports.low_stock.view', 'Low Stock Report', 'View the low stock report (included in inventory overview)'),
-('reports.payments.view', 'Payments Report', 'View the payment method breakdown report'),
-('reports.purchases.view', 'Purchase Report', 'View the purchase orders report'),
-('reports.returns.view', 'Sales Returns Report', 'View the sales returns report'),
-('reports.till.view', 'Till Report', 'View the till session report'),
-('reports.vat.view', 'Tax / VAT Report', 'View the tax/VAT report'),
-('reports.summary.view', 'Reports Summary', 'View the reports summary cards'),
-('reports.custom.view', 'View Custom Reports', 'View saved custom sales reports'),
-('reports.custom.create', 'Create Custom Reports', 'Create and duplicate custom sales reports'),
-('reports.custom.edit', 'Edit Custom Reports', 'Edit owned custom sales reports'),
-('reports.custom.delete', 'Archive Custom Reports', 'Archive owned custom sales reports'),
+('reports.custom.view', 'View Reports', 'View reports created with Report Builder'),
+('reports.custom.create', 'Create Reports', 'Create and duplicate Report Builder reports'),
+('reports.custom.edit', 'Edit Reports', 'Edit owned Report Builder reports'),
+('reports.custom.delete', 'Archive Reports', 'Archive owned Report Builder reports'),
 ('reports.custom.share', 'Share Custom Reports', 'Map custom reports to company users'),
 ('dashboard.view', 'View Dashboards', 'View dashboards available to the current user'),
 ('dashboard.create', 'Create Dashboards', 'Create dashboards'),
