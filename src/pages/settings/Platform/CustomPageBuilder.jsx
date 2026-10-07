@@ -10,7 +10,7 @@ import {
   registryForBuilder,
   useComponentRegistry,
 } from "./componentRegistry.js";
-import CustomPageRenderer from "../../../components/platform/CustomPageRenderer.jsx";
+import CustomPageRenderer, { useRecordCollection } from "../../../components/platform/CustomPageRenderer.jsx";
 import ActionWorkflowPicker, { describeInteraction } from "./ActionWorkflowPicker.jsx";
 import { CONDITION_OPERATORS } from "./conditionOperators.js";
 import {
@@ -1391,6 +1391,23 @@ function useCollectionFields(collection, objects) {
   return useCollectionFieldState(collection, objects).fields;
 }
 
+function CollectionLivePreview({ collection }) {
+  const live = useRecordCollection(collection, { enabled: Boolean(collection?.objectKey), page: 1 });
+  if (!collection?.objectKey) return <p className="text-[11px] text-slate-400">Select an object to verify live data.</p>;
+  if (live.loading) return <p className="text-xs text-slate-500">Loading preview records…</p>;
+  if (live.error) return <p role="alert" className="text-xs text-red-600">{live.error}</p>;
+  if (!live.records.length) return <p className="text-xs text-slate-500">0 records match the current filters.</p>;
+  const fields = collection.fields?.length ? collection.fields : Object.keys(live.records[0] || {}).filter((field) => field !== "id").slice(0, 4);
+  return <div className="space-y-1">
+    <p className="text-[11px] font-medium text-slate-500">{live.total} matching record{live.total === 1 ? "" : "s"} · showing {Math.min(live.records.length, 3)}</p>
+    <div className="max-h-32 overflow-auto rounded-lg border border-slate-200 bg-slate-50">
+      {live.records.slice(0, 3).map((record, index) => <div key={record.id || index} className="grid gap-1 border-b border-slate-200 px-2 py-1.5 text-[11px] last:border-b-0" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(fields.length, 4))},minmax(0,1fr))` }}>
+        {fields.slice(0,4).map((field) => <span key={field} className="truncate" title={String(record[field] ?? "")}><b className="block truncate font-medium text-slate-500">{String(field).replace(/_/g," ")}</b>{String(record[field] ?? "—")}</span>)}
+      </div>)}
+    </div>
+  </div>;
+}
+
 function FocusedDataPanel({ node, objects, onChange, targetComponents = [] }) {
   const collection = node.collection || {};
   const { fields, loading: fieldsLoading, error: fieldsError } = useCollectionFieldState(collection, objects);
@@ -1426,6 +1443,10 @@ function FocusedDataPanel({ node, objects, onChange, targetComponents = [] }) {
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Sort & Limit</legend>
         <SortEditor collection={collection} fields={fields} onChange={patchCollection} />
         <div className="space-y-1"><label className={labelClass}>Maximum Records (1–{MAX_RECORD_LIMIT})</label><input className={inputClass} type="number" min={1} max={MAX_RECORD_LIMIT} value={collection.maxRecords ?? 10} onChange={(event) => patchCollection({ maxRecords: Math.min(Math.max(Number(event.target.value) || 1, 1), MAX_RECORD_LIMIT) })}/></div>
+      </fieldset>
+      <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+        <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Live Data Check</legend>
+        <CollectionLivePreview collection={collection} />
       </fieldset>
     </div>
   );
