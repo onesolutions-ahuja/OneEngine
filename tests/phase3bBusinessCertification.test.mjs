@@ -62,3 +62,26 @@ test("business scenario names stay certification data, not Page Builder/runtime 
     assert.equal(implementation.includes(token), false, `business token leaked into generic Page Builder/runtime: ${token}`);
   }
 });
+
+
+test("Phase 3A generic Test/Debug closure is permanently enforced", async () => {
+  const builder = await read("src/pages/settings/Platform/CustomPageBuilder.jsx");
+  const route = await read("server/routes/platform.js");
+
+  assert.match(builder, /testNodeInteraction/);
+  assert.match(builder, /page-interactions\/test/);
+  assert.equal(builder.includes('if(!["workflow","screen_flow"].includes(interaction.type))'), false,
+    "Builder Test Mode must not reject generic non-Flow interactions");
+
+  assert.match(route, /router\.post\("\/platform\/runtime\/page-interactions\/test"/);
+  assert.match(route, /clientOnlyTypes = new Set\(\["none", "component", "navigate", "form_layout"\]\)/);
+  assert.match(route, /type === "action"/);
+  assert.match(route, /Unsupported page interaction type/);
+
+  for (const kind of ["page","component","event","permission","interaction","action","query","flow_input","flow","flow_step","flow_output","ui_refresh","rollback","timing","error"]) {
+    assert.ok(route.includes(`kind: "${kind}"`) || route.includes(`kind:"${kind}"`), `missing Phase 3A trace kind: ${kind}`);
+  }
+  assert.match(route, /client\.query\("BEGIN"\)/);
+  assert.match(route, /client\.query\("ROLLBACK"\)/);
+  assert.match(route, /rolledBack:true/);
+});
