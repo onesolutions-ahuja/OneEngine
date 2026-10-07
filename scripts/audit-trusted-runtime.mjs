@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = path.join(ROOT, 'src')
 const API_FILE = path.join(SRC, 'services', 'api.js')
-const RUNTIME_FILE = path.join(SRC, 'services', 'trustedRuntime.js')
 const SERVER = path.join(ROOT, 'server')
 const SERVER_ENTRY = path.join(SERVER, 'server.js')
 const SERVER_RUNTIME = path.join(SERVER, 'services', 'trustedRuntime.js')
@@ -54,7 +53,7 @@ for (const file of walk(SRC)) {
     })
   }
 
-  if (normal !== path.normalize(RUNTIME_FILE)) {
+  {
     for (const match of text.matchAll(/X-OneEngine-(?:Capability|Runtime)/g)) {
       findings.push({
         severity: 'ERROR',
@@ -101,17 +100,8 @@ if (!serverEntry.includes('validateTrustedPackageCatalogue()')) {
 }
 
 const apiText = fs.readFileSync(API_FILE, 'utf8')
-for (const required of ['isPrivilegedMutation', 'resolveTrustedCapability', 'UNREGISTERED_CAPABILITY']) {
-  if (!apiText.includes(required)) {
-    findings.push({ severity: 'ERROR', rule: 'API_GATE_MISSING', file: path.relative(ROOT, API_FILE), detail: required })
-  }
-}
-
-const runtimeText = fs.readFileSync(RUNTIME_FILE, 'utf8')
-for (const required of ['Object.freeze', 'TRUSTED_CAPABILITY_MAP', 'validateTrustedRuntime', "prefixes: ['/api/platform/']"]) {
-  if (!runtimeText.includes(required)) {
-    findings.push({ severity: 'ERROR', rule: 'RUNTIME_MANIFEST_INVALID', file: path.relative(ROOT, RUNTIME_FILE), detail: required })
-  }
+if (apiText.includes("from './trustedRuntime'") || apiText.includes('X-OneEngine-Capability')) {
+  findings.push({ severity: 'ERROR', rule: 'CLIENT_TRUST_AUTHORITY_FORBIDDEN', file: path.relative(ROOT, API_FILE) })
 }
 
 const report = {
