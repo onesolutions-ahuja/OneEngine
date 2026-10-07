@@ -193,12 +193,10 @@ export default function DashboardPage({ onOpenBuilder }) {
   useEffect(() => {
     let live = true
     Promise.all([
-      apiRequest('/api/settings').catch(() => null),
       apiRequest('/api/dashboards').catch(() => null),
       loadSessionPermissions().catch(() => null),
-    ]).then(([settings, dashboards, permissions]) => {
+    ]).then(([dashboards, permissions]) => {
       if (!live) return
-      if (settings?.success) setCurrency(settings.data?.company?.currency || 'GBP')
       setAvailable(dashboards?.success ? dashboards.data || [] : [])
       setPermissionCodes(Array.isArray(permissions?.permissions) ? permissions.permissions : [])
     })
