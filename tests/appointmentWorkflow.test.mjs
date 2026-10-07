@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 import { packageDefinitions } from "../server/services/packageRegistry.js";
 import { getWorkflowActionDefinition } from "../server/services/platformWorkflow.js";
@@ -292,13 +292,8 @@ test("booking router exposes business logic as Builder primitives", () => {
   assert.ok(createAppointment.fieldValues.ends_at);
 });
 
-test("SMSGate webhook only records inbound communication and no longer hard-codes booking links", () => {
-  const source = readFileSync(new URL("../server/routes/smsGateWebhooks.js", import.meta.url), "utf8");
-  assert.match(source, /recordCommunicationEvent/);
-  assert.match(source, /workflowDispatched/);
-  assert.doesNotMatch(source, /createAppointmentBookingCase/);
-  assert.doesNotMatch(source, /issueAppointmentPublicLink/);
-  assert.doesNotMatch(source, /Welcome\. Book your appointment here/);
+test("retired SMSGate business webhook route stays removed", () => {
+  assert.equal(existsSync(new URL("../server/routes/smsGateWebhooks.js", import.meta.url)), false);
 });
 
 
