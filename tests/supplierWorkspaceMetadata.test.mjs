@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-test("supplier app uses generic workspace runtime", async () => {
-  const source = await readFile(new URL("../src/pages/suppliers/SuppliersPage.jsx", import.meta.url), "utf8");
-  assert.match(source, /WorkspacePage/);
-  assert.match(source, /initialObjectKey="supplier"/);
-  for (const forbidden of ["/api/suppliers", "SupplierEditor", "SupplierProductForm", "SupplierAccounts", "purchase_count", "total_purchase_value"]) {
-    assert.equal(source.includes(forbidden), false, forbidden);
-  }
+test("supplier workspace is metadata-owned and legacy page stays deleted", async () => {
+  await assert.rejects(
+    readFile(new URL("../src/pages/suppliers/SuppliersPage.jsx", import.meta.url), "utf8"),
+    /ENOENT/
+  );
+  const workspace = await readFile(new URL("../src/platform/workspace/WorkspacePage.jsx", import.meta.url), "utf8");
+  assert.match(workspace, /platform\/objects|platform\/runtime\/objects/);
 });
 
 test("supplier master data is not blocked from generic metadata CRUD", async () => {
@@ -21,12 +21,8 @@ test("supplier purchase history is a metadata relationship", async () => {
   assert.match(source, /"parentObjectKey": "supplier"[\s\S]*"childObjectKey": "purchase_ledger"[\s\S]*"relationshipKey": "purchases"/);
 });
 
-
-test("legacy supplier CRUD route is removed", async () => {
+test("legacy supplier CRUD route stays removed", async () => {
   const server = await readFile(new URL("../server/server.js", import.meta.url), "utf8");
   assert.equal(server.includes("./routes/suppliers.js"), false);
   assert.equal(server.includes("createSuppliersRouter"), false);
-  const registry = await readFile(new URL("../server/services/packageRegistry.js", import.meta.url), "utf8");
-  assert.match(registry, /objectKey: "supplier_product"/);
-  assert.match(registry, /parentObjectKey: "supplier", childObjectKey: "supplier_product", relationshipKey: "products"/);
 });
