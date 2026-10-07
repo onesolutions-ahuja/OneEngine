@@ -1591,7 +1591,9 @@ function FocusedDataPanel({ node, objects, onChange, targetComponents = [], page
 
 function RecordCollectionDataGroup({ node, objects, onChange, children, targetComponents = [], pageResources = {} }) {
   const collection = node.collection || {};
+  const [objectQuery, setObjectQuery] = useState("");
   const fields = useCollectionFields(collection, objects);
+  const visibleObjects = objects.filter((object) => !objectQuery.trim() || String(object.label || object.object_key || "").toLowerCase().includes(objectQuery.trim().toLowerCase()) || String(object.object_key || "").toLowerCase().includes(objectQuery.trim().toLowerCase()));
   const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
   return (
     <>
@@ -1599,9 +1601,11 @@ function RecordCollectionDataGroup({ node, objects, onChange, children, targetCo
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Data</legend>
         <div className="space-y-1">
           <label className={labelClass}>Object</label>
+          <input className={inputClass} value={objectQuery} onChange={(event) => setObjectQuery(event.target.value)} placeholder="Search objects…" aria-label="Search objects" />
           <select className={inputClass} value={collection.objectKey || ""} onChange={(event) => patchCollection({ objectKey: event.target.value, fields: [], titleField: "", subtitleField: "" })}>
             <option value="">Select object…</option>
-            {objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}
+            {collection.objectKey && !visibleObjects.some((object) => object.object_key === collection.objectKey) ? objects.filter((object) => object.object_key === collection.objectKey).map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>) : null}
+            {visibleObjects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}
           </select>
         </div>
         <ConditionsEditor collection={collection} fields={fields} onChange={patchCollection} />
@@ -1972,13 +1976,16 @@ function collection_fields(node) {
 }
 
 function FieldSelect({ label, value, fields, onChange }) {
+  const [query, setQuery] = useState("");
+  const visibleFields = fields.filter((field) => !query.trim() || String(field.label || field.api_name || "").toLowerCase().includes(query.trim().toLowerCase()) || String(field.api_name || "").toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <div className="space-y-1">
       <label className={labelClass}>{label}</label>
+      <input className={inputClass} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search fields…" aria-label={`Search ${label}`} />
       <select className={inputClass} value={value || ""} onChange={(event) => onChange(event.target.value)}>
         <option value="">None</option>
-        {value && !fields.some((field) => field.api_name === value) ? <option value={value}>{value}</option> : null}
-        {fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label || field.api_name}</option>)}
+        {value && !visibleFields.some((field) => field.api_name === value) ? <option value={value}>{fields.find((field) => field.api_name === value)?.label || value}</option> : null}
+        {visibleFields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label || field.api_name}</option>)}
       </select>
     </div>
   );
