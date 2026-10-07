@@ -464,7 +464,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "validate_credit_entry",
                 "label": "Validate Credit Entry",
                 "apiName": "validate_credit_entry",
@@ -487,10 +487,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -509,7 +509,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "find_customer",
                 "label": "Find Customer",
                 "apiName": "find_customer",
@@ -528,10 +528,10 @@
                 "limit": 1,
                 "store": "first"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -550,7 +550,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "find_existing_credit_entry",
                 "label": "Find Existing Credit Entry",
                 "apiName": "find_existing_credit_entry",
@@ -569,10 +569,10 @@
                 "limit": 1,
                 "store": "first"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -591,7 +591,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "credit_entry_ready",
                 "label": "Credit Entry Ready?",
                 "apiName": "credit_entry_ready",
@@ -630,10 +630,10 @@
                   "credit_entry_invalid"
                 ]
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -652,7 +652,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_entry",
                 "label": "Create Customer Credit Ledger Entry",
                 "apiName": "create_entry",
@@ -694,10 +694,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -716,7 +716,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "credit_entry_invalid",
                 "label": "Customer Credit Entry Rejected",
                 "apiName": "credit_entry_invalid",
@@ -724,10 +724,10 @@
                 "errorMessage": "Credit entry is invalid, the customer does not exist, or the idempotency key was already used.",
                 "errorLocation": "record"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           }
         ]
