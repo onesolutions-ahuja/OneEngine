@@ -33,7 +33,7 @@ assert(store.includes('readMarketplaceCache()'), 'oneStore must recover from sha
 assert(store.includes('Retry'), 'oneStore must expose retry after catalogue failure')
 
 assert(exists('public/icons/apps/default-app.svg'), 'Missing public default app icon')
-assert(exists('public/icons/apps/onestore.svg'), 'Missing oneStore icon')
+assert(exists('public/icons/apps/onestore-dock-clean.svg'), 'Missing oneStore dock icon')
 
 // App icons are metadata-owned. The shared marketplace helper must not
 // reintroduce a hardcoded package/icon alias table; explicit manifest assets
@@ -109,7 +109,7 @@ for (const retired of ['src/pages/settings/Platform/PackageBuilderAdmin.jsx', 's
 }
 assert(!developer.includes('PackageBuilderAdmin'), 'OneDeveloper must not import the retired Package Builder')
 assert(!developer.includes("key: 'platform-apps'"), 'OneDeveloper must not expose the retired platform-apps section')
-assert(routes.includes("requestedSection === 'platform-apps' ? 'gptappbuilder'"), 'Legacy platform-apps route must redirect to GPTAppBuilder')
+assert(/requestedSection\s*===\s*['"]platform-apps['"][\s\S]{0,120}?['"]gptappbuilder['"]/.test(routes), 'Legacy platform-apps route must redirect to GPTAppBuilder')
 assert(gptAppBuilder.includes('/api/superadmin/packages/register-portable'), 'GPTAppBuilder publish must use generic portable package registration')
 assert(gptAppBuilder.includes('/api/superadmin/packages/releases'), 'GPTAppBuilder publish must use the generic release lifecycle')
 
