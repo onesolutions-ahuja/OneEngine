@@ -29,7 +29,6 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
 const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
 const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
@@ -624,7 +623,6 @@ function Desktop({ onLock, onSignOut }) {
     const aliases = {
       platform: 'developer',
       builder: 'developer',
-      one_connect_google: 'google-connect',
       one_assistant: 'assistant',
     }
     const target = aliases[id] || id
@@ -813,7 +811,7 @@ function Desktop({ onLock, onSignOut }) {
             className="status-button"
             aria-label="Open Settings"
             title="Settings"
-            onClick={() => { setTopPanel(''); setRoute('settings', 'company'); setActiveApp('settings') }}
+            onClick={() => { setTopPanel(''); setRoute('settings'); setActiveApp('settings') }}
           >
             <GearIcon size={17} strokeWidth={2.1} />
           </button>
@@ -866,8 +864,6 @@ function Desktop({ onLock, onSignOut }) {
           ) : enginePermissionNotice
         ) : activeApp === 'settings' ? (
           <SettingsPage initialSection={routeState?.section || ''} />
-        ) : activeApp === 'google-connect' ? (
-          <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeRuntimeApp && activeRuntimePage ? (
@@ -884,9 +880,9 @@ function Desktop({ onLock, onSignOut }) {
           enginePermissionStatus === 'ready' && canManageOneEngine ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : enginePermissionNotice
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
-            const next = { app: 'settings', section: 'company' }
+            const next = { app: 'settings', section: null }
             setRouteState(next)
-            setRoute('settings', 'company')
+            setRoute('settings')
             setActiveApp('settings')
           }} />
         ) : activeApp === 'custom-page-runtime' ? (
