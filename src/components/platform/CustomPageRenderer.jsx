@@ -873,6 +873,22 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
   const [collectionState, setCollectionState] = useState({});
   const [pageByNode, setPageByNode] = useState({});
   const [runtimeOverrides, setRuntimeOverrides] = useState({});
+  useEffect(() => {
+    const onInteractionComplete = (event) => {
+      const detail = event?.detail || {};
+      if (!detail.nodeId) return;
+      setRuntimeOverrides((current) => ({
+        ...current,
+        [detail.nodeId]: {
+          ...(current[detail.nodeId] || {}),
+          lastInteraction: detail,
+          refreshNonce: Number(current[detail.nodeId]?.refreshNonce || 0) + 1,
+        },
+      }));
+    };
+    window.addEventListener("oneengine:page-interaction-complete", onInteractionComplete);
+    return () => window.removeEventListener("oneengine:page-interaction-complete", onInteractionComplete);
+  }, []);
 
   const applyComponentInteraction = ({ record = null, node }) => {
     const interaction = node?.interaction;
