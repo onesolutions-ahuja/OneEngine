@@ -639,10 +639,35 @@ const updateNode = (nodeId, changes) => {
     window.addEventListener("pointercancel", end, { once: true });
   };
 
-  const testNodeInteraction = async ({ node, record = null }) => {
-    const interaction=node?.interaction||{};
-    if(!["workflow","screen_flow"].includes(interaction.type)){setTestTrace([{kind:"page_event",status:"skipped",detail:{message:"Select a component with a Flow-backed event to run rollback Test."}}]);return;}
-    try{setTestBusy(true);const response=await apiRequest("/api/platform/runtime/page-interactions/test",{method:"POST",body:JSON.stringify({nodeId:node?.id||null,event:"click",interaction,recordId:record?.id||record?.record_id||null,pageContext:{params:{},variables:Object.fromEntries((draft.resources?.variables||[]).map(v=>[v.key,v.defaultValue??null])),components:{},flows:{}}})});setTestTrace(response?.data?.trace||[]);if(!response?.success)throw new Error(response?.message||"Page Test failed");onMessage?.("Test completed. Database changes rolled back.");}catch(error){onError?.(error.message);setTestTrace((current)=>current.length?current:[{kind:"error",status:"failed",detail:{message:error.message}}]);}finally{setTestBusy(false);}
+  const testNodeInteraction = async ({ node, record = null, eventName = "click", eventValue = null }) => {
+    const interaction = node?.interactions?.[eventName] || node?.interaction || {};
+    try {
+      setTestBusy(true);
+      const response = await apiRequest("/api/platform/runtime/page-interactions/test", {
+        method: "POST",
+        body: JSON.stringify({
+          nodeId: node?.id || null,
+          event: eventName,
+          eventValue,
+          interaction,
+          recordId: record?.id || record?.record_id || null,
+          pageContext: {
+            params: {},
+            variables: Object.fromEntries((draft.resources?.variables || []).map((value) => [value.key, value.defaultValue ?? null])),
+            components: {},
+            flows: {},
+          },
+        }),
+      });
+      setTestTrace(response?.data?.trace || []);
+      if (!response?.success) throw new Error(response?.message || "Page Test failed");
+      onMessage?.(response?.data?.rolledBack ? "Test completed. Database changes rolled back." : "Test completed.");
+    } catch (error) {
+      onError?.(error.message);
+      setTestTrace((current) => current.length ? current : [{ kind: "error", status: "failed", detail: { message: error.message } }]);
+    } finally {
+      setTestBusy(false);
+    }
   };
 
   /* ------------------------------- save ---------------------------------- */
