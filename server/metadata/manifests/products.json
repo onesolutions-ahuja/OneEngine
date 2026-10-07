@@ -1,0 +1,301 @@
+{
+  "name": "products",
+  "objects": [
+    {
+      "objectKey": "category",
+      "sourceTable": "product_categories",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "product",
+      "sourceTable": "products",
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Product Create",
+      "key": "product_create",
+      "apiName": "PRODUCT_CREATE",
+      "action": {
+        "apiName": "PRODUCT_CREATE",
+        "actions": [
+          {
+            "id": "validate_product",
+            "label": "Validate Product",
+            "apiName": "validate_product",
+            "key": "FORMULA",
+            "expression": "name != null",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "create_product",
+            "label": "Create Product",
+            "apiName": "create_product",
+            "key": "CREATE_RECORD",
+            "objectKey": "product",
+            "fieldValues": {
+              "status": "ACTIVE"
+            }
+          },
+          {
+            "id": "raise_product_error",
+            "label": "Raise Product Error",
+            "apiName": "raise_product_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Product validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "validate_product",
+            "key": "action",
+            "label": "Validate Product",
+            "apiName": "validate_product",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_product",
+                "label": "Validate Product",
+                "apiName": "validate_product",
+                "key": "FORMULA",
+                "expression": "name != null",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_product",
+            "key": "action",
+            "label": "Create Product",
+            "apiName": "create_product",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_product",
+                "label": "Create Product",
+                "apiName": "create_product",
+                "key": "CREATE_RECORD",
+                "objectKey": "product",
+                "fieldValues": {
+                  "status": "ACTIVE"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_product_error",
+            "key": "action",
+            "label": "Raise Product Error",
+            "apiName": "raise_product_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_product_error",
+                "label": "Raise Product Error",
+                "apiName": "raise_product_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Product validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "validate_product",
+          "label": "Validate Product",
+          "apiName": "validate_product",
+          "key": "FORMULA",
+          "expression": "name != null",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "create_product",
+          "label": "Create Product",
+          "apiName": "create_product",
+          "key": "CREATE_RECORD",
+          "objectKey": "product",
+          "fieldValues": {
+            "status": "ACTIVE"
+          }
+        },
+        {
+          "id": "raise_product_error",
+          "label": "Raise Product Error",
+          "apiName": "raise_product_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Product validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "validate_product",
+          "key": "action",
+          "label": "Validate Product",
+          "apiName": "validate_product",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_product",
+              "label": "Validate Product",
+              "apiName": "validate_product",
+              "key": "FORMULA",
+              "expression": "name != null",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "create_product",
+          "key": "action",
+          "label": "Create Product",
+          "apiName": "create_product",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_product",
+              "label": "Create Product",
+              "apiName": "create_product",
+              "key": "CREATE_RECORD",
+              "objectKey": "product",
+              "fieldValues": {
+                "status": "ACTIVE"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_product_error",
+          "key": "action",
+          "label": "Raise Product Error",
+          "apiName": "raise_product_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_product_error",
+              "label": "Raise Product Error",
+              "apiName": "raise_product_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Product validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "validate_product",
+      "label": "Validate Product",
+      "apiName": "validate_product",
+      "key": "FORMULA",
+      "expression": "name != null",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "create_product",
+      "label": "Create Product",
+      "apiName": "create_product",
+      "key": "CREATE_RECORD",
+      "objectKey": "product",
+      "fieldValues": {
+        "status": "ACTIVE"
+      }
+    },
+    {
+      "id": "raise_product_error",
+      "label": "Raise Product Error",
+      "apiName": "raise_product_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Product validation failed"
+    }
+  ]
+}

@@ -1,0 +1,818 @@
+{
+  "name": "customer_credit",
+  "objects": [
+    {
+      "objectKey": "customer",
+      "sourceTable": "customers",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "customer_ledger",
+      "sourceTable": "customer_ledger",
+      "config": {
+        "flowWritesOnly": true
+      },
+      "fields": [
+        {
+          "apiName": "idempotency_key",
+          "label": "Idempotency Key",
+          "type": "string"
+        },
+        {
+          "apiName": "customer_id",
+          "label": "Customer",
+          "type": "string"
+        },
+        {
+          "apiName": "amount",
+          "label": "Amount",
+          "type": "number"
+        }
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Post Customer Credit Entry",
+      "key": "customer_credit_post",
+      "apiName": "CUSTOMER_CREDIT_POST",
+      "inputContract": [
+        {
+          "apiName": "customerId",
+          "type": "string"
+        },
+        {
+          "apiName": "amount",
+          "type": "number"
+        },
+        {
+          "apiName": "idempotencyKey",
+          "type": "string"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "entryId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "CUSTOMER_CREDIT_POST",
+        "actions": [
+          {
+            "id": "find_customer",
+            "key": "GET_RECORDS",
+            "label": "Find Customer",
+            "apiName": "find_customer",
+            "objectKey": "customer",
+            "filters": [
+              {
+                "field": "id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.customerId"
+                }
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "find_existing_credit_entry",
+            "key": "GET_RECORDS",
+            "label": "Find Existing Credit Entry",
+            "apiName": "find_existing_credit_entry",
+            "objectKey": "customer_ledger",
+            "filters": [
+              {
+                "field": "customer_id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.customerId"
+                }
+              },
+              {
+                "field": "idempotency_key",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.idempotencyKey"
+                }
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "validate_credit",
+            "key": "FORMULA",
+            "label": "Validate Credit",
+            "apiName": "validate_credit",
+            "expression": "amount > 0",
+            "resultType": "boolean"
+          },
+          {
+            "id": "customer_credit_ready",
+            "key": "CONDITION",
+            "label": "Credit Ready",
+            "apiName": "customer_credit_ready",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "customer_id",
+                      "operator": "is_set",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_ledger_entry"
+                ]
+              },
+              {
+                "id": "fail",
+                "label": "Blocked",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "customer_id",
+                      "operator": "is_set",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "raise_credit_error"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_credit_error"
+            ]
+          },
+          {
+            "id": "create_ledger_entry",
+            "key": "CREATE_RECORD",
+            "label": "Create Ledger Entry",
+            "apiName": "create_ledger_entry",
+            "objectKey": "customer_ledger",
+            "fieldValues": {
+              "customer_id": {
+                "path": "variables.customerId"
+              },
+              "amount": {
+                "path": "variables.amount"
+              },
+              "idempotency_key": {
+                "path": "variables.idempotencyKey"
+              }
+            }
+          },
+          {
+            "id": "raise_credit_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Credit Error",
+            "apiName": "raise_credit_error",
+            "message": "Customer credit validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "find_customer",
+            "key": "action",
+            "label": "Find Customer",
+            "apiName": "find_customer",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "find_customer",
+                "key": "GET_RECORDS",
+                "label": "Find Customer",
+                "apiName": "find_customer",
+                "objectKey": "customer",
+                "filters": [
+                  {
+                    "field": "id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.customerId"
+                    }
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "find_existing_credit_entry",
+            "key": "action",
+            "label": "Find Existing Credit Entry",
+            "apiName": "find_existing_credit_entry",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "find_existing_credit_entry",
+                "key": "GET_RECORDS",
+                "label": "Find Existing Credit Entry",
+                "apiName": "find_existing_credit_entry",
+                "objectKey": "customer_ledger",
+                "filters": [
+                  {
+                    "field": "customer_id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.customerId"
+                    }
+                  },
+                  {
+                    "field": "idempotency_key",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.idempotencyKey"
+                    }
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_credit",
+            "key": "action",
+            "label": "Validate Credit",
+            "apiName": "validate_credit",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_credit",
+                "key": "FORMULA",
+                "label": "Validate Credit",
+                "apiName": "validate_credit",
+                "expression": "amount > 0",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "customer_credit_ready",
+            "key": "action",
+            "label": "Credit Ready",
+            "apiName": "customer_credit_ready",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "customer_credit_ready",
+                "key": "CONDITION",
+                "label": "Credit Ready",
+                "apiName": "customer_credit_ready",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "customer_id",
+                          "operator": "is_set",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_ledger_entry"
+                    ]
+                  },
+                  {
+                    "id": "fail",
+                    "label": "Blocked",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "customer_id",
+                          "operator": "is_set",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "raise_credit_error"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_credit_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_ledger_entry",
+            "key": "action",
+            "label": "Create Ledger Entry",
+            "apiName": "create_ledger_entry",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_ledger_entry",
+                "key": "CREATE_RECORD",
+                "label": "Create Ledger Entry",
+                "apiName": "create_ledger_entry",
+                "objectKey": "customer_ledger",
+                "fieldValues": {
+                  "customer_id": {
+                    "path": "variables.customerId"
+                  },
+                  "amount": {
+                    "path": "variables.amount"
+                  },
+                  "idempotency_key": {
+                    "path": "variables.idempotencyKey"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_credit_error",
+            "key": "action",
+            "label": "Raise Credit Error",
+            "apiName": "raise_credit_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_credit_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Credit Error",
+                "apiName": "raise_credit_error",
+                "message": "Customer credit validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "find_customer",
+          "key": "GET_RECORDS",
+          "label": "Find Customer",
+          "apiName": "find_customer",
+          "objectKey": "customer",
+          "filters": [
+            {
+              "field": "id",
+              "operator": "equals",
+              "value": {
+                "path": "variables.customerId"
+              }
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "find_existing_credit_entry",
+          "key": "GET_RECORDS",
+          "label": "Find Existing Credit Entry",
+          "apiName": "find_existing_credit_entry",
+          "objectKey": "customer_ledger",
+          "filters": [
+            {
+              "field": "customer_id",
+              "operator": "equals",
+              "value": {
+                "path": "variables.customerId"
+              }
+            },
+            {
+              "field": "idempotency_key",
+              "operator": "equals",
+              "value": {
+                "path": "variables.idempotencyKey"
+              }
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "validate_credit",
+          "key": "FORMULA",
+          "label": "Validate Credit",
+          "apiName": "validate_credit",
+          "expression": "amount > 0",
+          "resultType": "boolean"
+        },
+        {
+          "id": "customer_credit_ready",
+          "key": "CONDITION",
+          "label": "Credit Ready",
+          "apiName": "customer_credit_ready",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Allowed",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "customer_id",
+                    "operator": "is_set",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_ledger_entry"
+              ]
+            },
+            {
+              "id": "fail",
+              "label": "Blocked",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "customer_id",
+                    "operator": "is_set",
+                    "value": false
+                  }
+                ]
+              },
+              "branch": [
+                "raise_credit_error"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_credit_error"
+          ]
+        },
+        {
+          "id": "create_ledger_entry",
+          "key": "CREATE_RECORD",
+          "label": "Create Ledger Entry",
+          "apiName": "create_ledger_entry",
+          "objectKey": "customer_ledger",
+          "fieldValues": {
+            "customer_id": {
+              "path": "variables.customerId"
+            },
+            "amount": {
+              "path": "variables.amount"
+            },
+            "idempotency_key": {
+              "path": "variables.idempotencyKey"
+            }
+          }
+        },
+        {
+          "id": "raise_credit_error",
+          "key": "CUSTOM_ERROR",
+          "label": "Raise Credit Error",
+          "apiName": "raise_credit_error",
+          "message": "Customer credit validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "find_customer",
+          "key": "action",
+          "label": "Find Customer",
+          "apiName": "find_customer",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "find_customer",
+              "key": "GET_RECORDS",
+              "label": "Find Customer",
+              "apiName": "find_customer",
+              "objectKey": "customer",
+              "filters": [
+                {
+                  "field": "id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "variables.customerId"
+                  }
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "find_existing_credit_entry",
+          "key": "action",
+          "label": "Find Existing Credit Entry",
+          "apiName": "find_existing_credit_entry",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "find_existing_credit_entry",
+              "key": "GET_RECORDS",
+              "label": "Find Existing Credit Entry",
+              "apiName": "find_existing_credit_entry",
+              "objectKey": "customer_ledger",
+              "filters": [
+                {
+                  "field": "customer_id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "variables.customerId"
+                  }
+                },
+                {
+                  "field": "idempotency_key",
+                  "operator": "equals",
+                  "value": {
+                    "path": "variables.idempotencyKey"
+                  }
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_credit",
+          "key": "action",
+          "label": "Validate Credit",
+          "apiName": "validate_credit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_credit",
+              "key": "FORMULA",
+              "label": "Validate Credit",
+              "apiName": "validate_credit",
+              "expression": "amount > 0",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "customer_credit_ready",
+          "key": "action",
+          "label": "Credit Ready",
+          "apiName": "customer_credit_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "customer_credit_ready",
+              "key": "CONDITION",
+              "label": "Credit Ready",
+              "apiName": "customer_credit_ready",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "customer_id",
+                        "operator": "is_set",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_ledger_entry"
+                  ]
+                },
+                {
+                  "id": "fail",
+                  "label": "Blocked",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "customer_id",
+                        "operator": "is_set",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "raise_credit_error"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_credit_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "create_ledger_entry",
+          "key": "action",
+          "label": "Create Ledger Entry",
+          "apiName": "create_ledger_entry",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_ledger_entry",
+              "key": "CREATE_RECORD",
+              "label": "Create Ledger Entry",
+              "apiName": "create_ledger_entry",
+              "objectKey": "customer_ledger",
+              "fieldValues": {
+                "customer_id": {
+                  "path": "variables.customerId"
+                },
+                "amount": {
+                  "path": "variables.amount"
+                },
+                "idempotency_key": {
+                  "path": "variables.idempotencyKey"
+                }
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_credit_error",
+          "key": "action",
+          "label": "Raise Credit Error",
+          "apiName": "raise_credit_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_credit_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Credit Error",
+              "apiName": "raise_credit_error",
+              "message": "Customer credit validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ]
+}

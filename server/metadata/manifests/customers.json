@@ -1,0 +1,516 @@
+{
+  "name": "customers",
+  "objects": [
+    {
+      "objectKey": "customer",
+      "sourceTable": "customers",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "customer_address",
+      "sourceTable": "customer_addresses",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "customer_contact",
+      "sourceTable": "customer_contacts",
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Register Customer",
+      "key": "customer_register",
+      "apiName": "CUSTOMER_REGISTER",
+      "inputContract": [
+        {
+          "apiName": "email",
+          "type": "string"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "customerId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "CUSTOMER_REGISTER",
+        "actions": [
+          {
+            "id": "validate_customer",
+            "key": "FORMULA",
+            "label": "Validate Customer",
+            "apiName": "validate_customer",
+            "expression": "email != null",
+            "resultType": "boolean"
+          },
+          {
+            "id": "customer_ready",
+            "key": "CONDITION",
+            "label": "Customer Ready",
+            "apiName": "customer_ready",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "email",
+                      "operator": "is_set",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_customer"
+                ]
+              },
+              {
+                "id": "fail",
+                "label": "Blocked",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "email",
+                      "operator": "is_set",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "raise_customer_error"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_customer_error"
+            ]
+          },
+          {
+            "id": "create_customer",
+            "key": "CREATE_RECORD",
+            "label": "Create Customer",
+            "apiName": "create_customer",
+            "objectKey": "customer",
+            "fieldValues": {
+              "status": "ACTIVE"
+            }
+          },
+          {
+            "id": "raise_customer_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Customer Error",
+            "apiName": "raise_customer_error",
+            "message": "Customer validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "validate_customer",
+            "key": "action",
+            "label": "Validate Customer",
+            "apiName": "validate_customer",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_customer",
+                "key": "FORMULA",
+                "label": "Validate Customer",
+                "apiName": "validate_customer",
+                "expression": "email != null",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "customer_ready",
+            "key": "action",
+            "label": "Customer Ready",
+            "apiName": "customer_ready",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "customer_ready",
+                "key": "CONDITION",
+                "label": "Customer Ready",
+                "apiName": "customer_ready",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "email",
+                          "operator": "is_set",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_customer"
+                    ]
+                  },
+                  {
+                    "id": "fail",
+                    "label": "Blocked",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "email",
+                          "operator": "is_set",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "raise_customer_error"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_customer_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_customer",
+            "key": "action",
+            "label": "Create Customer",
+            "apiName": "create_customer",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_customer",
+                "key": "CREATE_RECORD",
+                "label": "Create Customer",
+                "apiName": "create_customer",
+                "objectKey": "customer",
+                "fieldValues": {
+                  "status": "ACTIVE"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_customer_error",
+            "key": "action",
+            "label": "Raise Customer Error",
+            "apiName": "raise_customer_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_customer_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Customer Error",
+                "apiName": "raise_customer_error",
+                "message": "Customer validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "validate_customer",
+          "key": "FORMULA",
+          "label": "Validate Customer",
+          "apiName": "validate_customer",
+          "expression": "email != null",
+          "resultType": "boolean"
+        },
+        {
+          "id": "customer_ready",
+          "key": "CONDITION",
+          "label": "Customer Ready",
+          "apiName": "customer_ready",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Allowed",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "email",
+                    "operator": "is_set",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "create_customer"
+              ]
+            },
+            {
+              "id": "fail",
+              "label": "Blocked",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "email",
+                    "operator": "is_set",
+                    "value": false
+                  }
+                ]
+              },
+              "branch": [
+                "raise_customer_error"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_customer_error"
+          ]
+        },
+        {
+          "id": "create_customer",
+          "key": "CREATE_RECORD",
+          "label": "Create Customer",
+          "apiName": "create_customer",
+          "objectKey": "customer",
+          "fieldValues": {
+            "status": "ACTIVE"
+          }
+        },
+        {
+          "id": "raise_customer_error",
+          "key": "CUSTOM_ERROR",
+          "label": "Raise Customer Error",
+          "apiName": "raise_customer_error",
+          "message": "Customer validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "validate_customer",
+          "key": "action",
+          "label": "Validate Customer",
+          "apiName": "validate_customer",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_customer",
+              "key": "FORMULA",
+              "label": "Validate Customer",
+              "apiName": "validate_customer",
+              "expression": "email != null",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "customer_ready",
+          "key": "action",
+          "label": "Customer Ready",
+          "apiName": "customer_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "customer_ready",
+              "key": "CONDITION",
+              "label": "Customer Ready",
+              "apiName": "customer_ready",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "email",
+                        "operator": "is_set",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_customer"
+                  ]
+                },
+                {
+                  "id": "fail",
+                  "label": "Blocked",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "email",
+                        "operator": "is_set",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "raise_customer_error"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_customer_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "create_customer",
+          "key": "action",
+          "label": "Create Customer",
+          "apiName": "create_customer",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_customer",
+              "key": "CREATE_RECORD",
+              "label": "Create Customer",
+              "apiName": "create_customer",
+              "objectKey": "customer",
+              "fieldValues": {
+                "status": "ACTIVE"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_customer_error",
+          "key": "action",
+          "label": "Raise Customer Error",
+          "apiName": "raise_customer_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_customer_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Customer Error",
+              "apiName": "raise_customer_error",
+              "message": "Customer validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ]
+}

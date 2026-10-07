@@ -1,0 +1,641 @@
+{
+  "name": "purchasing_core",
+  "objects": [
+    {
+      "objectKey": "purchase_ledger",
+      "sourceTable": "purchase_ledger",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "purchase_line",
+      "sourceTable": "purchase_line",
+      "config": {
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
+      }
+    },
+    {
+      "objectKey": "purchase_receipt",
+      "sourceTable": "purchase_receipt",
+      "config": {
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
+      }
+    },
+    {
+      "objectKey": "stock_return",
+      "sourceTable": "stock_return",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "stock_return_line",
+      "sourceTable": "stock_return_line",
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "relationshipKey": "purchases",
+      "parentObjectKey": "supplier",
+      "childObjectKey": "purchase_ledger",
+      "label": "Purchase History",
+      "cardinality": "one-to-many"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Purchase Create",
+      "key": "purchase_create",
+      "apiName": "PURCHASE_CREATE",
+      "inputContract": [
+        {
+          "apiName": "supplierId",
+          "type": "string"
+        },
+        {
+          "apiName": "amount",
+          "type": "number"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "purchaseId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "PURCHASE_CREATE",
+        "actions": [
+          {
+            "id": "validate_purchase_total",
+            "key": "FORMULA",
+            "label": "Validate Purchase Total",
+            "apiName": "validate_purchase_total",
+            "expression": "amount > 0",
+            "resultType": "boolean"
+          },
+          {
+            "id": "check_purchase_status",
+            "key": "CONDITION",
+            "label": "Check Purchase Status",
+            "apiName": "check_purchase_status",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "DRAFT"
+                    }
+                  ]
+                },
+                "branch": [
+                  "create_purchase"
+                ]
+              },
+              {
+                "id": "fail",
+                "label": "Blocked",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "not_equals",
+                      "value": "DRAFT"
+                    }
+                  ]
+                },
+                "branch": [
+                  "raise_purchase_error"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_purchase_error"
+            ]
+          },
+          {
+            "id": "create_purchase",
+            "key": "CREATE_RECORD",
+            "label": "Create Purchase",
+            "apiName": "create_purchase",
+            "objectKey": "purchase_ledger",
+            "fieldValues": {
+              "status": "DRAFT"
+            }
+          },
+          {
+            "id": "create_purchase_line",
+            "key": "CREATE_RECORD",
+            "label": "Create Purchase Line",
+            "apiName": "create_purchase_line",
+            "objectKey": "purchase_line",
+            "commonFieldValues": {
+              "purchase_id": {
+                "path": "steps.create_purchase.created.id"
+              }
+            }
+          },
+          {
+            "id": "raise_purchase_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Purchase Error",
+            "apiName": "raise_purchase_error",
+            "message": "Purchase validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "validate_purchase_total",
+            "key": "action",
+            "label": "Validate Purchase Total",
+            "apiName": "validate_purchase_total",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_purchase_total",
+                "key": "FORMULA",
+                "label": "Validate Purchase Total",
+                "apiName": "validate_purchase_total",
+                "expression": "amount > 0",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "check_purchase_status",
+            "key": "action",
+            "label": "Check Purchase Status",
+            "apiName": "check_purchase_status",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "check_purchase_status",
+                "key": "CONDITION",
+                "label": "Check Purchase Status",
+                "apiName": "check_purchase_status",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "DRAFT"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "create_purchase"
+                    ]
+                  },
+                  {
+                    "id": "fail",
+                    "label": "Blocked",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "not_equals",
+                          "value": "DRAFT"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "raise_purchase_error"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_purchase_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_purchase",
+            "key": "action",
+            "label": "Create Purchase",
+            "apiName": "create_purchase",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_purchase",
+                "key": "CREATE_RECORD",
+                "label": "Create Purchase",
+                "apiName": "create_purchase",
+                "objectKey": "purchase_ledger",
+                "fieldValues": {
+                  "status": "DRAFT"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_purchase_line",
+            "key": "action",
+            "label": "Create Purchase Line",
+            "apiName": "create_purchase_line",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_purchase_line",
+                "key": "CREATE_RECORD",
+                "label": "Create Purchase Line",
+                "apiName": "create_purchase_line",
+                "objectKey": "purchase_line",
+                "commonFieldValues": {
+                  "purchase_id": {
+                    "path": "steps.create_purchase.created.id"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_purchase_error",
+            "key": "action",
+            "label": "Raise Purchase Error",
+            "apiName": "raise_purchase_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_purchase_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Purchase Error",
+                "apiName": "raise_purchase_error",
+                "message": "Purchase validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "validate_purchase_total",
+          "key": "FORMULA",
+          "label": "Validate Purchase Total",
+          "apiName": "validate_purchase_total",
+          "expression": "amount > 0",
+          "resultType": "boolean"
+        },
+        {
+          "id": "check_purchase_status",
+          "key": "CONDITION",
+          "label": "Check Purchase Status",
+          "apiName": "check_purchase_status",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Allowed",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "DRAFT"
+                  }
+                ]
+              },
+              "branch": [
+                "create_purchase"
+              ]
+            },
+            {
+              "id": "fail",
+              "label": "Blocked",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "not_equals",
+                    "value": "DRAFT"
+                  }
+                ]
+              },
+              "branch": [
+                "raise_purchase_error"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_purchase_error"
+          ]
+        },
+        {
+          "id": "create_purchase",
+          "key": "CREATE_RECORD",
+          "label": "Create Purchase",
+          "apiName": "create_purchase",
+          "objectKey": "purchase_ledger",
+          "fieldValues": {
+            "status": "DRAFT"
+          }
+        },
+        {
+          "id": "create_purchase_line",
+          "key": "CREATE_RECORD",
+          "label": "Create Purchase Line",
+          "apiName": "create_purchase_line",
+          "objectKey": "purchase_line",
+          "commonFieldValues": {
+            "purchase_id": {
+              "path": "steps.create_purchase.created.id"
+            }
+          }
+        },
+        {
+          "id": "raise_purchase_error",
+          "key": "CUSTOM_ERROR",
+          "label": "Raise Purchase Error",
+          "apiName": "raise_purchase_error",
+          "message": "Purchase validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "validate_purchase_total",
+          "key": "action",
+          "label": "Validate Purchase Total",
+          "apiName": "validate_purchase_total",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_purchase_total",
+              "key": "FORMULA",
+              "label": "Validate Purchase Total",
+              "apiName": "validate_purchase_total",
+              "expression": "amount > 0",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "check_purchase_status",
+          "key": "action",
+          "label": "Check Purchase Status",
+          "apiName": "check_purchase_status",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "check_purchase_status",
+              "key": "CONDITION",
+              "label": "Check Purchase Status",
+              "apiName": "check_purchase_status",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "DRAFT"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "create_purchase"
+                  ]
+                },
+                {
+                  "id": "fail",
+                  "label": "Blocked",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "not_equals",
+                        "value": "DRAFT"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "raise_purchase_error"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_purchase_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "create_purchase",
+          "key": "action",
+          "label": "Create Purchase",
+          "apiName": "create_purchase",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_purchase",
+              "key": "CREATE_RECORD",
+              "label": "Create Purchase",
+              "apiName": "create_purchase",
+              "objectKey": "purchase_ledger",
+              "fieldValues": {
+                "status": "DRAFT"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "create_purchase_line",
+          "key": "action",
+          "label": "Create Purchase Line",
+          "apiName": "create_purchase_line",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_purchase_line",
+              "key": "CREATE_RECORD",
+              "label": "Create Purchase Line",
+              "apiName": "create_purchase_line",
+              "objectKey": "purchase_line",
+              "commonFieldValues": {
+                "purchase_id": {
+                  "path": "steps.create_purchase.created.id"
+                }
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_purchase_error",
+          "key": "action",
+          "label": "Raise Purchase Error",
+          "apiName": "raise_purchase_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_purchase_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Purchase Error",
+              "apiName": "raise_purchase_error",
+              "message": "Purchase validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ]
+}

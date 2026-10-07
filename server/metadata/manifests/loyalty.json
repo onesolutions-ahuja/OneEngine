@@ -1,0 +1,731 @@
+{
+  "name": "loyalty",
+  "objects": [
+    {
+      "objectKey": "customer_loyalty_balance",
+      "sourceTable": "customer_loyalty_balances",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "loyalty_adjustment",
+      "sourceTable": "loyalty_adjustments",
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Adjust Loyalty",
+      "key": "loyalty_adjust",
+      "apiName": "LOYALTY_ADJUST",
+      "inputContract": [
+        {
+          "apiName": "customerId",
+          "type": "string"
+        },
+        {
+          "apiName": "points",
+          "type": "number"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "adjustmentId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "LOYALTY_ADJUST",
+        "actions": [
+          {
+            "id": "validate_loyalty",
+            "key": "FORMULA",
+            "label": "Validate Loyalty",
+            "apiName": "validate_loyalty",
+            "expression": "points >= 0",
+            "resultType": "boolean"
+          },
+          {
+            "id": "get_account",
+            "key": "GET_RECORDS",
+            "label": "Get Loyalty Account",
+            "apiName": "get_account",
+            "objectKey": "customer_loyalty_balance",
+            "filters": [
+              {
+                "field": "customer_id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.customerId"
+                }
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "loyalty_ready",
+            "key": "CONDITION",
+            "label": "Loyalty Ready",
+            "apiName": "loyalty_ready",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Allowed",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "customer_loyalty_balance.id",
+                      "operator": "is_set",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "apply_loyalty_adjustment"
+                ]
+              },
+              {
+                "id": "fail",
+                "label": "Blocked",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "customer_loyalty_balance.id",
+                      "operator": "is_set",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "raise_loyalty_error"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_loyalty_error"
+            ]
+          },
+          {
+            "id": "update_balance",
+            "key": "UPDATE_RECORD",
+            "label": "Update Loyalty Balance",
+            "apiName": "update_balance",
+            "objectKey": "customer_loyalty_balance",
+            "recordId": {
+              "path": "steps.get_account.records[0].id"
+            },
+            "fieldValues": {
+              "points": {
+                "path": "steps.get_account.records[0].points + variables.points"
+              }
+            }
+          },
+          {
+            "id": "apply_loyalty_adjustment",
+            "key": "CREATE_RECORD",
+            "label": "Apply Loyalty Adjustment",
+            "apiName": "apply_loyalty_adjustment",
+            "objectKey": "loyalty_adjustment",
+            "fieldValues": {
+              "customer_id": {
+                "path": "variables.customerId"
+              },
+              "points": {
+                "path": "variables.points"
+              }
+            }
+          },
+          {
+            "id": "record_adjustment_audit",
+            "key": "CREATE_RECORD",
+            "label": "Record Adjustment Audit",
+            "apiName": "record_adjustment_audit",
+            "objectKey": "loyalty_adjustment",
+            "fieldValues": {
+              "customer_id": {
+                "path": "variables.customerId"
+              },
+              "points": {
+                "path": "variables.points"
+              },
+              "status": "POSTED"
+            }
+          },
+          {
+            "id": "raise_loyalty_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Loyalty Error",
+            "apiName": "raise_loyalty_error",
+            "message": "Loyalty validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "validate_loyalty",
+            "key": "action",
+            "label": "Validate Loyalty",
+            "apiName": "validate_loyalty",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_loyalty",
+                "key": "FORMULA",
+                "label": "Validate Loyalty",
+                "apiName": "validate_loyalty",
+                "expression": "points >= 0",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "get_account",
+            "key": "action",
+            "label": "Get Loyalty Account",
+            "apiName": "get_account",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "get_account",
+                "key": "GET_RECORDS",
+                "label": "Get Loyalty Account",
+                "apiName": "get_account",
+                "objectKey": "customer_loyalty_balance",
+                "filters": [
+                  {
+                    "field": "customer_id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.customerId"
+                    }
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "loyalty_ready",
+            "key": "action",
+            "label": "Loyalty Ready",
+            "apiName": "loyalty_ready",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "loyalty_ready",
+                "key": "CONDITION",
+                "label": "Loyalty Ready",
+                "apiName": "loyalty_ready",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Allowed",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "customer_loyalty_balance.id",
+                          "operator": "is_set",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "apply_loyalty_adjustment"
+                    ]
+                  },
+                  {
+                    "id": "fail",
+                    "label": "Blocked",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "customer_loyalty_balance.id",
+                          "operator": "is_set",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "raise_loyalty_error"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_loyalty_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "update_balance",
+            "key": "action",
+            "label": "Update Loyalty Balance",
+            "apiName": "update_balance",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "update_balance",
+                "key": "UPDATE_RECORD",
+                "label": "Update Loyalty Balance",
+                "apiName": "update_balance",
+                "objectKey": "customer_loyalty_balance",
+                "recordId": {
+                  "path": "steps.get_account.records[0].id"
+                },
+                "fieldValues": {
+                  "points": {
+                    "path": "steps.get_account.records[0].points + variables.points"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "apply_loyalty_adjustment",
+            "key": "action",
+            "label": "Apply Loyalty Adjustment",
+            "apiName": "apply_loyalty_adjustment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "apply_loyalty_adjustment",
+                "key": "CREATE_RECORD",
+                "label": "Apply Loyalty Adjustment",
+                "apiName": "apply_loyalty_adjustment",
+                "objectKey": "loyalty_adjustment",
+                "fieldValues": {
+                  "customer_id": {
+                    "path": "variables.customerId"
+                  },
+                  "points": {
+                    "path": "variables.points"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "record_adjustment_audit",
+            "key": "action",
+            "label": "Record Adjustment Audit",
+            "apiName": "record_adjustment_audit",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "record_adjustment_audit",
+                "key": "CREATE_RECORD",
+                "label": "Record Adjustment Audit",
+                "apiName": "record_adjustment_audit",
+                "objectKey": "loyalty_adjustment",
+                "fieldValues": {
+                  "customer_id": {
+                    "path": "variables.customerId"
+                  },
+                  "points": {
+                    "path": "variables.points"
+                  },
+                  "status": "POSTED"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_loyalty_error",
+            "key": "action",
+            "label": "Raise Loyalty Error",
+            "apiName": "raise_loyalty_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_loyalty_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Loyalty Error",
+                "apiName": "raise_loyalty_error",
+                "message": "Loyalty validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "gptBuilderElements": [
+        {
+          "id": "validate_loyalty",
+          "key": "action",
+          "label": "Validate Loyalty",
+          "apiName": "validate_loyalty",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_loyalty",
+              "key": "FORMULA",
+              "label": "Validate Loyalty",
+              "apiName": "validate_loyalty",
+              "expression": "points >= 0",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "get_account",
+          "key": "action",
+          "label": "Get Loyalty Account",
+          "apiName": "get_account",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "get_account",
+              "key": "GET_RECORDS",
+              "label": "Get Loyalty Account",
+              "apiName": "get_account",
+              "objectKey": "customer_loyalty_balance",
+              "filters": [
+                {
+                  "field": "customer_id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "variables.customerId"
+                  }
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "loyalty_ready",
+          "key": "action",
+          "label": "Loyalty Ready",
+          "apiName": "loyalty_ready",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "loyalty_ready",
+              "key": "CONDITION",
+              "label": "Loyalty Ready",
+              "apiName": "loyalty_ready",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Allowed",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "customer_loyalty_balance.id",
+                        "operator": "is_set",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "apply_loyalty_adjustment"
+                  ]
+                },
+                {
+                  "id": "fail",
+                  "label": "Blocked",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "customer_loyalty_balance.id",
+                        "operator": "is_set",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "raise_loyalty_error"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_loyalty_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "update_balance",
+          "key": "action",
+          "label": "Update Loyalty Balance",
+          "apiName": "update_balance",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "update_balance",
+              "key": "UPDATE_RECORD",
+              "label": "Update Loyalty Balance",
+              "apiName": "update_balance",
+              "objectKey": "customer_loyalty_balance",
+              "recordId": {
+                "path": "steps.get_account.records[0].id"
+              },
+              "fieldValues": {
+                "points": {
+                  "path": "steps.get_account.records[0].points + variables.points"
+                }
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "apply_loyalty_adjustment",
+          "key": "action",
+          "label": "Apply Loyalty Adjustment",
+          "apiName": "apply_loyalty_adjustment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "apply_loyalty_adjustment",
+              "key": "CREATE_RECORD",
+              "label": "Apply Loyalty Adjustment",
+              "apiName": "apply_loyalty_adjustment",
+              "objectKey": "loyalty_adjustment",
+              "fieldValues": {
+                "customer_id": {
+                  "path": "variables.customerId"
+                },
+                "points": {
+                  "path": "variables.points"
+                }
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "record_adjustment_audit",
+          "key": "action",
+          "label": "Record Adjustment Audit",
+          "apiName": "record_adjustment_audit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "record_adjustment_audit",
+              "key": "CREATE_RECORD",
+              "label": "Record Adjustment Audit",
+              "apiName": "record_adjustment_audit",
+              "objectKey": "loyalty_adjustment",
+              "fieldValues": {
+                "customer_id": {
+                  "path": "variables.customerId"
+                },
+                "points": {
+                  "path": "variables.points"
+                },
+                "status": "POSTED"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_loyalty_error",
+          "key": "action",
+          "label": "Raise Loyalty Error",
+          "apiName": "raise_loyalty_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_loyalty_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Loyalty Error",
+              "apiName": "raise_loyalty_error",
+              "message": "Loyalty validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ]
+}

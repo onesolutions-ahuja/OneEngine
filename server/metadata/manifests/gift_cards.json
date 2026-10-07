@@ -1,0 +1,301 @@
+{
+  "name": "gift_cards",
+  "objects": [
+    {
+      "objectKey": "gift_card",
+      "sourceTable": "gift_cards",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "gift_card_activity",
+      "sourceTable": "gift_card_activity",
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Gift Card Adjust",
+      "key": "gift_card_adjust",
+      "apiName": "GIFT_CARD_ADJUST",
+      "action": {
+        "apiName": "GIFT_CARD_ADJUST",
+        "actions": [
+          {
+            "id": "validate_gift_card",
+            "label": "Validate Gift Card",
+            "apiName": "validate_gift_card",
+            "key": "FORMULA",
+            "expression": "available_balance >= 0",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "adjust_gift_card",
+            "label": "Adjust Gift Card",
+            "apiName": "adjust_gift_card",
+            "key": "CREATE_RECORD",
+            "objectKey": "gift_card_activity",
+            "fieldValues": {
+              "status": "POSTED"
+            }
+          },
+          {
+            "id": "raise_gift_card_error",
+            "label": "Raise Gift Card Error",
+            "apiName": "raise_gift_card_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Gift card validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "validate_gift_card",
+            "key": "action",
+            "label": "Validate Gift Card",
+            "apiName": "validate_gift_card",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_gift_card",
+                "label": "Validate Gift Card",
+                "apiName": "validate_gift_card",
+                "key": "FORMULA",
+                "expression": "available_balance >= 0",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "adjust_gift_card",
+            "key": "action",
+            "label": "Adjust Gift Card",
+            "apiName": "adjust_gift_card",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "adjust_gift_card",
+                "label": "Adjust Gift Card",
+                "apiName": "adjust_gift_card",
+                "key": "CREATE_RECORD",
+                "objectKey": "gift_card_activity",
+                "fieldValues": {
+                  "status": "POSTED"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_gift_card_error",
+            "key": "action",
+            "label": "Raise Gift Card Error",
+            "apiName": "raise_gift_card_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_gift_card_error",
+                "label": "Raise Gift Card Error",
+                "apiName": "raise_gift_card_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Gift card validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "validate_gift_card",
+          "label": "Validate Gift Card",
+          "apiName": "validate_gift_card",
+          "key": "FORMULA",
+          "expression": "available_balance >= 0",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "adjust_gift_card",
+          "label": "Adjust Gift Card",
+          "apiName": "adjust_gift_card",
+          "key": "CREATE_RECORD",
+          "objectKey": "gift_card_activity",
+          "fieldValues": {
+            "status": "POSTED"
+          }
+        },
+        {
+          "id": "raise_gift_card_error",
+          "label": "Raise Gift Card Error",
+          "apiName": "raise_gift_card_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Gift card validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "validate_gift_card",
+          "key": "action",
+          "label": "Validate Gift Card",
+          "apiName": "validate_gift_card",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_gift_card",
+              "label": "Validate Gift Card",
+              "apiName": "validate_gift_card",
+              "key": "FORMULA",
+              "expression": "available_balance >= 0",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "adjust_gift_card",
+          "key": "action",
+          "label": "Adjust Gift Card",
+          "apiName": "adjust_gift_card",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "adjust_gift_card",
+              "label": "Adjust Gift Card",
+              "apiName": "adjust_gift_card",
+              "key": "CREATE_RECORD",
+              "objectKey": "gift_card_activity",
+              "fieldValues": {
+                "status": "POSTED"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_gift_card_error",
+          "key": "action",
+          "label": "Raise Gift Card Error",
+          "apiName": "raise_gift_card_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_gift_card_error",
+              "label": "Raise Gift Card Error",
+              "apiName": "raise_gift_card_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Gift card validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "validate_gift_card",
+      "label": "Validate Gift Card",
+      "apiName": "validate_gift_card",
+      "key": "FORMULA",
+      "expression": "available_balance >= 0",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "adjust_gift_card",
+      "label": "Adjust Gift Card",
+      "apiName": "adjust_gift_card",
+      "key": "CREATE_RECORD",
+      "objectKey": "gift_card_activity",
+      "fieldValues": {
+        "status": "POSTED"
+      }
+    },
+    {
+      "id": "raise_gift_card_error",
+      "label": "Raise Gift Card Error",
+      "apiName": "raise_gift_card_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Gift card validation failed"
+    }
+  ]
+}

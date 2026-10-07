@@ -1,0 +1,1636 @@
+{
+  "name": "online_orders",
+  "objects": [
+    {
+      "objectKey": "sales_order",
+      "sourceTable": "sales_orders",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "sales_order_line",
+      "sourceTable": "sales_order_items",
+      "config": {
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Online Order Transition",
+      "key": "online_order_transition",
+      "apiName": "ONLINE_ORDER_TRANSITION",
+      "action": {
+        "apiName": "ONLINE_ORDER_TRANSITION",
+        "actions": [
+          {
+            "id": "get_order",
+            "label": "Get Order",
+            "apiName": "get_order",
+            "key": "GET_RECORDS",
+            "objectKey": "sales_order",
+            "filters": [
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "PENDING"
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "validate_transition",
+            "label": "Validate Transition",
+            "apiName": "validate_transition",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "allow_0",
+                "label": "Allowed 0",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_0"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_1",
+                "label": "Allowed 1",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_1"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_2",
+                "label": "Allowed 2",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_2"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_3",
+                "label": "Allowed 3",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_3"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_4",
+                "label": "Allowed 4",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_4"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_5",
+                "label": "Allowed 5",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_5"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_6",
+                "label": "Allowed 6",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_6"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_7",
+                "label": "Allowed 7",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_7"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_8",
+                "label": "Allowed 8",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_8"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_9",
+                "label": "Allowed 9",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_9"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_10",
+                "label": "Allowed 10",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_10"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_11",
+                "label": "Allowed 11",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_11"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_12",
+                "label": "Allowed 12",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_12"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_13",
+                "label": "Allowed 13",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_13"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_14",
+                "label": "Allowed 14",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_14"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_15",
+                "label": "Allowed 15",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_15"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_16",
+                "label": "Allowed 16",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_16"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              },
+              {
+                "id": "allow_17",
+                "label": "Allowed 17",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "status",
+                      "operator": "equals",
+                      "value": "PENDING_17"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_online_order_status"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "update_online_order_status"
+            ]
+          },
+          {
+            "id": "update_online_order_status",
+            "label": "Update Online Order Status",
+            "apiName": "update_online_order_status",
+            "key": "UPDATE_RECORD",
+            "objectKey": "sales_order",
+            "recordId": {
+              "path": "variables.orderId"
+            },
+            "fieldValues": {
+              "status": {
+                "path": "variables.toStatus"
+              }
+            }
+          },
+          {
+            "id": "raise_transition_error",
+            "label": "Raise Transition Error",
+            "apiName": "raise_transition_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Order transition validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "get_order",
+            "key": "action",
+            "label": "Get Order",
+            "apiName": "get_order",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "get_order",
+                "label": "Get Order",
+                "apiName": "get_order",
+                "key": "GET_RECORDS",
+                "objectKey": "sales_order",
+                "filters": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING"
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_transition",
+            "key": "action",
+            "label": "Validate Transition",
+            "apiName": "validate_transition",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_transition",
+                "label": "Validate Transition",
+                "apiName": "validate_transition",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "allow_0",
+                    "label": "Allowed 0",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_0"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_1",
+                    "label": "Allowed 1",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_1"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_2",
+                    "label": "Allowed 2",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_2"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_3",
+                    "label": "Allowed 3",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_3"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_4",
+                    "label": "Allowed 4",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_4"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_5",
+                    "label": "Allowed 5",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_5"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_6",
+                    "label": "Allowed 6",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_6"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_7",
+                    "label": "Allowed 7",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_7"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_8",
+                    "label": "Allowed 8",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_8"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_9",
+                    "label": "Allowed 9",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_9"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_10",
+                    "label": "Allowed 10",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_10"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_11",
+                    "label": "Allowed 11",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_11"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_12",
+                    "label": "Allowed 12",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_12"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_13",
+                    "label": "Allowed 13",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_13"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_14",
+                    "label": "Allowed 14",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_14"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_15",
+                    "label": "Allowed 15",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_15"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_16",
+                    "label": "Allowed 16",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_16"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  },
+                  {
+                    "id": "allow_17",
+                    "label": "Allowed 17",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "status",
+                          "operator": "equals",
+                          "value": "PENDING_17"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_online_order_status"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "update_online_order_status"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "update_online_order_status",
+            "key": "action",
+            "label": "Update Online Order Status",
+            "apiName": "update_online_order_status",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "update_online_order_status",
+                "label": "Update Online Order Status",
+                "apiName": "update_online_order_status",
+                "key": "UPDATE_RECORD",
+                "objectKey": "sales_order",
+                "recordId": {
+                  "path": "variables.orderId"
+                },
+                "fieldValues": {
+                  "status": {
+                    "path": "variables.toStatus"
+                  }
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_transition_error",
+            "key": "action",
+            "label": "Raise Transition Error",
+            "apiName": "raise_transition_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_transition_error",
+                "label": "Raise Transition Error",
+                "apiName": "raise_transition_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Order transition validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "get_order",
+          "label": "Get Order",
+          "apiName": "get_order",
+          "key": "GET_RECORDS",
+          "objectKey": "sales_order",
+          "filters": [
+            {
+              "field": "status",
+              "operator": "equals",
+              "value": "PENDING"
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "validate_transition",
+          "label": "Validate Transition",
+          "apiName": "validate_transition",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "allow_0",
+              "label": "Allowed 0",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_0"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_1",
+              "label": "Allowed 1",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_1"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_2",
+              "label": "Allowed 2",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_2"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_3",
+              "label": "Allowed 3",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_3"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_4",
+              "label": "Allowed 4",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_4"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_5",
+              "label": "Allowed 5",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_5"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_6",
+              "label": "Allowed 6",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_6"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_7",
+              "label": "Allowed 7",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_7"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_8",
+              "label": "Allowed 8",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_8"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_9",
+              "label": "Allowed 9",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_9"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_10",
+              "label": "Allowed 10",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_10"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_11",
+              "label": "Allowed 11",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_11"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_12",
+              "label": "Allowed 12",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_12"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_13",
+              "label": "Allowed 13",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_13"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_14",
+              "label": "Allowed 14",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_14"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_15",
+              "label": "Allowed 15",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_15"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_16",
+              "label": "Allowed 16",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_16"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            },
+            {
+              "id": "allow_17",
+              "label": "Allowed 17",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "PENDING_17"
+                  }
+                ]
+              },
+              "branch": [
+                "update_online_order_status"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "update_online_order_status"
+          ]
+        },
+        {
+          "id": "update_online_order_status",
+          "label": "Update Online Order Status",
+          "apiName": "update_online_order_status",
+          "key": "UPDATE_RECORD",
+          "objectKey": "sales_order",
+          "recordId": {
+            "path": "variables.orderId"
+          },
+          "fieldValues": {
+            "status": {
+              "path": "variables.toStatus"
+            }
+          }
+        },
+        {
+          "id": "raise_transition_error",
+          "label": "Raise Transition Error",
+          "apiName": "raise_transition_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Order transition validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "get_order",
+          "key": "action",
+          "label": "Get Order",
+          "apiName": "get_order",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "get_order",
+              "label": "Get Order",
+              "apiName": "get_order",
+              "key": "GET_RECORDS",
+              "objectKey": "sales_order",
+              "filters": [
+                {
+                  "field": "status",
+                  "operator": "equals",
+                  "value": "PENDING"
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_transition",
+          "key": "action",
+          "label": "Validate Transition",
+          "apiName": "validate_transition",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_transition",
+              "label": "Validate Transition",
+              "apiName": "validate_transition",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "allow_0",
+                  "label": "Allowed 0",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_0"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_1",
+                  "label": "Allowed 1",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_1"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_2",
+                  "label": "Allowed 2",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_2"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_3",
+                  "label": "Allowed 3",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_3"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_4",
+                  "label": "Allowed 4",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_4"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_5",
+                  "label": "Allowed 5",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_5"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_6",
+                  "label": "Allowed 6",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_6"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_7",
+                  "label": "Allowed 7",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_7"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_8",
+                  "label": "Allowed 8",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_8"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_9",
+                  "label": "Allowed 9",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_9"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_10",
+                  "label": "Allowed 10",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_10"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_11",
+                  "label": "Allowed 11",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_11"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_12",
+                  "label": "Allowed 12",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_12"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_13",
+                  "label": "Allowed 13",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_13"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_14",
+                  "label": "Allowed 14",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_14"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_15",
+                  "label": "Allowed 15",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_15"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_16",
+                  "label": "Allowed 16",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_16"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                },
+                {
+                  "id": "allow_17",
+                  "label": "Allowed 17",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "status",
+                        "operator": "equals",
+                        "value": "PENDING_17"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "update_online_order_status"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "update_online_order_status"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "update_online_order_status",
+          "key": "action",
+          "label": "Update Online Order Status",
+          "apiName": "update_online_order_status",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "update_online_order_status",
+              "label": "Update Online Order Status",
+              "apiName": "update_online_order_status",
+              "key": "UPDATE_RECORD",
+              "objectKey": "sales_order",
+              "recordId": {
+                "path": "variables.orderId"
+              },
+              "fieldValues": {
+                "status": {
+                  "path": "variables.toStatus"
+                }
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_transition_error",
+          "key": "action",
+          "label": "Raise Transition Error",
+          "apiName": "raise_transition_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_transition_error",
+              "label": "Raise Transition Error",
+              "apiName": "raise_transition_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Order transition validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ]
+}

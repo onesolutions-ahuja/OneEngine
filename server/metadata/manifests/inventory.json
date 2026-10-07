@@ -1,0 +1,322 @@
+{
+  "name": "inventory",
+  "objects": [
+    {
+      "objectKey": "inventory_ledger",
+      "sourceTable": "inventory_ledger",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "store_stock",
+      "sourceTable": "store_stock",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "inventory_balance",
+      "sourceTable": "inventory_balance",
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Inventory Adjustment",
+      "key": "inventory_adjust",
+      "apiName": "INVENTORY_ADJUST",
+      "action": {
+        "apiName": "INVENTORY_ADJUST",
+        "actions": [
+          {
+            "id": "validate_ledger",
+            "label": "Validate Ledger",
+            "apiName": "validate_ledger",
+            "key": "FORMULA",
+            "expression": "quantity != 0",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "create_balance",
+            "label": "Create Balance",
+            "apiName": "create_balance",
+            "key": "CREATE_RECORD",
+            "objectKey": "inventory_ledger",
+            "fieldValues": {
+              "quantity": 0
+            }
+          },
+          {
+            "id": "raise_inventory_error",
+            "label": "Raise Inventory Error",
+            "apiName": "raise_inventory_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Inventory validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "validate_ledger",
+            "key": "action",
+            "label": "Validate Ledger",
+            "apiName": "validate_ledger",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_ledger",
+                "label": "Validate Ledger",
+                "apiName": "validate_ledger",
+                "key": "FORMULA",
+                "expression": "quantity != 0",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_balance",
+            "key": "action",
+            "label": "Create Balance",
+            "apiName": "create_balance",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_balance",
+                "label": "Create Balance",
+                "apiName": "create_balance",
+                "key": "CREATE_RECORD",
+                "objectKey": "inventory_ledger",
+                "fieldValues": {
+                  "quantity": 0
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_inventory_error",
+            "key": "action",
+            "label": "Raise Inventory Error",
+            "apiName": "raise_inventory_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_inventory_error",
+                "label": "Raise Inventory Error",
+                "apiName": "raise_inventory_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Inventory validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "validate_ledger",
+          "label": "Validate Ledger",
+          "apiName": "validate_ledger",
+          "key": "FORMULA",
+          "expression": "quantity != 0",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "create_balance",
+          "label": "Create Balance",
+          "apiName": "create_balance",
+          "key": "CREATE_RECORD",
+          "objectKey": "inventory_ledger",
+          "fieldValues": {
+            "quantity": 0
+          }
+        },
+        {
+          "id": "raise_inventory_error",
+          "label": "Raise Inventory Error",
+          "apiName": "raise_inventory_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Inventory validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "validate_ledger",
+          "key": "action",
+          "label": "Validate Ledger",
+          "apiName": "validate_ledger",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_ledger",
+              "label": "Validate Ledger",
+              "apiName": "validate_ledger",
+              "key": "FORMULA",
+              "expression": "quantity != 0",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "create_balance",
+          "key": "action",
+          "label": "Create Balance",
+          "apiName": "create_balance",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_balance",
+              "label": "Create Balance",
+              "apiName": "create_balance",
+              "key": "CREATE_RECORD",
+              "objectKey": "inventory_ledger",
+              "fieldValues": {
+                "quantity": 0
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_inventory_error",
+          "key": "action",
+          "label": "Raise Inventory Error",
+          "apiName": "raise_inventory_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_inventory_error",
+              "label": "Raise Inventory Error",
+              "apiName": "raise_inventory_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Inventory validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "validate_ledger",
+      "label": "Validate Ledger",
+      "apiName": "validate_ledger",
+      "key": "FORMULA",
+      "expression": "quantity != 0",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "create_balance",
+      "label": "Create Balance",
+      "apiName": "create_balance",
+      "key": "CREATE_RECORD",
+      "objectKey": "inventory_ledger",
+      "fieldValues": {
+        "quantity": 0
+      }
+    },
+    {
+      "id": "raise_inventory_error",
+      "label": "Raise Inventory Error",
+      "apiName": "raise_inventory_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Inventory validation failed"
+    }
+  ],
+  "rules": [
+    {
+      "id": "inventory_ledger_cannot_be_zero",
+      "name": "Inventory ledger cannot be zero",
+      "objectKey": "inventory_ledger",
+      "severity": "error"
+    },
+    {
+      "id": "inventory_balance_must_be_positive",
+      "name": "Inventory balance cannot be negative",
+      "objectKey": "inventory_balance",
+      "severity": "error"
+    }
+  ]
+}

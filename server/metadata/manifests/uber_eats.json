@@ -1,0 +1,3891 @@
+{
+  "name": "uber_eats",
+  "objects": [
+    {
+      "objectKey": "uber_menu",
+      "sourceTable": "uber_menus",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "uber_store",
+      "sourceTable": "uber_stores",
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Product Save Sync",
+      "key": "product_save_sync",
+      "apiName": "PRODUCT_SAVE_SYNC",
+      "action": {
+        "apiName": "PRODUCT_SAVE_SYNC",
+        "actions": [
+          {
+            "id": "load_product",
+            "label": "Load Product",
+            "apiName": "load_product",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_menu",
+            "filters": [
+              {
+                "field": "active",
+                "operator": "equals",
+                "value": true
+              }
+            ],
+            "limit": 1,
+            "handlerKey": "RUN_SUBFLOW"
+          },
+          {
+            "id": "check_connection",
+            "label": "Validate Connection",
+            "apiName": "check_connection",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Connected",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "connection",
+                      "operator": "equals",
+                      "value": "ACTIVE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "upload_menu"
+                ]
+              },
+              {
+                "id": "fail",
+                "label": "Blocked",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "connection",
+                      "operator": "not_equals",
+                      "value": "ACTIVE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "raise_menu_error"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_menu_error"
+            ]
+          },
+          {
+            "id": "upload_menu",
+            "label": "Upload Menu",
+            "apiName": "upload_menu",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+          },
+          {
+            "id": "raise_menu_error",
+            "label": "Raise Upload Error",
+            "apiName": "raise_menu_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Uber menu sync failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "load_product",
+            "key": "action",
+            "label": "Load Product",
+            "apiName": "load_product",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "load_product",
+                "label": "Load Product",
+                "apiName": "load_product",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_menu",
+                "filters": [
+                  {
+                    "field": "active",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ],
+                "limit": 1,
+                "handlerKey": "RUN_SUBFLOW"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "check_connection",
+            "key": "action",
+            "label": "Validate Connection",
+            "apiName": "check_connection",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "check_connection",
+                "label": "Validate Connection",
+                "apiName": "check_connection",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Connected",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "connection",
+                          "operator": "equals",
+                          "value": "ACTIVE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "upload_menu"
+                    ]
+                  },
+                  {
+                    "id": "fail",
+                    "label": "Blocked",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "connection",
+                          "operator": "not_equals",
+                          "value": "ACTIVE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "raise_menu_error"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_menu_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "upload_menu",
+            "key": "action",
+            "label": "Upload Menu",
+            "apiName": "upload_menu",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "upload_menu",
+                "label": "Upload Menu",
+                "apiName": "upload_menu",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_menu_error",
+            "key": "action",
+            "label": "Raise Upload Error",
+            "apiName": "raise_menu_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_menu_error",
+                "label": "Raise Upload Error",
+                "apiName": "raise_menu_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Uber menu sync failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "load_product",
+          "label": "Load Product",
+          "apiName": "load_product",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_menu",
+          "filters": [
+            {
+              "field": "active",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "limit": 1,
+          "handlerKey": "RUN_SUBFLOW"
+        },
+        {
+          "id": "check_connection",
+          "label": "Validate Connection",
+          "apiName": "check_connection",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Connected",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "connection",
+                    "operator": "equals",
+                    "value": "ACTIVE"
+                  }
+                ]
+              },
+              "branch": [
+                "upload_menu"
+              ]
+            },
+            {
+              "id": "fail",
+              "label": "Blocked",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "connection",
+                    "operator": "not_equals",
+                    "value": "ACTIVE"
+                  }
+                ]
+              },
+              "branch": [
+                "raise_menu_error"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_menu_error"
+          ]
+        },
+        {
+          "id": "upload_menu",
+          "label": "Upload Menu",
+          "apiName": "upload_menu",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+        },
+        {
+          "id": "raise_menu_error",
+          "label": "Raise Upload Error",
+          "apiName": "raise_menu_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Uber menu sync failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "load_product",
+          "key": "action",
+          "label": "Load Product",
+          "apiName": "load_product",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "load_product",
+              "label": "Load Product",
+              "apiName": "load_product",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_menu",
+              "filters": [
+                {
+                  "field": "active",
+                  "operator": "equals",
+                  "value": true
+                }
+              ],
+              "limit": 1,
+              "handlerKey": "RUN_SUBFLOW"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "check_connection",
+          "key": "action",
+          "label": "Validate Connection",
+          "apiName": "check_connection",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "check_connection",
+              "label": "Validate Connection",
+              "apiName": "check_connection",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Connected",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "connection",
+                        "operator": "equals",
+                        "value": "ACTIVE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "upload_menu"
+                  ]
+                },
+                {
+                  "id": "fail",
+                  "label": "Blocked",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "connection",
+                        "operator": "not_equals",
+                        "value": "ACTIVE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "raise_menu_error"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_menu_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "upload_menu",
+          "key": "action",
+          "label": "Upload Menu",
+          "apiName": "upload_menu",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "upload_menu",
+              "label": "Upload Menu",
+              "apiName": "upload_menu",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_menu_error",
+          "key": "action",
+          "label": "Raise Upload Error",
+          "apiName": "raise_menu_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_menu_error",
+              "label": "Raise Upload Error",
+              "apiName": "raise_menu_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Uber menu sync failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Order Status Sync",
+      "key": "order_status_sync",
+      "apiName": "ORDER_STATUS_SYNC",
+      "action": {
+        "apiName": "ORDER_STATUS_SYNC",
+        "actions": [
+          {
+            "id": "fetch_order",
+            "label": "Fetch Order",
+            "apiName": "fetch_order",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_store",
+            "filters": [
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "validate_order_status",
+            "label": "Validate Order Status",
+            "apiName": "validate_order_status",
+            "key": "FORMULA",
+            "expression": "status != null",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "push_status",
+            "label": "Push Status",
+            "apiName": "push_status",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_PUSH_STATUS"
+          },
+          {
+            "id": "raise_status_error",
+            "label": "Raise Status Error",
+            "apiName": "raise_status_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Order status sync failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "fetch_order",
+            "key": "action",
+            "label": "Fetch Order",
+            "apiName": "fetch_order",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "fetch_order",
+                "label": "Fetch Order",
+                "apiName": "fetch_order",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_store",
+                "filters": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "ACTIVE"
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_order_status",
+            "key": "action",
+            "label": "Validate Order Status",
+            "apiName": "validate_order_status",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_order_status",
+                "label": "Validate Order Status",
+                "apiName": "validate_order_status",
+                "key": "FORMULA",
+                "expression": "status != null",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "push_status",
+            "key": "action",
+            "label": "Push Status",
+            "apiName": "push_status",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "push_status",
+                "label": "Push Status",
+                "apiName": "push_status",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_PUSH_STATUS"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_status_error",
+            "key": "action",
+            "label": "Raise Status Error",
+            "apiName": "raise_status_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_status_error",
+                "label": "Raise Status Error",
+                "apiName": "raise_status_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Order status sync failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "fetch_order",
+          "label": "Fetch Order",
+          "apiName": "fetch_order",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_store",
+          "filters": [
+            {
+              "field": "status",
+              "operator": "equals",
+              "value": "ACTIVE"
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "validate_order_status",
+          "label": "Validate Order Status",
+          "apiName": "validate_order_status",
+          "key": "FORMULA",
+          "expression": "status != null",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "push_status",
+          "label": "Push Status",
+          "apiName": "push_status",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_PUSH_STATUS"
+        },
+        {
+          "id": "raise_status_error",
+          "label": "Raise Status Error",
+          "apiName": "raise_status_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Order status sync failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "fetch_order",
+          "key": "action",
+          "label": "Fetch Order",
+          "apiName": "fetch_order",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "fetch_order",
+              "label": "Fetch Order",
+              "apiName": "fetch_order",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_store",
+              "filters": [
+                {
+                  "field": "status",
+                  "operator": "equals",
+                  "value": "ACTIVE"
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_order_status",
+          "key": "action",
+          "label": "Validate Order Status",
+          "apiName": "validate_order_status",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_order_status",
+              "label": "Validate Order Status",
+              "apiName": "validate_order_status",
+              "key": "FORMULA",
+              "expression": "status != null",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "push_status",
+          "key": "action",
+          "label": "Push Status",
+          "apiName": "push_status",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "push_status",
+              "label": "Push Status",
+              "apiName": "push_status",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_PUSH_STATUS"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_status_error",
+          "key": "action",
+          "label": "Raise Status Error",
+          "apiName": "raise_status_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_status_error",
+              "label": "Raise Status Error",
+              "apiName": "raise_status_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Order status sync failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Inventory Sync",
+      "key": "inventory_sync",
+      "apiName": "INVENTORY_SYNC",
+      "action": {
+        "apiName": "INVENTORY_SYNC",
+        "actions": [
+          {
+            "id": "load_inventory",
+            "label": "Load Inventory",
+            "apiName": "load_inventory",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_store",
+            "filters": [
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "validate_inventory",
+            "label": "Validate Inventory",
+            "apiName": "validate_inventory",
+            "key": "FORMULA",
+            "expression": "available_quantity >= 0",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "run_sync",
+            "label": "Run Sync",
+            "apiName": "run_sync",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_SYNC_INVENTORY"
+          },
+          {
+            "id": "raise_inventory_error",
+            "label": "Raise Inventory Error",
+            "apiName": "raise_inventory_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Inventory sync failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "load_inventory",
+            "key": "action",
+            "label": "Load Inventory",
+            "apiName": "load_inventory",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "load_inventory",
+                "label": "Load Inventory",
+                "apiName": "load_inventory",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_store",
+                "filters": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "ACTIVE"
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_inventory",
+            "key": "action",
+            "label": "Validate Inventory",
+            "apiName": "validate_inventory",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_inventory",
+                "label": "Validate Inventory",
+                "apiName": "validate_inventory",
+                "key": "FORMULA",
+                "expression": "available_quantity >= 0",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "run_sync",
+            "key": "action",
+            "label": "Run Sync",
+            "apiName": "run_sync",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "run_sync",
+                "label": "Run Sync",
+                "apiName": "run_sync",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_SYNC_INVENTORY"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_inventory_error",
+            "key": "action",
+            "label": "Raise Inventory Error",
+            "apiName": "raise_inventory_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_inventory_error",
+                "label": "Raise Inventory Error",
+                "apiName": "raise_inventory_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Inventory sync failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "load_inventory",
+          "label": "Load Inventory",
+          "apiName": "load_inventory",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_store",
+          "filters": [
+            {
+              "field": "status",
+              "operator": "equals",
+              "value": "ACTIVE"
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "validate_inventory",
+          "label": "Validate Inventory",
+          "apiName": "validate_inventory",
+          "key": "FORMULA",
+          "expression": "available_quantity >= 0",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "run_sync",
+          "label": "Run Sync",
+          "apiName": "run_sync",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_SYNC_INVENTORY"
+        },
+        {
+          "id": "raise_inventory_error",
+          "label": "Raise Inventory Error",
+          "apiName": "raise_inventory_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Inventory sync failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "load_inventory",
+          "key": "action",
+          "label": "Load Inventory",
+          "apiName": "load_inventory",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "load_inventory",
+              "label": "Load Inventory",
+              "apiName": "load_inventory",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_store",
+              "filters": [
+                {
+                  "field": "status",
+                  "operator": "equals",
+                  "value": "ACTIVE"
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_inventory",
+          "key": "action",
+          "label": "Validate Inventory",
+          "apiName": "validate_inventory",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_inventory",
+              "label": "Validate Inventory",
+              "apiName": "validate_inventory",
+              "key": "FORMULA",
+              "expression": "available_quantity >= 0",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "run_sync",
+          "key": "action",
+          "label": "Run Sync",
+          "apiName": "run_sync",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "run_sync",
+              "label": "Run Sync",
+              "apiName": "run_sync",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_SYNC_INVENTORY"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_inventory_error",
+          "key": "action",
+          "label": "Raise Inventory Error",
+          "apiName": "raise_inventory_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_inventory_error",
+              "label": "Raise Inventory Error",
+              "apiName": "raise_inventory_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Inventory sync failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Menu Sync After Product Save",
+      "key": "uber_eats_menu_sync_after_product_save",
+      "apiName": "MENU_SYNC_AFTER_PRODUCT_SAVE",
+      "action": {
+        "apiName": "MENU_SYNC_AFTER_PRODUCT_SAVE",
+        "actions": [
+          {
+            "id": "get_records",
+            "label": "Get Records",
+            "apiName": "get_records",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_menu",
+            "filters": [
+              {
+                "field": "product_id",
+                "operator": "equals",
+                "value": {
+                  "path": "record.id"
+                }
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "validate_connection",
+            "label": "Validate Connection",
+            "apiName": "validate_connection",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "connected",
+                "label": "Connected",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "connection",
+                      "operator": "equals",
+                      "value": "ACTIVE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "run_subflow"
+                ]
+              },
+              {
+                "id": "blocked",
+                "label": "Blocked",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "connection",
+                      "operator": "not_equals",
+                      "value": "ACTIVE"
+                    }
+                  ]
+                },
+                "branch": [
+                  "raise_error"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_error"
+            ]
+          },
+          {
+            "id": "run_subflow",
+            "label": "Run Subflow",
+            "apiName": "run_subflow",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+          },
+          {
+            "id": "raise_error",
+            "label": "Raise Error",
+            "apiName": "raise_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Menu upload failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "get_records",
+            "key": "action",
+            "label": "Get Records",
+            "apiName": "get_records",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "get_records",
+                "label": "Get Records",
+                "apiName": "get_records",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_menu",
+                "filters": [
+                  {
+                    "field": "product_id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "record.id"
+                    }
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_connection",
+            "key": "action",
+            "label": "Validate Connection",
+            "apiName": "validate_connection",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_connection",
+                "label": "Validate Connection",
+                "apiName": "validate_connection",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "connected",
+                    "label": "Connected",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "connection",
+                          "operator": "equals",
+                          "value": "ACTIVE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "run_subflow"
+                    ]
+                  },
+                  {
+                    "id": "blocked",
+                    "label": "Blocked",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "connection",
+                          "operator": "not_equals",
+                          "value": "ACTIVE"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "raise_error"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "run_subflow",
+            "key": "action",
+            "label": "Run Subflow",
+            "apiName": "run_subflow",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "run_subflow",
+                "label": "Run Subflow",
+                "apiName": "run_subflow",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_error",
+            "key": "action",
+            "label": "Raise Error",
+            "apiName": "raise_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_error",
+                "label": "Raise Error",
+                "apiName": "raise_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Menu upload failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "get_records",
+          "label": "Get Records",
+          "apiName": "get_records",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_menu",
+          "filters": [
+            {
+              "field": "product_id",
+              "operator": "equals",
+              "value": {
+                "path": "record.id"
+              }
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "validate_connection",
+          "label": "Validate Connection",
+          "apiName": "validate_connection",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "connected",
+              "label": "Connected",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "connection",
+                    "operator": "equals",
+                    "value": "ACTIVE"
+                  }
+                ]
+              },
+              "branch": [
+                "run_subflow"
+              ]
+            },
+            {
+              "id": "blocked",
+              "label": "Blocked",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "connection",
+                    "operator": "not_equals",
+                    "value": "ACTIVE"
+                  }
+                ]
+              },
+              "branch": [
+                "raise_error"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_error"
+          ]
+        },
+        {
+          "id": "run_subflow",
+          "label": "Run Subflow",
+          "apiName": "run_subflow",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+        },
+        {
+          "id": "raise_error",
+          "label": "Raise Error",
+          "apiName": "raise_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Menu upload failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "get_records",
+          "key": "action",
+          "label": "Get Records",
+          "apiName": "get_records",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "get_records",
+              "label": "Get Records",
+              "apiName": "get_records",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_menu",
+              "filters": [
+                {
+                  "field": "product_id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "record.id"
+                  }
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_connection",
+          "key": "action",
+          "label": "Validate Connection",
+          "apiName": "validate_connection",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_connection",
+              "label": "Validate Connection",
+              "apiName": "validate_connection",
+              "key": "CONDITION",
+              "outcomes": [
+                {
+                  "id": "connected",
+                  "label": "Connected",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "connection",
+                        "operator": "equals",
+                        "value": "ACTIVE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "run_subflow"
+                  ]
+                },
+                {
+                  "id": "blocked",
+                  "label": "Blocked",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "connection",
+                        "operator": "not_equals",
+                        "value": "ACTIVE"
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "raise_error"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "run_subflow",
+          "key": "action",
+          "label": "Run Subflow",
+          "apiName": "run_subflow",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "run_subflow",
+              "label": "Run Subflow",
+              "apiName": "run_subflow",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_error",
+          "key": "action",
+          "label": "Raise Error",
+          "apiName": "raise_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_error",
+              "label": "Raise Error",
+              "apiName": "raise_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Menu upload failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Store Sync Schedule",
+      "key": "store_sync_schedule",
+      "apiName": "STORE_SYNC_SCHEDULE",
+      "action": {
+        "apiName": "STORE_SYNC_SCHEDULE",
+        "actions": [
+          {
+            "id": "fetch_store",
+            "label": "Fetch Store",
+            "apiName": "fetch_store",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_store",
+            "filters": [
+              {
+                "field": "active",
+                "operator": "equals",
+                "value": true
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "validate_schedule",
+            "label": "Validate Schedule",
+            "apiName": "validate_schedule",
+            "key": "FORMULA",
+            "expression": "schedule != null",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "schedule_push",
+            "label": "Schedule Push",
+            "apiName": "schedule_push",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_SCHEDULE_SYNC"
+          },
+          {
+            "id": "raise_schedule_error",
+            "label": "Raise Schedule Error",
+            "apiName": "raise_schedule_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Store sync failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "fetch_store",
+            "key": "action",
+            "label": "Fetch Store",
+            "apiName": "fetch_store",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "fetch_store",
+                "label": "Fetch Store",
+                "apiName": "fetch_store",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_store",
+                "filters": [
+                  {
+                    "field": "active",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_schedule",
+            "key": "action",
+            "label": "Validate Schedule",
+            "apiName": "validate_schedule",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_schedule",
+                "label": "Validate Schedule",
+                "apiName": "validate_schedule",
+                "key": "FORMULA",
+                "expression": "schedule != null",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "schedule_push",
+            "key": "action",
+            "label": "Schedule Push",
+            "apiName": "schedule_push",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "schedule_push",
+                "label": "Schedule Push",
+                "apiName": "schedule_push",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_SCHEDULE_SYNC"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_schedule_error",
+            "key": "action",
+            "label": "Raise Schedule Error",
+            "apiName": "raise_schedule_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_schedule_error",
+                "label": "Raise Schedule Error",
+                "apiName": "raise_schedule_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Store sync failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "fetch_store",
+          "label": "Fetch Store",
+          "apiName": "fetch_store",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_store",
+          "filters": [
+            {
+              "field": "active",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "validate_schedule",
+          "label": "Validate Schedule",
+          "apiName": "validate_schedule",
+          "key": "FORMULA",
+          "expression": "schedule != null",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "schedule_push",
+          "label": "Schedule Push",
+          "apiName": "schedule_push",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_SCHEDULE_SYNC"
+        },
+        {
+          "id": "raise_schedule_error",
+          "label": "Raise Schedule Error",
+          "apiName": "raise_schedule_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Store sync failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "fetch_store",
+          "key": "action",
+          "label": "Fetch Store",
+          "apiName": "fetch_store",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "fetch_store",
+              "label": "Fetch Store",
+              "apiName": "fetch_store",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_store",
+              "filters": [
+                {
+                  "field": "active",
+                  "operator": "equals",
+                  "value": true
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_schedule",
+          "key": "action",
+          "label": "Validate Schedule",
+          "apiName": "validate_schedule",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_schedule",
+              "label": "Validate Schedule",
+              "apiName": "validate_schedule",
+              "key": "FORMULA",
+              "expression": "schedule != null",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "schedule_push",
+          "key": "action",
+          "label": "Schedule Push",
+          "apiName": "schedule_push",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "schedule_push",
+              "label": "Schedule Push",
+              "apiName": "schedule_push",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_SCHEDULE_SYNC"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_schedule_error",
+          "key": "action",
+          "label": "Raise Schedule Error",
+          "apiName": "raise_schedule_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_schedule_error",
+              "label": "Raise Schedule Error",
+              "apiName": "raise_schedule_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Store sync failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Catalog Sync",
+      "key": "catalog_sync",
+      "apiName": "CATALOG_SYNC",
+      "action": {
+        "apiName": "CATALOG_SYNC",
+        "actions": [
+          {
+            "id": "find_catalog",
+            "label": "Find Catalog",
+            "apiName": "find_catalog",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_menu",
+            "filters": [
+              {
+                "field": "active",
+                "operator": "equals",
+                "value": true
+              }
+            ],
+            "limit": 20
+          },
+          {
+            "id": "validate_catalog",
+            "label": "Validate Catalog",
+            "apiName": "validate_catalog",
+            "key": "FORMULA",
+            "expression": "items.length > 0",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "sync_catalog",
+            "label": "Sync Catalog",
+            "apiName": "sync_catalog",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_SYNC_CATALOG"
+          },
+          {
+            "id": "raise_catalog_error",
+            "label": "Raise Catalog Error",
+            "apiName": "raise_catalog_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Catalog sync failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "find_catalog",
+            "key": "action",
+            "label": "Find Catalog",
+            "apiName": "find_catalog",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "find_catalog",
+                "label": "Find Catalog",
+                "apiName": "find_catalog",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_menu",
+                "filters": [
+                  {
+                    "field": "active",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ],
+                "limit": 20
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_catalog",
+            "key": "action",
+            "label": "Validate Catalog",
+            "apiName": "validate_catalog",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_catalog",
+                "label": "Validate Catalog",
+                "apiName": "validate_catalog",
+                "key": "FORMULA",
+                "expression": "items.length > 0",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "sync_catalog",
+            "key": "action",
+            "label": "Sync Catalog",
+            "apiName": "sync_catalog",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "sync_catalog",
+                "label": "Sync Catalog",
+                "apiName": "sync_catalog",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_SYNC_CATALOG"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_catalog_error",
+            "key": "action",
+            "label": "Raise Catalog Error",
+            "apiName": "raise_catalog_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_catalog_error",
+                "label": "Raise Catalog Error",
+                "apiName": "raise_catalog_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Catalog sync failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "find_catalog",
+          "label": "Find Catalog",
+          "apiName": "find_catalog",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_menu",
+          "filters": [
+            {
+              "field": "active",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "limit": 20
+        },
+        {
+          "id": "validate_catalog",
+          "label": "Validate Catalog",
+          "apiName": "validate_catalog",
+          "key": "FORMULA",
+          "expression": "items.length > 0",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "sync_catalog",
+          "label": "Sync Catalog",
+          "apiName": "sync_catalog",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_SYNC_CATALOG"
+        },
+        {
+          "id": "raise_catalog_error",
+          "label": "Raise Catalog Error",
+          "apiName": "raise_catalog_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Catalog sync failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "find_catalog",
+          "key": "action",
+          "label": "Find Catalog",
+          "apiName": "find_catalog",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "find_catalog",
+              "label": "Find Catalog",
+              "apiName": "find_catalog",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_menu",
+              "filters": [
+                {
+                  "field": "active",
+                  "operator": "equals",
+                  "value": true
+                }
+              ],
+              "limit": 20
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_catalog",
+          "key": "action",
+          "label": "Validate Catalog",
+          "apiName": "validate_catalog",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_catalog",
+              "label": "Validate Catalog",
+              "apiName": "validate_catalog",
+              "key": "FORMULA",
+              "expression": "items.length > 0",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "sync_catalog",
+          "key": "action",
+          "label": "Sync Catalog",
+          "apiName": "sync_catalog",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "sync_catalog",
+              "label": "Sync Catalog",
+              "apiName": "sync_catalog",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_SYNC_CATALOG"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_catalog_error",
+          "key": "action",
+          "label": "Raise Catalog Error",
+          "apiName": "raise_catalog_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_catalog_error",
+              "label": "Raise Catalog Error",
+              "apiName": "raise_catalog_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Catalog sync failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Delivery Cutoff Sync",
+      "key": "delivery_cutoff_sync",
+      "apiName": "DELIVERY_CUTOFF_SYNC",
+      "action": {
+        "apiName": "DELIVERY_CUTOFF_SYNC",
+        "actions": [
+          {
+            "id": "get_delivery_status",
+            "label": "Get Delivery Status",
+            "apiName": "get_delivery_status",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_store",
+            "filters": [
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "validate_cutoff",
+            "label": "Validate Cutoff",
+            "apiName": "validate_cutoff",
+            "key": "FORMULA",
+            "expression": "cutoff != null",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "sync_cutoff",
+            "label": "Sync Cutoff",
+            "apiName": "sync_cutoff",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_SYNC_CUTOFF"
+          },
+          {
+            "id": "raise_cutoff_error",
+            "label": "Raise Cutoff Error",
+            "apiName": "raise_cutoff_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Cutoff sync failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "get_delivery_status",
+            "key": "action",
+            "label": "Get Delivery Status",
+            "apiName": "get_delivery_status",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "get_delivery_status",
+                "label": "Get Delivery Status",
+                "apiName": "get_delivery_status",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_store",
+                "filters": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "ACTIVE"
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_cutoff",
+            "key": "action",
+            "label": "Validate Cutoff",
+            "apiName": "validate_cutoff",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_cutoff",
+                "label": "Validate Cutoff",
+                "apiName": "validate_cutoff",
+                "key": "FORMULA",
+                "expression": "cutoff != null",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "sync_cutoff",
+            "key": "action",
+            "label": "Sync Cutoff",
+            "apiName": "sync_cutoff",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "sync_cutoff",
+                "label": "Sync Cutoff",
+                "apiName": "sync_cutoff",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_SYNC_CUTOFF"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_cutoff_error",
+            "key": "action",
+            "label": "Raise Cutoff Error",
+            "apiName": "raise_cutoff_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_cutoff_error",
+                "label": "Raise Cutoff Error",
+                "apiName": "raise_cutoff_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Cutoff sync failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "get_delivery_status",
+          "label": "Get Delivery Status",
+          "apiName": "get_delivery_status",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_store",
+          "filters": [
+            {
+              "field": "status",
+              "operator": "equals",
+              "value": "ACTIVE"
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "validate_cutoff",
+          "label": "Validate Cutoff",
+          "apiName": "validate_cutoff",
+          "key": "FORMULA",
+          "expression": "cutoff != null",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "sync_cutoff",
+          "label": "Sync Cutoff",
+          "apiName": "sync_cutoff",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_SYNC_CUTOFF"
+        },
+        {
+          "id": "raise_cutoff_error",
+          "label": "Raise Cutoff Error",
+          "apiName": "raise_cutoff_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Cutoff sync failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "get_delivery_status",
+          "key": "action",
+          "label": "Get Delivery Status",
+          "apiName": "get_delivery_status",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "get_delivery_status",
+              "label": "Get Delivery Status",
+              "apiName": "get_delivery_status",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_store",
+              "filters": [
+                {
+                  "field": "status",
+                  "operator": "equals",
+                  "value": "ACTIVE"
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_cutoff",
+          "key": "action",
+          "label": "Validate Cutoff",
+          "apiName": "validate_cutoff",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_cutoff",
+              "label": "Validate Cutoff",
+              "apiName": "validate_cutoff",
+              "key": "FORMULA",
+              "expression": "cutoff != null",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "sync_cutoff",
+          "key": "action",
+          "label": "Sync Cutoff",
+          "apiName": "sync_cutoff",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "sync_cutoff",
+              "label": "Sync Cutoff",
+              "apiName": "sync_cutoff",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_SYNC_CUTOFF"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_cutoff_error",
+          "key": "action",
+          "label": "Raise Cutoff Error",
+          "apiName": "raise_cutoff_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_cutoff_error",
+              "label": "Raise Cutoff Error",
+              "apiName": "raise_cutoff_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Cutoff sync failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Customer Sync",
+      "key": "customer_sync",
+      "apiName": "CUSTOMER_SYNC",
+      "action": {
+        "apiName": "CUSTOMER_SYNC",
+        "actions": [
+          {
+            "id": "fetch_customers",
+            "label": "Fetch Customers",
+            "apiName": "fetch_customers",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_store",
+            "filters": [
+              {
+                "field": "active",
+                "operator": "equals",
+                "value": true
+              }
+            ],
+            "limit": 50
+          },
+          {
+            "id": "validate_customers",
+            "label": "Validate Customers",
+            "apiName": "validate_customers",
+            "key": "FORMULA",
+            "expression": "count >= 0",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "push_customers",
+            "label": "Push Customers",
+            "apiName": "push_customers",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_SYNC_CUSTOMERS"
+          },
+          {
+            "id": "raise_customer_error",
+            "label": "Raise Customer Error",
+            "apiName": "raise_customer_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Customer sync failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "fetch_customers",
+            "key": "action",
+            "label": "Fetch Customers",
+            "apiName": "fetch_customers",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "fetch_customers",
+                "label": "Fetch Customers",
+                "apiName": "fetch_customers",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_store",
+                "filters": [
+                  {
+                    "field": "active",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ],
+                "limit": 50
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_customers",
+            "key": "action",
+            "label": "Validate Customers",
+            "apiName": "validate_customers",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_customers",
+                "label": "Validate Customers",
+                "apiName": "validate_customers",
+                "key": "FORMULA",
+                "expression": "count >= 0",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "push_customers",
+            "key": "action",
+            "label": "Push Customers",
+            "apiName": "push_customers",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "push_customers",
+                "label": "Push Customers",
+                "apiName": "push_customers",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_SYNC_CUSTOMERS"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_customer_error",
+            "key": "action",
+            "label": "Raise Customer Error",
+            "apiName": "raise_customer_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_customer_error",
+                "label": "Raise Customer Error",
+                "apiName": "raise_customer_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Customer sync failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "fetch_customers",
+          "label": "Fetch Customers",
+          "apiName": "fetch_customers",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_store",
+          "filters": [
+            {
+              "field": "active",
+              "operator": "equals",
+              "value": true
+            }
+          ],
+          "limit": 50
+        },
+        {
+          "id": "validate_customers",
+          "label": "Validate Customers",
+          "apiName": "validate_customers",
+          "key": "FORMULA",
+          "expression": "count >= 0",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "push_customers",
+          "label": "Push Customers",
+          "apiName": "push_customers",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_SYNC_CUSTOMERS"
+        },
+        {
+          "id": "raise_customer_error",
+          "label": "Raise Customer Error",
+          "apiName": "raise_customer_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Customer sync failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "fetch_customers",
+          "key": "action",
+          "label": "Fetch Customers",
+          "apiName": "fetch_customers",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "fetch_customers",
+              "label": "Fetch Customers",
+              "apiName": "fetch_customers",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_store",
+              "filters": [
+                {
+                  "field": "active",
+                  "operator": "equals",
+                  "value": true
+                }
+              ],
+              "limit": 50
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_customers",
+          "key": "action",
+          "label": "Validate Customers",
+          "apiName": "validate_customers",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_customers",
+              "label": "Validate Customers",
+              "apiName": "validate_customers",
+              "key": "FORMULA",
+              "expression": "count >= 0",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "push_customers",
+          "key": "action",
+          "label": "Push Customers",
+          "apiName": "push_customers",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "push_customers",
+              "label": "Push Customers",
+              "apiName": "push_customers",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_SYNC_CUSTOMERS"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_customer_error",
+          "key": "action",
+          "label": "Raise Customer Error",
+          "apiName": "raise_customer_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_customer_error",
+              "label": "Raise Customer Error",
+              "apiName": "raise_customer_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Customer sync failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Operational Health Sync",
+      "key": "operational_health_sync",
+      "apiName": "OPERATIONAL_HEALTH_SYNC",
+      "action": {
+        "apiName": "OPERATIONAL_HEALTH_SYNC",
+        "actions": [
+          {
+            "id": "load_health",
+            "label": "Load Health",
+            "apiName": "load_health",
+            "key": "GET_RECORDS",
+            "objectKey": "uber_store",
+            "filters": [
+              {
+                "field": "status",
+                "operator": "equals",
+                "value": "ACTIVE"
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "validate_health",
+            "label": "Validate Health",
+            "apiName": "validate_health",
+            "key": "FORMULA",
+            "expression": "healthy == true",
+            "resultType": "boolean",
+            "inputs": {}
+          },
+          {
+            "id": "sync_health",
+            "label": "Sync Health",
+            "apiName": "sync_health",
+            "key": "RUN_SUBFLOW",
+            "handlerKey": "RUN_SUBFLOW",
+            "subflowApiName": "GPT_UBER_EATS_SYNC_HEALTH"
+          },
+          {
+            "id": "raise_health_error",
+            "label": "Raise Health Error",
+            "apiName": "raise_health_error",
+            "key": "CUSTOM_ERROR",
+            "message": "Operational health sync failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "load_health",
+            "key": "action",
+            "label": "Load Health",
+            "apiName": "load_health",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "load_health",
+                "label": "Load Health",
+                "apiName": "load_health",
+                "key": "GET_RECORDS",
+                "objectKey": "uber_store",
+                "filters": [
+                  {
+                    "field": "status",
+                    "operator": "equals",
+                    "value": "ACTIVE"
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_health",
+            "key": "action",
+            "label": "Validate Health",
+            "apiName": "validate_health",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_health",
+                "label": "Validate Health",
+                "apiName": "validate_health",
+                "key": "FORMULA",
+                "expression": "healthy == true",
+                "resultType": "boolean",
+                "inputs": {}
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "sync_health",
+            "key": "action",
+            "label": "Sync Health",
+            "apiName": "sync_health",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "RUN_SUBFLOW",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "sync_health",
+                "label": "Sync Health",
+                "apiName": "sync_health",
+                "key": "RUN_SUBFLOW",
+                "handlerKey": "RUN_SUBFLOW",
+                "subflowApiName": "GPT_UBER_EATS_SYNC_HEALTH"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_health_error",
+            "key": "action",
+            "label": "Raise Health Error",
+            "apiName": "raise_health_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_health_error",
+                "label": "Raise Health Error",
+                "apiName": "raise_health_error",
+                "key": "CUSTOM_ERROR",
+                "message": "Operational health sync failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "load_health",
+          "label": "Load Health",
+          "apiName": "load_health",
+          "key": "GET_RECORDS",
+          "objectKey": "uber_store",
+          "filters": [
+            {
+              "field": "status",
+              "operator": "equals",
+              "value": "ACTIVE"
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "validate_health",
+          "label": "Validate Health",
+          "apiName": "validate_health",
+          "key": "FORMULA",
+          "expression": "healthy == true",
+          "resultType": "boolean",
+          "inputs": {}
+        },
+        {
+          "id": "sync_health",
+          "label": "Sync Health",
+          "apiName": "sync_health",
+          "key": "RUN_SUBFLOW",
+          "handlerKey": "RUN_SUBFLOW",
+          "subflowApiName": "GPT_UBER_EATS_SYNC_HEALTH"
+        },
+        {
+          "id": "raise_health_error",
+          "label": "Raise Health Error",
+          "apiName": "raise_health_error",
+          "key": "CUSTOM_ERROR",
+          "message": "Operational health sync failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "load_health",
+          "key": "action",
+          "label": "Load Health",
+          "apiName": "load_health",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "load_health",
+              "label": "Load Health",
+              "apiName": "load_health",
+              "key": "GET_RECORDS",
+              "objectKey": "uber_store",
+              "filters": [
+                {
+                  "field": "status",
+                  "operator": "equals",
+                  "value": "ACTIVE"
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_health",
+          "key": "action",
+          "label": "Validate Health",
+          "apiName": "validate_health",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_health",
+              "label": "Validate Health",
+              "apiName": "validate_health",
+              "key": "FORMULA",
+              "expression": "healthy == true",
+              "resultType": "boolean",
+              "inputs": {}
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "sync_health",
+          "key": "action",
+          "label": "Sync Health",
+          "apiName": "sync_health",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "RUN_SUBFLOW",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "sync_health",
+              "label": "Sync Health",
+              "apiName": "sync_health",
+              "key": "RUN_SUBFLOW",
+              "handlerKey": "RUN_SUBFLOW",
+              "subflowApiName": "GPT_UBER_EATS_SYNC_HEALTH"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_health_error",
+          "key": "action",
+          "label": "Raise Health Error",
+          "apiName": "raise_health_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_health_error",
+              "label": "Raise Health Error",
+              "apiName": "raise_health_error",
+              "key": "CUSTOM_ERROR",
+              "message": "Operational health sync failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "load_product",
+      "label": "Load Product",
+      "apiName": "load_product",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_menu",
+      "filters": [
+        {
+          "field": "active",
+          "operator": "equals",
+          "value": true
+        }
+      ],
+      "limit": 1,
+      "handlerKey": "RUN_SUBFLOW"
+    },
+    {
+      "id": "check_connection",
+      "label": "Validate Connection",
+      "apiName": "check_connection",
+      "key": "CONDITION",
+      "outcomes": [
+        {
+          "id": "ok",
+          "label": "Connected",
+          "condition": {
+            "match": "all",
+            "conditions": [
+              {
+                "field": "connection",
+                "operator": "equals",
+                "value": "ACTIVE"
+              }
+            ]
+          },
+          "branch": [
+            "upload_menu"
+          ]
+        },
+        {
+          "id": "fail",
+          "label": "Blocked",
+          "condition": {
+            "match": "all",
+            "conditions": [
+              {
+                "field": "connection",
+                "operator": "not_equals",
+                "value": "ACTIVE"
+              }
+            ]
+          },
+          "branch": [
+            "raise_menu_error"
+          ]
+        }
+      ],
+      "defaultLabel": "Blocked",
+      "defaultBranch": [
+        "raise_menu_error"
+      ]
+    },
+    {
+      "id": "upload_menu",
+      "label": "Upload Menu",
+      "apiName": "upload_menu",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+    },
+    {
+      "id": "raise_menu_error",
+      "label": "Raise Upload Error",
+      "apiName": "raise_menu_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Uber menu sync failed"
+    },
+    {
+      "id": "fetch_order",
+      "label": "Fetch Order",
+      "apiName": "fetch_order",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_store",
+      "filters": [
+        {
+          "field": "status",
+          "operator": "equals",
+          "value": "ACTIVE"
+        }
+      ],
+      "limit": 1
+    },
+    {
+      "id": "validate_order_status",
+      "label": "Validate Order Status",
+      "apiName": "validate_order_status",
+      "key": "FORMULA",
+      "expression": "status != null",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "push_status",
+      "label": "Push Status",
+      "apiName": "push_status",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_PUSH_STATUS"
+    },
+    {
+      "id": "raise_status_error",
+      "label": "Raise Status Error",
+      "apiName": "raise_status_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Order status sync failed"
+    },
+    {
+      "id": "load_inventory",
+      "label": "Load Inventory",
+      "apiName": "load_inventory",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_store",
+      "filters": [
+        {
+          "field": "status",
+          "operator": "equals",
+          "value": "ACTIVE"
+        }
+      ],
+      "limit": 1
+    },
+    {
+      "id": "validate_inventory",
+      "label": "Validate Inventory",
+      "apiName": "validate_inventory",
+      "key": "FORMULA",
+      "expression": "available_quantity >= 0",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "run_sync",
+      "label": "Run Sync",
+      "apiName": "run_sync",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_SYNC_INVENTORY"
+    },
+    {
+      "id": "raise_inventory_error",
+      "label": "Raise Inventory Error",
+      "apiName": "raise_inventory_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Inventory sync failed"
+    },
+    {
+      "id": "get_records",
+      "label": "Get Records",
+      "apiName": "get_records",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_menu",
+      "filters": [
+        {
+          "field": "product_id",
+          "operator": "equals",
+          "value": {
+            "path": "record.id"
+          }
+        }
+      ],
+      "limit": 1
+    },
+    {
+      "id": "validate_connection",
+      "label": "Validate Connection",
+      "apiName": "validate_connection",
+      "key": "CONDITION",
+      "outcomes": [
+        {
+          "id": "connected",
+          "label": "Connected",
+          "condition": {
+            "match": "all",
+            "conditions": [
+              {
+                "field": "connection",
+                "operator": "equals",
+                "value": "ACTIVE"
+              }
+            ]
+          },
+          "branch": [
+            "run_subflow"
+          ]
+        },
+        {
+          "id": "blocked",
+          "label": "Blocked",
+          "condition": {
+            "match": "all",
+            "conditions": [
+              {
+                "field": "connection",
+                "operator": "not_equals",
+                "value": "ACTIVE"
+              }
+            ]
+          },
+          "branch": [
+            "raise_error"
+          ]
+        }
+      ],
+      "defaultLabel": "Blocked",
+      "defaultBranch": [
+        "raise_error"
+      ]
+    },
+    {
+      "id": "run_subflow",
+      "label": "Run Subflow",
+      "apiName": "run_subflow",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_UPLOAD_MENU"
+    },
+    {
+      "id": "raise_error",
+      "label": "Raise Error",
+      "apiName": "raise_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Menu upload failed"
+    },
+    {
+      "id": "fetch_store",
+      "label": "Fetch Store",
+      "apiName": "fetch_store",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_store",
+      "filters": [
+        {
+          "field": "active",
+          "operator": "equals",
+          "value": true
+        }
+      ],
+      "limit": 1
+    },
+    {
+      "id": "validate_schedule",
+      "label": "Validate Schedule",
+      "apiName": "validate_schedule",
+      "key": "FORMULA",
+      "expression": "schedule != null",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "schedule_push",
+      "label": "Schedule Push",
+      "apiName": "schedule_push",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_SCHEDULE_SYNC"
+    },
+    {
+      "id": "raise_schedule_error",
+      "label": "Raise Schedule Error",
+      "apiName": "raise_schedule_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Store sync failed"
+    },
+    {
+      "id": "find_catalog",
+      "label": "Find Catalog",
+      "apiName": "find_catalog",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_menu",
+      "filters": [
+        {
+          "field": "active",
+          "operator": "equals",
+          "value": true
+        }
+      ],
+      "limit": 20
+    },
+    {
+      "id": "validate_catalog",
+      "label": "Validate Catalog",
+      "apiName": "validate_catalog",
+      "key": "FORMULA",
+      "expression": "items.length > 0",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "sync_catalog",
+      "label": "Sync Catalog",
+      "apiName": "sync_catalog",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_SYNC_CATALOG"
+    },
+    {
+      "id": "raise_catalog_error",
+      "label": "Raise Catalog Error",
+      "apiName": "raise_catalog_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Catalog sync failed"
+    },
+    {
+      "id": "get_delivery_status",
+      "label": "Get Delivery Status",
+      "apiName": "get_delivery_status",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_store",
+      "filters": [
+        {
+          "field": "status",
+          "operator": "equals",
+          "value": "ACTIVE"
+        }
+      ],
+      "limit": 1
+    },
+    {
+      "id": "validate_cutoff",
+      "label": "Validate Cutoff",
+      "apiName": "validate_cutoff",
+      "key": "FORMULA",
+      "expression": "cutoff != null",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "sync_cutoff",
+      "label": "Sync Cutoff",
+      "apiName": "sync_cutoff",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_SYNC_CUTOFF"
+    },
+    {
+      "id": "raise_cutoff_error",
+      "label": "Raise Cutoff Error",
+      "apiName": "raise_cutoff_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Cutoff sync failed"
+    },
+    {
+      "id": "fetch_customers",
+      "label": "Fetch Customers",
+      "apiName": "fetch_customers",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_store",
+      "filters": [
+        {
+          "field": "active",
+          "operator": "equals",
+          "value": true
+        }
+      ],
+      "limit": 50
+    },
+    {
+      "id": "validate_customers",
+      "label": "Validate Customers",
+      "apiName": "validate_customers",
+      "key": "FORMULA",
+      "expression": "count >= 0",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "push_customers",
+      "label": "Push Customers",
+      "apiName": "push_customers",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_SYNC_CUSTOMERS"
+    },
+    {
+      "id": "raise_customer_error",
+      "label": "Raise Customer Error",
+      "apiName": "raise_customer_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Customer sync failed"
+    },
+    {
+      "id": "load_health",
+      "label": "Load Health",
+      "apiName": "load_health",
+      "key": "GET_RECORDS",
+      "objectKey": "uber_store",
+      "filters": [
+        {
+          "field": "status",
+          "operator": "equals",
+          "value": "ACTIVE"
+        }
+      ],
+      "limit": 1
+    },
+    {
+      "id": "validate_health",
+      "label": "Validate Health",
+      "apiName": "validate_health",
+      "key": "FORMULA",
+      "expression": "healthy == true",
+      "resultType": "boolean",
+      "inputs": {}
+    },
+    {
+      "id": "sync_health",
+      "label": "Sync Health",
+      "apiName": "sync_health",
+      "key": "RUN_SUBFLOW",
+      "handlerKey": "RUN_SUBFLOW",
+      "subflowApiName": "GPT_UBER_EATS_SYNC_HEALTH"
+    },
+    {
+      "id": "raise_health_error",
+      "label": "Raise Health Error",
+      "apiName": "raise_health_error",
+      "key": "CUSTOM_ERROR",
+      "message": "Operational health sync failed"
+    }
+  ]
+}

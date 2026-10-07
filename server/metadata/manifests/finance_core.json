@@ -1,0 +1,3339 @@
+{
+  "name": "finance_core",
+  "objects": [
+    {
+      "objectKey": "supplier_invoice",
+      "sourceTable": "supplier_invoices",
+      "config": {
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
+      },
+      "fields": [
+        {
+          "apiName": "paid_amount",
+          "label": "Paid Amount",
+          "type": "number"
+        },
+        {
+          "apiName": "outstanding_amount",
+          "label": "Outstanding Amount",
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "objectKey": "supplier_payment",
+      "sourceTable": "supplier_payments",
+      "config": {
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
+      },
+      "fields": [
+        {
+          "apiName": "paid_amount",
+          "label": "Paid Amount",
+          "type": "number"
+        },
+        {
+          "apiName": "outstanding_amount",
+          "label": "Outstanding Amount",
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "objectKey": "supplier_payment_allocation",
+      "sourceTable": "supplier_payment_allocations",
+      "config": {
+        "flowWritesOnly": true,
+        "internal": true,
+        "childStorage": true,
+        "generateOneId": false
+      }
+    },
+    {
+      "objectKey": "supplier_ledger",
+      "sourceTable": "supplier_ledger_entries",
+      "config": {
+        "flowWritesOnly": true
+      }
+    },
+    {
+      "objectKey": "supplier_credit_note",
+      "sourceTable": "supplier_credit_notes",
+      "config": {
+        "flowWritesOnly": true
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Supplier Invoice Create",
+      "key": "supplier_invoice_create",
+      "apiName": "SUPPLIER_INVOICE_CREATE",
+      "inputContract": [
+        {
+          "apiName": "supplierId",
+          "type": "string"
+        },
+        {
+          "apiName": "totalAmount",
+          "type": "number"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "invoiceId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "SUPPLIER_INVOICE_CREATE",
+        "actions": [
+          {
+            "id": "find_invoice",
+            "key": "GET_RECORDS",
+            "label": "Find Supplier Invoice",
+            "apiName": "find_invoice",
+            "objectKey": "supplier_invoice",
+            "filters": [
+              {
+                "field": "supplier_id",
+                "operator": "equals",
+                "value": {
+                  "path": "variables.supplierId"
+                }
+              }
+            ],
+            "limit": 1
+          },
+          {
+            "id": "create_invoice",
+            "key": "CREATE_RECORD",
+            "label": "Create Supplier Invoice",
+            "apiName": "create_invoice",
+            "objectKey": "supplier_invoice",
+            "fieldValues": {
+              "status": "DRAFT",
+              "supplier_id": {
+                "path": "variables.supplierId"
+              },
+              "total_amount": {
+                "path": "variables.totalAmount"
+              }
+            },
+            "checkMatchingRecords": true
+          },
+          {
+            "id": "validate_invoice_total",
+            "key": "FORMULA",
+            "label": "Validate Invoice Amount",
+            "apiName": "validate_invoice_total",
+            "expression": "total_amount > 0",
+            "resultType": "boolean"
+          },
+          {
+            "id": "post_invoice_ledger",
+            "key": "CREATE_RECORD",
+            "label": "Post Invoice Ledger Entry",
+            "apiName": "post_invoice_ledger",
+            "objectKey": "supplier_ledger",
+            "fieldValues": {
+              "reference_id": {
+                "path": "steps.create_invoice.created.id"
+              },
+              "amount": {
+                "path": "steps.create_invoice.created.total_amount"
+              }
+            },
+            "checkMatchingRecords": true
+          },
+          {
+            "id": "decision_invoice",
+            "key": "CONDITION",
+            "label": "Invoice Ready?",
+            "apiName": "decision_invoice",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Ready",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.create_invoice.created.id",
+                      "operator": "is_set",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "finish_invoice"
+                ]
+              },
+              {
+                "id": "fail",
+                "label": "Blocked",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.create_invoice.created.id",
+                      "operator": "is_set",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "raise_invoice_error"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_invoice_error"
+            ]
+          },
+          {
+            "id": "finish_invoice",
+            "key": "UPDATE_RECORD",
+            "label": "Complete Invoice",
+            "apiName": "finish_invoice",
+            "objectKey": "supplier_invoice",
+            "recordId": {
+              "path": "steps.create_invoice.created.id"
+            },
+            "fieldValues": {
+              "status": "APPROVED"
+            }
+          },
+          {
+            "id": "raise_invoice_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Invoice Error",
+            "apiName": "raise_invoice_error",
+            "message": "Supplier invoice validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "find_invoice",
+            "key": "action",
+            "label": "Find Supplier Invoice",
+            "apiName": "find_invoice",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "find_invoice",
+                "key": "GET_RECORDS",
+                "label": "Find Supplier Invoice",
+                "apiName": "find_invoice",
+                "objectKey": "supplier_invoice",
+                "filters": [
+                  {
+                    "field": "supplier_id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "variables.supplierId"
+                    }
+                  }
+                ],
+                "limit": 1
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_invoice",
+            "key": "action",
+            "label": "Create Supplier Invoice",
+            "apiName": "create_invoice",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_invoice",
+                "key": "CREATE_RECORD",
+                "label": "Create Supplier Invoice",
+                "apiName": "create_invoice",
+                "objectKey": "supplier_invoice",
+                "fieldValues": {
+                  "status": "DRAFT",
+                  "supplier_id": {
+                    "path": "variables.supplierId"
+                  },
+                  "total_amount": {
+                    "path": "variables.totalAmount"
+                  }
+                },
+                "checkMatchingRecords": true
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_invoice_total",
+            "key": "action",
+            "label": "Validate Invoice Amount",
+            "apiName": "validate_invoice_total",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_invoice_total",
+                "key": "FORMULA",
+                "label": "Validate Invoice Amount",
+                "apiName": "validate_invoice_total",
+                "expression": "total_amount > 0",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "post_invoice_ledger",
+            "key": "action",
+            "label": "Post Invoice Ledger Entry",
+            "apiName": "post_invoice_ledger",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "post_invoice_ledger",
+                "key": "CREATE_RECORD",
+                "label": "Post Invoice Ledger Entry",
+                "apiName": "post_invoice_ledger",
+                "objectKey": "supplier_ledger",
+                "fieldValues": {
+                  "reference_id": {
+                    "path": "steps.create_invoice.created.id"
+                  },
+                  "amount": {
+                    "path": "steps.create_invoice.created.total_amount"
+                  }
+                },
+                "checkMatchingRecords": true
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "decision_invoice",
+            "key": "action",
+            "label": "Invoice Ready?",
+            "apiName": "decision_invoice",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "decision_invoice",
+                "key": "CONDITION",
+                "label": "Invoice Ready?",
+                "apiName": "decision_invoice",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Ready",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.create_invoice.created.id",
+                          "operator": "is_set",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "finish_invoice"
+                    ]
+                  },
+                  {
+                    "id": "fail",
+                    "label": "Blocked",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.create_invoice.created.id",
+                          "operator": "is_set",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "raise_invoice_error"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_invoice_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "finish_invoice",
+            "key": "action",
+            "label": "Complete Invoice",
+            "apiName": "finish_invoice",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "finish_invoice",
+                "key": "UPDATE_RECORD",
+                "label": "Complete Invoice",
+                "apiName": "finish_invoice",
+                "objectKey": "supplier_invoice",
+                "recordId": {
+                  "path": "steps.create_invoice.created.id"
+                },
+                "fieldValues": {
+                  "status": "APPROVED"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_invoice_error",
+            "key": "action",
+            "label": "Raise Invoice Error",
+            "apiName": "raise_invoice_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_invoice_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Invoice Error",
+                "apiName": "raise_invoice_error",
+                "message": "Supplier invoice validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "find_invoice",
+          "key": "GET_RECORDS",
+          "label": "Find Supplier Invoice",
+          "apiName": "find_invoice",
+          "objectKey": "supplier_invoice",
+          "filters": [
+            {
+              "field": "supplier_id",
+              "operator": "equals",
+              "value": {
+                "path": "variables.supplierId"
+              }
+            }
+          ],
+          "limit": 1
+        },
+        {
+          "id": "create_invoice",
+          "key": "CREATE_RECORD",
+          "label": "Create Supplier Invoice",
+          "apiName": "create_invoice",
+          "objectKey": "supplier_invoice",
+          "fieldValues": {
+            "status": "DRAFT",
+            "supplier_id": {
+              "path": "variables.supplierId"
+            },
+            "total_amount": {
+              "path": "variables.totalAmount"
+            }
+          },
+          "checkMatchingRecords": true
+        },
+        {
+          "id": "validate_invoice_total",
+          "key": "FORMULA",
+          "label": "Validate Invoice Amount",
+          "apiName": "validate_invoice_total",
+          "expression": "total_amount > 0",
+          "resultType": "boolean"
+        },
+        {
+          "id": "post_invoice_ledger",
+          "key": "CREATE_RECORD",
+          "label": "Post Invoice Ledger Entry",
+          "apiName": "post_invoice_ledger",
+          "objectKey": "supplier_ledger",
+          "fieldValues": {
+            "reference_id": {
+              "path": "steps.create_invoice.created.id"
+            },
+            "amount": {
+              "path": "steps.create_invoice.created.total_amount"
+            }
+          },
+          "checkMatchingRecords": true
+        },
+        {
+          "id": "decision_invoice",
+          "key": "CONDITION",
+          "label": "Invoice Ready?",
+          "apiName": "decision_invoice",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Ready",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.create_invoice.created.id",
+                    "operator": "is_set",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "finish_invoice"
+              ]
+            },
+            {
+              "id": "fail",
+              "label": "Blocked",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.create_invoice.created.id",
+                    "operator": "is_set",
+                    "value": false
+                  }
+                ]
+              },
+              "branch": [
+                "raise_invoice_error"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_invoice_error"
+          ]
+        },
+        {
+          "id": "finish_invoice",
+          "key": "UPDATE_RECORD",
+          "label": "Complete Invoice",
+          "apiName": "finish_invoice",
+          "objectKey": "supplier_invoice",
+          "recordId": {
+            "path": "steps.create_invoice.created.id"
+          },
+          "fieldValues": {
+            "status": "APPROVED"
+          }
+        },
+        {
+          "id": "raise_invoice_error",
+          "key": "CUSTOM_ERROR",
+          "label": "Raise Invoice Error",
+          "apiName": "raise_invoice_error",
+          "message": "Supplier invoice validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "find_invoice",
+          "key": "action",
+          "label": "Find Supplier Invoice",
+          "apiName": "find_invoice",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "GET_RECORDS",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "find_invoice",
+              "key": "GET_RECORDS",
+              "label": "Find Supplier Invoice",
+              "apiName": "find_invoice",
+              "objectKey": "supplier_invoice",
+              "filters": [
+                {
+                  "field": "supplier_id",
+                  "operator": "equals",
+                  "value": {
+                    "path": "variables.supplierId"
+                  }
+                }
+              ],
+              "limit": 1
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "create_invoice",
+          "key": "action",
+          "label": "Create Supplier Invoice",
+          "apiName": "create_invoice",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_invoice",
+              "key": "CREATE_RECORD",
+              "label": "Create Supplier Invoice",
+              "apiName": "create_invoice",
+              "objectKey": "supplier_invoice",
+              "fieldValues": {
+                "status": "DRAFT",
+                "supplier_id": {
+                  "path": "variables.supplierId"
+                },
+                "total_amount": {
+                  "path": "variables.totalAmount"
+                }
+              },
+              "checkMatchingRecords": true
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_invoice_total",
+          "key": "action",
+          "label": "Validate Invoice Amount",
+          "apiName": "validate_invoice_total",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_invoice_total",
+              "key": "FORMULA",
+              "label": "Validate Invoice Amount",
+              "apiName": "validate_invoice_total",
+              "expression": "total_amount > 0",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "post_invoice_ledger",
+          "key": "action",
+          "label": "Post Invoice Ledger Entry",
+          "apiName": "post_invoice_ledger",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "post_invoice_ledger",
+              "key": "CREATE_RECORD",
+              "label": "Post Invoice Ledger Entry",
+              "apiName": "post_invoice_ledger",
+              "objectKey": "supplier_ledger",
+              "fieldValues": {
+                "reference_id": {
+                  "path": "steps.create_invoice.created.id"
+                },
+                "amount": {
+                  "path": "steps.create_invoice.created.total_amount"
+                }
+              },
+              "checkMatchingRecords": true
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "decision_invoice",
+          "key": "action",
+          "label": "Invoice Ready?",
+          "apiName": "decision_invoice",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "decision_invoice",
+              "key": "CONDITION",
+              "label": "Invoice Ready?",
+              "apiName": "decision_invoice",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Ready",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.create_invoice.created.id",
+                        "operator": "is_set",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "finish_invoice"
+                  ]
+                },
+                {
+                  "id": "fail",
+                  "label": "Blocked",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.create_invoice.created.id",
+                        "operator": "is_set",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "raise_invoice_error"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_invoice_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "finish_invoice",
+          "key": "action",
+          "label": "Complete Invoice",
+          "apiName": "finish_invoice",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "finish_invoice",
+              "key": "UPDATE_RECORD",
+              "label": "Complete Invoice",
+              "apiName": "finish_invoice",
+              "objectKey": "supplier_invoice",
+              "recordId": {
+                "path": "steps.create_invoice.created.id"
+              },
+              "fieldValues": {
+                "status": "APPROVED"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_invoice_error",
+          "key": "action",
+          "label": "Raise Invoice Error",
+          "apiName": "raise_invoice_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_invoice_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Invoice Error",
+              "apiName": "raise_invoice_error",
+              "message": "Supplier invoice validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Supplier Payment Execute",
+      "key": "supplier_payment_execute",
+      "apiName": "SUPPLIER_PAYMENT_EXECUTE",
+      "inputContract": [
+        {
+          "apiName": "supplierId",
+          "type": "string"
+        },
+        {
+          "apiName": "amount",
+          "type": "number"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "paymentId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "SUPPLIER_PAYMENT_EXECUTE",
+        "actions": [
+          {
+            "id": "create_payment",
+            "key": "CREATE_RECORD",
+            "label": "Create Supplier Payment",
+            "apiName": "create_payment",
+            "objectKey": "supplier_payment",
+            "fieldValues": {
+              "status": "PENDING",
+              "supplier_id": {
+                "path": "variables.supplierId"
+              },
+              "paid_amount": {
+                "path": "variables.amount"
+              }
+            },
+            "checkMatchingRecords": true
+          },
+          {
+            "id": "validate_payment",
+            "key": "FORMULA",
+            "label": "Validate Payment Amount",
+            "apiName": "validate_payment",
+            "expression": "paid_amount > 0",
+            "resultType": "boolean"
+          },
+          {
+            "id": "create_allocation",
+            "key": "CREATE_RECORD",
+            "label": "Create Payment Allocation",
+            "apiName": "create_allocation",
+            "objectKey": "supplier_payment_allocation",
+            "fieldValues": {
+              "payment_id": {
+                "path": "steps.create_payment.created.id"
+              },
+              "amount": {
+                "path": "variables.amount"
+              }
+            },
+            "checkMatchingRecords": true
+          },
+          {
+            "id": "post_payment_ledger",
+            "key": "CREATE_RECORD",
+            "label": "Post Payment Ledger Entry",
+            "apiName": "post_payment_ledger",
+            "objectKey": "supplier_ledger",
+            "fieldValues": {
+              "reference_id": {
+                "path": "steps.create_payment.created.id"
+              },
+              "amount": {
+                "path": "steps.create_payment.created.paid_amount"
+              }
+            },
+            "checkMatchingRecords": true
+          },
+          {
+            "id": "decision_payment",
+            "key": "CONDITION",
+            "label": "Payment Ready?",
+            "apiName": "decision_payment",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Ready",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.create_payment.created.id",
+                      "operator": "is_set",
+                      "value": true
+                    }
+                  ]
+                },
+                "branch": [
+                  "finish_payment"
+                ]
+              },
+              {
+                "id": "fail",
+                "label": "Blocked",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.create_payment.created.id",
+                      "operator": "is_set",
+                      "value": false
+                    }
+                  ]
+                },
+                "branch": [
+                  "raise_payment_error"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_payment_error"
+            ]
+          },
+          {
+            "id": "finish_payment",
+            "key": "UPDATE_RECORD",
+            "label": "Complete Payment",
+            "apiName": "finish_payment",
+            "objectKey": "supplier_payment",
+            "recordId": {
+              "path": "steps.create_payment.created.id"
+            },
+            "fieldValues": {
+              "status": "POSTED"
+            }
+          },
+          {
+            "id": "raise_payment_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Payment Error",
+            "apiName": "raise_payment_error",
+            "message": "Supplier payment validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "create_payment",
+            "key": "action",
+            "label": "Create Supplier Payment",
+            "apiName": "create_payment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_payment",
+                "key": "CREATE_RECORD",
+                "label": "Create Supplier Payment",
+                "apiName": "create_payment",
+                "objectKey": "supplier_payment",
+                "fieldValues": {
+                  "status": "PENDING",
+                  "supplier_id": {
+                    "path": "variables.supplierId"
+                  },
+                  "paid_amount": {
+                    "path": "variables.amount"
+                  }
+                },
+                "checkMatchingRecords": true
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_payment",
+            "key": "action",
+            "label": "Validate Payment Amount",
+            "apiName": "validate_payment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_payment",
+                "key": "FORMULA",
+                "label": "Validate Payment Amount",
+                "apiName": "validate_payment",
+                "expression": "paid_amount > 0",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "create_allocation",
+            "key": "action",
+            "label": "Create Payment Allocation",
+            "apiName": "create_allocation",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_allocation",
+                "key": "CREATE_RECORD",
+                "label": "Create Payment Allocation",
+                "apiName": "create_allocation",
+                "objectKey": "supplier_payment_allocation",
+                "fieldValues": {
+                  "payment_id": {
+                    "path": "steps.create_payment.created.id"
+                  },
+                  "amount": {
+                    "path": "variables.amount"
+                  }
+                },
+                "checkMatchingRecords": true
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "post_payment_ledger",
+            "key": "action",
+            "label": "Post Payment Ledger Entry",
+            "apiName": "post_payment_ledger",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "post_payment_ledger",
+                "key": "CREATE_RECORD",
+                "label": "Post Payment Ledger Entry",
+                "apiName": "post_payment_ledger",
+                "objectKey": "supplier_ledger",
+                "fieldValues": {
+                  "reference_id": {
+                    "path": "steps.create_payment.created.id"
+                  },
+                  "amount": {
+                    "path": "steps.create_payment.created.paid_amount"
+                  }
+                },
+                "checkMatchingRecords": true
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "decision_payment",
+            "key": "action",
+            "label": "Payment Ready?",
+            "apiName": "decision_payment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "decision_payment",
+                "key": "CONDITION",
+                "label": "Payment Ready?",
+                "apiName": "decision_payment",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Ready",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.create_payment.created.id",
+                          "operator": "is_set",
+                          "value": true
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "finish_payment"
+                    ]
+                  },
+                  {
+                    "id": "fail",
+                    "label": "Blocked",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.create_payment.created.id",
+                          "operator": "is_set",
+                          "value": false
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "raise_payment_error"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_payment_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "finish_payment",
+            "key": "action",
+            "label": "Complete Payment",
+            "apiName": "finish_payment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "finish_payment",
+                "key": "UPDATE_RECORD",
+                "label": "Complete Payment",
+                "apiName": "finish_payment",
+                "objectKey": "supplier_payment",
+                "recordId": {
+                  "path": "steps.create_payment.created.id"
+                },
+                "fieldValues": {
+                  "status": "POSTED"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_payment_error",
+            "key": "action",
+            "label": "Raise Payment Error",
+            "apiName": "raise_payment_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_payment_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Payment Error",
+                "apiName": "raise_payment_error",
+                "message": "Supplier payment validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "create_payment",
+          "key": "CREATE_RECORD",
+          "label": "Create Supplier Payment",
+          "apiName": "create_payment",
+          "objectKey": "supplier_payment",
+          "fieldValues": {
+            "status": "PENDING",
+            "supplier_id": {
+              "path": "variables.supplierId"
+            },
+            "paid_amount": {
+              "path": "variables.amount"
+            }
+          },
+          "checkMatchingRecords": true
+        },
+        {
+          "id": "validate_payment",
+          "key": "FORMULA",
+          "label": "Validate Payment Amount",
+          "apiName": "validate_payment",
+          "expression": "paid_amount > 0",
+          "resultType": "boolean"
+        },
+        {
+          "id": "create_allocation",
+          "key": "CREATE_RECORD",
+          "label": "Create Payment Allocation",
+          "apiName": "create_allocation",
+          "objectKey": "supplier_payment_allocation",
+          "fieldValues": {
+            "payment_id": {
+              "path": "steps.create_payment.created.id"
+            },
+            "amount": {
+              "path": "variables.amount"
+            }
+          },
+          "checkMatchingRecords": true
+        },
+        {
+          "id": "post_payment_ledger",
+          "key": "CREATE_RECORD",
+          "label": "Post Payment Ledger Entry",
+          "apiName": "post_payment_ledger",
+          "objectKey": "supplier_ledger",
+          "fieldValues": {
+            "reference_id": {
+              "path": "steps.create_payment.created.id"
+            },
+            "amount": {
+              "path": "steps.create_payment.created.paid_amount"
+            }
+          },
+          "checkMatchingRecords": true
+        },
+        {
+          "id": "decision_payment",
+          "key": "CONDITION",
+          "label": "Payment Ready?",
+          "apiName": "decision_payment",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Ready",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.create_payment.created.id",
+                    "operator": "is_set",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "finish_payment"
+              ]
+            },
+            {
+              "id": "fail",
+              "label": "Blocked",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.create_payment.created.id",
+                    "operator": "is_set",
+                    "value": false
+                  }
+                ]
+              },
+              "branch": [
+                "raise_payment_error"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_payment_error"
+          ]
+        },
+        {
+          "id": "finish_payment",
+          "key": "UPDATE_RECORD",
+          "label": "Complete Payment",
+          "apiName": "finish_payment",
+          "objectKey": "supplier_payment",
+          "recordId": {
+            "path": "steps.create_payment.created.id"
+          },
+          "fieldValues": {
+            "status": "POSTED"
+          }
+        },
+        {
+          "id": "raise_payment_error",
+          "key": "CUSTOM_ERROR",
+          "label": "Raise Payment Error",
+          "apiName": "raise_payment_error",
+          "message": "Supplier payment validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "create_payment",
+          "key": "action",
+          "label": "Create Supplier Payment",
+          "apiName": "create_payment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_payment",
+              "key": "CREATE_RECORD",
+              "label": "Create Supplier Payment",
+              "apiName": "create_payment",
+              "objectKey": "supplier_payment",
+              "fieldValues": {
+                "status": "PENDING",
+                "supplier_id": {
+                  "path": "variables.supplierId"
+                },
+                "paid_amount": {
+                  "path": "variables.amount"
+                }
+              },
+              "checkMatchingRecords": true
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_payment",
+          "key": "action",
+          "label": "Validate Payment Amount",
+          "apiName": "validate_payment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_payment",
+              "key": "FORMULA",
+              "label": "Validate Payment Amount",
+              "apiName": "validate_payment",
+              "expression": "paid_amount > 0",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "create_allocation",
+          "key": "action",
+          "label": "Create Payment Allocation",
+          "apiName": "create_allocation",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_allocation",
+              "key": "CREATE_RECORD",
+              "label": "Create Payment Allocation",
+              "apiName": "create_allocation",
+              "objectKey": "supplier_payment_allocation",
+              "fieldValues": {
+                "payment_id": {
+                  "path": "steps.create_payment.created.id"
+                },
+                "amount": {
+                  "path": "variables.amount"
+                }
+              },
+              "checkMatchingRecords": true
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "post_payment_ledger",
+          "key": "action",
+          "label": "Post Payment Ledger Entry",
+          "apiName": "post_payment_ledger",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "post_payment_ledger",
+              "key": "CREATE_RECORD",
+              "label": "Post Payment Ledger Entry",
+              "apiName": "post_payment_ledger",
+              "objectKey": "supplier_ledger",
+              "fieldValues": {
+                "reference_id": {
+                  "path": "steps.create_payment.created.id"
+                },
+                "amount": {
+                  "path": "steps.create_payment.created.paid_amount"
+                }
+              },
+              "checkMatchingRecords": true
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "decision_payment",
+          "key": "action",
+          "label": "Payment Ready?",
+          "apiName": "decision_payment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "decision_payment",
+              "key": "CONDITION",
+              "label": "Payment Ready?",
+              "apiName": "decision_payment",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Ready",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.create_payment.created.id",
+                        "operator": "is_set",
+                        "value": true
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "finish_payment"
+                  ]
+                },
+                {
+                  "id": "fail",
+                  "label": "Blocked",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "steps.create_payment.created.id",
+                        "operator": "is_set",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "raise_payment_error"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_payment_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "finish_payment",
+          "key": "action",
+          "label": "Complete Payment",
+          "apiName": "finish_payment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "finish_payment",
+              "key": "UPDATE_RECORD",
+              "label": "Complete Payment",
+              "apiName": "finish_payment",
+              "objectKey": "supplier_payment",
+              "recordId": {
+                "path": "steps.create_payment.created.id"
+              },
+              "fieldValues": {
+                "status": "POSTED"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_payment_error",
+          "key": "action",
+          "label": "Raise Payment Error",
+          "apiName": "raise_payment_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_payment_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Payment Error",
+              "apiName": "raise_payment_error",
+              "message": "Supplier payment validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Supplier Credit Create",
+      "key": "supplier_credit_create",
+      "apiName": "SUPPLIER_CREDIT_CREATE",
+      "inputContract": [
+        {
+          "apiName": "amount",
+          "type": "number"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "ledgerId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "SUPPLIER_CREDIT_CREATE",
+        "actions": [
+          {
+            "id": "create_ledger_adjustment",
+            "key": "CREATE_RECORD",
+            "label": "Create Supplier Credit",
+            "apiName": "create_ledger_adjustment",
+            "objectKey": "supplier_ledger",
+            "fieldValues": {
+              "entry_type": "CREDIT",
+              "amount": {
+                "path": "variables.amount"
+              }
+            },
+            "checkMatchingRecords": true
+          },
+          {
+            "id": "validate_credit",
+            "key": "FORMULA",
+            "label": "Validate Credit",
+            "apiName": "validate_credit",
+            "expression": "amount > 0",
+            "resultType": "boolean"
+          },
+          {
+            "id": "decision_credit",
+            "key": "CONDITION",
+            "label": "Credit Ready?",
+            "apiName": "decision_credit",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Ready",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "amount",
+                      "operator": "greater_than",
+                      "value": 0
+                    }
+                  ]
+                },
+                "branch": [
+                  "finish_credit"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_credit_error"
+            ]
+          },
+          {
+            "id": "finish_credit",
+            "key": "UPDATE_RECORD",
+            "label": "Finish Credit",
+            "apiName": "finish_credit",
+            "objectKey": "supplier_ledger",
+            "recordId": {
+              "path": "steps.create_ledger_adjustment.created.id"
+            },
+            "fieldValues": {
+              "status": "POSTED"
+            }
+          },
+          {
+            "id": "raise_credit_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Credit Error",
+            "apiName": "raise_credit_error",
+            "message": "Supplier credit validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "create_ledger_adjustment",
+            "key": "action",
+            "label": "Create Supplier Credit",
+            "apiName": "create_ledger_adjustment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_ledger_adjustment",
+                "key": "CREATE_RECORD",
+                "label": "Create Supplier Credit",
+                "apiName": "create_ledger_adjustment",
+                "objectKey": "supplier_ledger",
+                "fieldValues": {
+                  "entry_type": "CREDIT",
+                  "amount": {
+                    "path": "variables.amount"
+                  }
+                },
+                "checkMatchingRecords": true
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_credit",
+            "key": "action",
+            "label": "Validate Credit",
+            "apiName": "validate_credit",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_credit",
+                "key": "FORMULA",
+                "label": "Validate Credit",
+                "apiName": "validate_credit",
+                "expression": "amount > 0",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "decision_credit",
+            "key": "action",
+            "label": "Credit Ready?",
+            "apiName": "decision_credit",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "decision_credit",
+                "key": "CONDITION",
+                "label": "Credit Ready?",
+                "apiName": "decision_credit",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Ready",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "amount",
+                          "operator": "greater_than",
+                          "value": 0
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "finish_credit"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_credit_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "finish_credit",
+            "key": "action",
+            "label": "Finish Credit",
+            "apiName": "finish_credit",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "finish_credit",
+                "key": "UPDATE_RECORD",
+                "label": "Finish Credit",
+                "apiName": "finish_credit",
+                "objectKey": "supplier_ledger",
+                "recordId": {
+                  "path": "steps.create_ledger_adjustment.created.id"
+                },
+                "fieldValues": {
+                  "status": "POSTED"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_credit_error",
+            "key": "action",
+            "label": "Raise Credit Error",
+            "apiName": "raise_credit_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_credit_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Credit Error",
+                "apiName": "raise_credit_error",
+                "message": "Supplier credit validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "create_ledger_adjustment",
+          "key": "CREATE_RECORD",
+          "label": "Create Supplier Credit",
+          "apiName": "create_ledger_adjustment",
+          "objectKey": "supplier_ledger",
+          "fieldValues": {
+            "entry_type": "CREDIT",
+            "amount": {
+              "path": "variables.amount"
+            }
+          },
+          "checkMatchingRecords": true
+        },
+        {
+          "id": "validate_credit",
+          "key": "FORMULA",
+          "label": "Validate Credit",
+          "apiName": "validate_credit",
+          "expression": "amount > 0",
+          "resultType": "boolean"
+        },
+        {
+          "id": "decision_credit",
+          "key": "CONDITION",
+          "label": "Credit Ready?",
+          "apiName": "decision_credit",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Ready",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "amount",
+                    "operator": "greater_than",
+                    "value": 0
+                  }
+                ]
+              },
+              "branch": [
+                "finish_credit"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_credit_error"
+          ]
+        },
+        {
+          "id": "finish_credit",
+          "key": "UPDATE_RECORD",
+          "label": "Finish Credit",
+          "apiName": "finish_credit",
+          "objectKey": "supplier_ledger",
+          "recordId": {
+            "path": "steps.create_ledger_adjustment.created.id"
+          },
+          "fieldValues": {
+            "status": "POSTED"
+          }
+        },
+        {
+          "id": "raise_credit_error",
+          "key": "CUSTOM_ERROR",
+          "label": "Raise Credit Error",
+          "apiName": "raise_credit_error",
+          "message": "Supplier credit validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "create_ledger_adjustment",
+          "key": "action",
+          "label": "Create Supplier Credit",
+          "apiName": "create_ledger_adjustment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_ledger_adjustment",
+              "key": "CREATE_RECORD",
+              "label": "Create Supplier Credit",
+              "apiName": "create_ledger_adjustment",
+              "objectKey": "supplier_ledger",
+              "fieldValues": {
+                "entry_type": "CREDIT",
+                "amount": {
+                  "path": "variables.amount"
+                }
+              },
+              "checkMatchingRecords": true
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_credit",
+          "key": "action",
+          "label": "Validate Credit",
+          "apiName": "validate_credit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_credit",
+              "key": "FORMULA",
+              "label": "Validate Credit",
+              "apiName": "validate_credit",
+              "expression": "amount > 0",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "decision_credit",
+          "key": "action",
+          "label": "Credit Ready?",
+          "apiName": "decision_credit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "decision_credit",
+              "key": "CONDITION",
+              "label": "Credit Ready?",
+              "apiName": "decision_credit",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Ready",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "amount",
+                        "operator": "greater_than",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "finish_credit"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_credit_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "finish_credit",
+          "key": "action",
+          "label": "Finish Credit",
+          "apiName": "finish_credit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "finish_credit",
+              "key": "UPDATE_RECORD",
+              "label": "Finish Credit",
+              "apiName": "finish_credit",
+              "objectKey": "supplier_ledger",
+              "recordId": {
+                "path": "steps.create_ledger_adjustment.created.id"
+              },
+              "fieldValues": {
+                "status": "POSTED"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_credit_error",
+          "key": "action",
+          "label": "Raise Credit Error",
+          "apiName": "raise_credit_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_credit_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Credit Error",
+              "apiName": "raise_credit_error",
+              "message": "Supplier credit validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Supplier Debit Create",
+      "key": "supplier_debit_create",
+      "apiName": "SUPPLIER_DEBIT_CREATE",
+      "inputContract": [
+        {
+          "apiName": "amount",
+          "type": "number"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "ledgerId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "SUPPLIER_DEBIT_CREATE",
+        "actions": [
+          {
+            "id": "create_ledger_adjustment",
+            "key": "CREATE_RECORD",
+            "label": "Create Supplier Debit",
+            "apiName": "create_ledger_adjustment",
+            "objectKey": "supplier_ledger",
+            "fieldValues": {
+              "entry_type": "DEBIT",
+              "amount": {
+                "path": "variables.amount"
+              }
+            },
+            "checkMatchingRecords": true
+          },
+          {
+            "id": "validate_debit",
+            "key": "FORMULA",
+            "label": "Validate Debit",
+            "apiName": "validate_debit",
+            "expression": "amount > 0",
+            "resultType": "boolean"
+          },
+          {
+            "id": "decision_debit",
+            "key": "CONDITION",
+            "label": "Debit Ready?",
+            "apiName": "decision_debit",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Ready",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "amount",
+                      "operator": "greater_than",
+                      "value": 0
+                    }
+                  ]
+                },
+                "branch": [
+                  "finish_debit"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_debit_error"
+            ]
+          },
+          {
+            "id": "finish_debit",
+            "key": "UPDATE_RECORD",
+            "label": "Finish Debit",
+            "apiName": "finish_debit",
+            "objectKey": "supplier_ledger",
+            "recordId": {
+              "path": "steps.create_ledger_adjustment.created.id"
+            },
+            "fieldValues": {
+              "status": "POSTED"
+            }
+          },
+          {
+            "id": "raise_debit_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Debit Error",
+            "apiName": "raise_debit_error",
+            "message": "Supplier debit validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "create_ledger_adjustment",
+            "key": "action",
+            "label": "Create Supplier Debit",
+            "apiName": "create_ledger_adjustment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_ledger_adjustment",
+                "key": "CREATE_RECORD",
+                "label": "Create Supplier Debit",
+                "apiName": "create_ledger_adjustment",
+                "objectKey": "supplier_ledger",
+                "fieldValues": {
+                  "entry_type": "DEBIT",
+                  "amount": {
+                    "path": "variables.amount"
+                  }
+                },
+                "checkMatchingRecords": true
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_debit",
+            "key": "action",
+            "label": "Validate Debit",
+            "apiName": "validate_debit",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_debit",
+                "key": "FORMULA",
+                "label": "Validate Debit",
+                "apiName": "validate_debit",
+                "expression": "amount > 0",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "decision_debit",
+            "key": "action",
+            "label": "Debit Ready?",
+            "apiName": "decision_debit",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "decision_debit",
+                "key": "CONDITION",
+                "label": "Debit Ready?",
+                "apiName": "decision_debit",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Ready",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "amount",
+                          "operator": "greater_than",
+                          "value": 0
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "finish_debit"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_debit_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "finish_debit",
+            "key": "action",
+            "label": "Finish Debit",
+            "apiName": "finish_debit",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "finish_debit",
+                "key": "UPDATE_RECORD",
+                "label": "Finish Debit",
+                "apiName": "finish_debit",
+                "objectKey": "supplier_ledger",
+                "recordId": {
+                  "path": "steps.create_ledger_adjustment.created.id"
+                },
+                "fieldValues": {
+                  "status": "POSTED"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_debit_error",
+            "key": "action",
+            "label": "Raise Debit Error",
+            "apiName": "raise_debit_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_debit_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Debit Error",
+                "apiName": "raise_debit_error",
+                "message": "Supplier debit validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "create_ledger_adjustment",
+          "key": "CREATE_RECORD",
+          "label": "Create Supplier Debit",
+          "apiName": "create_ledger_adjustment",
+          "objectKey": "supplier_ledger",
+          "fieldValues": {
+            "entry_type": "DEBIT",
+            "amount": {
+              "path": "variables.amount"
+            }
+          },
+          "checkMatchingRecords": true
+        },
+        {
+          "id": "validate_debit",
+          "key": "FORMULA",
+          "label": "Validate Debit",
+          "apiName": "validate_debit",
+          "expression": "amount > 0",
+          "resultType": "boolean"
+        },
+        {
+          "id": "decision_debit",
+          "key": "CONDITION",
+          "label": "Debit Ready?",
+          "apiName": "decision_debit",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Ready",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "amount",
+                    "operator": "greater_than",
+                    "value": 0
+                  }
+                ]
+              },
+              "branch": [
+                "finish_debit"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_debit_error"
+          ]
+        },
+        {
+          "id": "finish_debit",
+          "key": "UPDATE_RECORD",
+          "label": "Finish Debit",
+          "apiName": "finish_debit",
+          "objectKey": "supplier_ledger",
+          "recordId": {
+            "path": "steps.create_ledger_adjustment.created.id"
+          },
+          "fieldValues": {
+            "status": "POSTED"
+          }
+        },
+        {
+          "id": "raise_debit_error",
+          "key": "CUSTOM_ERROR",
+          "label": "Raise Debit Error",
+          "apiName": "raise_debit_error",
+          "message": "Supplier debit validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "create_ledger_adjustment",
+          "key": "action",
+          "label": "Create Supplier Debit",
+          "apiName": "create_ledger_adjustment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_ledger_adjustment",
+              "key": "CREATE_RECORD",
+              "label": "Create Supplier Debit",
+              "apiName": "create_ledger_adjustment",
+              "objectKey": "supplier_ledger",
+              "fieldValues": {
+                "entry_type": "DEBIT",
+                "amount": {
+                  "path": "variables.amount"
+                }
+              },
+              "checkMatchingRecords": true
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_debit",
+          "key": "action",
+          "label": "Validate Debit",
+          "apiName": "validate_debit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_debit",
+              "key": "FORMULA",
+              "label": "Validate Debit",
+              "apiName": "validate_debit",
+              "expression": "amount > 0",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "decision_debit",
+          "key": "action",
+          "label": "Debit Ready?",
+          "apiName": "decision_debit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "decision_debit",
+              "key": "CONDITION",
+              "label": "Debit Ready?",
+              "apiName": "decision_debit",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Ready",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "amount",
+                        "operator": "greater_than",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "finish_debit"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_debit_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "finish_debit",
+          "key": "action",
+          "label": "Finish Debit",
+          "apiName": "finish_debit",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "finish_debit",
+              "key": "UPDATE_RECORD",
+              "label": "Finish Debit",
+              "apiName": "finish_debit",
+              "objectKey": "supplier_ledger",
+              "recordId": {
+                "path": "steps.create_ledger_adjustment.created.id"
+              },
+              "fieldValues": {
+                "status": "POSTED"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_debit_error",
+          "key": "action",
+          "label": "Raise Debit Error",
+          "apiName": "raise_debit_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_debit_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Debit Error",
+              "apiName": "raise_debit_error",
+              "message": "Supplier debit validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    },
+    {
+      "name": "Supplier Credit Note Create",
+      "key": "supplier_credit_note_create",
+      "apiName": "SUPPLIER_CREDIT_NOTE_CREATE",
+      "inputContract": [
+        {
+          "apiName": "amount",
+          "type": "number"
+        }
+      ],
+      "outputContract": [
+        {
+          "apiName": "ledgerId",
+          "type": "string"
+        }
+      ],
+      "action": {
+        "apiName": "SUPPLIER_CREDIT_NOTE_CREATE",
+        "actions": [
+          {
+            "id": "create_ledger_adjustment",
+            "key": "CREATE_RECORD",
+            "label": "Create Supplier Credit Note",
+            "apiName": "create_ledger_adjustment",
+            "objectKey": "supplier_ledger",
+            "fieldValues": {
+              "entry_type": "CREDIT_NOTE",
+              "amount": {
+                "path": "variables.amount"
+              }
+            },
+            "checkMatchingRecords": true
+          },
+          {
+            "id": "validate_note",
+            "key": "FORMULA",
+            "label": "Validate Credit Note",
+            "apiName": "validate_note",
+            "expression": "amount > 0",
+            "resultType": "boolean"
+          },
+          {
+            "id": "decision_note",
+            "key": "CONDITION",
+            "label": "Note Ready?",
+            "apiName": "decision_note",
+            "outcomes": [
+              {
+                "id": "ok",
+                "label": "Ready",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "amount",
+                      "operator": "greater_than",
+                      "value": 0
+                    }
+                  ]
+                },
+                "branch": [
+                  "finish_note"
+                ]
+              }
+            ],
+            "defaultLabel": "Blocked",
+            "defaultBranch": [
+              "raise_note_error"
+            ]
+          },
+          {
+            "id": "finish_note",
+            "key": "UPDATE_RECORD",
+            "label": "Finish Credit Note",
+            "apiName": "finish_note",
+            "objectKey": "supplier_ledger",
+            "recordId": {
+              "path": "steps.create_ledger_adjustment.created.id"
+            },
+            "fieldValues": {
+              "status": "POSTED"
+            }
+          },
+          {
+            "id": "raise_note_error",
+            "key": "CUSTOM_ERROR",
+            "label": "Raise Credit Note Error",
+            "apiName": "raise_note_error",
+            "message": "Supplier credit note validation failed"
+          }
+        ],
+        "gptBuilderElements": [
+          {
+            "id": "create_ledger_adjustment",
+            "key": "action",
+            "label": "Create Supplier Credit Note",
+            "apiName": "create_ledger_adjustment",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "create_ledger_adjustment",
+                "key": "CREATE_RECORD",
+                "label": "Create Supplier Credit Note",
+                "apiName": "create_ledger_adjustment",
+                "objectKey": "supplier_ledger",
+                "fieldValues": {
+                  "entry_type": "CREDIT_NOTE",
+                  "amount": {
+                    "path": "variables.amount"
+                  }
+                },
+                "checkMatchingRecords": true
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "validate_note",
+            "key": "action",
+            "label": "Validate Credit Note",
+            "apiName": "validate_note",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "validate_note",
+                "key": "FORMULA",
+                "label": "Validate Credit Note",
+                "apiName": "validate_note",
+                "expression": "amount > 0",
+                "resultType": "boolean"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "decision_note",
+            "key": "action",
+            "label": "Note Ready?",
+            "apiName": "decision_note",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "decision_note",
+                "key": "CONDITION",
+                "label": "Note Ready?",
+                "apiName": "decision_note",
+                "outcomes": [
+                  {
+                    "id": "ok",
+                    "label": "Ready",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "amount",
+                          "operator": "greater_than",
+                          "value": 0
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "finish_note"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Blocked",
+                "defaultBranch": [
+                  "raise_note_error"
+                ]
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "finish_note",
+            "key": "action",
+            "label": "Finish Credit Note",
+            "apiName": "finish_note",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "finish_note",
+                "key": "UPDATE_RECORD",
+                "label": "Finish Credit Note",
+                "apiName": "finish_note",
+                "objectKey": "supplier_ledger",
+                "recordId": {
+                  "path": "steps.create_ledger_adjustment.created.id"
+                },
+                "fieldValues": {
+                  "status": "POSTED"
+                }
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          },
+          {
+            "id": "raise_note_error",
+            "key": "action",
+            "label": "Raise Credit Note Error",
+            "apiName": "raise_note_error",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CUSTOM_ERROR",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedMetadataAction": {
+                "id": "raise_note_error",
+                "key": "CUSTOM_ERROR",
+                "label": "Raise Credit Note Error",
+                "apiName": "raise_note_error",
+                "message": "Supplier credit note validation failed"
+              },
+              "importedMetadataActionText": ""
+            },
+            "configured": true,
+            "source": "metadata_import",
+            "position": null
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "create_ledger_adjustment",
+          "key": "CREATE_RECORD",
+          "label": "Create Supplier Credit Note",
+          "apiName": "create_ledger_adjustment",
+          "objectKey": "supplier_ledger",
+          "fieldValues": {
+            "entry_type": "CREDIT_NOTE",
+            "amount": {
+              "path": "variables.amount"
+            }
+          },
+          "checkMatchingRecords": true
+        },
+        {
+          "id": "validate_note",
+          "key": "FORMULA",
+          "label": "Validate Credit Note",
+          "apiName": "validate_note",
+          "expression": "amount > 0",
+          "resultType": "boolean"
+        },
+        {
+          "id": "decision_note",
+          "key": "CONDITION",
+          "label": "Note Ready?",
+          "apiName": "decision_note",
+          "outcomes": [
+            {
+              "id": "ok",
+              "label": "Ready",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "amount",
+                    "operator": "greater_than",
+                    "value": 0
+                  }
+                ]
+              },
+              "branch": [
+                "finish_note"
+              ]
+            }
+          ],
+          "defaultLabel": "Blocked",
+          "defaultBranch": [
+            "raise_note_error"
+          ]
+        },
+        {
+          "id": "finish_note",
+          "key": "UPDATE_RECORD",
+          "label": "Finish Credit Note",
+          "apiName": "finish_note",
+          "objectKey": "supplier_ledger",
+          "recordId": {
+            "path": "steps.create_ledger_adjustment.created.id"
+          },
+          "fieldValues": {
+            "status": "POSTED"
+          }
+        },
+        {
+          "id": "raise_note_error",
+          "key": "CUSTOM_ERROR",
+          "label": "Raise Credit Note Error",
+          "apiName": "raise_note_error",
+          "message": "Supplier credit note validation failed"
+        }
+      ],
+      "gptBuilderElements": [
+        {
+          "id": "create_ledger_adjustment",
+          "key": "action",
+          "label": "Create Supplier Credit Note",
+          "apiName": "create_ledger_adjustment",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CREATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "create_ledger_adjustment",
+              "key": "CREATE_RECORD",
+              "label": "Create Supplier Credit Note",
+              "apiName": "create_ledger_adjustment",
+              "objectKey": "supplier_ledger",
+              "fieldValues": {
+                "entry_type": "CREDIT_NOTE",
+                "amount": {
+                  "path": "variables.amount"
+                }
+              },
+              "checkMatchingRecords": true
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "validate_note",
+          "key": "action",
+          "label": "Validate Credit Note",
+          "apiName": "validate_note",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "FORMULA",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "validate_note",
+              "key": "FORMULA",
+              "label": "Validate Credit Note",
+              "apiName": "validate_note",
+              "expression": "amount > 0",
+              "resultType": "boolean"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "decision_note",
+          "key": "action",
+          "label": "Note Ready?",
+          "apiName": "decision_note",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CONDITION",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "decision_note",
+              "key": "CONDITION",
+              "label": "Note Ready?",
+              "apiName": "decision_note",
+              "outcomes": [
+                {
+                  "id": "ok",
+                  "label": "Ready",
+                  "condition": {
+                    "match": "all",
+                    "conditions": [
+                      {
+                        "field": "amount",
+                        "operator": "greater_than",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "branch": [
+                    "finish_note"
+                  ]
+                }
+              ],
+              "defaultLabel": "Blocked",
+              "defaultBranch": [
+                "raise_note_error"
+              ]
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "finish_note",
+          "key": "action",
+          "label": "Finish Credit Note",
+          "apiName": "finish_note",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "UPDATE_RECORD",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "finish_note",
+              "key": "UPDATE_RECORD",
+              "label": "Finish Credit Note",
+              "apiName": "finish_note",
+              "objectKey": "supplier_ledger",
+              "recordId": {
+                "path": "steps.create_ledger_adjustment.created.id"
+              },
+              "fieldValues": {
+                "status": "POSTED"
+              }
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        },
+        {
+          "id": "raise_note_error",
+          "key": "action",
+          "label": "Raise Credit Note Error",
+          "apiName": "raise_note_error",
+          "description": "",
+          "labelSource": "manual",
+          "apiNameSource": "manual",
+          "config": {
+            "actionKey": "CUSTOM_ERROR",
+            "inputs": {},
+            "inputModes": {},
+            "inputIncluded": {},
+            "transforms": {},
+            "outputMode": "automatic",
+            "manualOutputs": [],
+            "importedMetadataAction": {
+              "id": "raise_note_error",
+              "key": "CUSTOM_ERROR",
+              "label": "Raise Credit Note Error",
+              "apiName": "raise_note_error",
+              "message": "Supplier credit note validation failed"
+            },
+            "importedMetadataActionText": ""
+          },
+          "configured": true,
+          "source": "metadata_import",
+          "position": null
+        }
+      ]
+    }
+  ]
+}
