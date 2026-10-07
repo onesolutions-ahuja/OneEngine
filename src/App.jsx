@@ -2384,6 +2384,60 @@ export default function App() {
     return () => { live = false }
   }, [])
 
+  useEffect(() => {
+    if (!sessionContextReady || !hasSession()) return undefined
+
+    let cancelled = false
+    const warm = async () => {
+      // Warm route chunks after authentication so normal navigation does not
+      // pay the network/parse cost of a first dynamic import. This is purely a
+      // presentation/runtime optimisation; routes and business behaviour still
+      // resolve from metadata.
+      const batches = [
+        [
+          () => import('./platform/workspace/WorkspacePage'),
+          () => import('./platform/pages/CustomPageRuntimePage'),
+          () => import('./pages/profile/ProfilePage'),
+          () => import('./pages/dashboard/DashboardPage'),
+        ],
+        [
+          () => import('./pages/developer/OneDeveloperPage'),
+          () => import('./pages/reports/CustomReportsPage'),
+          () => import('./pages/integrations/IntegrationsAdmin'),
+          () => import('./pages/audit/AuditLogPage'),
+        ],
+        [
+          () => import('./pages/superadmin/LicensingAdmin'),
+          () => import('./pages/superadmin/AppReleasesAdmin'),
+          () => import('./pages/settings/GoogleConnectSettings'),
+          () => import('./platform/records/RecordListView'),
+          () => import('./platform/forms/MetadataRecordFormModal'),
+        ],
+      ]
+
+      for (const batch of batches) {
+        if (cancelled) return
+        await Promise.allSettled(batch.map((load) => load()))
+        await new Promise((resolve) => window.setTimeout(resolve, 0))
+      }
+    }
+
+    const schedule = () => { void warm() }
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(schedule, { timeout: 500 })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback?.(id)
+      }
+    }
+
+    const id = window.setTimeout(schedule, 120)
+    return () => {
+      cancelled = true
+      window.clearTimeout(id)
+    }
+  }, [sessionContextReady])
+
   const unlock = () => {
     if (transitioning || pendingUnlock) return
     setSessionContextReady(true)
