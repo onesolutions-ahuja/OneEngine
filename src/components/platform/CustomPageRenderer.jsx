@@ -889,6 +889,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
           ...(current[detail.nodeId] || {}),
           lastInteraction: detail,
           refreshNonce: Number(current[detail.nodeId]?.refreshNonce || 0) + 1,
+          ...(detail.output !== undefined ? { flowOutput: detail.output } : {}),
         },
       }));
     };
@@ -947,6 +948,20 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
   }, [sections]);
 
   const setNodeState = (nodeId, patch) => setCollectionState((current) => ({ ...current, [nodeId]: { ...(current[nodeId] || {}), ...patch } }));
+  const effectivePageContext = {
+    ...(pageContext || {}),
+    components: {
+      ...(pageContext?.components || {}),
+      ...Object.fromEntries(Object.entries(runtimeOverrides).map(([id, state]) => [id, {
+        value: state?.value,
+        selectedRecord: state?.record || null,
+      }])),
+    },
+    flows: {
+      ...(pageContext?.flows || {}),
+      ...Object.fromEntries(Object.entries(runtimeOverrides).filter(([, state]) => state?.flowOutput !== undefined).map(([id, state]) => [id, state.flowOutput])),
+    },
+  };
 
   return (
     <div className={`cpb-tree${device === "mobile" ? " mx-auto w-full max-w-[390px]" : device === "tablet" ? " mx-auto w-full max-w-[820px]" : device === "kiosk" ? " mx-auto w-full max-w-[1024px]" : " w-full"}`}>
@@ -965,7 +980,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                 }}
                 className={`${builderMode && selectedId === node.id ? "cpb-selected" : ""}`}
               >
-                <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode} runtimeOverride={runtimeOverrides[node.id]} pageContext={pageContext}>
+                <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode} runtimeOverride={runtimeOverrides[node.id]} pageContext={effectivePageContext}>
                   <NodeView
                     node={node}
                     sectionWidth={section.width}
