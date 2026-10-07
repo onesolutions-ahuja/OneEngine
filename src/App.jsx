@@ -852,7 +852,7 @@ function Desktop({ onLock, onSignOut }) {
         ) : activeApp === 'settings' ? (
           <SettingsPage initialSection={routeState?.section || ''} />
         ) : activeApp === 'connector-settings' ? (
-          <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
+          <ConnectorAppSettings packageKey={routeState?.packageKey || ''} packageMetadata={storeApps.find((item) => String(item?.package_key || '') === String(routeState?.packageKey || '')) || null} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeRuntimeApp && activeRuntimePage ? (
           ['object','list_view'].includes(String(activeRuntimePage.page_type || 'object')) ? (
             <WorkspacePage initialObjectKey={activeRuntimeDefinition.objectKey || activeRuntimeDefinition.object_key || ''} appKey={activeRuntimeApp.app_key || ''} onNavigate={openItem} />
