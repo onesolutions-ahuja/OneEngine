@@ -23,7 +23,7 @@ import { loadEffectivePermissionSets, permissionSetAllowsObject, permissionSetAl
 import { systemObjectRbacPermission } from "./platformSystemObjects.js";
 import { hasPlatformObjectPermission } from "./platformReportSecurity.js";
 import { oneHttpRequestDefinition } from "./oneCoreFunctions.js";
-const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "CALL_WEBHOOK", "HTTP_REQUEST", "WEBHOOK"]);
+const IRREVERSIBLE_ACTIONS = new Set(["SEND_COMMUNICATION", "ONE_HTTP_REQUEST"]);
 const SECRET_KEY = /(password|token|secret|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
 const GENERIC_CONNECTOR_ACTIONS = Object.freeze([
   {
@@ -3165,34 +3165,6 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
     },
   },
   {
-    key: "IN_APP_NOTIFICATION",
-    builderVisible: false,
-    systemVisible: false,
-    legacyTransport: true,
-    displayName: "In-App Notification",
-    description: "Create a persistent internal notification for a user or team.",
-    validation: (action) => {
-      if (!action?.message && !action?.templateKey) throw new Error("In-App Notification requires a message or template");
-    },
-    async: false,
-    requiredPermissions: ["notifications.write"],
-    executor: async ({ db, action, req }) => {
-      if (typeof db !== "function") return { status: "completed", notice: action.message || action.templateKey };
-      try {
-        await db(
-          "INSERT INTO platform_notifications (company_id, user_id, message, status, created_at) VALUES ($1,$2,$3,'UNREAD',NOW())",
-          [req?.user?.companyId || null, req?.user?.id || null, action.message || action.templateKey || ""]
-        );
-      } catch (error) {
-        return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: false, note: error.message };
-      }
-      return { status: "completed", notice: action.message || action.templateKey || "notification", persistent: true };
-    },
-  },
-
-
-
-  {
     key: "RUN_SUBFLOW",
     displayName: "Run Subflow",
     description: "Run another approved workflow as a child workflow.",
@@ -3402,50 +3374,7 @@ export const WORKFLOW_ACTION_REGISTRY = Object.freeze([
       };
     },
   },
-  {
-    key: "CALL_WEBHOOK",
-    displayName: "Call Webhook",
-    description: "Send a webhook to an approved endpoint.",
-    schema: {
-      type: "object",
-      properties: {"url":{"type":"string","title":"Webhook URL"},"method":{"type":"string","title":"Method","enum":["POST","GET","PUT","PATCH"]},"headers":{"type":"object","title":"Headers"},"body":{"type":"object","title":"Body"}},
-      required: [],
-    },
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Call Webhook requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
   oneHttpRequestDefinition(),
-  {
-    key: "HTTP_REQUEST",
-    displayName: "HTTP Request",
-    description: "Send an HTTP request to an approved endpoint.",
-    schema: {
-      type: "object",
-      properties: {"url":{"type":"string","title":"Request URL"},"method":{"type":"string","title":"Method","enum":["POST","GET","PUT","PATCH","DELETE"]},"headers":{"type":"object","title":"Headers"},"body":{"type":"object","title":"Body"}},
-      required: [],
-    },
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("HTTP Request requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
-  {
-    key: "WEBHOOK",
-    displayName: "Webhook",
-    description: "Send a webhook to an approved endpoint.",
-    validation: (action) => {
-      if (!action?.url && !action?.endpoint) throw new Error("Webhook requires a url or endpoint");
-    },
-    async: true,
-    requiredPermissions: ["integrations.execute"],
-    executor: async ({ action }) => ({ status: "queued", endpoint: action.url || action.endpoint || null }),
-  },
   {
     key: "CONDITION",
     displayName: "Decision",
