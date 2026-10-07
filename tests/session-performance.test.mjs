@@ -348,6 +348,7 @@ test('login timing keeps permission and authorization phases separate', async ()
 
 test('final loading verification waits for a compatible Pages and backend deployment before live login', async () => {
   const source = await read('../.github/workflows/final-loading-verification.yml')
+  assert.match(source, /push:\s*\n\s*branches:\s*\[main\]/)
   assert.match(source, /workflow_dispatch:/)
   assert.equal(source.includes('workflow_run:'), false)
   assert.match(source, /DEPLOY_SHA:\s*\$\{\{ github\.sha \}\}/)
