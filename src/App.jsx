@@ -2087,6 +2087,24 @@ function Desktop({ onLock, onSignOut }) {
     setMessage(`${item?.label ?? 'App'} is not available in this workspace.`)
   }
 
+  useEffect(() => {
+    if (!activeApp || storeAppsLoading || !storeApps.length) return
+    const installedApp = storeApps.find((item) =>
+      item?.is_installed === true && String(item?.package_key || '') === String(activeApp)
+    )
+    if (!installedApp) return
+
+    const declaredRoute = resolveAppOpenRoute(installedApp)
+    if (!declaredRoute || declaredRoute === '/app') return
+    const routeParts = String(declaredRoute).split('?')[0].split('/').filter(Boolean)
+
+    // Legacy/package-key URLs such as /products are only aliases. Resolve them
+    // through the installed app's metadata-owned landing route instead of
+    // mounting a business-specific page branch.
+    if (!routeParts.some((part) => ['objects', 'workspace', 'developer', 'settings', 'connector-settings'].includes(part))) return
+    openRoutePath(declaredRoute)
+  }, [activeApp, storeAppsLoading, storeApps])
+
   return (
     <main className="screen desktop-screen" data-oneengine-route={activeApp} data-oneengine-section={routeState?.section || ""} data-oneengine-object={routeState?.objectKey || ""} data-oneengine-page={routeState?.pageKey || ""}>
       <header className="demo-menubar" ref={topbarPanelRef}>
@@ -2383,6 +2401,60 @@ export default function App() {
 
     return () => { live = false }
   }, [])
+
+  useEffect(() => {
+    if (!sessionContextReady || !hasSession()) return undefined
+
+    let cancelled = false
+    const warm = async () => {
+      // Warm route chunks after authentication so normal navigation does not
+      // pay the network/parse cost of a first dynamic import. This is purely a
+      // presentation/runtime optimisation; routes and business behaviour still
+      // resolve from metadata.
+      const batches = [
+        [
+          () => import('./platform/workspace/WorkspacePage'),
+          () => import('./platform/pages/CustomPageRuntimePage'),
+          () => import('./pages/profile/ProfilePage'),
+          () => import('./pages/dashboard/DashboardPage'),
+        ],
+        [
+          () => import('./pages/developer/OneDeveloperPage'),
+          () => import('./pages/reports/CustomReportsPage'),
+          () => import('./pages/integrations/IntegrationsAdmin'),
+          () => import('./pages/audit/AuditLogPage'),
+        ],
+        [
+          () => import('./pages/superadmin/LicensingAdmin'),
+          () => import('./pages/superadmin/AppReleasesAdmin'),
+          () => import('./pages/settings/GoogleConnectSettings'),
+          () => import('./platform/records/RecordListView'),
+          () => import('./platform/forms/MetadataRecordFormModal'),
+        ],
+      ]
+
+      for (const batch of batches) {
+        if (cancelled) return
+        await Promise.allSettled(batch.map((load) => load()))
+        await new Promise((resolve) => window.setTimeout(resolve, 0))
+      }
+    }
+
+    const schedule = () => { void warm() }
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(schedule, { timeout: 500 })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback?.(id)
+      }
+    }
+
+    const id = window.setTimeout(schedule, 120)
+    return () => {
+      cancelled = true
+      window.clearTimeout(id)
+    }
+  }, [sessionContextReady])
 
   const unlock = () => {
     if (transitioning || pendingUnlock) return
