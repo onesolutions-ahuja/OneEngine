@@ -690,6 +690,10 @@ function GenericPageComponentView({ node, builderMode, onButtonClick }) {
 
 function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
+  if (node.visible === false && !builderMode) return null;
+  const interactive = node.enabled !== false && node.readOnly !== true;
+  const guardedRecordClick = interactive ? onRecordClick : undefined;
+  const guardedButtonClick = interactive ? onButtonClick : undefined;
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
   if (STATIC_DASHBOARD_COMPONENTS.includes(key)) {
     const config = { ...(node.config || {}) };
@@ -745,24 +749,24 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
-  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={onButtonClick} />;
+  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
-  if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
+  if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={guardedRecordClick} builderMode={builderMode} />;
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
-        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={onRecordClick} onButtonClick={onButtonClick} data={data} runtimeOverrides={runtimeOverrides} />)}
+        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} data={data} runtimeOverrides={runtimeOverrides} />)}
       </div>
     );
   }
   if (key === "multi_container") {
-    return <MultiContainerView node={node} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={onRecordClick} data={data?.[node.id]} />;
+    return <MultiContainerView node={node} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} data={data?.[node.id]} />;
   }
   if (key === "table") {
-    return <TableView node={node} builderMode={builderMode} onRecordClick={onRecordClick} data={data?.[node.id]} />;
+    return <TableView node={node} builderMode={builderMode} onRecordClick={guardedRecordClick} data={data?.[node.id]} />;
   }
   if (key === "tree_view") {
-    return <TreeViewView node={node} builderMode={builderMode} onRecordClick={onRecordClick} data={data} />;
+    return <TreeViewView node={node} builderMode={builderMode} onRecordClick={guardedRecordClick} data={data} />;
   }
   if (key === "process_path") {
     return <ProcessPathView node={node} builderMode={builderMode} data={data} />;
