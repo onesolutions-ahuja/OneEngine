@@ -272,7 +272,6 @@ function DevicesMenu({ onOpenSettings }) {
 function HelpMenu({ onSelect }) {
   const items = [
     ['Getting started', 'Basic onePOS setup and first steps'],
-    ['Till guide', 'Sales, payments, returns and till workflows'],
     ['Settings guide', 'Company, store, users and permissions'],
     ['Troubleshooting', 'Connection health and recovery tools'],
     ['System diagnostics', 'Server, database and integration status'],
@@ -797,9 +796,8 @@ function Desktop({ onLock, onSignOut }) {
             <AnimatePresence>
               {topPanel === 'help' ? <HelpMenu onSelect={(label) => {
                 setTopPanel('')
-                if (label === 'Till guide') openItem('till')
-                else if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
-                else { setRoute('settings', 'connections'); setRouteState({ app: 'settings', section: 'connections' }); setActiveApp('settings') }
+                if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings'); setRouteState({ app: 'settings', section: null }); setActiveApp('settings') }
+                else { setRoute('settings'); setRouteState({ app: 'settings', section: null }); setActiveApp('settings') }
               }} /> : null}
             </AnimatePresence>
           </div>
