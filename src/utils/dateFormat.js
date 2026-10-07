@@ -5,7 +5,7 @@
  * record views) goes through here — never a raw ISO string like
  * "2026-09-25T23:00:00.000Z". The pattern honours the company's configured
  * date format (Settings → General → Date format, e.g. "DD/MM/YYYY") cached
- * from /api/settings; defaults to DD/MM/YYYY before settings arrive.
+ * from the metadata settings context; defaults to DD/MM/YYYY before settings arrive.
  */
 
 let cachedPattern = null;
