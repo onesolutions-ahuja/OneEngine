@@ -41,6 +41,12 @@ function fieldValue(record, field) {
   return record?.[field.api_name] ?? ''
 }
 
+function genericRecordLabel(record) {
+  if (!record || typeof record !== 'object') return ''
+  const value = Object.entries(record).find(([key, entry]) => key !== 'id' && entry != null && ['string','number'].includes(typeof entry) && String(entry).trim())
+  return value ? String(value[1]) : String(record.id || '')
+}
+
 function currentDeviceKey() { return getDeviceKey() }
 
 function currentDeviceName() {
@@ -138,8 +144,8 @@ function GenericObjectSettings({ object }) {
     setError('')
     try {
       const deviceScoped = object?.config?.settingsDeviceScoped === true || object?.config?.settings_device_scoped === true
-      const deviceKeyField = object?.config?.settingsDeviceKeyField || object?.config?.settings_device_key_field || 'device_key'
-      const filter = deviceScoped ? `&filter=${encodeURIComponent(JSON.stringify({ [deviceKeyField]: currentDeviceKey() }))}` : ''
+      const deviceKeyField = object?.config?.settingsDeviceKeyField || object?.config?.settings_device_key_field || ''
+      const filter = deviceScoped && deviceKeyField ? `&filter=${encodeURIComponent(JSON.stringify({ [deviceKeyField]: currentDeviceKey() }))}` : ''
       const [fieldRes, recordRes, permissionRes, buttonRes] = await Promise.all([
         apiRequest(`/api/platform/objects/${encodeURIComponent(object.id)}/fields`),
         apiRequest(`/api/platform/objects/${encodeURIComponent(key)}/records?page=1&pageSize=200${filter}`),
@@ -156,7 +162,7 @@ function GenericObjectSettings({ object }) {
           const records = Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : []
           return [field.api_name, records.map((row) => ({
             value: row.id,
-            label: row.name || row.label || row.full_name || row.username || row.code || row.api_name || row.id,
+            label: genericRecordLabel(row),
           }))]
         } catch {
           return [field.api_name, []]
@@ -277,7 +283,7 @@ function GenericObjectSettings({ object }) {
       <div className="metadata-settings-object-toolbar">
         <label><Search size={14}/><select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setEditing(false); setCreating(false) }}>
           <option value="">Select record…</option>
-          {rows.map((row) => <option key={row.id} value={row.id}>{row.name || row.full_name || row.username || row.code || row.id}</option>)}
+          {rows.map((row) => <option key={row.id} value={row.id}>{genericRecordLabel(row)}</option>)}
         </select></label>
         {selected ? buttons.filter((button) => ['record','settings_record'].includes(button.placement) || !button.placement).map((button) => (
           <button key={button.id || button.button_key} type="button" disabled={actionBusy === button.button_key} onClick={() => executeButton(button)}>{button.label}</button>
