@@ -328,5 +328,538 @@
       "permission": "inventory.adjust",
       "label": "Adjust inventory"
     }
+  ],
+  "workflows": [
+    {
+      "systemKey": "flow:inventory.movement.create",
+      "name": "Inventory · Apply Movement",
+      "triggerKey": "manual",
+      "action": {
+        "type": "workflow",
+        "systemGenerated": true,
+        "systemKey": "flow:inventory.movement.create",
+        "scope": "package",
+        "capabilityType": "workflow",
+        "capabilityKey": "inventory.movement.create",
+        "apiName": "INVENTORY_MOVEMENT_CREATE",
+        "flowType": "AUTOLAUNCHED",
+        "inputContract": [
+          {
+            "name": "productId",
+            "label": "productId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "storeId",
+            "label": "storeId",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "movementType",
+            "label": "movementType",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "quantityChange",
+            "label": "quantityChange",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "referenceType",
+            "label": "referenceType",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "referenceId",
+            "label": "referenceId",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "reason",
+            "label": "reason",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "createdBy",
+            "label": "createdBy",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "outputContract": [
+          {
+            "name": "movementId",
+            "label": "movementId",
+            "type": "text",
+            "source": "variables.movementId"
+          },
+          {
+            "name": "balance",
+            "label": "balance",
+            "type": "number",
+            "source": "variables.balance"
+          }
+        ],
+        "gptBuilder": true,
+        "layout": {
+          "mode": "AUTO"
+        },
+        "gptBuilderElements": [
+          {
+            "id": "get_stock",
+            "key": "action",
+            "label": "Get Store Stock",
+            "apiName": "get_stock",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "GET_RECORDS",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "get_stock",
+                "label": "Get Store Stock",
+                "key": "GET_RECORDS",
+                "objectKey": "inventory",
+                "filters": [
+                  {
+                    "field": "product_id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "$record.productId"
+                    }
+                  },
+                  {
+                    "field": "store_id",
+                    "operator": "equals",
+                    "value": {
+                      "path": "$record.storeId"
+                    }
+                  }
+                ],
+                "limit": 1,
+                "store": "first"
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "new_balance",
+            "key": "action",
+            "label": "Calculate New Balance",
+            "apiName": "new_balance",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "FORMULA",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "new_balance",
+                "label": "Calculate New Balance",
+                "key": "FORMULA",
+                "resourceName": "balance",
+                "resultType": "number",
+                "expression": "current + change",
+                "inputs": {
+                  "current": {
+                    "path": "steps.get_stock.record.quantity",
+                    "fallback": 0
+                  },
+                  "change": {
+                    "path": "$record.quantityChange"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "stock_exists",
+            "key": "action",
+            "label": "Stock Position Exists?",
+            "apiName": "stock_exists",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CONDITION",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "stock_exists",
+                "label": "Stock Position Exists?",
+                "key": "CONDITION",
+                "outcomes": [
+                  {
+                    "id": "yes",
+                    "label": "Update Stock",
+                    "condition": {
+                      "match": "all",
+                      "conditions": [
+                        {
+                          "field": "steps.get_stock.record.id",
+                          "operator": "is_not_blank"
+                        }
+                      ]
+                    },
+                    "branch": [
+                      "update_stock"
+                    ]
+                  }
+                ],
+                "defaultLabel": "Create Stock",
+                "defaultBranch": [
+                  "create_stock"
+                ]
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "update_stock",
+            "key": "action",
+            "label": "Update Store Stock",
+            "apiName": "update_stock",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "UPDATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "update_stock",
+                "label": "Update Store Stock",
+                "key": "UPDATE_RECORD",
+                "objectKey": "inventory",
+                "recordId": {
+                  "path": "steps.get_stock.record.id"
+                },
+                "fieldValues": {
+                  "quantity": {
+                    "path": "variables.balance"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_stock",
+            "key": "action",
+            "label": "Create Store Stock",
+            "apiName": "create_stock",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_stock",
+                "label": "Create Store Stock",
+                "key": "CREATE_RECORD",
+                "objectKey": "inventory",
+                "fieldValues": {
+                  "product_id": {
+                    "path": "$record.productId"
+                  },
+                  "store_id": {
+                    "path": "$record.storeId"
+                  },
+                  "quantity": {
+                    "path": "variables.balance"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "create_movement",
+            "key": "action",
+            "label": "Create Movement",
+            "apiName": "create_movement",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "CREATE_RECORD",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "create_movement",
+                "label": "Create Movement",
+                "key": "CREATE_RECORD",
+                "objectKey": "inventory_movement",
+                "fieldValues": {
+                  "product_id": {
+                    "path": "$record.productId"
+                  },
+                  "store_id": {
+                    "path": "$record.storeId"
+                  },
+                  "movement_type": {
+                    "path": "$record.movementType"
+                  },
+                  "quantity_change": {
+                    "path": "$record.quantityChange"
+                  },
+                  "balance_after": {
+                    "path": "variables.balance"
+                  },
+                  "reference_type": {
+                    "path": "$record.referenceType"
+                  },
+                  "reference_id": {
+                    "path": "$record.referenceId"
+                  },
+                  "reason": {
+                    "path": "$record.reason"
+                  },
+                  "created_by": {
+                    "path": "$record.createdBy"
+                  }
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          },
+          {
+            "id": "set_movement_id",
+            "key": "action",
+            "label": "Return Movement",
+            "apiName": "set_movement_id",
+            "description": "",
+            "labelSource": "manual",
+            "apiNameSource": "manual",
+            "config": {
+              "actionKey": "ASSIGNMENT",
+              "inputs": {},
+              "inputModes": {},
+              "inputIncluded": {},
+              "transforms": {},
+              "outputMode": "automatic",
+              "manualOutputs": [],
+              "importedRuntimeAction": {
+                "id": "set_movement_id",
+                "label": "Return Movement",
+                "key": "ASSIGNMENT",
+                "variableName": "movementId",
+                "variableType": "text",
+                "operator": "set",
+                "value": {
+                  "path": "steps.create_movement.record.id"
+                }
+              },
+              "importedRuntimeActionText": ""
+            },
+            "configured": true,
+            "source": "runtime_import",
+            "position": null
+          }
+        ],
+        "actions": [
+          {
+            "id": "get_stock",
+            "label": "Get Store Stock",
+            "key": "GET_RECORDS",
+            "objectKey": "inventory",
+            "filters": [
+              {
+                "field": "product_id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.productId"
+                }
+              },
+              {
+                "field": "store_id",
+                "operator": "equals",
+                "value": {
+                  "path": "$record.storeId"
+                }
+              }
+            ],
+            "limit": 1,
+            "store": "first"
+          },
+          {
+            "id": "new_balance",
+            "label": "Calculate New Balance",
+            "key": "FORMULA",
+            "resourceName": "balance",
+            "resultType": "number",
+            "expression": "current + change",
+            "inputs": {
+              "current": {
+                "path": "steps.get_stock.record.quantity",
+                "fallback": 0
+              },
+              "change": {
+                "path": "$record.quantityChange"
+              }
+            }
+          },
+          {
+            "id": "stock_exists",
+            "label": "Stock Position Exists?",
+            "key": "CONDITION",
+            "outcomes": [
+              {
+                "id": "yes",
+                "label": "Update Stock",
+                "condition": {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "field": "steps.get_stock.record.id",
+                      "operator": "is_not_blank"
+                    }
+                  ]
+                },
+                "branch": [
+                  "update_stock"
+                ]
+              }
+            ],
+            "defaultLabel": "Create Stock",
+            "defaultBranch": [
+              "create_stock"
+            ]
+          },
+          {
+            "id": "update_stock",
+            "label": "Update Store Stock",
+            "key": "UPDATE_RECORD",
+            "objectKey": "inventory",
+            "recordId": {
+              "path": "steps.get_stock.record.id"
+            },
+            "fieldValues": {
+              "quantity": {
+                "path": "variables.balance"
+              }
+            }
+          },
+          {
+            "id": "create_stock",
+            "label": "Create Store Stock",
+            "key": "CREATE_RECORD",
+            "objectKey": "inventory",
+            "fieldValues": {
+              "product_id": {
+                "path": "$record.productId"
+              },
+              "store_id": {
+                "path": "$record.storeId"
+              },
+              "quantity": {
+                "path": "variables.balance"
+              }
+            }
+          },
+          {
+            "id": "create_movement",
+            "label": "Create Movement",
+            "key": "CREATE_RECORD",
+            "objectKey": "inventory_movement",
+            "fieldValues": {
+              "product_id": {
+                "path": "$record.productId"
+              },
+              "store_id": {
+                "path": "$record.storeId"
+              },
+              "movement_type": {
+                "path": "$record.movementType"
+              },
+              "quantity_change": {
+                "path": "$record.quantityChange"
+              },
+              "balance_after": {
+                "path": "variables.balance"
+              },
+              "reference_type": {
+                "path": "$record.referenceType"
+              },
+              "reference_id": {
+                "path": "$record.referenceId"
+              },
+              "reason": {
+                "path": "$record.reason"
+              },
+              "created_by": {
+                "path": "$record.createdBy"
+              }
+            }
+          },
+          {
+            "id": "set_movement_id",
+            "label": "Return Movement",
+            "key": "ASSIGNMENT",
+            "variableName": "movementId",
+            "variableType": "text",
+            "operator": "set",
+            "value": {
+              "path": "steps.create_movement.record.id"
+            }
+          }
+        ]
+      }
+    }
   ]
 }
