@@ -275,6 +275,7 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const resizeNodeRef = useRef(null);
   const [canvasPanning, setCanvasPanning] = useState(false);
   const [canvasScroll, setCanvasScroll] = useState({ left: 0, max: 0 });
+  const [canvasZoom, setCanvasZoom] = useState(100);
 
   useEffect(() => {
     apiRequest("/api/platform/apps").then((response) => setApps(response.data || [])).catch((error) => onError?.(error.message));
@@ -1170,6 +1171,16 @@ const updateNode = (nodeId, changes) => {
         <p>Generic presentation metadata only. No business-specific styling is stored here.</p>
         <div className="space-y-1"><label className={labelClass}>Width (px, 0 = auto)</label><input className={inputClass} type="number" min="0" max="2400" value={node.layout?.width || 0} onChange={(event) => updateNode(node.id, { layout: { ...(node.layout || {}), width: Math.max(0, Number(event.target.value) || 0) } })}/></div>
         <div className="space-y-1"><label className={labelClass}>Height (px, 0 = auto)</label><input className={inputClass} type="number" min="0" max="1800" value={node.layout?.height || 0} onChange={(event) => updateNode(node.id, { layout: { ...(node.layout || {}), height: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1"><label className={labelClass}>Background</label><input className={inputClass} type="color" value={node.style?.backgroundColor || "#ffffff"} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), backgroundColor: event.target.value } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Text colour</label><input className={inputClass} type="color" value={node.style?.color || "#111827"} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), color: event.target.value } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Border colour</label><input className={inputClass} type="color" value={node.style?.borderColor || "#e5e7eb"} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), borderColor: event.target.value } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Border width</label><input className={inputClass} type="number" min="0" max="12" value={node.style?.borderWidth ?? 0} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), borderWidth: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Corner radius</label><input className={inputClass} type="number" min="0" max="999" value={node.style?.borderRadius ?? 0} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), borderRadius: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+          <div className="space-y-1"><label className={labelClass}>Padding</label><input className={inputClass} type="number" min="0" max="96" value={node.style?.padding ?? 0} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), padding: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+        </div>
+        <div className="space-y-1"><label className={labelClass}>Container shape</label><select className={inputClass} value={node.style?.shape || "square"} onChange={(event) => { const shape = event.target.value; const radius = { square: 0, soft: 8, rounded: 16, pill: 999 }[shape]; updateNode(node.id, { style: { ...(node.style || {}), shape, borderRadius: radius } }); }}><option value="square">Square</option><option value="soft">Slightly rounded</option><option value="rounded">Rounded</option><option value="pill">Pill</option></select></div>
+        <div className="space-y-1"><label className={labelClass}>Shadow</label><select className={inputClass} value={node.style?.shadow || "none"} onChange={(event) => updateNode(node.id, { style: { ...(node.style || {}), shadow: event.target.value } })}><option value="none">None</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
         {node.componentKey === "button" ? <><div className="space-y-1"><label className={labelClass}>Button style</label><select className={inputClass} value={node.variant || "primary"} onChange={(event) => updateNode(node.id, { variant: event.target.value })}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="ghost">Ghost</option><option value="danger">Destructive</option></select></div><div className="space-y-1"><label className={labelClass}>Size</label><select className={inputClass} value={node.size || "medium"} onChange={(event) => updateNode(node.id, { size: event.target.value })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div></> : null}
       </div>;
     }
@@ -1322,7 +1333,7 @@ const updateNode = (nodeId, changes) => {
       {preview ? (
         /* PREVIEW MODE — the unsaved tree rendered exactly like runtime. */
         <div className="cpb-canvas">
-          <div className={`cpb-device-frame is-${draft.device}`}>
+          <div className={`cpb-device-frame is-${draft.device}`} style={{ transform: `scale(${canvasZoom / 100})`, transformOrigin: "top center", marginBottom: canvasZoom < 100 ? `-${Math.round((1 - canvasZoom / 100) * 100)}%` : undefined }}>
             <CustomPageRenderer definition={definitionForSave()} builderMode={false} device={draft.device} onRecordClick={testMode ? ({record,node,eventName="row_click",value,changes})=>testNodeInteraction({record,node,eventName,value,changes}) : undefined} onButtonClick={testMode ? (node)=>testNodeInteraction({node,eventName:"click"}) : undefined} onEvent={testMode ? (payload)=>testNodeInteraction(payload) : undefined} onInteractionTrace={testMode ? (payload)=>testNodeInteraction(payload) : undefined} />
           </div>
           {testMode ? <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs"><div className="mb-2 flex items-center justify-between"><strong>Test Trace</strong><span className="text-emerald-700">Rollback ON</span></div>{testTrace.length ? <div className="max-h-48 space-y-1 overflow-auto">{testTrace.map((entry,index)=><div key={index} className="rounded bg-slate-50 px-2 py-1"><strong>{entry.kind}</strong> · {entry.status}{entry.detail?.message?` · ${entry.detail.message}`:""}</div>)}</div> : <span className="text-slate-500">Interact with a component to trace the complete Page → Event → Action/Flow → UI chain.</span>}</div> : null}
@@ -1385,6 +1396,18 @@ const updateNode = (nodeId, changes) => {
                   if (viewport) viewport.scrollLeft = Number(event.target.value) || 0;
                 }}
               />
+              <div className="ml-auto flex shrink-0 items-center gap-1" aria-label="Canvas zoom">
+                <button type="button" className="cpb-device-btn" onClick={() => setCanvasZoom((value) => Math.max(40, value - 10))} aria-label="Zoom out">−</button>
+                <button type="button" className="cpb-device-btn min-w-[58px]" onClick={() => setCanvasZoom(100)} title="Reset zoom">{canvasZoom}%</button>
+                <button type="button" className="cpb-device-btn" onClick={() => setCanvasZoom((value) => Math.min(160, value + 10))} aria-label="Zoom in">+</button>
+                <button type="button" className="cpb-device-btn" onClick={() => {
+                  const viewport = canvasViewportRef.current;
+                  const frame = viewport?.querySelector(".cpb-device-frame");
+                  if (!viewport || !frame) return;
+                  const naturalWidth = frame.scrollWidth || frame.getBoundingClientRect().width;
+                  setCanvasZoom(Math.max(40, Math.min(100, Math.floor(((viewport.clientWidth - 36) / Math.max(1, naturalWidth)) * 100))));
+                }}>Fit</button>
+              </div>
             </div>
           <main
             ref={canvasViewportRef}
@@ -1486,29 +1509,67 @@ function CollectionLivePreview({ collection }) {
 
 function FocusedDataPanel({ node, objects, onChange, targetComponents = [], pageResources = {} }) {
   const collection = node.collection || {};
+  const [objectQuery, setObjectQuery] = useState("");
+  const [fieldQuery, setFieldQuery] = useState("");
   const { fields, loading: fieldsLoading, error: fieldsError } = useCollectionFieldState(collection, objects);
+  const visibleObjects = objects.filter((object) => !objectQuery.trim() || String(object.label || object.object_key || "").toLowerCase().includes(objectQuery.trim().toLowerCase()) || String(object.object_key || "").toLowerCase().includes(objectQuery.trim().toLowerCase()));
+  const selectedFieldNames = Array.isArray(collection.fields) ? collection.fields : [];
+  const fieldByName = new Map(fields.map((field) => [field.api_name, field]));
+  const visibleFields = fields.filter((field) => !fieldQuery.trim() || String(field.label || field.api_name || "").toLowerCase().includes(fieldQuery.trim().toLowerCase()) || String(field.api_name || "").toLowerCase().includes(fieldQuery.trim().toLowerCase()));
+  const moveSelectedField = (apiName, delta) => {
+    const current = [...selectedFieldNames];
+    const from = current.indexOf(apiName);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= current.length) return;
+    [current[from], current[to]] = [current[to], current[from]];
+    patchCollection({ fields: current });
+  };
   const patchCollection = (changes) => onChange({ collection: { ...collection, ...changes } });
   return (
     <div className="space-y-3">
       <div className="cpb-page-settings"><h3>Data</h3><p>Select the metadata object, filters, sorting and record limit used by this component.</p></div>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Source</legend>
-        <div className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={collection.objectKey || ""} onChange={(event) => patchCollection({ objectKey: event.target.value, fields: [], titleField: "", subtitleField: "" })}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>
+        <div className="space-y-1"><label className={labelClass}>Object</label><input className={inputClass} value={objectQuery} onChange={(event) => setObjectQuery(event.target.value)} placeholder="Search objects…" aria-label="Search objects" /><select className={inputClass} value={collection.objectKey || ""} onChange={(event) => patchCollection({ objectKey: event.target.value, fields: [], titleField: "", subtitleField: "" })}><option value="">Select object…</option>{collection.objectKey && !visibleObjects.some((object) => object.object_key === collection.objectKey) ? objects.filter((object) => object.object_key === collection.objectKey).map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>) : null}{visibleObjects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>
       </fieldset>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Fields</legend>
         {fieldsLoading ? <p className="text-xs text-slate-500">Loading fields…</p> : null}
         {fieldsError ? <p role="alert" className="text-xs text-red-600">{fieldsError}</p> : null}
-        {!fieldsLoading && !fieldsError && collection.objectKey ? <div className="max-h-44 space-y-0.5 overflow-auto rounded-lg border border-slate-200 p-1.5">
-          {fields.map((field) => {
+        {!fieldsLoading && !fieldsError && collection.objectKey ? <>
+          <input className={inputClass} value={fieldQuery} onChange={(event) => setFieldQuery(event.target.value)} placeholder="Search fields…" aria-label="Search fields" />
+          {selectedFieldNames.length ? <div className="space-y-1 rounded-lg border border-slate-200 p-1.5">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Display order</p>
+            {selectedFieldNames.map((apiName, index) => {
+              const field = fieldByName.get(apiName);
+              return <div key={apiName} draggable onDragStart={(event) => event.dataTransfer.setData("text/page-builder-field", apiName)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+                event.preventDefault();
+                const dragged = event.dataTransfer.getData("text/page-builder-field");
+                if (!dragged || dragged === apiName) return;
+                const next = [...selectedFieldNames];
+                const from = next.indexOf(dragged);
+                const to = next.indexOf(apiName);
+                if (from < 0 || to < 0) return;
+                next.splice(to, 0, next.splice(from, 1)[0]);
+                patchCollection({ fields: next });
+              }} className="flex min-h-8 items-center gap-1 rounded bg-slate-50 px-1.5 text-xs text-slate-600">
+                <span className="cursor-grab text-slate-400" title="Drag to reorder">⋮⋮</span><span className="min-w-0 flex-1 truncate">{field?.label || apiName}</span>
+                <button type="button" className="rounded px-1 text-slate-500 disabled:opacity-30" disabled={index === 0} onClick={() => moveSelectedField(apiName, -1)} aria-label={`Move ${field?.label || apiName} up`}>↑</button>
+                <button type="button" className="rounded px-1 text-slate-500 disabled:opacity-30" disabled={index === selectedFieldNames.length - 1} onClick={() => moveSelectedField(apiName, 1)} aria-label={`Move ${field?.label || apiName} down`}>↓</button>
+              </div>;
+            })}
+          </div> : null}
+          <div className="max-h-44 space-y-0.5 overflow-auto rounded-lg border border-slate-200 p-1.5">
+          {visibleFields.map((field) => {
             const apiName = field.api_name;
-            const checked = (collection.fields || []).includes(apiName);
+            const checked = selectedFieldNames.includes(apiName);
             return <label key={apiName} className="flex min-h-7 items-center gap-2 rounded px-1.5 text-xs text-slate-600 hover:bg-slate-50">
-              <input type="checkbox" checked={checked} onChange={() => patchCollection({ fields: checked ? (collection.fields || []).filter((name) => name !== apiName) : [...(collection.fields || []), apiName].slice(0, 12) })}/>
+              <input type="checkbox" checked={checked} onChange={() => patchCollection({ fields: checked ? selectedFieldNames.filter((name) => name !== apiName) : [...selectedFieldNames, apiName].slice(0, 12) })}/>
               <span className="min-w-0 flex-1 truncate">{field.label || apiName}</span><span className="text-[10px] text-slate-400">{field.field_type || ""}</span>
             </label>;
           })}
-        </div> : null}
+          {!visibleFields.length ? <p className="px-1 py-2 text-[11px] text-slate-400">No fields match this search.</p> : null}
+        </div></> : null}
         <p className="text-[11px] text-slate-400">Only readable fields are shown. Runtime field security is enforced again when data loads.</p>
       </fieldset>
       <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
@@ -1923,7 +1984,7 @@ function FieldSelect({ label, value, fields, onChange }) {
   );
 }
 
-function CollectionFilterValue({ value, disabled, pageResources = {}, targetComponents = [], onChange }) {
+function CollectionFilterValue({ value, disabled, field = null, pageResources = {}, targetComponents = [], onChange }) {
   const resource = value && typeof value === "object" && !Array.isArray(value) ? value : { type: "constant", value: value ?? "" };
   const type = resource.type || "constant";
   const setType = (next) => {
@@ -1941,7 +2002,14 @@ function CollectionFilterValue({ value, disabled, pageResources = {}, targetComp
       <option value="component_value">Component Value</option><option value="selected_record">Selected Record</option><option value="flow_output">Flow Output</option>
       <option value="formula">Formula</option>
     </select>
-    {type === "constant" ? <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.value ?? ""} disabled={disabled} onChange={(event)=>onChange({type:"constant",value:event.target.value})} placeholder="value" /> : null}
+    {type === "constant" && !disabled ? (() => {
+      const fieldType = String(field?.field_type || field?.type || "").toLowerCase();
+      const choices = Array.isArray(field?.options) ? field.options : Array.isArray(field?.values) ? field.values : [];
+      if (fieldType === "boolean" || fieldType === "checkbox") return <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={String(resource.value ?? "")} onChange={(event)=>onChange({type:"constant",value:event.target.value === "true"})}><option value="">Value…</option><option value="true">True</option><option value="false">False</option></select>;
+      if (choices.length) return <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={resource.value ?? ""} onChange={(event)=>onChange({type:"constant",value:event.target.value})}><option value="">Value…</option>{choices.map((choice) => { const optionValue = typeof choice === "object" ? (choice.value ?? choice.key ?? choice.label) : choice; const optionLabel = typeof choice === "object" ? (choice.label ?? optionValue) : choice; return <option key={String(optionValue)} value={optionValue}>{String(optionLabel)}</option>; })}</select>;
+      const inputType = ["integer","number","decimal","currency","percent"].includes(fieldType) ? "number" : fieldType === "date" ? "date" : ["datetime","date_time","timestamp"].includes(fieldType) ? "datetime-local" : "text";
+      return <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" type={inputType} step={inputType === "number" ? "any" : undefined} value={resource.value ?? ""} onChange={(event)=>onChange({type:"constant",value:event.target.value})} placeholder="Value" />;
+    })() : null}
     {(type === "current_user" || type === "current_record") ? <input className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={resource.field || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,field:event.target.value})} placeholder="Field path" /> : null}
     {keyed && definitions.length ? <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={resource.key || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,key:event.target.value})}><option value="">Select…</option>{definitions.map((item)=><option key={item.key} value={item.key}>{item.label || item.key}</option>)}</select> : null}
     {keyed && !definitions.length && componentOptions.length ? <select className="min-w-0 flex-1 rounded border border-slate-200 px-1 py-1 text-xs" value={resource.key || ""} disabled={disabled} onChange={(event)=>onChange({...resource,type,key:event.target.value})}><option value="">Select component…</option>{componentOptions.map((item)=><option key={item.id} value={item.id}>{item.label}</option>)}</select> : null}
@@ -1967,7 +2035,7 @@ function ConditionsEditor({ collection, fields, onChange, pageResources = {}, ta
         </select>
       </div>
       {conditions.map((condition, index) => (
-        <div key={index} className="flex items-center gap-1">
+        <div key={index} className="flex flex-wrap items-center gap-1">
           <select className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-xs" value={condition.field} onChange={(event) => setConditions(conditions.map((item, itemIndex) => (itemIndex === index ? { ...item, field: event.target.value } : item)))}>
             <option value="">Field…</option>
             {fields.map((field) => <option key={field.api_name} value={field.api_name}>{field.label || field.api_name}</option>)}
@@ -1975,7 +2043,7 @@ function ConditionsEditor({ collection, fields, onChange, pageResources = {}, ta
           <select className="rounded border border-slate-200 px-1 py-1 text-xs" value={condition.operator} onChange={(event) => setConditions(conditions.map((item, itemIndex) => (itemIndex === index ? { ...item, operator: event.target.value } : item)))}>
             {operators.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <CollectionFilterValue value={condition.value} disabled={["is_empty", "is_not_empty"].includes(condition.operator)} pageResources={pageResources} targetComponents={targetComponents} onChange={(value)=>setConditions(conditions.map((item,itemIndex)=>(itemIndex===index?{...item,value}:item)))} />
+          <CollectionFilterValue value={condition.value} disabled={["is_empty", "is_not_empty"].includes(condition.operator)} field={fields.find((field) => field.api_name === condition.field) || null} pageResources={pageResources} targetComponents={targetComponents} onChange={(value)=>setConditions(conditions.map((item,itemIndex)=>(itemIndex===index?{...item,value}:item)))} />
           <button type="button" className="rounded p-1 text-slate-400 hover:text-red-600" aria-label="Remove condition" onClick={() => setConditions(conditions.filter((_, itemIndex) => itemIndex !== index))}>×</button>
         </div>
       ))}
