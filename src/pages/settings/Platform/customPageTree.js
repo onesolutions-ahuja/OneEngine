@@ -35,7 +35,7 @@ export const CONTAINER_SIZES = Object.freeze(["small", "medium", "large"]);
 export const MULTI_GRID_SIZES = Object.freeze(["small", "medium", "large"]);
 export const MAX_RECORD_LIMIT = 50;
 
-export const ON_CLICK_TYPES = Object.freeze(["none", "workflow", "action", "navigate", "form_layout", "component"]);
+export const ON_CLICK_TYPES = Object.freeze(["none", "workflow", "screen_flow", "action", "navigate", "form_layout", "component"]);
 
 const PAGE_DATA_TYPES = new Set(["text", "number", "boolean", "date", "datetime", "record", "collection", "object"]);
 function normalizePageResourceDefinitions(value) {
@@ -162,6 +162,9 @@ function normalizeInteraction(value) {
     // not break pages). Workflows are platform_rules rows; actions are keys of
     // the canonical Action Registry.
     workflowUuid: safeString(source.workflowUuid ?? source.workflow_uuid, 64) || null,
+    screenPresentation: ["screen_modal", "full_screen", "embedded"].includes(source.screenPresentation ?? source.screen_presentation) ? (source.screenPresentation ?? source.screen_presentation) : "screen_modal",
+    inputs: source.inputs && typeof source.inputs === "object" && !Array.isArray(source.inputs) ? source.inputs : {},
+    outputTarget: safeString(source.outputTarget ?? source.output_target, 100) || null,
     actionKey: safeString(source.actionKey ?? source.action_key, 100) || null,
     navigateTo: safeString(source.navigateTo ?? source.navigate_to, 200) || null,
     /* Canonical navigation-target definition (custom_page pages today; the
