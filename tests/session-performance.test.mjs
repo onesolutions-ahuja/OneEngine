@@ -25,11 +25,12 @@ test('session bootstrap preserves cached context and hydrates permissions in one
   assert.match(server, /permissions: \{ permissions \}/)
 })
 
-test('settings navigation uses its scoped session cache', async () => {
-  const source = await read('../src/services/settings.js')
-  assert.match(source, /loadSettingsContext\(\{ force = false \} = \{\}\)/)
-  assert.match(source, /const cachedContext = !force \? readSettingsContextCache\(\) : null/)
-  assert.match(source, /if \(cachedContext\) return cachedContext/)
+test('Settings runtime loads persisted metadata hosts instead of legacy settings context', async () => {
+  const page = await read('../src/pages/settings/MetadataSettingsPage.jsx')
+  const service = await read('../src/services/settings.js')
+  assert.match(page, /\/api\/platform\/runtime\/settings-hosts/)
+  assert.equal(service.includes('/api/settings'), false)
+  assert.equal(service.includes('loadSettingsContext'), false)
 })
 
 
@@ -390,11 +391,12 @@ test('stale cache revalidation is deduped by cache key', async () => {
   assert.match(source, /refreshInFlight\.set\(key, request\)/)
 })
 
-test('Dashboard startup reads are launched together instead of separate mount waterfalls', async () => {
+test('Dashboard startup parallelizes dashboards and permissions without legacy Settings API', async () => {
   const source = await read('../src/pages/dashboard/DashboardPage.jsx')
-  assert.match(source, /Promise\.all\(\[\s*apiRequest\('\/api\/settings'\)/)
+  assert.match(source, /Promise\.all\(\[/)
   assert.match(source, /apiRequest\('\/api\/dashboards'\)/)
   assert.match(source, /loadSessionPermissions\(\)/)
+  assert.equal(source.includes('/api/settings'), false)
 })
 
 test('Dashboard restores saved filter state before building the run request', async () => {
