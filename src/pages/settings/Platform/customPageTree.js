@@ -92,10 +92,12 @@ export function normalizeRecordCollection(value) {
   const conditions = Array.isArray(source.conditions) ? source.conditions
     .map((condition) => ({
       field: safeApiName(condition?.field) || "",
-      // The canonical condition-engine operator vocabulary — the same operators
-      // workflows and validation rules use. No page-specific operator set.
+      // Preserve Page Resource references. Runtime resolves these values; the
+      // metadata normalizer must not collapse them to null.
       operator: RECORD_CONDITION_OPERATORS.includes(condition?.operator) ? condition.operator : "equals",
-      value: condition && ["string", "number", "boolean"].includes(typeof condition.value) ? condition.value : null,
+      value: condition?.value && typeof condition.value === "object" && !Array.isArray(condition.value)
+        ? { ...condition.value }
+        : (condition?.value ?? null),
     }))
     .filter((condition) => condition.field)
     .slice(0, 20)
@@ -151,6 +153,17 @@ function normalizeNavigationTargetValue(value) {
     target.recordId = recordId;
   }
   return target;
+}
+
+function normalizeEventInteractions(value, fallbackInteraction) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const allowed = ["click","change","select","submit","load","row_click","scan","success","error"];
+  const result = {};
+  for (const eventName of allowed) {
+    if (source[eventName]) result[eventName] = normalizeInteraction(source[eventName]);
+  }
+  if (!Object.keys(result).length && fallbackInteraction) result.click = normalizeInteraction(fallbackInteraction);
+  return result;
 }
 
 function normalizeInteraction(value) {
@@ -335,6 +348,8 @@ function normalizeComponentNode(node) {
     required: node?.required === true,
     readOnly: node?.readOnly === true || node?.read_only === true,
     conditions: node?.conditions && typeof node.conditions === "object" && !Array.isArray(node.conditions) ? node.conditions : null,
+    eventName: ["click","change","select","submit","load","row_click","scan","success","error"].includes(node?.eventName) ? node.eventName : "click",
+    interactions: normalizeEventInteractions(node?.interactions, node?.interaction ?? node?.on_click),
     layout: {
       width: safeNumber(rawLayout.width, 0, { min: 0, max: 2400 }),
       height: safeNumber(rawLayout.height, 0, { min: 0, max: 1800 }),

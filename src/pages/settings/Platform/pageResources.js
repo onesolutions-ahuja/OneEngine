@@ -89,3 +89,18 @@ export function resolvePageResource(resource,context={}) {
   if(type==="flow_output")return readPath(context.flowOutputs?.[key],field);
   return undefined;
 }
+
+export function pageResourceOptions({ definitions = {}, components = [] } = {}) {
+  const normalized = normalizePageResourceDefinitions(definitions);
+  return [
+    { group: "Context", type: "current_user", label: "Current User" },
+    { group: "Context", type: "current_record", label: "Current Record" },
+    ...normalized.parameters.map((item) => ({ group: "Page Parameters", type: "page_parameter", key: item.key, label: item.label })),
+    ...normalized.variables.map((item) => ({ group: "Page Variables", type: "page_variable", key: item.key, label: item.label })),
+    ...components.map((item) => ({ group: "Components", type: "component_value", key: item.id, label: `${item.label} · Value` })),
+    ...components.map((item) => ({ group: "Components", type: "selected_record", key: item.id, label: `${item.label} · Selected Record` })),
+    ...components.map((item) => ({ group: "Flow Outputs", type: "flow_output", key: item.id, label: `${item.label} · Flow Output` })),
+    { group: "Other", type: "constant", label: "Constant" },
+    { group: "Other", type: "formula", label: "Formula" },
+  ];
+}

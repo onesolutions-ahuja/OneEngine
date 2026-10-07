@@ -122,7 +122,7 @@ export const COMPONENT_ICONS = {
   record_picker: ListFilter,
   pagination: Rows3,
   filter_bar: ListFilter,
-  product_image_card: ImageIcon,
+  image_record_card: ImageIcon,
   icon_button: Square,
   back_button: ArrowLeft,
   close_button: X,

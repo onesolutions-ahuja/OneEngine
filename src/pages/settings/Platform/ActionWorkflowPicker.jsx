@@ -417,6 +417,11 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
               {objectKey ? <p className="text-[11px] text-slate-400">Workflows for {objectKey} are listed first. The clicked record is passed as Current Record.</p> : null}
             </div>
           )}
+          {selectedWorkflow && Array.isArray(selectedWorkflow.action?.inputContract) && selectedWorkflow.action.inputContract.length ? <div className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Flow Inputs</p>
+            {selectedWorkflow.action.inputContract.map((input) => <label key={input.name} className="block space-y-1"><span className="text-xs font-medium text-slate-500">{input.label || input.name}{input.required ? " *" : ""}</span><input className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" placeholder="$record.id, $user.id, $page.params.key or a value" value={pageBindingText(interaction?.inputs?.[input.name])} onChange={(event) => patch({ inputs: { ...(interaction.inputs || {}), [input.name]: pageBindingFromText(event.target.value) } })}/></label>)}
+          </div> : null}
+          {selectedWorkflow ? <div className="space-y-1"><label className="block text-xs font-medium text-slate-500">Save Flow output as</label><input className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" value={interaction?.outputTarget || ""} onChange={(event)=>patch({outputTarget:event.target.value.replace(/[^A-Za-z0-9_]/g,"")||null})} placeholder="e.g. result" /><p className="text-[11px] text-slate-400">Optional page Flow-output key for later components and events.</p></div> : null}
         </div>
       ) : null}
 

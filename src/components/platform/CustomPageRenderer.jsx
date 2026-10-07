@@ -63,9 +63,10 @@ function placeholderRecords(collection) {
  * request shape and canonical server-side condition and permission gates.
  * Pagination state lives with the caller so filters and limits stay aligned.
  */
-export function useRecordCollection(collection, { enabled, page = 1 }) {
+export function useRecordCollection(collection, { enabled, page = 1, pageContext = null } = {}) {
   const [state, setState] = useState(() => ({ records: [], total: 0, fields: [], placeholder: false, loading: false, error: "" }));
   const key = useMemo(() => JSON.stringify(collection || {}), [collection]);
+  const contextKey = JSON.stringify(pageContext || {});
 
   useEffect(() => {
     if (!enabled) return;
@@ -92,6 +93,7 @@ export function useRecordCollection(collection, { enabled, page = 1 }) {
         maxRecords,
         fields: parsed.fields || [],
         offset: (clampedPage - 1) * maxRecords,
+        pageContext: pageContext || undefined,
       }),
     })
       .then((response) => {
@@ -104,7 +106,7 @@ export function useRecordCollection(collection, { enabled, page = 1 }) {
         if (live) setState({ records: [], total: 0, fields: parsed.fields || [], placeholder: true, loading: false, error: error?.message || "Records unavailable" });
       });
     return () => { live = false; };
-  }, [key, enabled, page]);
+  }, [key, enabled, page, contextKey]);
 
   return state;
 }
@@ -249,7 +251,7 @@ export function TableView({ node, builderMode, onRecordClick, data }) {
 }
 
 const ADVANCED_RECORD_COMPONENTS = ["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"];
-const REGISTRY_RECORD_COMPONENTS = ["avatar_group", "record_picker", "product_image_card", "searchable_dropdown"];
+const REGISTRY_RECORD_COMPONENTS = ["avatar_group", "record_picker", "image_record_card", "searchable_dropdown"];
 const STATIC_DASHBOARD_COMPONENTS = ["folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile", "clock_widget", "calendar_widget", "weather_widget"];
 const GENERIC_PAGE_COMPONENTS = new Set([
   "card","grid","stack","tabs","accordion","modal","drawer","alert","badge","progress","empty_state","loading_state",
@@ -281,7 +283,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   const [kanbanError, setKanbanError] = useState("");
   useEffect(() => setKanbanRecords(records), [records]);
   const placeholder = state.placeholder || !collection.objectKey;
-  const titleField = config.titleField || config.taskLabelField || config.labelField || "name";
+  const titleField = config.titleField || config.taskLabelField || config.labelField || collection.fields?.[0] || "id";
   const clickRecord = (record) => {
     if (!builderMode && node.clickable !== false && node.interaction?.type !== "none") onRecordClick?.({ record, node });
   };
@@ -292,33 +294,27 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   if (node.componentKey === "timeline") {
     const sorted = [...records].sort((a, b) => new Date(a[config.dateField] || 0) - new Date(b[config.dateField] || 0));
     if (config.sort === "desc") sorted.reverse();
-    return <div className="space-y-2">{(placeholder ? [{ name: "Timeline entry", created_at: "Date" }] : sorted).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="flex w-full gap-3 rounded-lg border bg-white p-3 text-left" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true" /><span className="min-w-0"><span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{formatRecordValue(record[config.dateField || "created_at"], "datetime")}</span><span className="block truncate text-sm font-medium" style={{ color: "var(--text-primary, #0f172a)" }}>{record[config.titleField || "name"] || "Untitled"}</span>{config.secondaryField && record[config.secondaryField] ? <span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.secondaryField]}</span> : null}</span></button>)}</div>;
+    return <div className="space-y-2">{(placeholder ? [{ name: "Timeline entry", created_at: "Date" }] : sorted).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="flex w-full gap-3 rounded-lg border bg-white p-3 text-left" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true" /><span className="min-w-0"><span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{formatRecordValue(record[config.dateField || ""], "datetime")}</span><span className="block truncate text-sm font-medium" style={{ color: "var(--text-primary, #0f172a)" }}>{record[config.titleField || collection.fields?.[0] || "id"] || "Untitled"}</span>{config.secondaryField && record[config.secondaryField] ? <span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.secondaryField]}</span> : null}</span></button>)}</div>;
   }
   if (node.componentKey === "kanban") {
-    const groupField = config.groupField || "status";
+    const groupField = config.groupField;
     const groups = new Map();
     for (const record of kanbanRecords) {
-      const group = String(record[groupField] || "Unassigned");
+      const group = groupField ? String(record[groupField] ?? "") : "";
       groups.set(group, [...(groups.get(group) || []), record]);
     }
-    if (!groups.size) ["Backlog", "In progress", "Done"].forEach((group) => groups.set(group, []));
+    if (!groups.size && placeholder) groups.set("Column", []);
     const ordered = config.columnOrder?.length ? [...config.columnOrder.filter((group) => groups.has(group)), ...[...groups.keys()].filter((group) => !config.columnOrder.includes(group))] : [...groups.keys()];
-    const moveCard = async (recordId, destination) => {
-      if (builderMode || config.allowDragDrop === false || !collection.objectKey) return;
+    const moveCard = (recordId, destination) => {
+      if (builderMode || config.allowDragDrop === false) return;
       const record = kanbanRecords.find((item) => String(item.id) === String(recordId));
-      if (!record || String(record[groupField] || "Unassigned") === destination) return;
-      try {
-        await apiRequest(`/api/platform/objects/${encodeURIComponent(collection.objectKey)}/records/${encodeURIComponent(record.id)}`, { method: "PUT", body: JSON.stringify({ data: { [groupField]: destination } }) });
-        setKanbanRecords((current) => current.map((item) => item.id === record.id ? { ...item, [groupField]: destination } : item));
-        setKanbanError("");
-      } catch (error) {
-        setKanbanError(error?.message || "Unable to move record. Edit permission may be required.");
-      }
+      if (!record || String(record[groupField] ?? "") === String(destination)) return;
+      onRecordClick?.({ record, node, eventName: "change", value: destination, changes: { [groupField]: destination } });
     };
     return <div className="space-y-2">{kanbanError ? <p role="alert" className="text-xs text-red-700">{kanbanError}</p> : null}<div className="flex min-w-0 gap-3 overflow-x-auto pb-1">{ordered.map((group) => <section key={group} onDragOver={(event) => { if (!builderMode && config.allowDragDrop !== false) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); moveCard(event.dataTransfer.getData("text/plain"), group); }} className="w-64 shrink-0 rounded-lg border p-2" style={{ borderColor: "var(--border-color, #e5e7eb)", background: "var(--muted-background, #f8fafc)" }}><h4 className="mb-2 flex justify-between text-xs font-semibold"><span>{group}</span><span>{groups.get(group).length}</span></h4><div className="space-y-2">{groups.get(group).map((record, index) => <button type="button" key={record.id || index} draggable={!builderMode && config.allowDragDrop !== false} onDragStart={(event) => event.dataTransfer.setData("text/plain", String(record.id))} onClick={() => clickRecord(record)} className="block w-full rounded-md border bg-white p-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="block font-medium">{record[titleField] || "Untitled"}</span>{config.subtitleField && record[config.subtitleField] ? <span className="mt-1 block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.subtitleField]}</span> : null}</button>)}</div></section>)}</div></div>;
   }
   if (node.componentKey === "calendar") {
-    const startField = config.startField || "start_date";
+    const startField = config.startField || config.dateField || "";
     const monthStart = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
     const gridStart = new Date(monthStart);
     gridStart.setDate(1 - ((monthStart.getDay() + 6) % 7));
@@ -329,40 +325,43 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     return <div className="space-y-2"><div className="flex items-center justify-between"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1))} aria-label="Previous month">‹</button><strong className="text-sm">{calendarDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1))} aria-label="Next month">›</button></div><div className="grid grid-cols-7 gap-1">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <div key={day} className="py-1 text-center text-[11px] font-semibold">{day}</div>)}{days.map((day) => <div key={dayKey(day)} className="min-h-16 min-w-0 rounded border p-1" style={{ borderColor: "var(--border-color, #e5e7eb)", opacity: day.getMonth() === calendarDate.getMonth() ? 1 : 0.45 }}><span className="text-[10px]">{day.getDate()}</span><div className="mt-1 space-y-0.5">{(events.get(dayKey(day)) || []).slice(0, 2).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="block w-full truncate rounded bg-emerald-100 px-1 py-0.5 text-left text-[10px]">{record[titleField] || "Event"}</button>)}</div></div>)}</div>{placeholder ? <div className="cpb-empty">Choose an object to populate this calendar.</div> : null}</div>;
   }
   if (node.componentKey === "scheduler") {
-    const startField = config.startField || "start_date";
+    const startField = config.startField || config.dateField || "";
     const groups = new Map();
-    records.forEach((record) => { const resource = String(record[config.resourceField || "assignee_id"] || "Unassigned"); groups.set(resource, [...(groups.get(resource) || []), record]); });
+    records.forEach((record) => { const resourceField = config.resourceField || "";
+    const resource = String(resourceField ? (record[resourceField] ?? "") : ""); groups.set(resource, [...(groups.get(resource) || []), record]); });
     if (!groups.size && placeholder) groups.set("Resource", []);
     return <div className="flex min-w-0 gap-3 overflow-x-auto pb-1">{[...groups.entries()].map(([resource, items]) => <section key={resource} className="w-64 shrink-0 rounded-lg border p-2" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><h4 className="mb-2 truncate text-xs font-semibold">{resource}</h4><div className="space-y-1">{items.sort((a, b) => new Date(a[startField]) - new Date(b[startField])).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="block w-full rounded border px-2 py-1.5 text-left" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="block text-[10px]" style={{ color: "var(--text-secondary, #64748b)" }}>{formatRecordValue(record[startField], "datetime")}</span><span className="block truncate text-xs font-medium">{record[titleField] || "Untitled"}</span></button>)}</div></section>)}</div>;
   }
   if (node.componentKey === "gantt") {
-    const startField = config.startField || "start_date";
-    const endField = config.endField || "end_date";
+    const startField = config.startField || config.dateField || "";
+    const endField = config.endField || "";
     const dates = records.flatMap((record) => [new Date(record[startField]).getTime(), new Date(record[endField]).getTime()]).filter(Number.isFinite);
     const minimum = Math.min(...dates);
     const span = Math.max(1, Math.max(...dates) - minimum);
-    return <div className="space-y-2">{(records.length ? records : state.placeholder ? [{ name: "Task", [startField]: 0, [endField]: 1 }] : []).map((record, index) => { const start = new Date(record[startField]).getTime(); const end = new Date(record[endField]).getTime(); const left = Number.isFinite(start) && Number.isFinite(minimum) ? Math.max(0, ((start - minimum) / span) * 100) : 0; const width = Number.isFinite(end - start) ? Math.max(4, ((end - start) / span) * 100) : 35; return <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="grid w-full grid-cols-[8rem_1fr] items-center gap-3 text-left"><span className="truncate text-xs">{record[config.taskLabelField || "name"] || "Untitled"}</span><span className="relative h-6 rounded bg-slate-100"><span className="absolute top-1 h-4 rounded bg-emerald-600" style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }} /></span></button>; })}</div>;
+    return <div className="space-y-2">{(records.length ? records : state.placeholder ? [{ name: "Task", [startField]: 0, [endField]: 1 }] : []).map((record, index) => { const start = new Date(record[startField]).getTime(); const end = new Date(record[endField]).getTime(); const left = Number.isFinite(start) && Number.isFinite(minimum) ? Math.max(0, ((start - minimum) / span) * 100) : 0; const width = Number.isFinite(end - start) ? Math.max(4, ((end - start) / span) * 100) : 35; return <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="grid w-full grid-cols-[8rem_1fr] items-center gap-3 text-left"><span className="truncate text-xs">{record[config.taskLabelField || collection.fields?.[0] || "id"] || "Untitled"}</span><span className="relative h-6 rounded bg-slate-100"><span className="absolute top-1 h-4 rounded bg-emerald-600" style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }} /></span></button>; })}</div>;
   }
   if (node.componentKey === "map") {
-    const valid = config.locationMode === "address" ? records.filter((record) => record[config.addressField]) : records.filter((record) => Number.isFinite(Number(record[config.latitudeField || "latitude"])) && Number.isFinite(Number(record[config.longitudeField || "longitude"])));
+    const hasLocationBinding = config.locationMode === "address" ? Boolean(config.addressField) : Boolean(config.latitudeField && config.longitudeField);
+    if (!hasLocationBinding) return <div className="cpb-empty">Configure location fields for this map.</div>;
+    const valid = config.locationMode === "address" ? records.filter((record) => record[config.addressField]) : records.filter((record) => Number.isFinite(Number(record[config.latitudeField])) && Number.isFinite(Number(record[config.longitudeField])));
     if (!valid.length) return <div className="cpb-empty">{placeholder ? "Location records will appear here." : "No records have valid locations."}</div>;
     const first = valid[0];
-    const firstLatitude = Number(first[config.latitudeField || "latitude"]);
-    const firstLongitude = Number(first[config.longitudeField || "longitude"]);
+    const firstLatitude = Number(first[config.latitudeField]);
+    const firstLongitude = Number(first[config.longitudeField]);
     const mapUrl = new URL("https://www.openstreetmap.org/export/embed.html");
-    const latitudes = valid.map((record) => Number(record[config.latitudeField || "latitude"]));
-    const longitudes = valid.map((record) => Number(record[config.longitudeField || "longitude"]));
+    const latitudes = valid.map((record) => Number(record[config.latitudeField]));
+    const longitudes = valid.map((record) => Number(record[config.longitudeField]));
     const padding = 0.01;
     mapUrl.searchParams.set("bbox", [Math.min(...longitudes) - padding, Math.min(...latitudes) - padding, Math.max(...longitudes) + padding, Math.max(...latitudes) + padding].join(","));
     mapUrl.searchParams.set("layer", "mapnik");
     mapUrl.searchParams.set("marker", `${firstLatitude},${firstLongitude}`);
-    return <div className="space-y-2">{config.locationMode !== "address" ? <iframe title="Record locations map" className="h-64 w-full rounded-lg border" src={mapUrl.toString()} loading="lazy" referrerPolicy="no-referrer" style={{ borderColor: "var(--border-color, #e5e7eb)" }} /> : null}<div className="space-y-1">{valid.map((record, index) => { const location = config.locationMode === "address" ? String(record[config.addressField]) : `${record[config.latitudeField || "latitude"]},${record[config.longitudeField || "longitude"]}`; return <a key={record.id || index} href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(location)}`} target="_blank" rel="noreferrer" className="flex justify-between gap-2 rounded border px-3 py-2 text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="truncate font-medium">{record[config.labelField || "name"] || "Location"}</span><span className="truncate text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{location}</span></a>; })}</div></div>;
+    return <div className="space-y-2">{config.locationMode !== "address" ? <iframe title="Record locations map" className="h-64 w-full rounded-lg border" src={mapUrl.toString()} loading="lazy" referrerPolicy="no-referrer" style={{ borderColor: "var(--border-color, #e5e7eb)" }} /> : null}<div className="space-y-1">{valid.map((record, index) => { const location = config.locationMode === "address" ? String(record[config.addressField]) : `${record[config.latitudeField]},${record[config.longitudeField]}`; return <a key={record.id || index} href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(location)}`} target="_blank" rel="noreferrer" className="flex justify-between gap-2 rounded border px-3 py-2 text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="truncate font-medium">{record[config.labelField || collection.fields?.[0] || "id"] || "Location"}</span><span className="truncate text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{location}</span></a>; })}</div></div>;
   }
   if (node.componentKey === "hierarchy_viewer") {
-    const parentField = config.parentField || "parent_id";
+    const parentField = config.parentField || "";
     const byParent = new Map();
     for (const record of records) { const parent = record[parentField] == null ? "__root__" : String(record[parentField]); byParent.set(parent, [...(byParent.get(parent) || []), record]); }
-    const render = (record, depth = 0) => <div key={record.id} className="space-y-1" style={{ marginLeft: depth * 16 }}><button type="button" onClick={() => clickRecord(record)} className="w-full rounded-md border bg-white px-3 py-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}>{record[config.titleField || "name"] || "Untitled"}{config.statusField && record[config.statusField] ? <span className="ml-2 text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.statusField]}</span> : null}</button>{depth < (config.maxDepth || 3) ? (byParent.get(String(record.id)) || []).map((child) => render(child, depth + 1)) : null}</div>;
+    const render = (record, depth = 0) => <div key={record.id} className="space-y-1" style={{ marginLeft: depth * 16 }}><button type="button" onClick={() => clickRecord(record)} className="w-full rounded-md border bg-white px-3 py-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}>{record[config.titleField || collection.fields?.[0] || "id"] || "Untitled"}{config.statusField && record[config.statusField] ? <span className="ml-2 text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.statusField]}</span> : null}</button>{depth < (config.maxDepth || 3) ? (byParent.get(String(record.id)) || []).map((child) => render(child, depth + 1)) : null}</div>;
     const roots = records.filter((record) => record[parentField] == null || !records.some((candidate) => String(candidate.id) === String(record[parentField])));
     return <div className="space-y-1">{roots.map((record) => render(record))}</div>;
   }
@@ -370,7 +369,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     return <FileViewerRecords node={node} records={records} placeholder={placeholder} />;
   }
   if (node.componentKey === "signature") {
-    return <div className="space-y-2">{records.length ? records.map((record, index) => <SignatureRecord key={record.id || index} node={node} record={record} objectKey={collection.objectKey} title={record[titleField] || record.id} builderMode={builderMode} />) : <div className="cpb-empty">{placeholder ? `${config.label || "Signature"} values will appear here.` : "No records available."}</div>}</div>;
+    return <div className="space-y-2">{records.length ? records.map((record, index) => <SignatureRecord key={record.id || index} node={node} record={record} title={record[titleField] || record.id} builderMode={builderMode} onRecordClick={onRecordClick} />) : <div className="cpb-empty">{placeholder ? `${config.label || "Signature"} values will appear here.` : "No records available."}</div>}</div>;
   }
   return <div className="cpb-empty">No records match this view.</div>;
 }
@@ -416,13 +415,12 @@ function FileViewerRecords({ node, records, placeholder }) {
   return <div className="space-y-2">{downloadError ? <p role="alert" className="text-xs text-red-700">{downloadError}</p> : null}<div className={node.config?.displayMode === "grid" ? "grid gap-2 sm:grid-cols-2" : "space-y-1"}>{files.slice(0, node.config?.maxItems || 12).map((file) => <button type="button" key={file.id} onClick={() => downloadFile(file)} className="flex min-w-0 w-full items-center justify-between gap-3 rounded-md border bg-white px-3 py-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="min-w-0 truncate font-medium">{file.filename}</span><span className="shrink-0 text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{file.mime_type || "File"}</span></button>)}</div></div>;
 }
 
-function SignatureRecord({ node, record, objectKey, title, builderMode }) {
+function SignatureRecord({ node, record, title, builderMode, onRecordClick }) {
   const canvasRef = useRef(null);
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [hasInk, setHasInk] = useState(false);
   const config = node.config || {};
-  const fieldKey = config.fieldKey || "signature";
+  const fieldKey = config.fieldKey || "";
   const canCapture = config.displayMode === "capture" && !builderMode;
   const drawing = useRef(false);
   const point = (event) => {
@@ -434,24 +432,18 @@ function SignatureRecord({ node, record, objectKey, title, builderMode }) {
     context.strokeStyle = "#172554";
     return { context, x: (event.clientX - bounds.left) * (canvas.width / bounds.width), y: (event.clientY - bounds.top) * (canvas.height / bounds.height) };
   };
-  const save = async () => {
-    if (!canvasRef.current || !objectKey || !record.id) return;
+  const save = () => {
+    if (!canvasRef.current || !record.id || !fieldKey) return;
     if (config.required && !hasInk) {
       setMessage("A signature is required.");
       return;
     }
-    setSaving(true);
-    setMessage("");
-    try {
-      await apiRequest(`/api/platform/objects/${encodeURIComponent(objectKey)}/records/${encodeURIComponent(record.id)}`, { method: "PUT", body: JSON.stringify({ data: { [fieldKey]: canvasRef.current.toDataURL("image/png") } }) });
-      setMessage("Signature saved.");
-    } catch (error) {
-      setMessage(error?.message || "Unable to save signature");
-    } finally {
-      setSaving(false);
-    }
+    const value = canvasRef.current.toDataURL("image/png");
+    setMessage("Signature captured.");
+    onRecordClick?.({ record, node, eventName: "submit", value, changes: { [fieldKey]: value } });
   };
-  return <div className="rounded-lg border bg-white p-3" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><div className="mb-2 text-xs font-medium">{config.label || "Signature"} · {title}</div>{record[fieldKey] ? <img className="mb-2 max-h-32 max-w-full object-contain" src={record[fieldKey]} alt={`${config.label || "Signature"} for ${title}`} /> : null}{canCapture ? <><canvas ref={canvasRef} width={config.width || 320} height={config.height || 180} className="block max-w-full touch-none rounded border border-dashed bg-slate-50" style={{ width: "100%", maxWidth: config.width || 320, height: config.height || 180, borderColor: "var(--border-color, #cbd5e1)" }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); drawing.current = true; const { context, x, y } = point(event); context.beginPath(); context.moveTo(x, y); }} onPointerMove={(event) => { if (!drawing.current) return; const { context, x, y } = point(event); context.lineTo(x, y); context.stroke(); setHasInk(true); }} onPointerUp={() => { drawing.current = false; }} onPointerCancel={() => { drawing.current = false; }} /><div className="mt-2 flex gap-2">{config.allowClear !== false ? <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => { const context = canvasRef.current?.getContext("2d"); context?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasInk(false); }}>Clear</button> : null}<button type="button" className="onepos-btn onepos-btn-primary onepos-btn-sm" disabled={saving || (config.required && !hasInk)} onClick={save}>{saving ? "Saving…" : "Save signature"}</button></div></> : null}{message ? <p role="status" className="mt-2 text-xs">{message}</p> : null}</div>;
+
+  return <div className="rounded-lg border bg-white p-3" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><div className="mb-2 text-xs font-medium">{config.label || "Signature"} · {title}</div>{record[fieldKey] ? <img className="mb-2 max-h-32 max-w-full object-contain" src={record[fieldKey]} alt={`${config.label || "Signature"} for ${title}`} /> : null}{canCapture ? <><canvas ref={canvasRef} width={config.width || 320} height={config.height || 180} className="block max-w-full touch-none rounded border border-dashed bg-slate-50" style={{ width: "100%", maxWidth: config.width || 320, height: config.height || 180, borderColor: "var(--border-color, #cbd5e1)" }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); drawing.current = true; const { context, x, y } = point(event); context.beginPath(); context.moveTo(x, y); }} onPointerMove={(event) => { if (!drawing.current) return; const { context, x, y } = point(event); context.lineTo(x, y); context.stroke(); setHasInk(true); }} onPointerUp={() => { drawing.current = false; }} onPointerCancel={() => { drawing.current = false; }} /><div className="mt-2 flex gap-2">{config.allowClear !== false ? <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => { const context = canvasRef.current?.getContext("2d"); context?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasInk(false); }}>Clear</button> : null}<button type="button" className="onepos-btn onepos-btn-primary onepos-btn-sm" disabled={!fieldKey || (config.required && !hasInk)} onClick={save}>Save signature</button></div></> : null}{message ? <p role="status" className="mt-2 text-xs">{message}</p> : null}</div>;
 }
 
 function TreeViewView({ node, builderMode, onRecordClick, data }) {
@@ -459,9 +451,9 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
   const config = node.config || {};
   const state = data?.[node.id] || {};
   const records = Array.isArray(state.records) ? state.records : [];
-  const parentField = config.parentField || "parent_id";
-  const labelField = config.labelField || "name";
-  const secondaryField = config.secondaryField || "status";
+  const parentField = config.parentField || "";
+  const labelField = config.labelField || collection.fields?.[0] || "id";
+  const secondaryField = config.secondaryField || "";
   const maxDepth = Math.max(1, Number(config.maxDepth) || 3);
   const defaultExpandedDepth = Math.max(0, Number(config.defaultExpandedDepth) || 1);
   const canCollapse = config.allowCollapse !== false;
@@ -493,7 +485,7 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
     const children = childMap.get(String(record.id)) || [];
     const isExpanded = canCollapse ? (expanded.has(record.id) || depth < defaultExpandedDepth) : true;
     const isLeaf = !children.length;
-    const label = record[labelField] ?? record.name ?? record.title ?? "Untitled";
+    const label = record[labelField] ?? record.id ?? "Untitled";
     const subtitle = secondaryField && record[secondaryField] ? String(record[secondaryField]) : "";
     const countText = config.showCounts !== false && !isLeaf ? ` (${children.length})` : "";
 
@@ -533,15 +525,14 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
   );
 }
 
-function ProcessPathView({ node, builderMode, data }) {
+function ProcessPathView({ node, builderMode, data, onRecordClick }) {
   const state = data?.[node.id] || {};
   const config = node.config || {};
   const record = state.records?.[0] || null;
-  const statusField = config.statusField || "status";
+  const statusField = config.statusField || "";
   const titleField = config.titleField || "";
   const stages = Array.isArray(config.stages) ? config.stages.filter(Boolean) : [];
   const [optimisticStage, setOptimisticStage] = useState("");
-  const [savingStage, setSavingStage] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -551,22 +542,11 @@ function ProcessPathView({ node, builderMode, data }) {
   const current = optimisticStage || (record?.[statusField] == null ? "" : String(record[statusField]));
   const stageList = stages.length ? stages : (current ? [current] : []);
 
-  const changeStage = async (stage) => {
-    if (builderMode || config.allowStageChange !== true || !record?.id || !node.collection?.objectKey || stage === current) return;
-    setSavingStage(stage);
-    setMessage("");
-    try {
-      await apiRequest(
-        `/api/platform/objects/${encodeURIComponent(node.collection.objectKey)}/records/${encodeURIComponent(record.id)}`,
-        { method: "PUT", body: JSON.stringify({ data: { [statusField]: stage } }) },
-      );
-      setOptimisticStage(stage);
-      setMessage("Stage updated.");
-    } catch (error) {
-      setMessage(error?.message || "Unable to update stage.");
-    } finally {
-      setSavingStage("");
-    }
+  const changeStage = (stage) => {
+    if (builderMode || config.allowStageChange !== true || !record?.id || !statusField || stage === current) return;
+    setOptimisticStage(stage);
+    setMessage("Stage selected.");
+    onRecordClick?.({ record, node, eventName: "change", value: stage, changes: { [statusField]: stage } });
   };
 
   if (state.loading) return <div className="cpb-empty">Loading process path…</div>;
@@ -586,7 +566,7 @@ function ProcessPathView({ node, builderMode, data }) {
               key={String(stage)}
               type="button"
               role="listitem"
-              disabled={builderMode || config.allowStageChange !== true || savingStage !== ""}
+              disabled={builderMode || config.allowStageChange !== true || !statusField}
               onClick={() => changeStage(String(stage))}
               className={`min-w-[120px] flex-1 rounded-lg border px-3 py-2 text-left text-xs ${active ? "font-semibold" : ""}`}
               style={{
@@ -594,7 +574,7 @@ function ProcessPathView({ node, builderMode, data }) {
                 background: active ? "color-mix(in srgb, var(--primary-color,#176f6a) 10%, white)" : completed ? "var(--muted-background,#f8fafc)" : "var(--card-background,#fff)",
                 color: active ? "var(--primary-color,#176f6a)" : "var(--text-primary,#334155)",
               }}
-              title={savingStage === String(stage) ? "Updating…" : String(stage)}
+              title={String(stage)}
             >
               <span className="block text-[10px] uppercase tracking-wide" style={{ color: "var(--text-secondary,#64748b)" }}>{index + 1}</span>
               <span className="block truncate">{String(stage).replaceAll("_", " ")}</span>
@@ -602,7 +582,7 @@ function ProcessPathView({ node, builderMode, data }) {
           );
         })}
       </div>
-      {message ? <p role="status" className="text-[11px]" style={{ color: message === "Stage updated." ? "var(--primary-color,#176f6a)" : "#b91c1c" }}>{message}</p> : null}
+      {message ? <p role="status" className="text-[11px]" style={{ color: "var(--primary-color,#176f6a)" }}>{message}</p> : null}
       {builderMode ? <p className="text-[11px]" style={{ color: "var(--text-secondary,#64748b)" }}>Runtime highlights the current stage from {statusField}.</p> : null}
     </div>
   );
@@ -638,13 +618,14 @@ function configText(config, keys, fallback = "") {
   return fallback;
 }
 
-function GenericPageComponentView({ node, builderMode, onButtonClick }) {
+function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, runtimeValue, onValueChange }) {
   const key = node.componentKey;
   const config = node.config || {};
   const title = node.title || config.title || config.label || node.label || key.replace(/_/g, " ");
   const action = () => { if (!builderMode) onButtonClick?.(node); };
   const options = Array.isArray(config.options) ? config.options : Array.isArray(config.items) ? config.items : [];
-  const disabled = builderMode || config.disabled === true;
+  const disabled = builderMode || node.enabled === false || node.readOnly === true || config.disabled === true;
+  const setValue = (value) => { if (!builderMode && !disabled) { onValueChange?.(node, value); onEvent?.({ eventName: "change", node, value }); } };
 
   if (key === "card") return <div className="rounded-xl border bg-white p-4 shadow-sm"><div className="text-sm font-semibold">{title}</div>{config.subtitle ? <div className="mt-1 text-xs text-slate-500">{String(config.subtitle)}</div> : null}</div>;
   if (key === "grid") return <div className="grid gap-2 rounded-xl border border-dashed p-3" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(6, Number(config.columns) || 2))}, minmax(0,1fr))` }}>{Array.from({length:Math.max(2,Math.min(6,Number(config.columns)||2))}).map((_,i)=><div key={i} className="h-10 rounded bg-slate-100" />)}</div>;
@@ -663,15 +644,15 @@ function GenericPageComponentView({ node, builderMode, onButtonClick }) {
   if (key === "icon") return <div className="flex items-center gap-2 text-sm"><span className="text-xl">{config.icon||"◈"}</span>{config.label||title}</div>;
   if (key === "qr_code") return <div className="inline-flex flex-col items-center gap-2"><div className="grid h-24 w-24 grid-cols-6 gap-0.5 bg-white p-2 ring-1 ring-slate-200">{Array.from({length:36}).map((_,i)=><span key={i} className={i%3===0||i%7===0?"bg-slate-900":"bg-white"}/>)}</div>{config.label?<span className="text-xs">{String(config.label)}</span>:null}</div>;
   if (key === "barcode") return <div className="inline-flex flex-col items-center gap-1"><div className="flex h-16 items-stretch gap-px bg-white p-2 ring-1 ring-slate-200">{Array.from({length:28}).map((_,i)=><span key={i} className="bg-slate-900" style={{width:i%4===0?3:1}}/>)}</div>{config.showValue!==false?<span className="text-[10px]">{configText(config,["valueBinding"],"000000000000")}</span>:null}</div>;
-  if (key === "search_box") return <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder={config.placeholder||"Search…"} disabled={disabled}/>;
-  if (key === "toggle") return <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" disabled={disabled}/>{config.label||title}</label>;
-  if (key === "radio_group") return <div className={`flex gap-3 ${config.orientation==="vertical"?"flex-col":""}`}>{(options.length?options:["Option 1","Option 2"]).map((item,i)=><label key={i} className="inline-flex items-center gap-1.5 text-sm"><input type="radio" disabled name={node.id}/>{typeof item==="object"?(item.label||item.value):String(item)}</label>)}</div>;
-  if (key === "slider") return <div><input className="w-full" type="range" min={config.min??0} max={config.max??100} step={config.step??1} disabled={disabled}/></div>;
-  if (key === "file_upload") return <label className="block rounded-lg border border-dashed p-4 text-center text-xs text-slate-500">Choose files<input type="file" className="hidden" multiple={config.multiple===true} disabled={disabled}/></label>;
-  if (key === "pin_input") return <div className="flex gap-1.5">{Array.from({length:Math.max(1,Math.min(12,Number(config.length)||4))}).map((_,i)=><input key={i} className="h-9 w-9 rounded border text-center" disabled={disabled} maxLength={1}/>)}</div>;
-  if (["select","multi_select"].includes(key)) return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><select className="w-full rounded-lg border bg-white px-3 py-2 text-sm" multiple={key==="multi_select"} disabled={disabled}><option>{config.placeholder||"Select…"}</option>{options.map((item,i)=><option key={i}>{typeof item==="object"?(item.label||item.value):String(item)}</option>)}</select></label>;
-  if (key === "time_input") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="time" step={config.step||undefined} disabled={disabled}/></label>;
-  if (key === "date_picker") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="date" min={config.min||undefined} max={config.max||undefined} disabled={disabled}/></label>;
+  if (key === "search_box") return <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder={config.placeholder||"Search…"} value={runtimeValue ?? ""} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(event.target.value)}/>;
+  if (key === "toggle") return <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(runtimeValue)} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(event.target.checked)}/>{config.label||title}</label>;
+  if (key === "radio_group") return <div className={`flex gap-3 ${config.orientation==="vertical"?"flex-col":""}`}>{(options.length?options:["Option 1","Option 2"]).map((item,i)=><label key={i} className="inline-flex items-center gap-1.5 text-sm"><input type="radio" disabled={disabled} name={node.id} checked={String(runtimeValue??"")===String(typeof item==="object"?(item.value??item.label):item)} onChange={()=>setValue(typeof item==="object"?(item.value??item.label):item)}/>{typeof item==="object"?(item.label||item.value):String(item)}</label>)}</div>;
+  if (key === "slider") return <div><input className="w-full" type="range" min={config.min??0} max={config.max??100} step={config.step??1} value={runtimeValue ?? config.min ?? 0} disabled={disabled} onChange={(event)=>setValue(Number(event.target.value))}/></div>;
+  if (key === "file_upload") return <label className="block rounded-lg border border-dashed p-4 text-center text-xs text-slate-500">{Array.isArray(runtimeValue)&&runtimeValue.length?`${runtimeValue.length} file(s) selected`:"Choose files"}<input type="file" className="hidden" multiple={config.multiple===true} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(Array.from(event.target.files||[]).map((file)=>({name:file.name,size:file.size,type:file.type,lastModified:file.lastModified})))}/></label>;
+  if (key === "pin_input") { const length=Math.max(1,Math.min(12,Number(config.length)||4)); const pin=String(runtimeValue??"").slice(0,length); return <div className="flex gap-1.5">{Array.from({length}).map((_,i)=><input key={i} className="h-9 w-9 rounded border text-center" disabled={disabled} required={node.required===true} maxLength={1} value={pin[i]||""} onChange={(event)=>{const chars=pin.padEnd(length," ").split("");chars[i]=event.target.value.slice(-1);setValue(chars.join("").trimEnd());}}/>)}</div>; }
+  if (["select","multi_select"].includes(key)) return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><select className="w-full rounded-lg border bg-white px-3 py-2 text-sm" multiple={key==="multi_select"} disabled={disabled} required={node.required===true} value={key==="multi_select"?(Array.isArray(runtimeValue)?runtimeValue:[]):(runtimeValue??"")} onChange={(event)=>setValue(key==="multi_select"?Array.from(event.target.selectedOptions).map((option)=>option.value):event.target.value)}><option>{config.placeholder||"Select…"}</option>{options.map((item,i)=><option key={i} value={typeof item==="object"?(item.value??item.label):String(item)}>{typeof item==="object"?(item.label||item.value):String(item)}</option>)}</select></label>;
+  if (key === "time_input") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="time" step={config.step||undefined} disabled={disabled} required={node.required===true} value={runtimeValue??""} onChange={(event)=>setValue(event.target.value)}/></label>;
+  if (key === "date_picker") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="date" min={config.min||undefined} max={config.max||undefined} disabled={disabled} required={node.required===true} value={runtimeValue??""} onChange={(event)=>setValue(event.target.value)}/></label>;
   if (key === "pagination") return <div className="flex items-center justify-center gap-2 text-xs"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Previous</button><span>1</span><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Next</button></div>;
   if (key === "filter_bar") return <div className="flex flex-wrap gap-2 rounded-lg border p-2">{(Array.isArray(config.fields)&&config.fields.length?config.fields:["Filter"]).map((field,i)=><span key={i} className="rounded bg-slate-100 px-2 py-1 text-xs">{String(field)}</span>)}</div>;
   if (["icon_button","back_button","close_button","refresh_button","navigation_button"].includes(key)) return <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled={disabled} onClick={action}><span>{config.icon||({back_button:"←",close_button:"×",refresh_button:"↻"}[key]||"◈")}</span>{config.label||title}</button>;
@@ -688,7 +669,7 @@ function GenericPageComponentView({ node, builderMode, onButtonClick }) {
   return <div className="rounded-lg border border-dashed p-3 text-sm text-slate-500">{title}</div>;
 }
 
-function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
+function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, onValueChange, onEvent, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
   if (node.visible === false && !builderMode) return null;
   const interactive = node.enabled !== false && node.readOnly !== true;
@@ -701,10 +682,10 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       const records = Array.isArray(data?.[node.id]?.records) ? data[node.id].records : [];
       if (records.length) {
         const imageField = config.imageField || "";
-        const initialsField = config.initialsField || "name";
+        const initialsField = config.initialsField || "";
         config.avatars = records.slice(0, Number(config.maxVisible) || 5).map((record) => ({
-          label: record[initialsField] || record.name || record.title || "",
-          initials: String(record[initialsField] || record.name || record.title || "?").trim().slice(0, 2).toUpperCase(),
+          label: (initialsField ? record[initialsField] : record.id) || "",
+          initials: String((initialsField ? record[initialsField] : record.id) || "?").trim().slice(0, 2).toUpperCase(),
           image: imageField ? record[imageField] : "",
         }));
       }
@@ -725,16 +706,16 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     const records = Array.isArray(state.records) ? state.records : [];
     if (state.error && !records.length) return <div className="cpb-empty" role="alert">{state.error}</div>;
     const valueField = config.valueField || "id";
-    const labelField = config.labelField || "name";
+    const labelField = config.labelField || state.fields?.[0]?.apiName || state.fields?.[0]?.api_name || "id";
     const secondaryField = config.secondaryField || "";
     return (
-      <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" disabled={builderMode || state.loading}>
+      <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" disabled={builderMode || state.loading || node.enabled === false || node.readOnly === true} required={node.required===true} value={runtimeOverrides?.[node.id]?.value ?? ""} onChange={(event)=>{ const selected=records.find((record)=>String(record[valueField]||record.id||"")===event.target.value)||null; onValueChange?.(node,event.target.value,selected); onEvent?.({eventName:"select",node,value:event.target.value,record:selected}); }}>
         <option value="">{state.loading ? "Loading…" : !records.length ? "No matching records" : (config.placeholder || "Select record…")}</option>
-        {records.map((record, index) => <option key={record[valueField] || record.id || index} value={record[valueField] || record.id || ""}>{String(record[labelField] || record.name || record.id || "Record")}{secondaryField && record[secondaryField] ? ` · ${record[secondaryField]}` : ""}</option>)}
+        {records.map((record, index) => <option key={record[valueField] || record.id || index} value={record[valueField] || record.id || ""}>{String(record[labelField] || record.id || "Record")}{secondaryField && record[secondaryField] ? ` · ${record[secondaryField]}` : ""}</option>)}
       </select>
     );
   }
-  if (key === "product_image_card") {
+  if (key === "image_record_card") {
     const config = node.config || {};
     const state = data?.[node.id] || {};
     if (!config.objectKey) return <div className="cpb-empty">Select an Object in Properties to preview product records.</div>;
@@ -744,18 +725,18 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     const shown = records.slice(0, Math.max(1, Number(config.maxRecords) || 8));
     return <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>{shown.map((record, index) => {
       const image = config.imageField ? record[config.imageField] : "";
-      const title = record[config.titleField || "name"] || "Record";
+      const title = record[config.titleField || collection.fields?.[0] || "id"] || "Record";
       const subtitleFields = Array.isArray(config.subtitleFields) ? config.subtitleFields : [];
       return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
-  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} />;
+  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} onEvent={onEvent} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={guardedRecordClick} builderMode={builderMode} />;
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
-        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} data={data} runtimeOverrides={runtimeOverrides} />)}
+        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} onEvent={onEvent} data={data} runtimeOverrides={runtimeOverrides} />)}
       </div>
     );
   }
@@ -769,7 +750,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     return <TreeViewView node={node} builderMode={builderMode} onRecordClick={guardedRecordClick} data={data} />;
   }
   if (key === "process_path") {
-    return <ProcessPathView node={node} builderMode={builderMode} data={data} />;
+    return <ProcessPathView node={node} builderMode={builderMode} data={data} onRecordClick={guardedRecordClick} />;
   }
   if (key === "button") {
     const variantClass = { primary: "onepos-btn-primary", secondary: "onepos-btn-secondary", ghost: "onepos-btn-secondary", danger: "onepos-btn-danger" }[node.variant || "primary"] || "onepos-btn-primary";
@@ -802,7 +783,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
  * the shared renderer — so MultiContainer, Table and future record components
  * stay in perfect sync without extra wiring.
  */
-function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeState, setPage, runtimeOverride, children }) {
+function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeState, setPage, runtimeOverride, pageContext, children }) {
   const baseCollection = ADVANCED_RECORD_COMPONENTS.includes(node.componentKey)
     ? advancedCollection(node)
     : REGISTRY_RECORD_COMPONENTS.includes(node.componentKey)
@@ -838,6 +819,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
   const live = useRecordCollection(collection, {
     enabled: isRecordBound && Boolean(collection.objectKey),
     page,
+    pageContext,
   });
   const effectiveLive = isRecordBound && !collection.objectKey
     ? { records: [], total: 0, fields: collection.fields || [], placeholder: true, loading: false, error: "" }
@@ -861,7 +843,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
  * @param builderMode when true, records stay as placeholders and interactions are inert
  * @param device      desktop | tablet | mobile | kiosk (builder device preview / runtime width)
  */
-export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, renderSectionChrome = null }) {
+export default function CustomPageRenderer({ definition, builderMode = false, device = "desktop", selectedId = null, onSelectNode = null, onRecordClick = null, onButtonClick = null, onEvent = null, onPageStateChange = null, renderSectionChrome = null, pageContext = null }) {
   const sections = Array.isArray(definition?.sections) ? definition.sections : [];
 
   /*
@@ -887,6 +869,8 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
           ...(current[detail.nodeId] || {}),
           lastInteraction: detail,
           refreshNonce: Number(current[detail.nodeId]?.refreshNonce || 0) + 1,
+          ...(detail.output !== undefined ? { flowOutput: detail.output } : {}),
+          ...(detail.outputTarget && detail.output !== undefined ? { outputTarget: detail.outputTarget } : {}),
         },
       }));
     };
@@ -894,25 +878,24 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     return () => window.removeEventListener("oneengine:page-interaction-complete", onInteractionComplete);
   }, []);
 
-  const applyComponentInteraction = ({ record = null, node }) => {
-    const interaction = node?.interaction;
+  const applyComponentInteraction = ({ record = null, node, eventName = "click", value = undefined }) => {
+    const interaction = node?.interactions?.[eventName] || (eventName === "click" ? node?.interaction : null);
     if (!interaction || interaction.type !== "component" || !interaction.targetNodeId) return false;
     const targetId = String(interaction.targetNodeId);
     setRuntimeOverrides((current) => {
       const existing = current[targetId] || {};
       const operation = interaction.operation || "set_record";
+      const sourceField = interaction.sourceField || "";
+      const sourceValue = sourceField ? record?.[sourceField] : (value !== undefined ? value : record);
       if (operation === "set_record") {
-        return { ...current, [targetId]: { ...existing, record: record || null } };
+        return { ...current, [targetId]: { ...existing, record: record || null, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
       }
       if (operation === "filter_collection") {
-        const sourceField = interaction.sourceField || "id";
-        const targetField = interaction.targetField || sourceField;
-        return { ...current, [targetId]: { ...existing, filter: { field: targetField, value: record?.[sourceField] ?? null }, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
+        const targetField = interaction.targetField || sourceField || "id";
+        return { ...current, [targetId]: { ...existing, filter: { field: targetField, value: sourceValue ?? null }, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
       }
       if (operation === "set_value") {
-        const sourceField = interaction.sourceField || "";
-        const value = sourceField ? record?.[sourceField] : record;
-        return { ...current, [targetId]: { ...existing, value, valueKey: interaction.targetField || "value" } };
+        return { ...current, [targetId]: { ...existing, value: sourceValue, valueKey: interaction.targetField || "value" } };
       }
       if (operation === "refresh") {
         return { ...current, [targetId]: { ...existing, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
@@ -923,12 +906,25 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
   };
 
   const handleRecordClick = (payload) => {
-    if (!applyComponentInteraction(payload)) onRecordClick?.(payload);
+    const eventName = payload?.eventName || "row_click";
+    if (applyComponentInteraction({ ...payload, eventName }) || (eventName === "row_click" && applyComponentInteraction(payload))) return;
+    const interaction = payload?.node?.interactions?.[eventName];
+    if (interaction && interaction.type !== "none") onEvent?.({ ...payload, eventName });
+    else if (eventName === "row_click") onRecordClick?.(payload);
   };
 
   const handleButtonClick = (node) => {
     if (!applyComponentInteraction({ record: null, node })) onButtonClick?.(node);
   };
+
+  const handleValueChange = (node, value, selectedRecord = undefined) => {
+    setRuntimeOverrides((current) => ({ ...current, [node.id]: { ...(current[node.id] || {}), value, ...(selectedRecord !== undefined ? { record: selectedRecord } : {}) } }));
+  };
+
+  const emitEvent = (payload) => { if (builderMode) return; if (!applyComponentInteraction(payload)) onEvent?.(payload); };
+  useEffect(() => {
+    if (!builderMode) onPageStateChange?.({ components: effectivePageContext.components, flows: effectivePageContext.flows });
+  }, [builderMode, onPageStateChange, runtimeOverrides]);
 
   const recordNodes = useMemo(() => {
     const nodes = [];
@@ -944,7 +940,33 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     return nodes;
   }, [sections]);
 
+  useEffect(() => {
+    if (builderMode || !onEvent) return;
+    const visit = (nodes) => (nodes || []).forEach((node) => {
+      const interaction = node?.interactions?.load;
+      if (interaction && interaction.type !== "none") onEvent({ eventName: "load", node });
+      if (Array.isArray(node.children)) visit(node.children);
+    });
+    sections.forEach((section) => visit(section.children));
+    // Load is a mount event; metadata changes produce a new page definition.
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [definition, builderMode]);
+
   const setNodeState = (nodeId, patch) => setCollectionState((current) => ({ ...current, [nodeId]: { ...(current[nodeId] || {}), ...patch } }));
+  const effectivePageContext = {
+    ...(pageContext || {}),
+    components: {
+      ...(pageContext?.components || {}),
+      ...Object.fromEntries(Object.entries(runtimeOverrides).map(([id, state]) => [id, {
+        value: state?.value,
+        selectedRecord: state?.record || null,
+      }])),
+    },
+    flows: {
+      ...(pageContext?.flows || {}),
+      ...Object.fromEntries(Object.entries(runtimeOverrides).filter(([, state]) => state?.flowOutput !== undefined).map(([id, state]) => [state.outputTarget || id, state.flowOutput])),
+    },
+  };
 
   return (
     <div className={`cpb-tree${device === "mobile" ? " mx-auto w-full max-w-[390px]" : device === "tablet" ? " mx-auto w-full max-w-[820px]" : device === "kiosk" ? " mx-auto w-full max-w-[1024px]" : " w-full"}`}>
@@ -963,7 +985,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                 }}
                 className={`${builderMode && selectedId === node.id ? "cpb-selected" : ""}`}
               >
-                <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode} runtimeOverride={runtimeOverrides[node.id]}>
+                <RecordBoundNodeBoundary node={node} collectionState={collectionState} pageByNode={pageByNode} setNodeState={setNodeState} setPage={setPageByNode} runtimeOverride={runtimeOverrides[node.id]} pageContext={effectivePageContext}>
                   <NodeView
                     node={node}
                     sectionWidth={section.width}
@@ -971,6 +993,8 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                     builderMode={builderMode}
                     onRecordClick={handleRecordClick}
                     onButtonClick={handleButtonClick}
+                    onValueChange={handleValueChange}
+                    onEvent={emitEvent}
                     data={runtimeOverrides[node.id]?.record
                       ? { ...collectionState, [node.id]: { ...(collectionState[node.id] || {}), records: [runtimeOverrides[node.id].record], total: 1, loading: false, error: "", placeholder: false } }
                       : collectionState}
