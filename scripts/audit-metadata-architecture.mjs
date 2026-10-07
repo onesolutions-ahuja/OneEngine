@@ -31,6 +31,7 @@ const hardcodedBusinessObjectKeys=[
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
 const retiredFrontendBusinessFiles = [
   "src/pages/products/GlobalProductLookupPage.jsx",
+  "src/components/online/OnlineOrderSummary.jsx",
 ];
 const retiredActionKeys=[
   "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION",
