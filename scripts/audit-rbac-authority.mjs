@@ -41,7 +41,6 @@ const runtimeFiles = new Set([
 const genericAccessFilesWithoutOneEngineOverride = new Set([
   "server/services/platformReportSecurity.js",
   "server/services/platformSearch.js",
-  "server/services/platformObjectNavigation.js",
 ]);
 
 const findings = [];
