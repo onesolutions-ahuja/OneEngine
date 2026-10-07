@@ -221,7 +221,6 @@ app.use("/api/online/uber/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/smsgate/webhook", express.raw({ type: "*/*", limit: "64kb" }));
-app.use("/api/shopify/webhooks", express.raw({ type: "*/*", limit: "1mb" }));
 
 app.use(express.json({ limit: "10mb" }));
 
@@ -594,7 +593,7 @@ const authenticate = (req, res, next) => baseAuthenticate(req, res, async (error
  * db helper and admin-bypass helper - no new permission system, and the tool
  * runner only ever runs SELECTs scoped to the caller's verified company/store.
 */
-const jarvis = createJarvis({ tools: createJarvisTools({ db, canViewCompanyCustomers }) });
+const jarvis = createJarvis({ tools: createJarvisTools({ db, hasCompanyWideScope }) });
 const jarvesAccess = createJarvesAccessChecker({ db });
 // Shared, server-only AI service for authenticated Flow actions. No provider
 // credentials are exposed through app.locals; callers only receive ask().
@@ -609,7 +608,7 @@ app.locals.oneEngineAgent = jarvis;
 | permission codes granted to `req.user.roleId` via `role_permissions` and
 | requires the user to hold at least one of the supplied codes.
 |
-| Administrator/Owner roles (as defined by `canViewCompanyCustomers`) retain
+| Administrator/Owner roles (as defined by `hasCompanyWideScope`) retain
 | full access, matching the existing behaviour for those accounts.
 */
 
@@ -699,7 +698,7 @@ async function hasPermission(req, code) {
 }
 
 
-async function canViewCompanyCustomers(user, request = null) {
+async function hasCompanyWideScope(user, request = null) {
   if (!user?.id || !user?.companyId) return false;
   const codes = user.roleId ? await getRolePermissionCodes(user.roleId, request) : [];
   const permissionSets = await loadEffectivePermissionSets(db, user, request);
@@ -1828,7 +1827,7 @@ app.post("/api/auth/change-password", authenticate, createChangePasswordHandler(
 
 
 
-app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, canViewCompanyCustomers, canAccessStore, writeAudit, hasPermission }));
+app.use("/api", createDashboardBuilderRouter({ authenticate, authorize, db, hasCompanyWideScope, canAccessStore, writeAudit, hasPermission }));
 
 /*
  * JARVIS AI assistant (V1) - POST /api/jarvis, GET /api/jarvis/status.
@@ -1847,7 +1846,7 @@ app.use(
   })
 );
 app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
-app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasPermission }));
+app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, hasCompanyWideScope, hasPermission }));
 app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
@@ -1949,7 +1948,7 @@ app.use("/api", createSmsGateWebhookRouter({ pool }));
 |   DEL  /api/products/:id          (product.delete)
 */
 
-app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, canViewCompanyCustomers, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
+app.use("/api", createAdminRouter({ authenticate, authorize, db, pool, hasCompanyWideScope, hasCompanyAdminAccess, hasPermission, bcrypt, savePlatformRecord: saveDomainConfiguration }));
 
 /* T10-AUDIT: central audit log (read-only) — see routes/audit.js. */
 app.use(
@@ -1958,12 +1957,12 @@ app.use(
     authenticate,
     authorize,
     db,
-    canViewCompanyCustomers,
+    hasCompanyWideScope,
     canAccessStore,
   })
 );
 
-app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyCustomers, hasPermission }));
+app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, hasCompanyWideScope, hasPermission }));
 
 /*
 |--------------------------------------------------------------------------
@@ -2719,13 +2718,7 @@ async function startServer() {
                 );
               }
             }
-            if (["SHOPIFY_PROVIDER_SYNC", "SHOPIFY_WEBHOOK_EVENT"].includes(job.kind)) {
-              await writeAudit(job.company_id, null, "provider_job_attempt_failed", "platform_action_job", job.id, {
-                kind: job.kind,
-                status: failed?.status || "FAILED",
-                attempts: failed?.attempts || 0,
-              });
-            }
+            
           },
           handler: async (job) => {
             assertTrustedJobKind(job.kind);
@@ -3331,7 +3324,7 @@ async function startServer() {
               return processDashboardSubscriptionDeliveryJob({
                 db,
                 payload: { ...(payload || {}), companyId: job.company_id },
-                canViewCompanyCustomers,
+                hasCompanyWideScope,
                 canAccessStore,
                 hasPermission,
               });
@@ -3587,50 +3580,8 @@ async function startServer() {
               }
             }
             if (job.kind === "APPROVAL_DUE") return processApprovalDueJob({ db, job });
-            if (job.kind === "SHOPIFY_WEBHOOK_EVENT") {
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey: "SHOPIFY_PROCESS_WEBHOOK",
-                req: { method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_WEBHOOK_EVENT", capability: "SHOPIFY_PROCESS_WEBHOOK" },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || "Shopify webhook processing failed"), {
-                  retryable: outcome.retryable === true,
-                });
-              }
-              return outcome;
-            }
-            if (job.kind === "SHOPIFY_PROVIDER_SYNC") {
-              const actionKey = String(payload.type || payload.key || "").toUpperCase();
-              if (!actionKey) throw Object.assign(new Error("Shopify provider job is missing an action key"), { retryable: false });
-              const execution = await executeSystemAction({
-                db,
-                companyId: job.company_id,
-                userId: payload.actorUserId || null,
-                actionKey,
-                req: { method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", user: { companyId: job.company_id, storeId: payload.storeId || null, id: payload.actorUserId || null } },
-                input: { ...payload, _executeFromJob: true },
-                storeId: payload.storeId || null,
-                writeAudit,
-                source: { type: "job", method: "JOB", path: "SHOPIFY_PROVIDER_SYNC", capability: actionKey },
-                extraContext: { pool },
-              });
-              const outcome = execution.result;
-              if (outcome?.success === false) {
-                throw Object.assign(new Error(outcome.message || outcome.code || "Shopify sync failed"), {
-                  retryable: outcome.retryable !== false,
-                });
-              }
-              return outcome;
-            }
+            
+            
             const actionKey = String(payload.type || payload.key || "").toUpperCase();
             if (!actionKey) throw Object.assign(new Error("Platform action job is missing an action key"), { retryable: false });
             const execution = await executeSystemAction({
