@@ -74,20 +74,8 @@ export async function initializePlatformMetadata(pool) {
   // The package catalogue is already synchronized before the HTTP listener is
   // exposed. Do not rewrite the same package_registry rows during metadata
   // bootstrap; overlapping startup instances can otherwise deadlock here.
-  const result = await pool.query(`SELECT id,module_id,version,manifest FROM package_registry WHERE active=true AND COALESCE((manifest->>'bootstrapFoundation')::boolean,false)=true`);
-  const byKey = new Map((result.rows || []).map((entry) => [entry.manifest?.packageKey, entry]));
-  const ordered = [], visiting = new Set(), visited = new Set();
-  const visit = (entry) => {
-    const key = entry?.manifest?.packageKey;
-    if (!key || visited.has(key)) return;
-    if (visiting.has(key)) throw new Error(`Bootstrap foundation dependency cycle at ${key}`);
-    visiting.add(key);
-    for (const dependency of entry.manifest?.dependencies || []) {
-      const dependencyKey = typeof dependency === "string" ? dependency : dependency?.packageKey || dependency?.package_key;
-      if (byKey.has(dependencyKey)) visit(byKey.get(dependencyKey));
-    }
-    visiting.delete(key); visited.add(key); ordered.push(entry);
-  };
-  for (const entry of result.rows || []) visit(entry);
-  for (const entry of ordered) if (entry.id && entry.module_id) await provisionPackageMetadata(pool.query.bind(pool), { packageId: entry.id, moduleId: entry.module_id, companyId: null, manifest: entry.manifest || {}, packageVersion: entry.version || "1.0.0" });
+  // Package manifests contain package identity, dependency and entitlement configuration only.
+  // Business metadata is database-owned and must never be provisioned from package manifests at startup.
+  // This prevents legacy persisted manifest payloads from reintroducing hardcoded objects, fields,
+  // relationships, views, rules, workflows, reports, layouts or other business definitions.
 }
