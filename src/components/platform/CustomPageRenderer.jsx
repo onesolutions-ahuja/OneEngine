@@ -251,6 +251,12 @@ export function TableView({ node, builderMode, onRecordClick, data }) {
 const ADVANCED_RECORD_COMPONENTS = ["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"];
 const REGISTRY_RECORD_COMPONENTS = ["avatar_group", "record_picker", "product_image_card", "searchable_dropdown"];
 const STATIC_DASHBOARD_COMPONENTS = ["folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile", "clock_widget", "calendar_widget", "weather_widget"];
+const GENERIC_PAGE_COMPONENTS = new Set([
+  "card","grid","stack","tabs","accordion","modal","drawer","alert","badge","progress","empty_state","loading_state",
+  "image","video","avatar","icon","qr_code","barcode","search_box","toggle","radio_group","slider","file_upload","pin_input",
+  "pagination","filter_bar","icon_button","back_button","close_button","refresh_button","navigation_button","link","select",
+  "multi_select","time_input","date_picker","menu","breadcrumb","stepper","tooltip","toast","confirmation_dialog","app_icon","dock_item",
+]);
 
 function advancedCollection(node) {
   const config = node.config || {};
@@ -274,7 +280,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   const [kanbanRecords, setKanbanRecords] = useState(records);
   const [kanbanError, setKanbanError] = useState("");
   useEffect(() => setKanbanRecords(records), [records]);
-  const placeholder = state.placeholder || (builderMode && !collection.objectKey);
+  const placeholder = state.placeholder || !collection.objectKey;
   const titleField = config.titleField || config.taskLabelField || config.labelField || "name";
   const clickRecord = (record) => {
     if (!builderMode && node.clickable !== false && node.interaction?.type !== "none") onRecordClick?.({ record, node });
@@ -623,6 +629,61 @@ function AnalyticsNodeView({ node }) {
   return renderDashboardComponent(component,state.result,state.loading?"loading":state.error?"error":"ready");
 }
 
+
+function configText(config, keys, fallback = "") {
+  for (const key of keys) {
+    const value = config?.[key];
+    if (value !== undefined && value !== null && value !== "") return String(value);
+  }
+  return fallback;
+}
+
+function GenericPageComponentView({ node, builderMode, onButtonClick }) {
+  const key = node.componentKey;
+  const config = node.config || {};
+  const title = node.title || config.title || config.label || node.label || key.replace(/_/g, " ");
+  const action = () => { if (!builderMode) onButtonClick?.(node); };
+  const options = Array.isArray(config.options) ? config.options : Array.isArray(config.items) ? config.items : [];
+  const disabled = builderMode || config.disabled === true;
+
+  if (key === "card") return <div className="rounded-xl border bg-white p-4 shadow-sm"><div className="text-sm font-semibold">{title}</div>{config.subtitle ? <div className="mt-1 text-xs text-slate-500">{String(config.subtitle)}</div> : null}</div>;
+  if (key === "grid") return <div className="grid gap-2 rounded-xl border border-dashed p-3" style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(6, Number(config.columns) || 2))}, minmax(0,1fr))` }}>{Array.from({length:Math.max(2,Math.min(6,Number(config.columns)||2))}).map((_,i)=><div key={i} className="h-10 rounded bg-slate-100" />)}</div>;
+  if (key === "stack") return <div className={`flex gap-2 rounded-xl border border-dashed p-3 ${config.direction === "row" ? "flex-row" : "flex-col"}`}><div className="h-8 flex-1 rounded bg-slate-100"/><div className="h-8 flex-1 rounded bg-slate-100"/></div>;
+  if (key === "tabs") return <div><div className="flex gap-1 border-b">{(options.length?options:["Tab 1","Tab 2"]).map((item,i)=><button key={i} type="button" className={`px-3 py-2 text-xs ${i===0?"border-b-2 border-teal-600 font-semibold":""}`} disabled>{typeof item==="object"?(item.label||item.title||`Tab ${i+1}`):String(item)}</button>)}</div><div className="p-3 text-xs text-slate-500">Tab content</div></div>;
+  if (key === "accordion") return <details open={config.defaultOpen !== false} className="rounded-lg border p-3"><summary className="cursor-default text-sm font-semibold">{title}</summary><div className="pt-2 text-xs text-slate-500">{config.message || "Accordion content"}</div></details>;
+  if (["modal","drawer","confirmation_dialog"].includes(key)) return <div className="rounded-xl border bg-white p-4 shadow-lg"><div className="text-sm font-semibold">{title}</div><div className="mt-2 text-xs text-slate-500">{config.message || `${key.replace(/_/g," ")} preview`}</div>{key==="confirmation_dialog"?<div className="mt-3 flex justify-end gap-2"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Cancel</button><button type="button" className="onepos-btn onepos-btn-primary onepos-btn-sm" disabled>Confirm</button></div>:null}</div>;
+  if (["alert","toast"].includes(key)) return <div className="rounded-lg border p-3"><div className="text-sm font-semibold">{title}</div><div className="text-xs text-slate-500">{config.message || "Message"}</div></div>;
+  if (key === "badge") return <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">{configText(config,["valueBinding","value"],"Badge")}</span>;
+  if (key === "progress") { const max=Math.max(1,Number(config.max)||100); const value=Math.max(0,Math.min(max,Number(config.valueBinding)||0)); return <div className="space-y-1"><div className="flex justify-between text-xs"><span>{config.label||"Progress"}</span>{config.showValue!==false?<span>{Math.round(value/max*100)}%</span>:null}</div><div className="h-2 overflow-hidden rounded bg-slate-100"><div className="h-full bg-teal-600" style={{width:`${value/max*100}%`}}/></div></div>; }
+  if (key === "empty_state") return <div className="rounded-xl border border-dashed p-6 text-center"><div className="text-sm font-semibold">{title}</div><div className="mt-1 text-xs text-slate-500">{config.message||"Nothing to show yet."}</div></div>;
+  if (key === "loading_state") return <div className="space-y-2">{Array.from({length:Math.max(1,Math.min(8,Number(config.rows)||3))}).map((_,i)=><div key={i} className="h-3 animate-pulse rounded bg-slate-100"/>)}</div>;
+  if (key === "image") return config.source ? <img src={config.source} alt={config.alt||""} className="max-h-64 w-full rounded-lg object-cover" /> : <div className="cpb-empty">Choose an image source in Properties.</div>;
+  if (key === "video") return config.source ? <video src={config.source} poster={config.poster||undefined} controls={config.controls!==false} className="max-h-72 w-full rounded-lg" /> : <div className="cpb-empty">Choose a video source in Properties.</div>;
+  if (["avatar","app_icon"].includes(key)) { const image=config.image||config.imageBinding; const initials=config.initialsBinding||config.label||title.slice(0,2).toUpperCase(); return <div className="flex items-center gap-2">{image?<img src={image} alt="" className="h-12 w-12 rounded-xl object-cover"/>:<div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-sm font-semibold">{initials}</div>}{config.label?<span className="text-sm">{String(config.label)}</span>:null}</div>; }
+  if (key === "icon") return <div className="flex items-center gap-2 text-sm"><span className="text-xl">{config.icon||"◈"}</span>{config.label||title}</div>;
+  if (key === "qr_code") return <div className="inline-flex flex-col items-center gap-2"><div className="grid h-24 w-24 grid-cols-6 gap-0.5 bg-white p-2 ring-1 ring-slate-200">{Array.from({length:36}).map((_,i)=><span key={i} className={i%3===0||i%7===0?"bg-slate-900":"bg-white"}/>)}</div>{config.label?<span className="text-xs">{String(config.label)}</span>:null}</div>;
+  if (key === "barcode") return <div className="inline-flex flex-col items-center gap-1"><div className="flex h-16 items-stretch gap-px bg-white p-2 ring-1 ring-slate-200">{Array.from({length:28}).map((_,i)=><span key={i} className="bg-slate-900" style={{width:i%4===0?3:1}}/>)}</div>{config.showValue!==false?<span className="text-[10px]">{configText(config,["valueBinding"],"000000000000")}</span>:null}</div>;
+  if (key === "search_box") return <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder={config.placeholder||"Search…"} disabled={disabled}/>;
+  if (key === "toggle") return <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" disabled={disabled}/>{config.label||title}</label>;
+  if (key === "radio_group") return <div className={`flex gap-3 ${config.orientation==="vertical"?"flex-col":""}`}>{(options.length?options:["Option 1","Option 2"]).map((item,i)=><label key={i} className="inline-flex items-center gap-1.5 text-sm"><input type="radio" disabled name={node.id}/>{typeof item==="object"?(item.label||item.value):String(item)}</label>)}</div>;
+  if (key === "slider") return <div><input className="w-full" type="range" min={config.min??0} max={config.max??100} step={config.step??1} disabled={disabled}/></div>;
+  if (key === "file_upload") return <label className="block rounded-lg border border-dashed p-4 text-center text-xs text-slate-500">Choose files<input type="file" className="hidden" multiple={config.multiple===true} disabled={disabled}/></label>;
+  if (key === "pin_input") return <div className="flex gap-1.5">{Array.from({length:Math.max(1,Math.min(12,Number(config.length)||4))}).map((_,i)=><input key={i} className="h-9 w-9 rounded border text-center" disabled={disabled} maxLength={1}/>)}</div>;
+  if (["select","multi_select"].includes(key)) return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><select className="w-full rounded-lg border bg-white px-3 py-2 text-sm" multiple={key==="multi_select"} disabled={disabled}><option>{config.placeholder||"Select…"}</option>{options.map((item,i)=><option key={i}>{typeof item==="object"?(item.label||item.value):String(item)}</option>)}</select></label>;
+  if (key === "time_input") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="time" step={config.step||undefined} disabled={disabled}/></label>;
+  if (key === "date_picker") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="date" min={config.min||undefined} max={config.max||undefined} disabled={disabled}/></label>;
+  if (key === "pagination") return <div className="flex items-center justify-center gap-2 text-xs"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Previous</button><span>1</span><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Next</button></div>;
+  if (key === "filter_bar") return <div className="flex flex-wrap gap-2 rounded-lg border p-2">{(Array.isArray(config.fields)&&config.fields.length?config.fields:["Filter"]).map((field,i)=><span key={i} className="rounded bg-slate-100 px-2 py-1 text-xs">{String(field)}</span>)}</div>;
+  if (["icon_button","back_button","close_button","refresh_button","navigation_button"].includes(key)) return <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled={disabled} onClick={action}><span>{config.icon||({back_button:"←",close_button:"×",refresh_button:"↻"}[key]||"◈")}</span>{config.label||title}</button>;
+  if (key === "link") return <a href={builderMode?"#":(config.href||"#")} target={config.target||"_self"} onClick={builderMode?(e)=>e.preventDefault():undefined} className="text-sm text-teal-700 underline">{config.label||title}</a>;
+  if (key === "menu") return <div className="inline-flex rounded-lg border bg-white p-1">{(options.length?options:["Menu"]).slice(0,5).map((item,i)=><button type="button" disabled key={i} className="px-2 py-1 text-xs">{typeof item==="object"?(item.label||item.title):String(item)}</button>)}</div>;
+  if (key === "breadcrumb") return <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">{(options.length?options:["Home","Page"]).map((item,i)=><span key={i}>{i>0?<span className="mr-1">/</span>:null}{typeof item==="object"?(item.label||item.title):String(item)}</span>)}</div>;
+  if (key === "stepper") return <div className={`flex gap-2 ${config.orientation==="vertical"?"flex-col":""}`}>{(Array.isArray(config.steps)&&config.steps.length?config.steps:["Step 1","Step 2","Step 3"]).map((item,i)=><div key={i} className="flex items-center gap-1.5 text-xs"><span className={`flex h-5 w-5 items-center justify-center rounded-full ${i<=(Number(config.currentStep)||0)?"bg-teal-600 text-white":"bg-slate-100"}`}>{i+1}</span><span>{typeof item==="object"?(item.label||item.title):String(item)}</span></div>)}</div>;
+  if (key === "tooltip") return <span className="inline-flex rounded border border-dashed px-2 py-1 text-xs" title={config.content||"Tooltip"}>{config.trigger||"Hover target"}</span>;
+  if (key === "dock_item") return <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm" disabled={disabled} onClick={action}><span>{config.icon||"◈"}</span><span>{config.label||title}</span>{config.badge?<span className="rounded-full bg-slate-800 px-1.5 text-[10px] text-white">{String(config.badge)}</span>:null}</button>;
+  return <div className="rounded-lg border border-dashed p-3 text-sm text-slate-500">{title}</div>;
+}
+
 function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
@@ -652,6 +713,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (["record_picker", "searchable_dropdown"].includes(key)) {
     const config = node.config || {};
     const state = data?.[node.id] || {};
+    if (!config.objectKey) return <div className="cpb-empty">Select an Object in Properties to preview records.</div>;
     const records = Array.isArray(state.records) ? state.records : [];
     const valueField = config.valueField || "id";
     const labelField = config.labelField || "name";
@@ -666,6 +728,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (key === "product_image_card") {
     const config = node.config || {};
     const state = data?.[node.id] || {};
+    if (!config.objectKey) return <div className="cpb-empty">Select an Object in Properties to preview product records.</div>;
     const records = Array.isArray(state.records) ? state.records : [];
     if (state.loading) return <div className="cpb-empty">Loading records…</div>;
     if (state.error && !records.length) return <div className="cpb-empty">{state.error}</div>;
@@ -677,6 +740,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
+  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={onButtonClick} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
   if (key === "container") {
@@ -766,15 +830,18 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
     enabled: isRecordBound && Boolean(collection.objectKey),
     page,
   });
+  const effectiveLive = isRecordBound && !collection.objectKey
+    ? { records: [], total: 0, fields: collection.fields || [], placeholder: true, loading: false, error: "" }
+    : live;
   useEffect(() => {
     if (!isRecordBound) return;
     setNodeState(node.id, {
-      ...live,
+      ...effectiveLive,
       page,
       onPageChange: (nextPage) => setPage((current) => ({ ...current, [node.id]: Math.max(1, Number(nextPage) || 1) })),
     });
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [isRecordBound, node.id, live.records, live.total, live.loading, live.error, live.placeholder, page]);
+  }, [isRecordBound, node.id, collection.objectKey, effectiveLive.records, effectiveLive.total, effectiveLive.loading, effectiveLive.error, effectiveLive.placeholder, page]);
   return children;
 }
 
