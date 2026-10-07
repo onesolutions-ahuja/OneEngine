@@ -174,7 +174,7 @@ The current navigation chain is:
 
 Internal app catalogue entries in [services/internalAppCatalog.js](../services/internalAppCatalog.js) and package metadata in [services/packageRegistry.js](../services/packageRegistry.js) provide module identity, dependencies, permissions, and entitlements. They do not, by themselves, create a Dock item.
 
-Dynamic Object navigation currently requires a company Platform Page targeting the Object through [services/platformObjectNavigation.js](../services/platformObjectNavigation.js). The runtime can then apply:
+Dynamic Object navigation currently requires a company Platform Page targeting the Object through [services/metadata runtime navigation](../services/metadata runtime navigation). The runtime can then apply:
 
 - licence/module entitlement;
 - company enablement;
