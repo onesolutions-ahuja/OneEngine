@@ -58,7 +58,7 @@ export function packageDefinitions(catalog = packageManifestCatalog) {
         workflows: workflows.map((workflow) => {
           const action = workflow?.action || {};
           const actions = Array.isArray(action.actions) ? action.actions : [];
-          if (!actions.length || String(action.flowType || "").toUpperCase() === "KIOSK_EXPERIENCE") return workflow;
+          if (!actions.length) return workflow;
           const existing = Array.isArray(action.gptBuilderElements) ? action.gptBuilderElements : [];
           const nodes = existing.length === actions.length ? existing : actions.map((step, index) => ({
             id: step.id || `package-step-${index + 1}`,
@@ -807,10 +807,7 @@ export async function provisionPackageMetadata(db, { packageId, moduleId, compan
     if (!safeMetadataKey(rule.triggerKey || rule.trigger_key)) {
       throw new Error(`Package rule "${rule.name}" has an invalid trigger key`);
     }
-    // Package manifests are the authority for whether their managed rules/workflows
-    // are active. Previously only validation rules and KIOSK_EXPERIENCE workflows
-    // could ever become active, which silently disabled communication/appointment
-    // workflows even when a package explicitly declared active: true.
+    // Package manifests are the authority for whether their managed rules/workflows are active.
     const packageRuleActive = rule.active === true;
     const packageRuleLifecycle = packageRuleActive
       ? "ACTIVE"
@@ -1242,61 +1239,6 @@ export async function capturePackageMetadataSnapshot(db, { packageId, companyId 
     packageRequired: row.package_required === true,
     state: row.state || null,
   }));
-}
-
-export async function provisionDefaultCompanyPackages(db, { companyId, installedBy = null, packageKeys = ["staff", "retail_pos", "products", "customers"] }) {
-  for (const packageKey of packageKeys) {
-    const packageResult = await db(
-      `SELECT p.id, p.version, p.module_id, p.manifest
-       FROM package_registry p
-       WHERE p.package_key=$1 AND p.active=true`,
-      [packageKey]
-    );
-    if (!packageResult.rows.length) continue;
-    const pkg = packageResult.rows[0];
-    if (packageKey === "products") {
-      await provisionPackageMetadata(db, {
-        packageId: pkg.id,
-        moduleId: pkg.module_id,
-        companyId,
-        manifest: pkg.manifest || {},
-        packageVersion: pkg.version,
-      });
-    }
-    await db(
-      `INSERT INTO company_package_installations
-       (company_id,package_id,version,status,installed_by,installation_type)
-       VALUES ($1,$2,$3,'active',$4,'PLATFORM_DEFAULT')
-       ON CONFLICT (company_id,package_id) DO NOTHING`,
-      [companyId, pkg.id, pkg.version, installedBy]
-    );
-    await db(
-      `INSERT INTO company_package_entitlement_sources
-       (company_id,package_id,source_type,source_key,active,metadata)
-       VALUES ($1,$2,'PLATFORM_DEFAULT',$3,true,$4::jsonb)
-       ON CONFLICT(company_id,package_id,source_type,source_key)
-       DO UPDATE SET active=true,metadata=EXCLUDED.metadata`,
-      [companyId, pkg.id, `platform-default:${pkg.id}`, JSON.stringify({ installationType: "PLATFORM_DEFAULT" })]
-    );
-    if (packageKey === "staff" || packageKey === "products") {
-      await provisionPackageMetadata(db, {
-        packageId: pkg.id,
-        moduleId: pkg.module_id,
-        companyId,
-        manifest: pkg.manifest || {},
-        packageVersion: pkg.version,
-      });
-    }
-    if (pkg.module_id) {
-      await db(
-        `INSERT INTO platform_module_access (module_id,company_id,store_id,enabled)
-         VALUES ($1,$2,NULL,true)
-         ON CONFLICT (module_id,company_id,COALESCE(store_id,'00000000-0000-0000-0000-000000000000'::uuid))
-         DO UPDATE SET enabled=true,updated_at=NOW()`,
-        [pkg.module_id, companyId]
-      );
-    }
-  }
 }
 
 export async function removePackageMetadata(db, { companyId, packageId }) {
