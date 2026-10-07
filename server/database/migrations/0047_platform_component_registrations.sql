@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS platform_component_registrations (
   component_path VARCHAR(300) NOT NULL,
   css_path VARCHAR(300),
   configurable JSONB NOT NULL DEFAULT '[]'::jsonb,
+  bindable BOOLEAN NOT NULL DEFAULT false,
+  binding_mode VARCHAR(40) NOT NULL DEFAULT 'none',
   supported_builders JSONB NOT NULL DEFAULT '["PAGE"]'::jsonb,
   supported_contexts JSONB NOT NULL DEFAULT '["page"]'::jsonb,
   active BOOLEAN NOT NULL DEFAULT true,
