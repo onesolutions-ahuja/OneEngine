@@ -7,8 +7,27 @@ import path from 'node:path'
 // existing 404 fallback.
 const source = await fs.readFile('src/navigation/routes.js', 'utf8')
 const appSource = await fs.readFile('src/App.jsx', 'utf8')
+const packageCatalogSource = await fs.readFile('server/packages/packageManifestCatalog.js', 'utf8')
 const html = await fs.readFile('dist/index.html', 'utf8')
 const routes = new Set([...source.matchAll(/parts\[0\] === '([a-z-]+)'/g)].map(match => match[1]))
+
+// Publish every concrete shell route the current runtime can mount. This keeps
+// GitHub Pages document requests on HTTP 200 without maintaining a second,
+ // business-specific route list in the deployment script.
+for (const match of appSource.matchAll(/activeApp\s*===\s*'([a-z0-9-]+)'/g)) {
+  const key = match[1]
+  if (key && !['home'].includes(key)) routes.add(key)
+}
+
+// Installed apps are metadata-owned. Generate package-key aliases directly
+// from the declarative package catalogue and include a URL-friendly hyphenated
+// form for keys that use underscores.
+for (const match of packageCatalogSource.matchAll(/^\s*(?:key|packageKey):\s*["']([a-z0-9_-]+)["']/gm)) {
+  const key = match[1]
+  if (!key) continue
+  routes.add(key)
+  routes.add(key.replaceAll('_', '-'))
+}
 const developerKeys = source.match(/DEVELOPER_SETTINGS_KEYS = new Set\(\[([\s\S]*?)\]\)/)?.[1]
 const settingsVisuals = appSource.match(/const SETTINGS_VISUALS = \{([\s\S]*?)\n\}/)?.[1]
 if (!routes.has('dashboard') || !developerKeys || !settingsVisuals) throw new Error('Unable to read fixed application routes')
