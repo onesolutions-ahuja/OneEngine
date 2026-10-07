@@ -19,8 +19,6 @@ const declarativeMetadataFiles = new Set([
   "server/packages/oneAssistantManifest.js",
   "server/packages/runtimeFlowManifests.js",
 ]);
-const retired = new Set(["server/routes/dashboard.js","server/services/reportSalesDefinition.js"]);
-const legacyBusinessRuntime = new Set([]);
 const businessTables=[
   "sales","sale_ledger","sale_items","customers","payments","products","suppliers",
   "purchases","purchase_ledger","purchase_items","purchase_receipts","refunds",
@@ -61,14 +59,14 @@ const forbiddenGenericConnectorProviderTokens=[
 ];
 const findings=[];
 
-if (legacyBusinessRuntime.size) {
-  findings.push({rule:"RUNTIME_ARCHITECTURE_EXEMPTION_PRESENT",file:"scripts/audit-metadata-architecture.mjs",count:legacyBusinessRuntime.size});
-}
-
 const retiredMetadataRuntime = "server/services/platformMetadata.js";
 const retiredProviderActionRuntime = "server/services/platformActions.js";
 const retiredProviderSpecificRoutes = [
   "server/routes/smsGateWebhooks.js",
+];
+const retiredBusinessRuntimeFiles = [
+  "server/routes/dashboard.js",
+  "server/services/reportSalesDefinition.js",
 ];
 const retiredInvoiceReceiptArtifacts = [
   "server/services/invoiceDelivery.js",
@@ -87,6 +85,11 @@ if (fs.existsSync(path.join(ROOT, retiredProviderActionRuntime))) {
 for (const artifact of retiredProviderSpecificRoutes) {
   if (fs.existsSync(path.join(ROOT, artifact))) {
     findings.push({rule:"RETIRED_PROVIDER_SPECIFIC_ROUTE_PRESENT",file:artifact});
+  }
+}
+for (const artifact of retiredBusinessRuntimeFiles) {
+  if (fs.existsSync(path.join(ROOT, artifact))) {
+    findings.push({rule:"RETIRED_BUSINESS_RUNTIME_FILE_PRESENT",file:artifact});
   }
 }
 for (const artifact of retiredInvoiceReceiptArtifacts) {
@@ -177,14 +180,8 @@ for (const artifact of retiredFrontendBusinessFiles) {
 for(const file of roots.flatMap(walk)){
   const name=rel(file);
   const text=fs.readFileSync(file,"utf8");
-  if(retired.has(name)){
-    if(name==="server/routes/dashboard.js" && /FROM\s+sales|FROM\s+products/i.test(text)) findings.push({rule:"RETIRED_BUSINESS_RUNTIME_STILL_IMPLEMENTED",file:name});
-    if(name==="server/services/reportSalesDefinition.js" && /dataSource\s*:\s*["']sales["']|FROM\s+sales/i.test(text)) findings.push({rule:"RETIRED_SALES_REPORT_ENGINE_STILL_IMPLEMENTED",file:name});
-    continue;
-  }
   const isHistoricalMigration = historicalMigrationFiles.has(name);
   const isDeclarativeMetadata = declarativeMetadataFiles.has(name);
-  if(legacyBusinessRuntime.has(name)) continue;
   if (!isHistoricalMigration && !isDeclarativeMetadata) {
     for(const table of businessTables){
       const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
@@ -263,7 +260,7 @@ for(const file of roots.flatMap(walk)){
   }
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
-const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
+const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,runtimeExemptions:0,findings:unique};
 fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
 fs.writeFileSync(path.join(ROOT,"artifacts","metadata-architecture-audit.json"),JSON.stringify(report,null,2)+"\n");
 if(unique.length){
