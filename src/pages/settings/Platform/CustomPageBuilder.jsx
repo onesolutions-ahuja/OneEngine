@@ -250,6 +250,9 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
   const [selectedSectionId, setSelectedSectionId] = useState(null);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [preview, setPreview] = useState(false);
+  const [testMode, setTestMode] = useState(false);
+  const [testTrace, setTestTrace] = useState([]);
+  const [testBusy, setTestBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [versions, setVersions] = useState([]);
@@ -634,6 +637,12 @@ const updateNode = (nodeId, changes) => {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end, { once: true });
     window.addEventListener("pointercancel", end, { once: true });
+  };
+
+  const testNodeInteraction = async ({ node, record = null }) => {
+    const interaction=node?.interaction||{};
+    if(!["workflow","screen_flow"].includes(interaction.type)){setTestTrace([{kind:"page_event",status:"skipped",detail:{message:"Select a component with a Flow-backed event to run rollback Test."}}]);return;}
+    try{setTestBusy(true);const response=await apiRequest("/api/platform/runtime/page-interactions/test",{method:"POST",body:JSON.stringify({nodeId:node?.id||null,event:"click",interaction,recordId:record?.id||record?.record_id||null,pageContext:{params:{},variables:Object.fromEntries((draft.resources?.variables||[]).map(v=>[v.key,v.defaultValue??null])),components:{},flows:{}}})});setTestTrace(response?.data?.trace||[]);if(!response?.success)throw new Error(response?.message||"Page Test failed");onMessage?.("Test completed. Database changes rolled back.");}catch(error){onError?.(error.message);setTestTrace((current)=>current.length?current:[{kind:"error",status:"failed",detail:{message:error.message}}]);}finally{setTestBusy(false);}
   };
 
   /* ------------------------------- save ---------------------------------- */
@@ -1228,6 +1237,9 @@ const updateNode = (nodeId, changes) => {
           <button type="button" className={`cpb-device-btn ${preview ? "active" : ""}`} onClick={() => setPreview((value) => !value)} aria-pressed={preview}>
             <Eye size={13} /> {preview ? "Exit Preview" : "Preview"}
           </button>
+          <button type="button" className={`cpb-device-btn ${testMode ? "active" : ""}`} onClick={() => { setTestMode((value)=>!value); setPreview(true); setTestTrace([]); }} aria-pressed={testMode} disabled={testBusy}>
+            {testBusy ? "Testing…" : testMode ? "Exit Test" : "Test · Rollback ON"}
+          </button>
           <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setShowVersions((value) => !value)} disabled={!pageId || lifecycleBusy}>Versions</button>
           {page?.active ? (
             <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={deactivatePage} disabled={lifecycleBusy}>Deactivate</button>
@@ -1254,8 +1266,9 @@ const updateNode = (nodeId, changes) => {
         /* PREVIEW MODE — the unsaved tree rendered exactly like runtime. */
         <div className="cpb-canvas">
           <div className={`cpb-device-frame is-${draft.device}`}>
-            <CustomPageRenderer definition={definitionForSave()} builderMode={false} device={draft.device} />
+            <CustomPageRenderer definition={definitionForSave()} builderMode={false} device={draft.device} onRecordClick={testMode ? ({record,node})=>testNodeInteraction({record,node}) : undefined} onButtonClick={testMode ? (node)=>testNodeInteraction({node}) : undefined} />
           </div>
+          {testMode ? <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs"><div className="mb-2 flex items-center justify-between"><strong>Test Trace</strong><span className="text-emerald-700">Rollback ON</span></div>{testTrace.length ? <div className="max-h-48 space-y-1 overflow-auto">{testTrace.map((entry,index)=><div key={index} className="rounded bg-slate-50 px-2 py-1"><strong>{entry.kind}</strong> · {entry.status}{entry.detail?.message?` · ${entry.detail.message}`:""}</div>)}</div> : <span className="text-slate-500">Click a Flow-backed component to test the Page → Flow chain.</span>}</div> : null}
         </div>
       ) : (
         <div className={`cpb-shell ${paletteOpen ? "" : "is-palette-collapsed"} ${propertiesOpen ? "" : "is-properties-collapsed"}`}>
