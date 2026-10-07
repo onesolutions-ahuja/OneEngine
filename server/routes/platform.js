@@ -984,7 +984,7 @@ function validAssignmentDates(body) {
     && (!fromDate || !untilDate || untilDate > fromDate);
 }
 
-export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyCustomers = async () => false, hasPermission = null }) {
+export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyScope = async () => false, hasPermission = null }) {
   const router = express.Router();
 
   // Express 4 does not forward rejected async route promises to error
@@ -1052,14 +1052,14 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
   const workflowExecute = [authenticate, authorizeWorkflowExecute];
   // Record CRUD is governed by Object permissions/RBAC, not by identity,
   // role names, or the Settings administration permission.
-  const recordAccess = [authenticate, resolveActingCompany, resolvePlatformCompanyCustomerScope];
+  const recordAccess = [authenticate, resolveActingCompany, resolvePlatformCompanyScope];
 
   // Keep generic platform metadata reads lightweight. Company-wide customer
   // visibility is record-data scope and must not be resolved for every
   // /platform metadata request (objects, fields, relationships, etc.).
-  async function resolvePlatformCompanyCustomerScope(req, res, next) {
+  async function resolvePlatformCompanyScope(req, res, next) {
     try {
-      req.platformCompanyCustomers = await canViewCompanyCustomers(req.user, req);
+      req.platformCompanyScope = await canViewCompanyScope(req.user, req);
       next();
     } catch (error) {
       next(error);
