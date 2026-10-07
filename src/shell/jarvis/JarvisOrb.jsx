@@ -1,5 +1,5 @@
 /*
- * JARVES Orb - the assistant's presence in the till UI.
+ * JARVES Orb - the assistant's shell presence.
  *
  * Deliberately NOT a microphone button: it is a living MULTI-COLOUR "energy
  * core" - teal, cyan, emerald, violet and pink plasma layers orbit, drift and
