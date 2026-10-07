@@ -52,6 +52,7 @@ export default function CustomPageRuntimePage({ pageKey }) {
   const [formAction,setFormAction]=useState(null);
   const [screenFlowAction,setScreenFlowAction]=useState(null);
   const [navigationContext,setNavigationContext]=useState(null);
+  const [runtimeState,setRuntimeState]=useState({components:{},flows:{}});
   useEffect(()=>{
     let live=true;setError("");
     Promise.all([apiRequest(`/api/platform/runtime/pages/${encodeURIComponent(pageKey||"")}`),loadSessionPermissions().catch(()=>null),apiRequest("/api/platform/runtime/navigation-targets").catch(()=>null)])
@@ -77,7 +78,7 @@ export default function CustomPageRuntimePage({ pageKey }) {
     try{
       setBusy(true);setError("");
       const objectKey=node?.collection?.objectKey||null;
-      const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null,eventName,eventValue:value,pageContext:{params:Object.fromEntries(new URLSearchParams(window.location.search).entries()),variables:Object.fromEntries((normalizeCustomPageTree(page?.definition||{}).resources?.variables||[]).map((variable)=>[variable.key,variable.defaultValue??null])),components:{[node?.id]:{value,selectedRecord:record||null}},flows:{}}})});
+      const response=await apiRequest("/api/platform/runtime/page-interactions/execute",{method:"POST",body:JSON.stringify({...interaction,objectKey,recordId:record?.id||null,eventName,eventValue:value,pageContext:{params:Object.fromEntries(new URLSearchParams(window.location.search).entries()),variables:Object.fromEntries((normalizeCustomPageTree(page?.definition||{}).resources?.variables||[]).map((variable)=>[variable.key,variable.defaultValue??null])),components:{...(runtimeState.components||{}),[node?.id]:{...(runtimeState.components?.[node?.id]||{}),value,selectedRecord:record||runtimeState.components?.[node?.id]?.selectedRecord||null}},flows:runtimeState.flows||{}}})});
       if(!response?.success)throw new Error(response?.message||"Unable to execute page action");
       const result=response?.data||{};
       const output=result?.result??result?.results??result;
@@ -92,14 +93,14 @@ export default function CustomPageRuntimePage({ pageKey }) {
   const pageContext={
     params:Object.fromEntries(new URLSearchParams(window.location.search).entries()),
     variables:Object.fromEntries((definition.resources?.variables||[]).map((variable)=>[variable.key,variable.defaultValue??null])),
-    components:{},
-    flows:{},
+    components:runtimeState.components||{},
+    flows:runtimeState.flows||{},
   };
   return <section className="onepos-page space-y-4">
     <div className="onepos-page-header"><div><h1 className="onepos-page-title">{page.label||page.page_key}</h1>{page.description?<p className="onepos-page-subtitle">{page.description}</p>:null}</div></div>
     {error?<div className="onepos-alert onepos-alert-error">{error}</div>:null}
     {busy?<div className="text-xs opacity-70">Running action…</div>:null}
-    <CustomPageRenderer definition={definition} device="desktop" pageContext={pageContext} onRecordClick={({record,node})=>execute({record,node,eventName:"row_click"})} onButtonClick={(node)=>execute({node,eventName:"click"})} onEvent={({eventName,node,value,record})=>execute({node,record,eventName,value})}/>
+    <CustomPageRenderer definition={definition} device="desktop" pageContext={pageContext} onPageStateChange={setRuntimeState} onRecordClick={({record,node})=>execute({record,node,eventName:"row_click"})} onButtonClick={(node)=>execute({node,eventName:"click"})} onEvent={({eventName,node,value,record})=>execute({node,record,eventName,value})}/>
     {formAction?<FormLayoutModal action={formAction} onClose={()=>setFormAction(null)} onSaved={()=>{}}/>:null}
     {screenFlowAction?<ScreenFlowModal action={screenFlowAction} onClose={()=>setScreenFlowAction(null)} onComplete={(result)=>window.dispatchEvent(new CustomEvent("oneengine:page-interaction-complete",{detail:{nodeId:screenFlowAction.nodeId,interactionType:"screen_flow",runId:result?.runId||null,status:result?.status||"COMPLETED",output:result?.variables||result}}))}/>:null}
   </section>;
