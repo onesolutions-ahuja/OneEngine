@@ -1964,25 +1964,29 @@ function SortEditor({ collection, fields, onChange }) {
 /** INTERACTION group — delegates to the generic picker. */
 function InteractionProperties({ node, onChange, targetComponents = [] }) {
   const eventName = node.eventName || "click";
+  const interactions = node.interactions || {};
+  const selectedInteraction = interactions[eventName] || (eventName === "click" ? node.interaction : null) || { type: "none" };
   return (
     <div className="space-y-2">
       <div className="space-y-1">
         <label className={labelClass}>Event</label>
         <select className={inputClass} value={eventName} onChange={(event) => onChange({ eventName: event.target.value })}>
-          <option value="click">On Click / Select</option>
+          <option value="click">On Click</option>
           <option value="change">On Change</option>
+          <option value="select">On Select</option>
           <option value="submit">On Submit</option>
           <option value="load">On Load</option>
+          <option value="row_click">On Row Click</option>
+          <option value="scan">On Scan</option>
           <option value="success">On Success</option>
           <option value="error">On Error</option>
         </select>
-        {eventName !== "click" ? <p className="text-[11px] text-amber-600">This event is saved as metadata. Runtime execution is enabled when the component emits this generic event.</p> : null}
       </div>
       <ActionWorkflowPicker
-        interaction={node.interaction || { type: "none" }}
+        interaction={selectedInteraction}
         objectKey={node.collection?.objectKey || node.config?.objectKey || ""}
         targetComponents={targetComponents}
-        onChange={(interaction) => onChange({ interaction })}
+        onChange={(interaction) => onChange({ interactions: { ...interactions, [eventName]: interaction }, ...(eventName === "click" ? { interaction } : {}) })}
       />
     </div>
   );
