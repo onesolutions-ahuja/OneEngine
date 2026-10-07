@@ -719,12 +719,13 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
     const state = data?.[node.id] || {};
     if (!config.objectKey) return <div className="cpb-empty">Select an Object in Properties to preview records.</div>;
     const records = Array.isArray(state.records) ? state.records : [];
+    if (state.error && !records.length) return <div className="cpb-empty" role="alert">{state.error}</div>;
     const valueField = config.valueField || "id";
     const labelField = config.labelField || "name";
     const secondaryField = config.secondaryField || "";
     return (
       <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" disabled={builderMode || state.loading}>
-        <option value="">{state.loading ? "Loading…" : (config.placeholder || "Select record…")}</option>
+        <option value="">{state.loading ? "Loading…" : !records.length ? "No matching records" : (config.placeholder || "Select record…")}</option>
         {records.map((record, index) => <option key={record[valueField] || record.id || index} value={record[valueField] || record.id || ""}>{String(record[labelField] || record.name || record.id || "Record")}{secondaryField && record[secondaryField] ? ` · ${record[secondaryField]}` : ""}</option>)}
       </select>
     );
