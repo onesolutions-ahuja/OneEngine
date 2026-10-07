@@ -99,6 +99,21 @@ for(const [route,app,section=""] of ROUTES){
   });
 }
 
+
+test("metadata object app slugs select their declared object",async({page,baseURL})=>{
+  expect(await loginIfConfigured(page),"authenticated login must run").toBe(true);
+  const objects=await authFetch(page,"/api/platform/objects");
+  expect(objects.ok,"object catalogue HTTP "+objects.status).toBe(true);
+  const rows=Array.isArray(objects.body?.data?.objects)?objects.body.data.objects:Array.isArray(objects.body?.data)?objects.body.data:[];
+  for(const object of rows.filter(row=>row?.active!==false&&row?.source_table)){
+    const key=String(object.object_key||object.api_name||object.key||"");
+    const plural=String(object.plural_label||object.pluralLabel||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-");
+    if(!key||!plural)continue;
+    await page.goto(new URL(plural,baseURL).href,{waitUntil:"domcontentloaded",timeout:30000});
+    await expect(page.locator('[data-oneengine-object="'+key+'"]').first(),plural+" metadata object").toBeVisible({timeout:10000});
+  }
+});
+
 test("settings catalogue and every visible settings section load",async({page,baseURL})=>{
   test.setTimeout(120000);
   const failures=watchRuntimeFailures(page);
