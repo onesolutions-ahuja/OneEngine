@@ -37,12 +37,15 @@ test("Phase 3B certifies all fifteen business scenarios through the same generic
 
 test("advanced page components do not bypass metadata events with direct record mutation", async () => {
   const renderer = await read("src/components/platform/CustomPageRenderer.jsx");
-  assert.equal(/apiRequest\([^\n]*\/api\/platform\/objects\/[^\n]*method:\s*["']PUT["']/.test(renderer), false);
+  assert.equal(renderer.includes('method: "PUT"'), false, "Page renderer must not mutate records directly");
   for (const assumption of [
     'config.groupField || "status"',
     'config.startField || "start_date"',
     'config.resourceField || "assignee_id"',
-    'config.titleField || config.taskLabelField || config.labelField || "name"'
+    'config.titleField || config.taskLabelField || config.labelField || "name"',
+    'config.parentField || "parent_id"',
+    'config.labelField || "name"',
+    'config.fieldKey || "signature"'
   ]) assert.equal(renderer.includes(assumption), false, assumption);
   assert.match(renderer, /eventName:\s*"change"/);
   assert.match(renderer, /changes:\s*\{\s*\[groupField\]/);
