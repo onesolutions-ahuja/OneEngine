@@ -25,7 +25,7 @@ export function buildCsv(headers, rows) {
 /**
  * Generate a CSV from headers + rows and trigger a browser download.
  * Filename defaults to `onePOS-export-<date>.csv` unless `name` is given
- * (e.g. "sales" -> `onePOS-sales.csv`).
+ * (e.g. "records" -> `onePOS-records.csv`).
  */
 export function exportCsv(headers, rows, name) {
   const csv = buildCsv(headers, rows);
