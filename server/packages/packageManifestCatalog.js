@@ -272,6 +272,7 @@ const PACKAGE_CATALOG = [
   },
   {
     key: "payment_reference",
+    runtimeDriver: { module: "./referencePaymentConnector.js", factory: "createReferencePaymentDriver" },
     packageKey: "payment_reference",
     name: "Reference Payment Connector (TEST)",
     description: "A payment simulator for connector setup and POS workflow testing. TEST ONLY; not a certified or production payment provider.",
@@ -632,6 +633,7 @@ const PACKAGE_CATALOG = [
   },
   {
     key: "brevo_connector",
+    runtimeDriver: { module: "./emailProviderConnectors.js", factory: "createBrevoDriver" },
     packageKey: "brevo_connector",
     name: "Brevo Connect",
     description: "Brevo transactional email connector for onePOS Communication Core.",
@@ -693,6 +695,7 @@ const PACKAGE_CATALOG = [
   },
   {
     key: "mailjet_connector",
+    runtimeDriver: { module: "./emailProviderConnectors.js", factory: "createMailjetDriver" },
     packageKey: "mailjet_connector",
     name: "Mailjet Connect",
     description: "Mailjet transactional email connector for onePOS Communication Core.",
@@ -789,6 +792,7 @@ const PACKAGE_CATALOG = [
   },
   {
     key: "smsgate_connector",
+    runtimeDriver: { module: "./smsGateConnector.js", factory: "createSmsGateDriver" },
     packageKey: "smsgate_connector",
     name: "SMSGate",
     description: "SMSGate Android SMS provider for onePOS Communication Core using username/password or API token authentication.",
