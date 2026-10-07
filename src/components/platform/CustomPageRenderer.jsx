@@ -366,8 +366,8 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
           </div>
         </div>
         {calendarView === "month" ? (
-          <div className="overflow-x-auto">
-            <div className="min-w-[560px]" style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 4 }}>
+          <div className="min-w-0 w-full overflow-hidden">
+            <div className="w-full min-w-0" style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 4 }}>
               {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <div key={day} className="py-1 text-center text-[11px] font-semibold" style={{ color: "var(--text-secondary, #64748b)" }}>{day}</div>)}
               {days.map((day) => {
                 const key = dayKey(day);
@@ -375,7 +375,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
                 const isSelected = selectedKey === key;
                 const isToday = dayKey(day) === dayKey(new Date());
                 return (
-                  <button type="button" key={key} onClick={() => setSelectedDay(new Date(day))} className="min-h-24 min-w-0 rounded-lg border p-1.5 text-left transition-shadow hover:shadow-sm" style={{ borderColor: isSelected ? "var(--accent-color, #2563eb)" : "var(--border-color, #e5e7eb)", background: isSelected ? "var(--muted-background, #f8fafc)" : "var(--card-background, #fff)", opacity: day.getMonth() === calendarDate.getMonth() ? 1 : 0.42 }}>
+                  <button type="button" key={key} onClick={() => setSelectedDay(new Date(day))} className="min-h-0 min-w-0 overflow-hidden rounded-lg border p-1.5 text-left transition-shadow hover:shadow-sm" style={{ minHeight: "clamp(52px, 9cqw, 96px)", borderColor: isSelected ? "var(--accent-color, #2563eb)" : "var(--border-color, #e5e7eb)", background: isSelected ? "var(--muted-background, #f8fafc)" : "var(--card-background, #fff)", opacity: day.getMonth() === calendarDate.getMonth() ? 1 : 0.42 }} data-calendar-day="true">
                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold" style={isToday ? { background: "var(--accent-color, #2563eb)", color: "#fff" } : undefined}>{day.getDate()}</span>
                     <div className="mt-1 space-y-1">
                       {dayEvents.slice(0, 3).map((record, index) => <span key={record.id || index} className="flex min-w-0 items-center gap-1 text-[10px]"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor(record) }} /><span className="truncate">{timeText(record[startField])} {record[titleField] || "Event"}</span></span>)}
