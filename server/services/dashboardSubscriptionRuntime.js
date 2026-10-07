@@ -64,7 +64,7 @@ function dashboardEmailBody(dashboard, run) {
 export async function processDashboardSubscriptionDeliveryJob({
   db,
   payload = {},
-  canViewCompanyCustomers,
+  hasCompanyWideScope,
   canAccessStore,
   hasPermission,
 } = {}) {
@@ -103,7 +103,7 @@ export async function processDashboardSubscriptionDeliveryJob({
     run_as_mode:"FIXED_USER",run_as_user_id:dashboard.run_as_user_id,access:dashboard.access,
     default_assignments:dashboard.default_assignments,
   });
-  const executor=createDashboardExecution({db,canViewCompanyCustomers,canAccessStore,hasPermission});
+  const executor=createDashboardExecution({db,hasCompanyWideScope,canAccessStore,hasPermission});
   const run=await executor.runDashboardDefinition(executionReq,definition,{ignoreGlobalFilters:true});
 
   let recipients=await resolveReportSubscriptionRecipients(db,{
