@@ -71,7 +71,7 @@ const RAW_PLATFORM_COMPONENTS = Object.freeze([
   // grouping, date range). None of them is Sales- or Product-specific, and all
   // of them are driven entirely by saved dashboard metadata.
   { key: "clock_widget", label: "Clock / Watch", category: "content", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "clock_widget", configurable: ["timeZone", "hour12", "showSeconds", "showDate"] },
-  { key: "calendar_widget", label: "Calendar", category: "content", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "calendar_widget", configurable: ["timeZone", "showWeekday", "showMonth"] },
+  { key: "calendar_widget", label: "Date Display", category: "content", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["DASHBOARD"], supportedContexts: ["dashboard"], supportsDashboardContext: true, supportsPageContext: false, rendererKey: "calendar_widget", configurable: ["timeZone", "showWeekday", "showMonth"] },
   { key: "weather_widget", label: "Weather", category: "content", kind: "content", bindable: false, dashboard: true, supportedBuilders: ["PAGE", "DASHBOARD"], supportedContexts: ["page", "dashboard"], supportsDashboardContext: true, supportsPageContext: true, rendererKey: "weather_widget", configurable: ["location", "unit", "temperature", "condition"] },
   {
     key: "kpi", label: "Metric / KPI", category: "dashboard", kind: "metric", bindable: false, dashboard: true,
