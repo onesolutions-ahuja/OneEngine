@@ -2,16 +2,7 @@ import { readFile } from "node:fs/promises";
 import { packageDefinitions } from "../server/services/packageRegistry.js";
 import { systemWorkflowDefinitions } from "../server/services/systemWorkflowCatalog.js";
 
-const atomicAllowlist = new Set([
-  "Open Drawer",
-  "OneTill - Validate Stock",
-  "OneTill - Age Verification",
-  "Staff - Set Active Status",
-  "OneTill - Open Drawer",
-  "OneTill - Receipt QR",
-  "OneTill - Receipt QR Policy",
-  "OneTill - Revoke Receipt QR",
-]);
+const atomicAllowlist = new Set();
 
 const rows = [];
 const add = ({ source, packageKey = null, name, apiName = null, action = {}, runtime = true }) => {
@@ -41,7 +32,7 @@ for (const pkg of packageDefinitions()) {
       name: workflow?.name || workflow?.label || workflow?.key,
       apiName: workflow?.apiName || action?.apiName || null,
       action,
-      runtime: String(action?.flowType || "").toUpperCase() !== "KIOSK_EXPERIENCE",
+      runtime: true,
     });
   }
 }
@@ -140,16 +131,13 @@ function countTopLevelActions(objectSource) {
 
 const platformSource = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
 for (const [marker, sourceName] of [
-  ["const lifecycleFlows = [", "platform-onestore"],
-  ["const tillWorkflowDefinitions = [", "platform-onetill"],
+  ["const lifecycleFlows = [", "platform-metadata"],
 ]) {
   for (const objectSource of extractArrayObjects(platformSource, marker)) {
     const name = objectSource.match(/\bname:\s*"([^"]+)"/)?.[1] || "(unnamed)";
     const apiName = objectSource.match(/\bapiName:\s*"([^"]+)"/)?.[1] || null;
     const steps = countTopLevelActions(objectSource);
-    const builderPersisted = sourceName === "platform-onestore"
-      ? platformSource.includes("gptBuilderElements: flow.actions.map")
-      : platformSource.includes("gptBuilderElements: (flow.actions || []).map");
+    const builderPersisted = platformSource.includes("gptBuilderElements: flow.actions.map");
     rows.push({
       source: sourceName,
       packageKey: null,
