@@ -3634,6 +3634,20 @@
   max-height: calc(100dvh - 98px);
 }
 
+/* Restore the larger dock clearance at responsive breakpoints. The desktop
+   OneDeveloper 70px override must not win over compact/mobile dock spacing. */
+@media (max-width: 900px) and (min-width: 621px) {
+  .onedeveloper-page .settings-content-body {
+    padding-bottom: calc(106px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .onedeveloper-page .settings-content-body {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
 /* Workflow list toolbar/search stays available while only the records scroll. */
 .onebuilder-list-view {
   min-height: 0;
