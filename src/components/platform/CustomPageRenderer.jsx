@@ -249,6 +249,8 @@ export function TableView({ node, builderMode, onRecordClick, data }) {
 }
 
 const ADVANCED_RECORD_COMPONENTS = ["timeline", "kanban", "calendar", "scheduler", "gantt", "map", "hierarchy_viewer", "file_viewer", "signature"];
+const REGISTRY_RECORD_COMPONENTS = ["avatar_group"];
+const STATIC_DASHBOARD_COMPONENTS = ["folder_card", "avatar_group", "modern_app_card", "modern_kpi_card", "modern_section_header", "modern_data_card", "icon_action_tile", "clock_widget", "calendar_widget", "weather_widget"];
 
 function advancedCollection(node) {
   const config = node.config || {};
@@ -624,6 +626,29 @@ function AnalyticsNodeView({ node }) {
 function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, data, runtimeOverrides = {} }) {
   const key = node.componentKey;
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
+  if (STATIC_DASHBOARD_COMPONENTS.includes(key)) {
+    const config = { ...(node.config || {}) };
+    if (key === "avatar_group") {
+      const records = Array.isArray(data?.[node.id]?.records) ? data[node.id].records : [];
+      if (records.length) {
+        const imageField = config.imageField || "";
+        const initialsField = config.initialsField || "name";
+        config.avatars = records.slice(0, Number(config.maxVisible) || 5).map((record) => ({
+          label: record[initialsField] || record.name || record.title || "",
+          initials: String(record[initialsField] || record.name || record.title || "?").trim().slice(0, 2).toUpperCase(),
+          image: imageField ? record[imageField] : "",
+        }));
+      }
+    }
+    return renderDashboardComponent({
+      id: node.id,
+      registryKey: key,
+      type: node.rendererKey || key,
+      title: node.title || node.label || "",
+      config,
+      layout: node.layout || {},
+    }, null, "ready");
+  }
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={onRecordClick} builderMode={builderMode} />;
   if (key === "container") {
@@ -677,7 +702,18 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
  * stay in perfect sync without extra wiring.
  */
 function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeState, setPage, runtimeOverride, children }) {
-  const baseCollection = ADVANCED_RECORD_COMPONENTS.includes(node.componentKey) ? advancedCollection(node) : (node.collection || {});
+  const baseCollection = ADVANCED_RECORD_COMPONENTS.includes(node.componentKey)
+    ? advancedCollection(node)
+    : node.componentKey === "avatar_group"
+      ? {
+          objectKey: node.config?.objectKey || "",
+          conditions: [],
+          conditionMatch: "all",
+          sort: [],
+          maxRecords: Math.max(1, Number(node.config?.maxVisible) || 5),
+          fields: [node.config?.imageField, node.config?.initialsField].filter(Boolean),
+        }
+      : (node.collection || {});
   const dynamicFilter = runtimeOverride?.filter?.field
     ? [{ field: runtimeOverride.filter.field, operator: "equals", value: runtimeOverride.filter.value }]
     : [];
@@ -686,7 +722,7 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
     conditions: [...(baseCollection.conditions || []), ...dynamicFilter],
     __refreshNonce: runtimeOverride?.refreshNonce || 0,
   };
-  const isRecordBound = ["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS].includes(node.componentKey);
+  const isRecordBound = ["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS, ...REGISTRY_RECORD_COMPONENTS].includes(node.componentKey);
   const page = pageByNode[node.id] || 1;
   const live = useRecordCollection(collection, {
     enabled: isRecordBound && Boolean(collection.objectKey),
@@ -769,7 +805,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     for (const section of sections) {
       const visit = (list) => {
         for (const node of list || []) {
-          if (["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS].includes(node.componentKey)) nodes.push(node);
+          if (["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS, ...REGISTRY_RECORD_COMPONENTS].includes(node.componentKey)) nodes.push(node);
           if (Array.isArray(node.children)) visit(node.children);
         }
       };
