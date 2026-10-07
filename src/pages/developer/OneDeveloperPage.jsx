@@ -55,6 +55,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
     return codes.includes('oneengine.manage')
   })
   const [clientsLoading, setClientsLoading] = useState(false)
+  const [clientsLoaded, setClientsLoaded] = useState(false)
 
   useEffect(() => { setActive(normalizeSection(initialSection)) }, [initialSection])
 
@@ -78,6 +79,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
         if (!alive) return
         const rows = Array.isArray(response?.data) ? response.data : []
         setClients(rows)
+        setClientsLoaded(true)
         const current = getActingCompanyId()
         const ownCompany = rows.find((row) => loggedInCompanyId && String(row.id) === String(loggedInCompanyId))
         const storedCompany = rows.find((row) => current && String(row.id) === String(current))
@@ -104,6 +106,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
         if (e?.status === 403) {
           setCanManageEngine(false)
           setClients([])
+          setClientsLoaded(true)
         } else {
           setError(e?.message || 'Unable to load client context')
         }
@@ -211,7 +214,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             </select>
           </label>
           {error ? <div className="settings-error">{error}</div> : null}
-          {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
           {current.key === 'objects' ? <ObjectsSettingsPane />
             : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onBack={() => select('objects')} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
             : current.key === 'gptappbuilder' ? <GPTAppBuilderPage />
