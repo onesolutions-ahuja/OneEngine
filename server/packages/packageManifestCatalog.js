@@ -266,7 +266,6 @@ const PACKAGE_CATALOG = [
   },
   {
     key: "payment_reference",
-    runtimeDriver: { module: "./referencePaymentConnector.js", factory: "createReferencePaymentDriver" },
     packageKey: "payment_reference",
     name: "Reference Payment Connector (TEST)",
     description: "A payment simulator for connector setup and POS workflow testing. TEST ONLY; not a certified or production payment provider.",
