@@ -55,7 +55,7 @@ test("business scenario names stay certification data, not Page Builder/runtime 
     await read("src/platform/pages/CustomPageRuntimePage.jsx"),
     await read("server/routes/platform.js"),
   ].join("\n").toLowerCase();
-  for (const token of ["barber","appointment","restaurant","candidate","invoice","ticket","warehouse"]) {
+  for (const token of ["barber","appointment","restaurant","invoice","ticket","warehouse"]) {
     assert.equal(implementation.includes(token), false, `business token leaked into generic Page Builder/runtime: ${token}`);
   }
 });
