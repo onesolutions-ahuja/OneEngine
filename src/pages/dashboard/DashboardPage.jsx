@@ -193,7 +193,7 @@ export default function DashboardPage({ onOpenBuilder }) {
   useEffect(() => {
     let live = true
     Promise.all([
-      apiRequest('/api/settings').catch(() => null),
+      apiRequest('/api/settings/runtime').catch(() => null),
       apiRequest('/api/dashboards').catch(() => null),
       loadSessionPermissions().catch(() => null),
     ]).then(([settings, dashboards, permissions]) => {

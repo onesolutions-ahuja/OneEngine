@@ -69,9 +69,10 @@ export async function loadSettingsContext({ force = false } = {}) {
    * actions enforce licence validity at execution time.
    */
   const permissionsPromise = loadSessionPermissions({ includeEntitlements: false })
-  const settingsPromise = hasCompanyContext
-    ? apiRequest('/api/settings').catch((error) => ({ __settingsError: error }))
-    : Promise.resolve(null)
+  // Company/general settings are metadata-owned. The legacy /api/settings
+  // aggregate was removed from the runtime, so do not issue a guaranteed 404
+  // from every Settings/Dashboard/Developer mount.
+  const settingsPromise = Promise.resolve(null)
 
   const [permissions, settingsResponse] = await Promise.all([
     permissionsPromise,
