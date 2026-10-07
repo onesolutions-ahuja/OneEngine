@@ -20,7 +20,7 @@ test("Phase 4 customer, credit, loyalty, and online-order flows are explicit and
     const nodes = action.gptBuilderElements || flow.gptBuilderElements || [];
     assert.ok(actions.length >= minimum, name + " step count");
     assert.equal(nodes.length, actions.length, name + " Builder/runtime count");
-    assert.ok(nodes.every((node) => node.config?.importedRuntimeAction && node.configured === true), name + " editable nodes");
+    assert.ok(nodes.every((node) => node.config?.importedMetadataAction && node.configured === true), name + " editable nodes");
   }
 });
 
