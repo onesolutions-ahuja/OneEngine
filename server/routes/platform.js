@@ -3302,6 +3302,23 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
       }
 
+      const pageContext = interaction.pageContext && typeof interaction.pageContext === "object" && !Array.isArray(interaction.pageContext) ? interaction.pageContext : {};
+      const bindingContext = {
+        currentUser: req.user,
+        currentRecord: record,
+        pageParameters: pageContext.params || {},
+        pageVariables: pageContext.variables || {},
+        components: pageContext.components || {},
+        flowOutputs: pageContext.flows || {},
+        resolveFormula: (expression) => evaluateWorkflowFormula(expression, {
+          user: req.user,
+          record: record || {},
+          page: { params: pageContext.params || {}, variables: pageContext.variables || {} },
+          components: pageContext.components || {},
+          flows: pageContext.flows || {},
+        }),
+      };
+
       if (type === "workflow") {
         const workflowUuid = String(interaction.workflowUuid || "");
         if (!recordIdIsValid(workflowUuid)) return res.status(400).json({ success: false, message: "A valid workflow reference is required" });
@@ -3316,6 +3333,18 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
         }
         const actions = Array.isArray(workflow.action?.actions) ? workflow.action.actions : [];
         if (!actions.length) return res.status(422).json({ success: false, message: "Configured workflow contains no executable actions" });
+        const rawInputs = interaction.inputs && typeof interaction.inputs === "object" && !Array.isArray(interaction.inputs) ? interaction.inputs : {};
+        const suppliedInputs = resolvePageBindingTree(rawInputs, bindingContext);
+        const workflowVariables = { variables: {}, steps: {} };
+        for (const input of Array.isArray(workflow.action?.inputContract) ? workflow.action.inputContract : []) {
+          const name = String(input?.name || "").trim();
+          if (!name) continue;
+          const value = Object.prototype.hasOwnProperty.call(suppliedInputs, name) ? suppliedInputs[name] : input.defaultValue;
+          if (input.required === true && (value === undefined || value === null || String(value).trim() === "")) {
+            return res.status(422).json({ success: false, message: `Input ${input.label || name} is required` });
+          }
+          if (value !== undefined) workflowVariables.variables[name] = value;
+        }
         for (const workflowAction of actions) {
           validateWorkflowAction(workflowAction);
           const definition = getWorkflowActionDefinition(workflowAction.type || workflowAction.key);
@@ -3350,6 +3379,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
             runId: run?.id || null,
             workflowVersion: Number(workflow.active_version || workflow.version || 1),
             trigger: "page_interaction",
+            workflowVariables,
           });
           const waiting = workflowResultsContainStatus(results, "waiting");
           if (run?.id) {
@@ -3362,7 +3392,7 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
               [waiting ? "WAITING" : "COMPLETED", run.id, req.user.companyId]
             );
           }
-          return res.json({ success: true, data: { runId: run?.id || null, status: waiting ? "WAITING" : "COMPLETED", results } });
+          return res.json({ success: true, data: { runId: run?.id || null, status: waiting ? "WAITING" : "COMPLETED", results, variables: workflowVariables.variables, steps: workflowVariables.steps } });
         } catch (error) {
           if (run?.id) {
             await db(
