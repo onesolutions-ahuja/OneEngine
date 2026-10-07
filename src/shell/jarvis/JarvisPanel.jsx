@@ -1,5 +1,5 @@
 /*
- * JARVES panel - compact assistant surface for the till.
+ * JARVES panel - compact assistant surface.
  *
  * Two input methods, one destination:
  *   - TEXT: input + Ask -> the existing authenticated POST /api/jarvis
@@ -26,9 +26,7 @@ import {
 } from "../../services/speechRecognition.js";
 
 const SUGGESTIONS = Object.freeze([
-  "What is onePOS?",
-  "How do I open the till session?",
-  "How do offline sales sync?",
+  "What can you help me with?",
 ]);
 
 export default function JarvisPanel({ onClose, onActivityChange, embedded = false }) {
