@@ -170,7 +170,7 @@ const packageRuntimeWorkflows = packageDefinitions()
     flowType: workflow.flowType || workflow.action?.flowType || null,
     actions: workflow.actions || workflow.action?.actions || [],
   })))
-  .filter((workflow) => String(workflow.flowType || "").toUpperCase() !== "KIOSK_EXPERIENCE");
+;
 
 const systemRuntimeWorkflows = systemWorkflowDefinitions().map((workflow) => ({
   source: "system",
@@ -180,32 +180,15 @@ const systemRuntimeWorkflows = systemWorkflowDefinitions().map((workflow) => ({
   actions: workflow.action?.actions || [],
 }));
 
-const metadataSeedWorkflows = [
-  ...extractTopLevelObjects(platformMetadataSource, "const lifecycleFlows = [").map((block) => ({
-    source: "platform-metadata:onestore",
-    name: block.match(/name:\s*"([^"]+)"/)?.[1] || "(unnamed)",
-    apiName: block.match(/buttonKey:\s*"([^"]+)"/)?.[1] || null,
-    actions: Array.from({ length: topLevelArrayItemCount(block) }),
-  })),
-  ...extractTopLevelObjects(platformMetadataSource, "const tillWorkflowDefinitions = [").map((block) => ({
-    source: "platform-metadata:onetill",
-    name: block.match(/name:\s*"([^"]+)"/)?.[1] || "(unnamed)",
-    apiName: block.match(/apiName:\s*"([^"]+)"/)?.[1] || null,
-    actions: Array.from({ length: topLevelArrayItemCount(block) }),
-  })),
-];
+const metadataSeedWorkflows = extractTopLevelObjects(platformMetadataSource, "const lifecycleFlows = [").map((block) => ({
+  source: "platform-metadata",
+  name: block.match(/name:\s*"([^"]+)"/)?.[1] || "(unnamed)",
+  apiName: block.match(/buttonKey:\s*"([^"]+)"/)?.[1] || null,
+  actions: Array.from({ length: topLevelArrayItemCount(block) }),
+}));
 
 const runtimeWorkflowInventory = [...packageRuntimeWorkflows, ...systemRuntimeWorkflows, ...metadataSeedWorkflows];
-const allowedShortRuntimeWorkflows = new Set([
-  "package:retail_pos::Open Drawer",
-  "package:retail_pos::OneTill - Validate Stock",
-  "package:retail_pos::OneTill - Age Verification",
-  "package:staff::Staff - Set Active Status",
-  "platform-metadata:onetill::OneTill - Open Drawer",
-  "platform-metadata:onetill::OneTill - Receipt QR",
-  "platform-metadata:onetill::OneTill - Receipt QR Policy",
-  "platform-metadata:onetill::OneTill - Revoke Receipt QR",
-]);
+const allowedShortRuntimeWorkflows = new Set();
 const shortRuntimeWorkflows = runtimeWorkflowInventory.filter((workflow) => workflow.actions.length <= 2);
 const invalidShortRuntimeWorkflows = shortRuntimeWorkflows.filter((workflow) => !allowedShortRuntimeWorkflows.has(workflow.source + "::" + workflow.name));
 const builderFallbackReady =
