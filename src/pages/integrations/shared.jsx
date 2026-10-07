@@ -13,9 +13,6 @@ export const AUTH_TYPES = [
 
 export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
-/* Entity types are provider-neutral; concrete event keys are metadata-defined. */
-export const ENTITY_TYPES = ["custom"];
-
 export const ENTITY_EVENT_HINT =
   "Use a metadata-defined event key.";
 
