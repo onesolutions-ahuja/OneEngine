@@ -166,6 +166,25 @@ export async function hasActiveUserLicence(db, companyId, userId) {
   return (await getUserLicenceState(db, companyId, userId)).active === true;
 }
 
+export async function hasUserEntitlement(db, companyId, userId, entitlementKey) {
+  if (!companyId || !userId || !entitlementKey) return false;
+  const state = await getUserLicenceState(db, companyId, userId);
+  if (state.active !== true || !state.licence_id) return false;
+  const result = await db(
+    `SELECT 1 FROM licence_entitlements
+      WHERE licence_id=$1 AND entitlement_key=$2 AND enabled=true
+      LIMIT 1`,
+    [state.licence_id, entitlementKey]
+  );
+  return result.rows.length > 0;
+}
+
+export function createUserEntitlementAccessChecker({ db, entitlementKey } = {}) {
+  if (typeof db !== "function") throw new Error("createUserEntitlementAccessChecker requires db");
+  if (!entitlementKey) throw new Error("createUserEntitlementAccessChecker requires entitlementKey");
+  return (user = {}) => hasUserEntitlement(db, user?.companyId, user?.id, entitlementKey);
+}
+
 export function hasEntitlement(entitlements, key) {
   return entitlements?.[key] === true;
 }
