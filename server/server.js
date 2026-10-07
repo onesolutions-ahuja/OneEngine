@@ -1184,17 +1184,6 @@ app.post("/api/auth/unlock-pin", authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: "User account is disabled" });
     }
 
-    /*
-     * Bootstrap only for a global profile holding oneengine.manage. This is an
-     * RBAC check, not an identity/profile-name bypass.
-     */        const pinHash = await bcrypt.hash(pin, PASSWORD_BCRYPT_ROUNDS);
-        await db(
-          "UPDATE users SET pin_hash=$1, updated_at=NOW() WHERE id=$2 AND company_id IS NOT DISTINCT FROM $3",
-          [pinHash, req.user.id, req.user.companyId]
-        );
-        return res.json({ success: true, initialized: true });
-      }
-    }
 
     if (!user.pin_hash) {
       return res.status(409).json({ success: false, code: "PIN_NOT_SET", message: "No PIN is configured for this user" });
