@@ -232,8 +232,17 @@ export default function WorkspacePage({ initialObjectKey = '', initialRecordId =
         const requested = initialObjectKey && list.some((item) => objectKey(item) === initialObjectKey)
           ? initialObjectKey
           : ''
+        const normalizedAppKey = String(appKey || '').trim().toLowerCase().replace(/-/g, '_')
+        const metadataMatch = !requested && normalizedAppKey
+          ? list.find((item) => {
+              const key = String(objectKey(item) || '').trim().toLowerCase()
+              const plural = String(item?.plural_label || item?.pluralLabel || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_')
+              return key === normalizedAppKey || plural === normalizedAppKey
+            })
+          : null
         const currentVisible = selectedKey && list.some((item) => objectKey(item) === selectedKey)
         if (requested) setSelectedKey(requested)
+        else if (metadataMatch) setSelectedKey(objectKey(metadataMatch))
         else if (!currentVisible) setSelectedKey(list.length ? objectKey(list[0]) : '')
       })
       .catch((err) => live && setError(err?.message || 'Unable to load Workspace objects'))
