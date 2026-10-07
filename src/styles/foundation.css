@@ -271,7 +271,7 @@ button:focus-visible {
   background: rgba(255,255,255,.18);
 }
 
-.google-signin-button {
+.external-signin-button {
   height: 44px;
   border: 1px solid rgba(255,255,255,.28);
   border-radius: 12px;
@@ -286,16 +286,16 @@ button:focus-visible {
   gap: 10px;
 }
 
-.google-signin-button:hover {
+.external-signin-button:hover {
   background: #fff;
 }
 
-.google-signin-button:disabled {
+.external-signin-button:disabled {
   opacity: .55;
   cursor: default;
 }
 
-.google-signin-logo {
+.external-signin-logo {
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
