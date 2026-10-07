@@ -4,6 +4,7 @@ import {
   LayoutGrid, ListChecks, UserCheck, Rocket, Search, Workflow,
 } from 'lucide-react'
 import { apiRequest, getActingCompanyId, getStoredSessionPermissions, getStoredUser, loadSessionPermissions, setActingCompanyId } from '../../services/api'
+import { clearSettingsContextCache } from '../../services/settings'
 import OneBuilder from '../settings/OneBuilder'
 import GPTPageBuilder from './GPTPageBuilder'
 import { ReportTypeManager } from '../reports/ReportTypeDesigner.jsx'
@@ -97,6 +98,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
               body: JSON.stringify({ actingCompanyId: preferred.id }),
             })
             setActingCompanyId(preferred.id)
+            clearSettingsContextCache()
           } else if (isOwnAuthenticatedCompany && current) {
             setActingCompanyId('')
           }
@@ -150,6 +152,7 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
         body: JSON.stringify({ actingCompanyId: id }),
       })
       setActingCompanyId(id)
+      clearSettingsContextCache()
       setSelectedClient(String(id))
     } catch (e) {
       setError(e?.message || 'Unable to select client')
@@ -207,6 +210,12 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
 
       <div className="settings-content" key={contentKey}>
         <div className="settings-content-body">
+          <label className="developer-compact-nav">
+            <span>Developer area</span>
+            <select value={current.key} onChange={(event) => select(event.target.value)} aria-label="Developer area">
+              {visibleItems.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+          </label>
           {error ? <div className="settings-error">{error}</div> : null}
           {clientsLoading && canManageEngine ? <div className="settings-state-card settings-state-card--inline">Refreshing client list…</div> : null}
           {current.key === 'objects' ? <ObjectsSettingsPane />
