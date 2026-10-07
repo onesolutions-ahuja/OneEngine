@@ -10,18 +10,12 @@ const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:tru
 }) : [];
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 
-// These files are platform infrastructure or declarative metadata authorities.
-// Business names may legitimately occur here as metadata; they must not become
-// executable business persistence/query logic elsewhere.
 const exempt = new Set([
   "server/services/platformSystemObjects.js",
   "server/services/tenantDatabase.js",
 ]);
 const declarativePrefixes=["server/packages/","server/metadata/"];
 const retired = new Set(["server/routes/dashboard.js","server/services/reportSalesDefinition.js"]);
-// Temporary compatibility inventory: these adapters are allowed to touch the
-// authoritative POS tables, but every entry is named here so additions cannot
-// silently expand the exception surface.
 const legacyBusinessRuntime = new Set([]);
 const businessTables=[
   "sales","sale_ledger","sale_items","customers","payments","products","suppliers",
@@ -43,13 +37,12 @@ const forbiddenCompiledConnectorActions=[
   "PAYMENT_START","PAYMENT_CANCEL","PRINT_RECEIPT","PRINT_KITCHEN_TICKET",
   "OPEN_CASH_DRAWER","SCANNER_STATUS"
 ];
+const forbiddenGenericConnectorProviderTokens=[
+  "smsgate_connector","brevo_connector","mailjet_connector","SMSGate","Brevo","Mailjet",
+  "configureSmsGateInboundWebhook","send-test-email","send-test-sms"
+];
 const findings=[];
 
-// platformMetadata.js was a legacy source-defined metadata authority. It has been
-// replaced by the generic platformBootstrap runtime and must never return, even
-// as an "exception" to this audit. Check the whole executable server tree for
-// both the retired file and stale imports/requires before applying the normal
-// business-runtime rules below.
 const retiredMetadataRuntime = "server/services/platformMetadata.js";
 const retiredProviderActionRuntime = "server/services/platformActions.js";
 const allServerRuntimeFiles = walk(path.join(ROOT, "server"));
@@ -73,6 +66,11 @@ for (const file of allServerRuntimeFiles) {
       if (text.includes(actionKey)) findings.push({rule:"COMPILED_BUSINESS_CONNECTOR_ACTION",file:name,actionKey});
     }
   }
+  if (name === "server/routes/connectors.js") {
+    for (const token of forbiddenGenericConnectorProviderTokens) {
+      if (text.includes(token)) findings.push({rule:"PROVIDER_SPECIFIC_GENERIC_CONNECTOR_ROUTE",file:name,token});
+    }
+  }
 }
 
 for(const file of roots.flatMap(walk)){
@@ -84,10 +82,6 @@ for(const file of roots.flatMap(walk)){
     continue;
   }
   if(exempt.has(name)||declarativePrefixes.some((prefix)=>name.startsWith(prefix))) continue;
-  // Existing app/domain adapters are compatibility boundaries around authoritative
-  // POS tables. They remain visible debt, but new generic platform/builders may
-  // not introduce direct business SQL. Phase 7B validates these adapters through
-  // their workflow/action gates before deployment.
   if(legacyBusinessRuntime.has(name)) continue;
   for(const table of businessTables){
     const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
