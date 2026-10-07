@@ -10,7 +10,8 @@ const files=roots.flatMap(walk);
 const businessTables=["sales","sale_items","payments","payment_attempts","payment_methods","refunds","customers","customer_ledger","customer_loyalty_ledger","gift_card_ledger","gift_cards","layaways","products","product_variants","product_bundles","product_store_pricing","product_supplier_costs","inventory_ledger","inventory_movements","inventory_levels","inventory_batches","suppliers","purchases","purchase_items","purchase_ledger","supplier_invoices","supplier_payments","online_orders","online_order_items","online_order_events"];
 const businessObjectKeys=["sale","sale_item","payment","refund","customer","gift_card","layaway","product","product_variant","inventory","inventory_movement","supplier","purchase","purchase_receipt","online_order"];
 const businessApiRoots=["sales","products","customers","suppliers","purchases","inventory","returns","exchanges","payments","payment","self-checkout","kiosk","online-orders","online_orders","ean","global-product","global_product","gift","loyalty","layaway","invoice","secure-invoice"];
-const businessTokens=["sale","sales","sale_item","payment","payments","refund","returns","exchange","customer","customers","loyalty","gift_card","layaway","product","products","category","inventory","supplier","suppliers","purchase","purchases","online_order","invoice","receipt","till","kiosk"];
+const businessBindingKeys=["initialObjectKey","objectKey","object_key","dataSource","data_source","sourceObject","source_object","entityType","entity_type"];
+const businessFieldTokens=["sale_id","customer_id","product_id","supplier_id","purchase_id","payment_id","refund_id","till_id","invoice_id","receipt_number","sale_number"];
 const providerTokens=["paypal","quickbooks","uber_eats","deliveroo","just_eat","shopify","woocommerce","magento","prestashop"];
 const findings=[];
 for(const file of files){
@@ -27,7 +28,10 @@ for(const file of files){
   if(/dataSource\s*:\s*["\']sales["\']|dataSource\s*===?\s*["\']sales["\']/i.test(text))findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text))findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   const code=text.replace(/\/\*[\s\S]*?\*\//g," ").replace(/(^|[^:])\/\/.*$/gm,"$1 ");
-  for(const token of businessTokens){const escaped=token.replace(/[.*+?^$()|[\]\\]/g,"\\$&");const rx=new RegExp("([\\\'\\\"])"+".*?\\b"+escaped+"\\b.*?\\1","i");if(rx.test(code))findings.push({rule:"HARDCODED_BUSINESS_LITERAL",file:name,token});}
+  if(name.startsWith("src/")){
+    for(const key of businessBindingKeys){for(const objectKey of businessObjectKeys){const rx=new RegExp("\\b"+key+"\\b\\s*(?:=|:)\\s*[\\\'\\\"]"+objectKey+"[\\\'\\\"]","i");if(rx.test(code))findings.push({rule:"HARDCODED_BUSINESS_BINDING",file:name,token:key+":"+objectKey});}}
+    for(const token of businessFieldTokens){const escaped=token.replace(/[.*+?^$()|[\]\\]/g,"\\$&");const rx=new RegExp("[\\\'\\\"]"+escaped+"[\\\'\\\"]\\s*(?:[:,]|\\])|\\b"+escaped+"\\b\\s*[:=]","i");if(rx.test(code))findings.push({rule:"HARDCODED_BUSINESS_FIELD_MAPPING",file:name,token});}
+  }
   for(const token of providerTokens){const escaped=token.replace(/[.*+?^$()|[\]\\]/g,"\\$&");const rx=new RegExp("([\\\'\\\"])"+".*?\\b"+escaped+"\\b.*?\\1","i");if(rx.test(code))findings.push({rule:"HARDCODED_PROVIDER_LITERAL",file:name,token});}
 }
 const unique=[...new Map(findings.map((x)=>[JSON.stringify(x),x])).values()].sort((a,b)=>a.file.localeCompare(b.file)||a.rule.localeCompare(b.rule)||String(a.token||a.table||"").localeCompare(String(b.token||b.table||"")));
