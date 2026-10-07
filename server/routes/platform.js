@@ -3244,7 +3244,19 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     const type = String(interaction.type || "");
     const trace = [{ kind: "page", status: "started", at: new Date().toISOString(), detail: { nodeId: req.body?.nodeId || null } }, { kind: "component", status: "started", at: new Date().toISOString(), detail: { nodeId: req.body?.nodeId || null } }, { kind: "event", status: "started", at: new Date().toISOString(), detail: { event: req.body?.event || "click", interactionType: type } }];
     try {
-      if (!["workflow","screen_flow"].includes(type)) return res.status(422).json({ success:false,message:"Page Test rollback currently executes Flow-backed interactions only",data:{rolledBack:true,trace} });
+      if (!["workflow","screen_flow"].includes(type)) {
+        const operations = Array.isArray(interaction.operations) ? interaction.operations : [];
+        const supportedOperations = new Set(["set_record", "filter_collection", "set_value", "refresh", "navigate", "open_modal", "close_modal", "submit_form"]);
+        const unsupported = operations.map((operation) => String(operation?.type || operation?.operation || "")).filter((operation) => operation && !supportedOperations.has(operation));
+        if (unsupported.length) return res.status(422).json({ success:false, message:`Unsupported Page Test operation: ${unsupported[0]}`, data:{rolledBack:true,trace} });
+        trace.push({kind:"permission",status:"passed",at:new Date().toISOString(),detail:{companyId:req.user.companyId,storeId:req.user.storeId||null}});
+        trace.push({kind:"query",status:"skipped",at:new Date().toISOString(),detail:{message:"No record query required for this interaction"}});
+        for (const [index, operation] of operations.entries()) trace.push({kind:"component_operation",status:"simulated",at:new Date().toISOString(),detail:{index,type:operation?.type||operation?.operation||null,operation}});
+        trace.push({kind:"ui_refresh",status:"simulated",at:new Date().toISOString(),detail:{operations}});
+        trace.push({kind:"rollback",status:"completed",at:new Date().toISOString(),detail:{databaseChanges:"none",transaction:"not_required"}});
+        trace.push({kind:"timing",status:"completed",at:new Date().toISOString(),detail:{durationMs:Date.now()-startedAt}});
+        return res.json({success:true,data:{status:"COMPLETED",rolledBack:true,externalActionsSimulated:true,results:operations,trace,durationMs:Date.now()-startedAt}});
+      }
       const workflowUuid=String(interaction.workflowUuid||"");
       if(!recordIdIsValid(workflowUuid)) return res.status(400).json({success:false,message:"A valid Flow reference is required"});
       const workflowResult=await db("SELECT * FROM platform_rules WHERE id=$1 AND company_id=$2 AND action->>'type'='workflow' LIMIT 1",[workflowUuid,req.user.companyId]);
