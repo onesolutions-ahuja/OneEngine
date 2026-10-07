@@ -1,8 +1,5 @@
 import { developerMetadataHeaders } from './developerContext'
 import { clearLazyCache } from './dataCache'
-import { isPrivilegedMutation, resolveTrustedCapability, trustedRuntimeHeaders, validateTrustedRuntime } from './trustedRuntime'
-export const TRUSTED_RUNTIME_STATE = validateTrustedRuntime()
-
 const DEFAULT_API_BASE = String(import.meta.env.VITE_API_BASE || 'https://oneengine-6gas.onrender.com').replace(/\/$/, '')
 const CANONICAL_PRODUCTION_API_HOST = 'oneengine-6gas.onrender.com'
 export const SERVER_ADDRESS_STORAGE_KEY = 'onepos_server_address'
@@ -10,8 +7,6 @@ export const ACTING_COMPANY_STORAGE_KEY = 'onepos_developer_target_company_id'
 export const SESSION_PERMISSIONS_STORAGE_KEY = 'onepos_session_permissions'
 export const ACTIVE_STORE_STORAGE_KEY = 'onepos_active_store_id'
 export const AVAILABLE_STORES_STORAGE_KEY = 'onepos_available_stores'
-export const KIOSK_TOKEN_STORAGE_KEY = 'onepos_kiosk_token'
-export const KIOSK_DISPLAY_TOKEN_STORAGE_KEY = 'onepos_kiosk_display_token'
 export const DEVICE_KEY_STORAGE_KEY = 'onepos_device_key'
 
 export function getDeviceKey() {
@@ -200,18 +195,7 @@ function clearCompanyContext() {
 }
 
 export async function apiFetch(path, options = {}) {
-  const method = String(options.method || 'GET').toUpperCase()
-  if (isPrivilegedMutation(path, method)) {
-    throw Object.assign(new Error('Privileged mutations must use the OneEngine Trusted Runtime API gate'), {
-      status: 403,
-      code: 'TRUSTED_RUNTIME_REQUIRED',
-    })
-  }
-  const kioskRuntime = typeof window !== 'undefined' && /\/kiosk-runtime\/?$/.test(window.location.pathname)
-  const kioskDisplay = typeof window !== 'undefined' && /\/kiosk-display\/?$/.test(window.location.pathname)
-  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || '') : ''
-  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || '') : ''
-  const token = kioskToken || displayToken || sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
+  const token = sessionStorage.getItem('onepos_token') || localStorage.getItem('onepos_token')
   return fetch(apiUrl(path), {
     ...options,
     headers: {
@@ -455,14 +439,6 @@ export function apiRequest(path, options = {}) {
 
 async function apiRequestCore(path, options = {}, tokenOverride = '') {
   const method = String(options.method || 'GET').toUpperCase()
-  const capability = resolveTrustedCapability(path, method)
-  if (isPrivilegedMutation(path, method) && !capability) {
-    throw Object.assign(new Error('This operation is not registered in OneEngine Trusted Runtime'), {
-      status: 403,
-      code: 'UNREGISTERED_CAPABILITY',
-    })
-  }
-
   const {
     timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     retryGet = true,
@@ -482,7 +458,6 @@ async function apiRequestCore(path, options = {}, tokenOverride = '') {
           Accept: 'application/json',
           ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...trustedRuntimeHeaders(capability),
           ...contextHeaders(path, fetchOptions.headers),
         },
       }, timeoutMs)
@@ -519,8 +494,7 @@ async function apiRequestCore(path, options = {}, tokenOverride = '') {
           Accept: 'application/json',
           ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...trustedRuntimeHeaders(capability),
-          ...contextHeaders(path, fetchOptions.headers),
+              ...contextHeaders(path, fetchOptions.headers),
         }
         const diagnostic = await diagnoseClientNetworkFailure(path, {
           method,
@@ -550,19 +524,7 @@ async function apiRequestCore(path, options = {}, tokenOverride = '') {
 }
 
 export async function apiDownload(path, options = {}) {
-  const method = String(options.method || "GET").toUpperCase()
-  const capability = resolveTrustedCapability(path, method)
-  if (isPrivilegedMutation(path, method) && !capability) {
-    throw Object.assign(new Error("This operation is not registered in OneEngine Trusted Runtime"), {
-      status: 403,
-      code: "UNREGISTERED_CAPABILITY",
-    })
-  }
-  const kioskRuntime = typeof window !== "undefined" && /\/kiosk-runtime\/?$/.test(window.location.pathname)
-  const kioskDisplay = typeof window !== "undefined" && /\/kiosk-display\/?$/.test(window.location.pathname)
-  const kioskToken = kioskRuntime ? (localStorage.getItem(KIOSK_TOKEN_STORAGE_KEY) || "") : ""
-  const displayToken = kioskDisplay ? (localStorage.getItem(KIOSK_DISPLAY_TOKEN_STORAGE_KEY) || "") : ""
-  const token = kioskToken || displayToken || sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token")
+  const token = sessionStorage.getItem("onepos_token") || localStorage.getItem("onepos_token")
   const response = await fetchWithTimeout(apiUrl(path), {
     ...options,
     headers: {
