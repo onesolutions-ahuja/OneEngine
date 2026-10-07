@@ -3984,3 +3984,24 @@ LEFT JOIN LATERAL (
         BOOL_OR(k.status <> 'COMPLETED' AND k.created_at < NOW()-INTERVAL '20 minutes') AS delayed
     FROM hospitality_kds_tickets k WHERE k.session_id=s.id AND k.company_id=s.company_id AND k.store_id=s.store_id
 ) kds ON TRUE;
+
+
+-- Metadata registrations for approved custom React components.
+-- Source modules are restricted to src/components/custom by the browser loader.
+CREATE TABLE IF NOT EXISTS platform_component_registrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+    component_key VARCHAR(120) NOT NULL,
+    label VARCHAR(180) NOT NULL,
+    category VARCHAR(80) NOT NULL DEFAULT 'custom',
+    kind VARCHAR(80) NOT NULL DEFAULT 'custom',
+    component_path VARCHAR(300) NOT NULL,
+    css_path VARCHAR(300),
+    configurable JSONB NOT NULL DEFAULT '[]'::jsonb,
+    supported_builders JSONB NOT NULL DEFAULT '["PAGE"]'::jsonb,
+    supported_contexts JSONB NOT NULL DEFAULT '["page"]'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(company_id, component_key)
+);

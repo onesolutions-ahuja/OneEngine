@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest } from "../../services/api.js";
 import renderDashboardComponent from "../dashboard/DashboardComponents.jsx";
+import { CustomComponentModule } from "../../pages/settings/Platform/customComponentLoader.jsx";
 import {
   SECTION_WIDTHS,
   multiContainerColumns,
@@ -822,6 +823,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   const guardedRecordClick = interactive ? onRecordClick : undefined;
   const guardedButtonClick = interactive ? onButtonClick : undefined;
   if (node.runtimeKind === "analytics") return <AnalyticsNodeView node={node} />;
+  if (node.rendererKey === "custom_module" && node.componentPath) return <CustomComponentModule registration={{ componentPath: node.componentPath, cssPath: node.cssPath }} node={node} config={node.config || {}} data={data?.[node.id]} builderMode={builderMode} onEvent={onEvent} />;
   if (STATIC_DASHBOARD_COMPONENTS.includes(key)) {
     const config = { ...(node.config || {}) };
     if (key === "avatar_group") {

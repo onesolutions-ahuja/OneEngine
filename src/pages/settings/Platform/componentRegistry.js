@@ -430,6 +430,8 @@ export function createRegisteredComponent(component, builder = "PAGE") {
     componentKey: spec.key,
     rendererKey: spec.rendererKey || spec.key,
     runtimeKind: spec.runtimeKind || null,
+    componentPath: spec.componentPath || null,
+    cssPath: spec.cssPath || null,
     label: spec.label,
     title: defaults.title || spec.label,
     config: defaults.config || {},

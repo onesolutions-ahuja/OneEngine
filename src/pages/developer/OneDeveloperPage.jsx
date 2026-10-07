@@ -14,11 +14,13 @@ import DeploymentAdmin from '../settings/Platform/DeploymentAdmin'
 import NotificationSubscriptionsAdmin from '../settings/Platform/NotificationSubscriptionsAdmin'
 import ValueSetList from '../settings/Platform/ValueSetList'
 import DebugCodesAdmin from './DebugCodesAdmin'
+import ComponentRegistryAdmin from './ComponentRegistryAdmin'
 import GPTBuilderPage from './gptbuilder/GPTBuilderPage'
 import GPTAppBuilderPage from './gptappbuilder/GPTAppBuilderPage'
 import './OneDeveloperPage.css'
 
 const DEVELOPER_ITEMS = [
+  { key: 'components', label: 'Components', icon: AppWindow },
   { key: 'objects', label: 'Objects', icon: LayoutGrid },
   { key: 'gptbuilder', label: 'GPT Builder', icon: Workflow },
   { key: 'gptappbuilder', label: 'GPTAppBuilder', icon: AppWindow },
@@ -214,7 +216,8 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
             </select>
           </label>
           {error ? <div className="settings-error">{error}</div> : null}
-          {current.key === 'objects' ? <ObjectsSettingsPane />
+          {current.key === 'components' ? <ComponentRegistryAdmin />
+            : current.key === 'objects' ? <ObjectsSettingsPane />
             : current.key === 'gptbuilder' ? <GPTBuilderPage initialWorkflowId={initialWorkflowId} onBack={() => select('objects')} onWorkflowOpen={(workflowId) => onSectionChange?.('gptbuilder', { workflowId })} />
             : current.key === 'gptappbuilder' ? <GPTAppBuilderPage />
             : current.key === 'approval-builder' ? <OneBuilder initialTab="approval" singleBuilder />
