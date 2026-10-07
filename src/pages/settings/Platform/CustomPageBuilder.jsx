@@ -1659,8 +1659,21 @@ function RegistryDrivenProperties({ node, meta, objects, onChange, targetCompone
   const objectKey = config.objectKey || "";
   const fields = useRegistryObjectFields(objectKey, objects);
   const actionKeys = configurable.filter((key) => /action$/i.test(key) || /clickaction/i.test(key));
-  const ordinaryKeys = configurable.filter((key) => !actionKeys.includes(key));
+  const ordinaryKeys = configurable.filter((key) => !actionKeys.includes(key) && !["filter","filters","sort","conditionMatch"].includes(key));
   const patchConfig = (key, value) => onChange({ config: { ...config, [key]: value } });
+  const supportsObjectConditions = configurable.includes("objectKey");
+  const conditionCollection = {
+    conditions: Array.isArray(config.filters) ? config.filters : [],
+    conditionMatch: config.conditionMatch || "all",
+    sort: Array.isArray(config.sort) ? config.sort : [],
+  };
+  const patchConditionCollection = (patch) => {
+    const next = { ...config };
+    if (Object.prototype.hasOwnProperty.call(patch, "conditions")) next.filters = patch.conditions;
+    if (Object.prototype.hasOwnProperty.call(patch, "conditionMatch")) next.conditionMatch = patch.conditionMatch;
+    if (Object.prototype.hasOwnProperty.call(patch, "sort")) next.sort = patch.sort;
+    onChange({ config: next });
+  };
 
   if (!configurable.length) {
     return (
@@ -1678,7 +1691,7 @@ function RegistryDrivenProperties({ node, meta, objects, onChange, targetCompone
       return <div key={key} className="space-y-1"><label className={labelClass}>Title</label><input className={inputClass} value={node.title || ""} onChange={(event) => onChange({ title: event.target.value })} /></div>;
     }
     if (key === "objectKey") {
-      return <div key={key} className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={config.objectKey || ""} onChange={(event) => patchConfig("objectKey", event.target.value)}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>;
+      return <div key={key} className="space-y-1"><label className={labelClass}>Object</label><select className={inputClass} value={config.objectKey || ""} onChange={(event) => onChange({ config: { ...config, objectKey: event.target.value, filters: [], conditionMatch: "all", sort: [] } })}><option value="">Select object…</option>{objects.map((object) => <option key={object.id} value={object.object_key}>{object.label || object.object_key}</option>)}</select></div>;
     }
     if (key === "dataSource") {
       return <div key={key} className="space-y-1"><label className={labelClass}>Data Source</label><select className={inputClass} value={config.dataSource || "records"} onChange={(event) => patchConfig("dataSource", event.target.value)}><option value="records">Object records</option><option value="static">Static values</option></select></div>;
@@ -1708,6 +1721,19 @@ function RegistryDrivenProperties({ node, meta, objects, onChange, targetCompone
         <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Configuration</legend>
         {ordinaryKeys.map(renderField)}
       </fieldset>
+      {supportsObjectConditions ? (
+        <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5">
+          <legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Conditions & Filters</legend>
+          {objectKey ? (
+            <>
+              <ConditionsEditor collection={conditionCollection} fields={fields} onChange={patchConditionCollection} />
+              <SortEditor collection={conditionCollection} fields={fields} onChange={patchConditionCollection} />
+            </>
+          ) : (
+            <p className="text-[11px] text-slate-500">Select an Object first, then add field conditions and sorting.</p>
+          )}
+        </fieldset>
+      ) : null}
       {actionKeys.length ? <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2.5"><legend className="px-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Interaction</legend><InteractionProperties node={node} targetComponents={targetComponents} onChange={onChange} /></fieldset> : null}
     </div>
   );
