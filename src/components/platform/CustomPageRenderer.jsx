@@ -280,7 +280,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   const records = Array.isArray(state.records) ? state.records : [];
   const [calendarDate, setCalendarDate] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedCalendarDay, setSelectedCalendarDay] = useState(null);
-  const [calendarView, setCalendarView] = useState("month");
+  const [calendarView, setCalendarView] = useState(() => ["month", "day", "list"].includes(config.defaultView) ? config.defaultView : "month");
   const [kanbanRecords, setKanbanRecords] = useState(records);
   const [kanbanError, setKanbanError] = useState("");
   useEffect(() => setKanbanRecords(records), [records]);
@@ -367,7 +367,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
         </div>
         {calendarView === "month" ? (
           <div className="overflow-x-auto">
-            <div className="grid min-w-[560px] grid-cols-7 gap-1">
+            <div className="min-w-[560px]" style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 4 }}>
               {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <div key={day} className="py-1 text-center text-[11px] font-semibold" style={{ color: "var(--text-secondary, #64748b)" }}>{day}</div>)}
               {days.map((day) => {
                 const key = dayKey(day);
@@ -1076,7 +1076,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
       {sections.filter((section) => section.visible !== false).map((section) => {
         const body = (
           <div className="cpb-section-body">
-            {(section.children || []).filter((child) => child.visible !== false).map((node) => (
+            {(section.children || []).filter((child) => child.visible !== false && !(child.componentKey === "calendar_widget" && (section.children || []).some((candidate) => candidate.visible !== false && candidate.componentKey === "calendar"))).map((node) => (
               <div
                 key={node.id}
                 onClick={builderMode && onSelectNode ? (event) => { event.stopPropagation(); onSelectNode(node.id, null); } : undefined}
