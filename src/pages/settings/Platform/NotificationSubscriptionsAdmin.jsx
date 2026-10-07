@@ -137,7 +137,7 @@ export default function NotificationSubscriptionsAdmin({ onMessage, onError }) {
 
       <section aria-label="Configured notification subscriptions">
         {loading ? <p className="py-5 text-sm text-slate-500">Loading subscriptions…</p> : subscriptions.length === 0 ? (
-          <div className="flex items-center gap-3 py-6 text-sm text-slate-500"><Bell size={18} aria-hidden="true" /> No notification subscriptions configured.</div>
+          <div className="flex items-start gap-3 py-6 text-sm text-slate-500"><Bell size={18} aria-hidden="true" /><span><strong className="block text-slate-700">No notification subscriptions configured.</strong>Create one above to persist an event rule for this company; when a matching event occurs, the configured recipient receives the in-app notification.</span></div>
         ) : (
           <div className="divide-y divide-slate-200">
             {subscriptions.map((subscription) => (
