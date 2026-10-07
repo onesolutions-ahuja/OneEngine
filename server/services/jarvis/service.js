@@ -127,7 +127,7 @@ export function createJarvisService({
     let toolFailed = false;
     if (tools && typeof tools.matchTool === "function" && typeof tools.executeTool === "function") {
       try {
-        const match = tools.matchTool(question);
+        const match = await tools.matchTool(question, safeContext);
         if (match?.name) {
           const toolResult = await tools.executeTool(match.name, safeContext);
           const grounding = formatToolResultBlock(toolResult);
