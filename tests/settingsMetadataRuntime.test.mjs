@@ -14,9 +14,20 @@ test("Settings UI resolves through persisted platform metadata", async () => {
   const page = await read("src/pages/settings/MetadataSettingsPage.jsx");
   const section = await read("src/pages/settings/MetadataSettingsSection.jsx");
   const app = await read("src/App.jsx");
+  const platformRoutes = await read("server/routes/platform.js");
+  const routeStart = platformRoutes.indexOf('router.get("/platform/runtime/settings-hosts", authenticate,');
+  const routeEnd = platformRoutes.indexOf('router.get("/platform/runtime/pages/:pageKey"', routeStart);
+  const settingsHostRoute = platformRoutes.slice(routeStart, routeEnd);
 
   assert.match(page, /\/api\/platform\/runtime\/settings-hosts/);
   assert.match(section, /\/api\/platform\/runtime\/settings-hosts/);
+  assert.notEqual(routeStart, -1);
+  assert.notEqual(routeEnd, -1);
+  assert.match(settingsHostRoute, /const batchSize = 3/);
+  assert.ok(
+    settingsHostRoute.indexOf('hasPlatformObjectPermission(db, req, object.id, "view")')
+      < settingsHostRoute.indexOf("FROM platform_fields")
+  );
   assert.match(app, /MetadataSettingsPage/);
   assert.equal(page.includes("/api/settings"), false);
   assert.equal(section.includes("/api/settings"), false);
