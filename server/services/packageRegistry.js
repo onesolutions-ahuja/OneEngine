@@ -1,9 +1,6 @@
-import { metadataManifestByPackageKey } from "./metadataManifestLoader.js";
 import { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 export { resolvePackagePlan, satisfiesPackageVersion, comparePackageVersions, resolveFeaturePlan } from "../packages/runtime/packagePlanning.js";
 import { packageManifestCatalog } from "../packages/packageManifestCatalog.js";
-
-const metadataManifestCache = new Map();
 
 const withPackageBuilderMetadata = (workflow) => {
   const action = workflow?.action || {};
@@ -64,11 +61,6 @@ const withPackageBuilderMetadata = (workflow) => {
     },
   };
 };
-function manifestForPackage(packageKey) {
-  if (!packageKey) return null;
-  return metadataManifestCache.get(packageKey) || null;
-}
-
 export function packageDefinition(entry) {
   // Package identity, presentation, entitlements and dependencies are declared
   // by packageManifestCatalog/metadata manifests. The registry is only a
@@ -95,7 +87,6 @@ export function packageDefinition(entry) {
     }
   }
 
-  const extractedManifest = manifestForPackage(entry.key || entry.packageKey);
   return {
     packageKey: entry.packageKey || entry.key,
     name: entry.name,
@@ -104,7 +95,6 @@ export function packageDefinition(entry) {
     dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : [],
     moduleKey: entry.key,
     manifest: {
-        ...(extractedManifest || {}),
       packageKey: entry.packageKey || entry.key,
       name: entry.name,
       version: entry.version || "1.0.0",
@@ -153,7 +143,6 @@ export function packageDefinition(entry) {
       iconAssetKey: entry.iconAssetKey || null,
 
       ...(entry.manifest && typeof entry.manifest === "object" ? entry.manifest : {}),
-      ...(metadataManifestByPackageKey(entry.key) || {}),
 
     },
   };
