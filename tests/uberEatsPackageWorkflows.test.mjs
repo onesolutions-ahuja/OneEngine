@@ -29,15 +29,14 @@ test("Uber package actions route to installed subflows instead of provider funct
   }
 });
 
-test("Uber connector uses metadata-driven OAuth client credentials", () => {
-  const connector = manifest.connectors.find((item) => item.connectorKey === "uber_eats");
-  assert.ok(connector);
-  assert.equal(connector.authType, "oauth2_client_credentials");
-  const oauth = connector.operations.find((item) => item.key === "oauth_client_credentials");
-  assert.equal(oauth.tokenUrls.sandbox, "https://sandbox-login.uber.com/oauth/v2/token");
-  assert.equal(oauth.tokenUrls.production, "https://auth.uber.com/oauth/v2/token");
-  assert.match(oauth.scope, /eats\.store/);
-  assert.match(oauth.scope, /eats\.order/);
+test("Uber package does not embed provider connector credentials in source manifests", () => {
+  assert.equal(
+    manifest.connectors.some((item) => String(item?.connectorKey || item?.connector_key || "").toLowerCase() === "uber_eats"),
+    false,
+  );
+  const requests = flows.flatMap((flow) => flow.action.actions).filter((item) => item.key === "ONE_HTTP_REQUEST");
+  assert.ok(requests.length > 0);
+  assert.ok(requests.some((item) => String(item.providerKey || "").toLowerCase() === "uber"));
 });
 
 test("Uber menu upload is metadata-driven from Product records", () => {
