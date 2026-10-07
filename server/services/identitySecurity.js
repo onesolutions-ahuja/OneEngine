@@ -383,6 +383,7 @@ export async function writeLoginHistory(db, { user = null, identifier = null, st
 
 export async function finalizeSuccessfulLogin(db, {
   user,
+  sessionId: suppliedSessionId = null,
   identifier = null,
   ip = null,
   userAgent = null,
@@ -396,7 +397,7 @@ export async function finalizeSuccessfulLogin(db, {
 }) {
   const config = settings || (user?.company_id ? await loadSecuritySettings(db, user.company_id) : null);
   const hours = Math.max(1, Number(config?.maximum_session_hours || 12));
-  const sessionId = randomUUID();
+  const sessionId = suppliedSessionId || randomUUID();
   const forwardedFor = req ? String(req.headers?.["x-forwarded-for"] || "").trim() || null : null;
   const loginUrl = req ? String(req.originalUrl || req.url || "").slice(0, 500) || null : null;
   const protocol = req ? String(req.headers?.["x-forwarded-proto"] || req.protocol || "").slice(0, 40) || null : null;
