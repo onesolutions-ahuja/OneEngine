@@ -7,8 +7,6 @@ import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/route
 import { MenuBarClock, useClock } from './shell/clock/ShellClock'
 import RdvnReferenceDock, { dockItems } from './shell/dock/RdvnReferenceDock'
 import { CompanyContextLoading, LockScreen } from './shell/auth/LoginShell'
-import { createRole, loadPermissions, loadRolePermissions, loadRoles, loadSettingsCatalog, loadSettingsContext, loadUsers, patchCompanySettings, patchSettings, readSettingsContextCache, saveRolePermissions, updateRole } from './services/settings'
-import { settingSectionAccess, sectionIsVisible } from './utils/settingsAccess'
 import { appIconUrl, applyDefaultAppIcon, localAppIcon, marketplaceSearchText, readMarketplaceCache, resolveAppOpenRoute, writeMarketplaceCache } from './utils/appMarketplace'
 import JarvisOrb, { ORB_STATES } from './shell/jarvis/JarvisOrb'
 import JarvisPanel from './shell/jarvis/JarvisPanel'
