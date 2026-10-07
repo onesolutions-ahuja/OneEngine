@@ -277,41 +277,6 @@ export default function createSuperadminRouter({ authenticate, db, pool, tenantD
     res.json({ success: true, data: { ...result.rows[0], licence_name: licence?.name || current.licence_name || null, starts_at: effectiveStartsAt, expires_at: effectiveExpiresAt, active: nextActive, status: newStatus } });
   });
 
-  router.get("/superadmin/companies/:id/jarves-licence", async (req,res) => {
-    try {
-      const [settings, enabled] = await Promise.all([
-        db("SELECT jarves_licence_users FROM company_settings WHERE company_id=$1 LIMIT 1", [req.params.id]),
-        db("SELECT COUNT(*)::int AS count FROM users WHERE company_id=$1 AND active=true AND jarves_enabled=true", [req.params.id]),
-      ]);
-      const allowance = Math.max(0, Number(settings.rows[0]?.jarves_licence_users) || 0);
-      const enabledUsers = Number(enabled.rows[0]?.count) || 0;
-      res.json({ success: true, data: { allowance, enabledUsers, seatsRemaining: Math.max(0, allowance - enabledUsers) } });
-    } catch (error) {
-      res.status(500).json({ success: false, message: "Unable to load JARVES licence allocation" });
-    }
-  });
-
-  router.put("/superadmin/companies/:id/jarves-licence", async (req,res) => {
-    const allowance = Math.max(0, Math.trunc(Number(req.body?.allowance) || 0));
-    try {
-      const enabled = await db("SELECT COUNT(*)::int AS count FROM users WHERE company_id=$1 AND active=true AND jarves_enabled=true", [req.params.id]);
-      const enabledUsers = Number(enabled.rows[0]?.count) || 0;
-      if (allowance < enabledUsers) {
-        return res.status(409).json({ success: false, message: `Cannot reduce JARVES seats below ${enabledUsers} enabled user${enabledUsers === 1 ? "" : "s"}` });
-      }
-      const result = await db(
-        `INSERT INTO company_settings(company_id,jarves_licence_users)
-         VALUES($1,$2)
-         ON CONFLICT(company_id) DO UPDATE SET jarves_licence_users=EXCLUDED.jarves_licence_users,updated_at=NOW()
-         RETURNING jarves_licence_users`,
-        [req.params.id, allowance]
-      );
-      res.json({ success: true, data: { allowance: Number(result.rows[0]?.jarves_licence_users) || 0, enabledUsers, seatsRemaining: Math.max(0, allowance - enabledUsers) } });
-    } catch (error) {
-      res.status(500).json({ success: false, message: "Unable to update JARVES licence allocation" });
-    }
-  });
-
   router.get("/superadmin/companies/:id/licence-allocations", async (req,res) => {
     const r=await db(`SELECT a.licence_id,l.name,a.seats,(SELECT COUNT(*)::int FROM user_licence_assignments u WHERE u.company_id=a.company_id AND u.licence_id=a.licence_id) AS used FROM company_licence_allocations a JOIN licences l ON l.id=a.licence_id WHERE a.company_id=$1 ORDER BY l.name`,[req.params.id]);
     res.json({success:true,data:r.rows});
