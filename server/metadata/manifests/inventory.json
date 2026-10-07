@@ -428,7 +428,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "get_stock",
                 "label": "Get Store Stock",
                 "key": "GET_RECORDS",
@@ -452,10 +452,10 @@
                 "limit": 1,
                 "store": "first"
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -474,7 +474,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "new_balance",
                 "label": "Calculate New Balance",
                 "key": "FORMULA",
@@ -491,10 +491,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -513,7 +513,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "stock_exists",
                 "label": "Stock Position Exists?",
                 "key": "CONDITION",
@@ -540,10 +540,10 @@
                   "create_stock"
                 ]
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -562,7 +562,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "update_stock",
                 "label": "Update Store Stock",
                 "key": "UPDATE_RECORD",
@@ -576,10 +576,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -598,7 +598,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_stock",
                 "label": "Create Store Stock",
                 "key": "CREATE_RECORD",
@@ -615,10 +615,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -637,7 +637,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "create_movement",
                 "label": "Create Movement",
                 "key": "CREATE_RECORD",
@@ -672,10 +672,10 @@
                   }
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           },
           {
@@ -694,7 +694,7 @@
               "transforms": {},
               "outputMode": "automatic",
               "manualOutputs": [],
-              "importedRuntimeAction": {
+              "importedMetadataAction": {
                 "id": "set_movement_id",
                 "label": "Return Movement",
                 "key": "ASSIGNMENT",
@@ -705,10 +705,10 @@
                   "path": "steps.create_movement.record.id"
                 }
               },
-              "importedRuntimeActionText": ""
+              "importedMetadataActionText": ""
             },
             "configured": true,
-            "source": "runtime_import",
+            "source": "metadata_import",
             "position": null
           }
         ],
