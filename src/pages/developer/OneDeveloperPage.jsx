@@ -4,7 +4,6 @@ import {
   LayoutGrid, ListChecks, UserCheck, Rocket, Search, Workflow,
 } from 'lucide-react'
 import { apiRequest, getActingCompanyId, getStoredSessionPermissions, getStoredUser, loadSessionPermissions, setActingCompanyId } from '../../services/api'
-import { clearSettingsContextCache } from '../../services/settings'
 import OneBuilder from '../settings/OneBuilder'
 import GPTPageBuilder from './GPTPageBuilder'
 import { ReportTypeManager } from '../reports/ReportTypeDesigner.jsx'
@@ -98,7 +97,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
               body: JSON.stringify({ actingCompanyId: preferred.id }),
             })
             setActingCompanyId(preferred.id)
-            clearSettingsContextCache()
           } else if (isOwnAuthenticatedCompany && current) {
             setActingCompanyId('')
           }
@@ -152,7 +150,6 @@ export default function OneDeveloperPage({ initialSection = 'objects', initialWo
         body: JSON.stringify({ actingCompanyId: id }),
       })
       setActingCompanyId(id)
-      clearSettingsContextCache()
       setSelectedClient(String(id))
     } catch (e) {
       setError(e?.message || 'Unable to select client')
