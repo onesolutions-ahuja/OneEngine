@@ -27,6 +27,7 @@ import { internalAppCatalog } from "../services/internalAppCatalog.js";
 import { moduleRuntimeAccess } from "../services/authorization.js";
 import { normalizeDeviceProfile } from "../services/runtimeAccess.js";
 import { buildRecordPathCatalog, resolveWorkflowResource } from "../services/platformRecordPaths.js";
+import { resolvePageBindingTree } from "../services/platformPageResources.js";
 import { getCompanyEntitlements, hasEntitlement, isPackageLicensed } from "../services/licensing.js";
 import { resolvePageLayout, resolveAssignedPageLayout } from "../services/platformLayoutResolver.js";
 import { searchPlatformRecords } from "../services/platformSearch.js";
@@ -5713,7 +5714,16 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
       let results = [];
       let debugError = null;
       const declaredInputs = Array.isArray(workflow.action?.inputContract) ? workflow.action.inputContract : [];
-      const suppliedInputs = req.body?.inputs && typeof req.body.inputs === "object" && !Array.isArray(req.body.inputs) ? req.body.inputs : {};
+      const rawSuppliedInputs = req.body?.inputs && typeof req.body.inputs === "object" && !Array.isArray(req.body.inputs) ? req.body.inputs : {};
+      const pageContext = req.body?.pageContext && typeof req.body.pageContext === "object" && !Array.isArray(req.body.pageContext) ? req.body.pageContext : {};
+      const suppliedInputs = resolvePageBindingTree(rawSuppliedInputs, {
+        user: req.user,
+        record,
+        pageParameters: pageContext.params || {},
+        pageVariables: pageContext.variables || {},
+        components: pageContext.components || {},
+        flowOutputs: pageContext.flows || {},
+      });
       const inputVariables = {};
       for (const input of declaredInputs) {
         const name = String(input?.name || "").trim();
