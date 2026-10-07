@@ -241,7 +241,12 @@ export default function CustomPageBuilder({ onMessage, onError, initialAppId = "
     return paletteGroups(registry)
       .map((group) => ({
         ...group,
-        items: group.items.filter((component) => component.key !== "section" && (!query || [component.label, component.key, group.label].some((value) => String(value || "").toLowerCase().includes(query))),
+        items: group.items.filter((component) => {
+          if (component.key === "section") return false;
+          if (!query) return true;
+          return [component.label, component.key, group.label]
+            .some((value) => String(value || "").toLowerCase().includes(query));
+        }),
       }))
       .filter((group) => group.items.length);
   }, [registry, paletteQuery]);
