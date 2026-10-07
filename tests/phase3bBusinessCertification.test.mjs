@@ -74,10 +74,11 @@ test("Phase 3A generic Test/Debug closure is permanently enforced", async () => 
     "Builder Test Mode must not reject generic non-Flow interactions");
 
   assert.match(route, /router\.post\("\/platform\/runtime\/page-interactions\/test"/);
-  assert.equal(route.includes('if (!["workflow","screen_flow"].includes(type))'), false,
-    "Server Test runtime must not reject generic non-Flow interactions");
+  assert.match(route, /clientOnlyTypes = new Set\(\["none", "component", "navigate", "form_layout"\]\)/);
+  assert.match(route, /type === "action"/);
+  assert.match(route, /Unsupported page interaction type/);
 
-  for (const kind of ["page","component","event","permission","query","flow_input","flow","flow_step","flow_output","ui_refresh","rollback","timing","error"]) {
+  for (const kind of ["page","component","event","permission","interaction","action","query","flow_input","flow","flow_step","flow_output","ui_refresh","rollback","timing","error"]) {
     assert.ok(route.includes(`kind: "${kind}"`) || route.includes(`kind:"${kind}"`), `missing Phase 3A trace kind: ${kind}`);
   }
   assert.match(route, /client\.query\("BEGIN"\)/);
