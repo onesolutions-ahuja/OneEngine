@@ -315,6 +315,10 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   }
   if (node.componentKey === "calendar") {
     const startField = config.startField || config.dateField || "";
+    const endField = config.endField || "";
+    const statusField = config.statusField || "";
+    const [selectedDay, setSelectedDay] = useState(null);
+    const [calendarView, setCalendarView] = useState("month");
     const monthStart = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
     const gridStart = new Date(monthStart);
     gridStart.setDate(1 - ((monthStart.getDay() + 6) % 7));
@@ -322,7 +326,82 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     const dayKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     const events = new Map();
     records.forEach((record) => { const date = new Date(record[startField]); if (!Number.isNaN(date.getTime())) events.set(dayKey(date), [...(events.get(dayKey(date)) || []), record]); });
-    return <div className="space-y-2"><div className="flex items-center justify-between"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1))} aria-label="Previous month">‹</button><strong className="text-sm">{calendarDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1))} aria-label="Next month">›</button></div><div className="grid grid-cols-7 gap-1">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <div key={day} className="py-1 text-center text-[11px] font-semibold">{day}</div>)}{days.map((day) => <div key={dayKey(day)} className="min-h-16 min-w-0 rounded border p-1" style={{ borderColor: "var(--border-color, #e5e7eb)", opacity: day.getMonth() === calendarDate.getMonth() ? 1 : 0.45 }}><span className="text-[10px]">{day.getDate()}</span><div className="mt-1 space-y-0.5">{(events.get(dayKey(day)) || []).slice(0, 2).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="block w-full truncate rounded bg-emerald-100 px-1 py-0.5 text-left text-[10px]">{record[titleField] || "Event"}</button>)}</div></div>)}</div>{placeholder ? <div className="cpb-empty">Choose an object to populate this calendar.</div> : null}</div>;
+    const statusPalette = config.statusColors && typeof config.statusColors === "object" ? config.statusColors : {};
+    const statusColor = (record) => statusPalette[String(record?.[statusField] ?? "")] || "var(--accent-color, #2563eb)";
+    const selectedKey = selectedDay ? dayKey(selectedDay) : "";
+    const selectedRecords = selectedKey ? (events.get(selectedKey) || []) : [];
+    const timeText = (value) => {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    };
+    const renderDayAgenda = (dayRecords) => (
+      <div className="space-y-2">
+        {dayRecords.length ? [...dayRecords].sort((left, right) => new Date(left[startField]) - new Date(right[startField])).map((record, index) => (
+          <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="flex w-full items-stretch overflow-hidden rounded-lg border bg-white text-left" style={{ borderColor: "var(--border-color, #e5e7eb)" }}>
+            <span className="w-1.5 shrink-0" style={{ background: statusColor(record) }} aria-hidden="true" />
+            <span className="min-w-0 flex-1 px-3 py-2">
+              <span className="block text-xs font-semibold">{timeText(record[startField])}{endField && record[endField] ? ` – ${timeText(record[endField])}` : ""}</span>
+              <span className="block truncate text-sm">{record[titleField] || "Untitled"}</span>
+              {statusField && record[statusField] != null ? <span className="block truncate text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{String(record[statusField])}</span> : null}
+            </span>
+          </button>
+        )) : <div className="cpb-empty">No records for this date.</div>}
+      </div>
+    );
+    const activeDay = selectedDay || new Date();
+    const activeRecords = events.get(dayKey(activeDay)) || [];
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1))} aria-label="Previous month">‹</button>
+            <strong className="min-w-32 text-center text-sm">{calendarDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong>
+            <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1))} aria-label="Next month">›</button>
+            <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => { const now = new Date(); setCalendarDate(new Date(now.getFullYear(), now.getMonth(), 1)); setSelectedDay(now); }}>Today</button>
+          </div>
+          <div className="flex rounded-lg border p-0.5" style={{ borderColor: "var(--border-color, #e5e7eb)" }}>
+            {["month", "day", "list"].map((view) => <button type="button" key={view} onClick={() => setCalendarView(view)} className="rounded-md px-2 py-1 text-xs font-medium" style={calendarView === view ? { background: "var(--accent-color, #2563eb)", color: "#fff" } : undefined}>{view[0].toUpperCase() + view.slice(1)}</button>)}
+          </div>
+        </div>
+        {calendarView === "month" ? (
+          <div className="overflow-x-auto">
+            <div className="grid min-w-[560px] grid-cols-7 gap-1">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <div key={day} className="py-1 text-center text-[11px] font-semibold" style={{ color: "var(--text-secondary, #64748b)" }}>{day}</div>)}
+              {days.map((day) => {
+                const key = dayKey(day);
+                const dayEvents = events.get(key) || [];
+                const isSelected = selectedKey === key;
+                const isToday = dayKey(day) === dayKey(new Date());
+                return (
+                  <button type="button" key={key} onClick={() => setSelectedDay(new Date(day))} className="min-h-24 min-w-0 rounded-lg border p-1.5 text-left transition-shadow hover:shadow-sm" style={{ borderColor: isSelected ? "var(--accent-color, #2563eb)" : "var(--border-color, #e5e7eb)", background: isSelected ? "var(--muted-background, #f8fafc)" : "var(--card-background, #fff)", opacity: day.getMonth() === calendarDate.getMonth() ? 1 : 0.42 }}>
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold" style={isToday ? { background: "var(--accent-color, #2563eb)", color: "#fff" } : undefined}>{day.getDate()}</span>
+                    <div className="mt-1 space-y-1">
+                      {dayEvents.slice(0, 3).map((record, index) => <span key={record.id || index} className="flex min-w-0 items-center gap-1 text-[10px]"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: statusColor(record) }} /><span className="truncate">{timeText(record[startField])} {record[titleField] || "Event"}</span></span>)}
+                      {dayEvents.length > 3 ? <span className="block text-[10px] font-medium">+{dayEvents.length - 3} more</span> : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : calendarView === "day" ? (
+          <div className="rounded-xl border p-3" style={{ borderColor: "var(--border-color, #e5e7eb)" }}>
+            <h4 className="mb-3 text-sm font-semibold">{activeDay.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h4>
+            {renderDayAgenda(activeRecords)}
+          </div>
+        ) : (
+          <div className="space-y-3">{[...events.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, dayRecords]) => <section key={key}><h4 className="mb-1 text-xs font-semibold">{new Date(`${key}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}</h4>{renderDayAgenda(dayRecords)}</section>)}</div>
+        )}
+        {calendarView === "month" && selectedDay ? (
+          <aside className="rounded-xl border p-3" style={{ borderColor: "var(--border-color, #e5e7eb)", background: "var(--muted-background, #f8fafc)" }}>
+            <div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-sm font-semibold">{selectedDay.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</h4><span className="text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{selectedRecords.length} item{selectedRecords.length === 1 ? "" : "s"}</span></div>
+            {renderDayAgenda(selectedRecords)}
+          </aside>
+        ) : null}
+        {statusField && Object.keys(statusPalette).length ? <div className="flex flex-wrap gap-x-4 gap-y-1">{Object.entries(statusPalette).map(([status, color]) => <span key={status} className="flex items-center gap-1.5 text-[11px]"><span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />{status}</span>)}</div> : null}
+        {placeholder ? <div className="cpb-empty">Choose an object and map start, end, title and status fields in Properties.</div> : null}
+      </div>
+    );
   }
   if (node.componentKey === "scheduler") {
     const startField = config.startField || config.dateField || "";
