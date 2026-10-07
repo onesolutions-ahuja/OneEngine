@@ -1,0 +1,1164 @@
+{
+  "packageKey": "staff",
+  "packageType": "FOUNDATION",
+  "name": "Staff Core",
+  "version": "1.1.0",
+  "description": "Technical foundation for Staff and Attendance metadata on existing tenant-scoped records.",
+  "dependencies": [],
+  "billable": false,
+  "licenceRequired": false,
+  "visibility": "HIDDEN",
+  "installable": true,
+  "systemOnly": true,
+  "technical": true,
+  "upgrade": {
+    "strategy": "idempotent_metadata_upsert",
+    "adoptsExistingData": true,
+    "preservesRecordIds": true,
+    "migrations": [
+      "staff_core_object_metadata_v1"
+    ]
+  },
+  "objects": [
+    {
+      "objectKey": "employee",
+      "label": "Staff Member",
+      "pluralLabel": "Staff",
+      "description": "Business-facing staff metadata on the existing authentication user record.",
+      "sourceTable": "users",
+      "config": {
+        "settingsHost": true,
+        "settingsGroup": "Users",
+        "settingsLabel": "Users",
+        "settingsOrder": 200,
+        "settingsAllowCreate": false,
+        "settingsAllowDelete": false
+      },
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "fields": [
+        {
+          "apiName": "full_name",
+          "label": "Name",
+          "fieldType": "text",
+          "sourceColumn": "full_name",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "username",
+          "label": "User",
+          "fieldType": "text",
+          "sourceColumn": "username",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "email",
+          "label": "Email",
+          "fieldType": "email",
+          "sourceColumn": "email",
+          "writable": true
+        },
+        {
+          "apiName": "active",
+          "label": "Status",
+          "fieldType": "boolean",
+          "sourceColumn": "active",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "store"
+          }
+        },
+        {
+          "apiName": "role_id",
+          "label": "Role",
+          "fieldType": "lookup",
+          "sourceColumn": "role_id",
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "role"
+          }
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        },
+        {
+          "apiName": "updated_at",
+          "label": "Updated",
+          "fieldType": "datetime",
+          "sourceColumn": "updated_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "attendance",
+      "label": "Attendance",
+      "pluralLabel": "Attendance Records",
+      "description": "Existing server-timestamped staff attendance sessions.",
+      "sourceTable": "attendance_records",
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "storeScoped": true,
+      "fields": [
+        {
+          "apiName": "user_id",
+          "label": "Staff User",
+          "fieldType": "lookup",
+          "sourceColumn": "user_id",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "store_id",
+          "label": "Store",
+          "fieldType": "lookup",
+          "sourceColumn": "store_id",
+          "required": true,
+          "writable": false
+        },
+        {
+          "apiName": "status",
+          "label": "Status",
+          "fieldType": "picklist",
+          "sourceColumn": "status",
+          "required": true,
+          "writable": true,
+          "options": [
+            "open",
+            "closed"
+          ]
+        },
+        {
+          "apiName": "clock_in",
+          "label": "Clock In",
+          "fieldType": "datetime",
+          "sourceColumn": "clock_in",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "clock_out",
+          "label": "Clock Out",
+          "fieldType": "datetime",
+          "sourceColumn": "clock_out",
+          "writable": true
+        },
+        {
+          "apiName": "worked_minutes",
+          "label": "Worked Minutes",
+          "fieldType": "number",
+          "sourceColumn": "worked_minutes",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "objectKey": "account_action_token",
+      "label": "Account Action Token",
+      "pluralLabel": "Account Action Tokens",
+      "description": "Internal metadata-backed secure token record used by account lifecycle flows.",
+      "sourceTable": "account_action_tokens",
+      "metadataScope": "global",
+      "fieldsMetadataScope": "global",
+      "config": {
+        "internal": true,
+        "flowWritesOnly": true,
+        "rbac": {
+          "view": "user.manage",
+          "create": "user.manage",
+          "edit": "user.manage",
+          "delete": "user.manage"
+        }
+      },
+      "fields": [
+        {
+          "apiName": "user_id",
+          "label": "User",
+          "fieldType": "lookup",
+          "sourceColumn": "user_id",
+          "required": true,
+          "writable": true,
+          "config": {
+            "relatedObjectKey": "employee"
+          }
+        },
+        {
+          "apiName": "purpose",
+          "label": "Purpose",
+          "fieldType": "picklist",
+          "sourceColumn": "purpose",
+          "required": true,
+          "writable": true,
+          "options": [
+            "REGISTRATION",
+            "PASSWORD_RESET"
+          ]
+        },
+        {
+          "apiName": "token_hash",
+          "label": "Token Hash",
+          "fieldType": "text",
+          "sourceColumn": "token_hash",
+          "required": true,
+          "writable": true,
+          "readable": false,
+          "config": {
+            "secure": true
+          }
+        },
+        {
+          "apiName": "expires_at",
+          "label": "Expires At",
+          "fieldType": "datetime",
+          "sourceColumn": "expires_at",
+          "required": true,
+          "writable": true
+        },
+        {
+          "apiName": "used_at",
+          "label": "Used At",
+          "fieldType": "datetime",
+          "sourceColumn": "used_at",
+          "writable": true
+        },
+        {
+          "apiName": "created_at",
+          "label": "Created",
+          "fieldType": "datetime",
+          "sourceColumn": "created_at",
+          "writable": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentObjectKey": "employee",
+      "childObjectKey": "attendance",
+      "relationshipKey": "attendance_records",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "user_id",
+      "required": true
+    },
+    {
+      "parentObjectKey": "store",
+      "childObjectKey": "employee",
+      "relationshipKey": "staff",
+      "relationshipType": "one_to_many",
+      "childFieldApiName": "store_id"
+    }
+  ],
+  "listViews": [
+    {
+      "objectKey": "employee",
+      "viewKey": "all_staff",
+      "label": "All Staff",
+      "description": "Existing business-facing user and employee records.",
+      "columns": [
+        "full_name",
+        "active",
+        "username",
+        "email",
+        "store_id"
+      ],
+      "sort": {
+        "field": "full_name",
+        "direction": "asc"
+      },
+      "isDefault": true
+    }
+  ],
+  "layouts": [
+    {
+      "objectKey": "employee",
+      "pageType": "detail",
+      "layoutKey": "staff_record_detail",
+      "name": "Staff Record",
+      "metadataScope": "global",
+      "definition": {
+        "sections": [
+          {
+            "id": "staff-details",
+            "label": "Staff Details",
+            "order": 0,
+            "columns": 2,
+            "visible": true
+          }
+        ],
+        "components": [
+          {
+            "id": "staff-header",
+            "type": "header",
+            "label": "Staff Record",
+            "section_id": "staff-details",
+            "order": 0,
+            "width": "full",
+            "visible": true
+          },
+          {
+            "id": "staff-full-name",
+            "type": "field",
+            "field_key": "full_name",
+            "section_id": "staff-details",
+            "order": 1,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-active",
+            "type": "field",
+            "field_key": "active",
+            "section_id": "staff-details",
+            "order": 2,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-username",
+            "type": "field",
+            "field_key": "username",
+            "section_id": "staff-details",
+            "order": 3,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-email",
+            "type": "field",
+            "field_key": "email",
+            "section_id": "staff-details",
+            "order": 4,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-store",
+            "type": "field",
+            "field_key": "store_id",
+            "section_id": "staff-details",
+            "order": 5,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-created",
+            "type": "field",
+            "field_key": "created_at",
+            "section_id": "staff-details",
+            "order": 6,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-attendance",
+            "type": "related_list",
+            "relationship_key": "attendance_records",
+            "label": "Attendance",
+            "section_id": "staff-details",
+            "order": 7,
+            "width": "full",
+            "visible": true
+          }
+        ]
+      }
+    },
+    {
+      "objectKey": "employee",
+      "pageType": "view",
+      "layoutKey": "staff_record_view",
+      "name": "Staff Record View",
+      "metadataScope": "global",
+      "definition": {
+        "sections": [
+          {
+            "id": "staff-view",
+            "label": "Staff Details",
+            "order": 0,
+            "columns": 2,
+            "visible": true
+          }
+        ],
+        "components": [
+          {
+            "id": "staff-view-header",
+            "type": "header",
+            "label": "Staff Record",
+            "section_id": "staff-view",
+            "order": 0,
+            "width": "full",
+            "visible": true
+          },
+          {
+            "id": "staff-view-name",
+            "type": "field",
+            "field_key": "full_name",
+            "section_id": "staff-view",
+            "order": 1,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-status",
+            "type": "field",
+            "field_key": "active",
+            "section_id": "staff-view",
+            "order": 2,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-user",
+            "type": "field",
+            "field_key": "username",
+            "section_id": "staff-view",
+            "order": 3,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-email",
+            "type": "field",
+            "field_key": "email",
+            "section_id": "staff-view",
+            "order": 4,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-store",
+            "type": "field",
+            "field_key": "store_id",
+            "section_id": "staff-view",
+            "order": 5,
+            "width": "1/2",
+            "visible": true,
+            "readOnly": true
+          },
+          {
+            "id": "staff-view-attendance",
+            "type": "related_list",
+            "relationship_key": "attendance_records",
+            "label": "Attendance",
+            "section_id": "staff-view",
+            "order": 6,
+            "width": "full",
+            "visible": true
+          }
+        ]
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "objectKey": "employee",
+      "name": "Staff - Issue Lifecycle Token",
+      "apiName": "STAFF_ISSUE_LIFECYCLE_TOKEN",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "inputContract": [
+        {
+          "name": "userId",
+          "label": "User ID",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "purpose",
+          "label": "Purpose",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "expiresMinutes",
+          "label": "Expiry Minutes",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "outputContract": [
+        {
+          "name": "token",
+          "label": "Token",
+          "type": "text",
+          "source": "variables.token"
+        },
+        {
+          "name": "expiresMinutes",
+          "label": "Expiry Minutes",
+          "type": "number",
+          "source": "variables.expiresMinutes"
+        }
+      ],
+      "actions": [
+        {
+          "id": "get_open_tokens",
+          "label": "Get Existing Active Tokens",
+          "apiName": "get_open_tokens",
+          "key": "GET_RECORDS",
+          "objectKey": "account_action_token",
+          "filters": [
+            {
+              "field": "user_id",
+              "operator": "equals",
+              "value": {
+                "path": "$record.userId"
+              }
+            },
+            {
+              "field": "purpose",
+              "operator": "equals",
+              "value": {
+                "path": "$record.purpose"
+              }
+            },
+            {
+              "field": "used_at",
+              "operator": "is_empty",
+              "value": true
+            }
+          ],
+          "match": "all",
+          "store": "all",
+          "limit": 100
+        },
+        {
+          "id": "expire_open_tokens",
+          "label": "Expire Existing Tokens",
+          "apiName": "expire_open_tokens",
+          "key": "LOOP",
+          "collection": "steps.get_open_tokens.records",
+          "itemVariable": "currentToken",
+          "bodyBranch": [
+            "mark_token_used"
+          ]
+        },
+        {
+          "id": "mark_token_used",
+          "label": "Mark Existing Token Used",
+          "apiName": "mark_token_used",
+          "key": "UPDATE_RECORD",
+          "objectKey": "account_action_token",
+          "recordId": {
+            "path": "variables.currentToken.id"
+          },
+          "fieldValues": {
+            "used_at": {
+              "path": "$now"
+            }
+          }
+        },
+        {
+          "id": "generate_token",
+          "label": "Generate Secure Token",
+          "apiName": "generate_token",
+          "key": "GENERATE_SECURE_TOKEN",
+          "tokenResourceName": "token",
+          "hashResourceName": "tokenHash",
+          "bytes": 32
+        },
+        {
+          "id": "clamp_expiry",
+          "label": "Clamp Token Expiry",
+          "apiName": "clamp_expiry",
+          "key": "FORMULA",
+          "resourceName": "safeExpiresMinutes",
+          "resultType": "number",
+          "expression": "MIN(MAX(expiresMinutes,1),10080)",
+          "inputs": {
+            "expiresMinutes": {
+              "path": "$record.expiresMinutes"
+            }
+          }
+        },
+        {
+          "id": "calculate_expiry",
+          "label": "Calculate Token Expiry",
+          "apiName": "calculate_expiry",
+          "key": "FORMULA",
+          "resourceName": "expiresAt",
+          "resultType": "datetime",
+          "expression": "ADDMINUTES(currentTime, expiresMinutes)",
+          "inputs": {
+            "currentTime": {
+              "path": "$now"
+            },
+            "expiresMinutes": {
+              "path": "variables.safeExpiresMinutes"
+            }
+          }
+        },
+        {
+          "id": "create_token_record",
+          "label": "Create Token Record",
+          "apiName": "create_token_record",
+          "key": "CREATE_RECORD",
+          "objectKey": "account_action_token",
+          "fieldValues": {
+            "user_id": {
+              "path": "$record.userId"
+            },
+            "purpose": {
+              "path": "$record.purpose"
+            },
+            "token_hash": {
+              "path": "variables.tokenHash"
+            },
+            "expires_at": {
+              "path": "variables.expiresAt"
+            }
+          }
+        },
+        {
+          "id": "set_expiry_output",
+          "label": "Set Expiry Output",
+          "apiName": "set_expiry_output",
+          "key": "ASSIGNMENT",
+          "variableName": "expiresMinutes",
+          "variableType": "number",
+          "operator": "set",
+          "value": {
+            "path": "variables.safeExpiresMinutes"
+          }
+        }
+      ]
+    },
+    {
+      "objectKey": "employee",
+      "name": "Staff - Set Active Status",
+      "apiName": "STAFF_SET_ACTIVE_STATUS",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "inputContract": [
+        {
+          "name": "active",
+          "label": "Active",
+          "type": "boolean",
+          "required": true
+        }
+      ],
+      "actions": [
+        {
+          "id": "set_active_status",
+          "label": "Set Active Status",
+          "apiName": "set_active_status",
+          "key": "UPDATE_RECORD",
+          "objectKey": "employee",
+          "recordId": {
+            "path": "$record.id"
+          },
+          "fieldValues": {
+            "active": {
+              "path": "$record.active"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectKey": "employee",
+      "name": "Staff - Send Password Reset",
+      "apiName": "STAFF_SEND_PASSWORD_RESET",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "actions": [
+        {
+          "id": "get_reset_settings",
+          "label": "Get User Lifecycle Settings",
+          "apiName": "get_reset_settings",
+          "key": "GET_RECORDS",
+          "objectKey": "system_settings",
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "reset_user_active",
+          "label": "User Is Active",
+          "apiName": "reset_user_active",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Active",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "$record.active",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "reset_enabled"
+              ]
+            }
+          ],
+          "defaultLabel": "Inactive",
+          "defaultBranch": [
+            "reset_inactive_error"
+          ]
+        },
+        {
+          "id": "reset_inactive_error",
+          "label": "Inactive User",
+          "apiName": "reset_inactive_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Password reset cannot be sent to an inactive user",
+          "errorLocation": "record"
+        },
+        {
+          "id": "reset_enabled",
+          "label": "Password Reset Email Enabled",
+          "apiName": "reset_enabled",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Enabled",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_reset_settings.record.password_reset_email_enabled",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "reset_email_present"
+              ]
+            }
+          ],
+          "defaultLabel": "Disabled",
+          "defaultBranch": [
+            "reset_disabled_error"
+          ]
+        },
+        {
+          "id": "reset_disabled_error",
+          "label": "Password Reset Disabled",
+          "apiName": "reset_disabled_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Password reset email is disabled in Settings",
+          "errorLocation": "record"
+        },
+        {
+          "id": "reset_email_present",
+          "label": "User Has Email",
+          "apiName": "reset_email_present",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Email Present",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "$record.email",
+                    "operator": "is_not_empty"
+                  }
+                ]
+              },
+              "branch": [
+                "issue_reset_token",
+                "send_reset_email"
+              ]
+            }
+          ],
+          "defaultLabel": "Missing Email",
+          "defaultBranch": [
+            "reset_email_error"
+          ]
+        },
+        {
+          "id": "reset_email_error",
+          "label": "Missing Email",
+          "apiName": "reset_email_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "User has no email address",
+          "errorLocation": "record"
+        },
+        {
+          "id": "issue_reset_token",
+          "label": "Issue Password Reset Token",
+          "apiName": "issue_reset_token",
+          "key": "RUN_SUBFLOW",
+          "subflowApiName": "STAFF_ISSUE_LIFECYCLE_TOKEN",
+          "inputMappings": {
+            "userId": {
+              "path": "$record.id"
+            },
+            "purpose": "PASSWORD_RESET",
+            "expiresMinutes": {
+              "path": "steps.get_reset_settings.record.password_reset_expiry_minutes"
+            }
+          },
+          "outputMappings": {
+            "token": "variables.resetToken",
+            "expiresMinutes": "variables.resetExpiresMinutes"
+          }
+        },
+        {
+          "id": "send_reset_email",
+          "label": "Send Password Reset Email",
+          "apiName": "send_reset_email",
+          "key": "SEND_COMMUNICATION",
+          "channel": "EMAIL",
+          "recipient": {
+            "path": "$record.email"
+          },
+          "templateKey": "PASSWORD_RESET",
+          "templateContext": {
+            "token": {
+              "path": "variables.resetToken"
+            },
+            "userId": {
+              "path": "$record.id"
+            },
+            "expiresMinutes": {
+              "path": "variables.resetExpiresMinutes"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "objectKey": "employee",
+      "name": "Staff - Send Invitation",
+      "apiName": "STAFF_SEND_INVITATION",
+      "triggerKey": "manual",
+      "active": true,
+      "lifecycleStatus": "ACTIVE",
+      "actions": [
+        {
+          "id": "get_invite_settings",
+          "label": "Get User Lifecycle Settings",
+          "apiName": "get_invite_settings",
+          "key": "GET_RECORDS",
+          "objectKey": "system_settings",
+          "limit": 1,
+          "store": "first"
+        },
+        {
+          "id": "invite_enabled",
+          "label": "Email Registration Enabled",
+          "apiName": "invite_enabled",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Enabled",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "steps.get_invite_settings.record.email_registration_enabled",
+                    "operator": "equals",
+                    "value": true
+                  }
+                ]
+              },
+              "branch": [
+                "invite_email_present"
+              ]
+            }
+          ],
+          "defaultLabel": "Disabled",
+          "defaultBranch": [
+            "invite_disabled_error"
+          ]
+        },
+        {
+          "id": "invite_disabled_error",
+          "label": "Email Registration Disabled",
+          "apiName": "invite_disabled_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "Email registration is disabled in Settings",
+          "errorLocation": "record"
+        },
+        {
+          "id": "invite_email_present",
+          "label": "User Has Email",
+          "apiName": "invite_email_present",
+          "key": "CONDITION",
+          "outcomes": [
+            {
+              "id": "yes",
+              "label": "Email Present",
+              "condition": {
+                "match": "all",
+                "conditions": [
+                  {
+                    "field": "$record.email",
+                    "operator": "is_not_empty"
+                  }
+                ]
+              },
+              "branch": [
+                "issue_invite_token",
+                "send_invite_email"
+              ]
+            }
+          ],
+          "defaultLabel": "Missing Email",
+          "defaultBranch": [
+            "invite_email_error"
+          ]
+        },
+        {
+          "id": "invite_email_error",
+          "label": "Missing Email",
+          "apiName": "invite_email_error",
+          "key": "CUSTOM_ERROR",
+          "errorMessage": "User has no email address",
+          "errorLocation": "record"
+        },
+        {
+          "id": "issue_invite_token",
+          "label": "Issue Registration Token",
+          "apiName": "issue_invite_token",
+          "key": "RUN_SUBFLOW",
+          "subflowApiName": "STAFF_ISSUE_LIFECYCLE_TOKEN",
+          "inputMappings": {
+            "userId": {
+              "path": "$record.id"
+            },
+            "purpose": "REGISTRATION",
+            "expiresMinutes": {
+              "path": "steps.get_invite_settings.record.registration_link_expiry_minutes"
+            }
+          },
+          "outputMappings": {
+            "token": "variables.inviteToken",
+            "expiresMinutes": "variables.inviteExpiresMinutes"
+          }
+        },
+        {
+          "id": "send_invite_email",
+          "label": "Send Invitation Email",
+          "apiName": "send_invite_email",
+          "key": "SEND_COMMUNICATION",
+          "channel": "EMAIL",
+          "recipient": {
+            "path": "$record.email"
+          },
+          "templateKey": "USER_INVITATION",
+          "templateContext": {
+            "token": {
+              "path": "variables.inviteToken"
+            },
+            "userId": {
+              "path": "$record.id"
+            },
+            "expiresMinutes": {
+              "path": "variables.inviteExpiresMinutes"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "actionKey": "employee.set_active_status",
+      "objectKey": "employee",
+      "label": "Set Active Status",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "user.edit",
+      "config": {
+        "subflowApiName": "STAFF_SET_ACTIVE_STATUS"
+      }
+    },
+    {
+      "actionKey": "employee.send_password_reset",
+      "objectKey": "employee",
+      "label": "Send Password Reset",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "user.manage",
+      "config": {
+        "subflowApiName": "STAFF_SEND_PASSWORD_RESET"
+      }
+    },
+    {
+      "actionKey": "employee.send_invitation",
+      "objectKey": "employee",
+      "label": "Send Invitation",
+      "handlerKey": "RUN_SUBFLOW",
+      "requiredPermission": "user.manage",
+      "config": {
+        "subflowApiName": "STAFF_SEND_INVITATION"
+      }
+    }
+  ],
+  "buttons": [
+    {
+      "objectKey": "employee",
+      "buttonKey": "set_active_status",
+      "label": "Set Active Status",
+      "targetType": "action",
+      "targetKey": "employee.set_active_status",
+      "actionKey": "employee.set_active_status",
+      "placement": "record",
+      "variant": "secondary",
+      "requiredPermission": "user.edit",
+      "inputMappings": {
+        "active": {
+          "path": "context.active"
+        }
+      },
+      "config": {
+        "hidden": true
+      }
+    },
+    {
+      "objectKey": "employee",
+      "buttonKey": "send_password_reset",
+      "label": "Send Password Reset",
+      "targetType": "action",
+      "targetKey": "employee.send_password_reset",
+      "actionKey": "employee.send_password_reset",
+      "placement": "record",
+      "variant": "secondary",
+      "requiredPermission": "user.manage",
+      "config": {
+        "icon": "key-round"
+      }
+    },
+    {
+      "objectKey": "employee",
+      "buttonKey": "send_invitation",
+      "label": "Send Invitation",
+      "targetType": "action",
+      "targetKey": "employee.send_invitation",
+      "actionKey": "employee.send_invitation",
+      "placement": "record",
+      "variant": "secondary",
+      "requiredPermission": "user.manage",
+      "config": {
+        "icon": "mail-plus"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "name": "Staff name is required",
+      "objectKey": "employee",
+      "triggerKey": "before_save",
+      "active": true,
+      "required": true,
+      "conditions": [
+        {
+          "field": "full_name",
+          "operator": "is_empty"
+        }
+      ],
+      "action": {
+        "type": "validation",
+        "match": "all",
+        "message": "Enter a staff name."
+      }
+    }
+  ],
+  "permissionDeclarations": [
+    {
+      "key": "staff_records",
+      "objectKey": "employee",
+      "permission": "user.view",
+      "access": "read"
+    },
+    {
+      "key": "staff_manage",
+      "objectKey": "employee",
+      "permission": "user.edit",
+      "access": "manage"
+    },
+    {
+      "key": "attendance_records",
+      "objectKey": "attendance",
+      "permission": "attendance.view",
+      "access": "read"
+    },
+    {
+      "key": "attendance_actions",
+      "objectKey": "attendance",
+      "permission": "attendance.use",
+      "access": "execute"
+    }
+  ],
+  "permissions": [
+    "user.view",
+    "user.create",
+    "user.edit",
+    "attendance.view",
+    "attendance.use"
+  ],
+  "capabilities": [
+    "staff_core",
+    "employee_metadata",
+    "attendance_metadata"
+  ],
+  "ownership": {
+    "metadataTypes": [
+      "object",
+      "field",
+      "relationship",
+      "layout",
+      "list_view",
+      "validation",
+      "workflow",
+      "action"
+    ],
+    "excludes": [
+      "authentication_user_metadata",
+      "roles",
+      "permissions",
+      "user_records",
+      "attendance_record_data"
+    ]
+  },
+  "upgradeMetadata": {
+    "strategy": "additive",
+    "preserveExistingUserIds": true,
+    "preserveAttendanceRecords": true
+  },
+  "migrations": [
+    "staff_core_object_metadata_v1"
+  ]
+}
