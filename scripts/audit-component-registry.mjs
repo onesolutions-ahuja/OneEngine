@@ -73,13 +73,28 @@ const actionRuntimeMissing = ["menu","breadcrumb","stepper","modal","drawer","co
   .filter((key) => !pageRendererSource.includes(`key === "${key}"`) && !pageRendererSource.includes(`["${key}"`));
 const pageCalendarCollision = pageComponents.some((component) => component.key === "calendar_widget");
 
+const recordDataConfigMismatch = pageComponents
+  .filter((component) => Array.isArray(component.configurable) && component.configurable.includes("objectKey"))
+  .filter((component) => component.runtimeKind !== "analytics")
+  .filter((component) => component.recordBound !== true && component.relationship !== true)
+  .map((component) => component.key);
+const childMetadataMismatch = pageComponents
+  .filter((component) => ["card","grid","stack","tabs","accordion","container"].includes(component.key))
+  .filter((component) => component.supportsChildren !== true && component.containsChildren !== true)
+  .map((component) => component.key);
+const duplicatePageLabels = Object.entries(pageComponents.reduce((acc, component) => {
+  const label = String(component.label || "").trim().toLowerCase();
+  if (label) (acc[label] ||= []).push(component.key);
+  return acc;
+}, {})).filter(([, componentKeys]) => componentKeys.length > 1).map(([label, componentKeys]) => ({ label, componentKeys }));
+
 const rendererCoverageMissing = pageComponents
   .filter((component) => component.key !== "section" && component.category !== "field" && component.runtimeKind !== "analytics")
   .filter((component) => !pageRendererSource.includes(`"${component.key}"`))
   .map((component) => component.key);
 
-if (propertyCoverageMissing.length || recordRuntimeMissing.length || bindingRuntimeMissing.length || relationshipRuntimeMissing.length || childRuntimeMissing.length || controlRuntimeMissing.length || actionRuntimeMissing.length || pageCalendarCollision || rendererCoverageMissing.length) {
-  console.error("Page Builder component coverage audit failed.", { propertyCoverageMissing, recordRuntimeMissing, bindingRuntimeMissing, relationshipRuntimeMissing, childRuntimeMissing, controlRuntimeMissing, actionRuntimeMissing, pageCalendarCollision, rendererCoverageMissing });
+if (propertyCoverageMissing.length || recordRuntimeMissing.length || bindingRuntimeMissing.length || relationshipRuntimeMissing.length || childRuntimeMissing.length || controlRuntimeMissing.length || actionRuntimeMissing.length || recordDataConfigMismatch.length || childMetadataMismatch.length || duplicatePageLabels.length || pageCalendarCollision || rendererCoverageMissing.length) {
+  console.error("Page Builder component coverage audit failed.", { propertyCoverageMissing, recordRuntimeMissing, bindingRuntimeMissing, relationshipRuntimeMissing, childRuntimeMissing, controlRuntimeMissing, actionRuntimeMissing, recordDataConfigMismatch, childMetadataMismatch, duplicatePageLabels, pageCalendarCollision, rendererCoverageMissing });
   process.exit(1);
 }
 
