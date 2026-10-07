@@ -120,7 +120,7 @@ export async function getGoogleConnectPasswordLoginRuntime(db, companyId) {
     return resolveGoogleConnectPasswordLoginRuntime(db, companyId, null, null);
   }
 
-  const [packageResult, connectionResult] = await Promise.all([
+  const [packageResult, connectionResult, entitlements] = await Promise.all([
     db(
       `SELECT p.*, i.status AS installation_status, i.suspended_by_entitlement, i.deactivated_by_user
          FROM package_registry p
@@ -138,14 +138,47 @@ export async function getGoogleConnectPasswordLoginRuntime(db, companyId) {
         LIMIT 1`,
       [companyId, GOOGLE_CONNECT_PACKAGE_KEY]
     ),
+    getCompanyEntitlements(db, companyId),
   ]);
 
-  return resolveGoogleConnectPasswordLoginRuntime(
-    db,
-    companyId,
-    packageResult.rows[0] || null,
-    connectionResult.rows[0] || null
+  const packageRow = packageResult.rows[0] || null;
+  const connection = connectionResult.rows[0] || null;
+  const config = configFromRow(connection);
+  const installed = Boolean(
+    packageRow
+    && packageRow.installation_status === "active"
+    && packageRow.suspended_by_entitlement !== true
+    && packageRow.deactivated_by_user !== true
   );
+  const configured = Boolean(config.clientId && config.clientSecret && config.redirectUri);
+  const enabled = connection?.enabled === true && config.enabled;
+
+  if (!packageRow || !installed || !enabled || !configured) {
+    return {
+      ready: false,
+      licensed: false,
+      installed,
+      configured,
+      enabled,
+      reason: "SSO_NOT_CONNECTED",
+      package: packageRow,
+      connection,
+      config,
+    };
+  }
+
+  const licensed = isPackageLicensed(entitlements, packageRow);
+  return {
+    ready: licensed,
+    licensed,
+    installed,
+    configured,
+    enabled,
+    reason: licensed ? "READY" : "SSO_NOT_CONNECTED",
+    package: packageRow,
+    connection,
+    config,
+  };
 }
 
 export async function getGoogleConnectRuntimeForEmail(db, email) {
