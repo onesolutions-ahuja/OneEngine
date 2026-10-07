@@ -17,9 +17,6 @@ DELETE FROM permissions WHERE code IN (
 );
 
 -- Legacy sales-source reports were predefined report behavior. Builder reports use platform objects.
-DELETE FROM report_subscriptions WHERE report_id IN (SELECT id FROM custom_reports WHERE data_source='sales');
-DELETE FROM report_favourites WHERE report_id IN (SELECT id FROM custom_reports WHERE data_source='sales');
-DELETE FROM report_run_history WHERE report_id IN (SELECT id FROM custom_reports WHERE data_source='sales');
 DELETE FROM custom_reports WHERE data_source='sales';
 
 ALTER TABLE custom_reports DROP CONSTRAINT IF EXISTS custom_reports_data_source_check;
