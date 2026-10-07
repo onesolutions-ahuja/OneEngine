@@ -1582,7 +1582,12 @@ export function seedPackageRegistry(pool) {
            version=EXCLUDED.version,
            description=EXCLUDED.description,
            module_id=EXCLUDED.module_id,
-           manifest=EXCLUDED.manifest,
+           manifest=(
+             package_registry.manifest
+               - 'objects' - 'fields' - 'relationships' - 'forms' - 'layouts'
+               - 'rules' - 'workflows' - 'actions' - 'buttons' - 'reports'
+               - 'assistantTools' - 'templates'
+           ) || EXCLUDED.manifest,
            package_type=EXCLUDED.package_type,
            publisher=EXCLUDED.publisher,
            category=EXCLUDED.category,
