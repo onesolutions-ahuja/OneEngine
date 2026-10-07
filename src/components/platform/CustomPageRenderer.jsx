@@ -958,6 +958,18 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
     return nodes;
   }, [sections]);
 
+  useEffect(() => {
+    if (builderMode || !onEvent) return;
+    const visit = (nodes) => (nodes || []).forEach((node) => {
+      const interaction = node?.interactions?.load;
+      if (interaction && interaction.type !== "none") onEvent({ eventName: "load", node });
+      if (Array.isArray(node.children)) visit(node.children);
+    });
+    sections.forEach((section) => visit(section.children));
+    // Load is a mount event; metadata changes produce a new page definition.
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [definition, builderMode]);
+
   const setNodeState = (nodeId, patch) => setCollectionState((current) => ({ ...current, [nodeId]: { ...(current[nodeId] || {}), ...patch } }));
   const effectivePageContext = {
     ...(pageContext || {}),
