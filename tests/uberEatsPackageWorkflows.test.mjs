@@ -36,7 +36,7 @@ test("Uber package does not embed provider connector credentials in source manif
   );
   const requests = flows.flatMap((flow) => flow.action.actions).filter((item) => item.key === "ONE_HTTP_REQUEST");
   assert.ok(requests.length > 0);
-  assert.ok(requests.some((item) => String(item.providerKey || "").toLowerCase() === "uber"));
+  assert.ok(requests.some((item) => String(item.providerKey || "").toLowerCase() === "uber_eats"));
 });
 
 test("Uber menu upload is metadata-driven from Product records", () => {
