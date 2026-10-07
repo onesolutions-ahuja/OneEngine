@@ -62,7 +62,7 @@ export default function MetadataSettingsSection({ section }) {
         try{
           const response=await apiRequest(`/api/platform/objects/${encodeURIComponent(relatedKey)}/records?page=1&pageSize=500`)
           const related=Array.isArray(response?.records)?response.records:Array.isArray(response?.data)?response.data:[]
-          return [field.api_name,related.map(row=>({value:row.id,label:row.name||row.label||row.code||row.api_name||row.id}))]
+          return [field.api_name,related.map(row=>({value:row.id,label:String(Object.entries(row).find(([key,value])=>key!=='id'&&value!=null&&['string','number'].includes(typeof value)&&String(value).trim())?.[1]||row.id)}))]
         }catch{return [field.api_name,[]]}
       }))
       setHost({...candidate,key})
