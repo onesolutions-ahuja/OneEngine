@@ -40,7 +40,6 @@ import { createRestrictedSessionGate } from "./services/restrictedSessionGate.js
 import createReportsRouter from "./routes/reports.js";
 import createSettingsRouter from "./routes/settings.js";
 import createAccountLifecycleRouter from "./routes/accountLifecycle.js";
-import createSmsGateWebhookRouter from "./routes/smsGateWebhooks.js";
 import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
@@ -60,11 +59,8 @@ import { accessDecision, clientIp, clearFailedLogin, createTrackedSession, enfor
 import { assuranceSatisfies, createPendingChallenge, effectiveStepUpPolicy, findTrustedDevice, listMfaMethods, loadEffectiveAssurance, mfaMethodAllowed, sortMfaMethods, stepUpRequired } from "./services/identityAssurance.js";
 import createPackagesRouter from "./routes/packages.js";
 import createConnectorsRouter from "./routes/connectors.js";
-import createGoogleConnectRouter from "./routes/googleConnect.js";
 import { ConnectorDriverRegistry } from "./services/connectorRuntime.js";
 import { createReferencePaymentDriver } from "./services/referencePaymentConnector.js";
-import { createSmsGateDriver, configureSmsGateInboundWebhook, getSmsGateDiagnostics } from "./services/smsGateConnector.js";
-import { createBrevoDriver, createMailjetDriver } from "./services/emailProviderConnectors.js";
 import createPlatformFilesRouter from "./routes/platformFiles.js";
 import createPlatformSequencesRouter from "./routes/platformSequences.js";
 import createPlatformSchedulesRouter from "./routes/platformSchedules.js";
@@ -79,7 +75,6 @@ import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegis
 import { getCompanyEntitlements } from "./services/licensing.js";
 import { reconcileCompanyPackageEntitlements } from "./services/packageEntitlements.js";
 import { requireEntitlement } from "./services/licensing.js";
-import { getGoogleConnectRuntimeForEmail, getGoogleConnectRuntime, getGoogleConnectPasswordLoginRuntime } from "./services/googleConnect.js";
 import { createJarvis } from "./services/jarvis/index.js";
 import { createJarvisTools } from "./services/jarvis/tools/index.js"; // JARVES V2 - read-only Sales tool
 import { createJarvesAccessChecker } from "./services/jarvis/licensing.js"; // JARVES V2 - licence gate
@@ -207,7 +202,6 @@ app.use("/api", apiLimiter);
 
 app.use("/api/webhooks/inbound", express.raw({ type: "*/*", limit: "1mb" }));
 app.use("/api/whatsapp/webhook", express.raw({ type: "*/*", limit: "1mb" }));
-app.use("/api/smsgate/webhook", express.raw({ type: "*/*", limit: "64kb" }));
 
 app.use(express.json({ limit: "10mb" }));
 
@@ -424,27 +418,9 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-const paymentProviders = new Map();
 const connectorDrivers = new ConnectorDriverRegistry();
 connectorDrivers.register(createReferencePaymentDriver());
-connectorDrivers.register(createSmsGateDriver());
-connectorDrivers.register(createBrevoDriver());
-connectorDrivers.register(createMailjetDriver());
 app.locals.connectorDrivers = connectorDrivers;
-
-async function testPaymentTerminal(terminal) {
-  if (!terminal || !terminal.active || !terminal.provider || !terminal.connection_url) {
-    return { status: "NOT_CONFIGURED", message: "Not configured" };
-  }
-
-  const provider = paymentProviders.get(terminal.provider.toLowerCase());
-
-  if (!provider) {
-    return { status: "PROVIDER_NOT_SUPPORTED", message: "Provider not supported" };
-  }
-
-  return provider.testConnection(terminal);
-}
 
 /*
  * Audit logging must never break the operation being audited - see
@@ -816,272 +792,6 @@ app.get("/api", (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-const GOOGLE_OAUTH_STATE_COOKIE = "onepos_google_oauth_state";
-
-function cookieValue(req, name) {
-  const raw = String(req.headers?.cookie || "");
-  for (const part of raw.split(";")) {
-    const [key, ...rest] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(rest.join("="));
-  }
-  return "";
-}
-
-function safeGoogleReturnTo(value) {
-  const fallback = "https://onesolutions-ahuja.github.io/OneEngine/";
-  try {
-    const parsed = new URL(String(value || fallback));
-    const allowed = new Set([
-      "https://onesolutions-ahuja.github.io",
-      "https://smart-theme.onrender.com",
-      "https://oneengine2.onrender.com",
-      "http://localhost:5173",
-    ]);
-    if (!allowed.has(parsed.origin)) return fallback;
-    return parsed.toString();
-  } catch {
-    return fallback;
-  }
-}
-
-function googleOAuthErrorRedirect(returnTo, code) {
-  const target = new URL(safeGoogleReturnTo(returnTo));
-  target.hash = `google_error=${encodeURIComponent(code)}`;
-  return target.toString();
-}
-
-app.get("/api/auth/google/status", async (req, res) => {
-  try {
-    const email = String(req.query?.email || "").trim().toLowerCase();
-    if (!email || !pool) {
-      return res.json({ success: true, data: { available: false, code: "SSO_NOT_CONNECTED" } });
-    }
-    const runtime = await getGoogleConnectRuntimeForEmail((query, params = []) => pool.query(query, params), email);
-    return res.json({
-      success: true,
-      data: {
-        available: runtime.ready === true,
-        code: runtime.ready === true ? "READY" : "SSO_NOT_CONNECTED",
-      },
-    });
-  } catch (error) {
-    console.error("Google SSO status error:", error);
-    return res.json({ success: true, data: { available: false, code: "SSO_NOT_CONNECTED" } });
-  }
-});
-
-app.get("/api/auth/google/start", async (req, res) => {
-  const secret = process.env.JWT_SECRET;
-  const returnTo = safeGoogleReturnTo(req.query?.returnTo);
-  try {
-    const email = String(req.query?.email || "").trim().toLowerCase();
-    if (!email || !pool) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "sso_not_connected"));
-    }
-
-    const runtime = await getGoogleConnectRuntimeForEmail((query, params = []) => pool.query(query, params), email);
-    if (!runtime.ready || !runtime.connection?.id) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "sso_not_connected"));
-    }
-
-    const { clientId, redirectUri } = runtime.config;
-    const nonce = randomBytes(24).toString("base64url");
-    const state = jwt.sign(
-      {
-        type: "google_oauth",
-        nonce,
-        returnTo,
-        companyId: runtime.companyId,
-        integrationId: runtime.connection.id,
-        loginEmail: email,
-      },
-      secret,
-      { expiresIn: "10m" }
-    );
-
-    res.setHeader(
-      "Set-Cookie",
-      `${GOOGLE_OAUTH_STATE_COOKIE}=${encodeURIComponent(nonce)}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth/google; Max-Age=600`
-    );
-
-    const authorize = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    authorize.searchParams.set("client_id", clientId);
-    authorize.searchParams.set("redirect_uri", redirectUri);
-    authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("scope", "openid email profile");
-    authorize.searchParams.set("state", state);
-    authorize.searchParams.set("prompt", "select_account");
-    authorize.searchParams.set("login_hint", email);
-    return res.redirect(authorize.toString());
-  } catch (error) {
-    console.error("Google OAuth start error:", error);
-    return res.redirect(googleOAuthErrorRedirect(returnTo, "sso_not_connected"));
-  }
-});
-
-app.get("/api/auth/google/callback", async (req, res) => {
-  const secret = process.env.JWT_SECRET;
-
-  let returnTo = "https://onesolutions-ahuja.github.io/OneEngine/";
-  try {
-    if (!pool) return res.redirect(googleOAuthErrorRedirect(returnTo, "sso_not_connected"));
-
-    const state = jwt.verify(String(req.query?.state || ""), secret);
-    if (state?.type !== "google_oauth" || !state?.nonce || !state?.companyId || !state?.integrationId || !state?.loginEmail) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "invalid_state"));
-    }
-    returnTo = safeGoogleReturnTo(state.returnTo);
-
-    const cookieNonce = cookieValue(req, GOOGLE_OAUTH_STATE_COOKIE);
-    const left = Buffer.from(String(cookieNonce));
-    const right = Buffer.from(String(state.nonce));
-    if (!cookieNonce || left.length !== right.length || !timingSafeEqual(left, right)) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "invalid_state"));
-    }
-
-    res.setHeader(
-      "Set-Cookie",
-      `${GOOGLE_OAUTH_STATE_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth/google; Max-Age=0`
-    );
-
-    if (req.query?.error) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "google_cancelled"));
-    }
-
-    const runtime = await getGoogleConnectRuntime(
-      (query, params = []) => pool.query(query, params),
-      state.companyId
-    );
-    if (!runtime.ready || String(runtime.connection?.id) !== String(state.integrationId)) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "sso_not_connected"));
-    }
-
-    const { clientId, clientSecret, redirectUri, allowedDomain } = runtime.config;
-    const code = String(req.query?.code || "");
-    if (!code) return res.redirect(googleOAuthErrorRedirect(returnTo, "missing_code"));
-
-    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: "authorization_code",
-      }),
-    });
-    if (!tokenResponse.ok) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "token_exchange_failed"));
-    }
-    const tokens = await tokenResponse.json();
-    if (!tokens?.access_token) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "token_exchange_failed"));
-    }
-
-    const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
-    });
-    if (!profileResponse.ok) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "profile_lookup_failed"));
-    }
-    const profile = await profileResponse.json();
-    const email = String(profile?.email || "").trim().toLowerCase();
-    if (!email || profile?.email_verified !== true) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "email_not_verified"));
-    }
-    if (email !== String(state.loginEmail).trim().toLowerCase()) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "account_not_linked"));
-    }
-    if (allowedDomain && email.split("@")[1] !== allowedDomain) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "account_not_linked"));
-    }
-
-    const result = await pool.query(
-      `
-      SELECT
-        u.id,
-        u.username,
-        u.full_name,
-        u.company_id,
-        u.store_id,
-        u.role_id,
-        u.active,
-        u.must_change_password,
-        r.name AS role_name,
-        COALESCE(r.default_landing_page, 'dashboard') AS default_landing_page
-      FROM users u
-      LEFT JOIN roles r ON r.id=u.role_id
-      WHERE LOWER(BTRIM(u.email))=$1 AND u.company_id=$2
-      LIMIT 1
-      `,
-      [email, state.companyId]
-    );
-    if (!result.rows.length) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "account_not_linked"));
-    }
-
-    const user = result.rows[0];
-    if (user.active !== true) {
-      return res.redirect(googleOAuthErrorRedirect(returnTo, "account_disabled"));
-    }
-
-    const googleDb = (query, params = []) => pool.query(query, params);
-    const googleIp = clientIp(req);
-    const googleAgent = req.get("user-agent") || null;
-    const googleSettings = await loadSecuritySettings(googleDb, user.company_id);
-    const googleAccess = await accessDecision(googleDb, {
-      companyId: user.company_id,
-      userId: user.id,
-      roleId: user.role_id,
-      ip: googleIp,
-    });
-    if (!googleAccess.allowed) {
-      await writeLoginHistory(googleDb, { user, identifier: email, status: "BLOCKED", reason: googleAccess.code, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", req });
-      return res.redirect(googleOAuthErrorRedirect(returnTo, String(googleAccess.code || "security_policy_blocked").toLowerCase()));
-    }
-    await clearFailedLogin(googleDb, user);
-    await pool.query("UPDATE users SET last_login_at=NOW() WHERE id=$1", [user.id]);
-    const googleAssurancePolicy = await loadEffectiveAssurance(googleDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id });
-    const googleBaseAssurance = googleAssurancePolicy.effective.trustSsoMfa ? "HIGH" : googleAssurancePolicy.effective.ssoAssurance;
-    const googleActivationSatisfied = !googleAssurancePolicy.effective.deviceActivationRequired
-      || googleBaseAssurance === "HIGH"
-      || (googleAssurancePolicy.effective.skipDeviceActivationOnTrustedNetwork && googleAccess.trustedNetwork === true);
-    const googleNeedsOneEngineMfa = googleAssurancePolicy.effective.mfaRequired && !googleAssurancePolicy.effective.trustSsoMfa
-      || googleAssurancePolicy.effective.phishingResistantRequired
-      || !assuranceSatisfies(googleBaseAssurance, googleAssurancePolicy.effective.requiredLoginAssurance)
-      || !googleActivationSatisfied;
-    if (googleNeedsOneEngineMfa) {
-      const methods = await listMfaMethods(googleDb, { companyId: user.company_id, userId: user.id });
-      const usable = sortMfaMethods(methods
-        .filter((method) => mfaMethodAllowed(method, googleAssurancePolicy.effective))
-        .filter((method) => !googleAssurancePolicy.effective.phishingResistantRequired || method.phishing_resistant === true));
-      const challenge = await createPendingChallenge(googleDb, {
-        companyId: user.company_id,
-        userId: user.id,
-        type: "LOGIN",
-        context: { authMethod: "GOOGLE", phishingResistantRequired: googleAssurancePolicy.effective.phishingResistantRequired === true, activationOnly: !googleActivationSatisfied && !googleAssurancePolicy.effective.mfaRequired, deviceActivationPending: !googleActivationSatisfied },
-        minutes: 10,
-      });
-      const target = new URL(returnTo);
-      target.hash = `google_mfa_challenge=${encodeURIComponent(challenge.id)}&google_mfa_enroll=${usable.length ? "0" : "1"}&google_mfa_phishing_resistant=${googleAssurancePolicy.effective.phishingResistantRequired ? "1" : "0"}`;
-      return res.redirect(target.toString());
-    }
-    const sessionId = await createTrackedSession(googleDb, { user, ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", settings: googleSettings, originHost: String(req.headers?.["x-forwarded-host"] || req.headers?.host || "").split(",")[0].trim().toLowerCase() || null });
-    await googleDb("UPDATE identity_sessions SET assurance_level=$2,assurance_verified_at=NOW(),mfa_method=$3 WHERE id=$1", [sessionId, googleBaseAssurance, googleBaseAssurance === "HIGH" ? "SSO_MFA" : null]);
-    user.session_id = sessionId;
-    const token = createToken(user);
-    await writeLoginHistory(googleDb, { user, identifier: email, status: "SUCCESS", ip: googleIp, userAgent: googleAgent, authMethod: "GOOGLE", sessionId, req });
-
-    const target = new URL(returnTo);
-    target.hash = `google_token=${encodeURIComponent(token)}`;
-    return res.redirect(target.toString());
-  } catch (error) {
-    console.error("Google OAuth callback error:", error);
-    return res.redirect(googleOAuthErrorRedirect(returnTo, "google_login_failed"));
-  }
-});
-
 app.post("/api/auth/login", loginLimiter, async (req, res) => {
   const loginStartedAt = Date.now();
   const loginTimings = {};
@@ -1198,13 +908,10 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       };
     })();
 
-    const [securityContext, googleRuntime, permissionBundle] = await Promise.all([
+    const [securityContext, permissionBundle] = await Promise.all([
       user.company_id
         ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id, ip: requestIp })
         : Promise.resolve({ settings: null, state: null, policy: null, companyTimezone: null, trustedNetwork: false, loginAllowedMatches: false, loginAllowedCount: 0 }),
-      user.company_id
-        ? getGoogleConnectPasswordLoginRuntime(loginDb, user.company_id)
-        : Promise.resolve(null),
       permissionsPromise,
     ]);
     const securitySettings = securityContext.settings;
@@ -1231,13 +938,6 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       });
     }
 
-    if (googleRuntime?.ready && googleRuntime.config?.allowPasswordLogin === false) {
-      return res.status(403).json({
-        success: false,
-        code: "GOOGLE_SSO_REQUIRED",
-        message: "This company requires Google SSO. Use Continue with Google.",
-      });
-    }
 
     const validPassword = await passwordCheckPromise;
     loginTimings.bcrypt_ms = bcryptDurationMs;
@@ -1846,7 +1546,6 @@ app.use("/api", createDataProtectionRouter({ authenticate, authorize, db, writeA
 app.use("/api", createPackagesRouter({ authenticate, authorize, db, pool, writeAudit }));
 app.use("/api", createAdvancedPlatformRouter({ authenticate, authorize, db }));
 app.use("/api", createConnectorsRouter({ authenticate, authorize, db, writeAudit, drivers: connectorDrivers }));
-app.use("/api", createGoogleConnectRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformFilesRouter({ authenticate, db }));
 app.use("/api", createPlatformSequencesRouter({ authenticate, authorize, db, pool }));
 app.use("/api", createPlatformSchedulesRouter({ authenticate, authorize, db }));
@@ -1900,20 +1599,7 @@ app.use("/api", createPlatformEventsRouter({
 }));
 app.use("/api", createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit }));
 
-app.use("/api", createSettingsRouter({
-  authenticate,
-  authorize,
-  db,
-  pool,
-  writeAudit,
-  testPaymentTerminal,
-  requireLoyaltyEntitlement: (req, res, next) => {
-    const keys = ["loyaltyEnabled", "loyaltyEarningRate", "loyaltyMinSaleTotal", "loyaltyRedeemValuePerPoint", "loyaltyMinPointsRedeem"];
-    if (!keys.some((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key))) return next();
-    return requireEntitlement(db, "loyalty")(req, res, next);
-  },
-}));
-app.use("/api", createSmsGateWebhookRouter({ pool }));
+app.use("/api", createSettingsRouter({ authenticate, authorize, db, pool, writeAudit }));
 
 /*
 |--------------------------------------------------------------------------
@@ -2405,88 +2091,6 @@ async function startServer() {
       BOOTSTRAP_TENANT_SUPERADMIN_NAME: "OneSolutions Superadmin",
     });
     console.log("onePOS: identity bootstrap ready");
-
-    // Reconcile SMSGate inbound webhooks after the HTTP listener is live. This
-    // is idempotent: existing callbacks are reused, while missing callbacks
-    // are created. Signing keys stay encrypted in integration credentials.
-    setTimeout(async () => {
-      try {
-        const rows = await pool.query(
-          `SELECT id,connector_configuration,credentials_encrypted,enabled
-             FROM integration_connections
-            WHERE connector_package_key='smsgate_connector'
-              AND enabled=TRUE`
-        );
-        for (const row of rows.rows) {
-          try {
-          const configuration = typeof row.connector_configuration === "string"
-            ? JSON.parse(row.connector_configuration || "{}")
-            : (row.connector_configuration || {});
-          const secrets = (() => {
-            try { return decryptCredentials(row.credentials_encrypted) || {}; }
-            catch { return {}; }
-          })();
-          const webhookToken = String(secrets.webhookToken || "").trim() || randomBytes(32).toString("hex");
-          const webhookUrl = `${String(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || "https://oneengine-6gas.onrender.com").replace(/\/$/, "")}/api/smsgate/webhook/${row.id}/${webhookToken}`;
-
-          const webhook = await configureSmsGateInboundWebhook(
-            { ...configuration, ...secrets },
-            { webhookUrl }
-          );
-
-          const nextSecrets = { ...secrets, webhookToken };
-          await pool.query(
-            `UPDATE integration_connections
-                SET credentials_encrypted=$1,
-                    connector_configuration=connector_configuration - 'webhookSigningKey',
-                    enabled=CASE
-                      WHEN COALESCE((connector_configuration->>'enabled')::boolean,FALSE)=TRUE THEN TRUE
-                      ELSE enabled
-                    END,
-                    updated_at=NOW()
-              WHERE id=$2`,
-            [encryptCredentials(nextSecrets), row.id]
-          );
-
-          console.log(`onePOS: SMSGate inbound webhook ready (${webhook.created ? "created" : "existing"}) connection=${row.id} staleRemoved=${webhook.removedStale || 0}`);
-          const diagnostics = await getSmsGateDiagnostics({ ...configuration, ...nextSecrets }).catch((error) => ({ error: error?.message || String(error) }));
-          const webhookRows = Array.isArray(diagnostics?.webhooks)
-            ? diagnostics.webhooks
-            : Array.isArray(diagnostics?.webhooks?.data)
-              ? diagnostics.webhooks.data
-              : Array.isArray(diagnostics?.webhooks?.webhooks)
-                ? diagnostics.webhooks.webhooks
-                : [];
-          const relevantWebhook = webhookRows.find((item) =>
-            String(item?.url || "") === webhookUrl
-              && String(item?.event || "").toLowerCase() === "sms:received"
-          );
-          const logRows = Array.isArray(diagnostics?.logs)
-            ? diagnostics.logs
-            : Array.isArray(diagnostics?.logs?.data)
-              ? diagnostics.logs.data
-              : Array.isArray(diagnostics?.logs?.logs)
-                ? diagnostics.logs.logs
-                : [];
-          console.log("onePOS: SMSGate diagnostics", {
-            webhookRegistered: Boolean(relevantWebhook),
-            webhookCount: webhookRows.length,
-            recentProviderLogs: logRows.slice(-8).map((entry) => ({
-              level: entry?.level || entry?.type || null,
-              message: String(entry?.message || entry?.event || entry?.action || "").slice(0, 180),
-              createdAt: entry?.createdAt || entry?.created_at || entry?.timestamp || null,
-            })),
-            providerLogError: diagnostics?.logs?.error || diagnostics?.error || null,
-          });
-          } catch (rowError) {
-            console.error(`onePOS: SMSGate inbound webhook reconciliation failed connection=${row.id}:`, rowError?.message || rowError);
-          }
-        }
-      } catch (error) {
-        console.error("onePOS: SMSGate inbound webhook reconciliation failed:", error?.message || error);
-      }
-    }, 1500).unref?.();
-
 
     // The metadata bootstrap is expensive and used to run on every Render restart,
     // including frontend-only commits. Persist a fingerprint of the source files
