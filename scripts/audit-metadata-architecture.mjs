@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const roots = ["server", "src"].map((item) => path.join(ROOT, item));
+const skipDirs = new Set(["node_modules","dist","build","coverage",".git","artifacts","playwright-report","test-results"]);
 const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:true}).flatMap((entry)=>{
+  if (skipDirs.has(entry.name)) return [];
   const full=path.join(dir,entry.name);
   return entry.isDirectory()?walk(full):/\.(?:js|jsx|mjs|ts|tsx)$/.test(entry.name)?[full]:[];
 }) : [];
