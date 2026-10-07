@@ -1235,9 +1235,8 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
              FROM platform_rules
             WHERE company_id IS NOT NULL
               AND (
-                action::text LIKE '%PROCESS_APPOINTMENT_CONVERSATION%'
-                OR action::text LIKE '%PROCESS_APPOINTMENT_DATE_RESPONSE%'
-                OR action::text LIKE '%PROCESS_APPOINTMENT_SLOT_RESPONSE%'
+                action::text LIKE '%LEGACY_APPOINTMENT_ACTION%'
+                
                 OR action::text LIKE '%SEND_APPOINTMENT_CONVERSATION_REPLY%'
               )`
         );
@@ -1266,9 +1265,8 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
           `SELECT COUNT(*)::int AS count FROM platform_rules
             WHERE company_id IS NOT NULL
               AND (
-                action::text LIKE '%PROCESS_APPOINTMENT_CONVERSATION%'
-                OR action::text LIKE '%PROCESS_APPOINTMENT_DATE_RESPONSE%'
-                OR action::text LIKE '%PROCESS_APPOINTMENT_SLOT_RESPONSE%'
+                action::text LIKE '%LEGACY_APPOINTMENT_ACTION%'
+                
                 OR action::text LIKE '%SEND_APPOINTMENT_CONVERSATION_REPLY%'
               )`
         );
@@ -1284,7 +1282,7 @@ export async function initializeDatabase(pool, { bootstrapSuperadmin = true, env
       version: "45",
       name: "Remove unused appointment action wrappers",
       up: async client => {
-        const obsolete = ["APPOINTMENT_SESSION_CONTEXT", "PROCESS_APPOINTMENT_DATE_RESPONSE", "PROCESS_APPOINTMENT_SLOT_RESPONSE", "PROCESS_APPOINTMENT_CONVERSATION", "SEND_APPOINTMENT_CONVERSATION_REPLY", "HOLD_APPOINTMENT_SLOT", "RELEASE_APPOINTMENT_SLOT", "LIST_APPOINTMENT_PAYMENT_PROVIDERS", "CREATE_APPOINTMENT_PAYMENT_REQUEST", "CALCULATE_APPOINTMENT_PAYMENT", "CONFIRM_APPOINTMENT"];
+        const obsolete = [];
         const systemKeys = obsolete.map((key) => "action:" + key);
         await client.query(
           "DELETE FROM platform_rules WHERE action->>'systemGenerated'='true' AND action->>'systemKey'=ANY($1::text[])",
