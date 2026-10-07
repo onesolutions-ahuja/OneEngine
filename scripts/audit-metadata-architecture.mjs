@@ -35,6 +35,10 @@ const hardcodedBusinessObjectKeys=[
   "supplier_invoice","supplier_payment","sales_order","sales_order_line","stock_return"
 ];
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
+const retiredRuntimeSymbols=[
+  "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION",
+  "CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION","executeMediatedRegisteredAction"
+];
 const findings=[];
 
 // platformMetadata.js was a legacy source-defined metadata authority. It has been
@@ -81,6 +85,10 @@ for(const file of roots.flatMap(walk)){
   if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
   if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
+  for(const symbol of retiredRuntimeSymbols) {
+    const symbolPattern = new RegExp("\\b"+symbol+"\\b");
+    if(symbolPattern.test(text)) findings.push({rule:"RETIRED_RUNTIME_SYMBOL",file:name,symbol});
+  }
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
 const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
