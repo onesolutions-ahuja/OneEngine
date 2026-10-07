@@ -28,6 +28,26 @@ import {
  *   - Form Layout: an existing platform_layouts row (UUID) + presentation type
  */
 
+function pageBindingFromText(value) {
+  const text=String(value||"").trim();
+  if(text==="$record")return {type:"current_record"};
+  if(text.startsWith("$record."))return {type:"current_record",field:text.slice(8)};
+  if(text==="$user")return {type:"current_user"};
+  if(text.startsWith("$user."))return {type:"current_user",field:text.slice(6)};
+  if(text.startsWith("$page.params."))return {type:"page_parameter",key:text.slice(13)};
+  if(text.startsWith("$page.variables."))return {type:"page_variable",key:text.slice(16)};
+  return {type:"constant",value};
+}
+function pageBindingText(value) {
+  if(!value||typeof value!=="object")return String(value??"");
+  if(value.type==="current_record")return `$record${value.field?"."+value.field:""}`;
+  if(value.type==="current_user")return `$user${value.field?"."+value.field:""}`;
+  if(value.type==="page_parameter")return `$page.params.${value.key||""}`;
+  if(value.type==="page_variable")return `$page.variables.${value.key||""}`;
+  if(value.type==="constant")return String(value.value??"");
+  return "";
+}
+
 const ON_CLICK_OPTIONS = [
   { value: "none", label: "None" },
   { value: "workflow", label: "Workflow" },
@@ -417,7 +437,7 @@ export default function ActionWorkflowPicker({ interaction, onChange, objectKey 
           </select>
           {selectedWorkflow && Array.isArray(selectedWorkflow.action?.inputContract) && selectedWorkflow.action.inputContract.length ? <div className="space-y-2 rounded-lg border border-slate-200 p-2.5">
             <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Flow Inputs</p>
-            {selectedWorkflow.action.inputContract.map((input) => <label key={input.name} className="block space-y-1"><span className="text-xs font-medium text-slate-500">{input.label || input.name}{input.required ? " *" : ""}</span><input className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" placeholder="$record.id, $user.id, $page.params.key or a value" value={typeof interaction?.inputs?.[input.name] === "string" ? interaction.inputs[input.name] : ""} onChange={(event) => patch({ inputs: { ...(interaction.inputs || {}), [input.name]: event.target.value } })}/></label>)}
+            {selectedWorkflow.action.inputContract.map((input) => <label key={input.name} className="block space-y-1"><span className="text-xs font-medium text-slate-500">{input.label || input.name}{input.required ? " *" : ""}</span><input className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm" placeholder="$record.id, $user.id, $page.params.key or a value" value={pageBindingText(interaction?.inputs?.[input.name])} onChange={(event) => patch({ inputs: { ...(interaction.inputs || {}), [input.name]: pageBindingFromText(event.target.value) } })}/></label>)}
           </div> : null}
           <p className="text-[11px] text-slate-400">Only Screen Flows are offered. Resource bindings are resolved server-side and Flow execute permission is enforced at runtime.</p>
         </div>
