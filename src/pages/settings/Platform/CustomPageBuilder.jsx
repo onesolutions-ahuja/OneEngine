@@ -61,7 +61,7 @@ const BUILDER_CSS = `
   .cpb-back-button:hover{background:#f5f7f7;border-color:#bcc6c8;color:#176f6a}
   .cpb-shell{
     display:grid;
-    grid-template-columns:minmax(230px,260px) minmax(420px,1fr) minmax(224px,256px);
+    grid-template-columns:minmax(250px,280px) minmax(520px,1fr) minmax(300px,340px);
     gap:10px;
     width:100%;
     min-width:0;
@@ -69,9 +69,9 @@ const BUILDER_CSS = `
     min-height:0;
     align-items:stretch;
   }
-  .cpb-shell.is-palette-collapsed{grid-template-columns:minmax(420px,1fr) minmax(224px,256px)}
-  .cpb-shell.is-properties-collapsed{grid-template-columns:minmax(230px,260px) minmax(420px,1fr)}
-  .cpb-shell.is-palette-collapsed.is-properties-collapsed{grid-template-columns:minmax(420px,1fr)}
+  .cpb-shell.is-palette-collapsed{grid-template-columns:minmax(520px,1fr) minmax(300px,340px)}
+  .cpb-shell.is-properties-collapsed{grid-template-columns:minmax(250px,280px) minmax(520px,1fr)}
+  .cpb-shell.is-palette-collapsed.is-properties-collapsed{grid-template-columns:minmax(520px,1fr)}
   .cpb-panel-toggle{white-space:nowrap}
   .cpb-panel{
     min-width:0;
@@ -152,8 +152,8 @@ const BUILDER_CSS = `
   .cpb-device-btn:disabled{opacity:.45;cursor:not-allowed}
   .cpb-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid #e2e5e9;border-radius:999px;background:#f7f8f9;padding:4px 9px;font-size:10.5px;color:#65707a}
   .cpb-properties{display:flex;flex-direction:column;overflow:hidden;padding:0!important}
-  .cpb-properties-tabs{display:flex;align-items:center;gap:4px;flex:0 0 auto;height:48px;padding:0 10px;border-bottom:1px solid #edf0f2;background:#fff}
-  .cpb-properties-tabs button{height:34px;border:0;border-bottom:2px solid transparent;background:transparent;padding:0 10px;font-size:11px;font-weight:700;color:#68727d;cursor:pointer}
+  .cpb-properties-tabs{display:flex;align-items:center;gap:0;flex:0 0 auto;height:48px;padding:0 8px;border-bottom:1px solid #edf0f2;background:#fff;overflow-x:auto;scrollbar-width:none}.cpb-properties-tabs::-webkit-scrollbar{display:none}
+  .cpb-properties-tabs button{height:34px;flex:0 0 auto;border:0;border-bottom:2px solid transparent;background:transparent;padding:0 8px;font-size:10.5px;font-weight:700;color:#68727d;cursor:pointer}
   .cpb-properties-tabs button.active{border-bottom-color:#147d70;color:#166e65}
   .cpb-properties-scroll{min-height:0;overflow-y:auto;padding:14px;overscroll-behavior:contain}
   .cpb-properties-scroll fieldset{border-color:#e3e6e9!important}
@@ -1116,6 +1116,41 @@ const updateNode = (nodeId, changes) => {
     );
   };
 
+  const renderFocusedPanel = () => {
+    if (panelMode === "properties") return selectedNode || selectedSection ? renderProperties() : renderPageSettings();
+    if (!selectedNode) return <p className="text-xs text-slate-400">Select a component on the canvas to configure {panelMode}.</p>;
+    const node = selectedNode;
+    if (panelMode === "data") {
+      if (node.collection) return <FocusedDataPanel node={node} objects={objects} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} />;
+      return <div className="cpb-page-settings"><h3>Data</h3><p>This component has no record collection. Content and registry-defined bindings are configured in Properties.</p></div>;
+    }
+    if (panelMode === "style") {
+      return <div className="cpb-page-settings">
+        <h3>Style & Layout</h3>
+        <p>Generic presentation metadata only. No business-specific styling is stored here.</p>
+        <div className="space-y-1"><label className={labelClass}>Width (px, 0 = auto)</label><input className={inputClass} type="number" min="0" max="2400" value={node.layout?.width || 0} onChange={(event) => updateNode(node.id, { layout: { ...(node.layout || {}), width: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+        <div className="space-y-1"><label className={labelClass}>Height (px, 0 = auto)</label><input className={inputClass} type="number" min="0" max="1800" value={node.layout?.height || 0} onChange={(event) => updateNode(node.id, { layout: { ...(node.layout || {}), height: Math.max(0, Number(event.target.value) || 0) } })}/></div>
+        {node.componentKey === "button" ? <><div className="space-y-1"><label className={labelClass}>Button style</label><select className={inputClass} value={node.variant || "primary"} onChange={(event) => updateNode(node.id, { variant: event.target.value })}><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="ghost">Ghost</option><option value="danger">Destructive</option></select></div><div className="space-y-1"><label className={labelClass}>Size</label><select className={inputClass} value={node.size || "medium"} onChange={(event) => updateNode(node.id, { size: event.target.value })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div></> : null}
+      </div>;
+    }
+    if (panelMode === "conditions") {
+      return <div className="cpb-page-settings">
+        <h3>Conditions</h3>
+        <p>Control whether this component is rendered. Record filtering belongs in the Data tab and uses the shared condition engine.</p>
+        <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={node.visible !== false} onChange={(event) => updateNode(node.id, { visible: event.target.checked })}/> Visible</label>
+        {node.collection ? <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-500">Data filters are available under Data → Filters.</div> : null}
+      </div>;
+    }
+    if (panelMode === "events") {
+      return <div className="cpb-page-settings">
+        <h3>Events</h3>
+        <p>Connect this component to generic navigation, another component, or a metadata-selected Flow/action.</p>
+        <InteractionProperties node={node} targetComponents={interactionTargets} onChange={(changes) => updateNode(node.id, changes)} />
+      </div>;
+    }
+    return renderProperties();
+  };
+
   const renderPageSettings = () => (
     <div className="cpb-page-settings">
       <div>
@@ -1329,13 +1364,10 @@ const updateNode = (nodeId, changes) => {
 
           {/* PROPERTIES — relevant settings for the selection only. */}
           {propertiesOpen ? <aside className="cpb-panel cpb-properties">
-            <div className="cpb-properties-tabs" role="tablist" aria-label="Builder side panel">
-              <button type="button" className={panelMode === "properties" ? "active" : ""} onClick={() => setPanelMode("properties")} role="tab" aria-selected={panelMode === "properties"}>Properties</button>
-              <button type="button" className={panelMode === "page" ? "active" : ""} onClick={() => setPanelMode("page")} role="tab" aria-selected={panelMode === "page"}>Page Settings</button>
+            <div className="cpb-properties-tabs" role="tablist" aria-label="Component configuration">
+              {["properties","data","style","conditions","events"].map((mode) => <button key={mode} type="button" className={panelMode === mode ? "active" : ""} onClick={() => setPanelMode(mode)} role="tab" aria-selected={panelMode === mode}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}
             </div>
-            <div className="cpb-properties-scroll">
-              {panelMode === "page" ? renderPageSettings() : renderProperties()}
-            </div>
+            <div className="cpb-properties-scroll">{renderFocusedPanel()}</div>
           </aside> : null}
         </div>
       )}
