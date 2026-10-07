@@ -72,7 +72,7 @@ import { saveDomainConfiguration } from "./services/platformDomainRecords.js";
 import createAdvancedPlatformRouter from "./routes/advancedPlatform.js";
 import createDebugCodesRouter from "./routes/debugCodes.js";
 import { buildDebugPayload, classifyDebugCode, builtinDebugCode, createDebugReference, normalizeDebugCode, writeDebugEvent } from "./services/debugCodes.js";
-import { initializePlatformMetadata, initializeStandardObjectEcosystem } from "./services/platformBootstrap.js";
+import { initializePlatformMetadata } from "./services/platformBootstrap.js";
 import { seedInternalAppCatalog } from "./services/internalAppCatalog.js";
 import { provisionPackageMetadata, seedPackageRegistry, verifyPublicPackageRegistry } from "./services/packageRegistry.js";
 import { getCompanyEntitlements } from "./services/licensing.js";
@@ -2516,14 +2516,12 @@ async function startServer() {
         if (!bootstrapState.current) {
           console.log("onePOS: platform bootstrap metadata changed; running full bootstrap");
           await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-          await initializeStandardObjectEcosystem(pool);
           bootstrapRan = true;
         } else {
           const initialRegistryHealth = await verifyPublicPackageRegistry(pool);
           if (!initialRegistryHealth.healthy) {
             console.warn("onePOS: package registry drift detected; repairing from source catalogue");
             await initializePlatformMetadata(pool, { includeOperationalObjects: true });
-            await initializeStandardObjectEcosystem(pool);
             bootstrapRan = true;
           } else {
             console.log("onePOS: platform bootstrap metadata unchanged; registry verified");
