@@ -66,6 +66,7 @@ function placeholderRecords(collection) {
 export function useRecordCollection(collection, { enabled, page = 1, pageContext = null } = {}) {
   const [state, setState] = useState(() => ({ records: [], total: 0, fields: [], placeholder: false, loading: false, error: "" }));
   const key = useMemo(() => JSON.stringify(collection || {}), [collection]);
+  const contextKey = JSON.stringify(pageContext || {});
 
   useEffect(() => {
     if (!enabled) return;
@@ -105,7 +106,7 @@ export function useRecordCollection(collection, { enabled, page = 1, pageContext
         if (live) setState({ records: [], total: 0, fields: parsed.fields || [], placeholder: true, loading: false, error: error?.message || "Records unavailable" });
       });
     return () => { live = false; };
-  }, [key, enabled, page, pageContext]);
+  }, [key, enabled, page, contextKey]);
 
   return state;
 }
