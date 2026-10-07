@@ -6,10 +6,10 @@
  * Builds a partner API payload from a onePOS source object plus a
  * field-mapping definition:
  *
- *   [{ partnerField: "customer_name", sourcePath: "sales.customer.name" }]
+ *   [{ partnerField: "related_name", sourcePath: "record.related.name" }]
  *
  * Source lookups delegate to integrationFieldResolver.js (never duplicated).
- * Partner paths support nesting ("customer.postcode") and one or more []
+ * Partner paths support nesting ("related.postcode") and one or more []
  * array levels ("items[].sku"). Array fields sharing the same target array
  * stay aligned by index and preserve source ordering.
  *
