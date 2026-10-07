@@ -9,7 +9,8 @@
     "platform:metadata:export": "node scripts/export-platform-package-metadata.mjs",
     "audit:trusted": "node ../scripts/audit-trusted-runtime.mjs",
     "test:trusted": "node --test test/trustedPackages.test.mjs",
-    "audit:workflow-coverage": "node ../scripts/audit-workflow-coverage.mjs"
+    "audit:workflow-coverage": "node ../scripts/audit-workflow-coverage.mjs",
+    "smoke:start": "ONEENGINE_STARTUP_SMOKE=1 node server.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
