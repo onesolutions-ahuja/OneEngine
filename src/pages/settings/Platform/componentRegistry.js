@@ -63,7 +63,20 @@ import {
   MessageSquareWarning,
   BadgeCheck,
   LoaderCircle,
-  ArrowLeft,\n  X,\n  RefreshCw,\n  ExternalLink,\n  Clock,\n  CalendarDays,\n  Menu,\n  ChevronRight,\n  ListOrdered,\n  MessageCircleQuestion,\n  Bell,\n  AppWindow,\n  PanelBottom,\n} from "lucide-react";
+  ArrowLeft,
+  X,
+  RefreshCw,
+  ExternalLink,
+  Clock,
+  CalendarDays,
+  Menu,
+  ChevronRight,
+  ListOrdered,
+  MessageCircleQuestion,
+  Bell,
+  AppWindow,
+  PanelBottom,
+} from "lucide-react";
 
 // Client fallback mirrors the server registry so the builder remains usable
 // during transient API failures. The server /platform/component-registry is
