@@ -19,7 +19,7 @@ function customReportVisibility(user, report) {
 }
 
 export default function createReportsRouter({ authenticate, authorize, db }) {
-  const { canAccessStore, canViewCompanyCustomers, hasPermission: hasSystemPermission } = arguments[0];
+  const { canAccessStore, hasCompanyWideScope, hasPermission: hasSystemPermission } = arguments[0];
   const router = express.Router();
 
   function scopedReportParams(req) {
