@@ -1800,7 +1800,7 @@ app.use(
   })
 );
 app.use("/api", createSuperadminRouter({ authenticate, db, pool, tenantDatabaseRouter, env: process.env, hasPermission }));
-app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, canViewCompanyScope, hasPermission }));
+app.use("/api", createPlatformRouter({ authenticate, authorize, db, pool, hasPermission }));
 app.use("/api", createDebugCodesRouter({ authenticate, authorize, db }));
 app.use("/api", createPlatformDeploymentsRouter({ authenticate, authorize, db, writeAudit }));
 app.use("/api", createPlatformSecurityRouter({ authenticate, authorize, db }));
