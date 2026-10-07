@@ -240,12 +240,6 @@ const PACKAGE_CATALOG = [
         "communication.handoff"
       ],
       action: "SEND_COMMUNICATION",
-      legacyActions: {
-        EMAIL: "SEND_EMAIL",
-        SMS: "SEND_SMS",
-        WHATSAPP: "SEND_WHATSAPP",
-        IN_APP: "IN_APP_NOTIFICATION"
-      },
       providerMetadataSource: "integrations",
       templateSource: "platform_message_templates",
       deliverySource: "platform_communication_deliveries"
@@ -349,7 +343,7 @@ const PACKAGE_CATALOG = [
     packageKey: "one_connect_google",
     name: "Google Connect",
     description: "Licensed Google Workspace/OpenID Connect single sign-on for onePOS users with tenant-specific OAuth configuration.",
-    route: "/app/google-connect",
+    route: "/app/connector-settings/one_connect_google",
     permissions: ["integration.manage"],
     storeScoped: false,
     category: "Identity & Access",
@@ -363,7 +357,7 @@ const PACKAGE_CATALOG = [
     providerConnector: {
       providerKey: "google",
       connectionMode: "OAUTH2",
-      settingsRoute: "/app/google-connect",
+      settingsRoute: "/app/connector-settings/one_connect_google",
     },
   },
   {
@@ -1005,7 +999,7 @@ const PACKAGE_CATALOG = [
     key: "open_food_facts",
     name: "Open Food Facts",
     description: "Free worldwide barcode and product-name lookup using the Open Food Facts database.",
-    route: "/app/global-products",
+    route: "/app/connector-settings/open_food_facts",
     permissions: ["global_product.view", "product.create", "integration.manage"],
     storeScoped: false,
     category: "Catalogue & Supply",
@@ -1048,7 +1042,7 @@ const PACKAGE_CATALOG = [
     key: "upcitemdb",
     name: "UPCitemdb",
     description: "Worldwide UPC, EAN and GTIN product lookup with free and customer-key API modes.",
-    route: "/app/global-products",
+    route: "/app/connector-settings/upcitemdb",
     permissions: ["global_product.view", "product.create", "integration.manage"],
     storeScoped: false,
     category: "Catalogue & Supply",
@@ -1092,7 +1086,7 @@ const PACKAGE_CATALOG = [
     key: "barcode_nest",
     name: "BarcodeNest",
     description: "BarcodeNest UPC, EAN and GTIN lookup using a customer-provided API key.",
-    route: "/app/global-products",
+    route: "/app/connector-settings/barcode_nest",
     permissions: ["global_product.view", "product.create", "integration.manage"],
     storeScoped: false,
     category: "Catalogue & Supply",
@@ -1133,7 +1127,7 @@ const PACKAGE_CATALOG = [
     key: "go_upc",
     name: "Go-UPC",
     description: "Live barcode product lookup using your company-provided Go-UPC API key.",
-    route: "/app/global-products",
+    route: "/app/connector-settings/go_upc",
     permissions: ["global_product.view", "product.create", "integration.manage"],
     storeScoped: false,
     category: "Catalogue & Supply",

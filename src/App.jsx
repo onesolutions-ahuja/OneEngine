@@ -16,17 +16,11 @@ const MetadataRecordFormModal = lazyWithRecovery(() => import('./platform/forms/
 const UserStoreAccessModal = lazyWithRecovery(() => import('./components/UserStoreAccessModal'))
 const OneDeveloperPage = lazyWithRecovery(() => import('./pages/developer/OneDeveloperPage'))
 const MetadataSettingsPage = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsPage'))
-const MetadataSettingsSection = lazyWithRecovery(() => import('./pages/settings/MetadataSettingsSection'))
-const PaymentTerminalSettings = lazyWithRecovery(() => import('./pages/settings/PaymentTerminalSettings'))
-const HardwareSettings = lazyWithRecovery(() => import('./pages/settings/HardwareSettings'))
-const AiAssistantSettings = lazyWithRecovery(() => import('./pages/settings/AiAssistantSettings'))
-const ConnectionsSettings = lazyWithRecovery(() => import('./pages/settings/ConnectionsSettings'))
 const WorkspacePage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
 const CustomPageRuntimePage = lazyWithRecovery(() => import('./platform/pages/CustomPageRuntimePage'))
 const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'))
 const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'))
 const CategoriesPage = lazyWithRecovery(() => import('./platform/workspace/WorkspacePage'))
-const GlobalProductLookupPage = lazyWithRecovery(() => import('./pages/products/GlobalProductLookupPage'))
 const ReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const CustomReportsPage = lazyWithRecovery(() => import('./pages/reports/CustomReportsPage'))
 const IntegrationsAdmin = lazyWithRecovery(() => import('./pages/integrations/IntegrationsAdmin'))
@@ -34,13 +28,7 @@ const AuditLogPage = lazyWithRecovery(() => import('./pages/audit/AuditLogPage')
 const OneStorePopover = lazyWithRecovery(() => import('./pages/oneStore/OneStorePopover'))
 const LicensingAdmin = lazyWithRecovery(() => import('./pages/superadmin/LicensingAdmin'))
 const AppReleasesAdmin = lazyWithRecovery(() => import('./pages/superadmin/AppReleasesAdmin'))
-const GoogleConnectSettings = lazyWithRecovery(() => import('./pages/settings/GoogleConnectSettings'))
 const ConnectorAppSettings = lazyWithRecovery(() => import('./pages/settings/ConnectorAppSettings'))
-const WhatsAppAssistantSettings = lazyWithRecovery(() => import('./pages/settings/WhatsAppAssistantSettings'))
-const SecurityIdentitySettings = lazyWithRecovery(() => import('./pages/settings/SecurityIdentitySettings'))
-const MfaAdministrationSettings = lazyWithRecovery(() => import('./pages/settings/MfaAdministrationSettings'))
-const SecurityGovernanceSettings = lazyWithRecovery(() => import('./pages/settings/SecurityGovernanceSettings'))
-const DataProtectionSettings = lazyWithRecovery(() => import('./pages/settings/DataProtectionSettings'))
 const ScreenFlowRuntimePage = lazyWithRecovery(() => import('./pages/flow/ScreenFlowRuntimePage'))
 import {
   LockKeyhole,
@@ -634,7 +622,7 @@ function Desktop({ onLock, onSignOut }) {
     }
     const settingsIndex = parts.indexOf('settings')
     if (settingsIndex >= 0) {
-      const section = parts[settingsIndex + 1] || 'company'
+      const section = parts[settingsIndex + 1] || ''
       if (DEVELOPER_SETTINGS_KEYS.has(section)) {
         setRoute('developer', section)
         setRouteState({ app: 'developer', section })
@@ -678,9 +666,6 @@ function Desktop({ onLock, onSignOut }) {
     const aliases = {
       platform: 'developer',
       builder: 'developer',
-      contacts: 'customers',
-      one_connect_google: 'google-connect',
-      one_assistant: 'assistant',
     }
     const target = aliases[id] || id
 
@@ -712,9 +697,9 @@ function Desktop({ onLock, onSignOut }) {
       return
     }
     if (target === 'settings') {
-      const section = readRoute().section || 'company'
+      const section = readRoute().section || null
       const next = { app: 'settings', section }
-      setRoute('settings', section)
+      setRoute('settings', section || undefined)
       setRouteState(next)
       setActiveApp('settings')
       return
@@ -849,8 +834,8 @@ function Desktop({ onLock, onSignOut }) {
             <AnimatePresence>
               {topPanel === 'help' ? <HelpMenu onSelect={(label) => {
                 setTopPanel('')
-                if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings', 'company'); setRouteState({ app: 'settings', section: 'company' }); setActiveApp('settings') }
-                else { setRoute('settings', 'connections'); setRouteState({ app: 'settings', section: 'connections' }); setActiveApp('settings') }
+                if (label === 'Settings guide' || label === 'Getting started') { setRoute('settings'); setRouteState({ app: 'settings', section: null }); setActiveApp('settings') }
+                else { setRoute('settings'); setRouteState({ app: 'settings', section: null }); setActiveApp('settings') }
               }} /> : null}
             </AnimatePresence>
           </div>
@@ -867,7 +852,7 @@ function Desktop({ onLock, onSignOut }) {
             className="status-button"
             aria-label="Open Settings"
             title="Settings"
-            onClick={() => { setTopPanel(''); setRoute('settings', 'company'); setActiveApp('settings') }}
+            onClick={() => { setTopPanel(''); setRoute('settings'); setRouteState({ app: 'settings', section: null }); setActiveApp('settings') }}
           >
             <GearIcon size={17} strokeWidth={2.1} />
           </button>
@@ -931,8 +916,6 @@ function Desktop({ onLock, onSignOut }) {
             setRoute('profile')
             setActiveApp('profile')
           }} />
-        ) : activeApp === 'google-connect' ? (
-          <GoogleConnectSettings />
         ) : activeApp === 'connector-settings' ? (
           <ConnectorAppSettings packageKey={routeState?.packageKey || ''} onBack={() => { setTopPanel('store'); setActiveApp('home'); setRoute('home') }} />
         ) : activeApp === 'workspace' ? (
@@ -957,9 +940,9 @@ function Desktop({ onLock, onSignOut }) {
           enginePermissionStatus === 'ready' && canManageOneEngine ? <div className="superadmin-theme"><AppReleasesAdmin /></div> : enginePermissionNotice
         ) : activeApp === 'profile' ? (
           <ProfilePage onBack={() => {
-            const next = { app: 'settings', section: 'company' }
+            const next = { app: 'settings', section: null }
             setRouteState(next)
-            setRoute('settings', 'company')
+            setRoute('settings')
             setActiveApp('settings')
           }} />
         ) : activeApp === 'custom-page-runtime' ? (

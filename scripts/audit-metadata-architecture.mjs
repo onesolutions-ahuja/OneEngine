@@ -3,20 +3,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const roots = ["server/routes", "server/services", "src"].map((item) => path.join(ROOT, item));
+const roots = ["server", "src"].map((item) => path.join(ROOT, item));
 const walk = (dir) => fs.existsSync(dir) ? fs.readdirSync(dir,{withFileTypes:true}).flatMap((entry)=>{
   const full=path.join(dir,entry.name);
   return entry.isDirectory()?walk(full):/\.(?:js|jsx|mjs|ts|tsx)$/.test(entry.name)?[full]:[];
 }) : [];
 const rel=(file)=>path.relative(ROOT,file).replaceAll("\\","/");
 
-const exempt = new Set([
-  "server/services/platformSystemObjects.js",
-  "server/services/tenantDatabase.js",
+const historicalMigrationFiles = new Set([
+  "server/database/init.js",
+  "server/database/migrations.js",
 ]);
-const declarativePrefixes=["server/packages/","server/metadata/"];
-const retired = new Set(["server/routes/dashboard.js"]);
-const legacyBusinessRuntime = new Set([]);
+const declarativeMetadataFiles = new Set([
+  "server/packages/packageManifestCatalog.js",
+  "server/packages/oneAssistantManifest.js",
+  "server/packages/runtimeFlowManifests.js",
+]);
 const businessTables=[
   "sales","sale_ledger","sale_items","customers","payments","products","suppliers",
   "purchases","purchase_ledger","purchase_items","purchase_receipts","refunds",
@@ -29,6 +31,20 @@ const hardcodedBusinessObjectKeys=[
   "supplier_invoice","supplier_payment","sales_order","sales_order_line","stock_return"
 ];
 const forbiddenUiBusinessTokens=["DASHBOARD_SALES_FIELDS"];
+const retiredFrontendBusinessFiles = [
+  "src/pages/products/GlobalProductLookupPage.jsx",
+  "src/components/online/OnlineOrderSummary.jsx",
+  "src/pages/settings/AiAssistantSettings.jsx",
+  "src/pages/settings/ConnectionsSettings.jsx",
+  "src/pages/settings/GoogleConnectSettings.jsx",
+  "src/pages/settings/HardwareSettings.jsx",
+  "src/pages/settings/PaymentTerminalSettings.jsx",
+  "src/pages/settings/WhatsAppAssistantSettings.jsx",
+  "src/pages/settings/SecurityIdentitySettings.jsx",
+  "src/pages/settings/MfaAdministrationSettings.jsx",
+  "src/pages/settings/SecurityGovernanceSettings.jsx",
+  "src/pages/settings/DataProtectionSettings.jsx",
+];
 const retiredActionKeys=[
   "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION",
   "CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION"
@@ -48,6 +64,10 @@ const retiredProviderActionRuntime = "server/services/platformActions.js";
 const retiredProviderSpecificRoutes = [
   "server/routes/smsGateWebhooks.js",
 ];
+const retiredBusinessRuntimeFiles = [
+  "server/routes/dashboard.js",
+  "server/services/reportSalesDefinition.js",
+];
 const retiredInvoiceReceiptArtifacts = [
   "server/services/invoiceDelivery.js",
   "server/services/receiptQr.js",
@@ -65,6 +85,11 @@ if (fs.existsSync(path.join(ROOT, retiredProviderActionRuntime))) {
 for (const artifact of retiredProviderSpecificRoutes) {
   if (fs.existsSync(path.join(ROOT, artifact))) {
     findings.push({rule:"RETIRED_PROVIDER_SPECIFIC_ROUTE_PRESENT",file:artifact});
+  }
+}
+for (const artifact of retiredBusinessRuntimeFiles) {
+  if (fs.existsSync(path.join(ROOT, artifact))) {
+    findings.push({rule:"RETIRED_BUSINESS_RUNTIME_FILE_PRESENT",file:artifact});
   }
 }
 for (const artifact of retiredInvoiceReceiptArtifacts) {
@@ -107,6 +132,15 @@ for (const file of allServerRuntimeFiles) {
       if (text.includes(token)) findings.push({rule:"HARDCODED_PROVIDER_RUNTIME_IN_SERVER",file:name,token});
     }
   }
+  if (name === "server/packages/packageManifestCatalog.js") {
+    if (/legacyActions\s*:/.test(text)) findings.push({rule:"LEGACY_ACTION_ALIAS_MAP_IN_PACKAGE_METADATA",file:name});
+    for (const token of ["SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION"]) {
+      if (text.includes(token)) findings.push({rule:"RETIRED_ACTION_ALIAS_IN_PACKAGE_METADATA",file:name,token});
+    }
+    if (/route:\s*["']\/app\/global-products["']/.test(text)) {
+      findings.push({rule:"RETIRED_FRONTEND_ROUTE_IN_PACKAGE_METADATA",file:name,route:"/app/global-products"});
+    }
+  }
   if (name === "server/services/packageRegistry.js") {
     if (/packageKeys\s*=\s*\[\s*["']staff["']\s*,\s*["']products["']\s*,\s*["']customers["']/.test(text)) {
       findings.push({rule:"HARDCODED_DEFAULT_BUSINESS_PACKAGES",file:name});
@@ -139,25 +173,75 @@ for (const file of allServerRuntimeFiles) {
   }
 }
 
+for (const artifact of retiredFrontendBusinessFiles) {
+  if (fs.existsSync(path.join(ROOT, artifact))) findings.push({rule:"RETIRED_FRONTEND_BUSINESS_FILE_PRESENT",file:artifact});
+}
+
 for(const file of roots.flatMap(walk)){
   const name=rel(file);
   const text=fs.readFileSync(file,"utf8");
-  if(retired.has(name)){
-    if(name==="server/routes/dashboard.js" && /FROM\s+sales|FROM\s+products/i.test(text)) findings.push({rule:"RETIRED_BUSINESS_RUNTIME_STILL_IMPLEMENTED",file:name});
-    continue;
+  const isHistoricalMigration = historicalMigrationFiles.has(name);
+  const isDeclarativeMetadata = declarativeMetadataFiles.has(name);
+  if (!isHistoricalMigration && !isDeclarativeMetadata) {
+    for(const table of businessTables){
+      const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
+      if(sql.test(text)) findings.push({rule:"DIRECT_BUSINESS_SQL",file:name,table});
+    }
+    for(const objectKey of hardcodedBusinessObjectKeys){
+      const objectRef=new RegExp("\\b(?:objectKey|object_key)\\s*[:=]\\s*[\"']"+objectKey+"[\"']","i");
+      if(objectRef.test(text)) findings.push({rule:"HARDCODED_BUSINESS_OBJECT",file:name,objectKey});
+    }
+    if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
+    if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
   }
-  if(exempt.has(name)||declarativePrefixes.some((prefix)=>name.startsWith(prefix))) continue;
-  if(legacyBusinessRuntime.has(name)) continue;
-  for(const table of businessTables){
-    const sql=new RegExp("\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|FROM|JOIN)\\s+(?:[a-zA-Z_]+\\.)?"+table+"\\b","i");
-    if(sql.test(text)) findings.push({rule:"DIRECT_BUSINESS_SQL",file:name,table});
+  if (name === "src/pages/developer/OneEngineManager.jsx") {
+    for (const token of [
+      "StoreTillSettingsPage","ClientWebShopSettings","PaymentTerminalSettings","HardwareSettings",
+      "AiAssistantSettings","ConnectionsSettings","GoogleConnectSettings","DeliverySettingsPage","WhatsAppAssistantSettings"
+    ]) if (text.includes(token)) findings.push({rule:"HARDCODED_DEVELOPER_SETTINGS_COMPONENT",file:name,token});
   }
-  for(const objectKey of hardcodedBusinessObjectKeys){
-    const objectRef=new RegExp("\\b(?:objectKey|object_key)\\s*[:=]\\s*[\"']"+objectKey+"[\"']","i");
-    if(objectRef.test(text)) findings.push({rule:"HARDCODED_BUSINESS_OBJECT",file:name,objectKey});
+  if (name === "src/App.jsx") {
+    for (const token of [
+      "PaymentTerminalSettings","HardwareSettings","AiAssistantSettings","ConnectionsSettings",
+      "WhatsAppAssistantSettings","SecurityIdentitySettings","MfaAdministrationSettings",
+      "SecurityGovernanceSettings","DataProtectionSettings","MetadataSettingsSection"
+    ]) if (text.includes(token)) findings.push({rule:"HARDCODED_APP_SETTINGS_COMPONENT",file:name,token});
+    if (/setRoute\(['"]settings['"]\s*,\s*['"](?:company|connections)['"]/.test(text)) {
+      findings.push({rule:"HARDCODED_SETTINGS_SECTION_ROUTE",file:name});
+    }
   }
-  if(/dataSource\s*:\s*["']sales["']|dataSource\s*===?\s*["']sales["']/i.test(text)) findings.push({rule:"HARDCODED_SALES_DATASOURCE",file:name});
-  if(/\bDASHBOARD_SALES_FIELDS\b|\bbuildCustomSalesQuery\b/.test(text)) findings.push({rule:"LEGACY_SALES_RUNTIME_SYMBOL",file:name});
+  if (name === "src/pages/dashboard/DashboardPage.jsx" && /currency\s*=\s*['"]GBP['"]/.test(text)) {
+    findings.push({rule:"HARDCODED_DASHBOARD_CURRENCY_DEFAULT",file:name});
+  }
+  if (name.startsWith("src/")) {
+    const businessApiPatterns = [
+      /\/api\/products(?:\/|['"`])/,
+      /\/api\/customers(?:\/|['"`])/,
+      /\/api\/suppliers(?:\/|['"`])/,
+      /\/api\/sales(?:\/|['"`])/,
+      /\/api\/till(?:\/|['"`])/,
+      /\/api\/online(?:\/|['"`])/,
+      /\/api\/global-products(?:\/|['"`])/,
+    ];
+    if (businessApiPatterns.some((pattern) => pattern.test(text))) {
+      findings.push({rule:"DIRECT_BUSINESS_API_IN_FRONTEND",file:name});
+    }
+  }
+  if (name === "src/App.jsx") {
+    for (const alias of ["contacts: 'customers'","one_connect_google: 'google-connect'","one_assistant: 'assistant'"]) {
+      if (text.includes(alias)) findings.push({rule:"HARDCODED_BUSINESS_APP_ALIAS",file:name,alias});
+    }
+    if (/activeApp\s*===\s*['"]google-connect['"]|GoogleConnectSettings/.test(text)) {
+      findings.push({rule:"DEDICATED_PROVIDER_SETTINGS_ROUTE",file:name});
+    }
+    if (/parts\[settingsIndex\s*\+\s*1\]\s*\|\|\s*['"]company['"]/.test(text)) {
+      findings.push({rule:"HARDCODED_SETTINGS_DEFAULT_SECTION",file:name});
+    }
+  }
+  if (name === "src/pages/settings/ConnectorAppSettings.jsx" &&
+      /one_connect_square|one_connect_dojo|one_connect_sumup|smsgate_connector|brevo_connector|mailjet_connector/.test(text)) {
+    findings.push({rule:"PROVIDER_SPECIFIC_GENERIC_CONNECTOR_UI",file:name});
+  }
   if(name.startsWith("src/")) for(const token of forbiddenUiBusinessTokens) if(text.includes(token)) findings.push({rule:"HARDCODED_UI_BUSINESS_ACTION",file:name,token});
 
   // Retired action names may still appear in migration/diagnostic copy, but they
@@ -176,7 +260,7 @@ for(const file of roots.flatMap(walk)){
   }
 }
 const unique=[...new Map(findings.map((item)=>[JSON.stringify(item),item])).values()];
-const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,legacyCompatibilityAdapters:[...legacyBusinessRuntime].sort(),legacyCompatibilityAdapterCount:legacyBusinessRuntime.size,findings:unique};
+const report={generatedAt:new Date().toISOString(),scannedFiles:roots.flatMap(walk).length,violations:unique.length,runtimeExemptions:0,findings:unique};
 fs.mkdirSync(path.join(ROOT,"artifacts"),{recursive:true});
 fs.writeFileSync(path.join(ROOT,"artifacts","metadata-architecture-audit.json"),JSON.stringify(report,null,2)+"\n");
 if(unique.length){

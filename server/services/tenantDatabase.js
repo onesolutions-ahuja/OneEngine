@@ -254,13 +254,11 @@ export async function validateTenantSchema(pool) {
   try {
     const result = await pool.query(
       `SELECT to_regclass('public.companies') AS companies,
-              to_regclass('public.products') AS products,
-              to_regclass('public.sales') AS sales,
               to_regclass('public.schema_migrations') AS migrations`
     );
     const row = result.rows[0] || {};
-    if (!row.companies && !row.products && !row.sales) return TENANT_SCHEMA_STATES.UNINITIALIZED;
-    if (!row.companies || !row.products || !row.sales || !row.migrations) return TENANT_SCHEMA_STATES.MIGRATION_REQUIRED;
+    if (!row.companies && !row.migrations) return TENANT_SCHEMA_STATES.UNINITIALIZED;
+    if (!row.companies || !row.migrations) return TENANT_SCHEMA_STATES.MIGRATION_REQUIRED;
     const migrationResult = await pool.query("SELECT migration_key FROM schema_migrations");
     const appliedMigrations = new Set(migrationResult.rows.map(migration => migration.migration_key));
     if (!CORE_DATABASE_MIGRATION_KEYS.every(key => appliedMigrations.has(key))) return TENANT_SCHEMA_STATES.MIGRATION_REQUIRED;
