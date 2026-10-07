@@ -1,5 +1,5 @@
 /*
- * Platform API request/response logging (Uber Eats / Deliveroo)
+ * Generic connector API request/response logging
  *
  * Every outbound platform API request and its response is stored in the
  * platform_api_logs table for debugging/auditing. Secrets (client secrets,
@@ -100,9 +100,9 @@ export async function logPlatformApiCall(db, entry = {}) {
       INSERT INTO platform_api_logs (
         company_id, platform, environment, action, endpoint, http_method,
         request_payload, request_headers, response_status, response_body,
-        success, error_message, duration_ms, order_id, product_id
+        success, error_message, duration_ms
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       `,
       [
         entry.companyId || null,
@@ -118,8 +118,6 @@ export async function logPlatformApiCall(db, entry = {}) {
         entry.success === true,
         entry.errorMessage || null,
         Number.isFinite(entry.durationMs) ? Math.round(entry.durationMs) : null,
-        entry.orderId || null,
-        entry.productId || null,
       ]
     );
   } catch (error) {
