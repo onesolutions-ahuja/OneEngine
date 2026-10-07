@@ -56,7 +56,7 @@ test("business workflow catalogs are not compiled into systemWorkflowCatalog", (
     "customer.credit.","SHOPIFY_","UBER_","OPEN_FOOD_FACTS_","QUICKBOOKS_",
     "PAYMENT_START","GLOBAL_PRODUCT_LOOKUP_BARCODE"
   ]) assert.equal(source.includes(token), false, token);
-  assert.match(source, /PACKAGE_RUNTIME_FLOWS/);
+  assert.match(source, /packageDefinitions/);
 });
 
 test("generated action and job pseudo-workflows stay removed from persistence", () => {
