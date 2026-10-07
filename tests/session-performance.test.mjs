@@ -67,14 +67,14 @@ test('per-request session security skips unused trusted-network lookup and paral
   assert.match(source, /const \[sessionResult, state\] = await Promise\.all/)
 })
 
-test('login RBAC permission reads run concurrently with security and Google preflight', async () => {
+test('login defers expensive permission-set expansion to authenticated session hydration', async () => {
   const server = await read('../server/server.js')
-  const security = await read('../server/services/identitySecurity.js')
-  assert.match(server, /const permissionsPromise = \(async \(\) =>/)
-  assert.match(server, /const \[securityContext, googleRuntime, permissionBundle\] = await Promise\.all/)
-  assert.match(server, /loadEffectivePermissionSets\(loginDb/)
-  assert.match(server, /SELECT p\.code/)
-  assert.equal(security.includes('AS permission_codes'), false)
+  const client = await read('../src/services/api.js')
+  assert.match(server, /const \[securityContext, googleRuntime\] = await Promise\.all/)
+  assert.equal(server.includes('const permissionsPromise = (async () =>'), false)
+  assert.equal(server.includes('permissions: effectivePermissions'), false)
+  assert.match(client, /loadSessionPermissions/)
+  assert.match(server, /app\.get\("\/api\/auth\/me\/permissions"/)
 })
 
 
