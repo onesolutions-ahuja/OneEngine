@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizePageResource, resolvePageResource, resolvePageBindingTree } from "../server/services/platformPageResources.js";
+import { pageResourceOptions } from "../src/pages/settings/Platform/pageResources.js";
 
 test("page resources resolve generic runtime contexts",()=>{
   const context={
