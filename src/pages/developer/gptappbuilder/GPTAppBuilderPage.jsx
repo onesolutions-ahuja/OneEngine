@@ -179,7 +179,7 @@ export default function GPTAppBuilderPage() {
     try {
       const { artifact } = buildResult;
       const app = artifact.manifest.apps[0] || {};
-      await apiRequest("/api/superadmin/packages/register-portable", {
+      await apiRequest("/api/platform-admin/packages/register-portable", {
         method: "POST",
         body: JSON.stringify({
           packageKey: artifact.packageKey,
@@ -192,7 +192,7 @@ export default function GPTAppBuilderPage() {
           billable: app.billable !== false,
         }),
       });
-      const releaseResponse = await apiRequest("/api/superadmin/packages/releases", {
+      const releaseResponse = await apiRequest("/api/platform-admin/packages/releases", {
         method: "POST",
         body: JSON.stringify({
           packageKey: artifact.packageKey,
@@ -204,9 +204,9 @@ export default function GPTAppBuilderPage() {
       });
       const releaseId = releaseResponse?.data?.id;
       if (!releaseId) throw new Error("Release was not created.");
-      const validation = await apiRequest(`/api/superadmin/packages/releases/${encodeURIComponent(releaseId)}/validate`, { method: "POST", body: "{}" });
+      const validation = await apiRequest(`/api/platform-admin/packages/releases/${encodeURIComponent(releaseId)}/validate`, { method: "POST", body: "{}" });
       if (validation?.data?.valid !== true) throw new Error((validation?.data?.errors || []).join(" ") || "Release validation failed.");
-      await apiRequest(`/api/superadmin/packages/releases/${encodeURIComponent(releaseId)}/publish`, { method: "POST", body: "{}" });
+      await apiRequest(`/api/platform-admin/packages/releases/${encodeURIComponent(releaseId)}/publish`, { method: "POST", body: "{}" });
       setMessage("Published. Package is now projected to OneStore and uses the existing licence/trial/install lifecycle.");
     } catch (e) {
       setError(e?.message || "Publish failed.");
