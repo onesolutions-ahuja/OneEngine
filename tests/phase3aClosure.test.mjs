@@ -20,7 +20,7 @@ test("Phase 3A Page Test covers every configured generic interaction family", as
     assert.ok(route.includes(`"${type}"`), `test runtime is missing interaction type ${type}`);
   }
   for (const kind of ["page", "component", "event", "permission", "interaction", "action", "query", "flow_input", "flow", "flow_step", "flow_output", "ui_refresh", "rollback", "timing", "error"]) {
-    assert.ok(route.includes(`kind: "${kind}"`), `test trace is missing ${kind}`);
+    assert.ok(route.includes(`kind: "${kind}"`) || route.includes(`kind:"${kind}"`), `test trace is missing ${kind}`);
   }
   assert.match(route, /await client\.query\("BEGIN"\)/);
   assert.match(route, /await client\.query\("ROLLBACK"\)/);
