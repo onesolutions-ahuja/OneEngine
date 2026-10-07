@@ -45,24 +45,11 @@ test("Phase 7A system workflow catalogue guarantees Builder metadata", () => {
   for (const key of retiredRuntimeKeys) assert.equal(definitions.some((flow) => flow.systemKey === key), false, key);
 });
 
-test("Phase 7A OneTill metadata seeds editable nodes for every runtime step", async () => {
-  const source = await readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8");
-  assert.match(source, /gptBuilderElements: \(flow\.actions \|\| \[\]\)\.map/);
-  assert.match(source, /importedRuntimeAction: step/);
-  const oneTillActionSource = source.slice(
-    source.lastIndexOf("const action = {", source.indexOf("gptBuilderElements: (flow.actions || []).map")),
-    source.indexOf("const existing", source.indexOf("gptBuilderElements: (flow.actions || []).map"))
-  );
-  assert.equal((oneTillActionSource.match(/gptBuilderElements:/g) || []).length, 1, "OneTill action must contain one Builder element source");
-  assert.equal((oneTillActionSource.match(/gptBuilder:\s*true/g) || []).length, 1, "OneTill action must contain one Builder flag");
-  assert.equal((oneTillActionSource.match(/layout:\s*\{\s*mode:\s*"AUTO"\s*\}/g) || []).length, 1, "OneTill action must contain one layout block");
-  for (const id of [
-    "validate_hold_items","hold_ready","hold_invalid",
-    "get_held_sale","held_sale_found","held_sale_missing",
-    "find_open_session","can_open_till","open_till_invalid",
-    "cash_movement_ready","cash_movement_invalid",
-    "get_open_session","can_close_till","close_till_invalid",
-  ]) assert.ok(source.includes(id), id);
+test("Phase 7A retired source-defined OneTill metadata authority stays deleted", async () => {
+  await assert.rejects(readFile(new URL("../server/services/platformMetadata.js", import.meta.url), "utf8"));
+  const bootstrap = await readFile(new URL("../server/services/platformBootstrap.js", import.meta.url), "utf8");
+  assert.match(bootstrap, /bootstrapFoundation/);
+  assert.match(bootstrap, /provisionPackageMetadata/);
 });
 
 test("Phase 7A migration and architecture gate keep retired duplicates out", async () => {
