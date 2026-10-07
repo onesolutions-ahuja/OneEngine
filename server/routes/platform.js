@@ -4,7 +4,6 @@ import { registerPlatformDeveloperRoutes } from "./platform/developerRoutes.js";
 import express from "express";
 import { createHash } from "node:crypto";
 import { isSafeIdentifier, toSafeApiName } from "../services/platformIdentifiers.js";
-import { normalizeObjectPageDefinition, objectNavigationEntries, OBJECT_RUNTIME_ROUTE_PREFIX } from "../services/platformObjectNavigation.js";
 import { evaluateValidationRules, validationRuleError } from "../services/platformValidation.js";
 import { compileFormulas, evaluateWorkflowFormula, FormulaError, formulaReferences, isCalculatedField, normalizeRollupConfig, ROLLUP_OPERATIONS, workflowFormulaReferences } from "../services/platformFormula.js";
 import { ConditionError, evaluateCondition, evaluatePlatformCondition, validateConditionConfig, validateConditionalRequired } from "../services/platformConditions.js";
