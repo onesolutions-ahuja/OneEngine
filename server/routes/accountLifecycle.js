@@ -38,19 +38,7 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     res.json({success:true});
   });
 
-  router.get("/settings/account-policy", authenticate, authorize("settings.manage"), async(req,res)=>{
-    const r=await db(`SELECT c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.password_reset_email_enabled,
-      cs.registration_link_expiry_minutes,cs.password_reset_expiry_minutes FROM companies c JOIN company_settings cs ON cs.company_id=c.id WHERE c.id=$1`,[req.user.companyId]);
-    res.json({success:true,data:r.rows[0]||{}});
-  });
-  router.put("/settings/account-policy", authenticate, authorize("settings.manage"), async(req,res)=>{
-    const b=req.body||{}; const domain=String(b.userEmailDomain||"").trim().toLowerCase().replace(/^@/,"")||null;
-    await db("UPDATE companies SET user_email_domain=$1,updated_at=NOW() WHERE id=$2",[domain,req.user.companyId]);
-    await db(`UPDATE company_settings SET domain_users_only=$1,email_registration_enabled=$2,password_reset_email_enabled=$3,
-      registration_link_expiry_minutes=$4,password_reset_expiry_minutes=$5,updated_by=$6,updated_at=NOW() WHERE company_id=$7`,
-      [b.domainUsersOnly===true,b.emailRegistrationEnabled===true,b.passwordResetEmailEnabled!==false,Math.max(5,Number(b.registrationLinkExpiryMinutes)||1440),Math.max(5,Number(b.passwordResetExpiryMinutes)||60),req.user.id,req.user.companyId]);
-    res.json({success:true});
-  });
+
 
   router.post("/account/invite/:userId", authenticate, authorize("admin.users"), async(req,res)=>{
     const r=await db(`SELECT u.id,u.email,u.company_id,c.user_email_domain,cs.domain_users_only,cs.email_registration_enabled,cs.registration_link_expiry_minutes
