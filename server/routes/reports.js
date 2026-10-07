@@ -230,7 +230,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
   router.get("/reports/custom/metadata", authenticate, authorize("reports.custom.view"), async (req, res) => {
     try {
       const manage = await canManageReports(req);
-      const [stores, users, roles, publicGroups, reports, reportTypes, platformObjects] = await Promise.all([
+      const [stores, users, roles, publicGroups, reports, reportTypes, platformObjects, companyContext] = await Promise.all([
         db("SELECT id,name FROM stores WHERE company_id=$1 AND active=true ORDER BY name", [req.user.companyId]),
         db("SELECT id,username,full_name FROM users WHERE company_id=$1 AND active=true ORDER BY full_name,username", [req.user.companyId]),
         db("SELECT id,name FROM roles WHERE company_id=$1 ORDER BY name", [req.user.companyId]),
@@ -242,6 +242,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
             GROUP BY cr.id,u.full_name ORDER BY cr.updated_at DESC`, [req.user.companyId, manage, req.user.id]),
         db("SELECT * FROM custom_report_types WHERE company_id=$1 AND active=TRUE ORDER BY lower(label)", [req.user.companyId]),
         db("SELECT o.id,o.object_key,o.label,o.source_table,o.company_id,COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config FROM platform_objects o LEFT JOIN platform_object_settings s ON s.object_id=o.id AND s.company_id=$1 WHERE o.active=true AND o.source_table IS NOT NULL AND (o.company_id IS NULL OR o.company_id=$1) ORDER BY o.label", [req.user.companyId]),
+        db("SELECT currency FROM companies WHERE id=$1", [req.user.companyId]),
       ]);
       res.json({ success: true, data: {
         fields: [],
@@ -258,6 +259,7 @@ export default function createReportsRouter({ authenticate, authorize, db }) {
         })(),
         sources: [],
         platformObjects: platformObjects.rows,
+        currency: companyContext.rows?.[0]?.currency || "GBP",
         capabilities: reportCapabilities(),
         canManage: manage,
       } });
