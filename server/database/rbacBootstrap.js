@@ -136,6 +136,6 @@ export async function bootstrapInitialSuperadmin(pool, env = process.env) {
     [user.rows[0].id]
   );
 
-  console.log("onePOS: company-bound Superadmin synchronized through RBAC", { companyId: company.id, email });
+  console.log("onePOS: company-bound Superadmin synchronized through RBAC");
   return { superadminReady: true, superadminEmail: email, companyId: company.id, roleId };
 }
