@@ -626,6 +626,31 @@ function TreeViewView({ node, builderMode, onRecordClick, data }) {
   );
 }
 
+function RelatedListView({ node, builderMode, pageContext }) {
+  const relationshipKey = node.relationshipKey || "";
+  const parentObjectKey = node.config?.parentObjectKey || pageContext?.objectKey || pageContext?.object_key || "";
+  const parentId = pageContext?.record?.id || pageContext?.selectedRecord?.id || pageContext?.recordId || "";
+  const [state, setState] = useState({ records: [], total: 0, loading: false, error: "" });
+  useEffect(() => {
+    if (builderMode || !relationshipKey || !parentObjectKey || !parentId) return;
+    let live = true;
+    setState((current) => ({ ...current, loading: true, error: "" }));
+    const params = new URLSearchParams({ page: "1", pageSize: String(Math.max(1, Math.min(50, Number(node.limit) || 10))) });
+    apiRequest(`/api/platform/objects/${encodeURIComponent(parentObjectKey)}/records/${encodeURIComponent(parentId)}/related/${encodeURIComponent(relationshipKey)}?${params.toString()}`)
+      .then((response) => { if (live) setState({ records: Array.isArray(response?.records) ? response.records : Array.isArray(response?.data) ? response.data : [], total: Number(response?.total || 0), loading: false, error: "" }); })
+      .catch((error) => { if (live) setState({ records: [], total: 0, loading: false, error: error?.message || "Unable to load related records." }); });
+    return () => { live = false; };
+  }, [builderMode, relationshipKey, parentObjectKey, parentId, node.limit]);
+  if (!relationshipKey) return <div className="cpb-empty">Choose a relationship in Properties.</div>;
+  if (builderMode) return <div className="cpb-empty">Related records · {relationshipKey}</div>;
+  if (!parentObjectKey || !parentId) return <div className="cpb-empty">Related List requires the current record context.</div>;
+  if (state.loading) return <div className="cpb-empty">Loading related records…</div>;
+  if (state.error) return <div className="cpb-empty" role="alert">{state.error}</div>;
+  if (!state.records.length) return <div className="cpb-empty">No related records.</div>;
+  const fields = [...new Set(state.records.flatMap((record) => Object.keys(record || {})))].filter((field) => !["id","record_id"].includes(field)).slice(0, 5);
+  return <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-left text-xs"><thead><tr>{fields.map((field)=><th key={field} className="border-b px-2 py-2 font-semibold">{field.replace(/_/g," ")}</th>)}</tr></thead><tbody>{state.records.map((record,index)=><tr key={record.id || record.record_id || index}>{fields.map((field)=><td key={field} className="border-b px-2 py-2">{formatRecordValue(record[field])}</td>)}</tr>)}</tbody></table></div>;
+}
+
 function ProcessPathView({ node, builderMode, data, onRecordClick }) {
   const state = data?.[node.id] || {};
   const config = node.config || {};
@@ -733,7 +758,7 @@ function resolveRuntimeBinding(binding, pageContext, runtimeOverrides) {
   return direct !== undefined ? direct : undefined;
 }
 
-function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, runtimeValue, onValueChange, pageContext, runtimeOverrides }) {
+function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, runtimeValue, onValueChange, pageContext, runtimeOverrides, data, pageState }) {
   const key = node.componentKey;
   const config = node.config || {};
   const title = node.title || config.title || config.label || node.label || key.replace(/_/g, " ");
@@ -763,7 +788,7 @@ function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, r
   if (key === "icon") return <div className="flex items-center gap-2 text-sm"><span className="text-xl">{config.icon||"◈"}</span>{config.label||title}</div>;
   if (key === "qr_code") return <div className="inline-flex flex-col items-center gap-2"><div className="grid h-24 w-24 grid-cols-6 gap-0.5 bg-white p-2 ring-1 ring-slate-200">{Array.from({length:36}).map((_,i)=><span key={i} className={i%3===0||i%7===0?"bg-slate-900":"bg-white"}/>)}</div>{config.label?<span className="text-xs">{String(config.label)}</span>:null}<span className="sr-only">{String(bound("valueBinding",""))}</span></div>;
   if (key === "barcode") return <div className="inline-flex flex-col items-center gap-1"><div className="flex h-16 items-stretch gap-px bg-white p-2 ring-1 ring-slate-200">{Array.from({length:28}).map((_,i)=><span key={i} className="bg-slate-900" style={{width:i%4===0?3:1}}/>)}</div>{config.showValue!==false?<span className="text-[10px]">{formatRecordValue(bound("valueBinding","000000000000"))}</span>:null}</div>;
-  if (key === "search_box") return <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder={config.placeholder||"Search…"} value={runtimeValue ?? ""} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(event.target.value)}/>;
+  if (key === "search_box") return <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder={config.placeholder||"Search…"} value={runtimeValue ?? ""} disabled={disabled} required={node.required===true} onChange={(event)=>{ const value=event.target.value; setValue(value); if(config.targetNodeId) onEvent?.({eventName:"change",node,value,interaction:{type:"component",targetNodeId:config.targetNodeId,operation:"search_collection"}}); }}/>;
   if (key === "toggle") return <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(runtimeValue)} disabled={disabled} required={node.required===true} onChange={(event)=>setValue(event.target.checked)}/>{config.label||title}</label>;
   if (key === "radio_group") return <div className={`flex gap-3 ${config.orientation==="vertical"?"flex-col":""}`}>{(options.length?options:["Option 1","Option 2"]).map((item,i)=><label key={i} className="inline-flex items-center gap-1.5 text-sm"><input type="radio" disabled={disabled} name={node.id} checked={String(runtimeValue??"")===String(typeof item==="object"?(item.value??item.label):item)} onChange={()=>setValue(typeof item==="object"?(item.value??item.label):item)}/>{typeof item==="object"?(item.label||item.value):String(item)}</label>)}</div>;
   if (key === "slider") return <div><input className="w-full" type="range" min={config.min??0} max={config.max??100} step={config.step??1} value={runtimeValue ?? config.min ?? 0} disabled={disabled} onChange={(event)=>setValue(Number(event.target.value))}/></div>;
@@ -772,8 +797,8 @@ function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, r
   if (["select","multi_select"].includes(key)) return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><select className="w-full rounded-lg border bg-white px-3 py-2 text-sm" multiple={key==="multi_select"} disabled={disabled} required={node.required===true} value={key==="multi_select"?(Array.isArray(runtimeValue)?runtimeValue:[]):(runtimeValue??"")} onChange={(event)=>setValue(key==="multi_select"?Array.from(event.target.selectedOptions).map((option)=>option.value):event.target.value)}><option>{config.placeholder||"Select…"}</option>{options.map((item,i)=><option key={i} value={typeof item==="object"?(item.value??item.label):String(item)}>{typeof item==="object"?(item.label||item.value):String(item)}</option>)}</select></label>;
   if (key === "time_input") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="time" step={config.step||undefined} disabled={disabled} required={node.required===true} value={runtimeValue??""} onChange={(event)=>setValue(event.target.value)}/></label>;
   if (key === "date_picker") return <label className="block text-xs"><span className="mb-1 block text-slate-500">{config.label||title}</span><input className="w-full rounded-lg border px-3 py-2 text-sm" type="date" min={config.min||undefined} max={config.max||undefined} disabled={disabled} required={node.required===true} value={runtimeValue??""} onChange={(event)=>setValue(event.target.value)}/></label>;
-  if (key === "pagination") return <div className="flex items-center justify-center gap-2 text-xs"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Previous</button><span>1</span><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled>Next</button></div>;
-  if (key === "filter_bar") return <div className="flex flex-wrap gap-2 rounded-lg border p-2">{(Array.isArray(config.fields)&&config.fields.length?config.fields:["Filter"]).map((field,i)=><span key={i} className="rounded bg-slate-100 px-2 py-1 text-xs">{String(field)}</span>)}</div>;
+  if (key === "pagination") { const targetId=config.targetNodeId||""; const target=data?.[targetId]||{}; const max=Math.max(1,Number(target.maxRecords||config.pageSize)||10); const current=Math.max(1,Number(pageState?.[targetId])||1); const pages=Math.max(1,Math.ceil((Number(target.total)||0)/max)); return <div className="flex items-center justify-center gap-2 text-xs"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled={builderMode||!targetId||current<=1} onClick={()=>target.onPageChange?.(current-1)}>Previous</button><span>{current} / {pages}</span><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled={builderMode||!targetId||current>=pages} onClick={()=>target.onPageChange?.(current+1)}>Next</button></div>; }
+  if (key === "filter_bar") { const fields=Array.isArray(config.fields)&&config.fields.length?config.fields:["Filter"]; return <div className="flex flex-wrap gap-2 rounded-lg border p-2">{fields.map((field,i)=><input key={i} className="min-w-[120px] rounded border px-2 py-1 text-xs" placeholder={String(field)} disabled={disabled} onChange={(event)=>{if(config.targetNodeId) onEvent?.({eventName:"change",node,value:event.target.value,record:{[String(field)]:event.target.value},interaction:{type:"component",targetNodeId:config.targetNodeId,operation:"filter_collection",sourceField:String(field),targetField:String(field)}});}} />)}</div>; }
   if (["icon_button","back_button","close_button","refresh_button","navigation_button"].includes(key)) return <button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" disabled={disabled} onClick={action}><span>{config.icon||({back_button:"←",close_button:"×",refresh_button:"↻"}[key]||"◈")}</span>{config.label||title}</button>;
   if (key === "link") return <a href={builderMode?"#":(config.href||"#")} target={config.target||"_self"} onClick={builderMode?(e)=>e.preventDefault():undefined} className="text-sm text-teal-700 underline">{config.label||title}</a>;
   if (key === "menu") return <div className="inline-flex rounded-lg border bg-white p-1">{(options.length?options:["Menu"]).slice(0,5).map((item,i)=><button type="button" disabled key={i} className="px-2 py-1 text-xs">{typeof item==="object"?(item.label||item.title):String(item)}</button>)}</div>;
@@ -788,7 +813,7 @@ function GenericPageComponentView({ node, builderMode, onButtonClick, onEvent, r
   return <div className="rounded-lg border border-dashed p-3 text-sm text-slate-500">{title}</div>;
 }
 
-function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, onValueChange, onEvent, data, runtimeOverrides = {}, pageContext = null }) {
+function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onButtonClick, onValueChange, onEvent, data, runtimeOverrides = {}, pageContext = null, pageState = {} }) {
   const key = node.componentKey;
   if (node.visible === false && !builderMode) return null;
   const interactive = node.enabled !== false && node.readOnly !== true;
@@ -849,13 +874,13 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       return <div key={record.id || index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">{image ? <img src={image} alt="" className="h-28 w-full object-cover" /> : <div className="h-28 bg-slate-100" />}<div className="p-2"><div className="truncate text-sm font-semibold">{String(title)}</div>{subtitleFields.slice(0,2).map((field) => record[field] ? <div key={field} className="truncate text-xs text-slate-500">{String(record[field])}</div> : null)}</div></div>;
     })}{!shown.length ? <div className="cpb-empty">No records match this component.</div> : null}</div>;
   }
-  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} onEvent={onEvent} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} pageContext={pageContext} runtimeOverrides={runtimeOverrides} />;
+  if (GENERIC_PAGE_COMPONENTS.has(key)) return <GenericPageComponentView node={node} builderMode={builderMode} onButtonClick={guardedButtonClick} onEvent={onEvent} runtimeValue={runtimeOverrides?.[node.id]?.value} onValueChange={onValueChange} pageContext={pageContext} runtimeOverrides={runtimeOverrides} data={data} pageState={pageState} />;
   const currentOverride = runtimeOverrides?.[node.id] || {};
   if (ADVANCED_RECORD_COMPONENTS.includes(key)) return <AdvancedRecordView node={node} data={data} onRecordClick={guardedRecordClick} builderMode={builderMode} />;
   if (key === "container") {
     return (
       <div className="cpb-container-grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, node.columns || 2)}, minmax(0, 1fr))`, gap: (node.spacing || 3) * 4 }}>
-        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} onEvent={onEvent} data={data} runtimeOverrides={runtimeOverrides} pageContext={pageContext} />)}
+        {(node.children || []).map((child) => <NodeView key={child.id} node={child} sectionWidth={sectionWidth} device={device} builderMode={builderMode} onRecordClick={guardedRecordClick} onButtonClick={guardedButtonClick} onValueChange={onValueChange} onEvent={onEvent} data={data} runtimeOverrides={runtimeOverrides} pageContext={pageContext} pageState={pageState} />)}
       </div>
     );
   }
@@ -887,7 +912,7 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
   if (key === "text") return <p className="text-sm" style={{ color: "var(--text-secondary, #475569)" }}>{node.text || node.label || "Text"}</p>;
   if (key === "divider") return <hr style={{ borderColor: "var(--border-color, #e5e7eb)", margin: 0 }} />;
   if (key === "spacer") return <div style={{ height: 16 + (Number(node.spacing) || 3) * 6 }} aria-hidden="true" />;
-  if (key === "related_list") return <div className="cpb-empty">Related list{node.relationshipKey ? ` · ${node.relationshipKey}` : ""}</div>;
+  if (key === "related_list") return <RelatedListView node={node} builderMode={builderMode} pageContext={pageContext} />;
   if (key === "field_value") {
     const value = currentOverride?.value !== undefined ? currentOverride.value : resolveRuntimeBinding(node.field ? `record.${node.field}` : node.config?.valueBinding, pageContext, runtimeOverrides);
     return <div className="text-sm" style={{ color: "var(--text-primary, #374151)" }}>{value !== undefined ? formatRecordValue(value) : node.field ? `${String(node.field).replace(/_/g, " ")}` : "Field value"}</div>;
@@ -928,9 +953,12 @@ function RecordBoundNodeBoundary({ node, collectionState, pageByNode, setNodeSta
   const dynamicFilter = runtimeOverride?.filter?.field
     ? [{ field: runtimeOverride.filter.field, operator: "equals", value: runtimeOverride.filter.value }]
     : [];
+  const searchFilter = runtimeOverride?.search && Array.isArray(baseCollection.fields) && baseCollection.fields.length
+    ? [{ field: baseCollection.fields[0], operator: "contains", value: runtimeOverride.search }]
+    : [];
   const collection = {
     ...baseCollection,
-    conditions: [...(baseCollection.conditions || []), ...dynamicFilter],
+    conditions: [...(baseCollection.conditions || []), ...dynamicFilter, ...searchFilter],
     __refreshNonce: runtimeOverride?.refreshNonce || 0,
   };
   const isRecordBound = ["multi_container", "table", "tree_view", "process_path", ...ADVANCED_RECORD_COMPONENTS, ...REGISTRY_RECORD_COMPONENTS].includes(node.componentKey);
@@ -998,7 +1026,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
   }, []);
 
   const applyComponentInteraction = ({ record = null, node, eventName = "click", value = undefined }) => {
-    const interaction = node?.interactions?.[eventName] || (eventName === "click" ? node?.interaction : null);
+    const interaction = arguments[0]?.interaction || node?.interactions?.[eventName] || (eventName === "click" ? node?.interaction : null);
     if (!interaction || interaction.type !== "component" || !interaction.targetNodeId) return false;
     const targetId = String(interaction.targetNodeId);
     setRuntimeOverrides((current) => {
@@ -1008,6 +1036,9 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
       const sourceValue = sourceField ? record?.[sourceField] : (value !== undefined ? value : record);
       if (operation === "set_record") {
         return { ...current, [targetId]: { ...existing, record: record || null, refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
+      }
+      if (operation === "search_collection") {
+        return { ...current, [targetId]: { ...existing, search: String(value ?? ""), refreshNonce: Number(existing.refreshNonce || 0) + 1 } };
       }
       if (operation === "filter_collection") {
         const targetField = interaction.targetField || sourceField || "id";
@@ -1120,6 +1151,7 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
                       : collectionState}
                     runtimeOverrides={runtimeOverrides}
                     pageContext={effectivePageContext}
+                    pageState={pageByNode}
                   />
                 </RecordBoundNodeBoundary>
               </div>
