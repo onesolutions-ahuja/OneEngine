@@ -64,7 +64,7 @@ export function resolveRecordPathValue(record, path, rootObjectKey = null) {
   return value;
 }
 
-function resolveContextPathValue(path, { record, previousRecord, user, rootObjectKey, variables, now = new Date() } = {}) {
+function resolveContextPathValue(path, { record, previousRecord, user, rootObjectKey, variables, pageParameters, pageVariables, components, flowOutputs, now = new Date() } = {}) {
   const raw = String(path || "").trim();
   if (!raw) return undefined;
   if (raw === "$now") return now instanceof Date ? now.toISOString() : now;
@@ -76,6 +76,14 @@ function resolveContextPathValue(path, { record, previousRecord, user, rootObjec
   if (raw.startsWith("$previous.")) return resolveRecordPathValue(previousRecord, raw.slice("$previous.".length), null);
   if (raw === "$user") return user || null;
   if (raw.startsWith("$user.")) return resolveRecordPathValue(user, raw.slice("$user.".length), null);
+  if (raw === "$page.params") return pageParameters || {};
+  if (raw.startsWith("$page.params.")) return resolveRecordPathValue(pageParameters, raw.slice("$page.params.".length), null);
+  if (raw === "$page.variables") return pageVariables || {};
+  if (raw.startsWith("$page.variables.")) return resolveRecordPathValue(pageVariables, raw.slice("$page.variables.".length), null);
+  if (raw === "$components") return components || {};
+  if (raw.startsWith("$components.")) return resolveRecordPathValue(components, raw.slice("$components.".length), null);
+  if (raw === "$flows") return flowOutputs || {};
+  if (raw.startsWith("$flows.")) return resolveRecordPathValue(flowOutputs, raw.slice("$flows.".length), null);
 
   const normalized = normalizeRecordPath(raw);
   if (!normalized) return undefined;
