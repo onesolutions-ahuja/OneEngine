@@ -283,7 +283,7 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
   const [kanbanError, setKanbanError] = useState("");
   useEffect(() => setKanbanRecords(records), [records]);
   const placeholder = state.placeholder || !collection.objectKey;
-  const titleField = config.titleField || config.taskLabelField || config.labelField || "name";
+  const titleField = config.titleField || config.taskLabelField || config.labelField || collection.fields?.[0] || "id";
   const clickRecord = (record) => {
     if (!builderMode && node.clickable !== false && node.interaction?.type !== "none") onRecordClick?.({ record, node });
   };
@@ -297,30 +297,24 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     return <div className="space-y-2">{(placeholder ? [{ name: "Timeline entry", created_at: "Date" }] : sorted).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="flex w-full gap-3 rounded-lg border bg-white p-3 text-left" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true" /><span className="min-w-0"><span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{formatRecordValue(record[config.dateField || "created_at"], "datetime")}</span><span className="block truncate text-sm font-medium" style={{ color: "var(--text-primary, #0f172a)" }}>{record[config.titleField || "name"] || "Untitled"}</span>{config.secondaryField && record[config.secondaryField] ? <span className="block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.secondaryField]}</span> : null}</span></button>)}</div>;
   }
   if (node.componentKey === "kanban") {
-    const groupField = config.groupField || "status";
+    const groupField = config.groupField;
     const groups = new Map();
     for (const record of kanbanRecords) {
-      const group = String(record[groupField] || "Unassigned");
+      const group = groupField ? String(record[groupField] ?? "") : "";
       groups.set(group, [...(groups.get(group) || []), record]);
     }
-    if (!groups.size) ["Backlog", "In progress", "Done"].forEach((group) => groups.set(group, []));
+    if (!groups.size && placeholder) groups.set("Column", []);
     const ordered = config.columnOrder?.length ? [...config.columnOrder.filter((group) => groups.has(group)), ...[...groups.keys()].filter((group) => !config.columnOrder.includes(group))] : [...groups.keys()];
-    const moveCard = async (recordId, destination) => {
-      if (builderMode || config.allowDragDrop === false || !collection.objectKey) return;
+    const moveCard = (recordId, destination) => {
+      if (builderMode || config.allowDragDrop === false) return;
       const record = kanbanRecords.find((item) => String(item.id) === String(recordId));
-      if (!record || String(record[groupField] || "Unassigned") === destination) return;
-      try {
-        await apiRequest(`/api/platform/objects/${encodeURIComponent(collection.objectKey)}/records/${encodeURIComponent(record.id)}`, { method: "PUT", body: JSON.stringify({ data: { [groupField]: destination } }) });
-        setKanbanRecords((current) => current.map((item) => item.id === record.id ? { ...item, [groupField]: destination } : item));
-        setKanbanError("");
-      } catch (error) {
-        setKanbanError(error?.message || "Unable to move record. Edit permission may be required.");
-      }
+      if (!record || String(record[groupField] ?? "") === String(destination)) return;
+      onRecordClick?.({ record, node, eventName: "change", value: destination, changes: { [groupField]: destination } });
     };
     return <div className="space-y-2">{kanbanError ? <p role="alert" className="text-xs text-red-700">{kanbanError}</p> : null}<div className="flex min-w-0 gap-3 overflow-x-auto pb-1">{ordered.map((group) => <section key={group} onDragOver={(event) => { if (!builderMode && config.allowDragDrop !== false) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); moveCard(event.dataTransfer.getData("text/plain"), group); }} className="w-64 shrink-0 rounded-lg border p-2" style={{ borderColor: "var(--border-color, #e5e7eb)", background: "var(--muted-background, #f8fafc)" }}><h4 className="mb-2 flex justify-between text-xs font-semibold"><span>{group}</span><span>{groups.get(group).length}</span></h4><div className="space-y-2">{groups.get(group).map((record, index) => <button type="button" key={record.id || index} draggable={!builderMode && config.allowDragDrop !== false} onDragStart={(event) => event.dataTransfer.setData("text/plain", String(record.id))} onClick={() => clickRecord(record)} className="block w-full rounded-md border bg-white p-2 text-left text-sm" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="block font-medium">{record[titleField] || "Untitled"}</span>{config.subtitleField && record[config.subtitleField] ? <span className="mt-1 block text-xs" style={{ color: "var(--text-secondary, #64748b)" }}>{record[config.subtitleField]}</span> : null}</button>)}</div></section>)}</div></div>;
   }
   if (node.componentKey === "calendar") {
-    const startField = config.startField || "start_date";
+    const startField = config.startField || config.dateField || "";
     const monthStart = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
     const gridStart = new Date(monthStart);
     gridStart.setDate(1 - ((monthStart.getDay() + 6) % 7));
@@ -331,14 +325,15 @@ export function AdvancedRecordView({ node, data, onRecordClick, builderMode }) {
     return <div className="space-y-2"><div className="flex items-center justify-between"><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1))} aria-label="Previous month">‹</button><strong className="text-sm">{calendarDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong><button type="button" className="onepos-btn onepos-btn-secondary onepos-btn-sm" onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1))} aria-label="Next month">›</button></div><div className="grid grid-cols-7 gap-1">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <div key={day} className="py-1 text-center text-[11px] font-semibold">{day}</div>)}{days.map((day) => <div key={dayKey(day)} className="min-h-16 min-w-0 rounded border p-1" style={{ borderColor: "var(--border-color, #e5e7eb)", opacity: day.getMonth() === calendarDate.getMonth() ? 1 : 0.45 }}><span className="text-[10px]">{day.getDate()}</span><div className="mt-1 space-y-0.5">{(events.get(dayKey(day)) || []).slice(0, 2).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="block w-full truncate rounded bg-emerald-100 px-1 py-0.5 text-left text-[10px]">{record[titleField] || "Event"}</button>)}</div></div>)}</div>{placeholder ? <div className="cpb-empty">Choose an object to populate this calendar.</div> : null}</div>;
   }
   if (node.componentKey === "scheduler") {
-    const startField = config.startField || "start_date";
+    const startField = config.startField || config.dateField || "";
     const groups = new Map();
-    records.forEach((record) => { const resource = String(record[config.resourceField || "assignee_id"] || "Unassigned"); groups.set(resource, [...(groups.get(resource) || []), record]); });
+    records.forEach((record) => { const resourceField = config.resourceField || "";
+    const resource = String(resourceField ? (record[resourceField] ?? "") : ""); groups.set(resource, [...(groups.get(resource) || []), record]); });
     if (!groups.size && placeholder) groups.set("Resource", []);
     return <div className="flex min-w-0 gap-3 overflow-x-auto pb-1">{[...groups.entries()].map(([resource, items]) => <section key={resource} className="w-64 shrink-0 rounded-lg border p-2" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><h4 className="mb-2 truncate text-xs font-semibold">{resource}</h4><div className="space-y-1">{items.sort((a, b) => new Date(a[startField]) - new Date(b[startField])).map((record, index) => <button type="button" key={record.id || index} onClick={() => clickRecord(record)} className="block w-full rounded border px-2 py-1.5 text-left" style={{ borderColor: "var(--border-color, #e5e7eb)" }}><span className="block text-[10px]" style={{ color: "var(--text-secondary, #64748b)" }}>{formatRecordValue(record[startField], "datetime")}</span><span className="block truncate text-xs font-medium">{record[titleField] || "Untitled"}</span></button>)}</div></section>)}</div>;
   }
   if (node.componentKey === "gantt") {
-    const startField = config.startField || "start_date";
+    const startField = config.startField || config.dateField || "";
     const endField = config.endField || "end_date";
     const dates = records.flatMap((record) => [new Date(record[startField]).getTime(), new Date(record[endField]).getTime()]).filter(Number.isFinite);
     const minimum = Math.min(...dates);
