@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: oneengine-final-loading
+  group: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' && 'oneengine-final-loading' || format('oneengine-final-loading-non-success-{0}', github.run_id) }}
   cancel-in-progress: true
 
 jobs:
