@@ -4419,12 +4419,6 @@ ON secure_invoice_links(company_id, created_at DESC);
       ALTER TABLE sales_orders
         ADD CONSTRAINT online_orders_platform_format_check
         CHECK (platform ~ '^[a-z][a-z0-9_]{0,19}$');
-      UPDATE sales_orders AS o
-         SET customer_id = c.id
-        FROM customers AS c
-       WHERE o.customer_id IS NULL
-         AND c.id::text = o.customer_data->>'id'
-         AND c.company_id = o.company_id;
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS hospitality_floors (
