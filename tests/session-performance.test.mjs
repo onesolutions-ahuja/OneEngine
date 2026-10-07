@@ -285,7 +285,7 @@ test('OneEngine Manager resolves permission and client discovery concurrently', 
 test('normal password login keeps security and Google readiness on the critical path', async () => {
   const server = await read('../server/server.js')
   const security = await read('../server/services/identitySecurity.js')
-  assert.match(server, /const \[securityContext, googleRuntime, permissionBundle\] = await Promise\.all/)
+  assert.match(server, /const \[securityContext, googleRuntime\] = await Promise\.all/)
   assert.match(server, /getGoogleConnectPasswordLoginRuntime\(loginDb/)
   assert.equal(security.includes('row_to_json(gp.*) AS google_package'), false)
   assert.equal(security.includes('row_to_json(gc.*) AS google_connection'), false)
