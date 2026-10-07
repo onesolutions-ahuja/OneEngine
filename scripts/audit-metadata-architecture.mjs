@@ -39,6 +39,10 @@ const retiredRuntimeSymbols=[
   "SEND_EMAIL","SEND_SMS","SEND_WHATSAPP","IN_APP_NOTIFICATION",
   "CALL_WEBHOOK","HTTP_REQUEST","CALL_FUNCTION","executeMediatedRegisteredAction"
 ];
+const forbiddenCompiledConnectorActions=[
+  "PAYMENT_START","PAYMENT_CANCEL","PRINT_RECEIPT","PRINT_KITCHEN_TICKET",
+  "OPEN_CASH_DRAWER","SCANNER_STATUS"
+];
 const findings=[];
 
 // platformMetadata.js was a legacy source-defined metadata authority. It has been
@@ -47,16 +51,27 @@ const findings=[];
 // both the retired file and stale imports/requires before applying the normal
 // business-runtime rules below.
 const retiredMetadataRuntime = "server/services/platformMetadata.js";
+const retiredProviderActionRuntime = "server/services/platformActions.js";
 const allServerRuntimeFiles = walk(path.join(ROOT, "server"));
 if (fs.existsSync(path.join(ROOT, retiredMetadataRuntime))) {
   findings.push({rule:"RETIRED_PLATFORM_METADATA_RUNTIME_PRESENT",file:retiredMetadataRuntime});
 }
+if (fs.existsSync(path.join(ROOT, retiredProviderActionRuntime))) {
+  findings.push({rule:"RETIRED_PROVIDER_ACTION_RUNTIME_PRESENT",file:retiredProviderActionRuntime});
+}
 for (const file of allServerRuntimeFiles) {
   const name = rel(file);
   const text = fs.readFileSync(file,"utf8");
-  if (name === retiredMetadataRuntime) continue;
-  if (/platformMetadata\.js/.test(text)) {
+  if (name !== retiredMetadataRuntime && /platformMetadata\.js/.test(text)) {
     findings.push({rule:"RETIRED_PLATFORM_METADATA_IMPORT",file:name});
+  }
+  if (name !== retiredProviderActionRuntime && /platformActions\.js/.test(text)) {
+    findings.push({rule:"RETIRED_PROVIDER_ACTION_IMPORT",file:name});
+  }
+  if (name === "server/services/platformWorkflow.js") {
+    for (const actionKey of forbiddenCompiledConnectorActions) {
+      if (text.includes(actionKey)) findings.push({rule:"COMPILED_BUSINESS_CONNECTOR_ACTION",file:name,actionKey});
+    }
   }
 }
 
