@@ -2,7 +2,7 @@ import { LazyLoadBoundary, lazyWithRecovery } from './app/bootstrap/lazyWithReco
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { apiRequest, checkBackend, consumeGoogleOAuthCallback, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, hasSessionContext, loadSessionPermissions, login, logout, setActiveStoreId, startGoogleLogin, verifyPin } from './services/api'
+import { apiRequest, checkBackend, ensureActingCompanyContext, ensureActiveStoreContext, getActiveStoreId, getAvailableStores, getStoredSessionPermissions, getStoredUser, hasSession, hasSessionContext, loadSessionPermissions, login, logout, setActiveStoreId, verifyPin } from './services/api'
 import { DEVELOPER_SETTINGS_KEYS, readRoute, setRoute } from './navigation/routes'
 import { MenuBarClock, useClock } from './shell/clock/ShellClock'
 import RdvnReferenceDock, { dockItems } from './shell/dock/RdvnReferenceDock'
@@ -665,7 +665,6 @@ function Desktop({ onLock, onSignOut }) {
       platform: 'developer',
       builder: 'developer',
       contacts: 'customers',
-      one_connect_google: 'connector-settings',
       one_assistant: 'assistant',
       one_kiosk: 'kiosk-devices',
     }
