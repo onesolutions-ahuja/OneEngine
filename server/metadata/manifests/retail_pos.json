@@ -2252,7 +2252,8 @@
             "source": "runtime_import",
             "position": null
           }
-        ]
+        ],
+        "atomic": true
       }
     },
     {
@@ -4033,7 +4034,8 @@
             "source": "runtime_import",
             "position": null
           }
-        ]
+        ],
+        "atomic": true
       }
     },
     {
@@ -4195,7 +4197,8 @@
             "source": "runtime_import",
             "position": null
           }
-        ]
+        ],
+        "atomic": true
       }
     },
     {
