@@ -11,7 +11,6 @@ import { useState } from "react";
 import { apiRequest } from "../../services/api.js";
 import { Toggle } from "../../components/ui.jsx";
 import { AUTH_TYPES } from "./shared.jsx";
-import { BrandIcon } from "../../components/BrandIcons.jsx";
 
 export default function IntegrationFormModal({ integration, storeId, onClose, onSaved }) {
   const isEdit = Boolean(integration);
@@ -90,7 +89,6 @@ export default function IntegrationFormModal({ integration, storeId, onClose, on
         <form onSubmit={submit}>
           <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-              {String(providerName || "").toLowerCase() === "shopify" && <span className="w-5 h-5" title="Shopify"><BrandIcon name="shopify" /></span>}
               {isEdit ? "Edit Integration" : "Add Integration"}
             </h2>
             <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600" aria-label="Close">✕</button>
