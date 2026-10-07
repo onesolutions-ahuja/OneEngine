@@ -15,7 +15,6 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
     trialDurationDays: "", startsAt: "", expiresAt: "", active: true,
   });
   const name = licenceForm.name;
-  const entitlementKeys = [...new Set([...marketplacePackages.map((item) => item.package_key).filter(Boolean), ...Object.keys(entitlements)])].sort();
   const [licencePackages, setLicencePackages] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState(companyId || "");
   const [selectedLicence, setSelectedLicence] = useState("");
@@ -26,6 +25,7 @@ export default function LicensingAdmin({ companyId = '', lockCompany = false }) 
   const [jarvesLicence, setJarvesLicence] = useState({ allowance: 0, enabledUsers: 0, seatsRemaining: 0 });
   const [jarvesAllowanceDraft, setJarvesAllowanceDraft] = useState("0");
   const [entitlements, setEntitlements] = useState({});
+  const entitlementKeys = [...new Set([...marketplacePackages.map((item) => item.package_key).filter(Boolean), ...Object.keys(entitlements)])].sort();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [databaseCompany, setDatabaseCompany] = useState(companyId || "");
