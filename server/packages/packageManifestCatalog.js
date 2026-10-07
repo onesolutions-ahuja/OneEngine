@@ -138,9 +138,9 @@ const PACKAGE_CATALOG = [
   {
     key: "reports",
     name: "Reports",
-    description: "Operational, sales and configurable Platform reports.",
+    description: "Metadata-driven reports created with Report Builder.",
     route: "/app/reports",
-    permissions: ["reports.summary.view", "reports.custom.view"],
+    permissions: ["reports.custom.view"],
     storeScoped: false,
     category: "Business",
   },
