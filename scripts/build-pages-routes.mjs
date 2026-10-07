@@ -51,7 +51,7 @@ for (const key of objectKeys) {
   routes.add(`objects/${key}`)
 }
 const developerKeys = source.match(/DEVELOPER_SETTINGS_KEYS = new Set\(\[([\s\S]*?)\]\)/)?.[1]
-const settingsVisuals = appSource.match(/const SETTINGS_VISUALS = \{([\s\S]*?)\n\}/)?.[1]
+const settingsVisuals = appSource.match(/const SETTINGS_VISUALS\s*=\s*\{([\s\S]*?)\n\s*\}/)?.[1]
 if (!routes.has('dashboard') || !developerKeys || !settingsVisuals) throw new Error('Unable to read fixed application routes')
 const developerSet = new Set([...developerKeys.matchAll(/'([a-z-]+)'/g)].map(match => match[1]))
 for (const key of developerSet) {
