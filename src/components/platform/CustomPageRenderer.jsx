@@ -923,10 +923,11 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
   };
 
   const handleRecordClick = (payload) => {
-    if (applyComponentInteraction({ ...payload, eventName: "row_click" }) || applyComponentInteraction(payload)) return;
-    const rowInteraction = payload?.node?.interactions?.row_click;
-    if (rowInteraction && rowInteraction.type !== "none") onEvent?.({ ...payload, eventName: "row_click" });
-    else onRecordClick?.(payload);
+    const eventName = payload?.eventName || "row_click";
+    if (applyComponentInteraction({ ...payload, eventName }) || (eventName === "row_click" && applyComponentInteraction(payload))) return;
+    const interaction = payload?.node?.interactions?.[eventName];
+    if (interaction && interaction.type !== "none") onEvent?.({ ...payload, eventName });
+    else if (eventName === "row_click") onRecordClick?.(payload);
   };
 
   const handleButtonClick = (node) => {
