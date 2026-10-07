@@ -2,6 +2,16 @@ import { randomUUID } from "node:crypto";
 
 const DAY_KEYS = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
 
+export function detectLoginBrowser(userAgent) {
+  if (!userAgent) return null;
+  const agent = String(userAgent).toLowerCase();
+  if (agent.includes("edg/")) return "Edge";
+  if (agent.includes("chrome/")) return "Chrome";
+  if (agent.includes("firefox/")) return "Firefox";
+  if (agent.includes("safari/")) return "Safari";
+  return "Other";
+}
+
 export function clientIp(req) {
   const value = String(req?.ip || req?.headers?.["x-forwarded-for"] || req?.socket?.remoteAddress || "").split(",")[0].trim();
   return value.replace(/^::ffff:/, "") || null;
@@ -364,7 +374,7 @@ export async function writeLoginHistory(db, { user = null, identifier = null, st
     const loginUrl = req ? String(req.originalUrl || req.url || "").slice(0, 500) || null : null;
     const protocol = req ? String(req.headers?.["x-forwarded-proto"] || req.protocol || "").slice(0, 40) || null : null;
     const platform = userAgent ? (/Windows/i.test(userAgent) ? "Windows" : /Android/i.test(userAgent) ? "Android" : /iPhone|iPad|iOS/i.test(userAgent) ? "iOS" : /Mac OS|Macintosh/i.test(userAgent) ? "macOS" : /Linux/i.test(userAgent) ? "Linux" : "Unknown") : null;
-    const browser = userAgent ? (/Edg\//i.test(userAgent) ? "Edge" : /Chrome\//i.test(userAgent) ? "Chrome" : /Firefox\//i.test(userAgent) ? "Firefox" : /Safari\//i.test(userAgent) ? "Safari" : "Other") : null;
+    const browser = detectLoginBrowser(userAgent);
     await db(
       `INSERT INTO identity_login_history(company_id,user_id,login_identifier,status,reason,ip_address,user_agent,auth_method,session_id,
         forwarded_for,login_type,application,login_url,tls_protocol,platform,browser)
@@ -398,7 +408,7 @@ export async function finalizeSuccessfulLogin(db, {
   const loginUrl = req ? String(req.originalUrl || req.url || "").slice(0, 500) || null : null;
   const protocol = req ? String(req.headers?.["x-forwarded-proto"] || req.protocol || "").slice(0, 40) || null : null;
   const platform = userAgent ? (/Windows/i.test(userAgent) ? "Windows" : /Android/i.test(userAgent) ? "Android" : /iPhone|iPad|iOS/i.test(userAgent) ? "iOS" : /Mac OS|Macintosh/i.test(userAgent) ? "macOS" : /Linux/i.test(userAgent) ? "Linux" : "Unknown") : null;
-  const browser = userAgent ? (/Edg\\//i.test(userAgent) ? "Edge" : /Chrome\\//i.test(userAgent) ? "Chrome" : /Firefox\\//i.test(userAgent) ? "Firefox" : /Safari\\//i.test(userAgent) ? "Safari" : "Other") : null;
+  const browser = detectLoginBrowser(userAgent);
 
   /*
    * Only session creation is required before issuing the token. Login-history,
