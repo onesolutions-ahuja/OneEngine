@@ -928,7 +928,10 @@ export default function CustomPageRenderer({ definition, builderMode = false, de
   };
 
   const handleRecordClick = (payload) => {
-    if (!applyComponentInteraction(payload)) onRecordClick?.(payload);
+    if (applyComponentInteraction(payload)) return;
+    const rowInteraction = payload?.node?.interactions?.row_click;
+    if (rowInteraction && rowInteraction.type !== "none") onEvent?.({ ...payload, eventName: "row_click" });
+    else onRecordClick?.(payload);
   };
 
   const handleButtonClick = (node) => {
