@@ -5180,6 +5180,22 @@ const DEBUG_EXECUTABLE_ACTIONS = new Set([
   // remains simulated during Debug.
   ]);
 
+function errorDetails(error) {
+  const message = String(error?.message || error?.error || error || "Workflow execution failed");
+  const code = String(error?.code || error?.oeCode || error?.errorCode || "").trim() || null;
+  let classified = null;
+  try {
+    classified = classifyDebugCode(error);
+  } catch {}
+  return {
+    message,
+    code,
+    oeCode: String(error?.oeCode || classified?.code || code || "OEWX01"),
+    retryable: error?.retryable === true || classified?.retryable === true,
+    name: String(error?.name || "Error"),
+  };
+}
+
 export function friendlyWorkflowError(error, actionType = "") {
   const message = String(error?.message || error || "Workflow execution failed");
   const lower = message.toLowerCase();
