@@ -1124,6 +1124,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
      * global accounts with a tenant-local user row.
      */
     const identityStartedAt = Date.now();
+    loginTimings.pre_identity_ms = identityStartedAt - loginStartedAt;
     const requestTenantPool = req.tenantPool || tenantPoolManager.getPoolForRequest(req) || pool;
     const centralIdentityPromise = pool.query(identitySql, [email]);
     const tenantIdentityPromise = requestTenantPool === pool
@@ -1163,6 +1164,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       return valid;
     })();
     const preflightStartedAt = Date.now();
+    loginTimings.identity_to_preflight_ms = preflightStartedAt - (identityStartedAt + (loginTimings.identity_bundle_ms || 0));
     const [securityContext, googleRuntime] = await Promise.all([
       user.company_id
         ? loadLoginSecurityContext(loginDb, { companyId: user.company_id, userId: user.id, roleId: user.role_id, ip: requestIp })
@@ -1337,6 +1339,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     }
 
     const finalizationStartedAt = Date.now();
+    loginTimings.authorization_to_finalization_ms = finalizationStartedAt - (authorizationStartedAt + (loginTimings.authorization_bundle_ms || 0));
     const sessionId = await finalizeSuccessfulLogin(loginDb, {
       user,
       identifier: email,
@@ -1359,7 +1362,9 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
     });
 
     res.setHeader("Server-Timing", [
+      `pre_identity;dur=${loginTimings.pre_identity_ms || 0}`,
       `identity;dur=${loginTimings.central_identity_ms || 0}`,
+      `identity_to_preflight;dur=${loginTimings.identity_to_preflight_ms || 0}`,
       `tenant_identity;dur=${loginTimings.tenant_identity_ms || 0}`,
       `bcrypt;dur=${loginTimings.bcrypt_ms || 0}`,
       `last_login;dur=${loginTimings.last_login_update_ms || 0}`,
@@ -1369,6 +1374,7 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       `password_wait;dur=${loginTimings.password_wait_ms || 0}`,
       `post_password_gap;dur=${loginTimings.post_password_gap_ms || 0}`,
       `authorization;dur=${loginTimings.authorization_bundle_ms || 0}`,
+      `authorization_to_finalization;dur=${loginTimings.authorization_to_finalization_ms || 0}`,
       `finalization;dur=${loginTimings.finalization_ms || 0}`,
       `total;dur=${loginTimings.total_ms || 0}`,
     ].join(", "));
