@@ -102,8 +102,7 @@ export function normalizeRecordCollection(value) {
     .filter((condition) => condition.field)
     .slice(0, 20)
     : [];
-  const conditionMatch = ["all", "any", "custom"].includes(source.conditionMatch) ? source.conditionMatch : "all";
-  const conditionLogic = conditionMatch === "custom" ? safeString(source.conditionLogic, 1000) : null;
+  const conditionMatch = source.conditionMatch === "any" ? "any" : "all";
   const sort = Array.isArray(source.sort) ? source.sort
     .map((entry) => ({ field: safeApiName(entry?.field) || "", direction: entry?.direction === "asc" ? "asc" : "desc" }))
     .filter((entry) => entry.field)
@@ -113,7 +112,6 @@ export function normalizeRecordCollection(value) {
     objectKey: safeApiName(source.objectKey ?? source.object_key) || "",
     conditions,
     conditionMatch,
-    ...(conditionLogic ? { conditionLogic } : {}),
     sort,
     maxRecords: safeNumber(source.maxRecords ?? source.max_records, 10, { min: 1, max: MAX_RECORD_LIMIT }),
     pagination: source.pagination !== false,
