@@ -3,12 +3,53 @@ import path from 'node:path'
 
 // GitHub Pages cannot rewrite SPA document requests to index.html with HTTP
 // 200. Publish entry points for the router's fixed paths instead. Application
-// routing and authorization remain unchanged; dynamic record URLs retain the
-// existing 404 fallback.
+// routing and authorization remain unchanged. Dynamic workspace/object URLs
+// are emitted from the build's metadata seed catalogue below so direct loads
+// also receive the SPA shell with HTTP 200.
 const source = await fs.readFile('src/navigation/routes.js', 'utf8')
 const appSource = await fs.readFile('src/App.jsx', 'utf8')
+const packageCatalogSource = await fs.readFile('server/packages/packageManifestCatalog.js', 'utf8')
+const bootstrapSources = await Promise.all([
+  'server/services/platformBootstrap.js',
+  'server/database/oneSolutionsSeeder.js',
+  'server/database/init.js',
+].map(async file => {
+  try { return await fs.readFile(file, 'utf8') } catch { return '' }
+}))
 const html = await fs.readFile('dist/index.html', 'utf8')
 const routes = new Set([...source.matchAll(/parts\[0\] === '([a-z-]+)'/g)].map(match => match[1]))
+
+// Publish every concrete shell route the current runtime can mount. This keeps
+// GitHub Pages document requests on HTTP 200 without maintaining a second,
+ // business-specific route list in the deployment script.
+for (const match of appSource.matchAll(/activeApp\s*===\s*'([a-z0-9-]+)'/g)) {
+  const key = match[1]
+  if (key && !['home'].includes(key)) routes.add(key)
+}
+
+// Installed apps are metadata-owned. Generate package-key aliases directly
+// from the declarative package catalogue and include a URL-friendly hyphenated
+// form for keys that use underscores.
+for (const match of packageCatalogSource.matchAll(/^\s*(?:key|packageKey):\s*["']([a-z0-9_-]+)["']/gm)) {
+  const key = match[1]
+  if (!key) continue
+  routes.add(key)
+  routes.add(key.replaceAll('_', '-'))
+}
+
+// Workspace object routes are metadata-owned but still need physical Pages
+// entry points because GitHub Pages has no rewrite-to-index facility. Derive
+// object keys from metadata/bootstrap source rather than maintaining a
+// business-specific deployment list.
+const metadataSource = bootstrapSources.join('\n')
+const objectKeys = new Set()
+for (const match of metadataSource.matchAll(/(?:object_key|objectKey|api_name|apiName)\s*[:=]\s*["'`]([a-z][a-z0-9_]*)["'`]/g)) {
+  objectKeys.add(match[1])
+}
+for (const key of objectKeys) {
+  routes.add(`workspace/${key}`)
+  routes.add(`objects/${key}`)
+}
 const developerKeys = source.match(/DEVELOPER_SETTINGS_KEYS = new Set\(\[([\s\S]*?)\]\)/)?.[1]
 const settingsVisuals = appSource.match(/const SETTINGS_VISUALS = \{([\s\S]*?)\n\}/)?.[1]
 if (!routes.has('dashboard') || !developerKeys || !settingsVisuals) throw new Error('Unable to read fixed application routes')
