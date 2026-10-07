@@ -40,7 +40,6 @@ import { buildPlatformSharingScope } from "../services/platformSharing.js";
 import { hasPlatformObjectPermission } from "../services/platformReportSecurity.js";
 import { configuredDuplicateRules, evaluateDuplicateRules, findConfiguredDuplicateMatches, findObjectDuplicateMatches, loadObjectDuplicateRules, resolveDuplicateAction, validateDuplicateRule } from "../services/platformDuplicateMatching.js";
 import { publishPlatformEvent } from "../services/platformEvents.js";
-import { buildSettingsCatalog } from "../services/settingsNavigationCatalog.js";
 import { enrichRuleFieldReferences } from "../services/platformRuleReferences.js";
 import { ensureSystemWorkflowCatalog } from "../services/systemWorkflowCatalog.js";
 import { executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
@@ -7674,90 +7673,6 @@ router.get("/platform/runtime/apps", authenticate, async (req, res) => {
     } catch (error) { next(error); }
   });
 
-  router.get("/platform/runtime/settings-catalog", authenticate, async (req, res, next) => {
-    try {
-      /*
-       * Lightweight shell metadata only. This endpoint deliberately does NOT
-       * load Object fields/layouts/workflows: opening Settings must never wait
-       * on full platform metadata.
-       */
-      const [permissionResult, permissionSets, hostedObjectsResult] = await Promise.all([
-        db(
-          `SELECT p.code
-             FROM role_permissions rp
-             JOIN permissions p ON p.id=rp.permission_id
-            WHERE rp.role_id=$1`,
-          [req.user.roleId]
-        ),
-        loadEffectivePermissionSets(db, req.user, req),
-        db(
-          `SELECT id,object_key,label,config
-             FROM platform_objects
-            WHERE active=TRUE
-              AND (company_id IS NULL OR company_id=$1)
-              AND COALESCE((config->>'settingsHost')::boolean,FALSE)=TRUE
-            ORDER BY COALESCE((config->>'settingsOrder')::integer,999), label`,
-          [req.user.companyId]
-        ),
-      ]);
-      const permissions = [...new Set([
-        ...permissionResult.rows.map((row) => row.code),
-        ...permissionSets.flatMap((set) => Array.isArray(set.system_permissions) ? set.system_permissions : []),
-      ])];
-      // Settings navigation is RBAC/install metadata only. Licence validity is
-      // enforced by the licensed action at runtime, never by shell bootstrap.
-      const catalog = buildSettingsCatalog({ permissions });
-
-      /* Object-hosted Settings sections extend the same catalogue. Only the
-         object identity + Settings presentation config is returned here; the
-         canonical Object runtime fetches its own metadata after selection.
-
-         Reuse the role permission query above for oneengine.manage instead of
-         re-querying it once per hosted object. For other roles, resolve object
-         visibility concurrently so this lightweight catalogue cannot degrade
-         into a sequential N+1 request chain. */
-      const hostedObjects = hostedObjectsResult.rows || [];
-      const visibleHostedObjects = permissions.includes("oneengine.manage")
-        ? hostedObjects
-        : (await Promise.all(
-            hostedObjects.map(async (object) => ({
-              object,
-              canView: await hasPlatformObjectPermission(db, req, object.id, "view"),
-            }))
-          ))
-            .filter((entry) => entry.canView)
-            .map((entry) => entry.object);
-
-      for (const object of visibleHostedObjects) {
-        const config = object.config || {};
-        const groupKey = String(config.settingsGroupKey || "platform");
-        if (!catalog.groups.some((group) => group.key === groupKey)) {
-          catalog.groups.push({
-            key: groupKey,
-            label: String(config.settingsGroupLabel || "Platform"),
-            order: Number(config.settingsGroupOrder ?? 90),
-          });
-        }
-        catalog.sections.push({
-          key: String(config.settingsKey || object.object_key),
-          label: String(config.settingsLabel || object.label),
-          groupKey,
-          order: Number(config.settingsOrder ?? 999),
-          iconKey: String(config.settingsIconKey || "layout-grid"),
-          description: String(config.settingsDescription || object.label || ""),
-          action: { type: "object", objectKey: object.object_key },
-        });
-      }
-
-      catalog.groups.sort((a, b) => Number(a.order || 0) - Number(b.order || 0) || String(a.label).localeCompare(String(b.label)));
-      catalog.sections.sort((a, b) => {
-        const ga = catalog.groups.findIndex((group) => group.key === a.groupKey);
-        const gb = catalog.groups.findIndex((group) => group.key === b.groupKey);
-        return ga - gb || Number(a.order || 0) - Number(b.order || 0) || String(a.label).localeCompare(String(b.label));
-      });
-      res.json({ success: true, data: catalog });
-    } catch (error) { next(error); }
-  });
 
   async function assertWorkflowActionPermissions(req, actions) {
     for (const workflowAction of actions || []) {
