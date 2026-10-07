@@ -31,22 +31,14 @@ export default function ProfilePage({ onBack }) {
   useEffect(() => {
     let live = true
     setLoading(true)
-    Promise.all([
-      apiRequest('/api/platform/runtime/my-record'),
-      apiRequest('/api/security/mfa/methods').catch(()=>({data:[]})),
-      apiRequest('/api/security/trusted-devices').catch(()=>({data:[]})),
-      apiRequest('/api/auth/mfa/passkey/policy').catch(()=>({data:{}})),
-    ])
-      .then(([response,methods,devices,passkey]) => {
+
+    // The profile record is the only blocking payload. Security methods,
+    // trusted devices and passkey policy enrich the page after first paint and
+    // must never delay the user's profile becoming usable.
+    apiRequest('/api/platform/runtime/my-record')
+      .then((response) => {
         if (!live) return
         setRuntime(response?.data || null)
-        setMfaMethods(methods?.data||[])
-        setTrustedDevices(devices?.data||[])
-        setPasskeyPolicy({
-          allowPasskeyLogin:passkey?.data?.allowPasskeyLogin===true,
-          allowPlatformPasskeys:passkey?.data?.allowPlatformPasskeys===true,
-          allowSecurityKeys:passkey?.data?.allowSecurityKeys===true,
-        })
         setError('')
       })
       .catch((err) => {
@@ -55,6 +47,22 @@ export default function ProfilePage({ onBack }) {
         setError(err?.message || 'Unable to load your profile')
       })
       .finally(() => live && setLoading(false))
+
+    void Promise.all([
+      apiRequest('/api/security/mfa/methods').catch(()=>({data:[]})),
+      apiRequest('/api/security/trusted-devices').catch(()=>({data:[]})),
+      apiRequest('/api/auth/mfa/passkey/policy').catch(()=>({data:{}})),
+    ]).then(([methods,devices,passkey]) => {
+      if (!live) return
+      setMfaMethods(methods?.data||[])
+      setTrustedDevices(devices?.data||[])
+      setPasskeyPolicy({
+        allowPasskeyLogin:passkey?.data?.allowPasskeyLogin===true,
+        allowPlatformPasskeys:passkey?.data?.allowPlatformPasskeys===true,
+        allowSecurityKeys:passkey?.data?.allowSecurityKeys===true,
+      })
+    })
+
     return () => { live = false }
   }, [])
 
