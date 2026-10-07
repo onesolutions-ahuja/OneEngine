@@ -28,6 +28,8 @@ jobs:
         working-directory: server
       - run: npm run build
         working-directory: server
+      - run: npm run smoke:start
+        working-directory: server
       - run: npm run test:unit
       - run: npm run audit:trusted
       - run: npm run audit:apps
