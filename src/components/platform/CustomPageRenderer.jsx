@@ -876,9 +876,11 @@ function NodeView({ node, sectionWidth, device, builderMode, onRecordClick, onBu
       const orderedFields = selectedFields.length ? selectedFields : (state.fields || []).map((field) => field.apiName || field.api_name).filter(Boolean);
       const imageField = orderedFields.find((field) => {
         const value = record[field];
-        return typeof value === "string" && (/^https?:\/\//i.test(value) || /^data:image\//i.test(value) || /^\/[^/]/.test(value));
+        if (value && typeof value === "object") return typeof value.url === "string" || typeof value.src === "string";
+        return typeof value === "string" && (/^https?:\/\//i.test(value) || /^data:image\//i.test(value) || /^blob:/i.test(value) || /^\/[^/]/.test(value) || /\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(value));
       }) || "";
-      const image = imageField ? record[imageField] : "";
+      const rawImage = imageField ? record[imageField] : "";
+      const image = rawImage && typeof rawImage === "object" ? (rawImage.url || rawImage.src || "") : rawImage;
       const textFields = orderedFields.filter((field) => field !== imageField);
       const titleField = textFields[0] || "";
       const title = titleField ? record[titleField] : (record.id || "Record");
