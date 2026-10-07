@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { consumeAccountToken, hashAccountToken, issueAccountOtp, domainAllowed, normalizeEmail, pendingPolicies } from "../services/accountPolicy.js";
-import { executeSystemAction, executeSystemWorkflow } from "../services/systemWorkflowRuntime.js";
+import { executeSystemAction } from "../services/systemWorkflowRuntime.js";
 import { assertPasswordAllowed, loadSecuritySettings, recordPasswordChange } from "../services/identitySecurity.js";
 
 export default function createAccountLifecycleRouter({ authenticate, authorize, db, writeAudit = null }) {
@@ -85,17 +85,20 @@ export default function createAccountLifecycleRouter({ authenticate, authorize, 
     await writeAudit?.(u.company_id,u.id,"password_reset_otp_requested","user",u.id,{channel:"EMAIL",expiresMinutes:10});
     const otp=await issueAccountOtp(db,{companyId:u.company_id,userId:u.id,purpose:"PASSWORD_RESET",expiresMinutes:10});
     try {
-      await executeSystemWorkflow({
+      await executeSystemAction({
         db,
         companyId:u.company_id,
         userId:null,
-        actionKey: "SEND_EMAIL",
+        actionKey:"SEND_COMMUNICATION",
         req,
+        connectorDrivers:req.app?.locals?.connectorDrivers || null,
         input:{
+          channel:"EMAIL",
           recipient:email,
           to:email,
           contentMode:"CUSTOM",
           subject:"Your One Solutions password reset code",
+          message:`Your password reset code is ${otp}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
           body:`Your password reset code is ${otp}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
           idempotencyKey:`${u.company_id}:password-reset-otp:${u.id}:${Date.now()}`,
         },
