@@ -253,7 +253,15 @@ const BUILT_IN_DATABASE_MIGRATIONS = Object.freeze([
     up: client => client.query(
       readFileSync(new URL("./migrations/0046_purchase_and_sales_order_consolidation.sql", import.meta.url), "utf8")
     ),
-  },
+  },,
+  {
+    key: "0047_platform_component_registrations",
+    version: "47",
+    name: "Metadata-managed custom component registrations",
+    up: client => client.query(
+      readFileSync(new URL("./migrations/0047_platform_component_registrations.sql", import.meta.url), "utf8")
+    ),
+  }
 ]);
 
 export async function runMigrations(database, migrations) {
