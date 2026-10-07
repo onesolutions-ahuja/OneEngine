@@ -36,25 +36,7 @@ export async function seedOneSolutionsDemo(pool) {
       );
     }
 
-    // Core tenant settings only. No business package tables are created here.
-    await client.query(
-      `INSERT INTO company_settings(
-          company_id,date_format,vat_enabled,default_vat_rate,
-          loyalty_enabled,scan_go_enabled,exchange_mode,product_view,
-          customer_display_enabled,online_ordering_enabled,
-          online_payment_methods
-        )
-       VALUES(
-          $1,'DD/MM/YYYY',TRUE,20,
-          FALSE,FALSE,'both','image',
-          FALSE,FALSE,'[]'::jsonb
-        )
-       ON CONFLICT(company_id) DO UPDATE SET
-          date_format=EXCLUDED.date_format,
-          vat_enabled=EXCLUDED.vat_enabled,
-          default_vat_rate=EXCLUDED.default_vat_rate`,
-      [company.id]
-    );
+
 
     let store = (await client.query(
       "SELECT id FROM stores WHERE company_id=$1 AND code='ONES-HQ' ORDER BY created_at,id LIMIT 1",
