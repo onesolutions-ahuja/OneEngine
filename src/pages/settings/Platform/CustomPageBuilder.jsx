@@ -122,9 +122,11 @@ const BUILDER_CSS = `
   .cpb-node{position:relative;min-width:90px;min-height:38px;cursor:default;overflow:visible;box-sizing:border-box}
   .cpb-resize-handle{position:absolute;right:4px;bottom:4px;z-index:30;width:28px;height:28px;display:grid;place-items:center;border:2px solid #147d70;border-radius:7px;background:#fff;color:#147d70;box-shadow:0 3px 12px rgba(15,23,42,.22);cursor:nwse-resize;touch-action:none}
   .cpb-resize-handle:hover{background:#edf8f6;border-color:#147d70}
-  .cpb-resize-edge{position:absolute;z-index:29;background:transparent;touch-action:none}
-  .cpb-resize-edge-right{top:8px;right:-5px;bottom:34px;width:10px;cursor:ew-resize}
-  .cpb-resize-edge-bottom{left:8px;right:34px;bottom:-5px;height:10px;cursor:ns-resize}
+  .cpb-resize-edge{position:absolute;z-index:31;background:transparent;touch-action:none;pointer-events:auto}
+  .cpb-resize-edge-right{top:8px;right:-7px;bottom:8px;width:14px;cursor:ew-resize}
+  .cpb-resize-edge-bottom{left:8px;right:8px;bottom:-7px;height:14px;cursor:ns-resize}
+  .cpb-resize-edge-left{top:8px;left:-7px;bottom:8px;width:14px;cursor:ew-resize}
+  .cpb-resize-edge-top{left:8px;right:8px;top:-7px;height:14px;cursor:ns-resize}
   .cpb-node-actions{position:absolute;top:4px;right:38px;z-index:8;display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #cad4d2;border-radius:8px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.10)}
   .cpb-node-remove{position:absolute;top:4px;right:6px;z-index:9;width:28px;height:28px;display:grid;place-items:center;border:1px solid #d2d7dc;border-radius:999px;background:#fff;color:#5f6972;box-shadow:0 2px 8px rgba(15,23,42,.10);cursor:pointer}
   .cpb-node-remove:hover{border-color:#fecaca;background:#fff1f2;color:#dc2626}
@@ -596,58 +598,54 @@ const updateNode = (nodeId, changes) => {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
-  const beginNodeResize = (nodeId, event, axis = "both") => {
-    if (preview || !nodeId) return;
+  const beginNodeResize = (nodeId, event, edge = "bottom-right") => {
+    if (preview || !nodeId || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    const element = event.currentTarget.closest(".cpb-node");
+    const handle = event.currentTarget;
+    const element = handle.closest(".cpb-node");
     if (!element) return;
     const rect = element.getBoundingClientRect();
-    const state = {
-      nodeId,
-      element,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startWidth: rect.width,
-      startHeight: rect.height,
-      axis,
-    };
+    const state = { nodeId, element, handle, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startWidth: rect.width, startHeight: rect.height, edge };
     resizeNodeRef.current = state;
-    // Do not capture the pointer on the handle while listening for movement on
-    // window. Chromium can retarget captured pointer events to the handle and
-    // prevent the window listener from receiving a usable drag sequence.
-    // Window-level listeners already keep resizing alive outside the handle.
-    document.body.style.cursor = "nwse-resize";
+    const horizontal = edge === "left" || edge === "right";
+    const vertical = edge === "top" || edge === "bottom";
+    const cursor = horizontal ? "ew-resize" : vertical ? "ns-resize" : (edge === "top-right" || edge === "bottom-left" ? "nesw-resize" : "nwse-resize");
+    document.body.style.cursor = cursor;
     document.body.style.userSelect = "none";
+    handle.setPointerCapture?.(event.pointerId);
 
     const move = (moveEvent) => {
       const active = resizeNodeRef.current;
-      if (!active || active.nodeId !== nodeId) return;
-      const width = Math.max(90, Math.min(2400, active.startWidth + (moveEvent.clientX - active.startX)));
-      const height = Math.max(38, Math.min(1800, active.startHeight + (moveEvent.clientY - active.startY)));
-      if (active.axis !== "bottom") active.element.style.width = `${Math.round(width)}px`;
-      if (active.axis !== "right") active.element.style.height = `${Math.round(height)}px`;
+      if (!active || active.nodeId !== nodeId || moveEvent.pointerId !== active.pointerId) return;
+      moveEvent.preventDefault();
+      const dx = moveEvent.clientX - active.startX;
+      const dy = moveEvent.clientY - active.startY;
+      const changesWidth = active.edge.includes("left") || active.edge.includes("right");
+      const changesHeight = active.edge.includes("top") || active.edge.includes("bottom");
+      const width = Math.max(90, Math.min(2400, active.startWidth + (active.edge.includes("left") ? -dx : dx)));
+      const height = Math.max(38, Math.min(1800, active.startHeight + (active.edge.includes("top") ? -dy : dy)));
+      if (changesWidth) active.element.style.width = `${Math.round(width)}px`;
+      if (changesHeight) active.element.style.height = `${Math.round(height)}px`;
     };
-    const end = () => {
+    const end = (endEvent) => {
       const active = resizeNodeRef.current;
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
+      if (!active || active.nodeId !== nodeId || (endEvent?.pointerId != null && endEvent.pointerId !== active.pointerId)) return;
+      active.handle.removeEventListener("pointermove", move);
+      active.handle.removeEventListener("pointerup", end);
+      active.handle.removeEventListener("pointercancel", end);
+      active.handle.releasePointerCapture?.(active.pointerId);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      if (!active || active.nodeId !== nodeId) return;
       resizeNodeRef.current = null;
       const resized = active.element.getBoundingClientRect();
-      const width = Math.round(resized.width);
-      const height = Math.round(resized.height);
+      const width = Math.round(resized.width), height = Math.round(resized.height);
       const currentLayout = findNode(draft.sections, nodeId)?.node?.layout || {};
-      if (Math.abs(Number(currentLayout.width || 0) - width) <= 1 && Math.abs(Number(currentLayout.height || 0) - height) <= 1) return;
       updateNode(nodeId, { layout: { ...currentLayout, width, height } });
     };
-    window.addEventListener("pointermove", move, { passive: false });
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
+    handle.addEventListener("pointermove", move, { passive: false });
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
   };
 
   const testNodeInteraction = async ({ node, record = null, eventName = "click", value = undefined, changes = undefined, interaction: explicitInteraction = null }) => {
@@ -872,13 +870,15 @@ const updateNode = (nodeId, changes) => {
           <>
             <div className="cpb-resize-edge cpb-resize-edge-right" aria-hidden="true" onPointerDown={(event) => beginNodeResize(node.id, event, "right")} />
             <div className="cpb-resize-edge cpb-resize-edge-bottom" aria-hidden="true" onPointerDown={(event) => beginNodeResize(node.id, event, "bottom")} />
+            <div className="cpb-resize-edge cpb-resize-edge-left" aria-hidden="true" onPointerDown={(event) => beginNodeResize(node.id, event, "left")} />
+            <div className="cpb-resize-edge cpb-resize-edge-top" aria-hidden="true" onPointerDown={(event) => beginNodeResize(node.id, event, "top")} />
             <span className="cpb-chip" style={{ position: "absolute", top: 4, left: 6, zIndex: 7, background: "#147d70", color: "#fff" }}>
               {nodeLabel(node)}
             </span>
             <span className="cpb-node-actions">
               <button type="button" title="Duplicate component" aria-label="Duplicate component" onClick={(event) => { event.stopPropagation(); duplicateSelectedNode(); }}><Copy size={13}/></button>
             </span>
-            <button type="button" className="cpb-resize-handle" title="Drag to resize" aria-label="Resize component" onPointerDown={(event) => beginNodeResize(node.id, event)}>
+            <button type="button" className="cpb-resize-handle" title="Drag to resize" aria-label="Resize component" onPointerDown={(event) => beginNodeResize(node.id, event, "bottom-right")}>
               <MoveDiagonal2 size={12}/>
             </button>
           </>
