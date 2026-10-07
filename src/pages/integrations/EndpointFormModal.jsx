@@ -1,10 +1,7 @@
 /*
  * T9M - Endpoint add/edit modal.
  *
- * Name, URL/path, HTTP method, entity/event type (the dispatcher consumes
- * entity_type to route SALE_CREATED / PURCHASE_CREATED / PURCHASE_RECEIVED /
- * SALES_RETURN_CREATED) and enabled. Authentication is always inherited from
- * the parent connection — deliberately not editable here.
+ * Endpoint transport configuration. Event/entity keys are metadata-defined.
  */
 import { useState } from "react";
 import { apiRequest } from "../../services/api.js";
@@ -18,7 +15,7 @@ export default function EndpointFormModal({ integration, endpoint, onClose, onSa
   const [name, setName] = useState(endpoint?.name || "");
   const [method, setMethod] = useState(endpoint?.method || "POST");
   const [path, setPath] = useState(endpoint?.path || "");
-  const [entityType, setEntityType] = useState(endpoint?.entity_type || "sale");
+  const [entityType, setEntityType] = useState(endpoint?.entity_type || "custom");
   const [enabled, setEnabled] = useState(endpoint?.enabled ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
