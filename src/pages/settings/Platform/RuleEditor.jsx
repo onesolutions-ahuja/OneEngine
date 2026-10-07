@@ -326,7 +326,7 @@ export default function RuleEditor({
                 onChange={(event) =>
                   update("name", event.target.value)
                 }
-                placeholder="Customer Credit Validation"
+                placeholder="Record Validation"
                 required
               />
             </label>
