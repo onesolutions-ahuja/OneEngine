@@ -1,8 +1,8 @@
 /*
  * T9M - Field mapping editor (Partner field | Platform field).
  *
- * The onePOS side is a searchable dropdown driven by the T9E field
- * catalogue (never hard-coded here) with a free-text custom path fallback.
+ * The platform side is a searchable dropdown driven by live object/field metadata
+ * with a free-text custom path fallback.
  * Validates every row via the T9D contract, surfaces per-row errors,
  * duplicate partner-field detection and array indicators. Non-direct
  * (constant/template) mappings support a static value.
@@ -241,7 +241,7 @@ export default function MappingEditorModal({ integration, endpoint, onClose }) {
                           onChange={(e) => updateRow(index, { mappingType: e.target.value })}
                           className="h-9 px-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           aria-label="Mapping type"
-                          title="Direct: from onePOS · Constant/Template: static value"
+                          title="Direct: from platform metadata · Constant/Template: static value"
                         >
                           {MAPPING_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                         </select>
