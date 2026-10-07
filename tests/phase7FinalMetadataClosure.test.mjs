@@ -11,7 +11,7 @@ test("generic server has no provider-specific Google auth runtime",async()=>{
 
 test("legacy business bootstrap is not executable",async()=>{
  const source=await read("server/database/init.js");
- assert.equal(source.includes("up: client => initializeLegacyDatabase(client)"),false);
+ assert.equal(source.includes("initializeLegacyDatabase"),false);
 });
 
 test("architecture audit includes init and guards legacy bootstrap",async()=>{
