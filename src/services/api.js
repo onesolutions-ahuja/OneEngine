@@ -606,7 +606,8 @@ export async function login(username, password) {
 
   const attemptLogin = async () => {
     const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 15000)
+    // Give PostgreSQL-backed identity and security checks enough time to finish.
+    const timeout = window.setTimeout(() => controller.abort(), 45000)
     try {
       return await apiRequest('/api/auth/login', {
         method: 'POST',
