@@ -40,6 +40,7 @@ import createAdminRouter from "./routes/admin.js";
 import createAuditRouter from "./routes/audit.js"; // T10-AUDIT: central audit log API
 
 import createIntegrationsRouter from "./routes/integrations.js";
+import createWhatsAppWebhookRouter from "./routes/whatsappWebhook.js";
 import createDashboardBuilderRouter from "./routes/dashboardBuilder.js";
 import createJarvisRouter from "./routes/jarvis.js"; // JARVIS V1 - authenticated AI assistant questions
 import createPlatformAdminRouter from "./routes/platformAdmin.js";
@@ -1621,6 +1622,8 @@ app.use(
 );
 
 app.use("/api", createReportsRouter({ authenticate, authorize, db, canAccessStore, canViewCompanyScope, hasPermission }));
+
+app.use("/api", createWhatsAppWebhookRouter({ db }));
 
 /*
 | T9A - generic integration foundation (provider-agnostic). Credentials are
