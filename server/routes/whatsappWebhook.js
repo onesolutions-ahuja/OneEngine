@@ -116,6 +116,7 @@ function parseOccurredAt(timestamp) {
 }
 
 router.get("/whatsapp/webhook", async (req, res) => {
+  console.info("WhatsApp webhook verification request received", { method: req.method, path: req.path, hasMode: Boolean(req.query["hub.mode"]), hasChallenge: Boolean(req.query["hub.challenge"]) });
   const mode = String(req.query["hub.mode"] || "");
   const token = String(req.query["hub.verify_token"] || "");
   const challenge = String(req.query["hub.challenge"] || "");
@@ -138,6 +139,7 @@ router.get("/whatsapp/webhook", async (req, res) => {
 });
 
 router.post("/whatsapp/webhook", async (req, res) => {
+  console.info("WhatsApp inbound webhook request received", { method: req.method, path: req.path, contentType: req.get("content-type") || null, contentLength: req.get("content-length") || null, bodyIsBuffer: Buffer.isBuffer(req.body), bodyBytes: Buffer.isBuffer(req.body) ? req.body.length : null });
   const rawBody = Buffer.isBuffer(req.body)
     ? req.body
     : Buffer.from(typeof req.body === "string" ? req.body : JSON.stringify(req.body || {}), "utf8");
