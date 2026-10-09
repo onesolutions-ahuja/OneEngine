@@ -53,7 +53,37 @@ export async function recordCommunicationEvent({
         ORDER BY created_at DESC LIMIT 1`,
       [companyId, normalizedChannel, providerMessageId]
     );
-    if (existing.rows?.[0]) return { ...existing.rows[0], duplicate: true, workflowDispatched: false };
+    if (existing.rows?.[0]) {
+      const prior = existing.rows[0];
+      // Meta may retry after the communication event committed but the
+      // platform event/workflow dispatch failed. Replay through the durable,
+      // idempotent event publisher so the missing workflow job is repaired.
+      await publishPlatformEvent({
+        db,
+        companyId,
+        eventType: communicationTriggerKey(prior.event_type),
+        payload: {
+          id: prior.id,
+          communicationEventId: prior.id,
+          channel: normalizedChannel,
+          eventType: prior.event_type,
+          direction: prior.direction,
+          provider: prior.provider,
+          providerMessageId: prior.provider_message_id,
+          recipient: prior.recipient,
+          sender: prior.sender,
+          templateId: prior.template_id,
+          objectId: prior.object_id,
+          recordId: prior.record_id,
+          communicationId: prior.communication_id,
+          body: prior.body ?? prior.metadata?.body ?? prior.metadata?.text ?? null,
+          text: prior.body ?? prior.metadata?.text ?? prior.metadata?.body ?? null,
+          metadata: prior.metadata || {},
+        },
+        idempotencyKey: `communication:${prior.id}`,
+      });
+      return { ...prior, duplicate: true, workflowDispatched: true };
+    }
   }
   const result = await db(
     `INSERT INTO platform_communication_events
