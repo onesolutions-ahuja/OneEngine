@@ -164,6 +164,50 @@ export async function publishPlatformEvent({ db, companyId = null, eventType, pa
     } catch (error) {
       console.error("Platform event workflow dispatch error:", error);
     }
+  } else if (row.company_id) {
+    // A previous attempt may have persisted the event but failed before its
+    // workflow jobs were queued. Replays repair dispatch; job idempotency keeps
+    // successful prior dispatches from creating duplicate executions.
+    try {
+      const workflowPayload = row.payload || payload || {};
+      const workflows = await db(
+        `SELECT r.id,r.name,r.object_id
+           FROM platform_rules r
+          WHERE r.company_id=$1 AND r.active=TRUE
+            AND COALESCE(r.lifecycle_status,'ACTIVE')='ACTIVE'
+            AND r.trigger_key=$2
+            AND r.action->>'type'='workflow'
+          ORDER BY r.created_at,r.id`,
+        [row.company_id, row.event_type]
+      );
+      if (row.event_type === "communication_message_received") {
+        console.info("Communication event workflow replay dispatch", {
+          companyId: row.company_id,
+          eventId: row.id,
+          workflowCount: workflows.rows?.length || 0,
+          workflows: (workflows.rows || []).map((workflow) => workflow.name),
+        });
+      }
+      for (const workflow of workflows.rows || []) {
+        await enqueuePlatformJob({
+          db,
+          companyId: row.company_id,
+          kind: "PLATFORM_EVENT_WORKFLOW",
+          payload: {
+            workflowId: workflow.id,
+            eventId: row.id,
+            eventType: row.event_type,
+            objectId: workflow.object_id || workflowPayload?.objectId || null,
+            recordId: workflowPayload?.recordId || workflowPayload?.id || null,
+            record: workflowPayload?.record || workflowPayload || null,
+            actorUserId: row.actor_user_id || null,
+          },
+          idempotencyKey: `event-workflow:${workflow.id}:${row.id}`,
+        });
+      }
+    } catch (error) {
+      console.error("Platform event workflow replay dispatch error:", error);
+    }
   }
   return { event: eventFromRow(row), inserted, notifications };
 }
