@@ -1896,6 +1896,60 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     });
   });
 
+  // Settings metadata catalogue used by the Settings UI. Keep this route
+  // authenticated and company-scoped, and return only objects explicitly
+  // configured as Settings hosts plus their effective access and section fields.
+  router.get("/platform/runtime/settings-hosts", authenticate, async (req, res) => {
+    try {
+      const result = await db(
+        `SELECT o.*, merged.config
+           FROM platform_objects o
+           LEFT JOIN platform_object_settings s
+             ON s.object_id=o.id AND s.company_id=$1
+           CROSS JOIN LATERAL (
+             SELECT COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config
+           ) merged
+          WHERE (o.company_id IS NULL OR o.company_id=$1)
+            AND COALESCE(o.active,true)=true
+            AND (
+              merged.config ? 'settingsLabel'
+              OR merged.config ? 'settings_label'
+              OR merged.config ? 'settingsSectionSource'
+              OR merged.config ? 'settings_section_source'
+              OR merged.config ? 'settingsGroup'
+              OR merged.config ? 'settings_group'
+              OR LOWER(o.object_key) IN ('system_settings','systemsettings')
+            )
+          ORDER BY o.label`,
+        [req.user.companyId]
+      );
+
+      const actions = ["view", "create", "edit", "delete", "import", "export"];
+      const hosts = await Promise.all(result.rows.map(async (object) => {
+        const permissions = Object.fromEntries(await Promise.all(actions.map(async (action) => [
+          `can_${action}`,
+          await hasPlatformObjectPermission(db, req, object.id, action),
+        ])));
+        const isSectioned = object.config?.settingsSectionSource === "field-config"
+          || object.config?.settings_section_source === "field-config";
+        let fields = [];
+        if (isSectioned) {
+          const fieldResult = await db(
+            "SELECT * FROM platform_fields WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2) ORDER BY display_order,label",
+            [object.id, req.user.companyId]
+          );
+          fields = await enrichFields(db, fieldResult.rows, req);
+        }
+        return { ...object, config: object.config || {}, permissions, fields };
+      }));
+
+      res.json({ success: true, data: hosts });
+    } catch (error) {
+      console.error("Settings metadata catalogue load error:", error);
+      res.status(500).json({ success: false, message: "Unable to load Settings metadata" });
+    }
+  });
+
   router.get("/platform/runtime/ui-context", authenticate, async (req, res) => {
     try {
       const [rolePermissionsResult, permissionSets, entitlements] = await Promise.all([
