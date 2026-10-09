@@ -951,5 +951,104 @@ export default function createIntegrationsRouter({ authenticate, authorize, db, 
   );
 
 
+
+  // Read-only WhatsApp webhook diagnostic. Authenticated and company-scoped;
+  // never returns credential values or the phone number itself.
+  router.get(
+    "/integrations/whatsapp/diagnostic",
+    authenticate,
+    authorize("integration.manage"),
+    async (req, res) => {
+      try {
+        const result = await db(
+          `SELECT id, name, provider_name, integration_type, connector_package_key,
+                  enabled, connection_status, connector_configuration, credentials_encrypted
+             FROM integration_connections
+            WHERE company_id = $1
+              AND (
+                LOWER(COALESCE(provider_name,'')) LIKE '%whatsapp%'
+                OR LOWER(COALESCE(integration_type,'')) LIKE '%communication%'
+                OR connector_package_key = 'whatsapp_connector'
+              )
+            ORDER BY updated_at DESC`,
+          [req.user.companyId]
+        );
+        const parseObject = (value) => {
+          if (value && typeof value === "object" && !Array.isArray(value)) return value;
+          if (typeof value === "string") {
+            try {
+              const parsed = JSON.parse(value);
+              return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+            } catch {}
+          }
+          return {};
+        };
+        const envVerifyTokenConfigured = Boolean(
+          String(process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || "").trim()
+        );
+        const envAppSecretConfigured = Boolean(
+          String(process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || "").trim()
+        );
+        const integrations = (result.rows || []).map((row) => {
+          let credentials = {};
+          let decryptionSucceeded = false;
+          let decryptionError = null;
+          try {
+            credentials = parseObject(decryptCredentials(row.credentials_encrypted));
+            decryptionSucceeded = Boolean(row.credentials_encrypted);
+          } catch (error) {
+            decryptionError = String(error?.message || "Credential decryption failed").slice(0, 180);
+          }
+          const config = parseObject(row.connector_configuration);
+          const sources = [config, config.settings, config.credentials, credentials, credentials.settings].map(parseObject);
+          const hasAny = (...keys) => sources.some((source) =>
+            keys.some((key) => source[key] !== undefined && source[key] !== null && String(source[key]).trim() !== "")
+          );
+          const enabled = row.enabled === true;
+          const hasPhoneNumberId = hasAny("phone_number_id", "phoneNumberId", "wa_phone_number_id");
+          const hasVerifyToken = hasAny("webhook_verify_token", "webhookVerifyToken", "verify_token", "verifyToken") || envVerifyTokenConfigured;
+          const hasAppSecret = hasAny("app_secret", "appSecret", "meta_app_secret", "metaAppSecret") || envAppSecretConfigured;
+          const issues = [];
+          if (!enabled) issues.push("Integration is disabled");
+          if (!row.credentials_encrypted) issues.push("No encrypted credentials are saved");
+          else if (!decryptionSucceeded) issues.push("Saved credentials could not be decrypted");
+          if (!hasPhoneNumberId) issues.push("Phone Number ID is missing");
+          if (!hasVerifyToken) issues.push("Webhook verify token is missing (integration settings and Render environment)");
+          if (!hasAppSecret) issues.push("Meta App Secret is missing (integration settings and Render environment)");
+          return {
+            id: row.id,
+            name: row.name,
+            providerName: row.provider_name,
+            integrationType: row.integration_type,
+            connectorPackageKey: row.connector_package_key,
+            enabled,
+            connectionStatus: row.connection_status,
+            hasEncryptedCredentials: Boolean(row.credentials_encrypted),
+            credentialsDecryptionSucceeded: decryptionSucceeded,
+            ...(decryptionError ? { decryptionError } : {}),
+            hasPhoneNumberId,
+            hasWebhookVerifyToken: hasVerifyToken,
+            hasMetaAppSecret: hasAppSecret,
+            webhookVerifyTokenSource: envVerifyTokenConfigured ? "Render environment configured (or integration)" : hasAny("webhook_verify_token", "webhookVerifyToken", "verify_token", "verifyToken") ? "integration credentials/configuration" : "missing",
+            metaAppSecretSource: envAppSecretConfigured ? "Render environment configured (or integration)" : hasAny("app_secret", "appSecret", "meta_app_secret", "metaAppSecret") ? "integration credentials/configuration" : "missing",
+            issues,
+          };
+        });
+        res.json({
+          success: true,
+          endpoint: "/api/whatsapp/webhook",
+          environmentVerifyTokenConfigured: envVerifyTokenConfigured,
+          environmentMetaAppSecretConfigured: envAppSecretConfigured,
+          matchingIntegrationCount: integrations.length,
+          enabledIntegrationCount: integrations.filter((item) => item.enabled).length,
+          integrations,
+        });
+      } catch (error) {
+        console.error("WhatsApp diagnostic failed:", error?.message || error);
+        res.status(500).json({ success: false, message: "Unable to diagnose WhatsApp integration" });
+      }
+    }
+  );
+
   return router;
 }
