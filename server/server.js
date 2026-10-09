@@ -319,7 +319,7 @@ const pool = primaryDatabaseUrl
       connectionTimeoutMillis: 15000,
       keepAlive: true,
       keepAliveInitialDelayMillis: 10_000,
-      max: Math.max(2, Math.min(10, Number.parseInt(process.env.PG_POOL_MAX || "5", 10) || 5)),
+      max: Math.max(2, Math.min(10, Number.parseInt(process.env.PG_POOL_MAX || "10", 10) || 5)),
     })
   : null;
 
