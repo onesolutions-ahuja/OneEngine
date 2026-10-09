@@ -985,6 +985,23 @@ function validAssignmentDates(body) {
 export default function createPlatformRouter({ authenticate, authorize, db, pool, writeAudit = null, canViewCompanyCustomers = async () => false, hasPermission = null }) {
   const router = express.Router();
 
+  // Button visibility must use the same permission sources as platform execution:
+  // the injected application checker, role permissions, and assigned permission sets.
+  async function hasExecutionPermission(req, permission) {
+    const code = String(permission || "").trim();
+    if (!code || !req.user?.id || !req.user?.companyId) return false;
+    if (hasPermission) return Boolean(await hasPermission(req, code));
+    if (Array.isArray(req.user.permissions) && req.user.permissions.includes(code)) return true;
+
+    const [roleResult, permissionSets] = await Promise.all([
+      req.user.roleId
+        ? db("SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=$1 AND p.code=$2 LIMIT 1", [req.user.roleId, code])
+        : Promise.resolve({ rows: [] }),
+      loadEffectivePermissionSets(db, req.user, req),
+    ]);
+    return roleResult.rows.length > 0 || permissionSetAllowsSystemPermission(permissionSets, code);
+  }
+
   // Express 4 does not forward rejected async route promises to error
   // middleware. Wrap async handlers at registration time so a failed query or
   // runtime check returns a controlled response instead of becoming an
