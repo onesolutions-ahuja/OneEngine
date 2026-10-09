@@ -25,6 +25,8 @@ export default function IntegrationsAdmin({ storeId }) {
   const [editing, setEditing] = useState(null);
   const [managing, setManaging] = useState(null);
   const [testingId, setTestingId] = useState(null);
+  const [whatsappDiagnostic, setWhatsappDiagnostic] = useState(null);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,6 +45,20 @@ export default function IntegrationsAdmin({ storeId }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const runWhatsappDiagnostic = async () => {
+    setDiagnosticLoading(true);
+    setWhatsappDiagnostic(null);
+    setError("");
+    try {
+      const response = await apiRequest("/api/integrations/whatsapp/diagnostic");
+      setWhatsappDiagnostic(response?.data || response);
+    } catch (err) {
+      setError(err.message || "Unable to load WhatsApp webhook diagnostics");
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  };
 
   const toggleEnabled = async (integration) => {
     setError("");
@@ -125,6 +141,21 @@ export default function IntegrationsAdmin({ storeId }) {
       <Flash message={message} error={error} />
 
       <ConnectorInstancesPanel />
+
+      <section className="mb-4 bg-white border border-slate-200 rounded-xl p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-800">WhatsApp webhook diagnostics</h2>
+            <p className="text-sm text-slate-500">Check the saved WhatsApp integration and webhook configuration using your signed-in session.</p>
+          </div>
+          <button onClick={runWhatsappDiagnostic} disabled={diagnosticLoading} className="h-9 px-3 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
+            {diagnosticLoading ? "Checking…" : "Run diagnostic"}
+          </button>
+        </div>
+        {whatsappDiagnostic && (
+          <pre className="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 overflow-auto whitespace-pre-wrap break-words">{JSON.stringify(whatsappDiagnostic, null, 2)}</pre>
+        )}
+      </section>
 
       {managing ? (
         <IntegrationDetail integration={managing} onBack={() => setManaging(null)} />
