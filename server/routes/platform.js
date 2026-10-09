@@ -1151,6 +1151,28 @@ export default function createPlatformRouter({ authenticate, authorize, db, pool
     return object || null;
   }
 
+  // Shared metadata resolver used by record reports, approvals and record buttons.
+  // Resolve by API object key (not UUID), keeping tenant scoping and field enrichment consistent.
+  async function getRecordMetadata(objectKey, req) {
+    const objectResult = await db(
+      `SELECT o.*, COALESCE(o.config,'{}'::jsonb) || COALESCE(s.config,'{}'::jsonb) AS config
+         FROM platform_objects o
+         LEFT JOIN platform_object_settings s ON s.object_id=o.id AND s.company_id=$2
+        WHERE o.object_key=$1 AND o.active=true AND (o.company_id IS NULL OR o.company_id=$2)
+        LIMIT 1`,
+      [objectKey, req.user.companyId]
+    );
+    const object = objectResult.rows[0] || null;
+    if (!object) return { object: null, fields: [] };
+    const fieldResult = await db(
+      `SELECT * FROM platform_fields
+        WHERE object_id=$1 AND active=true AND (company_id IS NULL OR company_id=$2)
+        ORDER BY display_order,label`,
+      [object.id, req.user.companyId]
+    );
+    return { object, fields: await enrichFields(db, fieldResult.rows, req) };
+  }
+
   async function validateReferences(req, parentObjectId, childObjectId, childFieldId = null) {
     const [parent, child] = await Promise.all([getObject(parentObjectId, req), getObject(childObjectId, req)]);
     if (!parent || !child) return "Referenced objects must exist";
